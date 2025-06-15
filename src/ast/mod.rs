@@ -5,6 +5,7 @@ pub enum BinaryOperator {
     Multiply,
     Divide,
     Power,
+    Modulus,
 }
 impl BinaryOperator {
     pub fn from_symbol(symbol: char) -> Option<Self> {
@@ -14,6 +15,7 @@ impl BinaryOperator {
             '/' => Some(Self::Divide),
             '*' => Some(Self::Multiply),
             '^' => Some(Self::Power),
+            '%' => Some(Self::Modulus),
             _ => None,
         }
     }
@@ -25,6 +27,7 @@ impl BinaryOperator {
             Self::Divide => '/',
             Self::Multiply => '*',
             Self::Power => '^',
+            Self::Modulus => '%',
         }
     }
 }
@@ -32,6 +35,11 @@ impl BinaryOperator {
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum NodeType {
     Program(Box<Vec<NodeType>>),
+    VariableDeclaration {
+        is_mutable: bool,
+        identifier: String,
+        value: Option<Box<Vec<NodeType>>>,
+    },
     Identifier(String),
     NumericLiteral(f64),
     BinaryExpression {

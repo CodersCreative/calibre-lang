@@ -30,12 +30,29 @@ impl Parser {
         self.parse_additive_expression()
     }
 
-    pub fn parse_multiplicative_expression(&mut self) -> NodeType {
+    pub fn parse_power_expression(&mut self) -> NodeType {
         let mut left = self.parse_primary_expression();
+
+        while ["^"].contains(&self.first().value.trim()) {
+            let operator = self.eat().value.trim().chars().nth(0).unwrap();
+            let right = self.parse_primary_expression();
+
+            left = NodeType::BinaryExpression {
+                left: Box::new(left),
+                right: Box::new(right),
+                operator: BinaryOperator::from_symbol(operator).unwrap(),
+            };
+        }
+
+        left
+    }
+
+    pub fn parse_multiplicative_expression(&mut self) -> NodeType {
+        let mut left = self.parse_power_expression();
 
         while ["/", "*", "%"].contains(&self.first().value.trim()) {
             let operator = self.eat().value.trim().chars().nth(0).unwrap();
-            let right = self.parse_primary_expression();
+            let right = self.parse_power_expression();
 
             left = NodeType::BinaryExpression {
                 left: Box::new(left),

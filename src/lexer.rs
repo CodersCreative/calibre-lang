@@ -1,3 +1,4 @@
+use core::panic;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -9,14 +10,14 @@ pub enum TokenType {
     CloseBrackets,
     BinaryOperator,
     Var,
-    Const,
+    Let,
     EOF,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("var"), TokenType::Var),
-        (String::from("const"), TokenType::Const),
+        (String::from("let"), TokenType::Let),
     ])
 }
 
@@ -36,59 +37,65 @@ impl Token {
 }
 
 pub fn tokenize(txt: String) -> Vec<Token> {
-    let mut buffer = String::new();
-    let mut tokens: Vec<Token> = txt
-        .chars()
-        .filter(|x| !x.is_whitespace())
-        .enumerate()
-        .map(|(i, c)| {
-            let mut token = match c {
-                '(' => Some(Token::new(TokenType::OpenBrackets, "(")),
-                ')' => Some(Token::new(TokenType::CloseBrackets, "(")),
-                '+' | '-' => Some(Token::new(TokenType::BinaryOperator, &c.to_string())),
-                '*' | '/' | '^' | '%' => {
-                    Some(Token::new(TokenType::BinaryOperator, &c.to_string()))
-                }
-                '=' => Some(Token::new(TokenType::Equals, "=")),
-                _ => {
-                    if c.is_alphanumeric() && !c.is_whitespace() {
-                        buffer.push(c);
+    let mut tokens = Vec::new();
+    let mut buffer: Vec<char> = txt.chars().collect();
+    while buffer.len() > 0 {
+        let first = buffer.first().unwrap();
+        let token = match first {
+            '(' => Some(Token::new(
+                TokenType::OpenBrackets,
+                buffer.remove(0).to_string().trim(),
+            )),
+            ')' => Some(Token::new(
+                TokenType::CloseBrackets,
+                buffer.remove(0).to_string().trim(),
+            )),
+            '+' | '-' => Some(Token::new(
+                TokenType::BinaryOperator,
+                buffer.remove(0).to_string().trim(),
+            )),
+            '*' | '/' | '^' | '%' => Some(Token::new(
+                TokenType::BinaryOperator,
+                buffer.remove(0).to_string().trim(),
+            )),
+            '=' => Some(Token::new(
+                TokenType::Equals,
+                buffer.remove(0).to_string().trim(),
+            )),
+            _ => {
+                if first.is_whitespace() {
+                    let _ = buffer.remove(0);
+                    None
+                } else if first.is_numeric() {
+                    let mut number = String::new();
+                    while buffer.len() > 0 && buffer[0].is_numeric() {
+                        number.push(buffer.remove(0));
+                    }
+                    Some(Token::new(TokenType::Number, number.trim()))
+                } else if first.is_alphabetic() {
+                    let mut txt = String::new();
+                    while buffer.len() > 0
+                        && buffer[0].is_alphanumeric()
+                        && !buffer[0].is_whitespace()
+                    {
+                        txt.push(buffer.remove(0));
                     }
 
-                    None
+                    if let Some(identifier) = keywords().get(txt.trim()) {
+                        Some(Token::new(identifier.clone(), txt.trim()))
+                    } else {
+                        Some(Token::new(TokenType::Identifier, txt.trim()))
+                    }
+                } else {
+                    panic!("Unrecognized character : {}", first);
                 }
-            };
-
-            if !buffer.is_empty() {
-                let next = txt.chars().nth(i + 1).unwrap_or(c);
-                if token.is_none()
-                    && (i >= txt.len() - 1
-                        || next.is_whitespace()
-                        || buffer.chars().nth(0).unwrap().is_alphabetic() != next.is_alphabetic()
-                        || buffer.chars().nth(0).unwrap().is_numeric() != next.is_numeric())
-                {
-                    token = match buffer.chars().last().unwrap().is_alphabetic() {
-                        true => {
-                            if let Some(identifier) = keywords().get(buffer.trim()) {
-                                Some(Token::new(identifier.clone(), buffer.trim()))
-                            } else {
-                                Some(Token::new(TokenType::Identifier, buffer.trim()))
-                            }
-                        }
-                        false => Some(Token::new(TokenType::Number, buffer.trim())),
-                    };
-                    buffer.clear();
-                } else if token.is_some() {
-                    buffer.clear();
-                }
-                // return None;
             }
+        };
 
-            token
-        })
-        .filter(|x| x.is_some())
-        .map(|x| x.unwrap())
-        .collect();
+        if let Some(token) = token {
+            tokens.push(token);
+        }
+    }
 
     tokens.push(Token::new(TokenType::EOF, "EndOfFile"));
 

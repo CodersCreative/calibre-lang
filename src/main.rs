@@ -1,19 +1,28 @@
-use crate::{lexer::tokenize, parser::Parser, utils::read_input};
+use crate::{
+    lexer::tokenize,
+    parser::Parser,
+    runtime::{interpreter::evaluate, scope::Scope},
+    utils::read_input,
+};
 
 pub mod ast;
 pub mod lexer;
 pub mod parser;
+pub mod runtime;
 pub mod utils;
 
 fn main() {
     let mut parser = Parser::default();
+    let mut scope = Scope::new(None);
 
     loop {
         if let Ok(input) = read_input() {
             if input.trim() == "exit" {
                 break;
             }
-            println!("{:?}", parser.produce_ast(input));
+            let program = parser.produce_ast(input);
+            println!("{:?}", program);
+            println!("result : {:?}", evaluate(program, &mut scope));
         } else {
             break;
         }
