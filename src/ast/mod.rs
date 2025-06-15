@@ -38,10 +38,11 @@ pub enum NodeType {
     VariableDeclaration {
         is_mutable: bool,
         identifier: String,
-        value: Option<Box<Vec<NodeType>>>,
+        value: Option<Box<NodeType>>,
     },
     Identifier(String),
     NumericLiteral(f64),
+    EOL,
     BinaryExpression {
         left: Box<NodeType>,
         right: Box<NodeType>,

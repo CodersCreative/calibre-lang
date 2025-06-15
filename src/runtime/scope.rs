@@ -10,6 +10,7 @@ use crate::runtime::values::RuntimeValue;
 pub struct Scope {
     pub parent: Option<Box<Self>>,
     pub variables: HashMap<String, RuntimeValue>,
+    pub constants: HashMap<String, RuntimeValue>,
 }
 
 fn get_global_variables() -> HashMap<String, RuntimeValue> {
@@ -34,33 +35,44 @@ fn get_global_variables() -> HashMap<String, RuntimeValue> {
 impl Scope {
     pub fn new(parent: Option<Box<Self>>) -> Self {
         Self {
-            variables: if let None = parent {
+            constants: if let None = parent {
                 get_global_variables()
             } else {
                 HashMap::new()
             },
+            variables: HashMap::new(),
             parent,
         }
     }
 
-    pub fn push_var(&mut self, key: String, value: &RuntimeValue) {
-        self.variables.insert(key, value.clone());
+    pub fn push_var(&mut self, key: String, value: &RuntimeValue, is_mutable: bool) {
+        if is_mutable {
+            self.variables.insert(key, value.clone());
+        } else {
+            self.constants.insert(key, value.clone());
+        }
     }
 
     pub fn assign_var(&mut self, key: String, value: &RuntimeValue) {
         if self.resolve(&key).variables.contains_key(&key) {
             self.variables.insert(key, value.clone());
         } else {
-            panic!("Variable not yet defined.");
+            panic!("Variable is a immutable.");
         }
     }
 
     pub fn get_var(&mut self, key: &str) -> &RuntimeValue {
-        self.resolve(key).variables.get(key).unwrap()
+        if let Some(value) = self.resolve(key).variables.get(key) {
+            return value;
+        } else if let Some(value) = self.resolve(key).constants.get(key) {
+            return value;
+        } else {
+            panic!("Cannot resolve variable : '{}'", key);
+        }
     }
 
     pub fn resolve(&self, key: &str) -> &Self {
-        if self.variables.contains_key(key) {
+        if self.variables.contains_key(key) || self.constants.contains_key(key) {
             self
         } else if let Some(parent) = &self.parent {
             parent.resolve(key)

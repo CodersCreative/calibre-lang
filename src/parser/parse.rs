@@ -23,7 +23,46 @@ impl Parser {
         value
     }
     pub fn parse_statement(&mut self) -> NodeType {
-        self.parse_expression()
+        match self.first().token_type {
+            TokenType::Var | TokenType::Let => self.parse_variable_declaration(),
+            _ => self.parse_expression(),
+        }
+    }
+
+    pub fn parse_variable_declaration(&mut self) -> NodeType {
+        let is_mutable = self.eat().token_type == TokenType::Var;
+        let identifier = self
+            .expect_eat(&TokenType::Identifier, "Expected variable identifier")
+            .value;
+
+        match self.eat().token_type {
+            TokenType::EOL => {
+                if !is_mutable {
+                    panic!("Cannot declare null constant")
+                }
+
+                NodeType::VariableDeclaration {
+                    is_mutable,
+                    identifier,
+                    value: None,
+                }
+            }
+            TokenType::Equals => {
+                let node = NodeType::VariableDeclaration {
+                    is_mutable,
+                    identifier,
+                    value: Some(Box::new(self.parse_expression())),
+                };
+
+                self.expect_eat(
+                    &TokenType::EOL,
+                    "Expected either a ';' or the end of the line",
+                );
+
+                node
+            }
+            _ => panic!("Expected either variable declaration (EOL) or assignment (=)"),
+        }
     }
 
     pub fn parse_expression(&mut self) -> NodeType {
@@ -36,6 +75,10 @@ impl Parser {
         while ["^"].contains(&self.first().value.trim()) {
             let operator = self.eat().value.trim().chars().nth(0).unwrap();
             let right = self.parse_primary_expression();
+
+            if let NodeType::EOL = right {
+                break;
+            }
 
             left = NodeType::BinaryExpression {
                 left: Box::new(left),
@@ -54,6 +97,10 @@ impl Parser {
             let operator = self.eat().value.trim().chars().nth(0).unwrap();
             let right = self.parse_power_expression();
 
+            if let NodeType::EOL = right {
+                break;
+            }
+
             left = NodeType::BinaryExpression {
                 left: Box::new(left),
                 right: Box::new(right),
@@ -70,6 +117,10 @@ impl Parser {
         while ["+", "-"].contains(&self.first().value.trim()) {
             let operator = self.eat().value.trim().chars().nth(0).unwrap();
             let right = self.parse_multiplicative_expression();
+
+            if let NodeType::EOL = right {
+                break;
+            }
 
             left = NodeType::BinaryExpression {
                 left: Box::new(left),
@@ -93,6 +144,10 @@ impl Parser {
                     "Unexpected token found inside parenthesis.",
                 );
                 value
+            }
+            TokenType::EOL => {
+                self.eat();
+                NodeType::EOL
             }
             _ => panic!("Unexpected Token : {:?}.", self.first()),
         }

@@ -9,6 +9,7 @@ pub enum TokenType {
     OpenBrackets,
     CloseBrackets,
     BinaryOperator,
+    EOL,
     Var,
     Let,
     EOF,
@@ -56,6 +57,10 @@ pub fn tokenize(txt: String) -> Vec<Token> {
             )),
             '*' | '/' | '^' | '%' => Some(Token::new(
                 TokenType::BinaryOperator,
+                buffer.remove(0).to_string().trim(),
+            )),
+            ';' => Some(Token::new(
+                TokenType::EOL,
                 buffer.remove(0).to_string().trim(),
             )),
             '=' => Some(Token::new(
