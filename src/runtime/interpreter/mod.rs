@@ -23,6 +23,6 @@ pub fn evaluate(node: NodeType, scope: &mut Scope) -> RuntimeValue {
         NodeType::MapLiteral(_) => evaluate_object_expression(node, scope),
         NodeType::VariableDeclaration { .. } => evaluate_variable_declaration(node, scope),
         NodeType::AssignmentExpression { .. } => evaluate_assignment_expression(node, scope),
-        _ => panic!("This AST Node has not been implemented."),
+        _ => panic!("This AST Node has not been implemented. {:?}", node),
     }
 }

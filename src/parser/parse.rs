@@ -1,5 +1,5 @@
 use core::panic;
-use std::collections::HashMap;
+use std::collections::{self, HashMap};
 
 use crate::{
     ast::{BinaryOperator, NodeType},
@@ -68,28 +68,13 @@ impl Parser {
     pub fn parse_assignment_expression(&mut self) -> NodeType {
         let mut left = self.parse_object_expression();
 
-        if self.first().token_type == TokenType::Equals {
-            while [TokenType::Equals].contains(&self.first().token_type) {
-                let _ = self.eat();
-                let right = self.parse_object_expression();
-                left = NodeType::AssignmentExpression {
-                    identifier: Box::new(left),
-                    value: Box::new(right),
-                };
-            }
-        } else {
-            while [TokenType::OpenBrackets].contains(&self.first().token_type) {
-                let _ = self.eat();
-                let right = self.parse_additive_expression();
-                self.expect_eat(
-                    &TokenType::CloseBrackets,
-                    "Expected close brackets for setter.",
-                );
-                left = NodeType::AssignmentExpression {
-                    identifier: Box::new(left),
-                    value: Box::new(right),
-                };
-            }
+        while [TokenType::Equals].contains(&self.first().token_type) {
+            let _ = self.eat();
+            let right = self.parse_object_expression();
+            left = NodeType::AssignmentExpression {
+                identifier: Box::new(left),
+                value: Box::new(right),
+            };
         }
 
         left
@@ -131,12 +116,12 @@ impl Parser {
         NodeType::MapLiteral(properties)
     }
 
-    pub fn parse_power_expression(&mut self) -> NodeType {
-        let mut left = self.parse_primary_expression();
+    pub fn parse_additive_expression(&mut self) -> NodeType {
+        let mut left = self.parse_multiplicative_expression();
 
-        while ["^"].contains(&self.first().value.trim()) {
+        while ["+", "-"].contains(&self.first().value.trim()) {
             let operator = self.eat().value.trim().chars().nth(0).unwrap();
-            let right = self.parse_primary_expression();
+            let right = self.parse_multiplicative_expression();
 
             left = NodeType::BinaryExpression {
                 left: Box::new(left),
@@ -165,12 +150,12 @@ impl Parser {
         left
     }
 
-    pub fn parse_additive_expression(&mut self) -> NodeType {
-        let mut left = self.parse_multiplicative_expression();
+    pub fn parse_power_expression(&mut self) -> NodeType {
+        let mut left = self.parse_call_member_expression();
 
-        while ["+", "-"].contains(&self.first().value.trim()) {
+        while ["^"].contains(&self.first().value.trim()) {
             let operator = self.eat().value.trim().chars().nth(0).unwrap();
-            let right = self.parse_multiplicative_expression();
+            let right = self.parse_call_member_expression();
 
             left = NodeType::BinaryExpression {
                 left: Box::new(left),
@@ -180,6 +165,82 @@ impl Parser {
         }
 
         left
+    }
+
+    pub fn parse_call_member_expression(&mut self) -> NodeType {
+        let member = self.parse_member_expression();
+
+        if self.first().token_type == TokenType::OpenBrackets {
+            return self.parse_call_expression(member);
+        }
+
+        member
+    }
+
+    pub fn parse_call_expression(&mut self, caller: NodeType) -> NodeType {
+        let mut expression =
+            NodeType::CallExpression(Box::new(caller), Box::new(self.parse_arguments()));
+
+        if self.first().token_type == TokenType::OpenBrackets {
+            expression = self.parse_call_expression(expression);
+        }
+
+        expression
+    }
+
+    pub fn parse_member_expression(&mut self) -> NodeType {
+        let mut object = self.parse_primary_expression();
+
+        while self.first().token_type == TokenType::FullStop
+            || self.first().token_type == TokenType::OpenSquare
+        {
+            let (property, is_computed) = if self.eat().token_type == TokenType::FullStop {
+                let prop = self.parse_primary_expression();
+
+                if let NodeType::Identifier(_) = prop {
+                    (prop, false)
+                } else {
+                    panic!("Cannot use dot operator without an identifier");
+                }
+            } else {
+                let prop = self.parse_expression();
+                self.expect_eat(&TokenType::CloseSquare, "Missing Closing Bracket");
+                (prop, true)
+            };
+
+            object = NodeType::MemberExpression {
+                object: Box::new(object),
+                property: Box::new(property),
+                is_computed,
+            };
+        }
+
+        object
+    }
+
+    pub fn parse_arguments(&mut self) -> Vec<NodeType> {
+        let _ = self.expect_eat(&TokenType::OpenBrackets, "Expected open brackers.");
+
+        let args = if self.first().token_type == TokenType::CloseBrackets {
+            Vec::new()
+        } else {
+            self.parse_arguments_list()
+        };
+
+        let _ = self.expect_eat(&TokenType::CloseBrackets, "Missing closing brackets");
+
+        args
+    }
+
+    pub fn parse_arguments_list(&mut self) -> Vec<NodeType> {
+        let mut args = vec![self.parse_assignment_expression()];
+
+        while self.first().token_type == TokenType::Comma {
+            let _ = self.eat();
+            args.push(self.parse_assignment_expression());
+        }
+
+        args
     }
 
     pub fn parse_primary_expression(&mut self) -> NodeType {
