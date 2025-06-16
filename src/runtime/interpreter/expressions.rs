@@ -32,6 +32,20 @@ pub fn evaluate_binary_expression(exp: NodeType, scope: &mut Scope) -> RuntimeVa
     }
 }
 
+pub fn evaluate_assignment_expression(node : NodeType, scope: &mut Scope) -> RuntimeValue {
+    if let NodeType::AssignmentExpression { identifier, value } = node {
+        if let NodeType::Identifier(identifier) = *identifier{
+            let value = evaluate(*value, scope);
+            scope.assign_var(identifier, &value);
+            value
+        }else{
+            panic!("Tried to evaluate non-assignment-expression node using evaluate_assignment_expression.")
+        }
+    } else {
+        panic!("Tried to evaluate non-assignment-expression node using evaluate_assignment_expression.")
+    }
+}
+
 pub fn evaluate_numeric_binary_expression(left: f64, right: f64, operator: BinaryOperator) -> f64 {
     match operator {
         BinaryOperator::Add => left + right,

@@ -19,6 +19,7 @@ pub fn evaluate(node: NodeType, scope: &mut Scope) -> RuntimeValue {
         NodeType::Program(_) => evaluate_program(node, scope),
         NodeType::Identifier(x) => evaluate_identifier(&x, scope),
         NodeType::VariableDeclaration { .. } => evaluate_variable_declaration(node, scope),
+        NodeType::AssignmentExpression { .. } => evaluate_assignment_expression(node, scope),
         _ => panic!("This AST Node has not been implemented."),
     }
 }

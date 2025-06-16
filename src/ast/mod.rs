@@ -40,6 +40,10 @@ pub enum NodeType {
         identifier: String,
         value: Option<Box<NodeType>>,
     },
+    AssignmentExpression {
+        identifier : Box<NodeType>,
+        value : Box<NodeType>
+    },
     Identifier(String),
     NumericLiteral(f64),
     EOL,

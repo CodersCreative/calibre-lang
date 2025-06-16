@@ -1,6 +1,8 @@
 use core::panic;
 use std::collections::HashMap;
 
+const IGNORE : [char; 1] = [';'];
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TokenType {
     Number,
@@ -9,7 +11,6 @@ pub enum TokenType {
     OpenBrackets,
     CloseBrackets,
     BinaryOperator,
-    EOL,
     Var,
     Let,
     EOF,
@@ -59,25 +60,23 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                 TokenType::BinaryOperator,
                 buffer.remove(0).to_string().trim(),
             )),
-            ';' => Some(Token::new(
-                TokenType::EOL,
-                buffer.remove(0).to_string().trim(),
-            )),
             '=' => Some(Token::new(
                 TokenType::Equals,
                 buffer.remove(0).to_string().trim(),
             )),
             _ => {
-                if first.is_whitespace() {
+                let ignore = IGNORE.contains(first);
+
+                if first.is_whitespace() && !ignore {
                     let _ = buffer.remove(0);
                     None
-                } else if first.is_numeric() {
+                } else if first.is_numeric() && !ignore {
                     let mut number = String::new();
                     while buffer.len() > 0 && buffer[0].is_numeric() {
                         number.push(buffer.remove(0));
                     }
                     Some(Token::new(TokenType::Number, number.trim()))
-                } else if first.is_alphabetic() {
+                } else if first.is_alphabetic() && !ignore {
                     let mut txt = String::new();
                     while buffer.len() > 0
                         && buffer[0].is_alphanumeric()
@@ -91,7 +90,10 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                     } else {
                         Some(Token::new(TokenType::Identifier, txt.trim()))
                     }
-                } else {
+                } else if ignore{
+                    let _ = buffer.remove(0);
+                    None
+                } else{
                     panic!("Unrecognized character : {}", first);
                 }
             }

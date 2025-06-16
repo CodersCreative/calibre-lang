@@ -1,7 +1,6 @@
-use core::panic;
 use std::{
     collections::HashMap,
-    f64::{self, consts::PI},
+    f64::{self, consts::PI}, panic,
 };
 
 use crate::runtime::values::RuntimeValue;
@@ -46,10 +45,14 @@ impl Scope {
     }
 
     pub fn push_var(&mut self, key: String, value: &RuntimeValue, is_mutable: bool) {
-        if is_mutable {
-            self.variables.insert(key, value.clone());
+        if !self.constants.contains_key(&key) {
+            if is_mutable {
+                self.variables.insert(key, value.clone());
+            } else {
+                self.constants.insert(key, value.clone());
+            }
         } else {
-            self.constants.insert(key, value.clone());
+            panic!("Cannot shadow a non-mutable value");
         }
     }
 
