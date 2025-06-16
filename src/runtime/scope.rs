@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
-    f64::{self, consts::PI}, panic,
+    f64::{self, consts::PI},
+    i64, panic,
 };
 
 use crate::runtime::values::RuntimeValue;
@@ -14,19 +15,18 @@ pub struct Scope {
 
 fn get_global_variables() -> HashMap<String, RuntimeValue> {
     HashMap::from([
-        (String::from("PI"), RuntimeValue::Number(PI)),
-        (String::from("MAX"), RuntimeValue::Number(f64::MAX)),
-        (String::from("MIN"), RuntimeValue::Number(f64::MIN)),
+        (String::from("PI"), RuntimeValue::Float(PI)),
+        (String::from("FLOAT_MAX"), RuntimeValue::Float(f64::MAX)),
+        (String::from("INT_MAX"), RuntimeValue::Integer(i64::MAX)),
+        (String::from("FLOAT_MIN"), RuntimeValue::Float(f64::MIN)),
+        (String::from("INT_MIN"), RuntimeValue::Integer(i64::MIN)),
         (String::from("true"), RuntimeValue::Bool(true)),
         (String::from("false"), RuntimeValue::Bool(false)),
         (String::from("null"), RuntimeValue::Null),
-        (
-            String::from("INFINITY"),
-            RuntimeValue::Number(f64::INFINITY),
-        ),
+        (String::from("INFINITY"), RuntimeValue::Float(f64::INFINITY)),
         (
             String::from("NEG_INFINITY"),
-            RuntimeValue::Number(f64::NEG_INFINITY),
+            RuntimeValue::Float(f64::NEG_INFINITY),
         ),
     ])
 }

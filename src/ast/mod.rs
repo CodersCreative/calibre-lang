@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BinaryOperator {
     Subtract,
@@ -32,7 +34,7 @@ impl BinaryOperator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
     Program(Box<Vec<NodeType>>),
     VariableDeclaration {
@@ -41,15 +43,23 @@ pub enum NodeType {
         value: Option<Box<NodeType>>,
     },
     AssignmentExpression {
-        identifier : Box<NodeType>,
-        value : Box<NodeType>
+        identifier: Box<NodeType>,
+        value: Box<NodeType>,
     },
     Identifier(String),
-    NumericLiteral(f64),
+    FloatLiteral(f64),
+    IntegerLiteral(i64),
+    MemberExpression {
+        object: Box<NodeType>,
+        property: Box<NodeType>,
+        is_computed: bool,
+    },
+    CallExpression(Box<NodeType>, Box<Vec<NodeType>>),
     EOL,
     BinaryExpression {
         left: Box<NodeType>,
         right: Box<NodeType>,
         operator: BinaryOperator,
     },
+    MapLiteral(HashMap<String, Option<NodeType>>),
 }

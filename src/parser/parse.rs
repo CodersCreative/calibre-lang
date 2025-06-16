@@ -1,9 +1,11 @@
 use core::panic;
+use std::collections::HashMap;
 
 use crate::{
     ast::{BinaryOperator, NodeType},
     lexer::{Token, TokenType},
     parser::Parser,
+    runtime::values,
 };
 
 impl Parser {
@@ -36,7 +38,6 @@ impl Parser {
             .value;
 
         match self.eat().token_type {
-
             TokenType::Equals => {
                 let node = NodeType::VariableDeclaration {
                     is_mutable,
@@ -45,7 +46,7 @@ impl Parser {
                 };
 
                 node
-            },
+            }
             _ => {
                 if !is_mutable {
                     panic!("Cannot declare null constant")
@@ -56,8 +57,7 @@ impl Parser {
                     identifier,
                     value: None,
                 }
-            }
-            // _ => panic!("Expected either variable declaration (EOL) or assignment (=)"),
+            } // _ => panic!("Expected either variable declaration (EOL) or assignment (=)"),
         }
     }
 
@@ -66,15 +66,18 @@ impl Parser {
     }
 
     pub fn parse_assignment_expression(&mut self) -> NodeType {
-        let mut left = self.parse_additive_expression();
-        
-        if self.first().token_type == TokenType::Equals{
+        let mut left = self.parse_object_expression();
+
+        if self.first().token_type == TokenType::Equals {
             while [TokenType::Equals].contains(&self.first().token_type) {
                 let _ = self.eat();
-                let right = self.parse_additive_expression();
-                left = NodeType::AssignmentExpression { identifier: Box::new(left), value: Box::new(right) };
+                let right = self.parse_object_expression();
+                left = NodeType::AssignmentExpression {
+                    identifier: Box::new(left),
+                    value: Box::new(right),
+                };
             }
-        }else{
+        } else {
             while [TokenType::OpenBrackets].contains(&self.first().token_type) {
                 let _ = self.eat();
                 let right = self.parse_additive_expression();
@@ -82,12 +85,50 @@ impl Parser {
                     &TokenType::CloseBrackets,
                     "Expected close brackets for setter.",
                 );
-                left = NodeType::AssignmentExpression { identifier: Box::new(left), value: Box::new(right) };
+                left = NodeType::AssignmentExpression {
+                    identifier: Box::new(left),
+                    value: Box::new(right),
+                };
             }
         }
 
-        
         left
+    }
+
+    pub fn parse_object_expression(&mut self) -> NodeType {
+        if self.first().token_type != TokenType::OpenCurly {
+            return self.parse_additive_expression();
+        }
+
+        let mut properties = HashMap::new();
+        let _ = self.eat();
+
+        while !self.is_eof() && self.first().token_type != TokenType::CloseCurly {
+            let key = self
+                .expect_eat(&TokenType::Identifier, "Expected object literal key.")
+                .value;
+
+            if [TokenType::Comma, TokenType::CloseCurly].contains(&self.first().token_type) {
+                if self.first().token_type != TokenType::CloseCurly {
+                    let _ = self.eat();
+                }
+
+                properties.insert(key, None);
+                continue;
+            }
+
+            let _ = self.expect_eat(&TokenType::Colon, "Object missing colon after identifier.");
+
+            properties.insert(key, Some(self.parse_expression()));
+
+            if self.first().token_type != TokenType::CloseCurly {
+                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+            }
+        }
+
+        let _ = self.expect_eat(&TokenType::CloseCurly, "Object missing closing brace.");
+
+        NodeType::MapLiteral(properties)
     }
 
     pub fn parse_power_expression(&mut self) -> NodeType {
@@ -144,7 +185,10 @@ impl Parser {
     pub fn parse_primary_expression(&mut self) -> NodeType {
         match self.first().token_type {
             TokenType::Identifier => NodeType::Identifier(self.eat().value),
-            TokenType::Number => NodeType::NumericLiteral(self.eat().value.trim().parse().unwrap()),
+            TokenType::Float => NodeType::FloatLiteral(self.eat().value.trim().parse().unwrap()),
+            TokenType::Integer => {
+                NodeType::IntegerLiteral(self.eat().value.trim().parse().unwrap())
+            }
             TokenType::OpenBrackets => {
                 self.eat();
                 let value = self.parse_expression();

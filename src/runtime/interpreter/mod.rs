@@ -14,10 +14,13 @@ use crate::{
 
 pub fn evaluate(node: NodeType, scope: &mut Scope) -> RuntimeValue {
     match node {
-        NodeType::NumericLiteral(x) => RuntimeValue::Number(x),
+        NodeType::FloatLiteral(x) => RuntimeValue::Float(x),
+
+        NodeType::IntegerLiteral(x) => RuntimeValue::Integer(x),
         NodeType::BinaryExpression { .. } => evaluate_binary_expression(node, scope),
         NodeType::Program(_) => evaluate_program(node, scope),
         NodeType::Identifier(x) => evaluate_identifier(&x, scope),
+        NodeType::MapLiteral(_) => evaluate_object_expression(node, scope),
         NodeType::VariableDeclaration { .. } => evaluate_variable_declaration(node, scope),
         NodeType::AssignmentExpression { .. } => evaluate_assignment_expression(node, scope),
         _ => panic!("This AST Node has not been implemented."),

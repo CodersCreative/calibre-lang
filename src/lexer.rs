@@ -1,18 +1,26 @@
 use core::panic;
 use std::collections::HashMap;
 
-const IGNORE : [char; 1] = [';'];
+const IGNORE: [char; 1] = [';'];
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TokenType {
-    Number,
+    Float,
+    Integer,
     Identifier,
     Equals,
     OpenBrackets,
     CloseBrackets,
+    OpenCurly,
+    CloseCurly,
+    OpenSquare,
+    CloseSquare,
+    Colon,
+    Comma,
     BinaryOperator,
     Var,
     Let,
+    FullStop,
     EOF,
 }
 
@@ -43,27 +51,28 @@ pub fn tokenize(txt: String) -> Vec<Token> {
     let mut buffer: Vec<char> = txt.chars().collect();
     while buffer.len() > 0 {
         let first = buffer.first().unwrap();
-        let token = match first {
-            '(' => Some(Token::new(
-                TokenType::OpenBrackets,
-                buffer.remove(0).to_string().trim(),
-            )),
-            ')' => Some(Token::new(
-                TokenType::CloseBrackets,
-                buffer.remove(0).to_string().trim(),
-            )),
-            '+' | '-' => Some(Token::new(
-                TokenType::BinaryOperator,
-                buffer.remove(0).to_string().trim(),
-            )),
-            '*' | '/' | '^' | '%' => Some(Token::new(
-                TokenType::BinaryOperator,
-                buffer.remove(0).to_string().trim(),
-            )),
-            '=' => Some(Token::new(
-                TokenType::Equals,
-                buffer.remove(0).to_string().trim(),
-            )),
+
+        let get_token = |c: char| -> Option<TokenType> {
+            match c {
+                '(' => Some(TokenType::OpenBrackets),
+                ')' => Some(TokenType::CloseBrackets),
+                '{' => Some(TokenType::OpenCurly),
+                '}' => Some(TokenType::CloseCurly),
+                '[' => Some(TokenType::OpenSquare),
+                ']' => Some(TokenType::CloseSquare),
+                ',' => Some(TokenType::Comma),
+                '.' => Some(TokenType::FullStop),
+                ':' => Some(TokenType::Colon),
+                '+' | '-' => Some(TokenType::BinaryOperator),
+                '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator),
+                '=' => Some(TokenType::Equals),
+                _ => None,
+            }
+            // Some(Token::new(t, buffer.remove(0).to_string().trim()))
+        };
+
+        let token = match get_token(*first) {
+            Some(t) => Some(Token::new(t, buffer.remove(0).to_string().trim())),
             _ => {
                 let ignore = IGNORE.contains(first);
 
@@ -72,10 +81,19 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                     None
                 } else if first.is_numeric() && !ignore {
                     let mut number = String::new();
-                    while buffer.len() > 0 && buffer[0].is_numeric() {
+                    let mut is_int = true;
+                    while buffer.len() > 0 && (buffer[0].is_numeric() || buffer[0] == '.') {
+                        if buffer[0] == '.' {
+                            is_int = false;
+                        }
                         number.push(buffer.remove(0));
                     }
-                    Some(Token::new(TokenType::Number, number.trim()))
+
+                    if is_int {
+                        Some(Token::new(TokenType::Integer, number.trim()))
+                    } else {
+                        Some(Token::new(TokenType::Float, number.trim()))
+                    }
                 } else if first.is_alphabetic() && !ignore {
                     let mut txt = String::new();
                     while buffer.len() > 0
@@ -90,10 +108,10 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                     } else {
                         Some(Token::new(TokenType::Identifier, txt.trim()))
                     }
-                } else if ignore{
+                } else if ignore {
                     let _ = buffer.remove(0);
                     None
-                } else{
+                } else {
                     panic!("Unrecognized character : {}", first);
                 }
             }
