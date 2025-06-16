@@ -13,6 +13,10 @@ impl Parser {
         self.tokens.first().unwrap()
     }
 
+    fn nth(&self, i: usize) -> &Token {
+        self.tokens.get(i).unwrap()
+    }
+
     fn eat(&mut self) -> Token {
         self.tokens.remove(0)
     }
@@ -68,7 +72,37 @@ impl Parser {
     pub fn parse_assignment_expression(&mut self) -> NodeType {
         let mut left = self.parse_object_expression();
 
-        while [TokenType::Equals].contains(&self.first().token_type) {
+        if [TokenType::UnaryAssign].contains(&self.first().token_type) {
+            let operator = self.eat();
+
+            if ['^', '/', '*'].contains(&operator.value.chars().nth(0).unwrap()) {
+                panic!(
+                    "This notation cannot be used with operator {:?} as it would not alter the value.",
+                    operator.value.chars().nth(0).unwrap()
+                );
+            }
+
+            left = NodeType::AssignmentExpression {
+                identifier: Box::new(left.clone()),
+                value: Box::new(NodeType::BinaryExpression {
+                    left: Box::new(left),
+                    right: Box::new(NodeType::IntegerLiteral(1)),
+                    operator: BinaryOperator::from_symbol(operator.value.chars().nth(0).unwrap())
+                        .unwrap(),
+                }),
+            };
+        } else if [TokenType::BinaryAssign].contains(&self.first().token_type) {
+            let operator = self.eat();
+            left = NodeType::AssignmentExpression {
+                identifier: Box::new(left.clone()),
+                value: Box::new(NodeType::BinaryExpression {
+                    left: Box::new(left),
+                    right: Box::new(self.parse_object_expression()),
+                    operator: BinaryOperator::from_symbol(operator.value.chars().nth(0).unwrap())
+                        .unwrap(),
+                }),
+            };
+        } else if [TokenType::Equals].contains(&self.first().token_type) {
             let _ = self.eat();
             let right = self.parse_object_expression();
             left = NodeType::AssignmentExpression {
@@ -119,7 +153,9 @@ impl Parser {
     pub fn parse_additive_expression(&mut self) -> NodeType {
         let mut left = self.parse_multiplicative_expression();
 
-        while ["+", "-"].contains(&self.first().value.trim()) {
+        while ["+", "-"].contains(&self.first().value.trim())
+            && self.first().token_type == TokenType::BinaryOperator
+        {
             let operator = self.eat().value.trim().chars().nth(0).unwrap();
             let right = self.parse_multiplicative_expression();
 
@@ -136,7 +172,9 @@ impl Parser {
     pub fn parse_multiplicative_expression(&mut self) -> NodeType {
         let mut left = self.parse_power_expression();
 
-        while ["/", "*", "%"].contains(&self.first().value.trim()) {
+        while ["/", "*", "%"].contains(&self.first().value.trim())
+            && self.first().token_type == TokenType::BinaryOperator
+        {
             let operator = self.eat().value.trim().chars().nth(0).unwrap();
             let right = self.parse_power_expression();
 
@@ -153,7 +191,9 @@ impl Parser {
     pub fn parse_power_expression(&mut self) -> NodeType {
         let mut left = self.parse_call_member_expression();
 
-        while ["^"].contains(&self.first().value.trim()) {
+        while ["^"].contains(&self.first().value.trim())
+            && self.first().token_type == TokenType::BinaryOperator
+        {
             let operator = self.eat().value.trim().chars().nth(0).unwrap();
             let right = self.parse_call_member_expression();
 

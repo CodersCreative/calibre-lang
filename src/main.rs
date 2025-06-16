@@ -30,6 +30,7 @@ fn main() {
     //             break;
     //         }
     //
+    //         let program = parser.produce_ast(input);
     //         println!("{:?}", program);
     //         println!("result : {:?}", evaluate(program, &mut scope));
     //     } else {

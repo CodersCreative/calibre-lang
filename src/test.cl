@@ -1,4 +1,4 @@
-var foo = 50 / 2;
+var foo = 50;
 
 let map = {
   x : 100,
@@ -9,5 +9,6 @@ let map = {
   },
 };
 
-
-foo = map.foo() + 5;
+foo(20)
+foo++;
+print(foo)

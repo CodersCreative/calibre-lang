@@ -1,3 +1,4 @@
+use crate::ast::BinaryOperator;
 use core::panic;
 use std::collections::HashMap;
 
@@ -18,6 +19,8 @@ pub enum TokenType {
     Colon,
     Comma,
     BinaryOperator,
+    BinaryAssign,
+    UnaryAssign,
     Var,
     Let,
     FullStop,
@@ -47,7 +50,7 @@ impl Token {
 }
 
 pub fn tokenize(txt: String) -> Vec<Token> {
-    let mut tokens = Vec::new();
+    let mut tokens: Vec<Token> = Vec::new();
     let mut buffer: Vec<char> = txt.chars().collect();
     while buffer.len() > 0 {
         let first = buffer.first().unwrap();
@@ -118,6 +121,29 @@ pub fn tokenize(txt: String) -> Vec<Token> {
         };
 
         if let Some(token) = token {
+            if let Some(last) = tokens.last() {
+                if last.token_type == TokenType::BinaryOperator
+                    && token.token_type == TokenType::Equals
+                {
+                    let token = Token::new(TokenType::BinaryAssign, &last.value);
+                    tokens.pop();
+                    tokens.push(token);
+                    continue;
+                }
+
+                if last == &token && token.token_type == TokenType::BinaryOperator {
+                    let token = Token::new(TokenType::UnaryAssign, &last.value);
+                    tokens.pop();
+                    tokens.push(token);
+                    continue;
+                } else if token.token_type == TokenType::BinaryOperator
+                    && last.token_type == TokenType::BinaryOperator
+                {
+                    panic!(
+                        "Can only use short hand assignment with similar operators e.g. x++ or x--"
+                    );
+                }
+            }
             tokens.push(token);
         }
     }

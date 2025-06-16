@@ -1,11 +1,12 @@
-use std::collections::HashMap;
+use core::panic;
+use std::{collections::HashMap, thread::scope};
 
 use crate::{
     ast::{BinaryOperator, NodeType},
     runtime::{
         interpreter::evaluate,
         scope::Scope,
-        values::{self, RuntimeValue},
+        values::{self, NativeFunctions, RuntimeValue},
     },
 };
 
@@ -74,6 +75,47 @@ pub fn evaluate_object_expression(obj: NodeType, scope: &mut Scope) -> RuntimeVa
     RuntimeValue::Map(properties)
 }
 
+pub fn evaluate_call_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValue {
+    println!("{:?}", exp);
+    if let NodeType::CallExpression(caller, arguments) = exp {
+        let arguments: Vec<RuntimeValue> = arguments
+            .iter()
+            .map(|x| evaluate(x.clone(), scope))
+            .collect();
+
+        if let NodeType::Identifier(caller) = *caller.clone() {
+            if let Some(scope) = scope.safe_resolve_mut(&caller) {
+                if scope.variables.contains_key(&caller) {
+                    if arguments.len() <= 0 {
+                        return scope.get_var(&caller).clone();
+                    } else if arguments.len() == 1 {
+                        scope.assign_var(caller, &arguments[0]);
+                        return RuntimeValue::Null;
+                    } else {
+                        panic!(
+                            "Setters cant have more than one value or function has same identifier as variable."
+                        );
+                    }
+                } else if let Some(var) = scope.constants.get(&caller) {
+                    match var {
+                        NativeFunctions => {}
+                        _ => panic!(),
+                    }
+                }
+            }
+        }
+
+        let func = evaluate(*caller, scope);
+        match func {
+            RuntimeValue::NativeFunction(_) => func.call_native(arguments, scope),
+            _ => panic!("Cannot call non-variable or function value"),
+        }
+    } else {
+        panic!(
+            "Tried to evaluate non-assignment-expression node using evaluate_assignment_expression."
+        )
+    }
+}
 pub fn evaluate_numeric_binary_expression(
     left: &RuntimeValue,
     right: &RuntimeValue,

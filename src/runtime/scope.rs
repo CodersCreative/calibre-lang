@@ -1,12 +1,14 @@
 use std::{
     collections::HashMap,
     f64::{self, consts::PI},
-    i64, panic,
+    i64,
+    mem::discriminant,
+    panic,
 };
 
-use crate::runtime::values::RuntimeValue;
+use crate::runtime::values::{NativeFunctions, RuntimeValue};
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Scope {
     pub parent: Option<Box<Self>>,
     pub variables: HashMap<String, RuntimeValue>,
@@ -23,6 +25,10 @@ fn get_global_variables() -> HashMap<String, RuntimeValue> {
         (String::from("true"), RuntimeValue::Bool(true)),
         (String::from("false"), RuntimeValue::Bool(false)),
         (String::from("null"), RuntimeValue::Null),
+        (
+            String::from("print"),
+            RuntimeValue::NativeFunction(NativeFunctions::Print),
+        ),
         (String::from("INFINITY"), RuntimeValue::Float(f64::INFINITY)),
         (
             String::from("NEG_INFINITY"),
@@ -57,18 +63,55 @@ impl Scope {
     }
 
     pub fn assign_var(&mut self, key: String, value: &RuntimeValue) {
-        if self.resolve(&key).variables.contains_key(&key) {
-            self.variables.insert(key, value.clone());
+        let scope = self.resolve_mut(&key);
+        if scope.variables.contains_key(&key) {
+            if let Some(v) = scope.variables.get_mut(&key) {
+                if discriminant(v) == discriminant(value) || v.is_number() && value.is_number() {
+                    *v = value.clone()
+                } else {
+                    panic!("Cannot assign differently typed values to one another.");
+                }
+            }
         } else {
             panic!("Variable is a immutable.");
         }
     }
 
-    pub fn get_var(&mut self, key: &str) -> &RuntimeValue {
+    pub fn get_var(&self, key: &str) -> &RuntimeValue {
         if let Some(value) = self.resolve(key).variables.get(key) {
             return value;
         } else if let Some(value) = self.resolve(key).constants.get(key) {
             return value;
+        } else {
+            panic!("Cannot resolve variable : '{}'", key);
+        }
+    }
+
+    pub fn safe_resolve(&self, key: &str) -> Option<&Self> {
+        if self.variables.contains_key(key) || self.constants.contains_key(key) {
+            Some(self)
+        } else if let Some(parent) = &self.parent {
+            parent.safe_resolve(key)
+        } else {
+            None
+        }
+    }
+
+    pub fn safe_resolve_mut(&mut self, key: &str) -> Option<&mut Self> {
+        if self.variables.contains_key(key) || self.constants.contains_key(key) {
+            Some(self)
+        } else if let Some(parent) = &mut self.parent {
+            parent.safe_resolve_mut(key)
+        } else {
+            None
+        }
+    }
+
+    pub fn resolve_mut(&mut self, key: &str) -> &mut Self {
+        if self.variables.contains_key(key) || self.constants.contains_key(key) {
+            self
+        } else if let Some(parent) = &mut self.parent {
+            parent.resolve_mut(key)
         } else {
             panic!("Cannot resolve variable : '{}'", key);
         }
