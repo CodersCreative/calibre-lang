@@ -1,12 +1,12 @@
 use core::panic;
 use std::{
     collections::HashMap,
-    fmt::{Debug, write},
+    fmt::{Debug, format, write},
     str::FromStr,
     string::ParseError,
 };
 
-use crate::{lexer::TokenType, runtime::scope::Scope};
+use crate::{ast::NodeType, lexer::TokenType, runtime::scope::Scope};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NativeFunctions {
@@ -50,6 +50,14 @@ pub enum RuntimeValue {
     Bool(bool),
     Str(String),
     Char(char),
+    Function {
+        identifier: String,
+        parameters: HashMap<String, RuntimeType>,
+        body: Vec<NodeType>,
+        return_type: Option<RuntimeType>,
+        is_async: bool,
+        // scope : Rc<Ref>
+    },
     NativeFunction(NativeFunctions),
 }
 
@@ -64,6 +72,15 @@ impl ToString for RuntimeValue {
             Self::NativeFunction(x) => format!("native function : {:?}", x),
             Self::Str(x) => x.to_string(),
             Self::Char(x) => x.to_string(),
+            Self::Function {
+                identifier,
+                parameters,
+                body,
+                return_type,
+                is_async,
+            } => {
+                format!("{:?} ({:?}) -> {:?}", identifier, parameters, return_type)
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ use std::{collections::HashMap, thread::scope};
 use crate::{
     ast::{BinaryOperator, NodeType},
     runtime::{
-        interpreter::evaluate,
+        interpreter::{evaluate, statements},
         scope::Scope,
         values::{self, NativeFunctions, RuntimeValue},
     },
@@ -85,6 +85,33 @@ pub fn evaluate_call_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValu
 
         if let NodeType::Identifier(caller) = *caller.clone() {
             if let Some(scope) = scope.safe_resolve_var_mut(&caller) {
+                if let RuntimeValue::Function {
+                    identifier,
+                    parameters,
+                    body,
+                    return_type,
+                    is_async,
+                } = scope.get_var(&caller)
+                {
+                    let mut scope = Scope::new(Some(Box::new(scope.clone())));
+
+                    for (i, (k, v)) in parameters.iter().enumerate() {
+                        let arg = arguments[i].into_type(&mut scope, v.clone());
+                        scope.push_var(k.to_string(), &arg, true);
+                    }
+
+                    let mut result: RuntimeValue = RuntimeValue::Null;
+                    for statement in body {
+                        result = evaluate(statement.clone(), &mut scope);
+                    }
+
+                    if let Some(t) = return_type {
+                        return result.into_type(&mut scope, t.clone());
+                    } else {
+                        return RuntimeValue::Null;
+                    }
+                }
+
                 if scope.variables.contains_key(&caller) {
                     if arguments.len() <= 0 {
                         return scope.get_var(&caller).clone();
@@ -99,7 +126,13 @@ pub fn evaluate_call_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValu
                 } else if let Some(var) = scope.constants.get(&caller) {
                     match var {
                         NativeFunctions => {}
-                        _ => panic!(),
+                        _ => {
+                            if arguments.len() <= 0 {
+                                return scope.get_var(&caller).clone();
+                            } else {
+                                panic!("Cannot set constant");
+                            }
+                        }
                     }
                 }
             }

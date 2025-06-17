@@ -52,8 +52,8 @@ pub enum NodeType {
     FunctionDeclaration {
         identifier: String,
         parameters: HashMap<String, RuntimeType>,
-        body: Box<NodeType>,
-        return_type: RuntimeType,
+        body: Box<Vec<NodeType>>,
+        return_type: Option<RuntimeType>,
         is_async: bool,
     },
     AssignmentExpression {

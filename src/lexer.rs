@@ -25,7 +25,10 @@ pub enum TokenType {
     Var,
     Let,
     Async,
+    Loop,
     Func,
+    If,
+    Scope,
     FullStop,
     EOF,
     Struct,
@@ -35,7 +38,10 @@ pub fn keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("var"), TokenType::Var),
         (String::from("let"), TokenType::Let),
+        (String::from("for"), TokenType::Loop),
+        (String::from("scope"), TokenType::Scope),
         (String::from("fn"), TokenType::Func),
+        (String::from("if"), TokenType::If),
         (String::from("func"), TokenType::Func),
         (String::from("struct"), TokenType::Struct),
         (String::from("async"), TokenType::Async),
@@ -144,6 +150,19 @@ pub fn tokenize(txt: String) -> Vec<Token> {
 
         if let Some(token) = token {
             if let Some(last) = tokens.last() {
+                if last.value == "/" && token.value == "*" {
+                    tokens.pop();
+                    let mut first = '/';
+                    let mut second = '*';
+
+                    while buffer.len() > 0 && (first != '*' || second != '/') {
+                        first = second;
+                        second = buffer.remove(0);
+                    }
+
+                    continue;
+                }
+
                 if last.token_type == TokenType::BinaryOperator
                     && token.token_type == TokenType::Equals
                 {

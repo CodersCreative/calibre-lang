@@ -47,7 +47,7 @@ impl Parser {
             .expect_eat(&TokenType::Identifier, "Expected function identifier")
             .value;
 
-        let mut arguments =
+        let mut parameters =
             self.parse_key_type_list(TokenType::OpenBrackets, TokenType::CloseBrackets);
 
         let is_async = self.first().token_type == TokenType::Async;
@@ -66,7 +66,21 @@ impl Parser {
 
         let _ = self.expect_eat(&TokenType::OpenCurly, "Expected opening brackets");
 
-        todo!()
+        let mut body: Vec<NodeType> = Vec::new();
+
+        while ![TokenType::EOF, TokenType::CloseCurly].contains(&self.first().token_type) {
+            body.push(self.parse_statement());
+        }
+
+        let _ = self.expect_eat(&TokenType::CloseCurly, "Expected closing brackets");
+
+        NodeType::FunctionDeclaration {
+            identifier,
+            parameters,
+            body: Box::new(body),
+            return_type,
+            is_async,
+        }
     }
 
     fn parse_key_type_list(
@@ -90,12 +104,12 @@ impl Parser {
 
             properties.insert(key, RuntimeType::from_str(&value).unwrap());
 
-            if self.first().token_type != TokenType::CloseCurly {
+            if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
             }
         }
 
-        let _ = self.expect_eat(&TokenType::CloseCurly, "Object missing closing brace.");
+        let _ = self.expect_eat(&close_token, "Object missing closing brace.");
 
         properties
     }

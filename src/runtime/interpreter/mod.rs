@@ -26,6 +26,7 @@ pub fn evaluate(node: NodeType, scope: &mut Scope) -> RuntimeValue {
         NodeType::VariableDeclaration { .. } => evaluate_variable_declaration(node, scope),
         NodeType::StructDeclaration { .. } => evaluate_struct_declaration(node, scope),
         NodeType::AssignmentExpression { .. } => evaluate_assignment_expression(node, scope),
+        NodeType::FunctionDeclaration { .. } => evaluate_function_declaration(node, scope),
         _ => panic!("This AST Node has not been implemented. {:?}", node),
     }
 }

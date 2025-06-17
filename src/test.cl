@@ -21,7 +21,17 @@ let map = {
 
 let zimbabwe : Country = {name : "Zimbabwe", people : 10, language : {code : 19}}
 
-foo(20)
+fn main(number : int) : string{
+  fn add (x : int, y : int) : int {
+    x + y
+  }
+
+  add(number, 100)
+}
+
+print(main(100));
+
+/*foo(20)
 
 let fb = "foo_bar";
 
@@ -31,5 +41,5 @@ let foo_bar = foo + 100; let bar_foo = 1 / foo_bar;
 print(foo_bar)
 print(bar_foo)
 print(fb)
-print(foo)
 print(zimbabwe)
+print(foo)*/
