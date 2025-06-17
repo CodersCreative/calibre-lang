@@ -8,6 +8,7 @@ const IGNORE: [char; 1] = [';'];
 pub enum TokenType {
     Float,
     Integer,
+    String,
     Identifier,
     Equals,
     OpenBrackets,
@@ -59,6 +60,8 @@ impl Token {
 pub fn tokenize(txt: String) -> Vec<Token> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut buffer: Vec<char> = txt.chars().collect();
+    let mut in_str = false;
+
     while buffer.len() > 0 {
         let first = buffer.first().unwrap();
 
@@ -86,7 +89,19 @@ pub fn tokenize(txt: String) -> Vec<Token> {
             _ => {
                 let ignore = IGNORE.contains(first);
 
-                if first.is_whitespace() && !ignore {
+                if first == &'"' {
+                    let mut txt = String::new();
+
+                    let _ = buffer.remove(0);
+
+                    while buffer[0] != '"' {
+                        txt.push(buffer.remove(0));
+                    }
+
+                    let _ = buffer.remove(0);
+
+                    Some(Token::new(TokenType::String, &txt))
+                } else if first.is_whitespace() && !ignore {
                     let _ = buffer.remove(0);
                     None
                 } else if first.is_numeric() && !ignore {
@@ -104,10 +119,10 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                     } else {
                         Some(Token::new(TokenType::Float, number.trim()))
                     }
-                } else if first.is_alphabetic() && !ignore {
+                } else if (first.is_alphabetic() || first == &'_') && !ignore {
                     let mut txt = String::new();
                     while buffer.len() > 0
-                        && buffer[0].is_alphanumeric()
+                        && (buffer[0].is_alphanumeric() || buffer[0] == '_')
                         && !buffer[0].is_whitespace()
                     {
                         txt.push(buffer.remove(0));

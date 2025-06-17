@@ -6,6 +6,7 @@ struct Language {
 
 struct Country {
   people : int,
+  name : string,
 	language : Language,
 }
 
@@ -18,9 +19,17 @@ let map = {
   },
 };
 
-let zimbabwe : Country = {people : 10, language : {code : 19}}
+let zimbabwe : Country = {name : "Zimbabwe", people : 10, language : {code : 19}}
 
 foo(20)
-foo++;
+
+let fb = "foo_bar";
+
+foo++; 
+let foo_bar = foo + 100; let bar_foo = 1 / foo_bar;
+
+print(foo_bar)
+print(bar_foo)
+print(fb)
 print(foo)
 print(zimbabwe)

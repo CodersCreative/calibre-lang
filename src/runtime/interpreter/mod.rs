@@ -16,6 +16,8 @@ pub fn evaluate(node: NodeType, scope: &mut Scope) -> RuntimeValue {
     match node {
         NodeType::FloatLiteral(x) => RuntimeValue::Float(x),
         NodeType::IntegerLiteral(x) => RuntimeValue::Integer(x),
+        NodeType::StringLiteral(x) => RuntimeValue::Str(x),
+        NodeType::CharLiteral(x) => RuntimeValue::Char(x),
         NodeType::BinaryExpression { .. } => evaluate_binary_expression(node, scope),
         NodeType::Program(_) => evaluate_program(node, scope),
         NodeType::Identifier(x) => evaluate_identifier(&x, scope),

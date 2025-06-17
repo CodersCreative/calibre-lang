@@ -1,5 +1,9 @@
 use core::panic;
-use std::{collections::{self, HashMap}, str::FromStr};
+use std::{
+    collections::{self, HashMap},
+    ops::Not,
+    str::FromStr,
+};
 
 use crate::{
     ast::{BinaryOperator, NodeType},
@@ -32,7 +36,7 @@ impl Parser {
         match self.first().token_type {
             TokenType::Var | TokenType::Let => self.parse_variable_declaration(),
             TokenType::Struct => self.parse_struct_declaration(),
-            TokenType::Func => self.parse_function_declaration(), 
+            TokenType::Func => self.parse_function_declaration(),
             _ => self.parse_expression(),
         }
     }
@@ -42,8 +46,9 @@ impl Parser {
         let identifier = self
             .expect_eat(&TokenType::Identifier, "Expected function identifier")
             .value;
-        
-        let mut arguments = self.parse_key_type_list(TokenType::OpenBrackets, TokenType::CloseBrackets);
+
+        let mut arguments =
+            self.parse_key_type_list(TokenType::OpenBrackets, TokenType::CloseBrackets);
 
         let is_async = self.first().token_type == TokenType::Async;
 
@@ -53,18 +58,22 @@ impl Parser {
 
         let return_type = if self.eat().token_type == TokenType::OpenCurly {
             None
-        }else {
+        } else {
             let t = self.expect_eat(&TokenType::Identifier, "Expected return type");
 
             Some(RuntimeType::from_str(&t.value).unwrap())
         };
 
         let _ = self.expect_eat(&TokenType::OpenCurly, "Expected opening brackets");
-    
+
         todo!()
     }
 
-    fn parse_key_type_list(&mut self, open_token : TokenType, close_token : TokenType) -> HashMap<String, RuntimeType> {
+    fn parse_key_type_list(
+        &mut self,
+        open_token: TokenType,
+        close_token: TokenType,
+    ) -> HashMap<String, RuntimeType> {
         let mut properties = HashMap::new();
         let _ = self.expect_eat(&open_token, "Expected opening brackets");
 
@@ -73,13 +82,12 @@ impl Parser {
                 .expect_eat(&TokenType::Identifier, "Expected object literal key.")
                 .value;
 
-            
             let _ = self.expect_eat(&TokenType::Colon, "Object missing colon after identifier.");
 
             let value = self
                 .expect_eat(&TokenType::Identifier, "Expected data type.")
                 .value;
-            
+
             properties.insert(key, RuntimeType::from_str(&value).unwrap());
 
             if self.first().token_type != TokenType::CloseCurly {
@@ -88,17 +96,21 @@ impl Parser {
         }
 
         let _ = self.expect_eat(&TokenType::CloseCurly, "Object missing closing brace.");
-        
+
         properties
     }
 
     pub fn parse_struct_declaration(&mut self) -> NodeType {
-        let _ = self
-            .expect_eat(&TokenType::Struct, "Expected struct keyword");
+        let _ = self.expect_eat(&TokenType::Struct, "Expected struct keyword");
 
-        let identifier = self.expect_eat(&TokenType::Identifier, "Expected struct name").value;
-        
-        NodeType::StructDeclaration  { identifier, properties : self.parse_key_type_list(TokenType::OpenCurly, TokenType::CloseCurly) }
+        let identifier = self
+            .expect_eat(&TokenType::Identifier, "Expected struct name")
+            .value;
+
+        NodeType::StructDeclaration {
+            identifier,
+            properties: self.parse_key_type_list(TokenType::OpenCurly, TokenType::CloseCurly),
+        }
     }
     pub fn parse_variable_declaration(&mut self) -> NodeType {
         let is_mutable = self.eat().token_type == TokenType::Var;
@@ -109,9 +121,12 @@ impl Parser {
         let data_type = match self.first().token_type {
             TokenType::Colon => {
                 let _ = self.eat();
-                Some(self.expect_eat(&TokenType::Identifier, "Expected variable type").value)
-            },
-            _ => None
+                Some(
+                    self.expect_eat(&TokenType::Identifier, "Expected variable type")
+                        .value,
+                )
+            }
+            _ => None,
         };
 
         match self.eat().token_type {
@@ -130,13 +145,11 @@ impl Parser {
                     panic!("Cannot declare null constant")
                 }
 
-
-
                 NodeType::VariableDeclaration {
                     is_mutable,
                     identifier,
                     value: None,
-                    data_type
+                    data_type,
                 }
             } // _ => panic!("Expected either variable declaration (EOL) or assignment (=)"),
         }
@@ -295,8 +308,10 @@ impl Parser {
     }
 
     pub fn parse_call_expression(&mut self, caller: NodeType) -> NodeType {
-        let mut expression =
-            NodeType::CallExpression(Box::new(caller), Box::new(self.parse_arguments(TokenType::OpenBrackets, TokenType::CloseBrackets)));
+        let mut expression = NodeType::CallExpression(
+            Box::new(caller),
+            Box::new(self.parse_arguments(TokenType::OpenBrackets, TokenType::CloseBrackets)),
+        );
 
         if self.first().token_type == TokenType::OpenBrackets {
             expression = self.parse_call_expression(expression);
@@ -335,7 +350,11 @@ impl Parser {
         object
     }
 
-    pub fn parse_arguments(&mut self, open_token : TokenType, close_token : TokenType) -> Vec<NodeType> {
+    pub fn parse_arguments(
+        &mut self,
+        open_token: TokenType,
+        close_token: TokenType,
+    ) -> Vec<NodeType> {
         let _ = self.expect_eat(&open_token, "Expected open brackers.");
 
         let args = if self.first().token_type == close_token {
@@ -354,7 +373,8 @@ impl Parser {
 
         while self.first().token_type == TokenType::Comma {
             let _ = self.eat();
-            if [TokenType::CloseCurly, TokenType::CloseBrackets].contains(&self.first().token_type) {
+            if [TokenType::CloseCurly, TokenType::CloseBrackets].contains(&self.first().token_type)
+            {
                 break;
             }
             args.push(self.parse_assignment_expression());
@@ -369,6 +389,14 @@ impl Parser {
             TokenType::Float => NodeType::FloatLiteral(self.eat().value.trim().parse().unwrap()),
             TokenType::Integer => {
                 NodeType::IntegerLiteral(self.eat().value.trim().parse().unwrap())
+            }
+            TokenType::String => {
+                let val = self.eat().value;
+                if val.len() == 1 {
+                    NodeType::CharLiteral(val.chars().nth(0).unwrap())
+                } else {
+                    NodeType::StringLiteral(val.to_string())
+                }
             }
             TokenType::OpenBrackets => {
                 self.eat();

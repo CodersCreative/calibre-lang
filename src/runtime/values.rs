@@ -1,7 +1,9 @@
 use core::panic;
 use std::{
     collections::HashMap,
-    fmt::{write, Debug}, str::FromStr, string::ParseError,
+    fmt::{Debug, write},
+    str::FromStr,
+    string::ParseError,
 };
 
 use crate::{lexer::TokenType, runtime::scope::Scope};
@@ -32,7 +34,9 @@ impl FromStr for RuntimeType {
             "float" => RuntimeType::Float,
             "map" => RuntimeType::Map,
             "bool" => RuntimeType::Bool,
-            _ => RuntimeType::Struct(s.to_string())
+            "string" => RuntimeType::Str,
+            "char" => RuntimeType::Char,
+            _ => RuntimeType::Struct(s.to_string()),
         })
     }
 }
@@ -92,11 +96,11 @@ impl RuntimeValue {
             panic!();
         }
     }
-    
-    pub fn into_type(&self, scope: &mut Scope, t : RuntimeType) -> RuntimeValue {
+
+    pub fn into_type(&self, scope: &mut Scope, t: RuntimeType) -> RuntimeValue {
         let panic_type = || {
-           panic!("Cannot convert {:?} into {:?}", self, t);
-           RuntimeValue::Null
+            panic!("Cannot convert {:?} into {:?}", self, t);
+            RuntimeValue::Null
         };
 
         match self {
@@ -106,32 +110,49 @@ impl RuntimeValue {
                 RuntimeType::Bool => RuntimeValue::Bool(match x {
                     0 => false,
                     1 => true,
-                    _ => {panic_type(); false},
+                    _ => {
+                        panic_type();
+                        false
+                    }
                 }),
                 RuntimeType::Map => panic_type(),
-                RuntimeType::Struct(_) => panic_type()
-            }
+                RuntimeType::Struct(_) => panic_type(),
+                RuntimeType::Str => RuntimeValue::Str(self.to_string()),
+                RuntimeType::Char => panic_type(),
+            },
             RuntimeValue::Float(x) => match t {
                 RuntimeType::Integer => RuntimeValue::Integer(*x as i64),
                 RuntimeType::Float => self.clone(),
                 RuntimeType::Bool => RuntimeValue::Bool(match x {
                     0.0 => false,
                     1.0 => true,
-                    _ => {panic_type(); false},
+                    _ => {
+                        panic_type();
+                        false
+                    }
                 }),
                 RuntimeType::Map => panic_type(),
-                RuntimeType::Struct(_) => panic_type()
-            }
+                RuntimeType::Struct(_) => panic_type(),
+                RuntimeType::Str => RuntimeValue::Str(self.to_string()),
+                RuntimeType::Char => panic_type(),
+            },
             RuntimeValue::Str(x) => match t {
                 RuntimeType::Integer => RuntimeValue::Integer(x.parse().unwrap()),
                 RuntimeType::Float => RuntimeValue::Float(x.parse().unwrap()),
-                RuntimeType::Bool => panic_type(),                RuntimeType::Map => panic_type(),
-                RuntimeType::Struct(_) => panic_type()
-            }
+                RuntimeType::Bool => panic_type(),
+                RuntimeType::Map => panic_type(),
+                RuntimeType::Str => self.clone(),
+                RuntimeType::Char => RuntimeValue::Char(x.chars().nth(0).unwrap()),
+                RuntimeType::Struct(_) => panic_type(),
+            },
             RuntimeValue::Null => panic_type(),
-            RuntimeValue::Char(x) => RuntimeValue::into_type(&RuntimeValue::Str(x.to_string()), scope, t),
+            RuntimeValue::Char(x) => {
+                RuntimeValue::into_type(&RuntimeValue::Str(x.to_string()), scope, t)
+            }
             RuntimeValue::Map(x) => match t {
                 RuntimeType::Map => self.clone(),
+                RuntimeType::Str => RuntimeValue::Str(self.to_string()),
+                RuntimeType::Char => panic_type(),
                 RuntimeType::Struct(identifier) => {
                     let properties = scope.resolve_struct(&identifier).get_struct(&identifier);
                     for property in properties {

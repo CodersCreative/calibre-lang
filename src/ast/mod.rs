@@ -43,7 +43,7 @@ pub enum NodeType {
         is_mutable: bool,
         identifier: String,
         value: Option<Box<NodeType>>,
-        data_type : Option<String>,
+        data_type: Option<String>,
     },
     StructDeclaration {
         identifier: String,
@@ -53,14 +53,16 @@ pub enum NodeType {
         identifier: String,
         parameters: HashMap<String, RuntimeType>,
         body: Box<NodeType>,
-        return_type : RuntimeType,
-        is_async : bool,
+        return_type: RuntimeType,
+        is_async: bool,
     },
     AssignmentExpression {
         identifier: Box<NodeType>,
         value: Box<NodeType>,
     },
     Identifier(String),
+    StringLiteral(String),
+    CharLiteral(char),
     FloatLiteral(f64),
     IntegerLiteral(i64),
     MemberExpression {
