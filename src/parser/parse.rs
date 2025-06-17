@@ -1,11 +1,11 @@
 use core::panic;
-use std::collections::{self, HashMap};
+use std::{collections::{self, HashMap}, str::FromStr};
 
 use crate::{
     ast::{BinaryOperator, NodeType},
     lexer::{Token, TokenType},
     parser::Parser,
-    runtime::values,
+    runtime::values::{self, RuntimeType},
 };
 
 impl Parser {
@@ -31,6 +31,7 @@ impl Parser {
     pub fn parse_statement(&mut self) -> NodeType {
         match self.first().token_type {
             TokenType::Var | TokenType::Let => self.parse_variable_declaration(),
+            TokenType::Struct => self.parse_struct_declaration(),
             _ => self.parse_expression(),
         }
     }
@@ -41,11 +42,20 @@ impl Parser {
             .expect_eat(&TokenType::Identifier, "Expected variable identifier")
             .value;
 
+        let data_type = match self.first().token_type {
+            TokenType::Colon => {
+                let _ = self.eat();
+                Some(self.expect_eat(&TokenType::Identifier, "Expected variable type").value)
+            },
+            _ => None
+        };
+
         match self.eat().token_type {
             TokenType::Equals => {
                 let node = NodeType::VariableDeclaration {
                     is_mutable,
                     identifier,
+                    data_type,
                     value: Some(Box::new(self.parse_expression())),
                 };
 
@@ -56,10 +66,13 @@ impl Parser {
                     panic!("Cannot declare null constant")
                 }
 
+
+
                 NodeType::VariableDeclaration {
                     is_mutable,
                     identifier,
                     value: None,
+                    data_type
                 }
             } // _ => panic!("Expected either variable declaration (EOL) or assignment (=)"),
         }
@@ -207,6 +220,39 @@ impl Parser {
         left
     }
 
+    pub fn parse_struct_declaration(&mut self) -> NodeType {
+        let _ = self
+            .expect_eat(&TokenType::Struct, "Expected struct keyword");
+
+        let identifier = self.expect_eat(&TokenType::Identifier, "Expected struct name").value;
+
+        let mut properties = HashMap::new();
+        let _ = self.expect_eat(&TokenType::OpenCurly, "Expected opening brackets");
+
+        while !self.is_eof() && self.first().token_type != TokenType::CloseCurly {
+            let key = self
+                .expect_eat(&TokenType::Identifier, "Expected object literal key.")
+                .value;
+
+
+            
+            let _ = self.expect_eat(&TokenType::Colon, "Object missing colon after identifier.");
+
+            let value = self
+                .expect_eat(&TokenType::Identifier, "Expected data type.")
+                .value;
+            
+            properties.insert(key, RuntimeType::from_str(&value).unwrap());
+
+            if self.first().token_type != TokenType::CloseCurly {
+                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+            }
+        }
+
+        let _ = self.expect_eat(&TokenType::CloseCurly, "Object missing closing brace.");
+        
+        NodeType::StructDeclaration  { identifier, properties }
+    }
     pub fn parse_call_member_expression(&mut self) -> NodeType {
         let member = self.parse_member_expression();
 
@@ -219,7 +265,7 @@ impl Parser {
 
     pub fn parse_call_expression(&mut self, caller: NodeType) -> NodeType {
         let mut expression =
-            NodeType::CallExpression(Box::new(caller), Box::new(self.parse_arguments()));
+            NodeType::CallExpression(Box::new(caller), Box::new(self.parse_arguments(TokenType::OpenBrackets, TokenType::CloseBrackets)));
 
         if self.first().token_type == TokenType::OpenBrackets {
             expression = self.parse_call_expression(expression);
@@ -258,16 +304,16 @@ impl Parser {
         object
     }
 
-    pub fn parse_arguments(&mut self) -> Vec<NodeType> {
-        let _ = self.expect_eat(&TokenType::OpenBrackets, "Expected open brackers.");
+    pub fn parse_arguments(&mut self, open_token : TokenType, close_token : TokenType) -> Vec<NodeType> {
+        let _ = self.expect_eat(&open_token, "Expected open brackers.");
 
-        let args = if self.first().token_type == TokenType::CloseBrackets {
+        let args = if self.first().token_type == close_token {
             Vec::new()
         } else {
             self.parse_arguments_list()
         };
 
-        let _ = self.expect_eat(&TokenType::CloseBrackets, "Missing closing brackets");
+        let _ = self.expect_eat(&close_token, "Missing closing brackets");
 
         args
     }
@@ -277,6 +323,9 @@ impl Parser {
 
         while self.first().token_type == TokenType::Comma {
             let _ = self.eat();
+            if [TokenType::CloseCurly, TokenType::CloseBrackets].contains(&self.first().token_type) {
+                break;
+            }
             args.push(self.parse_assignment_expression());
         }
 

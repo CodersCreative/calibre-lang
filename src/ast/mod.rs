@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::runtime::values::RuntimeType;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BinaryOperator {
     Subtract,
@@ -41,6 +43,11 @@ pub enum NodeType {
         is_mutable: bool,
         identifier: String,
         value: Option<Box<NodeType>>,
+        data_type : Option<String>,
+    },
+    StructDeclaration {
+        identifier: String,
+        properties: HashMap<String, RuntimeType>,
     },
     AssignmentExpression {
         identifier: Box<NodeType>,

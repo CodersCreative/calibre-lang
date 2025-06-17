@@ -1,9 +1,10 @@
+use core::panic;
 use std::{
     collections::HashMap,
-    fmt::{Debug, write},
+    fmt::{write, Debug}, str::FromStr, string::ParseError,
 };
 
-use crate::runtime::scope::Scope;
+use crate::{lexer::TokenType, runtime::scope::Scope};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NativeFunctions {
@@ -11,6 +12,28 @@ pub enum NativeFunctions {
 }
 
 impl NativeFunctions {}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RuntimeType {
+    Float,
+    Integer,
+    Map,
+    Bool,
+    Struct(String),
+}
+
+impl FromStr for RuntimeType {
+    type Err = ParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "int" => RuntimeType::Integer,
+            "float" => RuntimeType::Float,
+            "map" => RuntimeType::Map,
+            "bool" => RuntimeType::Bool,
+            _ => RuntimeType::Struct(s.to_string())
+        })
+    }
+}
 
 #[derive(Clone, PartialEq)]
 pub enum RuntimeValue {
@@ -61,6 +84,53 @@ impl RuntimeValue {
             }
         } else {
             panic!();
+        }
+    }
+    
+    pub fn into_type(&self, scope: &mut Scope, t : RuntimeType) -> RuntimeValue {
+        let panic_type = || {
+           panic!("Cannot convert {:?} into {:?}", self, t);
+           RuntimeValue::Null
+        };
+
+        match self {
+            RuntimeValue::Integer(x) => match t {
+                RuntimeType::Integer => self.clone(),
+                RuntimeType::Float => RuntimeValue::Float(*x as f64),
+                RuntimeType::Bool => RuntimeValue::Bool(match x {
+                    0 => false,
+                    1 => true,
+                    _ => {panic_type(); false},
+                }),
+                RuntimeType::Map => panic_type(),
+                RuntimeType::Struct(_) => panic_type()
+            }
+            RuntimeValue::Float(x) => match t {
+                RuntimeType::Integer => RuntimeValue::Integer(*x as i64),
+                RuntimeType::Float => self.clone(),
+                RuntimeType::Bool => RuntimeValue::Bool(match x {
+                    0.0 => false,
+                    1.0 => true,
+                    _ => {panic_type(); false},
+                }),
+                RuntimeType::Map => panic_type(),
+                RuntimeType::Struct(_) => panic_type()
+            }
+            RuntimeValue::Null => panic_type(),
+            RuntimeValue::Map(x) => match t {
+                RuntimeType::Map => self.clone(),
+                RuntimeType::Struct(identifier) => {
+                    let properties = scope.resolve_struct(&identifier).get_struct(&identifier);
+                    for property in properties {
+                        if !x.contains_key(property.0) {
+                            panic!("Struct Declaration is missing {:?}", property);
+                        }
+                    }
+                    self.clone()
+                }
+                _ => panic_type(),
+            },
+            _ => panic_type(),
         }
     }
 }

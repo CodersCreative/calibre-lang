@@ -17,7 +17,7 @@ fn main() {
     let mut parser = Parser::default();
     let mut scope = Scope::new(None);
 
-    if let Ok(txt) = fs::read_to_string("./src/test.cl") {
+    if let Ok(txt) = fs::read_to_string("./test.cl") {
         let program = parser.produce_ast(txt);
         println!("result : {:?}", evaluate(program, &mut scope));
     } else {

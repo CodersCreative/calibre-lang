@@ -25,12 +25,14 @@ pub enum TokenType {
     Let,
     FullStop,
     EOF,
+    Struct,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("var"), TokenType::Var),
         (String::from("let"), TokenType::Let),
+        (String::from("struct"), TokenType::Struct),
     ])
 }
 

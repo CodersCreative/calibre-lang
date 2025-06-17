@@ -84,7 +84,7 @@ pub fn evaluate_call_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValu
             .collect();
 
         if let NodeType::Identifier(caller) = *caller.clone() {
-            if let Some(scope) = scope.safe_resolve_mut(&caller) {
+            if let Some(scope) = scope.safe_resolve_var_mut(&caller) {
                 if scope.variables.contains_key(&caller) {
                     if arguments.len() <= 0 {
                         return scope.get_var(&caller).clone();

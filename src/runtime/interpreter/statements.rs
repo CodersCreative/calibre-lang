@@ -1,6 +1,8 @@
+use std::str::FromStr;
+
 use crate::{
     ast::NodeType,
-    runtime::{interpreter::evaluate, scope::Scope, values::RuntimeValue},
+    runtime::{interpreter::evaluate, scope::Scope, values::{RuntimeType, RuntimeValue}},
 };
 
 pub fn evaluate_program(exp: NodeType, scope: &mut Scope) -> RuntimeValue {
@@ -16,17 +18,32 @@ pub fn evaluate_program(exp: NodeType, scope: &mut Scope) -> RuntimeValue {
 
     last
 }
+pub fn evaluate_struct_declaration(declaration: NodeType, scope: &mut Scope) -> RuntimeValue {
+    if let NodeType::StructDeclaration { identifier, properties } = declaration
+    {
+        scope.push_struct(identifier, &properties);
+        RuntimeValue::Null
+    } else {
+        panic!("Tried to evaluate non-declaration node using evaluate_variable_declaration.")
+    }
+}
+
 pub fn evaluate_variable_declaration(declaration: NodeType, scope: &mut Scope) -> RuntimeValue {
     if let NodeType::VariableDeclaration {
         is_mutable,
         identifier,
         value,
+        data_type,
     } = declaration
     {
-        let value = match value {
+        let mut value = match value {
             Some(x) => evaluate(*x, scope),
             None => RuntimeValue::Null,
         };
+
+        if let Some(t) = data_type {
+            value = value.into_type(scope, RuntimeType::from_str(&t).unwrap());
+        }
 
         scope.push_var(identifier, &value, is_mutable);
 

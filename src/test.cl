@@ -1,4 +1,13 @@
-var foo = 50;
+var foo : float = 50;
+
+struct Language {
+	code : int,
+}
+
+struct Country {
+  people : int,
+	language : Language,
+}
 
 let map = {
   x : 100,
@@ -9,6 +18,9 @@ let map = {
   },
 };
 
+let zimbabwe : Country = {people : 10, language : {code : 19}}
+
 foo(20)
 foo++;
 print(foo)
+print(zimbabwe)
