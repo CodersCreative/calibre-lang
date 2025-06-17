@@ -2,6 +2,7 @@ use core::panic;
 use std::{
     collections::HashMap,
     fmt::{Debug, format, write},
+    ops::Deref,
     str::FromStr,
     string::ParseError,
 };
@@ -23,6 +24,11 @@ pub enum RuntimeType {
     Bool,
     Str,
     Char,
+    Function {
+        return_type: Option<Box<RuntimeType>>,
+        parameters: Vec<RuntimeType>,
+        is_async: bool,
+    },
     Struct(String),
 }
 
@@ -50,9 +56,11 @@ pub enum RuntimeValue {
     Bool(bool),
     Str(String),
     Char(char),
+    // Option(Option<Box<RuntimeValue>>),
+    // Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>),
     Function {
         identifier: String,
-        parameters: HashMap<String, RuntimeType>,
+        parameters: Vec<(String, RuntimeType)>,
         body: Vec<NodeType>,
         return_type: Option<RuntimeType>,
         is_async: bool,
@@ -136,6 +144,7 @@ impl RuntimeValue {
                 RuntimeType::Struct(_) => panic_type(),
                 RuntimeType::Str => RuntimeValue::Str(self.to_string()),
                 RuntimeType::Char => panic_type(),
+                RuntimeType::Function { .. } => panic_type(),
             },
             RuntimeValue::Float(x) => match t {
                 RuntimeType::Integer => RuntimeValue::Integer(*x as i64),
@@ -152,6 +161,7 @@ impl RuntimeValue {
                 RuntimeType::Struct(_) => panic_type(),
                 RuntimeType::Str => RuntimeValue::Str(self.to_string()),
                 RuntimeType::Char => panic_type(),
+                RuntimeType::Function { .. } => panic_type(),
             },
             RuntimeValue::Str(x) => match t {
                 RuntimeType::Integer => RuntimeValue::Integer(x.parse().unwrap()),
@@ -161,6 +171,7 @@ impl RuntimeValue {
                 RuntimeType::Str => self.clone(),
                 RuntimeType::Char => RuntimeValue::Char(x.chars().nth(0).unwrap()),
                 RuntimeType::Struct(_) => panic_type(),
+                RuntimeType::Function { .. } => panic_type(),
             },
             RuntimeValue::Null => panic_type(),
             RuntimeValue::Char(x) => {
@@ -179,8 +190,44 @@ impl RuntimeValue {
                     }
                     self.clone()
                 }
+                RuntimeType::Function { .. } => panic_type(),
                 _ => panic_type(),
             },
+            RuntimeValue::Function {
+                identifier: _,
+                parameters: val_parameters,
+                body: _,
+                return_type: val_type,
+                is_async: val_is_async,
+            } => match t {
+                RuntimeType::Function {
+                    return_type,
+                    parameters,
+                    is_async,
+                } => {
+                    if is_async != *val_is_async {
+                        panic!("Check whether the function or type is async.");
+                    };
+
+                    if let Some(x) = return_type {
+                        if let Some(y) = val_type {
+                            if x.deref() != y {
+                                panic!("Function has wrong return type");
+                            }
+                        } else {
+                            panic!("Expects a return type");
+                        }
+                    }
+
+                    if val_parameters.len() != parameters.len() {
+                        panic!("Parameters are not equal");
+                    };
+
+                    self.clone()
+                }
+                _ => panic_type(),
+            },
+
             _ => panic_type(),
         }
     }

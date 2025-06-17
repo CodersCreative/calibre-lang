@@ -22,8 +22,10 @@ pub enum TokenType {
     BinaryOperator,
     BinaryAssign,
     UnaryAssign,
+    Greater,
     Var,
     Let,
+    Arrow,
     Async,
     Loop,
     Func,
@@ -80,6 +82,7 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                 '[' => Some(TokenType::OpenSquare),
                 ']' => Some(TokenType::CloseSquare),
                 ',' => Some(TokenType::Comma),
+                '>' => Some(TokenType::Greater),
                 '.' => Some(TokenType::FullStop),
                 ':' => Some(TokenType::Colon),
                 '+' | '-' => Some(TokenType::BinaryOperator),
@@ -150,16 +153,31 @@ pub fn tokenize(txt: String) -> Vec<Token> {
 
         if let Some(token) = token {
             if let Some(last) = tokens.last() {
-                if last.value == "/" && token.value == "*" {
+                if last.value == "/" && (token.value == "*" || token.value == "/") {
                     tokens.pop();
                     let mut first = '/';
                     let mut second = '*';
 
-                    while buffer.len() > 0 && (first != '*' || second != '/') {
+                    let can_continue = |f: char, s: char, short: bool| -> bool {
+                        if short {
+                            s != '\n'
+                        } else {
+                            f != '*' || s != '/'
+                        }
+                    };
+
+                    while buffer.len() > 0 && can_continue(first, second, token.value == "/") {
                         first = second;
                         second = buffer.remove(0);
                     }
 
+                    continue;
+                }
+
+                if last.value == "-" && token.token_type == TokenType::Greater {
+                    let token = Token::new(TokenType::Arrow, "->");
+                    tokens.pop();
+                    tokens.push(token);
                     continue;
                 }
 

@@ -43,7 +43,7 @@ pub enum NodeType {
         is_mutable: bool,
         identifier: String,
         value: Option<Box<NodeType>>,
-        data_type: Option<String>,
+        data_type: Option<RuntimeType>,
     },
     StructDeclaration {
         identifier: String,
@@ -51,7 +51,7 @@ pub enum NodeType {
     },
     FunctionDeclaration {
         identifier: String,
-        parameters: HashMap<String, RuntimeType>,
+        parameters: Vec<(String, RuntimeType)>,
         body: Box<Vec<NodeType>>,
         return_type: Option<RuntimeType>,
         is_async: bool,

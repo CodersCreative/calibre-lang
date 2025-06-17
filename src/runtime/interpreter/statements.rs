@@ -74,7 +74,7 @@ pub fn evaluate_variable_declaration(declaration: NodeType, scope: &mut Scope) -
         };
 
         if let Some(t) = data_type {
-            value = value.into_type(scope, RuntimeType::from_str(&t).unwrap());
+            value = value.into_type(scope, t);
         }
 
         scope.push_var(identifier, &value, is_mutable);
