@@ -22,6 +22,7 @@ pub fn evaluate(node: NodeType, scope: &mut Scope) -> RuntimeValue {
         NodeType::Program(_) => evaluate_program(node, scope),
         NodeType::Identifier(x) => evaluate_identifier(&x, scope),
         NodeType::MapLiteral(_) => evaluate_object_expression(node, scope),
+        NodeType::ListLiteral(_) => evaluate_list_expression(node, scope),
         NodeType::CallExpression(_, _) => evaluate_call_expression(node, scope),
         NodeType::VariableDeclaration { .. } => evaluate_variable_declaration(node, scope),
         NodeType::StructDeclaration { .. } => evaluate_struct_declaration(node, scope),

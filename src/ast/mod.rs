@@ -62,6 +62,7 @@ pub enum NodeType {
     },
     Identifier(String),
     StringLiteral(String),
+    ListLiteral(Box<Vec<NodeType>>),
     CharLiteral(char),
     FloatLiteral(f64),
     IntegerLiteral(i64),

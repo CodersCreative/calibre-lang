@@ -31,7 +31,7 @@ fn main(number : int) -> string{
 }
 
 let zimbabwe : Country = {name : "Zimbabwe", people : 10, language : {code : 19, function :main}}
-
+let lst : list(list(int)) = [[10, 10, 100], [0,10]];
 
 fn hello_int(function : fn(int) -> string, amt : string) -> int {
   let first = function(amt);
@@ -50,9 +50,10 @@ print(hello);
 
 hello(main, "50");
 
+var fb = "foo_bar";
 /*foo(20)
 
-let fb = "foo_bar";
+
 
 foo++; 
 let foo_bar = foo + 100; let bar_foo = 1 / foo_bar;
@@ -63,4 +64,8 @@ print(fb)
 
 print(foo)*/
 
+print(fb);
+var fb : list(char) = fb;
+print(fb);
 print(zimbabwe)
+print(lst)

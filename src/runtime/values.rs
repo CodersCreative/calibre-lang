@@ -2,6 +2,7 @@ use core::panic;
 use std::{
     collections::HashMap,
     fmt::{Debug, format, write},
+    mem::discriminant,
     ops::Deref,
     str::FromStr,
     string::ParseError,
@@ -24,6 +25,7 @@ pub enum RuntimeType {
     Bool,
     Str,
     Char,
+    List(Option<Box<RuntimeType>>),
     Function {
         return_type: Option<Box<RuntimeType>>,
         parameters: Vec<RuntimeType>,
@@ -47,6 +49,36 @@ impl FromStr for RuntimeType {
     }
 }
 
+impl Into<RuntimeType> for RuntimeValue {
+    fn into(self) -> RuntimeType {
+        match self {
+            Self::Null => panic!("Tried to convert null value to type"),
+            Self::Float(_) => RuntimeType::Float,
+            Self::Integer(_) => RuntimeType::Integer,
+            Self::Map(_) => RuntimeType::Map,
+            Self::Bool(_) => RuntimeType::Bool,
+            Self::Str(_) => RuntimeType::Str,
+            Self::Char(_) => RuntimeType::Char,
+            Self::List { data, data_type } => RuntimeType::List(data_type),
+            Self::Function {
+                identifier,
+                parameters,
+                body,
+                return_type,
+                is_async,
+            } => RuntimeType::Function {
+                return_type: match return_type {
+                    Some(x) => Some(Box::new(x)),
+                    None => None,
+                },
+                parameters: parameters.iter().map(|x| x.1.clone()).collect(),
+                is_async,
+            },
+            Self::NativeFunction(_) => panic!("Cannot get type of native functions"),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub enum RuntimeValue {
     Null,
@@ -56,6 +88,10 @@ pub enum RuntimeValue {
     Bool(bool),
     Str(String),
     Char(char),
+    List {
+        data: Vec<RuntimeValue>,
+        data_type: Option<Box<RuntimeType>>,
+    },
     // Option(Option<Box<RuntimeValue>>),
     // Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>),
     Function {
@@ -78,6 +114,7 @@ impl ToString for RuntimeValue {
             Self::Bool(x) => x.to_string(),
             Self::Map(x) => format!("{:?}", x),
             Self::NativeFunction(x) => format!("native function : {:?}", x),
+            Self::List { data, data_type } => format!("{:?}", data),
             Self::Str(x) => x.to_string(),
             Self::Char(x) => x.to_string(),
             Self::Function {
@@ -128,6 +165,21 @@ impl RuntimeValue {
             RuntimeValue::Null
         };
 
+        let mut list_case = || {
+            if let RuntimeType::List(x) = t.clone() {
+                RuntimeValue::List {
+                    data: vec![if let Some(x) = x.clone() {
+                        self.into_type(scope, *x)
+                    } else {
+                        self.clone()
+                    }],
+                    data_type: x,
+                }
+            } else {
+                panic!()
+            }
+        };
+
         match self {
             RuntimeValue::Integer(x) => match t {
                 RuntimeType::Integer => self.clone(),
@@ -143,6 +195,7 @@ impl RuntimeValue {
                 RuntimeType::Map => panic_type(),
                 RuntimeType::Struct(_) => panic_type(),
                 RuntimeType::Str => RuntimeValue::Str(self.to_string()),
+                RuntimeType::List(_) => list_case(),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::Function { .. } => panic_type(),
             },
@@ -159,6 +212,7 @@ impl RuntimeValue {
                 }),
                 RuntimeType::Map => panic_type(),
                 RuntimeType::Struct(_) => panic_type(),
+                RuntimeType::List(_) => list_case(),
                 RuntimeType::Str => RuntimeValue::Str(self.to_string()),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::Function { .. } => panic_type(),
@@ -171,8 +225,16 @@ impl RuntimeValue {
                 RuntimeType::Str => self.clone(),
                 RuntimeType::Char => RuntimeValue::Char(x.chars().nth(0).unwrap()),
                 RuntimeType::Struct(_) => panic_type(),
+                RuntimeType::List(typ) if typ == Some(Box::new(RuntimeType::Char)) => {
+                    RuntimeValue::List {
+                        data: x.chars().map(|c| RuntimeValue::Char(c)).collect(),
+                        data_type: Some(Box::new(RuntimeType::Char)),
+                    }
+                }
+                RuntimeType::List(_) => list_case(),
                 RuntimeType::Function { .. } => panic_type(),
             },
+
             RuntimeValue::Null => panic_type(),
             RuntimeValue::Char(x) => {
                 RuntimeValue::into_type(&RuntimeValue::Str(x.to_string()), scope, t)
@@ -181,6 +243,7 @@ impl RuntimeValue {
                 RuntimeType::Map => self.clone(),
                 RuntimeType::Str => RuntimeValue::Str(self.to_string()),
                 RuntimeType::Char => panic_type(),
+                RuntimeType::List(_) => list_case(),
                 RuntimeType::Struct(identifier) => {
                     let properties = scope.resolve_struct(&identifier).get_struct(&identifier);
                     for property in properties {
@@ -190,7 +253,10 @@ impl RuntimeValue {
                     }
                     self.clone()
                 }
-                RuntimeType::Function { .. } => panic_type(),
+                RuntimeType::Function { .. } => match t {
+                    RuntimeType::List(_) => list_case(),
+                    _ => panic_type(),
+                },
                 _ => panic_type(),
             },
             RuntimeValue::Function {
@@ -227,6 +293,30 @@ impl RuntimeValue {
                 }
                 _ => panic_type(),
             },
+            RuntimeValue::List { data, data_type } => {
+                if data.len() > 0 {
+                    let t2 = discriminant(&data[0]);
+                    let filtered: Vec<&RuntimeValue> =
+                        data.iter().filter(|x| discriminant(*x) == t2).collect();
+
+                    if data.len() == filtered.len() {
+                        RuntimeValue::List {
+                            data: data.clone(),
+                            data_type: Some(Box::new(t)),
+                        }
+                    } else {
+                        RuntimeValue::List {
+                            data: data.iter().map(|x| x.into_type(scope, t.clone())).collect(),
+                            data_type: Some(Box::new(t)),
+                        }
+                    }
+                } else {
+                    RuntimeValue::List {
+                        data: Vec::new(),
+                        data_type: Some(Box::new(t)),
+                    }
+                }
+            }
 
             _ => panic_type(),
         }

@@ -1,5 +1,5 @@
 use core::panic;
-use std::{collections::HashMap, thread::scope};
+use std::{collections::HashMap, mem::discriminant, thread::scope};
 
 use crate::{
     ast::{BinaryOperator, NodeType},
@@ -75,6 +75,31 @@ pub fn evaluate_object_expression(obj: NodeType, scope: &mut Scope) -> RuntimeVa
     RuntimeValue::Map(properties)
 }
 
+pub fn evaluate_list_expression(obj: NodeType, scope: &mut Scope) -> RuntimeValue {
+    let mut values = Vec::new();
+
+    if let NodeType::ListLiteral(vals) = obj {
+        values = vals.iter().map(|v| evaluate(v.clone(), scope)).collect();
+    }
+
+    let t = if values.len() > 0 {
+        let t = discriminant(&values[0]);
+        let filtered: Vec<&RuntimeValue> =
+            values.iter().filter(|x| discriminant(*x) == t).collect();
+        if values.len() == filtered.len() {
+            Some(Box::new(values[0].clone().into()))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    RuntimeValue::List {
+        data: values,
+        data_type: t,
+    }
+}
 pub fn evaluate_call_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValue {
     println!("{:?}", exp);
     if let NodeType::CallExpression(caller, arguments) = exp {

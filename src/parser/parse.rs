@@ -213,6 +213,16 @@ impl Parser {
                 parameters: args,
                 is_async,
             })
+        } else if t.token_type == TokenType::List {
+            let t = if self.first().token_type == TokenType::OpenBrackets {
+                let _ = self.eat();
+                let t = Some(Box::new(self.parse_type().expect("Expected data type")));
+                let _ = self.expect_eat(&TokenType::CloseBrackets, "Expected closing brackets.");
+                t
+            } else {
+                None
+            };
+            Some(RuntimeType::List(t))
         } else {
             match RuntimeType::from_str(&t.value) {
                 Ok(x) => Some(x),
@@ -265,7 +275,7 @@ impl Parser {
     }
 
     pub fn parse_assignment_expression(&mut self) -> NodeType {
-        let mut left = self.parse_object_expression();
+        let mut left = self.parse_list_expression();
 
         if [TokenType::UnaryAssign].contains(&self.first().token_type) {
             let operator = self.eat();
@@ -292,14 +302,14 @@ impl Parser {
                 identifier: Box::new(left.clone()),
                 value: Box::new(NodeType::BinaryExpression {
                     left: Box::new(left),
-                    right: Box::new(self.parse_object_expression()),
+                    right: Box::new(self.parse_list_expression()),
                     operator: BinaryOperator::from_symbol(operator.value.chars().nth(0).unwrap())
                         .unwrap(),
                 }),
             };
         } else if [TokenType::Equals].contains(&self.first().token_type) {
             let _ = self.eat();
-            let right = self.parse_object_expression();
+            let right = self.parse_list_expression();
             left = NodeType::AssignmentExpression {
                 identifier: Box::new(left),
                 value: Box::new(right),
@@ -307,6 +317,27 @@ impl Parser {
         }
 
         left
+    }
+
+    pub fn parse_list_expression(&mut self) -> NodeType {
+        if self.first().token_type != TokenType::OpenSquare {
+            return self.parse_object_expression();
+        }
+
+        let mut values = Vec::new();
+        let _ = self.eat();
+
+        while !self.is_eof() && self.first().token_type != TokenType::CloseSquare {
+            values.push(self.parse_expression());
+
+            if self.first().token_type != TokenType::CloseSquare {
+                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+            }
+        }
+
+        let _ = self.expect_eat(&TokenType::CloseSquare, "Object missing closing brace.");
+
+        NodeType::ListLiteral(Box::new(values))
     }
 
     pub fn parse_object_expression(&mut self) -> NodeType {
