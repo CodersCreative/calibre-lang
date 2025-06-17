@@ -19,6 +19,8 @@ pub enum RuntimeType {
     Integer,
     Map,
     Bool,
+    Str,
+    Char,
     Struct(String),
 }
 
@@ -42,6 +44,8 @@ pub enum RuntimeValue {
     Integer(i64),
     Map(HashMap<String, RuntimeValue>),
     Bool(bool),
+    Str(String),
+    Char(char),
     NativeFunction(NativeFunctions),
 }
 
@@ -54,6 +58,8 @@ impl ToString for RuntimeValue {
             Self::Bool(x) => x.to_string(),
             Self::Map(x) => format!("{:?}", x),
             Self::NativeFunction(x) => format!("native function : {:?}", x),
+            Self::Str(x) => x.to_string(),
+            Self::Char(x) => x.to_string(),
         }
     }
 }
@@ -116,7 +122,14 @@ impl RuntimeValue {
                 RuntimeType::Map => panic_type(),
                 RuntimeType::Struct(_) => panic_type()
             }
+            RuntimeValue::Str(x) => match t {
+                RuntimeType::Integer => RuntimeValue::Integer(x.parse().unwrap()),
+                RuntimeType::Float => RuntimeValue::Float(x.parse().unwrap()),
+                RuntimeType::Bool => panic_type(),                RuntimeType::Map => panic_type(),
+                RuntimeType::Struct(_) => panic_type()
+            }
             RuntimeValue::Null => panic_type(),
+            RuntimeValue::Char(x) => RuntimeValue::into_type(&RuntimeValue::Str(x.to_string()), scope, t),
             RuntimeValue::Map(x) => match t {
                 RuntimeType::Map => self.clone(),
                 RuntimeType::Struct(identifier) => {

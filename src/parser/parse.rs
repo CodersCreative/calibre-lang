@@ -32,10 +32,74 @@ impl Parser {
         match self.first().token_type {
             TokenType::Var | TokenType::Let => self.parse_variable_declaration(),
             TokenType::Struct => self.parse_struct_declaration(),
+            TokenType::Func => self.parse_function_declaration(), 
             _ => self.parse_expression(),
         }
     }
 
+    pub fn parse_function_declaration(&mut self) -> NodeType {
+        let _ = self.eat();
+        let identifier = self
+            .expect_eat(&TokenType::Identifier, "Expected function identifier")
+            .value;
+        
+        let mut arguments = self.parse_key_type_list(TokenType::OpenBrackets, TokenType::CloseBrackets);
+
+        let is_async = self.first().token_type == TokenType::Async;
+
+        if is_async {
+            let _ = self.eat();
+        }
+
+        let return_type = if self.eat().token_type == TokenType::OpenCurly {
+            None
+        }else {
+            let t = self.expect_eat(&TokenType::Identifier, "Expected return type");
+
+            Some(RuntimeType::from_str(&t.value).unwrap())
+        };
+
+        let _ = self.expect_eat(&TokenType::OpenCurly, "Expected opening brackets");
+    
+        todo!()
+    }
+
+    fn parse_key_type_list(&mut self, open_token : TokenType, close_token : TokenType) -> HashMap<String, RuntimeType> {
+        let mut properties = HashMap::new();
+        let _ = self.expect_eat(&open_token, "Expected opening brackets");
+
+        while !self.is_eof() && self.first().token_type != close_token {
+            let key = self
+                .expect_eat(&TokenType::Identifier, "Expected object literal key.")
+                .value;
+
+            
+            let _ = self.expect_eat(&TokenType::Colon, "Object missing colon after identifier.");
+
+            let value = self
+                .expect_eat(&TokenType::Identifier, "Expected data type.")
+                .value;
+            
+            properties.insert(key, RuntimeType::from_str(&value).unwrap());
+
+            if self.first().token_type != TokenType::CloseCurly {
+                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+            }
+        }
+
+        let _ = self.expect_eat(&TokenType::CloseCurly, "Object missing closing brace.");
+        
+        properties
+    }
+
+    pub fn parse_struct_declaration(&mut self) -> NodeType {
+        let _ = self
+            .expect_eat(&TokenType::Struct, "Expected struct keyword");
+
+        let identifier = self.expect_eat(&TokenType::Identifier, "Expected struct name").value;
+        
+        NodeType::StructDeclaration  { identifier, properties : self.parse_key_type_list(TokenType::OpenCurly, TokenType::CloseCurly) }
+    }
     pub fn parse_variable_declaration(&mut self) -> NodeType {
         let is_mutable = self.eat().token_type == TokenType::Var;
         let identifier = self
@@ -220,39 +284,6 @@ impl Parser {
         left
     }
 
-    pub fn parse_struct_declaration(&mut self) -> NodeType {
-        let _ = self
-            .expect_eat(&TokenType::Struct, "Expected struct keyword");
-
-        let identifier = self.expect_eat(&TokenType::Identifier, "Expected struct name").value;
-
-        let mut properties = HashMap::new();
-        let _ = self.expect_eat(&TokenType::OpenCurly, "Expected opening brackets");
-
-        while !self.is_eof() && self.first().token_type != TokenType::CloseCurly {
-            let key = self
-                .expect_eat(&TokenType::Identifier, "Expected object literal key.")
-                .value;
-
-
-            
-            let _ = self.expect_eat(&TokenType::Colon, "Object missing colon after identifier.");
-
-            let value = self
-                .expect_eat(&TokenType::Identifier, "Expected data type.")
-                .value;
-            
-            properties.insert(key, RuntimeType::from_str(&value).unwrap());
-
-            if self.first().token_type != TokenType::CloseCurly {
-                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
-            }
-        }
-
-        let _ = self.expect_eat(&TokenType::CloseCurly, "Object missing closing brace.");
-        
-        NodeType::StructDeclaration  { identifier, properties }
-    }
     pub fn parse_call_member_expression(&mut self) -> NodeType {
         let member = self.parse_member_expression();
 

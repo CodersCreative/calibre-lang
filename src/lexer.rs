@@ -23,6 +23,8 @@ pub enum TokenType {
     UnaryAssign,
     Var,
     Let,
+    Async,
+    Func,
     FullStop,
     EOF,
     Struct,
@@ -32,7 +34,10 @@ pub fn keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("var"), TokenType::Var),
         (String::from("let"), TokenType::Let),
+        (String::from("fn"), TokenType::Func),
+        (String::from("func"), TokenType::Func),
         (String::from("struct"), TokenType::Struct),
+        (String::from("async"), TokenType::Async),
     ])
 }
 

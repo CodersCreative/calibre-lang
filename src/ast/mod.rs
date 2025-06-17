@@ -49,6 +49,13 @@ pub enum NodeType {
         identifier: String,
         properties: HashMap<String, RuntimeType>,
     },
+    FunctionDeclaration {
+        identifier: String,
+        parameters: HashMap<String, RuntimeType>,
+        body: Box<NodeType>,
+        return_type : RuntimeType,
+        is_async : bool,
+    },
     AssignmentExpression {
         identifier: Box<NodeType>,
         value: Box<NodeType>,
