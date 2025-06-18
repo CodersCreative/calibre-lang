@@ -3,7 +3,6 @@ pub mod binary;
 pub mod declarations;
 pub mod functions;
 
-use core::panic;
 use std::{
     collections::{self, HashMap},
     ops::Not,
@@ -43,16 +42,6 @@ impl Parser {
         }
         value
     }
-    pub fn parse_statement(&mut self) -> NodeType {
-        match self.first().token_type {
-            TokenType::Var | TokenType::Let => self.parse_variable_declaration(),
-            TokenType::Struct => self.parse_struct_declaration(),
-            TokenType::Func => self.parse_function_declaration(),
-            _ => self.parse_expression(),
-        }
-    }
-
-
 
     fn parse_key_type_list_ordered(
         &mut self,

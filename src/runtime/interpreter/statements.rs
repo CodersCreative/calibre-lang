@@ -60,6 +60,41 @@ pub fn evaluate_function_declaration(declaration: NodeType, scope: &mut Scope) -
     }
 }
 
+pub fn evaluate_if_statement(declaration: NodeType, scope: &mut Scope) -> RuntimeValue {
+    if let NodeType::IfStatement { comparisons, bodies } = declaration {
+        for (i, comparison) in comparisons.iter().enumerate() {
+            if let RuntimeValue::Bool(x) = evaluate(comparison.clone(), scope) {
+                if x {
+                    let mut scope = Scope::new(Some(Box::new(scope.clone())));
+                    let mut result: RuntimeValue = RuntimeValue::Null;
+                    for statement in bodies[i].iter() {
+                        result = evaluate(statement.clone(), &mut scope);
+                    }
+
+                    return result;
+                }
+            }else{
+                panic!("Expected a boolean operation");
+            }
+        }
+
+        if comparisons.len() < bodies.len() {
+            if let Some(last) = bodies.last() {
+                let mut scope = Scope::new(Some(Box::new(scope.clone())));
+                let mut result: RuntimeValue = RuntimeValue::Null;
+                for statement in last.iter() {
+                    result = evaluate(statement.clone(), &mut scope);
+                }
+                return result;
+            }
+        }
+
+        RuntimeValue::Null
+    } else {
+        panic!("Tried to evaluate non-declaration node using evaluate_variable_declaration.")
+    }
+}
+
 pub fn evaluate_variable_declaration(declaration: NodeType, scope: &mut Scope) -> RuntimeValue {
     if let NodeType::VariableDeclaration {
         is_mutable,

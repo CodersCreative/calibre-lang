@@ -53,11 +53,19 @@ fn hello(function : fn(int) -> string, amt : string) {
   print(first);
 }
 
-print(hello == hello);
+// print(hello == hello);
+
+if hello != hello {
+  print("hello");
+}else if false{
+  print("No")
+}else {
+  print("Yes")
+}
 
 // var hello : fn(int) -> string = main;
 
-hello(main, "50");
+// hello(main, "50");
 
 var fb = "foo_bar";
 /*foo(20)
@@ -77,4 +85,4 @@ print(fb);
 print(zimbabwe)
 print(lst)*/
 
-test(map);
+// test(map);

@@ -1,4 +1,4 @@
-use crate::parser::Parser;
+use crate::{ast::comparison, parser::Parser};
 use std::{
     collections::{self, HashMap},
     ops::Not,
@@ -12,6 +12,15 @@ use crate::{
 };
 
 impl Parser {
+    pub fn parse_statement(&mut self) -> NodeType {
+        match self.first().token_type {
+            TokenType::Var | TokenType::Let => self.parse_variable_declaration(),
+            TokenType::Struct => self.parse_struct_declaration(),
+            TokenType::Func => self.parse_function_declaration(),
+            TokenType::If => self.parse_if_statement(),
+            _ => self.parse_expression(),
+        }
+    }
     pub fn parse_variable_declaration(&mut self) -> NodeType {
         let is_mutable = self.eat().token_type == TokenType::Var;
         let identifier = self
@@ -87,6 +96,16 @@ impl Parser {
             self.parse_type()
         };
 
+        NodeType::FunctionDeclaration {
+            identifier,
+            parameters,
+            body: Box::new(self.parse_block()),
+            return_type,
+            is_async,
+        }
+    }
+
+    pub fn parse_block(&mut self) -> Vec<NodeType> {
         let _ = self.expect_eat(&TokenType::OpenCurly, "Expected opening brackets");
 
         let mut body: Vec<NodeType> = Vec::new();
@@ -96,13 +115,30 @@ impl Parser {
         }
 
         let _ = self.expect_eat(&TokenType::CloseCurly, "Expected closing brackets");
+        body
+    }
 
-        NodeType::FunctionDeclaration {
-            identifier,
-            parameters,
-            body: Box::new(body),
-            return_type,
-            is_async,
+    pub fn parse_if_statement(&mut self) -> NodeType {
+        let mut comparisons = Vec::new();
+        let mut bodies = Vec::new();
+        
+        while self.first().token_type == TokenType::If {
+            let _ = self.eat();
+            comparisons.push(self.parse_expression());
+            bodies.push(Box::new(self.parse_block()));
+
+            if self.first().token_type == TokenType::Else{
+                let _ = self.eat();
+                if self.first().token_type == TokenType::OpenCurly{
+                    bodies.push(Box::new(self.parse_block()));
+                    break;
+                }
+
+            }else {
+                break;
+            }
+
         }
+        NodeType::IfStatement { comparisons : Box::new(comparisons), bodies}
     }
 }

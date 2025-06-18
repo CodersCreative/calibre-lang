@@ -24,7 +24,7 @@ pub enum TokenType {
     BinaryOperator(BinaryOperator),
     BinaryAssign(BinaryOperator),
     UnaryAssign(BinaryOperator),
-    Greater,
+    Not,
     Var,
     Let,
     List,
@@ -38,6 +38,7 @@ pub enum TokenType {
     FullStop,
     EOF,
     Struct,
+    Else,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
@@ -47,6 +48,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("for"), TokenType::Loop),
         (String::from("scope"), TokenType::Scope),
         (String::from("fn"), TokenType::Func),
+        (String::from("else"), TokenType::Else),
         (String::from("list"), TokenType::List),
         (String::from("return"), TokenType::Return),
         (String::from("if"), TokenType::If),
@@ -103,6 +105,7 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                 ':' => Some(TokenType::Colon),
                 '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(BinaryOperator::from_symbol(c).unwrap())),
                 '=' => Some(TokenType::Equals),
+                '!' => Some(TokenType::Not),
                 _ => None,
             }
             // Some(Token::new(t, buffer.remove(0).to_string().trim()))

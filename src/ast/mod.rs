@@ -55,5 +55,9 @@ pub enum NodeType {
         right: Box<NodeType>,
         operator: Comparison,
     },
+    IfStatement {
+        comparisons : Box<Vec<NodeType>>,
+        bodies : Vec<Box<Vec<NodeType>>>
+    },
     MapLiteral(HashMap<String, Option<NodeType>>),
 }
