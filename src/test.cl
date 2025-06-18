@@ -67,6 +67,10 @@ if hello != hello {
 
 // hello(main, "50");
 
+print(lst)
+print(lst(0)(0))
+print(map.x)
+
 var fb = "foo_bar";
 /*foo(20)
 

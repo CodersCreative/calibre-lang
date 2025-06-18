@@ -14,6 +14,26 @@ pub fn evaluate_identifier(identifier: &str, scope: &mut Scope) -> RuntimeValue 
     scope.get_var(identifier).clone()
 }
 
+pub fn evaluate_member_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValue {
+    if let NodeType::MemberExpression { object, property, is_computed }= exp
+    {
+        let object = evaluate(*object, scope);
+        let prop = evaluate(*property, scope);
+        if let RuntimeValue::Map(map) = object{
+            if let RuntimeValue::Str(x) = prop {
+                return map.0.get(&x).unwrap().clone();
+            } else{
+                panic!("Variable is not a string");
+            }
+        }else{
+            panic!("Variable is not a map");
+        }
+
+
+    } else {
+        panic!("Tried to evaluate non-binary-expression node using evaluate_binary_expression.")
+    }
+}
 pub fn evaluate_binary_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValue {
     if let NodeType::BinaryExpression {
         left,
@@ -107,41 +127,48 @@ pub fn evaluate_list_expression(obj: NodeType, scope: &mut Scope) -> RuntimeValu
     }
 }
 pub fn evaluate_call_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValue {
+    println!("{:?}", exp);
+
     if let NodeType::CallExpression(caller, arguments) = exp {
         let arguments: Vec<RuntimeValue> = arguments
             .iter()
             .map(|x| evaluate(x.clone(), scope))
             .collect();
 
-        if let NodeType::Identifier(caller) = *caller.clone() {
-            if let Some(scope) = scope.safe_resolve_var_mut(&caller) {
-                if let RuntimeValue::Function {
-                    identifier,
-                    parameters,
-                    body,
-                    return_type,
-                    is_async,
-                } = scope.get_var(&caller)
-                {
-                    let mut scope = Scope::new(Some(Box::new(scope.clone())));
+        let func = evaluate(*caller.clone(), scope);
+        
+        match func {
+            RuntimeValue::Function { identifier, parameters, body, return_type, is_async } => {
+                let mut scope = Scope::new(Some(Box::new(scope.clone())));
 
-                    for (i, (k, v)) in parameters.iter().enumerate() {
-                        let arg = arguments[i].into_type(&mut scope, v.clone());
-                        scope.push_var(k.to_string(), &arg, true);
-                    }
-
-                    let mut result: RuntimeValue = RuntimeValue::Null;
-                    for statement in &body.0 {
-                        result = evaluate(statement.clone(), &mut scope);
-                    }
-
-                    if let Some(t) = return_type {
-                        return result.into_type(&mut scope, t.clone());
-                    } else {
-                        return RuntimeValue::Null;
-                    }
+                for (i, (k, v)) in parameters.iter().enumerate() {
+                    let arg = arguments[i].into_type(&mut scope, v.clone());
+                    scope.push_var(k.to_string(), &arg, true);
                 }
 
+                let mut result: RuntimeValue = RuntimeValue::Null;
+                for statement in &body.0 {
+                    result = evaluate(statement.clone(), &mut scope);
+                }
+
+                if let Some(t) = return_type {
+                    return result.into_type(&mut scope, t.clone());
+                } else {
+                    return RuntimeValue::Null;
+                }
+            },
+            RuntimeValue::List { data, data_type } if arguments.len() == 1 => match arguments[0] {
+                RuntimeValue::Integer(i) if arguments.len() == 1 => {
+                    return data.get(i as usize).expect("Tried to get index that is larger than list size").clone();
+                }
+                _ => panic!("Cannot index with value other than int"),
+            }
+            RuntimeValue::NativeFunction(_) => return func.call_native(arguments, scope),
+            _ => {}
+        }
+        
+        if let NodeType::Identifier(caller) = *caller.clone() {
+            if let Some(scope) = scope.safe_resolve_var_mut(&caller) {
                 if scope.variables.contains_key(&caller) {
                     if arguments.len() <= 0 {
                         return scope.get_var(&caller).clone();
@@ -167,12 +194,7 @@ pub fn evaluate_call_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValu
                 }
             }
         }
-
-        let func = evaluate(*caller, scope);
-        match func {
-            RuntimeValue::NativeFunction(_) => func.call_native(arguments, scope),
-            _ => panic!("Cannot call non-variable or function value"),
-        }
+        panic!("Cannot call non-variable or function value, {:?}", func);
     } else {
         panic!(
             "Tried to evaluate non-assignment-expression node using evaluate_assignment_expression."
