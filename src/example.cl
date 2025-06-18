@@ -6,7 +6,7 @@ struct CountryBase {
 	language : Language,
 }
 
-struct Country extends CountryBase {}
+struct Country {}
 
 impl CountryBase {
 	pub fn get_language(&self) : Language {
@@ -16,7 +16,7 @@ impl CountryBase {
 
 
 enum Language {
-	FRENCH,
+	FRENCH { data : int},
 	ENGLISH,
 	SPANISH,
 }
@@ -28,7 +28,7 @@ let language_forced : Language = Language.FRENCH;
 var x = 100;
 var y : number = 0;
 var list = [0, 10, 30, 50]; // Arrays are dynamic by default
-var lst : number = [0, 40, 20]; // A static array 
+var lst : list(number) = [0, 40, 20]; // A static array 
 
 fn main(): number {
 	x = 50;

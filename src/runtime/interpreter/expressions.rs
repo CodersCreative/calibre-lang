@@ -107,7 +107,6 @@ pub fn evaluate_list_expression(obj: NodeType, scope: &mut Scope) -> RuntimeValu
     }
 }
 pub fn evaluate_call_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValue {
-    println!("{:?}", exp);
     if let NodeType::CallExpression(caller, arguments) = exp {
         let arguments: Vec<RuntimeValue> = arguments
             .iter()

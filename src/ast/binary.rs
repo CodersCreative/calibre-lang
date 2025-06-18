@@ -60,22 +60,41 @@ impl RuntimeValue{
 impl Add for RuntimeValue{
     type Output = RuntimeValue;
     fn add(self, rhs: Self) -> Self::Output {
+        let add_str = || -> RuntimeValue {
+            let mut x = rhs.to_string();
+            x.push_str(&self.to_string());
+            RuntimeValue::Str(x)
+        };
+
         match self{
+            Self::Str(mut x) => {
+                if let RuntimeValue::List{..} = rhs {
+                    panic!("Cannt add values of list to a string");
+                }else{
+                    x.push_str(&rhs.to_string());
+                    Self::Str(x)
+                }
+            }
             Self::Integer(x) => match rhs {
                 Self::Integer(y) => RuntimeValue::Integer(x + y),
                 Self::Float(y) => RuntimeValue::Float(x as f64 + y),
+                Self::Str(_) => add_str(),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Add),
             },
             Self::Float(x) => match rhs {
                 Self::Integer(y) => RuntimeValue::Float(x + y as f64),
                 Self::Float(y) => RuntimeValue::Float(x as f64 + y),
+                Self::Str(_) => add_str(),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Add),
             },
             Self::List { mut data, data_type } => {
                 data.push(rhs);
                 Self::List { data, data_type }
             }
-            _ => self.panic_operator(&rhs, &BinaryOperator::Add),
+            _ => match rhs {
+                Self::Str(_) => add_str(),
+                _ => self.panic_operator(&rhs, &BinaryOperator::Add),
+            },
         }
     }
 }

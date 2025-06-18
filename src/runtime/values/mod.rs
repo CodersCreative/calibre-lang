@@ -2,12 +2,7 @@ pub mod helper;
 
 use core::panic;
 use std::{
-    collections::HashMap,
-    fmt::{Debug, format, write},
-    mem::discriminant,
-    ops::Deref,
-    str::FromStr,
-    string::ParseError,
+    collections::HashMap, env::args, fmt::{format, write, Debug}, mem::discriminant, ops::Deref, str::FromStr, string::ParseError
 };
 
 use helper::{Block, Map};
@@ -153,7 +148,13 @@ impl RuntimeValue {
         if let Self::NativeFunction(func) = self {
             match func {
                 NativeFunctions::Print => {
-                    println!("{:?}", args);
+                    let mut output = String::new();
+
+                    for arg in args{
+                        output.push_str(&format!("{} ", arg.to_string()));
+                    }
+
+                    println!("{}", output.trim());
 
                     RuntimeValue::Null
                 }
