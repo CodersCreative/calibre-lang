@@ -1,3 +1,5 @@
+pub mod helper;
+
 use core::panic;
 use std::{
     collections::HashMap,
@@ -8,16 +10,18 @@ use std::{
     string::ParseError,
 };
 
+use helper::{Block, Map};
+
 use crate::{ast::NodeType, lexer::TokenType, runtime::scope::Scope};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum NativeFunctions {
     Print,
 }
 
 impl NativeFunctions {}
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum RuntimeType {
     Float,
     Integer,
@@ -79,12 +83,12 @@ impl Into<RuntimeType> for RuntimeValue {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, PartialOrd)]
 pub enum RuntimeValue {
     Null,
     Float(f64),
     Integer(i64),
-    Map(HashMap<String, RuntimeValue>),
+    Map(Map<RuntimeValue>),
     Bool(bool),
     Str(String),
     Char(char),
@@ -97,7 +101,7 @@ pub enum RuntimeValue {
     Function {
         identifier: String,
         parameters: Vec<(String, RuntimeType)>,
-        body: Vec<NodeType>,
+        body: Block,
         return_type: Option<RuntimeType>,
         is_async: bool,
         // scope : Rc<Ref>
@@ -247,7 +251,7 @@ impl RuntimeValue {
                 RuntimeType::Struct(identifier) => {
                     let properties = scope.resolve_struct(&identifier).get_struct(&identifier);
                     for property in properties {
-                        if !x.contains_key(property.0) {
+                        if !x.0.contains_key(property.0) {
                             panic!("Struct Declaration is missing {:?}", property);
                         }
                     }

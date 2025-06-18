@@ -5,7 +5,7 @@ use crate::{
     runtime::{
         interpreter::evaluate,
         scope::Scope,
-        values::{RuntimeType, RuntimeValue},
+        values::{helper::Block, RuntimeType, RuntimeValue},
     },
 };
 
@@ -48,7 +48,7 @@ pub fn evaluate_function_declaration(declaration: NodeType, scope: &mut Scope) -
         let value = RuntimeValue::Function {
             identifier: identifier.clone(),
             parameters,
-            body: *body,
+            body: Block(*body),
             return_type,
             is_async,
         };

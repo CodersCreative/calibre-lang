@@ -1,40 +1,12 @@
+pub mod binary;
+pub mod comparison;
+
 use std::collections::HashMap;
 
+use binary::BinaryOperator;
+use comparison::Comparison;
+
 use crate::runtime::values::RuntimeType;
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BinaryOperator {
-    Subtract,
-    Add,
-    Multiply,
-    Divide,
-    Power,
-    Modulus,
-}
-impl BinaryOperator {
-    pub fn from_symbol(symbol: char) -> Option<Self> {
-        match symbol {
-            '+' => Some(Self::Add),
-            '-' => Some(Self::Subtract),
-            '/' => Some(Self::Divide),
-            '*' => Some(Self::Multiply),
-            '^' => Some(Self::Power),
-            '%' => Some(Self::Modulus),
-            _ => None,
-        }
-    }
-
-    pub fn to_symbol(&self) -> char {
-        match self {
-            Self::Add => '+',
-            Self::Subtract => '-',
-            Self::Divide => '/',
-            Self::Multiply => '*',
-            Self::Power => '^',
-            Self::Modulus => '%',
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
@@ -77,6 +49,11 @@ pub enum NodeType {
         left: Box<NodeType>,
         right: Box<NodeType>,
         operator: BinaryOperator,
+    },
+    ComparisonExpression {
+        left: Box<NodeType>,
+        right: Box<NodeType>,
+        operator: Comparison,
     },
     MapLiteral(HashMap<String, Option<NodeType>>),
 }

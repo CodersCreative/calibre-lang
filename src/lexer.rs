@@ -1,6 +1,7 @@
-use crate::ast::BinaryOperator;
 use core::panic;
 use std::collections::HashMap;
+
+use crate::ast::{binary::BinaryOperator, comparison::Comparison};
 
 const IGNORE: [char; 1] = [';'];
 
@@ -19,9 +20,10 @@ pub enum TokenType {
     CloseSquare,
     Colon,
     Comma,
-    BinaryOperator,
-    BinaryAssign,
-    UnaryAssign,
+    Comparison(Comparison),
+    BinaryOperator(BinaryOperator),
+    BinaryAssign(BinaryOperator),
+    UnaryAssign(BinaryOperator),
     Greater,
     Var,
     Let,
@@ -51,6 +53,16 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("func"), TokenType::Func),
         (String::from("struct"), TokenType::Struct),
         (String::from("async"), TokenType::Async),
+    ])
+}
+
+pub fn special_keywords() -> HashMap<String, TokenType> {
+    HashMap::from([
+        (String::from("->"), TokenType::Arrow),
+        (String::from(">="), TokenType::Comparison(Comparison::GreaterEqual)),
+        (String::from("<="), TokenType::Comparison(Comparison::LesserEqual)),
+        (String::from("=="), TokenType::Comparison(Comparison::Equal)),
+        (String::from("!="), TokenType::Comparison(Comparison::NotEqual)),
     ])
 }
 
@@ -86,11 +98,10 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                 '[' => Some(TokenType::OpenSquare),
                 ']' => Some(TokenType::CloseSquare),
                 ',' => Some(TokenType::Comma),
-                '>' => Some(TokenType::Greater),
+                '<' | '>'=> Some(TokenType::Comparison(Comparison::from_operator(&c.to_string()).unwrap())),
                 '.' => Some(TokenType::FullStop),
                 ':' => Some(TokenType::Colon),
-                '+' | '-' => Some(TokenType::BinaryOperator),
-                '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator),
+                '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(BinaryOperator::from_symbol(c).unwrap())),
                 '=' => Some(TokenType::Equals),
                 _ => None,
             }
@@ -178,33 +189,36 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                     continue;
                 }
 
-                if last.value == "-" && token.token_type == TokenType::Greater {
-                    let token = Token::new(TokenType::Arrow, "->");
+                let combined = format!("{}{}", last.value, token.value);
+
+                if let Some(t) = special_keywords().get(&combined) {
+                    let token = Token::new(t.clone(), &combined);
                     tokens.pop();
                     tokens.push(token);
                     continue;
                 }
 
-                if last.token_type == TokenType::BinaryOperator
-                    && token.token_type == TokenType::Equals
-                {
-                    let token = Token::new(TokenType::BinaryAssign, &last.value);
-                    tokens.pop();
-                    tokens.push(token);
-                    continue;
+                if let TokenType::BinaryOperator(x) = &last.token_type {
+                    if token.token_type == TokenType::Equals{
+                        let token = Token::new(TokenType::BinaryAssign(x.clone()), &last.value);
+                        tokens.pop();
+                        tokens.push(token);
+                        continue;
+                    }
                 }
-
-                if last == &token && token.token_type == TokenType::BinaryOperator {
-                    let token = Token::new(TokenType::UnaryAssign, &last.value);
-                    tokens.pop();
-                    tokens.push(token);
-                    continue;
-                } else if token.token_type == TokenType::BinaryOperator
-                    && last.token_type == TokenType::BinaryOperator
-                {
-                    panic!(
-                        "Can only use short hand assignment with similar operators e.g. x++ or x--"
-                    );
+                
+                if let TokenType::BinaryOperator(x) = &last.token_type {
+                    if let TokenType::BinaryOperator(y) = token.token_type {
+                        if x != &y {
+                            panic!(
+                                "Can only use short hand assignment with similar operators e.g. x++ or x--"
+                            );
+                        }
+                        let token = Token::new(TokenType::UnaryAssign(y), &last.value);
+                        tokens.pop();
+                        tokens.push(token);
+                        continue;
+                    }
                 }
             }
             tokens.push(token);

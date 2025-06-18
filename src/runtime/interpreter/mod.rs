@@ -4,7 +4,7 @@ pub mod statements;
 use core::panic;
 
 use crate::{
-    ast::{BinaryOperator, NodeType},
+    ast::{NodeType},
     runtime::{
         interpreter::{expressions::*, statements::*},
         scope::Scope,
@@ -28,6 +28,7 @@ pub fn evaluate(node: NodeType, scope: &mut Scope) -> RuntimeValue {
         NodeType::StructDeclaration { .. } => evaluate_struct_declaration(node, scope),
         NodeType::AssignmentExpression { .. } => evaluate_assignment_expression(node, scope),
         NodeType::FunctionDeclaration { .. } => evaluate_function_declaration(node, scope),
+        NodeType::ComparisonExpression { .. } => evaluate_comparison_expression(node, scope),
         _ => panic!("This AST Node has not been implemented. {:?}", node),
     }
 }

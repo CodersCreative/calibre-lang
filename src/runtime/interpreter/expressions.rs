@@ -2,11 +2,11 @@ use core::panic;
 use std::{collections::HashMap, mem::discriminant, thread::scope};
 
 use crate::{
-    ast::{BinaryOperator, NodeType},
+    ast::{binary::BinaryOperator, NodeType},
     runtime::{
         interpreter::{evaluate, statements},
         scope::Scope,
-        values::{self, NativeFunctions, RuntimeValue},
+        values::{self, helper::Map, NativeFunctions, RuntimeValue},
     },
 };
 
@@ -24,21 +24,27 @@ pub fn evaluate_binary_expression(exp: NodeType, scope: &mut Scope) -> RuntimeVa
         let left = evaluate(*left, scope);
         let right = evaluate(*right, scope);
 
-        if left.is_number() && right.is_number() {
-            if let Some(value) = evaluate_numeric_binary_expression(&left, &right, operator) {
-                return value;
-            }
-        }
-
-        panic!(
-            "Cannot perform binary expression on two values of types : {:?} and {:?}",
-            left, right
-        );
+        operator.handle(left, right)
     } else {
         panic!("Tried to evaluate non-binary-expression node using evaluate_binary_expression.")
     }
 }
 
+pub fn evaluate_comparison_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValue {
+    if let NodeType::ComparisonExpression {
+        left,
+        right,
+        operator,
+    } = exp
+    {
+        let left = evaluate(*left, scope);
+        let right = evaluate(*right, scope);
+
+        operator.handle(left, right)
+    } else {
+        panic!("Tried to evaluate non-binary-expression node using evaluate_binary_expression.")
+    }
+}
 pub fn evaluate_assignment_expression(node: NodeType, scope: &mut Scope) -> RuntimeValue {
     if let NodeType::AssignmentExpression { identifier, value } = node {
         if let NodeType::Identifier(identifier) = *identifier {
@@ -72,7 +78,7 @@ pub fn evaluate_object_expression(obj: NodeType, scope: &mut Scope) -> RuntimeVa
         }
     }
 
-    RuntimeValue::Map(properties)
+    RuntimeValue::Map(Map(properties))
 }
 
 pub fn evaluate_list_expression(obj: NodeType, scope: &mut Scope) -> RuntimeValue {
@@ -126,7 +132,7 @@ pub fn evaluate_call_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValu
                     }
 
                     let mut result: RuntimeValue = RuntimeValue::Null;
-                    for statement in body {
+                    for statement in &body.0 {
                         result = evaluate(statement.clone(), &mut scope);
                     }
 
@@ -172,52 +178,5 @@ pub fn evaluate_call_expression(exp: NodeType, scope: &mut Scope) -> RuntimeValu
         panic!(
             "Tried to evaluate non-assignment-expression node using evaluate_assignment_expression."
         )
-    }
-}
-pub fn evaluate_numeric_binary_expression(
-    left: &RuntimeValue,
-    right: &RuntimeValue,
-    operator: BinaryOperator,
-) -> Option<RuntimeValue> {
-    match left {
-        RuntimeValue::Float(x) => match right {
-            RuntimeValue::Float(y) => Some(RuntimeValue::Float(match operator {
-                BinaryOperator::Add => x + y,
-                BinaryOperator::Subtract => x - y,
-                BinaryOperator::Divide => x / y,
-                BinaryOperator::Multiply => x * y,
-                BinaryOperator::Power => x.powf(*y),
-                BinaryOperator::Modulus => x % y,
-            })),
-            RuntimeValue::Integer(y) => Some(RuntimeValue::Float(match operator {
-                BinaryOperator::Add => x + *y as f64,
-                BinaryOperator::Subtract => x - *y as f64,
-                BinaryOperator::Divide => x / *y as f64,
-                BinaryOperator::Multiply => x * *y as f64,
-                BinaryOperator::Power => x.powf(*y as f64),
-                BinaryOperator::Modulus => x % *y as f64,
-            })),
-            _ => return None,
-        },
-        RuntimeValue::Integer(x) => match right {
-            RuntimeValue::Integer(y) => Some(RuntimeValue::Integer(match operator {
-                BinaryOperator::Add => x + y,
-                BinaryOperator::Subtract => x - y,
-                BinaryOperator::Divide => x / y,
-                BinaryOperator::Multiply => x * y,
-                BinaryOperator::Power => x.pow(*y as u32),
-                BinaryOperator::Modulus => x % y,
-            })),
-            RuntimeValue::Float(y) => Some(RuntimeValue::Float(match operator {
-                BinaryOperator::Add => *x as f64 + y,
-                BinaryOperator::Subtract => *x as f64 - y,
-                BinaryOperator::Divide => *x as f64 / y,
-                BinaryOperator::Multiply => *x as f64 * y,
-                BinaryOperator::Power => (*x as f64).powf(*y),
-                BinaryOperator::Modulus => *x as f64 % y,
-            })),
-            _ => return None,
-        },
-        _ => return None,
     }
 }

@@ -13,7 +13,12 @@ struct Country {
 	language : Language,
 }
 
-let map = {
+struct Test {
+  x : int,
+  y : float,
+}
+
+let map : Test = {
   x : 100,
   y : 32 * 2,
   foo,
@@ -21,6 +26,10 @@ let map = {
     bar : false,
   },
 };
+
+fn test(test : Test) {
+  print(test)
+}
 
 fn main(number : int) -> string{
   fn add (x : int, y : int) -> int {
@@ -44,7 +53,7 @@ fn hello(function : fn(int) -> string, amt : string) {
   print(first);
 }
 
-print(hello);
+print(hello == hello);
 
 // var hello : fn(int) -> string = main;
 
@@ -53,8 +62,6 @@ hello(main, "50");
 var fb = "foo_bar";
 /*foo(20)
 
-
-
 foo++; 
 let foo_bar = foo + 100; let bar_foo = 1 / foo_bar;
 
@@ -62,10 +69,12 @@ print(foo_bar)
 print(bar_foo)
 print(fb)
 
-print(foo)*/
+print(foo)
 
 print(fb);
 var fb : list(char) = fb;
 print(fb);
 print(zimbabwe)
-print(lst)
+print(lst)*/
+
+test(map);
