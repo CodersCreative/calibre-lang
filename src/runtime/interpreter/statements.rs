@@ -3,42 +3,48 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::evaluate,
+        interpreter::{InterpreterErr, evaluate},
         scope::Scope,
         values::{RuntimeValue, helper::Block},
     },
 };
 
-pub fn evaluate_program(exp: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_program(
+    exp: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     let mut last = RuntimeValue::Null;
 
     if let NodeType::Program(body) = exp {
         for statement in body.into_iter() {
-            last = evaluate(statement, scope.clone());
+            last = evaluate(statement, scope.clone())?;
         }
     } else {
-        panic!("Tried to evaluate non-program node using evaluate_program.")
+        return Err(InterpreterErr::NotImplemented(exp));
     }
 
-    last
+    Ok(last)
 }
 pub fn evaluate_struct_declaration(
     declaration: NodeType,
     scope: Rc<RefCell<Scope>>,
-) -> RuntimeValue {
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::StructDeclaration {
         identifier,
         properties,
     } = declaration
     {
         scope.borrow_mut().push_struct(identifier, &properties);
-        RuntimeValue::Null
+        Ok(RuntimeValue::Null)
     } else {
-        panic!("Tried to evaluate non-declaration node using evaluate_variable_declaration.")
+        Err(InterpreterErr::NotImplemented(declaration))
     }
 }
 
-pub fn evaluate_impl_declaration(declaration: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_impl_declaration(
+    declaration: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::ImplDeclaration {
         identifier,
         functions,
@@ -46,7 +52,7 @@ pub fn evaluate_impl_declaration(declaration: NodeType, scope: Rc<RefCell<Scope>
     {
         for function in functions {
             let scope_2 = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
-            let func = evaluate(function.0, scope_2);
+            let func = evaluate(function.0, scope_2)?;
 
             if let RuntimeValue::Function {
                 identifier: iden, ..
@@ -56,20 +62,20 @@ pub fn evaluate_impl_declaration(declaration: NodeType, scope: Rc<RefCell<Scope>
                     .borrow_mut()
                     .push_struct_function(identifier.clone(), (iden, func, function.1));
             } else {
-                panic!("Impl block can only contain functions");
+                return Err(InterpreterErr::ExpectedFunctions);
             }
         }
 
-        RuntimeValue::Null
+        Ok(RuntimeValue::Null)
     } else {
-        panic!("Tried to evaluate non-declaration node using evaluate_variable_declaration.")
+        Err(InterpreterErr::NotImplemented(declaration))
     }
 }
 
 pub fn evaluate_function_declaration(
     declaration: NodeType,
     scope: Rc<RefCell<Scope>>,
-) -> RuntimeValue {
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::FunctionDeclaration {
         identifier,
         parameters,
@@ -78,7 +84,6 @@ pub fn evaluate_function_declaration(
         is_async,
     } = declaration
     {
-        // scope.push_struct(identifier, &properties);
         let value = RuntimeValue::Function {
             identifier: identifier.clone(),
             parameters,
@@ -88,30 +93,33 @@ pub fn evaluate_function_declaration(
         };
 
         scope.borrow_mut().push_var(identifier, &value, false);
-        value
+        Ok(value)
     } else {
-        panic!("Tried to evaluate non-declaration node using evaluate_variable_declaration.")
+        Err(InterpreterErr::NotImplemented(declaration))
     }
 }
 
-pub fn evaluate_if_statement(declaration: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_if_statement(
+    declaration: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::IfStatement {
         comparisons,
         bodies,
     } = declaration
     {
         for (i, comparison) in comparisons.iter().enumerate() {
-            if let RuntimeValue::Bool(x) = evaluate(comparison.clone(), scope.clone()) {
+            if let RuntimeValue::Bool(x) = evaluate(comparison.clone(), scope.clone())? {
                 if x {
                     let mut result: RuntimeValue = RuntimeValue::Null;
                     for statement in bodies[i].iter() {
-                        result = evaluate(statement.clone(), scope.clone());
+                        result = evaluate(statement.clone(), scope.clone())?;
                     }
 
-                    return result;
+                    return Ok(result);
                 }
             } else {
-                panic!("Expected a boolean operation");
+                return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
             }
         }
 
@@ -119,22 +127,22 @@ pub fn evaluate_if_statement(declaration: NodeType, scope: Rc<RefCell<Scope>>) -
             if let Some(last) = bodies.last() {
                 let mut result: RuntimeValue = RuntimeValue::Null;
                 for statement in last.iter() {
-                    result = evaluate(statement.clone(), scope.clone());
+                    result = evaluate(statement.clone(), scope.clone())?;
                 }
-                return result;
+                return Ok(result);
             }
         }
 
-        RuntimeValue::Null
+        Ok(RuntimeValue::Null)
     } else {
-        panic!("Tried to evaluate non-declaration node using evaluate_variable_declaration.")
+        Err(InterpreterErr::NotImplemented(declaration))
     }
 }
 
 pub fn evaluate_variable_declaration(
     declaration: NodeType,
     scope: Rc<RefCell<Scope>>,
-) -> RuntimeValue {
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::VariableDeclaration {
         is_mutable,
         identifier,
@@ -143,18 +151,18 @@ pub fn evaluate_variable_declaration(
     } = declaration
     {
         let mut value = match value {
-            Some(x) => evaluate(*x, scope.clone()),
+            Some(x) => evaluate(*x, scope.clone())?,
             None => RuntimeValue::Null,
         };
 
         if let Some(t) = data_type {
-            value = value.into_type(scope.clone(), t);
+            value = value.into_type(scope.clone(), t)?;
         }
 
         scope.borrow_mut().push_var(identifier, &value, is_mutable);
 
-        value
+        Ok(value)
     } else {
-        panic!("Tried to evaluate non-declaration node using evaluate_variable_declaration.")
+        Err(InterpreterErr::NotImplemented(declaration))
     }
 }

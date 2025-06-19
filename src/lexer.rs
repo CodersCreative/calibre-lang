@@ -1,12 +1,23 @@
 use core::panic;
 use std::collections::HashMap;
 
+use thiserror::Error;
+
 use crate::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperation, Comparison},
 };
 
 const IGNORE: [char; 1] = [';'];
+
+#[derive(Error, Debug)]
+pub enum LexerError {
+    #[error("Unrecognized character '{0}'")]
+    Unrecognized(char),
+
+    #[error("Can only use short hand assignment with similar operators e.g. x++ or x--")]
+    BinaryOperatorShortHand,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TokenType {
@@ -115,7 +126,7 @@ impl Token {
     }
 }
 
-pub fn tokenize(txt: String) -> Vec<Token> {
+pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut buffer: Vec<char> = txt.chars().collect();
 
@@ -200,7 +211,7 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                     let _ = buffer.remove(0);
                     None
                 } else {
-                    panic!("Unrecognized character : {}", first);
+                    return Err(LexerError::Unrecognized(*first));
                 }
             }
         };
@@ -249,9 +260,7 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                 if let TokenType::BinaryOperator(x) = &last.token_type {
                     if let TokenType::BinaryOperator(y) = token.token_type {
                         if x != &y {
-                            panic!(
-                                "Can only use short hand assignment with similar operators e.g. x++ or x--"
-                            );
+                            return Err(LexerError::BinaryOperatorShortHand);
                         }
                         let token = Token::new(TokenType::UnaryAssign(y), &last.value);
                         tokens.pop();
@@ -266,5 +275,5 @@ pub fn tokenize(txt: String) -> Vec<Token> {
 
     tokens.push(Token::new(TokenType::EOF, "EndOfFile"));
 
-    tokens
+    Ok(tokens)
 }

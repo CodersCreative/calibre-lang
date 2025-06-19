@@ -1,6 +1,16 @@
 use std::ops::{Add, Div, Mul, Sub};
 
-use crate::runtime::values::RuntimeValue;
+use thiserror::Error;
+
+use crate::{ast::comparison::BooleanOperation, runtime::values::RuntimeValue};
+
+#[derive(Error, Debug, Clone)]
+pub enum ASTError {
+    #[error("Cannot {2:?} values of {0:?}, {1:?}.")]
+    BinaryOperator(RuntimeValue, RuntimeValue, BinaryOperator),
+    #[error("Cannot perform a boolean operation to values of {0:?}, {1:?}.")]
+    BooleanOperator(RuntimeValue, RuntimeValue),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BinaryOperator {
@@ -36,7 +46,11 @@ impl BinaryOperator {
         }
     }
 
-    pub fn handle(&self, left : RuntimeValue, right : RuntimeValue) -> RuntimeValue{
+    pub fn handle(
+        &self,
+        left: RuntimeValue,
+        right: RuntimeValue,
+    ) -> Result<RuntimeValue, ASTError> {
         match self {
             Self::Add => left + right,
             Self::Subtract => left - right,
@@ -46,50 +60,62 @@ impl BinaryOperator {
             Self::Modulus => left.modulus(right),
         }
     }
-
-
 }
 
-impl RuntimeValue{
-    fn panic_operator(&self, rhs : &Self, operator : &BinaryOperator) -> Self{
-        panic!("Cannot {:?} values of {:?}, {:?}.", operator, self,rhs);
-        Self::Null
+impl RuntimeValue {
+    fn panic_operator(
+        &self,
+        rhs: &Self,
+        operator: &BinaryOperator,
+    ) -> Result<RuntimeValue, ASTError> {
+        Err(ASTError::BinaryOperator(
+            self.clone(),
+            rhs.clone(),
+            operator.clone(),
+        ))
     }
 }
 
-impl Add for RuntimeValue{
-    type Output = RuntimeValue;
+impl Add for RuntimeValue {
+    type Output = Result<RuntimeValue, ASTError>;
     fn add(self, rhs: Self) -> Self::Output {
-        let add_str = || -> RuntimeValue {
+        let add_str = || -> Self::Output {
             let mut x = rhs.to_string();
             x.push_str(&self.to_string());
-            RuntimeValue::Str(x)
+            Ok(RuntimeValue::Str(x))
         };
 
-        match self{
+        match self {
             Self::Str(mut x) => {
-                if let RuntimeValue::List{..} = rhs {
-                    panic!("Cannt add values of list to a string");
-                }else{
+                if let RuntimeValue::List { .. } = rhs {
+                    Err(ASTError::BinaryOperator(
+                        Self::Str(x),
+                        rhs.clone(),
+                        BinaryOperator::Add,
+                    ))
+                } else {
                     x.push_str(&rhs.to_string());
-                    Self::Str(x)
+                    Ok(Self::Str(x))
                 }
             }
             Self::Integer(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Integer(x + y),
-                Self::Float(y) => RuntimeValue::Float(x as f64 + y),
+                Self::Integer(y) => Ok(RuntimeValue::Integer(x + y)),
+                Self::Float(y) => Ok(RuntimeValue::Float(x as f64 + y)),
                 Self::Str(_) => add_str(),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Add),
             },
             Self::Float(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Float(x + y as f64),
-                Self::Float(y) => RuntimeValue::Float(x as f64 + y),
+                Self::Integer(y) => Ok(RuntimeValue::Float(x + y as f64)),
+                Self::Float(y) => Ok(RuntimeValue::Float(x as f64 + y)),
                 Self::Str(_) => add_str(),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Add),
             },
-            Self::List { mut data, data_type } => {
+            Self::List {
+                mut data,
+                data_type,
+            } => {
                 data.push(rhs);
-                Self::List { data, data_type }
+                Ok(Self::List { data, data_type })
             }
             _ => match rhs {
                 Self::Str(_) => add_str(),
@@ -98,92 +124,87 @@ impl Add for RuntimeValue{
         }
     }
 }
-impl Sub for RuntimeValue{
-    type Output = RuntimeValue;
+impl Sub for RuntimeValue {
+    type Output = Result<RuntimeValue, ASTError>;
     fn sub(self, rhs: Self) -> Self::Output {
-        match self{
+        match self {
             Self::Integer(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Integer(x - y),
-                Self::Float(y) => RuntimeValue::Float(x as f64 - y),
+                Self::Integer(y) => Ok(RuntimeValue::Integer(x - y)),
+                Self::Float(y) => Ok(RuntimeValue::Float(x as f64 - y)),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Subtract),
             },
             Self::Float(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Float(x + y as f64),
-                Self::Float(y) => RuntimeValue::Float(x as f64 + y),
+                Self::Integer(y) => Ok(RuntimeValue::Float(x + y as f64)),
+                Self::Float(y) => Ok(RuntimeValue::Float(x as f64 + y)),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Subtract),
             },
             _ => self.panic_operator(&rhs, &BinaryOperator::Subtract),
         }
     }
 }
-impl Mul for RuntimeValue{
-    type Output = RuntimeValue;
+impl Mul for RuntimeValue {
+    type Output = Result<RuntimeValue, ASTError>;
     fn mul(self, rhs: Self) -> Self::Output {
-        match self{
+        match self {
             Self::Integer(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Integer(x * y),
-                Self::Float(y) => RuntimeValue::Float(x as f64 * y),
+                Self::Integer(y) => Ok(RuntimeValue::Integer(x * y)),
+                Self::Float(y) => Ok(RuntimeValue::Float(x as f64 * y)),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Multiply),
             },
             Self::Float(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Float(x * y as f64),
-                Self::Float(y) => RuntimeValue::Float(x as f64 * y),
+                Self::Integer(y) => Ok(RuntimeValue::Float(x * y as f64)),
+                Self::Float(y) => Ok(RuntimeValue::Float(x as f64 * y)),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Multiply),
             },
-                _ => self.panic_operator(&rhs, &BinaryOperator::Multiply),
+            _ => self.panic_operator(&rhs, &BinaryOperator::Multiply),
         }
     }
 }
-impl Div for RuntimeValue{
-    type Output = RuntimeValue;
+impl Div for RuntimeValue {
+    type Output = Result<RuntimeValue, ASTError>;
     fn div(self, rhs: Self) -> Self::Output {
-        let panic_add = || {
-            panic!("Cannot add values of {:?}, {:?}.", self,rhs);
-            Self::Null
-        };
-
-        match self{
+        match self {
             Self::Integer(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Integer(x / y),
-                Self::Float(y) => RuntimeValue::Float(x as f64 / y),
+                Self::Integer(y) => Ok(RuntimeValue::Integer(x / y)),
+                Self::Float(y) => Ok(RuntimeValue::Float(x as f64 / y)),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Divide),
             },
             Self::Float(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Float(x / y as f64),
-                Self::Float(y) => RuntimeValue::Float(x as f64 / y),
+                Self::Integer(y) => Ok(RuntimeValue::Float(x / y as f64)),
+                Self::Float(y) => Ok(RuntimeValue::Float(x as f64 / y)),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Divide),
             },
             _ => self.panic_operator(&rhs, &BinaryOperator::Divide),
         }
     }
 }
-impl RuntimeValue{
-    fn modulus(self, rhs: Self) -> Self {
-        match self{
+impl RuntimeValue {
+    fn modulus(self, rhs: Self) -> Result<RuntimeValue, ASTError> {
+        match self {
             Self::Integer(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Integer(x % y),
-                Self::Float(y) => RuntimeValue::Float(x as f64 % y),
+                Self::Integer(y) => Ok(RuntimeValue::Integer(x % y)),
+                Self::Float(y) => Ok(RuntimeValue::Float(x as f64 % y)),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Modulus),
             },
             Self::Float(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Float(x % y as f64),
-                Self::Float(y) => RuntimeValue::Float(x as f64 % y),
+                Self::Integer(y) => Ok(RuntimeValue::Float(x % y as f64)),
+                Self::Float(y) => Ok(RuntimeValue::Float(x as f64 % y)),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Modulus),
             },
             _ => self.panic_operator(&rhs, &BinaryOperator::Modulus),
         }
     }
 
-    fn pow(self, rhs: Self) -> Self {
-        match self{
+    fn pow(self, rhs: Self) -> Result<RuntimeValue, ASTError> {
+        match self {
             Self::Integer(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Integer(x.pow(y as u32)),
-                Self::Float(y) => RuntimeValue::Float((x as f64).powf(y)),
+                Self::Integer(y) => Ok(RuntimeValue::Integer(x.pow(y as u32))),
+                Self::Float(y) => Ok(RuntimeValue::Float((x as f64).powf(y))),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Power),
             },
             Self::Float(x) => match rhs {
-                Self::Integer(y) => RuntimeValue::Float(x + y as f64),
-                Self::Float(y) => RuntimeValue::Float(x as f64 + y),
+                Self::Integer(y) => Ok(RuntimeValue::Float(x + y as f64)),
+                Self::Float(y) => Ok(RuntimeValue::Float(x as f64 + y)),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Power),
             },
             _ => self.panic_operator(&rhs, &BinaryOperator::Power),

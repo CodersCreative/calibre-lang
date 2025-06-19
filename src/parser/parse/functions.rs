@@ -1,51 +1,51 @@
-use crate::parser::Parser;
+use crate::parser::{Parser, ParserError, SyntaxErr};
 
-use crate::{
-    ast::NodeType,
-    lexer::TokenType,
-};
+use crate::{ast::NodeType, lexer::TokenType};
 
 impl Parser {
-    pub fn parse_call_member_expression(&mut self) -> NodeType {
-        let member = self.parse_member_expression();
+    pub fn parse_call_member_expression(&mut self) -> Result<NodeType, ParserError> {
+        let member = self.parse_member_expression()?;
 
         if self.first().token_type == TokenType::OpenBrackets {
             return self.parse_call_expression(member);
         }
 
-        member
+        Ok(member)
     }
 
-    pub fn parse_call_expression(&mut self, caller: NodeType) -> NodeType {
+    pub fn parse_call_expression(&mut self, caller: NodeType) -> Result<NodeType, ParserError> {
         let mut expression = NodeType::CallExpression(
             Box::new(caller),
-            Box::new(self.parse_arguments(TokenType::OpenBrackets, TokenType::CloseBrackets)),
+            Box::new(self.parse_arguments(TokenType::OpenBrackets, TokenType::CloseBrackets)?),
         );
 
         if self.first().token_type == TokenType::OpenBrackets {
-            expression = self.parse_call_expression(expression);
+            expression = self.parse_call_expression(expression)?;
         }
 
-        expression
+        Ok(expression)
     }
 
-    pub fn parse_member_expression(&mut self) -> NodeType {
-        let mut object = self.parse_primary_expression();
+    pub fn parse_member_expression(&mut self) -> Result<NodeType, ParserError> {
+        let mut object = self.parse_primary_expression()?;
 
         while self.first().token_type == TokenType::FullStop
             || self.first().token_type == TokenType::OpenSquare
         {
             let (property, is_computed) = if self.eat().token_type == TokenType::FullStop {
-                let prop = self.parse_primary_expression();
+                let prop = self.parse_primary_expression()?;
 
                 if let NodeType::Identifier(_) = prop {
                     (prop, false)
                 } else {
-                    panic!("Cannot use dot operator without an identifier");
+                    return Err(self.get_err(SyntaxErr::ExpectedIdentifier));
                 }
             } else {
-                let prop = self.parse_expression();
-                self.expect_eat(&TokenType::CloseSquare, "Missing Closing Bracket");
+                let prop = self.parse_expression()?;
+                self.expect_eat(
+                    &TokenType::CloseSquare,
+                    SyntaxErr::ExpectedClosingBracket(TokenType::CloseSquare),
+                )?;
                 (prop, true)
             };
 
@@ -56,30 +56,35 @@ impl Parser {
             };
         }
 
-        object
+        Ok(object)
     }
 
     pub fn parse_arguments(
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<NodeType> {
-        let _ = self.expect_eat(&open_token, "Expected open brackers.");
+    ) -> Result<Vec<NodeType>, ParserError> {
+        let _ = self.expect_eat(
+            &open_token,
+            SyntaxErr::ExpectedOpeningBracket(open_token.clone()),
+        )?;
 
         let args = if self.first().token_type == close_token {
             Vec::new()
         } else {
-            self.parse_arguments_list()
-            // self.parse_key_type_list(open_token, close_token)
+            self.parse_arguments_list()?
         };
 
-        let _ = self.expect_eat(&close_token, "Missing closing brackets");
+        let _ = self.expect_eat(
+            &close_token,
+            SyntaxErr::ExpectedOpeningBracket(close_token.clone()),
+        )?;
 
-        args
+        Ok(args)
     }
 
-    pub fn parse_arguments_list(&mut self) -> Vec<NodeType> {
-        let mut args = vec![self.parse_assignment_expression()];
+    pub fn parse_arguments_list(&mut self) -> Result<Vec<NodeType>, ParserError> {
+        let mut args = vec![self.parse_assignment_expression()?];
 
         while self.first().token_type == TokenType::Comma {
             let _ = self.eat();
@@ -87,9 +92,9 @@ impl Parser {
             {
                 break;
             }
-            args.push(self.parse_assignment_expression());
+            args.push(self.parse_assignment_expression()?);
         }
 
-        args
+        Ok(args)
     }
 }

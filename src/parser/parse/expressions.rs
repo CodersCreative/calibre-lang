@@ -1,4 +1,7 @@
-use crate::parser::Parser;
+use crate::{
+    lexer::LexerError,
+    parser::{Parser, ParserError, SyntaxErr},
+};
 use std::collections::HashMap;
 
 use crate::{
@@ -7,8 +10,8 @@ use crate::{
 };
 
 impl Parser {
-    pub fn parse_primary_expression(&mut self) -> NodeType {
-        match self.first().token_type {
+    pub fn parse_primary_expression(&mut self) -> Result<NodeType, ParserError> {
+        Ok(match self.first().token_type {
             TokenType::Identifier => NodeType::Identifier(self.eat().value),
             TokenType::Float => NodeType::FloatLiteral(self.eat().value.trim().parse().unwrap()),
             TokenType::Integer => {
@@ -24,17 +27,17 @@ impl Parser {
             }
             TokenType::OpenBrackets => {
                 self.eat();
-                let value = self.parse_expression();
+                let value = self.parse_expression()?;
                 self.expect_eat(
                     &TokenType::CloseBrackets,
-                    "Unexpected token found inside parenthesis.",
+                    SyntaxErr::ExpectedClosingBracket(TokenType::CloseBrackets),
                 );
                 value
             }
-            _ => panic!("Unexpected Token : {:?}.", self.first()),
-        }
+            _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
+        })
     }
-    pub fn parse_object_expression(&mut self) -> NodeType {
+    pub fn parse_object_expression(&mut self) -> Result<NodeType, ParserError> {
         if self.first().token_type != TokenType::OpenCurly {
             return self.parse_boolean_expression();
         }
@@ -44,7 +47,7 @@ impl Parser {
 
         while !self.is_eof() && self.first().token_type != TokenType::CloseCurly {
             let key = self
-                .expect_eat(&TokenType::Identifier, "Expected object literal key.")
+                .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)?
                 .value;
 
             if [TokenType::Comma, TokenType::CloseCurly].contains(&self.first().token_type) {
@@ -56,25 +59,28 @@ impl Parser {
                 continue;
             }
 
-            let _ = self.expect_eat(&TokenType::Colon, "Object missing colon after identifier.");
+            let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
 
-            properties.insert(key, Some(self.parse_expression()));
+            properties.insert(key, Some(self.parse_expression()?));
 
             if self.first().token_type != TokenType::CloseCurly {
-                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
             }
         }
 
-        let _ = self.expect_eat(&TokenType::CloseCurly, "Object missing closing brace.");
+        let _ = self.expect_eat(
+            &TokenType::CloseCurly,
+            SyntaxErr::ExpectedClosingBracket(TokenType::CloseCurly),
+        )?;
 
-        NodeType::StructLiteral(properties)
+        Ok(NodeType::StructLiteral(properties))
     }
-    pub fn parse_assignment_expression(&mut self) -> NodeType {
-        let mut left = self.parse_list_expression();
+
+    pub fn parse_assignment_expression(&mut self) -> Result<NodeType, ParserError> {
+        let mut left = self.parse_list_expression()?;
 
         if let TokenType::UnaryAssign(op) = self.first().token_type.clone() {
-            let operator = self.eat();
-
+            let _ = self.eat();
             if [
                 BinaryOperator::Power,
                 BinaryOperator::Divide,
@@ -82,10 +88,7 @@ impl Parser {
             ]
             .contains(&op)
             {
-                panic!(
-                    "This notation cannot be used with operator {:?} as it would not alter the value.",
-                    operator.value.chars().nth(0).unwrap()
-                );
+                return Err(ParserError::Lexer(LexerError::BinaryOperatorShortHand));
             }
 
             left = NodeType::AssignmentExpression {
@@ -97,24 +100,24 @@ impl Parser {
                 }),
             };
         } else if let TokenType::BinaryAssign(op) = self.first().token_type.clone() {
-            let operator = self.eat();
+            let _ = self.eat();
             left = NodeType::AssignmentExpression {
                 identifier: Box::new(left.clone()),
                 value: Box::new(NodeType::BinaryExpression {
                     left: Box::new(left),
-                    right: Box::new(self.parse_list_expression()),
+                    right: Box::new(self.parse_list_expression()?),
                     operator: op,
                 }),
             };
         } else if [TokenType::Equals].contains(&self.first().token_type) {
             let _ = self.eat();
-            let right = self.parse_list_expression();
+            let right = self.parse_list_expression()?;
             left = NodeType::AssignmentExpression {
                 identifier: Box::new(left),
                 value: Box::new(right),
             };
         }
 
-        left
+        Ok(left)
     }
 }

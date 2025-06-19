@@ -4,132 +4,153 @@ use std::{cell::RefCell, collections::HashMap, mem::discriminant, rc::Rc};
 use crate::{
     ast::{NodeType, RefMutability},
     runtime::{
-        interpreter::evaluate,
+        interpreter::{InterpreterErr, evaluate},
         scope::{
-            Scope,
-            variables::{get_var, resolve_var, safe_resolve_var},
+            Scope, ScopeErr,
+            variables::{get_var, resolve_var},
         },
-        values::{RuntimeType, RuntimeValue, helper::Map},
+        values::{RuntimeType, RuntimeValue, ValueErr, helper::Map},
     },
 };
 
-pub fn evaluate_identifier(identifier: &str, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
-    get_var(scope, identifier).clone()
+pub fn evaluate_identifier(
+    identifier: &str,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    Ok(get_var(scope, identifier).clone()?)
 }
 
-pub fn evaluate_member_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_member_expression(
+    exp: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::MemberExpression {
         object,
         property,
         is_computed,
     } = exp
     {
-        let object = evaluate(*object, scope.clone());
-        let prop = evaluate(*property, scope.clone());
-        println!("mem {:?} , {:?}", &object, &prop);
+        let object = evaluate(*object, scope.clone())?;
+        let prop = evaluate(*property, scope.clone())?;
         if let RuntimeValue::Struct(map, t) = object {
             if let RuntimeValue::Str(x) = prop {
-                return map.0.get(&x).unwrap().clone();
+                return Ok(map.0.get(&x).unwrap().clone());
             } else {
-                panic!("Variable is not a string");
+                Err(InterpreterErr::ExpectedType(prop, RuntimeType::Str))
             }
         } else {
-            panic!("Variable is not a map");
+            Err(InterpreterErr::ExpectedType(
+                prop,
+                RuntimeType::Struct(None),
+            ))
         }
     } else {
-        panic!("Tried to evaluate non-binary-expression node using evaluate_binary_expression.")
+        Err(InterpreterErr::NotImplemented(exp))
     }
 }
-pub fn evaluate_binary_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_binary_expression(
+    exp: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::BinaryExpression {
         left,
         right,
         operator,
     } = exp
     {
-        let left = evaluate(*left, scope.clone());
-        let right = evaluate(*right, scope.clone());
+        let left = evaluate(*left, scope.clone())?;
+        let right = evaluate(*right, scope.clone())?;
 
-        operator.handle(left, right)
+        Ok(operator.handle(left, right)?)
     } else {
-        panic!("Tried to evaluate non-binary-expression node using evaluate_binary_expression.")
+        Err(InterpreterErr::NotImplemented(exp))
     }
 }
-pub fn evaluate_boolean_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_boolean_expression(
+    exp: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::BooleanExpression {
         left,
         right,
         operator,
     } = exp
     {
-        let left = evaluate(*left, scope.clone());
-        let right = evaluate(*right, scope.clone());
+        let left = evaluate(*left, scope.clone())?;
+        let right = evaluate(*right, scope.clone())?;
 
-        operator.handle(left, right)
+        Ok(operator.handle(left, right)?)
     } else {
-        panic!("Tried to evaluate non-binary-expression node using evaluate_binary_expression.")
+        Err(InterpreterErr::NotImplemented(exp))
     }
 }
 
-pub fn evaluate_comparison_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_comparison_expression(
+    exp: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::ComparisonExpression {
         left,
         right,
         operator,
     } = exp
     {
-        let left = evaluate(*left, scope.clone());
-        let right = evaluate(*right, scope.clone());
+        let left = evaluate(*left, scope.clone())?;
+        let right = evaluate(*right, scope.clone())?;
 
-        operator.handle(left, right)
+        Ok(operator.handle(left, right))
     } else {
-        panic!("Tried to evaluate non-binary-expression node using evaluate_binary_expression.")
+        Err(InterpreterErr::NotImplemented(exp))
     }
 }
-pub fn evaluate_assignment_expression(node: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_assignment_expression(
+    node: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::AssignmentExpression { identifier, value } = node {
         if let NodeType::Identifier(identifier) = *identifier {
-            let value = evaluate(*value, scope.clone());
+            let value = evaluate(*value, scope.clone())?;
             scope.borrow_mut().assign_var(identifier, &value);
-            value
+            return Ok(value);
         } else {
-            panic!(
-                "Tried to evaluate non-assignment-expression node using evaluate_assignment_expression."
-            )
+            Err(InterpreterErr::AssignNonVariable(*identifier))
         }
     } else {
-        panic!(
-            "Tried to evaluate non-assignment-expression node using evaluate_assignment_expression."
-        )
+        Err(InterpreterErr::NotImplemented(node))
     }
 }
 
-pub fn evaluate_struct_expression(obj: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_struct_expression(
+    obj: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     let mut properties = HashMap::new();
 
     if let NodeType::StructLiteral(props) = obj {
         for (k, v) in props {
             let value = if let Some(value) = v {
-                evaluate(value, scope.clone())
+                evaluate(value, scope.clone())?
             } else {
-                get_var(scope.clone(), &k)
+                get_var(scope.clone(), &k)?
             };
 
             properties.insert(k, value);
         }
     }
 
-    RuntimeValue::Struct(Map(properties), None)
+    Ok(RuntimeValue::Struct(Map(properties), None))
 }
 
-pub fn evaluate_list_expression(obj: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_list_expression(
+    obj: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     let mut values = Vec::new();
 
     if let NodeType::ListLiteral(vals) = obj {
-        values = vals
-            .iter()
-            .map(|v| evaluate(v.clone(), scope.clone()))
-            .collect();
+        for val in vals.iter() {
+            values.push(evaluate(val.clone(), scope.clone())?);
+        }
     }
 
     let t = if values.len() > 0 {
@@ -145,19 +166,17 @@ pub fn evaluate_list_expression(obj: NodeType, scope: Rc<RefCell<Scope>>) -> Run
         None
     };
 
-    RuntimeValue::List {
+    Ok(RuntimeValue::List {
         data: values,
         data_type: Box::new(t),
-    }
+    })
 }
-pub fn evaluate_call_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_call_expression(
+    exp: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::CallExpression(caller, arguments) = exp {
-        let evaluated_arguments: Vec<RuntimeValue> = arguments
-            .iter()
-            .map(|x| evaluate(x.clone(), scope.clone()))
-            .collect();
-
-        let func = evaluate(*caller.clone(), scope.clone());
+        let func = evaluate(*caller.clone(), scope.clone())?;
 
         match func {
             RuntimeValue::Function {
@@ -170,18 +189,20 @@ pub fn evaluate_call_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> Run
                 let scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
 
                 for (i, (k, v, m)) in parameters.iter().enumerate() {
-                    println!("{:?}", m);
                     match m {
                         RefMutability::MutRef | RefMutability::Ref => {
                             if let NodeType::Identifier(x) = &arguments[i] {
-                                let (env, name) = resolve_var(scope.clone(), x);
-                                // let env_b = env.borrow_mut();
+                                let (env, name) = resolve_var(scope.clone(), x)?;
+
                                 if m == &RefMutability::MutRef
                                     && env.borrow().constants.contains_key(&name)
                                 {
-                                    panic!("Cannot mutably reference a non-mutable value");
+                                    return Err(InterpreterErr::MutRefNonMut(
+                                        env.borrow().constants.get(&name).unwrap().clone(),
+                                    ));
                                 }
-                                let var = get_var(env, &name).clone();
+
+                                let var = get_var(env, &name)?;
                                 let x = name.clone();
                                 if var.is_type(scope.clone(), v.clone()) {
                                     scope.borrow_mut().alias.insert(k.to_string(), x);
@@ -194,14 +215,15 @@ pub fn evaluate_call_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> Run
                                         },
                                     );
                                 } else {
-                                    panic!("Variable is of wrong type");
+                                    return Err(InterpreterErr::UnexpectedType(var));
                                 }
                             } else {
-                                panic!("Can only reference a variable");
+                                return Err(InterpreterErr::RefNonVar(arguments[0].clone()));
                             }
                         }
                         _ => {
-                            let arg = evaluated_arguments[i].into_type(scope.clone(), v.clone());
+                            let arg = evaluate(arguments[i].clone(), scope.clone())?
+                                .into_type(scope.clone(), v.clone())?;
                             scope.borrow_mut().push_var(
                                 k.to_string(),
                                 &arg,
@@ -209,61 +231,69 @@ pub fn evaluate_call_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> Run
                                     RefMutability::MutRef | RefMutability::MutValue => true,
                                     _ => false,
                                 },
-                            );
+                            )?;
                         }
                     }
                 }
 
                 let mut result: RuntimeValue = RuntimeValue::Null;
                 for statement in &body.0 {
-                    result = evaluate(statement.clone(), scope.clone());
+                    result = evaluate(statement.clone(), scope.clone())?;
                 }
 
                 if let Some(t) = return_type {
-                    return result.into_type(scope, t.clone());
+                    return Ok(result.into_type(scope, t.clone())?);
                 } else {
-                    return RuntimeValue::Null;
+                    return Ok(RuntimeValue::Null);
                 }
             }
             RuntimeValue::List { data, data_type } if arguments.len() == 1 => {
-                match evaluated_arguments[0] {
+                match evaluate(arguments[0].clone(), scope)? {
                     RuntimeValue::Integer(i) if arguments.len() == 1 => {
-                        return data
+                        return Ok(data
                             .get(i as usize)
                             .expect("Tried to get index that is larger than list size")
-                            .clone();
+                            .clone());
                     }
-                    _ => panic!("Cannot index with value other than int"),
+                    _ => return Err(InterpreterErr::IndexNonList(arguments[0].clone())),
                 }
             }
-            RuntimeValue::NativeFunction(_) => return func.call_native(evaluated_arguments, scope),
+            RuntimeValue::NativeFunction(_) => {
+                let mut evaluated_arguments = Vec::new();
+
+                for arg in arguments.iter() {
+                    evaluated_arguments.push(evaluate(arg.clone(), scope.clone())?);
+                }
+
+                return Ok(func.call_native(evaluated_arguments, scope));
+            }
             _ => {}
         }
 
         if let NodeType::Identifier(caller) = *caller.clone() {
-            if let Some(scope) = safe_resolve_var(scope, &caller) {
-                if scope.0.borrow().variables.contains_key(&scope.1) {
+            if let Ok(scope_b) = resolve_var(scope, &caller) {
+                if scope_b.0.borrow().variables.contains_key(&scope_b.1) {
                     if arguments.len() <= 0 {
-                        return get_var(scope.0, &scope.1).clone();
+                        return Ok(get_var(scope_b.0, &scope_b.1)?);
                     } else if arguments.len() == 1 {
-                        scope
-                            .0
-                            .borrow_mut()
-                            .assign_var(caller, &evaluated_arguments[0]);
-                        return RuntimeValue::Null;
-                    } else {
-                        panic!(
-                            "Setters cant have more than one value or function has same identifier as variable."
+                        scope_b.0.borrow_mut().assign_var(
+                            caller,
+                            &evaluate(arguments[0].clone(), scope_b.0.clone())?,
                         );
+                        return Ok(RuntimeValue::Null);
+                    } else {
+                        return Err(InterpreterErr::SetterArgs(arguments));
                     }
-                } else if let Some(var) = scope.0.borrow().constants.get(&scope.1) {
+                } else if let Some(var) = scope_b.0.borrow().constants.get(&scope_b.1) {
                     match var {
                         NativeFunctions => {}
                         _ => {
                             if arguments.len() <= 0 {
-                                return get_var(scope.0.clone(), &scope.1).clone();
+                                return Ok(get_var(scope_b.0.clone(), &scope_b.1)?);
                             } else {
-                                panic!("Cannot set constant");
+                                return Err(InterpreterErr::Value(ValueErr::Scope(
+                                    ScopeErr::AssignConstant(scope_b.1),
+                                )));
                             }
                         }
                     }
@@ -272,8 +302,6 @@ pub fn evaluate_call_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> Run
         }
         panic!("Cannot call non-variable or function value, {:?}", func);
     } else {
-        panic!(
-            "Tried to evaluate non-assignment-expression node using evaluate_assignment_expression."
-        )
+        Err(InterpreterErr::NotImplemented(exp))
     }
 }

@@ -3,13 +3,12 @@ pub mod declarations;
 pub mod expressions;
 pub mod functions;
 
-use core::panic;
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
     ast::{NodeType, RefMutability},
     lexer::{Token, TokenType},
-    parser::Parser,
+    parser::{Parser, ParserError, SyntaxErr},
     runtime::values::RuntimeType,
 };
 
@@ -26,34 +25,37 @@ impl Parser {
         self.tokens.remove(0)
     }
 
-    fn expect_eat(&mut self, t: &TokenType, msg: &str) -> Token {
+    fn get_err(&self, err: SyntaxErr) -> ParserError {
+        ParserError::Syntax(err, self.first().clone(), self.nth(1).clone())
+    }
+
+    fn expect_eat(&mut self, t: &TokenType, err: SyntaxErr) -> Result<Token, ParserError> {
         let value = self.eat();
+
         if &value.token_type != t {
-            panic!(
-                "Parser Error:\n{:?}, {:?} \nExpecting: {:?} \nNext {:?}",
-                msg,
-                value,
-                t,
-                self.first()
-            );
+            return Err(self.get_err(err));
         }
-        value
+
+        Ok(value)
     }
 
     fn parse_key_type_list_ordered_with_ref(
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<(String, RuntimeType, RefMutability)> {
+    ) -> Result<Vec<(String, RuntimeType, RefMutability)>, ParserError> {
         let mut properties = Vec::new();
-        let _ = self.expect_eat(&open_token, "Expected opening brackets");
+        let _ = self.expect_eat(
+            &open_token,
+            SyntaxErr::ExpectedOpeningBracket(open_token.clone()),
+        );
 
         while !self.is_eof() && self.first().token_type != close_token {
             let key = self
-                .expect_eat(&TokenType::Identifier, "Expected object literal key.")
+                .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)?
                 .value;
 
-            let _ = self.expect_eat(&TokenType::Colon, "Object missing colon after identifier.");
+            let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
 
             let ref_mutability = RefMutability::from(self.first().token_type.clone());
 
@@ -63,81 +65,99 @@ impl Parser {
 
             properties.push((
                 key,
-                self.parse_type().expect("Expected data type."),
+                self.parse_type()?.expect("Expected data type."),
                 ref_mutability,
             ));
 
             if self.first().token_type != close_token {
-                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
             }
         }
 
-        let _ = self.expect_eat(&close_token, "Object missing closing brace.");
+        let _ = self.expect_eat(
+            &close_token,
+            SyntaxErr::ExpectedClosingBracket(close_token.clone()),
+        )?;
 
-        properties
+        Ok(properties)
     }
 
     fn parse_key_type_list_ordered(
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<(String, RuntimeType)> {
+    ) -> Result<Vec<(String, RuntimeType)>, ParserError> {
         let mut properties = Vec::new();
-        let _ = self.expect_eat(&open_token, "Expected opening brackets");
+        let _ = self.expect_eat(
+            &open_token,
+            SyntaxErr::ExpectedOpeningBracket(open_token.clone()),
+        );
 
         while !self.is_eof() && self.first().token_type != close_token {
             let key = self
-                .expect_eat(&TokenType::Identifier, "Expected object literal key.")
+                .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)?
                 .value;
 
-            let _ = self.expect_eat(&TokenType::Colon, "Object missing colon after identifier.");
+            let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
 
-            properties.push((key, self.parse_type().expect("Expected data type.")));
+            properties.push((key, self.parse_type()?.expect("Expected data type.")));
 
             if self.first().token_type != close_token {
-                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
             }
         }
 
-        let _ = self.expect_eat(&close_token, "Object missing closing brace.");
+        let _ = self.expect_eat(
+            &close_token,
+            SyntaxErr::ExpectedClosingBracket(close_token.clone()),
+        )?;
 
-        properties
+        Ok(properties)
     }
 
     fn parse_key_type_list(
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> HashMap<String, RuntimeType> {
+    ) -> Result<HashMap<String, RuntimeType>, ParserError> {
         let mut properties = HashMap::new();
-        let _ = self.expect_eat(&open_token, "Expected opening brackets");
+        let _ = self.expect_eat(
+            &open_token,
+            SyntaxErr::ExpectedOpeningBracket(open_token.clone()),
+        );
 
         while !self.is_eof() && self.first().token_type != close_token {
             let key = self
-                .expect_eat(&TokenType::Identifier, "Expected object literal key.")
+                .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)?
                 .value;
 
-            let _ = self.expect_eat(&TokenType::Colon, "Object missing colon after identifier.");
+            let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
 
-            properties.insert(key, self.parse_type().expect("Expected data type."));
+            properties.insert(key, self.parse_type()?.expect("Expected data type."));
 
             if self.first().token_type != close_token {
-                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
             }
         }
 
-        let _ = self.expect_eat(&close_token, "Object missing closing brace.");
+        let _ = self.expect_eat(
+            &close_token,
+            SyntaxErr::ExpectedClosingBracket(close_token.clone()),
+        )?;
 
-        properties
+        Ok(properties)
     }
 
     fn parse_type_list_with_ref(
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<(RuntimeType, RefMutability)> {
+    ) -> Result<Vec<(RuntimeType, RefMutability)>, ParserError> {
         let mut properties = Vec::new();
-        let _ = self.expect_eat(&open_token, "Expected opening brackets");
+        let _ = self.expect_eat(
+            &open_token,
+            SyntaxErr::ExpectedOpeningBracket(open_token.clone()),
+        );
 
         while !self.is_eof() && self.first().token_type != close_token {
             let ref_mutability = RefMutability::from(self.first().token_type.clone());
@@ -147,93 +167,108 @@ impl Parser {
             }
 
             properties.push((
-                self.parse_type()
+                self.parse_type()?
                     .expect("Expected data type after identifier"),
                 ref_mutability,
             ));
 
             if self.first().token_type != close_token {
-                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
             }
         }
 
-        let _ = self.expect_eat(&close_token, "Object missing closing brace.");
+        let _ = self.expect_eat(
+            &close_token,
+            SyntaxErr::ExpectedClosingBracket(close_token.clone()),
+        )?;
 
-        properties
+        Ok(properties)
     }
 
     fn parse_type_list(
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<RuntimeType> {
+    ) -> Result<Vec<RuntimeType>, ParserError> {
         let mut properties = Vec::new();
-        let _ = self.expect_eat(&open_token, "Expected opening brackets");
+        let _ = self.expect_eat(
+            &open_token,
+            SyntaxErr::ExpectedOpeningBracket(open_token.clone()),
+        );
 
         while !self.is_eof() && self.first().token_type != close_token {
             properties.push(
-                self.parse_type()
+                self.parse_type()?
                     .expect("Expected data type after identifier"),
             );
 
             if self.first().token_type != close_token {
-                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
             }
         }
 
-        let _ = self.expect_eat(&close_token, "Object missing closing brace.");
+        let _ = self.expect_eat(
+            &close_token,
+            SyntaxErr::ExpectedClosingBracket(close_token.clone()),
+        )?;
 
-        properties
+        Ok(properties)
     }
 
-    pub fn parse_type(&mut self) -> Option<RuntimeType> {
+    pub fn parse_type(&mut self) -> Result<Option<RuntimeType>, ParserError> {
         let t = self.eat();
 
         if t.token_type == TokenType::Func || t.token_type == TokenType::Async {
             let is_async = if t.token_type == TokenType::Async {
-                let _ = self.expect_eat(&TokenType::Func, "Expected function keyword after async");
+                let _ = self.expect_eat(
+                    &TokenType::Func,
+                    SyntaxErr::ExpectedKeyword(String::from("function")),
+                )?;
                 true
             } else {
                 false
             };
 
             let args =
-                self.parse_type_list_with_ref(TokenType::OpenBrackets, TokenType::CloseBrackets);
+                self.parse_type_list_with_ref(TokenType::OpenBrackets, TokenType::CloseBrackets)?;
             let mut ret = None;
 
             if self.first().token_type == TokenType::Arrow {
                 let _ = self.eat();
-                ret = Some(self.parse_type().unwrap());
+                ret = Some(self.parse_type()?.unwrap());
             }
 
-            Some(RuntimeType::Function {
+            Ok(Some(RuntimeType::Function {
                 return_type: Box::new(ret),
                 parameters: args,
                 is_async,
-            })
+            }))
         } else if t.token_type == TokenType::List {
             let t = if self.first().token_type == TokenType::OpenBrackets {
                 let _ = self.eat();
-                let t = Some(self.parse_type().expect("Expected data type"));
-                let _ = self.expect_eat(&TokenType::CloseBrackets, "Expected closing brackets.");
+                let t = Some(self.parse_type()?.expect("Expected data type"));
+                let _ = self.expect_eat(
+                    &TokenType::CloseBrackets,
+                    SyntaxErr::ExpectedClosingBracket(TokenType::CloseBrackets),
+                );
                 t
             } else {
                 None
             };
-            Some(RuntimeType::List(Box::new(t)))
+            Ok(Some(RuntimeType::List(Box::new(t))))
         } else {
             match RuntimeType::from_str(&t.value) {
-                Ok(x) => Some(x),
-                Err(_) => None,
+                Ok(x) => Ok(Some(x)),
+                Err(_) => Ok(None),
             }
         }
     }
 
-    pub fn parse_expression(&mut self) -> NodeType {
+    pub fn parse_expression(&mut self) -> Result<NodeType, ParserError> {
         self.parse_assignment_expression()
     }
 
-    pub fn parse_list_expression(&mut self) -> NodeType {
+    pub fn parse_list_expression(&mut self) -> Result<NodeType, ParserError> {
         if self.first().token_type != TokenType::OpenSquare {
             return self.parse_object_expression();
         }
@@ -242,15 +277,18 @@ impl Parser {
         let _ = self.eat();
 
         while !self.is_eof() && self.first().token_type != TokenType::CloseSquare {
-            values.push(self.parse_expression());
+            values.push(self.parse_expression()?);
 
             if self.first().token_type != TokenType::CloseSquare {
-                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
             }
         }
 
-        let _ = self.expect_eat(&TokenType::CloseSquare, "Object missing closing brace.");
+        let _ = self.expect_eat(
+            &TokenType::CloseSquare,
+            SyntaxErr::ExpectedClosingBracket(TokenType::CloseSquare),
+        );
 
-        NodeType::ListLiteral(Box::new(values))
+        Ok(NodeType::ListLiteral(Box::new(values)))
     }
 }

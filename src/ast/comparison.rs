@@ -1,4 +1,4 @@
-use crate::runtime::values::RuntimeValue;
+use crate::{ast::binary::ASTError, runtime::values::RuntimeValue};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Comparison {
@@ -32,17 +32,21 @@ impl BooleanOperation {
         }
     }
 
-    pub fn handle(&self, left: RuntimeValue, right: RuntimeValue) -> RuntimeValue {
+    pub fn handle(
+        &self,
+        left: RuntimeValue,
+        right: RuntimeValue,
+    ) -> Result<RuntimeValue, ASTError> {
         if let RuntimeValue::Bool(x) = left {
             if let RuntimeValue::Bool(y) = right {
-                return RuntimeValue::Bool(match self {
+                return Ok(RuntimeValue::Bool(match self {
                     Self::And => x && y,
                     Self::Or => x || y,
-                });
+                }));
             }
         }
 
-        panic!("Cannot use boolean operation on non bool values.")
+        Err(ASTError::BooleanOperator(left, right))
     }
 }
 

@@ -9,9 +9,27 @@ use std::{
     rc::Rc,
 };
 
+use thiserror::Error;
+
 use crate::runtime::values::{NativeFunctions, RuntimeValue};
 
 use super::values::RuntimeType;
+
+#[derive(Error, Debug, Clone)]
+pub enum ScopeErr {
+    #[error("Unable to resolve variable : {0}.")]
+    Variable(String),
+    #[error("Unable to assign immutable variable : {0}.")]
+    AssignConstant(String),
+    #[error("Unable to shadow immutable variable : {0}.")]
+    ShadowConstant(String),
+    #[error("Variable types dont match : {0:?} and {1:?}.")]
+    TypeMismatch(RuntimeValue, RuntimeValue),
+    #[error("Unable to resolve struct : {0}.")]
+    Struct(String),
+    #[error("Unable to resolve static function : {0}.")]
+    StructFunction(String),
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scope {

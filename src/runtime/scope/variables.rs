@@ -1,11 +1,18 @@
 use std::{cell::RefCell, mem::discriminant, rc::Rc};
 
-use crate::runtime::values::RuntimeValue;
+use thiserror::Error;
+
+use crate::runtime::{scope::ScopeErr, values::RuntimeValue};
 
 use super::Scope;
 
 impl Scope {
-    pub fn push_var(&mut self, key: String, value: &RuntimeValue, is_mutable: bool) {
+    pub fn push_var(
+        &mut self,
+        key: String,
+        value: &RuntimeValue,
+        is_mutable: bool,
+    ) -> Result<(), ScopeErr> {
         if !self.constants.contains_key(&key) {
             if is_mutable {
                 self.variables.insert(key, value.clone());
@@ -13,8 +20,10 @@ impl Scope {
                 self.constants.insert(key, value.clone());
             }
         } else {
-            panic!("Cannot shadow a non-mutable value");
+            return Err(ScopeErr::AssignConstant(key));
         }
+
+        Ok(())
     }
 
     fn resolve_alias<'a>(&'a self, original: &'a str) -> &'a str {
@@ -25,57 +34,56 @@ impl Scope {
         }
     }
 
-    pub fn assign_var(&mut self, og_key: String, value: &RuntimeValue) {
+    pub fn assign_var(&mut self, og_key: String, value: &RuntimeValue) -> Result<(), ScopeErr> {
         let key = self.resolve_alias(&og_key).to_string();
 
         if og_key == key {
             if let Some(v) = self.variables.get_mut(&key) {
                 if discriminant(v) == discriminant(value) || v.is_number() && value.is_number() {
                     *v = value.clone();
-                    return;
+                    return Ok(());
                 } else {
-                    panic!("Cannot assign differently typed values to one another.");
+                    return Err(ScopeErr::TypeMismatch(v.clone(), value.clone()));
                 }
             } else if self.constants.contains_key(&key) {
-                panic!("Variable is a immutable.");
+                return Err(ScopeErr::AssignConstant(key));
             }
-            println!("Variablee. {:?}, {:?}", key, self.variables);
         }
 
         if let Some(parent) = &self.parent {
             parent.borrow_mut().assign_var(key.to_string(), value);
         } else {
-            panic!("Failed to resolve variable {:?}", key)
+            return Err(ScopeErr::Variable(key.to_string()));
         }
+
+        Ok(())
     }
 }
 
-pub fn get_var(this: Rc<RefCell<Scope>>, key: &str) -> RuntimeValue {
-    let scope = resolve_var(this, key);
-    if let Some(value) = scope.0.borrow().variables.get(&scope.1) {
-        return value.clone();
-    } else if let Some(value) = scope.0.borrow().constants.get(&scope.1) {
-        return value.clone();
-    } else {
-        panic!("Cannot resolve variable : '{}'", key);
-    }
+pub fn get_var(this: Rc<RefCell<Scope>>, key: &str) -> Result<RuntimeValue, ScopeErr> {
+    let scope = resolve_var(this, key)?;
+    Ok(
+        if let Some(value) = scope.0.borrow().variables.get(&scope.1) {
+            value.clone()
+        } else if let Some(value) = scope.0.borrow().constants.get(&scope.1) {
+            value.clone()
+        } else {
+            return Err(ScopeErr::Variable(key.to_string()));
+        },
+    )
 }
 
-pub fn safe_resolve_var(
+pub fn resolve_var(
     this: Rc<RefCell<Scope>>,
     og_key: &str,
-) -> Option<(Rc<RefCell<Scope>>, String)> {
+) -> Result<(Rc<RefCell<Scope>>, String), ScopeErr> {
     let key = this.borrow().resolve_alias(og_key).to_string();
 
     if this.borrow().variables.contains_key(&key) || this.borrow().constants.contains_key(&key) {
-        return Some((this, key));
+        return Ok((this, key));
     } else if let Some(parent) = &this.borrow().parent {
-        return safe_resolve_var(parent.clone(), &key);
+        return resolve_var(parent.clone(), &key);
     } else {
-        None
+        Err(ScopeErr::Variable(key))
     }
-}
-
-pub fn resolve_var(this: Rc<RefCell<Scope>>, key: &str) -> (Rc<RefCell<Scope>>, String) {
-    safe_resolve_var(this, key).expect(&format!("Cannot resolve variable : {}", key))
 }

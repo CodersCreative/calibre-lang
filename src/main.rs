@@ -16,8 +16,8 @@ fn main() {
     let scope = Rc::new(RefCell::new(Scope::new(None)));
 
     if let Ok(txt) = fs::read_to_string("./src/test.cl") {
-        let program = parser.produce_ast(txt);
-        println!("result : {:?}", evaluate(program, scope));
+        let program = parser.produce_ast(txt).unwrap();
+        println!("result : {:?}", evaluate(program, scope).unwrap());
     } else {
         println!("Failed to read");
     }

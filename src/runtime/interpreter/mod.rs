@@ -4,21 +4,69 @@ pub mod statements;
 use core::panic;
 use std::{cell::RefCell, rc::Rc};
 
+use thiserror::Error;
+
 use crate::{
-    ast::NodeType,
+    ast::{NodeType, binary::ASTError},
     runtime::{
         interpreter::{expressions::*, statements::*},
-        scope::Scope,
-        values::RuntimeValue,
+        scope::{Scope, ScopeErr},
+        values::{RuntimeType, RuntimeValue, ValueErr},
     },
 };
 
-pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+#[derive(Error, Debug, Clone)]
+pub enum InterpreterErr {
+    #[error("{0}")]
+    Value(ValueErr),
+    #[error("{0}")]
+    AST(ASTError),
+    #[error("Cannot assign a literal value, {0:?}.")]
+    AssignNonVariable(NodeType),
+    #[error("Cannot mutably reference a non mutable value, {0:?}.")]
+    MutRefNonMut(RuntimeValue),
+    #[error("Cannot mutably reference a non variable, {0:?}.")]
+    RefNonVar(NodeType),
+    #[error("Cannot index a value that is not a list, {0:?}.")]
+    IndexNonList(NodeType),
+    #[error("This AST Node has not been implemented, {0:?}.")]
+    NotImplemented(NodeType),
+    #[error("Expected {0:?} operation.")]
+    ExpectedOperation(String),
+    #[error("Expected only functions.")]
+    ExpectedFunctions,
+    #[error("{0:?} is not of type {1:?}.")]
+    ExpectedType(RuntimeValue, RuntimeType),
+    #[error("Variable {0:?} has an unexpected type.")]
+    UnexpectedType(RuntimeValue),
+    #[error("Setters can only have one argument, {0:?}")]
+    SetterArgs(Box<Vec<NodeType>>),
+}
+
+impl From<ASTError> for InterpreterErr {
+    fn from(value: ASTError) -> Self {
+        Self::AST(value)
+    }
+}
+
+impl From<ValueErr> for InterpreterErr {
+    fn from(value: ValueErr) -> Self {
+        Self::Value(value)
+    }
+}
+
+impl From<ScopeErr> for InterpreterErr {
+    fn from(value: ScopeErr) -> Self {
+        Self::Value(ValueErr::Scope(value))
+    }
+}
+
+pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValue, InterpreterErr> {
     match node {
-        NodeType::FloatLiteral(x) => RuntimeValue::Float(x),
-        NodeType::IntegerLiteral(x) => RuntimeValue::Integer(x),
-        NodeType::StringLiteral(x) => RuntimeValue::Str(x),
-        NodeType::CharLiteral(x) => RuntimeValue::Char(x),
+        NodeType::FloatLiteral(x) => Ok(RuntimeValue::Float(x)),
+        NodeType::IntegerLiteral(x) => Ok(RuntimeValue::Integer(x)),
+        NodeType::StringLiteral(x) => Ok(RuntimeValue::Str(x)),
+        NodeType::CharLiteral(x) => Ok(RuntimeValue::Char(x)),
         NodeType::BinaryExpression { .. } => evaluate_binary_expression(node, scope),
         NodeType::Program(_) => evaluate_program(node, scope),
         NodeType::Identifier(x) => evaluate_identifier(&x, scope),
@@ -34,6 +82,6 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
         NodeType::IfStatement { .. } => evaluate_if_statement(node, scope),
         NodeType::MemberExpression { .. } => evaluate_member_expression(node, scope),
         NodeType::ImplDeclaration { .. } => evaluate_impl_declaration(node, scope),
-        _ => panic!("This AST Node has not been implemented. {:?}", node),
+        _ => Err(InterpreterErr::NotImplemented(node)),
     }
 }
