@@ -19,6 +19,7 @@ pub struct Scope {
     pub variables: HashMap<String, RuntimeValue>,
     pub alias: HashMap<String, String>,
     pub structs: HashMap<String, HashMap<String, RuntimeType>>,
+    pub structs_functions: HashMap<String, HashMap<String, (RuntimeValue, bool)>>,
     pub constants: HashMap<String, RuntimeValue>,
 }
 
@@ -55,6 +56,7 @@ impl Scope {
             alias: HashMap::new(),
             variables: HashMap::new(),
             structs: HashMap::new(),
+            structs_functions: HashMap::new(),
             parent,
         }
     }

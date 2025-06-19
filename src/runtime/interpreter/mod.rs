@@ -22,7 +22,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
         NodeType::BinaryExpression { .. } => evaluate_binary_expression(node, scope),
         NodeType::Program(_) => evaluate_program(node, scope),
         NodeType::Identifier(x) => evaluate_identifier(&x, scope),
-        NodeType::MapLiteral(_) => evaluate_object_expression(node, scope),
+        NodeType::StructLiteral(_) => evaluate_struct_expression(node, scope),
         NodeType::ListLiteral(_) => evaluate_list_expression(node, scope),
         NodeType::CallExpression(_, _) => evaluate_call_expression(node, scope),
         NodeType::VariableDeclaration { .. } => evaluate_variable_declaration(node, scope),
@@ -33,6 +33,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
         NodeType::BooleanExpression { .. } => evaluate_boolean_expression(node, scope),
         NodeType::IfStatement { .. } => evaluate_if_statement(node, scope),
         NodeType::MemberExpression { .. } => evaluate_member_expression(node, scope),
+        NodeType::ImplDeclaration { .. } => evaluate_impl_declaration(node, scope),
         _ => panic!("This AST Node has not been implemented. {:?}", node),
     }
 }

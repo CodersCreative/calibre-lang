@@ -1,5 +1,5 @@
 use crate::parser::Parser;
-use std::collections::{HashMap};
+use std::collections::HashMap;
 
 use crate::{
     ast::{NodeType, binary::BinaryOperator},
@@ -67,7 +67,7 @@ impl Parser {
 
         let _ = self.expect_eat(&TokenType::CloseCurly, "Object missing closing brace.");
 
-        NodeType::MapLiteral(properties)
+        NodeType::StructLiteral(properties)
     }
     pub fn parse_assignment_expression(&mut self) -> NodeType {
         let mut left = self.parse_list_expression();

@@ -1,14 +1,7 @@
-use crate::{
-    ast::RefMutability,
-    parser::Parser,
-};
+use crate::{ast::RefMutability, parser::Parser};
 use core::panic;
 
-use crate::{
-    ast::NodeType,
-    lexer::TokenType,
-    runtime::values::{RuntimeType},
-};
+use crate::{ast::NodeType, lexer::TokenType, runtime::values::RuntimeType};
 
 impl Parser {
     pub fn parse_statement(&mut self) -> NodeType {
@@ -90,7 +83,7 @@ impl Parser {
                 } => {
                     let mut depends = false;
                     if &parameters[0].0 == "self" {
-                        parameters[0].1 = RuntimeType::Struct(identifier.clone());
+                        parameters[0].1 = RuntimeType::Struct(Some(identifier.clone()));
                         depends = true;
                     }
 

@@ -4,16 +4,13 @@ pub mod expressions;
 pub mod functions;
 
 use core::panic;
-use std::{
-    collections::{HashMap},
-    str::FromStr,
-};
+use std::{collections::HashMap, str::FromStr};
 
 use crate::{
     ast::{NodeType, RefMutability},
     lexer::{Token, TokenType},
     parser::Parser,
-    runtime::values::{RuntimeType},
+    runtime::values::RuntimeType,
 };
 
 impl Parser {
@@ -206,24 +203,24 @@ impl Parser {
 
             if self.first().token_type == TokenType::Arrow {
                 let _ = self.eat();
-                ret = Some(Box::new(self.parse_type().unwrap()));
+                ret = Some(self.parse_type().unwrap());
             }
 
             Some(RuntimeType::Function {
-                return_type: ret,
+                return_type: Box::new(ret),
                 parameters: args,
                 is_async,
             })
         } else if t.token_type == TokenType::List {
             let t = if self.first().token_type == TokenType::OpenBrackets {
                 let _ = self.eat();
-                let t = Some(Box::new(self.parse_type().expect("Expected data type")));
+                let t = Some(self.parse_type().expect("Expected data type"));
                 let _ = self.expect_eat(&TokenType::CloseBrackets, "Expected closing brackets.");
                 t
             } else {
                 None
             };
-            Some(RuntimeType::List(t))
+            Some(RuntimeType::List(Box::new(t)))
         } else {
             match RuntimeType::from_str(&t.value) {
                 Ok(x) => Some(x),

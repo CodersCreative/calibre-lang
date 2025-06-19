@@ -9,7 +9,7 @@ use crate::{
             Scope,
             variables::{get_var, resolve_var, safe_resolve_var},
         },
-        values::{RuntimeValue, helper::Map},
+        values::{RuntimeType, RuntimeValue, helper::Map},
     },
 };
 
@@ -26,7 +26,8 @@ pub fn evaluate_member_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> R
     {
         let object = evaluate(*object, scope.clone());
         let prop = evaluate(*property, scope.clone());
-        if let RuntimeValue::Map(map) = object {
+        println!("mem {:?} , {:?}", &object, &prop);
+        if let RuntimeValue::Struct(map, t) = object {
             if let RuntimeValue::Str(x) = prop {
                 return map.0.get(&x).unwrap().clone();
             } else {
@@ -103,10 +104,10 @@ pub fn evaluate_assignment_expression(node: NodeType, scope: Rc<RefCell<Scope>>)
     }
 }
 
-pub fn evaluate_object_expression(obj: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+pub fn evaluate_struct_expression(obj: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
     let mut properties = HashMap::new();
 
-    if let NodeType::MapLiteral(props) = obj {
+    if let NodeType::StructLiteral(props) = obj {
         for (k, v) in props {
             let value = if let Some(value) = v {
                 evaluate(value, scope.clone())
@@ -118,7 +119,7 @@ pub fn evaluate_object_expression(obj: NodeType, scope: Rc<RefCell<Scope>>) -> R
         }
     }
 
-    RuntimeValue::Map(Map(properties))
+    RuntimeValue::Struct(Map(properties), None)
 }
 
 pub fn evaluate_list_expression(obj: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
@@ -136,7 +137,7 @@ pub fn evaluate_list_expression(obj: NodeType, scope: Rc<RefCell<Scope>>) -> Run
         let filtered: Vec<&RuntimeValue> =
             values.iter().filter(|x| discriminant(*x) == t).collect();
         if values.len() == filtered.len() {
-            Some(Box::new(values[0].clone().into()))
+            Some(values[0].clone().into())
         } else {
             None
         }
@@ -146,7 +147,7 @@ pub fn evaluate_list_expression(obj: NodeType, scope: Rc<RefCell<Scope>>) -> Run
 
     RuntimeValue::List {
         data: values,
-        data_type: t,
+        data_type: Box::new(t),
     }
 }
 pub fn evaluate_call_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {

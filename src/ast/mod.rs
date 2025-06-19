@@ -86,5 +86,5 @@ pub enum NodeType {
         comparisons: Box<Vec<NodeType>>,
         bodies: Vec<Box<Vec<NodeType>>>,
     },
-    MapLiteral(HashMap<String, Option<NodeType>>),
+    StructLiteral(HashMap<String, Option<NodeType>>),
 }

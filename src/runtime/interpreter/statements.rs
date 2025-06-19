@@ -38,6 +38,34 @@ pub fn evaluate_struct_declaration(
     }
 }
 
+pub fn evaluate_impl_declaration(declaration: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+    if let NodeType::ImplDeclaration {
+        identifier,
+        functions,
+    } = declaration
+    {
+        for function in functions {
+            let scope_2 = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
+            let func = evaluate(function.0, scope_2);
+
+            if let RuntimeValue::Function {
+                identifier: iden, ..
+            } = func.clone()
+            {
+                scope
+                    .borrow_mut()
+                    .push_struct_function(identifier.clone(), (iden, func, function.1));
+            } else {
+                panic!("Impl block can only contain functions");
+            }
+        }
+
+        RuntimeValue::Null
+    } else {
+        panic!("Tried to evaluate non-declaration node using evaluate_variable_declaration.")
+    }
+}
+
 pub fn evaluate_function_declaration(
     declaration: NodeType,
     scope: Rc<RefCell<Scope>>,

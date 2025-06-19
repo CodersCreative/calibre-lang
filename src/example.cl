@@ -9,7 +9,7 @@ struct CountryBase {
 struct Country {}
 
 impl CountryBase {
-	pub fn get_language(&self) : Language {
+	fn get_language(&self) : Language {
 		self.language
 	}
 }

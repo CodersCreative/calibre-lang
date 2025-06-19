@@ -4,14 +4,14 @@ print(foo)
 
 struct Language {
 	code : int,
-  // function : fn(int) -> string,
+  function : fn(int) -> string,
 }
 
-/*impl Language {
-  fn print(self) {
-    print(self.code);
+impl Language {
+  fn print_lang(&self) {
+    print(self);
   }
-}*/
+}
 
 struct Country {
   people : int,
@@ -46,6 +46,10 @@ fn main(number : int) -> string{
 }
 
 let zimbabwe : Country = {name : "Zimbabwe", people : 10, language : {code : 19, function :main}}
+
+let english : Language = {code : 20, function : main}
+// english.print_lang()
+
 let lst : list(list(int)) = [[10, 10, 100], [0,10]];
 
 fn hello_int(function : fn(int) -> string, amt : string) -> int {

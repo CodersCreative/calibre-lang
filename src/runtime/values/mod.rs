@@ -2,12 +2,7 @@ pub mod helper;
 
 use core::panic;
 use std::{
-    cell::RefCell,
-    fmt::Debug,
-    mem::discriminant,
-    ops::Deref,
-    rc::Rc,
-    str::FromStr,
+    cell::RefCell, fmt::Debug, mem::discriminant, ops::Deref, rc::Rc, str::FromStr,
     string::ParseError,
 };
 
@@ -32,17 +27,16 @@ impl NativeFunctions {}
 pub enum RuntimeType {
     Float,
     Integer,
-    Map,
     Bool,
     Str,
     Char,
-    List(Option<Box<RuntimeType>>),
+    List(Box<Option<RuntimeType>>),
     Function {
-        return_type: Option<Box<RuntimeType>>,
+        return_type: Box<Option<RuntimeType>>,
         parameters: Vec<(RuntimeType, RefMutability)>,
         is_async: bool,
     },
-    Struct(String),
+    Struct(Option<String>),
 }
 
 impl FromStr for RuntimeType {
@@ -51,11 +45,11 @@ impl FromStr for RuntimeType {
         Ok(match s {
             "int" => RuntimeType::Integer,
             "float" => RuntimeType::Float,
-            "map" => RuntimeType::Map,
+            "struct" => RuntimeType::Struct(None),
             "bool" => RuntimeType::Bool,
             "string" => RuntimeType::Str,
             "char" => RuntimeType::Char,
-            _ => RuntimeType::Struct(s.to_string()),
+            _ => RuntimeType::Struct(Some(s.to_string())),
         })
     }
 }
@@ -66,7 +60,7 @@ impl Into<RuntimeType> for RuntimeValue {
             Self::Null => panic!("Tried to convert null value to type"),
             Self::Float(_) => RuntimeType::Float,
             Self::Integer(_) => RuntimeType::Integer,
-            Self::Map(_) => RuntimeType::Map,
+            Self::Struct(_, x) => RuntimeType::Struct(x),
             Self::Bool(_) => RuntimeType::Bool,
             Self::Str(_) => RuntimeType::Str,
             Self::Char(_) => RuntimeType::Char,
@@ -79,8 +73,8 @@ impl Into<RuntimeType> for RuntimeValue {
                 is_async,
             } => RuntimeType::Function {
                 return_type: match return_type {
-                    Some(x) => Some(Box::new(x)),
-                    None => None,
+                    Some(x) => Box::new(Some(x)),
+                    None => Box::new(None),
                 },
                 parameters: parameters
                     .iter()
@@ -98,13 +92,13 @@ pub enum RuntimeValue {
     Null,
     Float(f64),
     Integer(i64),
-    Map(Map<RuntimeValue>),
+    Struct(Map<RuntimeValue>, Option<String>),
     Bool(bool),
     Str(String),
     Char(char),
     List {
         data: Vec<RuntimeValue>,
-        data_type: Option<Box<RuntimeType>>,
+        data_type: Box<Option<RuntimeType>>,
     },
     // Option(Option<Box<RuntimeValue>>),
     // Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>),
@@ -126,7 +120,7 @@ impl ToString for RuntimeValue {
             Self::Float(x) => x.to_string(),
             Self::Integer(x) => x.to_string(),
             Self::Bool(x) => x.to_string(),
-            Self::Map(x) => format!("{:?}", x),
+            Self::Struct(x, _) => format!("{:?}", x),
             Self::NativeFunction(x) => format!("native function : {:?}", x),
             Self::List { data, data_type: _ } => format!("{:?}", data),
             Self::Str(x) => x.to_string(),
@@ -183,7 +177,7 @@ impl RuntimeValue {
         match self {
             RuntimeValue::Null => false,
             RuntimeValue::NativeFunction(_) => false,
-            RuntimeValue::Map(_) => {
+            RuntimeValue::Struct(_, _) => {
                 self.into_type(scope, t);
                 true
             }
@@ -223,9 +217,9 @@ impl RuntimeValue {
                         return false;
                     };
 
-                    if let Some(x) = return_type {
+                    if let Some(x) = *return_type {
                         if let Some(y) = val_type {
-                            if x.deref() != y {
+                            if x != *y {
                                 return false;
                             }
                         } else {
@@ -263,8 +257,8 @@ impl RuntimeValue {
         let list_case = || {
             if let RuntimeType::List(x) = t.clone() {
                 RuntimeValue::List {
-                    data: vec![if let Some(x) = x.clone() {
-                        self.into_type(scope.clone(), *x)
+                    data: vec![if let Some(x) = *x.clone() {
+                        self.into_type(scope.clone(), x)
                     } else {
                         self.clone()
                     }],
@@ -287,7 +281,6 @@ impl RuntimeValue {
                         false
                     }
                 }),
-                RuntimeType::Map => panic_type(),
                 RuntimeType::Struct(_) => panic_type(),
                 RuntimeType::Str => RuntimeValue::Str(self.to_string()),
                 RuntimeType::List(_) => list_case(),
@@ -305,7 +298,6 @@ impl RuntimeValue {
                         false
                     }
                 }),
-                RuntimeType::Map => panic_type(),
                 RuntimeType::Struct(_) => panic_type(),
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Str => RuntimeValue::Str(self.to_string()),
@@ -316,16 +308,13 @@ impl RuntimeValue {
                 RuntimeType::Integer => RuntimeValue::Integer(x.parse().unwrap()),
                 RuntimeType::Float => RuntimeValue::Float(x.parse().unwrap()),
                 RuntimeType::Bool => panic_type(),
-                RuntimeType::Map => panic_type(),
                 RuntimeType::Str => self.clone(),
                 RuntimeType::Char => RuntimeValue::Char(x.chars().nth(0).unwrap()),
                 RuntimeType::Struct(_) => panic_type(),
-                RuntimeType::List(typ) if typ == Some(Box::new(RuntimeType::Char)) => {
-                    RuntimeValue::List {
-                        data: x.chars().map(|c| RuntimeValue::Char(c)).collect(),
-                        data_type: Some(Box::new(RuntimeType::Char)),
-                    }
-                }
+                RuntimeType::List(typ) if *typ == Some(RuntimeType::Char) => RuntimeValue::List {
+                    data: x.chars().map(|c| RuntimeValue::Char(c)).collect(),
+                    data_type: Box::new(Some(RuntimeType::Char)),
+                },
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Function { .. } => panic_type(),
             },
@@ -334,19 +323,19 @@ impl RuntimeValue {
             RuntimeValue::Char(x) => {
                 RuntimeValue::into_type(&RuntimeValue::Str(x.clone().to_string()), scope, t)
             }
-            RuntimeValue::Map(x) => match t {
-                RuntimeType::Map => self.clone(),
+            RuntimeValue::Struct(x, _) => match t {
+                RuntimeType::Struct(None) => self.clone(),
                 RuntimeType::Str => RuntimeValue::Str(self.to_string()),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
-                RuntimeType::Struct(identifier) => {
+                RuntimeType::Struct(Some(identifier)) => {
                     let properties = get_struct(resolve_struct(scope, &identifier), &identifier);
                     for property in properties {
                         if !x.0.contains_key(&property.0) {
                             panic!("Struct Declaration is missing {:?}", property);
                         }
                     }
-                    self.clone()
+                    RuntimeValue::Struct(x.clone(), Some(identifier))
                 }
                 RuntimeType::Function { .. } => match t {
                     RuntimeType::List(_) => list_case(),
@@ -370,9 +359,9 @@ impl RuntimeValue {
                         panic!("Check whether the function or type is async.");
                     };
 
-                    if let Some(x) = return_type {
+                    if let Some(x) = *return_type {
                         if let Some(y) = val_type {
-                            if x.deref() != y {
+                            if x != *y {
                                 panic!("Function has wrong return type");
                             }
                         } else {
@@ -397,7 +386,7 @@ impl RuntimeValue {
                     if data.len() == filtered.len() {
                         RuntimeValue::List {
                             data: data.clone(),
-                            data_type: Some(Box::new(t)),
+                            data_type: Box::new(Some(t)),
                         }
                     } else {
                         RuntimeValue::List {
@@ -405,13 +394,13 @@ impl RuntimeValue {
                                 .iter()
                                 .map(|x| x.into_type(scope.clone(), t.clone()))
                                 .collect(),
-                            data_type: Some(Box::new(t)),
+                            data_type: Box::new(Some(t)),
                         }
                     }
                 } else {
                     RuntimeValue::List {
                         data: Vec::new(),
-                        data_type: Some(Box::new(t)),
+                        data_type: Box::new(Some(t)),
                     }
                 }
             }
