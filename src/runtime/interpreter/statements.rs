@@ -1,11 +1,11 @@
-use std::{cell::RefCell, rc::Rc, str::FromStr};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ast::NodeType,
     runtime::{
         interpreter::evaluate,
         scope::Scope,
-        values::{RuntimeType, RuntimeValue, helper::Block},
+        values::{RuntimeValue, helper::Block},
     },
 };
 

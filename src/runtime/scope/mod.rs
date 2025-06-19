@@ -6,8 +6,6 @@ use std::{
     collections::HashMap,
     f64::{self, consts::PI},
     i64,
-    mem::discriminant,
-    panic,
     rc::Rc,
 };
 

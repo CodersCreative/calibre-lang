@@ -1,6 +1,6 @@
 use std::{cell::RefCell, mem::discriminant, rc::Rc};
 
-use crate::runtime::{scope::variables, values::RuntimeValue};
+use crate::runtime::values::RuntimeValue;
 
 use super::Scope;
 

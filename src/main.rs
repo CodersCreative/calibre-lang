@@ -1,10 +1,8 @@
 use std::{cell::RefCell, fs, rc::Rc};
 
 use crate::{
-    lexer::tokenize,
     parser::Parser,
     runtime::{interpreter::evaluate, scope::Scope},
-    utils::read_input,
 };
 
 pub mod ast;

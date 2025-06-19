@@ -1,15 +1,15 @@
 use core::panic;
-use std::{cell::RefCell, collections::HashMap, mem::discriminant, rc::Rc, thread::scope};
+use std::{cell::RefCell, collections::HashMap, mem::discriminant, rc::Rc};
 
 use crate::{
-    ast::{NodeType, RefMutability, binary::BinaryOperator},
+    ast::{NodeType, RefMutability},
     runtime::{
-        interpreter::{evaluate, statements},
+        interpreter::evaluate,
         scope::{
             Scope,
             variables::{get_var, resolve_var, safe_resolve_var},
         },
-        values::{self, NativeFunctions, RuntimeValue, helper::Map},
+        values::{RuntimeValue, helper::Map},
     },
 };
 

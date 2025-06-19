@@ -1,6 +1,6 @@
-use std::{cell::RefCell, collections::HashMap, mem::discriminant, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::runtime::values::{RuntimeType, RuntimeValue};
+use crate::runtime::values::RuntimeType;
 
 use super::Scope;
 

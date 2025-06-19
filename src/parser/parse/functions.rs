@@ -1,14 +1,8 @@
 use crate::parser::Parser;
-use std::{
-    collections::{self, HashMap},
-    ops::Not,
-    str::FromStr,
-};
 
 use crate::{
-    ast::{binary::BinaryOperator, NodeType},
-    lexer::{Token, TokenType},
-    runtime::values::{self, RuntimeType},
+    ast::NodeType,
+    lexer::TokenType,
 };
 
 impl Parser {

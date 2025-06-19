@@ -3,9 +3,7 @@ pub mod helper;
 use core::panic;
 use std::{
     cell::RefCell,
-    collections::HashMap,
-    env::args,
-    fmt::{Debug, format, write},
+    fmt::Debug,
     mem::discriminant,
     ops::Deref,
     rc::Rc,
@@ -16,8 +14,7 @@ use std::{
 use helper::{Block, Map};
 
 use crate::{
-    ast::{NodeType, RefMutability},
-    lexer::TokenType,
+    ast::RefMutability,
     runtime::scope::{
         Scope,
         structs::{get_struct, resolve_struct},

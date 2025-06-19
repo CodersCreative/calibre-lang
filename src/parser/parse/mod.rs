@@ -5,17 +5,15 @@ pub mod functions;
 
 use core::panic;
 use std::{
-    cell::Ref,
-    collections::{self, HashMap},
-    ops::Not,
+    collections::{HashMap},
     str::FromStr,
 };
 
 use crate::{
-    ast::{NodeType, RefMutability, binary::BinaryOperator},
+    ast::{NodeType, RefMutability},
     lexer::{Token, TokenType},
     parser::Parser,
-    runtime::values::{self, RuntimeType},
+    runtime::values::{RuntimeType},
 };
 
 impl Parser {
