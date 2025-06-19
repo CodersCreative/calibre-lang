@@ -2,7 +2,7 @@ use std::ops::{Add, Div, Mul, Sub};
 
 use thiserror::Error;
 
-use crate::{ast::comparison::BooleanOperation, runtime::values::RuntimeValue};
+use crate::runtime::values::RuntimeValue;
 
 #[derive(Error, Debug, Clone)]
 pub enum ASTError {

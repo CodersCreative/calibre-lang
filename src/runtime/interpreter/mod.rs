@@ -1,7 +1,6 @@
 pub mod expressions;
 pub mod statements;
 
-use core::panic;
 use std::{cell::RefCell, rc::Rc};
 
 use thiserror::Error;

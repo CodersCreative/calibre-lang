@@ -2,7 +2,6 @@ use crate::{
     ast::RefMutability,
     parser::{Parser, ParserError, SyntaxErr},
 };
-use core::panic;
 
 use crate::{ast::NodeType, lexer::TokenType, runtime::values::RuntimeType};
 

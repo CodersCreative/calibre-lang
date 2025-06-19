@@ -2,7 +2,7 @@ pub mod helper;
 
 use core::panic;
 use std::{
-    cell::RefCell, fmt::Debug, mem::discriminant, ops::Deref, rc::Rc, str::FromStr,
+    cell::RefCell, fmt::Debug, mem::discriminant, rc::Rc, str::FromStr,
     string::ParseError,
 };
 

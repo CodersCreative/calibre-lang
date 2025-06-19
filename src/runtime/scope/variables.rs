@@ -1,6 +1,5 @@
 use std::{cell::RefCell, mem::discriminant, rc::Rc};
 
-use thiserror::Error;
 
 use crate::runtime::{scope::ScopeErr, values::RuntimeValue};
 
