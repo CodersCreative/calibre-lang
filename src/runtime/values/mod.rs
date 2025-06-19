@@ -131,15 +131,15 @@ impl ToString for RuntimeValue {
             Self::Bool(x) => x.to_string(),
             Self::Map(x) => format!("{:?}", x),
             Self::NativeFunction(x) => format!("native function : {:?}", x),
-            Self::List { data, data_type } => format!("{:?}", data),
+            Self::List { data, data_type: _ } => format!("{:?}", data),
             Self::Str(x) => x.to_string(),
             Self::Char(x) => x.to_string(),
             Self::Function {
                 identifier,
                 parameters,
-                body,
+                body: _,
                 return_type,
-                is_async,
+                is_async: _,
             } => {
                 format!("{:?} ({:?}) -> {:?}", identifier, parameters, return_type)
             }
@@ -244,7 +244,7 @@ impl RuntimeValue {
                 }
                 _ => false,
             },
-            RuntimeValue::List { data, data_type } => match t {
+            RuntimeValue::List { data: _, data_type } => match t {
                 RuntimeType::List(z) => {
                     if *data_type == z {
                         true
@@ -391,7 +391,7 @@ impl RuntimeValue {
                 }
                 _ => panic_type(),
             },
-            RuntimeValue::List { data, data_type } => {
+            RuntimeValue::List { data, data_type: _ } => {
                 if data.len() > 0 {
                     let t2 = discriminant(&data[0]);
                     let filtered: Vec<&RuntimeValue> =

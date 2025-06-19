@@ -30,6 +30,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
         NodeType::AssignmentExpression { .. } => evaluate_assignment_expression(node, scope),
         NodeType::FunctionDeclaration { .. } => evaluate_function_declaration(node, scope),
         NodeType::ComparisonExpression { .. } => evaluate_comparison_expression(node, scope),
+        NodeType::BooleanExpression { .. } => evaluate_boolean_expression(node, scope),
         NodeType::IfStatement { .. } => evaluate_if_statement(node, scope),
         NodeType::MemberExpression { .. } => evaluate_member_expression(node, scope),
         _ => panic!("This AST Node has not been implemented. {:?}", node),

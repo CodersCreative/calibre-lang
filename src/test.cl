@@ -71,13 +71,17 @@ fn hello(function : fn(int) -> string, amt : string) {
 
 // print(hello == hello);
 
-if hello != hello {
+if hello != hello{
   print("hello");
 }else if false{
   print("No")
 }else {
   print("Yes")
 }
+
+//let b = true && true;
+
+// print(b);
 
 // var hello : fn(int) -> string = main;
 

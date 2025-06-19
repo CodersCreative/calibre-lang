@@ -10,8 +10,44 @@ pub enum Comparison {
     NotEqual,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BooleanOperation {
+    And,
+    Or,
+}
+
+impl BooleanOperation {
+    pub fn from_operator(txt: &str) -> Option<Self> {
+        match txt.trim() {
+            "&&" => Some(Self::And),
+            "||" => Some(Self::Or),
+            _ => None,
+        }
+    }
+
+    pub fn to_operator(&self) -> &str {
+        match self {
+            Self::And => "&&",
+            Self::Or => "||",
+        }
+    }
+
+    pub fn handle(&self, left: RuntimeValue, right: RuntimeValue) -> RuntimeValue {
+        if let RuntimeValue::Bool(x) = left {
+            if let RuntimeValue::Bool(y) = right {
+                return RuntimeValue::Bool(match self {
+                    Self::And => x && y,
+                    Self::Or => x || y,
+                });
+            }
+        }
+
+        panic!("Cannot use boolean operation on non bool values.")
+    }
+}
+
 impl Comparison {
-    pub fn from_operator(txt : &str) -> Option<Self> {
+    pub fn from_operator(txt: &str) -> Option<Self> {
         match txt.trim() {
             "<=" => Some(Self::GreaterEqual),
             "<" => Some(Self::Greater),
@@ -23,7 +59,7 @@ impl Comparison {
         }
     }
 
-    pub fn to_operator(&self) -> &str{
+    pub fn to_operator(&self) -> &str {
         match self {
             Self::GreaterEqual => "<=",
             Self::Greater => "<",
@@ -33,8 +69,8 @@ impl Comparison {
             Self::NotEqual => "!=",
         }
     }
-    
-    pub fn handle(&self, left : RuntimeValue, right : RuntimeValue) -> RuntimeValue  {
+
+    pub fn handle(&self, left: RuntimeValue, right: RuntimeValue) -> RuntimeValue {
         RuntimeValue::Bool(match self {
             Self::NotEqual => left != right,
             Self::Equal => left == right,
@@ -45,4 +81,3 @@ impl Comparison {
         })
     }
 }
-

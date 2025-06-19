@@ -54,6 +54,21 @@ pub fn evaluate_binary_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> R
         panic!("Tried to evaluate non-binary-expression node using evaluate_binary_expression.")
     }
 }
+pub fn evaluate_boolean_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
+    if let NodeType::BooleanExpression {
+        left,
+        right,
+        operator,
+    } = exp
+    {
+        let left = evaluate(*left, scope.clone());
+        let right = evaluate(*right, scope.clone());
+
+        operator.handle(left, right)
+    } else {
+        panic!("Tried to evaluate non-binary-expression node using evaluate_binary_expression.")
+    }
+}
 
 pub fn evaluate_comparison_expression(exp: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
     if let NodeType::ComparisonExpression {

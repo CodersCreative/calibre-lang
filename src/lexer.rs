@@ -1,7 +1,10 @@
 use core::panic;
 use std::collections::HashMap;
 
-use crate::ast::{binary::BinaryOperator, comparison::Comparison};
+use crate::ast::{
+    binary::BinaryOperator,
+    comparison::{BooleanOperation, Comparison},
+};
 
 const IGNORE: [char; 1] = [';'];
 
@@ -21,6 +24,7 @@ pub enum TokenType {
     Colon,
     Comma,
     Comparison(Comparison),
+    Boolean(BooleanOperation),
     BinaryOperator(BinaryOperator),
     BinaryAssign(BinaryOperator),
     UnaryAssign(BinaryOperator),
@@ -40,6 +44,7 @@ pub enum TokenType {
     Func,
     Return,
     If,
+    Or,
     This,
     Scope,
     FullStop,
@@ -73,6 +78,11 @@ pub fn keywords() -> HashMap<String, TokenType> {
 pub fn special_keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("->"), TokenType::Arrow),
+        (
+            String::from("&&"),
+            TokenType::Boolean(BooleanOperation::And),
+        ),
+        (String::from("||"), TokenType::Boolean(BooleanOperation::Or)),
         (String::from("&mut"), TokenType::RefMut),
         (
             String::from(">="),
@@ -108,7 +118,6 @@ impl Token {
 pub fn tokenize(txt: String) -> Vec<Token> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut buffer: Vec<char> = txt.chars().collect();
-    let mut in_str = false;
 
     while buffer.len() > 0 {
         let first = buffer.first().unwrap();
@@ -116,6 +125,7 @@ pub fn tokenize(txt: String) -> Vec<Token> {
         let get_token = |c: char| -> Option<TokenType> {
             match c {
                 '(' => Some(TokenType::OpenBrackets),
+                '|' => Some(TokenType::Or),
                 ')' => Some(TokenType::CloseBrackets),
                 '{' => Some(TokenType::OpenCurly),
                 '}' => Some(TokenType::CloseCurly),
@@ -135,7 +145,6 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                 '!' => Some(TokenType::Not),
                 _ => None,
             }
-            // Some(Token::new(t, buffer.remove(0).to_string().trim()))
         };
 
         let token = match get_token(*first) {

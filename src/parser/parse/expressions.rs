@@ -41,7 +41,7 @@ impl Parser {
     }
     pub fn parse_object_expression(&mut self) -> NodeType {
         if self.first().token_type != TokenType::OpenCurly {
-            return self.parse_comparison_expression();
+            return self.parse_boolean_expression();
         }
 
         let mut properties = HashMap::new();
