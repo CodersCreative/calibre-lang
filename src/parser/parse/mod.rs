@@ -1,16 +1,18 @@
-pub mod expressions;
 pub mod binary;
 pub mod declarations;
+pub mod expressions;
 pub mod functions;
 
+use core::panic;
 use std::{
+    cell::Ref,
     collections::{self, HashMap},
     ops::Not,
     str::FromStr,
 };
 
 use crate::{
-    ast::{binary::BinaryOperator, NodeType},
+    ast::{NodeType, RefMutability, binary::BinaryOperator},
     lexer::{Token, TokenType},
     parser::Parser,
     runtime::values::{self, RuntimeType},
@@ -41,6 +43,43 @@ impl Parser {
             );
         }
         value
+    }
+
+    fn parse_key_type_list_ordered_with_ref(
+        &mut self,
+        open_token: TokenType,
+        close_token: TokenType,
+    ) -> Vec<(String, RuntimeType, RefMutability)> {
+        let mut properties = Vec::new();
+        let _ = self.expect_eat(&open_token, "Expected opening brackets");
+
+        while !self.is_eof() && self.first().token_type != close_token {
+            let key = self
+                .expect_eat(&TokenType::Identifier, "Expected object literal key.")
+                .value;
+
+            let _ = self.expect_eat(&TokenType::Colon, "Object missing colon after identifier.");
+
+            let ref_mutability = RefMutability::from(self.first().token_type.clone());
+
+            if ref_mutability != RefMutability::Value {
+                let _ = self.eat();
+            }
+
+            properties.push((
+                key,
+                self.parse_type().expect("Expected data type."),
+                ref_mutability,
+            ));
+
+            if self.first().token_type != close_token {
+                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+            }
+        }
+
+        let _ = self.expect_eat(&close_token, "Object missing closing brace.");
+
+        properties
     }
 
     fn parse_key_type_list_ordered(
@@ -97,6 +136,37 @@ impl Parser {
         properties
     }
 
+    fn parse_type_list_with_ref(
+        &mut self,
+        open_token: TokenType,
+        close_token: TokenType,
+    ) -> Vec<(RuntimeType, RefMutability)> {
+        let mut properties = Vec::new();
+        let _ = self.expect_eat(&open_token, "Expected opening brackets");
+
+        while !self.is_eof() && self.first().token_type != close_token {
+            let ref_mutability = RefMutability::from(self.first().token_type.clone());
+
+            if ref_mutability != RefMutability::Value {
+                let _ = self.eat();
+            }
+
+            properties.push((
+                self.parse_type()
+                    .expect("Expected data type after identifier"),
+                ref_mutability,
+            ));
+
+            if self.first().token_type != close_token {
+                let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
+            }
+        }
+
+        let _ = self.expect_eat(&close_token, "Object missing closing brace.");
+
+        properties
+    }
+
     fn parse_type_list(
         &mut self,
         open_token: TokenType,
@@ -110,11 +180,6 @@ impl Parser {
                 self.parse_type()
                     .expect("Expected data type after identifier"),
             );
-            // let value = self
-            //     .expect_eat(&TokenType::Identifier, "Expected data type.")
-            //     .value;
-            //
-            // properties.push(RuntimeType::from_str(&value).unwrap());
 
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, "Object missing comma after property");
@@ -137,7 +202,8 @@ impl Parser {
                 false
             };
 
-            let args = self.parse_type_list(TokenType::OpenBrackets, TokenType::CloseBrackets);
+            let args =
+                self.parse_type_list_with_ref(TokenType::OpenBrackets, TokenType::CloseBrackets);
             let mut ret = None;
 
             if self.first().token_type == TokenType::Arrow {
@@ -168,11 +234,9 @@ impl Parser {
         }
     }
 
-
     pub fn parse_expression(&mut self) -> NodeType {
         self.parse_assignment_expression()
     }
-
 
     pub fn parse_list_expression(&mut self) -> NodeType {
         if self.first().token_type != TokenType::OpenSquare {

@@ -1,4 +1,4 @@
-use std::fs;
+use std::{cell::RefCell, fs, rc::Rc};
 
 use crate::{
     lexer::tokenize,
@@ -15,11 +15,11 @@ pub mod utils;
 
 fn main() {
     let mut parser = Parser::default();
-    let mut scope = Scope::new(None);
+    let scope = Rc::new(RefCell::new(Scope::new(None)));
 
     if let Ok(txt) = fs::read_to_string("./src/test.cl") {
         let program = parser.produce_ast(txt);
-        println!("result : {:?}", evaluate(program, &mut scope));
+        println!("result : {:?}", evaluate(program, scope));
     } else {
         println!("Failed to read");
     }

@@ -6,7 +6,25 @@ use std::collections::HashMap;
 use binary::BinaryOperator;
 use comparison::Comparison;
 
-use crate::runtime::values::RuntimeType;
+use crate::{lexer::TokenType, runtime::values::RuntimeType};
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RefMutability {
+    Value,
+    Ref,
+    MutRef,
+    MutValue,
+}
+impl From<TokenType> for RefMutability {
+    fn from(value: TokenType) -> Self {
+        match value {
+            TokenType::Mut => RefMutability::MutValue,
+            TokenType::RefMut => RefMutability::MutRef,
+            TokenType::Ref => RefMutability::Ref,
+            _ => RefMutability::Value,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
@@ -17,13 +35,17 @@ pub enum NodeType {
         value: Option<Box<NodeType>>,
         data_type: Option<RuntimeType>,
     },
+    ImplDeclaration {
+        identifier: String,
+        functions: Vec<(NodeType, bool)>,
+    },
     StructDeclaration {
         identifier: String,
         properties: HashMap<String, RuntimeType>,
     },
     FunctionDeclaration {
         identifier: String,
-        parameters: Vec<(String, RuntimeType)>,
+        parameters: Vec<(String, RuntimeType, RefMutability)>,
         body: Box<Vec<NodeType>>,
         return_type: Option<RuntimeType>,
         is_async: bool,
@@ -56,8 +78,8 @@ pub enum NodeType {
         operator: Comparison,
     },
     IfStatement {
-        comparisons : Box<Vec<NodeType>>,
-        bodies : Vec<Box<Vec<NodeType>>>
+        comparisons: Box<Vec<NodeType>>,
+        bodies: Vec<Box<Vec<NodeType>>>,
     },
     MapLiteral(HashMap<String, Option<NodeType>>),
 }

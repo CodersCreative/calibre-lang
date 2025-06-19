@@ -2,9 +2,10 @@ pub mod expressions;
 pub mod statements;
 
 use core::panic;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    ast::{NodeType},
+    ast::NodeType,
     runtime::{
         interpreter::{expressions::*, statements::*},
         scope::Scope,
@@ -12,7 +13,7 @@ use crate::{
     },
 };
 
-pub fn evaluate(node: NodeType, scope: &mut Scope) -> RuntimeValue {
+pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
     match node {
         NodeType::FloatLiteral(x) => RuntimeValue::Float(x),
         NodeType::IntegerLiteral(x) => RuntimeValue::Integer(x),
@@ -29,7 +30,7 @@ pub fn evaluate(node: NodeType, scope: &mut Scope) -> RuntimeValue {
         NodeType::AssignmentExpression { .. } => evaluate_assignment_expression(node, scope),
         NodeType::FunctionDeclaration { .. } => evaluate_function_declaration(node, scope),
         NodeType::ComparisonExpression { .. } => evaluate_comparison_expression(node, scope),
-        NodeType::IfStatement {..} => evaluate_if_statement(node, scope),
+        NodeType::IfStatement { .. } => evaluate_if_statement(node, scope),
         NodeType::MemberExpression { .. } => evaluate_member_expression(node, scope),
         _ => panic!("This AST Node has not been implemented. {:?}", node),
     }

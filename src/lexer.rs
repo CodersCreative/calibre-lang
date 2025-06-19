@@ -25,8 +25,14 @@ pub enum TokenType {
     BinaryAssign(BinaryOperator),
     UnaryAssign(BinaryOperator),
     Not,
-    Var,
+    Ref,
+    RefMut,
+    Mut,
+    Const,
     Let,
+    Impl,
+    For,
+    Trait,
     List,
     Arrow,
     Async,
@@ -34,6 +40,7 @@ pub enum TokenType {
     Func,
     Return,
     If,
+    This,
     Scope,
     FullStop,
     EOF,
@@ -43,7 +50,8 @@ pub enum TokenType {
 
 pub fn keywords() -> HashMap<String, TokenType> {
     HashMap::from([
-        (String::from("var"), TokenType::Var),
+        (String::from("mut"), TokenType::Mut),
+        (String::from("const"), TokenType::Const),
         (String::from("let"), TokenType::Let),
         (String::from("for"), TokenType::Loop),
         (String::from("scope"), TokenType::Scope),
@@ -55,16 +63,30 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("func"), TokenType::Func),
         (String::from("struct"), TokenType::Struct),
         (String::from("async"), TokenType::Async),
+        (String::from("impl"), TokenType::Impl),
+        (String::from("trait"), TokenType::Trait),
+        (String::from("Self"), TokenType::This),
+        (String::from("for"), TokenType::For),
     ])
 }
 
 pub fn special_keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("->"), TokenType::Arrow),
-        (String::from(">="), TokenType::Comparison(Comparison::GreaterEqual)),
-        (String::from("<="), TokenType::Comparison(Comparison::LesserEqual)),
+        (String::from("&mut"), TokenType::RefMut),
+        (
+            String::from(">="),
+            TokenType::Comparison(Comparison::GreaterEqual),
+        ),
+        (
+            String::from("<="),
+            TokenType::Comparison(Comparison::LesserEqual),
+        ),
         (String::from("=="), TokenType::Comparison(Comparison::Equal)),
-        (String::from("!="), TokenType::Comparison(Comparison::NotEqual)),
+        (
+            String::from("!="),
+            TokenType::Comparison(Comparison::NotEqual),
+        ),
     ])
 }
 
@@ -100,10 +122,15 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                 '[' => Some(TokenType::OpenSquare),
                 ']' => Some(TokenType::CloseSquare),
                 ',' => Some(TokenType::Comma),
-                '<' | '>'=> Some(TokenType::Comparison(Comparison::from_operator(&c.to_string()).unwrap())),
+                '&' => Some(TokenType::Ref),
+                '<' | '>' => Some(TokenType::Comparison(
+                    Comparison::from_operator(&c.to_string()).unwrap(),
+                )),
                 '.' => Some(TokenType::FullStop),
                 ':' => Some(TokenType::Colon),
-                '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(BinaryOperator::from_symbol(c).unwrap())),
+                '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(
+                    BinaryOperator::from_symbol(c).unwrap(),
+                )),
                 '=' => Some(TokenType::Equals),
                 '!' => Some(TokenType::Not),
                 _ => None,
@@ -202,14 +229,14 @@ pub fn tokenize(txt: String) -> Vec<Token> {
                 }
 
                 if let TokenType::BinaryOperator(x) = &last.token_type {
-                    if token.token_type == TokenType::Equals{
+                    if token.token_type == TokenType::Equals {
                         let token = Token::new(TokenType::BinaryAssign(x.clone()), &last.value);
                         tokens.pop();
                         tokens.push(token);
                         continue;
                     }
                 }
-                
+
                 if let TokenType::BinaryOperator(x) = &last.token_type {
                     if let TokenType::BinaryOperator(y) = token.token_type {
                         if x != &y {

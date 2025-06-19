@@ -6,13 +6,12 @@ use std::{
 };
 
 use crate::{
-    ast::{binary::BinaryOperator, NodeType},
+    ast::{NodeType, binary::BinaryOperator},
     lexer::{Token, TokenType},
     runtime::values::{self, RuntimeType},
 };
 
 impl Parser {
-
     pub fn parse_primary_expression(&mut self) -> NodeType {
         match self.first().token_type {
             TokenType::Identifier => NodeType::Identifier(self.eat().value),
@@ -81,7 +80,13 @@ impl Parser {
         if let TokenType::UnaryAssign(op) = self.first().token_type.clone() {
             let operator = self.eat();
 
-            if [BinaryOperator::Power, BinaryOperator::Divide, BinaryOperator::Multiply].contains(&op) {
+            if [
+                BinaryOperator::Power,
+                BinaryOperator::Divide,
+                BinaryOperator::Multiply,
+            ]
+            .contains(&op)
+            {
                 panic!(
                     "This notation cannot be used with operator {:?} as it would not alter the value.",
                     operator.value.chars().nth(0).unwrap()

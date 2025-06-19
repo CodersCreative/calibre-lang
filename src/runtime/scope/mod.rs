@@ -1,12 +1,14 @@
-pub mod variables;
 pub mod structs;
+pub mod variables;
 
 use std::{
+    cell::RefCell,
     collections::HashMap,
     f64::{self, consts::PI},
     i64,
     mem::discriminant,
     panic,
+    rc::Rc,
 };
 
 use crate::runtime::values::{NativeFunctions, RuntimeValue};
@@ -15,9 +17,10 @@ use super::values::RuntimeType;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scope {
-    pub parent: Option<Box<Self>>,
+    pub parent: Option<Rc<RefCell<Self>>>,
     pub variables: HashMap<String, RuntimeValue>,
-    pub structs: HashMap<String,HashMap<String, RuntimeType>>,
+    pub alias: HashMap<String, String>,
+    pub structs: HashMap<String, HashMap<String, RuntimeType>>,
     pub constants: HashMap<String, RuntimeValue>,
 }
 
@@ -44,13 +47,14 @@ fn get_global_variables() -> HashMap<String, RuntimeValue> {
 }
 
 impl Scope {
-    pub fn new(parent: Option<Box<Self>>) -> Self {
+    pub fn new(parent: Option<Rc<RefCell<Self>>>) -> Self {
         Self {
             constants: if let None = parent {
                 get_global_variables()
             } else {
                 HashMap::new()
             },
+            alias: HashMap::new(),
             variables: HashMap::new(),
             structs: HashMap::new(),
             parent,

@@ -1,11 +1,17 @@
-var foo : float = 50;
+let mut foo : float = 50;
 
 print(foo)
 
 struct Language {
 	code : int,
-  function : fn(int) -> string,
+  // function : fn(int) -> string,
 }
+
+/*impl Language {
+  fn print(self) {
+    print(self.code);
+  }
+}*/
 
 struct Country {
   people : int,
@@ -48,6 +54,16 @@ fn hello_int(function : fn(int) -> string, amt : string) -> int {
   first
 }
 
+let mut t = "bye";
+fn test_again(txt : &mut string) {
+  txt = "hello8"
+  //print(t);;
+}
+
+t = "hello4";
+test_again(t);
+print(t);
+
 fn hello(function : fn(int) -> string, amt : string) {
   let first = function(amt);
   print(first);
@@ -69,9 +85,9 @@ if hello != hello {
 
 print(lst)
 print(lst(0)(0))
-print(map.x)
+print(map)
 
-var fb = "foo_bar";
+let mut fb = "foo_bar";
 /*foo(20)
 
 foo++; 

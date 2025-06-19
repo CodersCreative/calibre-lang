@@ -2,12 +2,27 @@ pub mod helper;
 
 use core::panic;
 use std::{
-    collections::HashMap, env::args, fmt::{format, write, Debug}, mem::discriminant, ops::Deref, str::FromStr, string::ParseError
+    cell::RefCell,
+    collections::HashMap,
+    env::args,
+    fmt::{Debug, format, write},
+    mem::discriminant,
+    ops::Deref,
+    rc::Rc,
+    str::FromStr,
+    string::ParseError,
 };
 
 use helper::{Block, Map};
 
-use crate::{ast::NodeType, lexer::TokenType, runtime::scope::Scope};
+use crate::{
+    ast::{NodeType, RefMutability},
+    lexer::TokenType,
+    runtime::scope::{
+        Scope,
+        structs::{get_struct, resolve_struct},
+    },
+};
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum NativeFunctions {
@@ -27,7 +42,7 @@ pub enum RuntimeType {
     List(Option<Box<RuntimeType>>),
     Function {
         return_type: Option<Box<RuntimeType>>,
-        parameters: Vec<RuntimeType>,
+        parameters: Vec<(RuntimeType, RefMutability)>,
         is_async: bool,
     },
     Struct(String),
@@ -70,7 +85,10 @@ impl Into<RuntimeType> for RuntimeValue {
                     Some(x) => Some(Box::new(x)),
                     None => None,
                 },
-                parameters: parameters.iter().map(|x| x.1.clone()).collect(),
+                parameters: parameters
+                    .iter()
+                    .map(|x| (x.1.clone(), x.2.clone()))
+                    .collect(),
                 is_async,
             },
             Self::NativeFunction(_) => panic!("Cannot get type of native functions"),
@@ -95,7 +113,7 @@ pub enum RuntimeValue {
     // Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>),
     Function {
         identifier: String,
-        parameters: Vec<(String, RuntimeType)>,
+        parameters: Vec<(String, RuntimeType, RefMutability)>,
         body: Block,
         return_type: Option<RuntimeType>,
         is_async: bool,
@@ -144,13 +162,13 @@ impl RuntimeValue {
         }
     }
 
-    pub fn call_native(&self, args: Vec<RuntimeValue>, scope: &mut Scope) -> RuntimeValue {
+    pub fn call_native(&self, args: Vec<RuntimeValue>, scope: Rc<RefCell<Scope>>) -> RuntimeValue {
         if let Self::NativeFunction(func) = self {
             match func {
                 NativeFunctions::Print => {
                     let mut output = String::new();
 
-                    for arg in args{
+                    for arg in args {
                         output.push_str(&format!("{} ", arg.to_string()));
                     }
 
@@ -164,17 +182,92 @@ impl RuntimeValue {
         }
     }
 
-    pub fn into_type(&self, scope: &mut Scope, t: RuntimeType) -> RuntimeValue {
+    pub fn is_type(&self, scope: Rc<RefCell<Scope>>, t: RuntimeType) -> bool {
+        match self {
+            RuntimeValue::Null => false,
+            RuntimeValue::NativeFunction(_) => false,
+            RuntimeValue::Map(_) => {
+                self.into_type(scope, t);
+                true
+            }
+            RuntimeValue::Str(_) => match t {
+                RuntimeType::Str => true,
+                _ => false,
+            },
+            RuntimeValue::Bool(_) => match t {
+                RuntimeType::Bool => true,
+                _ => false,
+            },
+            RuntimeValue::Integer(_) => match t {
+                RuntimeType::Integer => true,
+                _ => false,
+            },
+            RuntimeValue::Float(_) => match t {
+                RuntimeType::Float => true,
+                _ => false,
+            },
+            RuntimeValue::Char(_) => match t {
+                RuntimeType::Char => true,
+                _ => false,
+            },
+            RuntimeValue::Function {
+                identifier: _,
+                parameters: val_parameters,
+                body: _,
+                return_type: val_type,
+                is_async: val_is_async,
+            } => match t {
+                RuntimeType::Function {
+                    return_type,
+                    parameters,
+                    is_async,
+                } => {
+                    if is_async != *val_is_async {
+                        return false;
+                    };
+
+                    if let Some(x) = return_type {
+                        if let Some(y) = val_type {
+                            if x.deref() != y {
+                                return false;
+                            }
+                        } else {
+                            return false;
+                        }
+                    }
+
+                    if val_parameters.len() != parameters.len() {
+                        return false;
+                    };
+
+                    true
+                }
+                _ => false,
+            },
+            RuntimeValue::List { data, data_type } => match t {
+                RuntimeType::List(z) => {
+                    if *data_type == z {
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            },
+        }
+    }
+
+    pub fn into_type(&self, scope: Rc<RefCell<Scope>>, t: RuntimeType) -> RuntimeValue {
         let panic_type = || {
             panic!("Cannot convert {:?} into {:?}", self, t);
             RuntimeValue::Null
         };
 
-        let mut list_case = || {
+        let list_case = || {
             if let RuntimeType::List(x) = t.clone() {
                 RuntimeValue::List {
                     data: vec![if let Some(x) = x.clone() {
-                        self.into_type(scope, *x)
+                        self.into_type(scope.clone(), *x)
                     } else {
                         self.clone()
                     }],
@@ -242,7 +335,7 @@ impl RuntimeValue {
 
             RuntimeValue::Null => panic_type(),
             RuntimeValue::Char(x) => {
-                RuntimeValue::into_type(&RuntimeValue::Str(x.to_string()), scope, t)
+                RuntimeValue::into_type(&RuntimeValue::Str(x.clone().to_string()), scope, t)
             }
             RuntimeValue::Map(x) => match t {
                 RuntimeType::Map => self.clone(),
@@ -250,9 +343,9 @@ impl RuntimeValue {
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Struct(identifier) => {
-                    let properties = scope.resolve_struct(&identifier).get_struct(&identifier);
+                    let properties = get_struct(resolve_struct(scope, &identifier), &identifier);
                     for property in properties {
-                        if !x.0.contains_key(property.0) {
+                        if !x.0.contains_key(&property.0) {
                             panic!("Struct Declaration is missing {:?}", property);
                         }
                     }
@@ -311,7 +404,10 @@ impl RuntimeValue {
                         }
                     } else {
                         RuntimeValue::List {
-                            data: data.iter().map(|x| x.into_type(scope, t.clone())).collect(),
+                            data: data
+                                .iter()
+                                .map(|x| x.into_type(scope.clone(), t.clone()))
+                                .collect(),
                             data_type: Some(Box::new(t)),
                         }
                     }
