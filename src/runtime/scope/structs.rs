@@ -42,13 +42,18 @@ impl Scope {
 
 pub fn get_struct_function(
     this: Rc<RefCell<Scope>>,
-    key: &str,
-) -> Result<HashMap<String, (RuntimeValue, bool)>, ScopeErr> {
-    let scope = resolve_struct(this, key)?;
-    if let Some(value) = scope.borrow().structs_functions.get(key) {
-        Ok(value.clone())
+    strct: &str,
+    func: &str,
+) -> Result<(RuntimeValue, bool), ScopeErr> {
+    let scope = resolve_struct(this, strct)?;
+    if let Some(fns) = scope.borrow().structs_functions.get(strct) {
+        if let Some(val) = fns.get(func) {
+            Ok(val.clone())
+        } else {
+            Err(ScopeErr::StructFunction(func.to_string()))
+        }
     } else {
-        Err(ScopeErr::Struct(key.to_string()))
+        Err(ScopeErr::Struct(strct.to_string()))
     }
 }
 

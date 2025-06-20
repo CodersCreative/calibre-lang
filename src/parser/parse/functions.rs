@@ -33,21 +33,21 @@ impl Parser {
             || self.first().token_type == TokenType::OpenSquare
         {
             let (property, is_computed) = if self.eat().token_type == TokenType::FullStop {
-                let prop = self.parse_primary_expression()?;
+                let prop = self.parse_expression()?;
 
-                if let NodeType::Identifier(_) = prop {
-                    (prop, false)
-                } else {
-                    return Err(self.get_err(SyntaxErr::ExpectedIdentifier));
-                }
+                (prop, false)
             } else {
                 let prop = self.parse_expression()?;
+
                 self.expect_eat(
                     &TokenType::CloseSquare,
                     SyntaxErr::ExpectedClosingBracket(TokenType::CloseSquare),
                 )?;
+
                 (prop, true)
             };
+
+            // let _ = self.eat();
 
             object = NodeType::MemberExpression {
                 object: Box::new(object),

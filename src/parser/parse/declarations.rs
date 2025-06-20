@@ -90,9 +90,11 @@ impl Parser {
                     is_async,
                 } => {
                     let mut depends = false;
-                    if &parameters[0].0 == "self" {
-                        parameters[0].1 = RuntimeType::Struct(Some(identifier.clone()));
-                        depends = true;
+                    if parameters.len() > 0 {
+                        if &parameters[0].0 == "self" {
+                            parameters[0].1 = RuntimeType::Struct(Some(identifier.clone()));
+                            depends = true;
+                        }
                     }
 
                     functions.push((

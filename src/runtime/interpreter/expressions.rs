@@ -1,5 +1,7 @@
 use core::panic;
-use std::{cell::RefCell, collections::HashMap, mem::discriminant, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, env::args, mem::discriminant, rc::Rc};
+
+use rand::random_range;
 
 use crate::{
     ast::{NodeType, RefMutability},
@@ -7,6 +9,7 @@ use crate::{
         interpreter::{InterpreterErr, evaluate},
         scope::{
             Scope, ScopeErr,
+            structs::{get_struct_function, resolve_struct_function},
             variables::{get_var, resolve_var},
         },
         values::{RuntimeType, RuntimeValue, ValueErr, helper::Map},
@@ -25,29 +28,158 @@ pub fn evaluate_member_expression(
     scope: Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::MemberExpression {
-        object,
+        object: old_object,
         property,
         is_computed,
     } = exp
     {
-        let object = evaluate(*object, scope.clone())?;
-        let prop = evaluate(*property, scope.clone())?;
-        if let RuntimeValue::Struct(map, t) = object {
-            if let RuntimeValue::Str(x) = prop {
-                return Ok(map.0.get(&x).unwrap().clone());
-            } else {
-                Err(InterpreterErr::ExpectedType(prop, RuntimeType::Str))
+        let mut object = evaluate(*old_object.clone(), scope.clone())?;
+        // let (final_object, mut last_property_node) =
+        //     resolve_chained_member_access(&mut object, property, scope.clone())?;
+        let mut path = Vec::new();
+        let mut prop = property.clone();
+        if let RuntimeValue::Struct(map, t) = object.clone() {
+            let mut latest = (map.clone(), t.clone());
+
+            while let NodeType::MemberExpression {
+                property, object, ..
+            } = *prop
+            {
+                if let NodeType::Identifier(name) = *object {
+                    if let Some(RuntimeValue::Struct(map, t)) = latest.0.0.get(&name) {
+                        latest = (map.clone(), t.clone());
+                        path.push(name);
+                    }
+                }
+                prop = property;
             }
+
+            if let NodeType::Identifier(prop) = *prop {
+                if let Some(x) = latest.0.0.get(&prop) {
+                    return Ok(x.clone());
+                }
+            } else if let NodeType::CallExpression(caller, mut args) = *prop {
+                let mut main = get_nested_mut(&mut object, &path).unwrap();
+                if let NodeType::Identifier(caller) = *caller {
+                    if let Ok(val) = get_struct_function(scope.clone(), &latest.1.unwrap(), &caller)
+                    {
+                        let name = [random_range(0..1000).to_string(), path.join("")].join("");
+                        if let RuntimeValue::Function { parameters, .. } = val.0.clone() {
+                            let mut arguments = Vec::new();
+                            if parameters.len() > 0 {
+                                if parameters[0].0 == "self" {
+                                    let _ = scope.borrow_mut().push_var(
+                                        name.clone(),
+                                        &main.clone(),
+                                        true,
+                                    );
+                                    arguments.push(NodeType::Identifier(name.clone()));
+                                }
+                            }
+
+                            arguments.append(&mut args);
+
+                            let value = evaluate_function(scope.clone(), val.0, arguments)?;
+                            if let RuntimeValue::Struct(m, _) = &mut main {
+                                if let RuntimeValue::Struct(x, _) = get_var(scope.clone(), &name)? {
+                                    *m = x;
+                                }
+                            }
+                            if let NodeType::Identifier(x) = *old_object {
+                                let _ = scope.borrow_mut().assign_var(x.clone(), &object);
+                            }
+
+                            return Ok(value);
+                        }
+                    }
+                }
+            } else if let NodeType::AssignmentExpression { identifier, value } = *prop {
+                let mut main = get_nested_mut(&mut object, &path);
+
+                if let NodeType::Identifier(y) = *identifier {
+                    if let Some(RuntimeValue::Struct(m, _)) = &mut main {
+                        if let Some(x) = m.0.get_mut(&y) {
+                            *x = evaluate(*value, scope.clone())?;
+                        }
+                    }
+                }
+
+                let main = object;
+
+                if let NodeType::Identifier(x) = *old_object {
+                    let _ = scope.borrow_mut().assign_var(x.clone(), &main);
+
+                    return Ok(main.clone());
+                }
+            }
+            panic!()
+            // return Err(InterpreterErr::ExpectedType(prop?, RuntimeType::Str));
         } else {
-            Err(InterpreterErr::ExpectedType(
-                prop,
+            panic!();
+            /*Err(InterpreterErr::ExpectedType(
+                prop?,
                 RuntimeType::Struct(None),
-            ))
+            ))*/
         }
     } else {
         Err(InterpreterErr::NotImplemented(exp))
     }
 }
+fn resolve_chained_member_access<'a>(
+    initial_object: &'a mut RuntimeValue,
+    mut property_node: Box<NodeType>,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<(&'a mut RuntimeValue, Box<NodeType>), InterpreterErr> {
+    let mut current_object = initial_object;
+    let mut path = Vec::new();
+
+    // Traverse the member expression chain to find the actual target object and the final property
+    while let NodeType::MemberExpression {
+        object: inner_object_node,
+        property: inner_property_node,
+        is_computed: inner_is_computed,
+    } = *property_node
+    {
+        let member_name = if inner_is_computed {
+            let prop_val = evaluate(*inner_property_node.clone(), scope.clone())?;
+            match prop_val {
+                RuntimeValue::Str(s) => s,
+                _ => {
+                    return Err(InterpreterErr::UnexpectedType(prop_val));
+                }
+            }
+        } else {
+            if let NodeType::Identifier(name) = *inner_object_node {
+                name
+            } else {
+                return Err(InterpreterErr::NotImplemented(*inner_object_node));
+            }
+        };
+        path.push(member_name);
+        property_node = inner_property_node; // Move to the next property in the chain
+    }
+
+    if let Some(final_target_object) = get_nested_mut(current_object, &path) {
+        Ok((final_target_object, property_node))
+    } else {
+        Err(InterpreterErr::PropertyNotFound(path.join(".")))
+    }
+}
+fn get_nested_mut<'a>(
+    root: &'a mut RuntimeValue,
+    path: &Vec<String>,
+) -> Option<&'a mut RuntimeValue> {
+    let mut current_val = root;
+    for key in path {
+        if let RuntimeValue::Struct(obj, _) = current_val {
+            current_val = obj.0.get_mut(key)?;
+        } else {
+            return None;
+        }
+    }
+    Some(current_val)
+}
+
 pub fn evaluate_binary_expression(
     exp: NodeType,
     scope: Rc<RefCell<Scope>>,
@@ -66,6 +198,7 @@ pub fn evaluate_binary_expression(
         Err(InterpreterErr::NotImplemented(exp))
     }
 }
+
 pub fn evaluate_boolean_expression(
     exp: NodeType,
     scope: Rc<RefCell<Scope>>,
@@ -110,7 +243,7 @@ pub fn evaluate_assignment_expression(
     if let NodeType::AssignmentExpression { identifier, value } = node {
         if let NodeType::Identifier(identifier) = *identifier {
             let value = evaluate(*value, scope.clone())?;
-            scope.borrow_mut().assign_var(identifier, &value);
+            let _ = scope.borrow_mut().assign_var(identifier, &value)?;
             return Ok(value);
         } else {
             Err(InterpreterErr::AssignNonVariable(*identifier))
@@ -171,6 +304,83 @@ pub fn evaluate_list_expression(
         data_type: Box::new(t),
     })
 }
+
+pub fn evaluate_function(
+    scope: Rc<RefCell<Scope>>,
+    func: RuntimeValue,
+    arguments: Vec<NodeType>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let RuntimeValue::Function {
+        identifier,
+        parameters,
+        body,
+        return_type,
+        is_async,
+    } = func
+    {
+        let new_scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
+
+        for (i, (k, v, m)) in parameters.iter().enumerate() {
+            match m {
+                RefMutability::MutRef | RefMutability::Ref => {
+                    if let NodeType::Identifier(x) = &arguments[i] {
+                        let (env, name) = resolve_var(new_scope.clone(), x)?;
+
+                        if m == &RefMutability::MutRef && env.borrow().constants.contains_key(&name)
+                        {
+                            return Err(InterpreterErr::MutRefNonMut(
+                                env.borrow().constants.get(&name).unwrap().clone(),
+                            ));
+                        }
+                        let var = get_var(env, &name)?;
+                        let x = name.clone();
+                        if var.is_type(scope.clone(), v.clone()) {
+                            new_scope.borrow_mut().alias.insert(k.to_string(), x);
+                            let _ = new_scope.borrow_mut().push_var(
+                                k.to_string(),
+                                &RuntimeValue::Null,
+                                match m {
+                                    RefMutability::MutRef | RefMutability::MutValue => true,
+                                    _ => false,
+                                },
+                            )?;
+                        } else {
+                            return Err(InterpreterErr::UnexpectedType(var));
+                        }
+                    } else {
+                        return Err(InterpreterErr::RefNonVar(arguments[0].clone()));
+                    }
+                }
+                _ => {
+                    let arg = evaluate(arguments[i].clone(), new_scope.clone())?
+                        .into_type(new_scope.clone(), v.clone())?;
+                    new_scope.borrow_mut().push_var(
+                        k.to_string(),
+                        &arg,
+                        match m {
+                            RefMutability::MutRef | RefMutability::MutValue => true,
+                            _ => false,
+                        },
+                    )?;
+                }
+            }
+        }
+
+        let mut result: RuntimeValue = RuntimeValue::Null;
+        for statement in &body.0 {
+            result = evaluate(statement.clone(), new_scope.clone())?;
+        }
+
+        if let Some(t) = return_type {
+            return Ok(result.into_type(new_scope, t.clone())?);
+        } else {
+            return Ok(RuntimeValue::Null);
+        }
+    } else {
+        panic!()
+    }
+}
+
 pub fn evaluate_call_expression(
     exp: NodeType,
     scope: Rc<RefCell<Scope>>,
@@ -179,73 +389,8 @@ pub fn evaluate_call_expression(
         let func = evaluate(*caller.clone(), scope.clone())?;
 
         match func {
-            RuntimeValue::Function {
-                identifier,
-                parameters,
-                body,
-                return_type,
-                is_async,
-            } => {
-                let scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
-
-                for (i, (k, v, m)) in parameters.iter().enumerate() {
-                    match m {
-                        RefMutability::MutRef | RefMutability::Ref => {
-                            if let NodeType::Identifier(x) = &arguments[i] {
-                                let (env, name) = resolve_var(scope.clone(), x)?;
-
-                                if m == &RefMutability::MutRef
-                                    && env.borrow().constants.contains_key(&name)
-                                {
-                                    return Err(InterpreterErr::MutRefNonMut(
-                                        env.borrow().constants.get(&name).unwrap().clone(),
-                                    ));
-                                }
-
-                                let var = get_var(env, &name)?;
-                                let x = name.clone();
-                                if var.is_type(scope.clone(), v.clone()) {
-                                    scope.borrow_mut().alias.insert(k.to_string(), x);
-                                    scope.borrow_mut().push_var(
-                                        k.to_string(),
-                                        &RuntimeValue::Null,
-                                        match m {
-                                            RefMutability::MutRef | RefMutability::MutValue => true,
-                                            _ => false,
-                                        },
-                                    );
-                                } else {
-                                    return Err(InterpreterErr::UnexpectedType(var));
-                                }
-                            } else {
-                                return Err(InterpreterErr::RefNonVar(arguments[0].clone()));
-                            }
-                        }
-                        _ => {
-                            let arg = evaluate(arguments[i].clone(), scope.clone())?
-                                .into_type(scope.clone(), v.clone())?;
-                            scope.borrow_mut().push_var(
-                                k.to_string(),
-                                &arg,
-                                match m {
-                                    RefMutability::MutRef | RefMutability::MutValue => true,
-                                    _ => false,
-                                },
-                            )?;
-                        }
-                    }
-                }
-
-                let mut result: RuntimeValue = RuntimeValue::Null;
-                for statement in &body.0 {
-                    result = evaluate(statement.clone(), scope.clone())?;
-                }
-
-                if let Some(t) = return_type {
-                    return Ok(result.into_type(scope, t.clone())?);
-                } else {
-                    return Ok(RuntimeValue::Null);
-                }
+            RuntimeValue::Function { .. } => {
+                return evaluate_function(scope, func, *arguments);
             }
             RuntimeValue::List { data, data_type } if arguments.len() == 1 => {
                 match evaluate(arguments[0].clone(), scope)? {
@@ -276,10 +421,10 @@ pub fn evaluate_call_expression(
                     if arguments.len() <= 0 {
                         return Ok(get_var(scope_b.0, &scope_b.1)?);
                     } else if arguments.len() == 1 {
-                        scope_b.0.borrow_mut().assign_var(
+                        let _ = scope_b.0.borrow_mut().assign_var(
                             caller,
                             &evaluate(arguments[0].clone(), scope_b.0.clone())?,
-                        );
+                        )?;
                         return Ok(RuntimeValue::Null);
                     } else {
                         return Err(InterpreterErr::SetterArgs(arguments));

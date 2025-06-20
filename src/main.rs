@@ -17,7 +17,10 @@ fn main() {
 
     if let Ok(txt) = fs::read_to_string("./src/test.cl") {
         let program = parser.produce_ast(txt).unwrap();
-        println!("result : {:?}", evaluate(program, scope).unwrap());
+        println!(
+            "result : {:?}",
+            evaluate(program, scope).map_err(|e| e.to_string())
+        );
     } else {
         println!("Failed to read");
     }

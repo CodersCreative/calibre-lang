@@ -2,7 +2,7 @@ pub mod helper;
 
 use core::panic;
 use std::{
-    cell::RefCell, fmt::Debug, mem::discriminant, rc::Rc, str::FromStr,
+    cell::RefCell, collections::HashMap, fmt::Debug, mem::discriminant, rc::Rc, str::FromStr,
     string::ParseError,
 };
 
@@ -347,13 +347,22 @@ impl RuntimeValue {
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Struct(Some(identifier)) => {
-                    let properties = get_struct(resolve_struct(scope, &identifier)?, &identifier)?;
-                    for property in properties {
-                        if !x.0.contains_key(&property.0) {
+                    let properties =
+                        get_struct(resolve_struct(scope.clone(), &identifier)?, &identifier)?;
+                    let mut new_values = HashMap::new();
+
+                    for property in &properties {
+                        if let Some(val) = x.0.get(property.0) {
+                            new_values.insert(
+                                property.0.clone(),
+                                val.into_type(scope.clone(), property.1.clone())?,
+                            );
+                        } else {
                             return panic_type();
                         }
                     }
-                    Ok(RuntimeValue::Struct(x.clone(), Some(identifier)))
+
+                    Ok(RuntimeValue::Struct(Map(new_values), Some(identifier)))
                 }
                 RuntimeType::Function { .. } => match t {
                     RuntimeType::List(_) => list_case(),

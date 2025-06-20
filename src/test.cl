@@ -8,8 +8,12 @@ struct Language {
 }
 
 impl Language {
-  fn print_lang(&self) {
-    print(self);
+  fn print_lang(&mut self) {
+    print(10);
+    print(self.code);
+    self.code = 100;
+    print(self.code);
+    
   }
 }
 
@@ -45,11 +49,15 @@ fn main(number : int) -> string{
   add(number, 100)
 }
 
-let zimbabwe : Country = {name : "Zimbabwe", people : 10, language : {code : 19, function :main}}
+let mut zimbabwe : Country = {name : "Zimbabwe", people : 10, language : {code : 19, function :main}}
 
-let english : Language = {code : 20, function : main}
-// english.print_lang()
+let english : Language = {code : 25, function : main}
+zimbabwe.language.code = 50;
 
+
+print(zimbabwe.language.print_lang());
+
+print(zimbabwe.language.code)
 let lst : list(list(int)) = [[10, 10, 100], [0,10]];
 
 fn hello_int(function : fn(int) -> string, amt : string) -> int {
@@ -59,10 +67,12 @@ fn hello_int(function : fn(int) -> string, amt : string) -> int {
 }
 
 let mut t = "bye";
-fn test_again(txt : &mut string) {
-  txt = "hello8"
-  //print(t);;
+fn test_again(txt : string) {
+  //txt = "hello8"
+  print(txt);
 }
+
+test_again("JI")
 
 t = "hello4";
 test_again(t);

@@ -40,6 +40,8 @@ pub enum InterpreterErr {
     UnexpectedType(RuntimeValue),
     #[error("Setters can only have one argument, {0:?}")]
     SetterArgs(Box<Vec<NodeType>>),
+    #[error("Property not found, {0:?}")]
+    PropertyNotFound(String),
 }
 
 impl From<ASTError> for InterpreterErr {
