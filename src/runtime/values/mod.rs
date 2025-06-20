@@ -335,10 +335,10 @@ impl RuntimeValue {
                 RuntimeType::Integer => Ok(RuntimeValue::Integer(*to as i64)),
                 RuntimeType::Float => Ok(RuntimeValue::Float(*to as f64)),
                 RuntimeType::List(_) => Ok(RuntimeValue::List {
-                    data: vec![
-                        RuntimeValue::Integer(*from as i64),
-                        RuntimeValue::Integer(*to as i64),
-                    ],
+                    data: (*from..*to)
+                        .into_iter()
+                        .map(|x| RuntimeValue::Integer(x as i64))
+                        .collect(),
                     data_type: Box::new(Some(RuntimeType::Integer)),
                 }),
                 _ => panic_type(),
