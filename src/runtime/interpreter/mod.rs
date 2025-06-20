@@ -84,6 +84,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::IfStatement { .. } => Ok(evaluate_if_statement(node, scope)?.0),
         NodeType::MemberExpression { .. } => evaluate_member_expression(node, scope),
         NodeType::ImplDeclaration { .. } => evaluate_impl_declaration(node, scope),
+        NodeType::NotExpression { .. } => evaluate_not(node, scope),
         NodeType::LoopDeclaration { .. } => evaluate_loop_declaration(node, scope),
         _ => Err(InterpreterErr::NotImplemented(node)),
     }

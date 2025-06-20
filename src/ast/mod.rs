@@ -65,6 +65,9 @@ pub enum NodeType {
         identifier: Box<NodeType>,
         value: Box<NodeType>,
     },
+    NotExpression {
+        value: Box<NodeType>,
+    },
     RangeDeclaration {
         from: Box<NodeType>,
         to: Box<NodeType>,

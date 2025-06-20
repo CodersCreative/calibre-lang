@@ -208,6 +208,25 @@ pub fn evaluate_member_expression(
     }
 }
 
+pub fn evaluate_not<'a>(
+    exp: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let NodeType::NotExpression { value } = exp {
+        let value = evaluate(*value, scope.clone())?;
+
+        match value {
+            RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
+            RuntimeValue::Integer(x) => Ok(RuntimeValue::Integer(-x)),
+            RuntimeValue::Float(x) => Ok(RuntimeValue::Float(-x)),
+            RuntimeValue::Range(f, t) => Ok(RuntimeValue::Range(t, f)),
+            _ => Err(InterpreterErr::UnexpectedType(value)),
+        }
+    } else {
+        Err(InterpreterErr::NotImplemented(exp))
+    }
+}
+
 fn get_nested_mut<'a>(
     root: &'a mut RuntimeValue,
     path: &Vec<String>,

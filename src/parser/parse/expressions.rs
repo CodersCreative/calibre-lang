@@ -11,7 +11,7 @@ use crate::{
 
 impl Parser {
     pub fn parse_primary_expression(&mut self) -> Result<NodeType, ParserError> {
-        Ok(match self.first().token_type {
+        Ok(match &self.first().token_type {
             TokenType::Identifier => NodeType::Identifier(self.eat().value),
             TokenType::Float => NodeType::FloatLiteral(self.eat().value.trim().parse().unwrap()),
             TokenType::Integer => {
@@ -33,6 +33,18 @@ impl Parser {
                     SyntaxErr::ExpectedClosingBracket(TokenType::CloseBrackets),
                 )?;
                 value
+            }
+            TokenType::BinaryOperator(x) if x == &BinaryOperator::Subtract => {
+                self.eat();
+                NodeType::NotExpression {
+                    value: Box::new(self.parse_expression()?),
+                }
+            }
+            TokenType::Not => {
+                self.eat();
+                NodeType::NotExpression {
+                    value: Box::new(self.parse_expression()?),
+                }
             }
             _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
         })

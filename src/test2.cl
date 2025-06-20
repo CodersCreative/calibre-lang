@@ -34,7 +34,7 @@ print(lst);
 obj.time.day = 30;
 
 print("Starting")
-for true || false{
+for !false {
   for l in &mut lst {
     l = l + 50;
   }
@@ -46,5 +46,5 @@ for l in lst {
   print(l);
 }
 print(obj.time.day);
-obj.time.day = 30;
+obj.time.day = -30;
 print(obj.time.day);
