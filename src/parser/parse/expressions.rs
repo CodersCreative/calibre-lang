@@ -28,10 +28,10 @@ impl Parser {
             TokenType::OpenBrackets => {
                 self.eat();
                 let value = self.parse_expression()?;
-                self.expect_eat(
+                let _ = self.expect_eat(
                     &TokenType::CloseBrackets,
                     SyntaxErr::ExpectedClosingBracket(TokenType::CloseBrackets),
-                );
+                )?;
                 value
             }
             _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),

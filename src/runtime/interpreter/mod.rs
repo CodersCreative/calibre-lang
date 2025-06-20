@@ -76,6 +76,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::CallExpression(_, _) => evaluate_call_expression(node, scope),
         NodeType::VariableDeclaration { .. } => evaluate_variable_declaration(node, scope),
         NodeType::StructDeclaration { .. } => evaluate_struct_declaration(node, scope),
+        NodeType::RangeDeclaration { .. } => evaluate_range_expression(node, scope),
         NodeType::AssignmentExpression { .. } => evaluate_assignment_expression(node, scope),
         NodeType::FunctionDeclaration { .. } => evaluate_function_declaration(node, scope),
         NodeType::ComparisonExpression { .. } => evaluate_comparison_expression(node, scope),
@@ -83,6 +84,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::IfStatement { .. } => Ok(evaluate_if_statement(node, scope)?.0),
         NodeType::MemberExpression { .. } => evaluate_member_expression(node, scope),
         NodeType::ImplDeclaration { .. } => evaluate_impl_declaration(node, scope),
+        NodeType::LoopDeclaration { .. } => evaluate_loop_declaration(node, scope),
         _ => Err(InterpreterErr::NotImplemented(node)),
     }
 }

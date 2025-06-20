@@ -1,5 +1,5 @@
 use core::panic;
-use std::{cell::RefCell, collections::HashMap, env::args, mem::discriminant, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, mem::discriminant, rc::Rc};
 
 use rand::random_range;
 
@@ -242,6 +242,36 @@ pub fn evaluate_binary_expression(
     }
 }
 
+pub fn evaluate_range_expression(
+    exp: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let NodeType::RangeDeclaration {
+        from,
+        to,
+        inclusive,
+    } = exp
+    {
+        if let RuntimeValue::Integer(from) = evaluate(*from.clone(), scope.clone())?
+            .into_type(scope.clone(), RuntimeType::Integer)?
+        {
+            if let RuntimeValue::Integer(to) = evaluate(*to.clone(), scope.clone())?
+                .into_type(scope.clone(), RuntimeType::Integer)?
+            {
+                let to = if inclusive { to + 1 } else { to };
+
+                Ok(RuntimeValue::Range(from as i8, to as i8))
+            } else {
+                Err(InterpreterErr::NotImplemented(*to))
+            }
+        } else {
+            Err(InterpreterErr::NotImplemented(*from))
+        }
+    } else {
+        Err(InterpreterErr::NotImplemented(exp))
+    }
+}
+
 pub fn evaluate_boolean_expression(
     exp: NodeType,
     scope: Rc<RefCell<Scope>>,
@@ -353,6 +383,61 @@ pub fn evaluate_list_expression(
     })
 }
 
+pub fn get_new_scope(
+    scope: Rc<RefCell<Scope>>,
+    parameters: Vec<(String, RuntimeType, RefMutability)>,
+    arguments: Vec<NodeType>,
+) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
+    let new_scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
+
+    for (i, (k, v, m)) in parameters.iter().enumerate() {
+        match m {
+            RefMutability::MutRef | RefMutability::Ref => {
+                if let NodeType::Identifier(x) = &arguments[i] {
+                    let (env, name) = resolve_var(new_scope.clone(), x)?;
+
+                    if m == &RefMutability::MutRef && env.borrow().constants.contains_key(&name) {
+                        return Err(InterpreterErr::MutRefNonMut(
+                            env.borrow().constants.get(&name).unwrap().clone(),
+                        ));
+                    }
+                    let var = get_var(env, &name)?;
+                    let x = name.clone();
+                    if var.is_type(scope.clone(), v.clone()) {
+                        new_scope.borrow_mut().alias.insert(k.to_string(), x);
+                        let _ = new_scope.borrow_mut().push_var(
+                            k.to_string(),
+                            &RuntimeValue::Null,
+                            match m {
+                                RefMutability::MutRef | RefMutability::MutValue => true,
+                                _ => false,
+                            },
+                        )?;
+                    } else {
+                        return Err(InterpreterErr::UnexpectedType(var));
+                    }
+                } else {
+                    return Err(InterpreterErr::RefNonVar(arguments[0].clone()));
+                }
+            }
+            _ => {
+                let arg = evaluate(arguments[i].clone(), new_scope.clone())?
+                    .into_type(new_scope.clone(), v.clone())?;
+                new_scope.borrow_mut().push_var(
+                    k.to_string(),
+                    &arg,
+                    match m {
+                        RefMutability::MutRef | RefMutability::MutValue => true,
+                        _ => false,
+                    },
+                )?;
+            }
+        }
+    }
+
+    Ok(new_scope)
+}
+
 pub fn evaluate_function(
     scope: Rc<RefCell<Scope>>,
     func: RuntimeValue,
@@ -366,53 +451,7 @@ pub fn evaluate_function(
         is_async,
     } = func
     {
-        let new_scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
-
-        for (i, (k, v, m)) in parameters.iter().enumerate() {
-            match m {
-                RefMutability::MutRef | RefMutability::Ref => {
-                    if let NodeType::Identifier(x) = &arguments[i] {
-                        let (env, name) = resolve_var(new_scope.clone(), x)?;
-
-                        if m == &RefMutability::MutRef && env.borrow().constants.contains_key(&name)
-                        {
-                            return Err(InterpreterErr::MutRefNonMut(
-                                env.borrow().constants.get(&name).unwrap().clone(),
-                            ));
-                        }
-                        let var = get_var(env, &name)?;
-                        let x = name.clone();
-                        if var.is_type(scope.clone(), v.clone()) {
-                            new_scope.borrow_mut().alias.insert(k.to_string(), x);
-                            let _ = new_scope.borrow_mut().push_var(
-                                k.to_string(),
-                                &RuntimeValue::Null,
-                                match m {
-                                    RefMutability::MutRef | RefMutability::MutValue => true,
-                                    _ => false,
-                                },
-                            )?;
-                        } else {
-                            return Err(InterpreterErr::UnexpectedType(var));
-                        }
-                    } else {
-                        return Err(InterpreterErr::RefNonVar(arguments[0].clone()));
-                    }
-                }
-                _ => {
-                    let arg = evaluate(arguments[i].clone(), new_scope.clone())?
-                        .into_type(new_scope.clone(), v.clone())?;
-                    new_scope.borrow_mut().push_var(
-                        k.to_string(),
-                        &arg,
-                        match m {
-                            RefMutability::MutRef | RefMutability::MutValue => true,
-                            _ => false,
-                        },
-                    )?;
-                }
-            }
-        }
+        let new_scope = get_new_scope(scope, parameters, arguments)?;
 
         let mut result: RuntimeValue = RuntimeValue::Null;
         for statement in &body.0 {

@@ -6,6 +6,31 @@ use crate::{
 };
 
 impl Parser {
+    pub fn parse_range_expression(&mut self) -> Result<NodeType, ParserError> {
+        let mut left = self.parse_additive_expression()?;
+
+        if let TokenType::Range = self.first().token_type.clone() {
+            let _ = self.eat();
+
+            let inclusive = if self.first().token_type == TokenType::Equals {
+                let _ = self.eat();
+                true
+            } else {
+                false
+            };
+
+            let right = self.parse_additive_expression()?;
+
+            left = NodeType::RangeDeclaration {
+                from: Box::new(left),
+                to: Box::new(right),
+                inclusive,
+            }
+        }
+
+        Ok(left)
+    }
+
     pub fn parse_additive_expression(&mut self) -> Result<NodeType, ParserError> {
         let mut left = self.parse_multiplicative_expression()?;
 
@@ -69,10 +94,10 @@ impl Parser {
     }
 
     pub fn parse_comparison_expression(&mut self) -> Result<NodeType, ParserError> {
-        let mut left = self.parse_additive_expression()?;
+        let mut left = self.parse_range_expression()?;
         if let TokenType::Comparison(comparison) = self.first().token_type.clone() {
             let _ = self.eat();
-            let right = self.parse_additive_expression()?;
+            let right = self.parse_range_expression()?;
 
             left = NodeType::ComparisonExpression {
                 left: Box::new(left),

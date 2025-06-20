@@ -1,5 +1,5 @@
 use crate::{
-    ast::RefMutability,
+    ast::{LoopType, RefMutability},
     parser::{Parser, ParserError, SyntaxErr},
 };
 
@@ -15,6 +15,7 @@ impl Parser {
             TokenType::Return => self.parse_return_declaration(),
             TokenType::Trait => self.parse_if_statement(),
             TokenType::Impl => self.parse_impl_declaration(),
+            TokenType::For => self.parse_loop_declaration(),
             _ => self.parse_expression(),
         }
     }
@@ -147,6 +148,51 @@ impl Parser {
         Ok(NodeType::StructDeclaration {
             identifier,
             properties: self.parse_key_type_list(TokenType::OpenCurly, TokenType::CloseCurly)?,
+        })
+    }
+
+    pub fn parse_loop_declaration(&mut self) -> Result<NodeType, ParserError> {
+        let _ = self.expect_eat(
+            &TokenType::For,
+            SyntaxErr::ExpectedKeyword(String::from("for")),
+        )?;
+
+        let loop_type = if self.first().token_type == TokenType::Identifier
+            && self.nth(1).token_type == TokenType::In
+        {
+            let identifier = self
+                .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
+                .value;
+
+            let _ = self.eat();
+
+            let ref_mutability = RefMutability::from(self.first().token_type.clone());
+
+            if ref_mutability != RefMutability::Value {
+                let _ = self.eat();
+
+                let var = self
+                    .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
+                    .value;
+
+                LoopType::ForEach(identifier, (var, ref_mutability))
+            } else {
+                let lst = self.parse_expression()?;
+
+                if let NodeType::Identifier(x) = lst {
+                    LoopType::ForEach(identifier, (x, ref_mutability))
+                } else {
+                    LoopType::For(identifier, lst)
+                }
+            }
+        } else {
+            let task = self.parse_expression()?;
+            LoopType::While(task)
+        };
+
+        Ok(NodeType::LoopDeclaration {
+            loop_type: Box::new(loop_type),
+            body: Box::new(self.parse_block()?),
         })
     }
 

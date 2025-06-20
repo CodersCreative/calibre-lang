@@ -1,11 +1,11 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    ast::NodeType,
+    ast::{LoopType, NodeType, RefMutability},
     runtime::{
-        interpreter::{InterpreterErr, evaluate},
-        scope::Scope,
-        values::{RuntimeValue, helper::Block},
+        interpreter::{InterpreterErr, evaluate, expressions::get_new_scope},
+        scope::{Scope, variables::get_var},
+        values::{RuntimeType, RuntimeValue, helper::Block},
     },
 };
 
@@ -41,6 +41,88 @@ pub fn evaluate_struct_declaration(
     }
 }
 
+pub fn evaluate_loop_declaration(
+    declaration: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let NodeType::LoopDeclaration { loop_type, body } = declaration {
+        let handle_body = |new_scope: Rc<RefCell<Scope>>| {
+            let mut result = RuntimeValue::Null;
+            for statement in body.iter() {
+                if let NodeType::IfStatement { .. } = statement {
+                    return evaluate_if_statement(statement.clone(), new_scope.clone());
+                } else if let NodeType::Return { value } = statement {
+                    return Ok((evaluate(*value.clone(), new_scope)?, true));
+                } else {
+                    result = evaluate(statement.clone(), new_scope.clone())?;
+                }
+            }
+
+            Ok((result, false))
+        };
+
+        let mut result = RuntimeValue::Null;
+
+        if let LoopType::For(identifier, range) = *loop_type {
+            if let RuntimeValue::Range(from, to) =
+                evaluate(range, scope.clone())?.into_type(scope.clone(), RuntimeType::Range)?
+            {
+                for i in from..to {
+                    let new_scope = get_new_scope(
+                        scope.clone(),
+                        vec![(
+                            identifier.clone(),
+                            RuntimeType::Integer,
+                            RefMutability::Value,
+                        )],
+                        vec![NodeType::IntegerLiteral(i as i64)],
+                    )?;
+                    let value = handle_body(new_scope)?;
+                    result = value.0;
+                    if value.1 {
+                        return Ok(result);
+                    }
+                }
+            }
+        } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
+            if let RuntimeValue::List { data, data_type } = get_var(scope.clone(), &loop_name)? {
+                for d in data {
+                    let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
+                    let _ = new_scope.borrow_mut().push_var(
+                        identifier.clone(),
+                        &d,
+                        match mutability {
+                            RefMutability::MutRef | RefMutability::MutValue => true,
+                            _ => false,
+                        },
+                    );
+
+                    let value = handle_body(new_scope)?;
+                    result = value.0;
+                    if value.1 {
+                        return Ok(result);
+                    }
+                }
+            }
+        } else if let LoopType::While(condition) = *loop_type {
+            while let RuntimeValue::Bool(x) = evaluate(condition.clone(), scope.clone())? {
+                if !x {
+                    break;
+                }
+                let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
+                let value = handle_body(new_scope)?;
+                result = value.0;
+                if value.1 {
+                    return Ok(result);
+                }
+            }
+        }
+
+        Ok(result)
+    } else {
+        Err(InterpreterErr::NotImplemented(declaration))
+    }
+}
 pub fn evaluate_impl_declaration(
     declaration: NodeType,
     scope: Rc<RefCell<Scope>>,

@@ -53,7 +53,10 @@ pub enum TokenType {
     Async,
     Func,
     Return,
+    Break,
+    Continue,
     If,
+    In,
     Or,
     This,
     Scope,
@@ -73,6 +76,9 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("else"), TokenType::Else),
         (String::from("list"), TokenType::List),
         (String::from("return"), TokenType::Return),
+        (String::from("in"), TokenType::In),
+        (String::from("break"), TokenType::Break),
+        (String::from("continue"), TokenType::Continue),
         (String::from("if"), TokenType::If),
         (String::from("func"), TokenType::Func),
         (String::from("struct"), TokenType::Struct),
@@ -180,8 +186,12 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                 } else if first.is_numeric() && !ignore {
                     let mut number = String::new();
                     let mut is_int = true;
+
                     while buffer.len() > 0 && (buffer[0].is_numeric() || buffer[0] == '.') {
                         if buffer[0] == '.' {
+                            if buffer[1] == '.' {
+                                break;
+                            }
                             is_int = false;
                         }
                         number.push(buffer.remove(0));

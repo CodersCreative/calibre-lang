@@ -28,6 +28,14 @@ if obj.code == 20{
   print(obj.code);
 }
 
+let mut lst : list(number) = [0, 40, 20]; // A static array 
+
+obj.time.day = 30;
+
+for l in 0..100 {
+  print(l);
+}
+
 print(obj.time.day);
 obj.time.day = 30;
 print(obj.time.day);

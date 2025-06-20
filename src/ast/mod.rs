@@ -31,6 +31,13 @@ impl From<TokenType> for RefMutability {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum LoopType {
+    While(NodeType),
+    For(String, NodeType),
+    ForEach(String, (String, RefMutability)),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
     Program(Box<Vec<NodeType>>),
     VariableDeclaration {
@@ -57,6 +64,15 @@ pub enum NodeType {
     AssignmentExpression {
         identifier: Box<NodeType>,
         value: Box<NodeType>,
+    },
+    RangeDeclaration {
+        from: Box<NodeType>,
+        to: Box<NodeType>,
+        inclusive: bool,
+    },
+    LoopDeclaration {
+        loop_type: Box<LoopType>,
+        body: Box<Vec<NodeType>>,
     },
     Return {
         value: Box<NodeType>,

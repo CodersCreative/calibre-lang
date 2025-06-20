@@ -330,6 +330,19 @@ impl RuntimeValue {
                 RuntimeType::Char => panic_type(),
                 RuntimeType::Function { .. } => panic_type(),
             },
+            RuntimeValue::Range(from, to) => match t {
+                RuntimeType::Range => Ok(self.clone()),
+                RuntimeType::Integer => Ok(RuntimeValue::Integer(*to as i64)),
+                RuntimeType::Float => Ok(RuntimeValue::Float(*to as f64)),
+                RuntimeType::List(_) => Ok(RuntimeValue::List {
+                    data: vec![
+                        RuntimeValue::Integer(*from as i64),
+                        RuntimeValue::Integer(*to as i64),
+                    ],
+                    data_type: Box::new(Some(RuntimeType::Integer)),
+                }),
+                _ => panic_type(),
+            },
             RuntimeValue::Str(x) => match t {
                 RuntimeType::Integer => Ok(RuntimeValue::Integer(x.parse().unwrap())),
                 RuntimeType::Float => Ok(RuntimeValue::Float(x.parse().unwrap())),
