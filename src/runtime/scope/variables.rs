@@ -1,6 +1,5 @@
 use std::{cell::RefCell, mem::discriminant, rc::Rc};
 
-
 use crate::runtime::{scope::ScopeErr, values::RuntimeValue};
 
 use super::Scope;
@@ -33,13 +32,13 @@ impl Scope {
         }
     }
 
-    pub fn assign_var(&mut self, og_key: String, value: &RuntimeValue) -> Result<(), ScopeErr> {
+    pub fn assign_var(&mut self, og_key: &str, value: RuntimeValue) -> Result<(), ScopeErr> {
         let key = self.resolve_alias(&og_key).to_string();
 
         if og_key == key {
             if let Some(v) = self.variables.get_mut(&key) {
-                if discriminant(v) == discriminant(value) || v.is_number() && value.is_number() {
-                    *v = value.clone();
+                if discriminant(v) == discriminant(&value) || v.is_number() && value.is_number() {
+                    *v = value;
                     return Ok(());
                 } else {
                     return Err(ScopeErr::TypeMismatch(v.clone(), value.clone()));
@@ -50,7 +49,7 @@ impl Scope {
         }
 
         if let Some(parent) = &self.parent {
-            parent.borrow_mut().assign_var(key.to_string(), value);
+            let _ = parent.borrow_mut().assign_var(&key, value)?;
         } else {
             return Err(ScopeErr::Variable(key.to_string()));
         }

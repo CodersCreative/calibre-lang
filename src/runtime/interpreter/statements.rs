@@ -85,8 +85,12 @@ pub fn evaluate_loop_declaration(
                 }
             }
         } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
-            if let RuntimeValue::List { data, data_type } = get_var(scope.clone(), &loop_name)? {
-                for d in data {
+            if let RuntimeValue::List {
+                mut data,
+                data_type,
+            } = get_var(scope.clone(), &loop_name)?
+            {
+                for d in data.iter_mut() {
                     let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
                     let _ = new_scope.borrow_mut().push_var(
                         identifier.clone(),
@@ -97,12 +101,29 @@ pub fn evaluate_loop_declaration(
                         },
                     );
 
-                    let value = handle_body(new_scope)?;
+                    let value = handle_body(new_scope.clone())?;
                     result = value.0;
                     if value.1 {
+                        scope.borrow_mut().assign_var(
+                            &loop_name,
+                            RuntimeValue::List {
+                                data: data.clone(),
+                                data_type: data_type.clone(),
+                            },
+                        );
                         return Ok(result);
                     }
+
+                    *d = get_var(new_scope, &identifier)?;
                 }
+
+                scope.borrow_mut().assign_var(
+                    &loop_name,
+                    RuntimeValue::List {
+                        data: data.clone(),
+                        data_type: data_type.clone(),
+                    },
+                );
             }
         } else if let LoopType::While(condition) = *loop_type {
             while let RuntimeValue::Bool(x) = evaluate(condition.clone(), scope.clone())? {

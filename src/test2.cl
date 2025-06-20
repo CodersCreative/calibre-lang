@@ -32,10 +32,13 @@ let mut lst : list(number) = [0, 40, 20]; // A static array
 
 obj.time.day = 30;
 
-for l in 0..100 {
-  print(l);
+for l in &mut lst {
+  l = l + 50;
 }
 
+for l in lst {
+  print(l);
+}
 print(obj.time.day);
 obj.time.day = 30;
 print(obj.time.day);

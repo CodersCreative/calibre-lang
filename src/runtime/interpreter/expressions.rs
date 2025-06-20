@@ -70,7 +70,7 @@ pub fn assign_member_expression(
                 let main = object;
 
                 if let NodeType::Identifier(x) = *old_object {
-                    let _ = scope.borrow_mut().assign_var(x.clone(), &main);
+                    let _ = scope.borrow_mut().assign_var(&x, main);
 
                     return Ok(());
                 }
@@ -185,7 +185,7 @@ pub fn evaluate_member_expression(
                                 }
 
                                 if let NodeType::Identifier(x) = *old_object {
-                                    let _ = scope.borrow_mut().assign_var(x.clone(), &object)?;
+                                    let _ = scope.borrow_mut().assign_var(&x, object)?;
                                 }
 
                                 scope.borrow_mut().variables.remove(&name);
@@ -316,7 +316,7 @@ pub fn evaluate_assignment_expression(
     if let NodeType::AssignmentExpression { identifier, value } = node {
         if let NodeType::Identifier(identifier) = *identifier {
             let value = evaluate(*value, scope.clone())?;
-            let _ = scope.borrow_mut().assign_var(identifier, &value)?;
+            let _ = scope.borrow_mut().assign_var(&identifier, value.clone())?;
             return Ok(value);
         }
         if let NodeType::MemberExpression { .. } = *identifier {
@@ -520,8 +520,8 @@ pub fn evaluate_call_expression(
                         return Ok(get_var(scope_b.0, &scope_b.1)?);
                     } else if arguments.len() == 1 {
                         let _ = scope_b.0.borrow_mut().assign_var(
-                            caller,
-                            &evaluate(arguments[0].clone(), scope_b.0.clone())?,
+                            &caller,
+                            evaluate(arguments[0].clone(), scope_b.0.clone())?,
                         )?;
                         return Ok(RuntimeValue::Null);
                     } else {
