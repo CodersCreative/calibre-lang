@@ -33,8 +33,8 @@ impl Parser {
             || self.first().token_type == TokenType::OpenSquare
         {
             let (property, is_computed) = if self.eat().token_type == TokenType::FullStop {
-                let prop = self.parse_expression()?;
-
+                let prop = self.parse_call_member_expression()?;
+                // println!("{:?}", prop);
                 (prop, false)
             } else {
                 let prop = self.parse_expression()?;

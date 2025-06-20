@@ -12,6 +12,7 @@ impl Parser {
             TokenType::Struct => self.parse_struct_declaration(),
             TokenType::Func => self.parse_function_declaration(false),
             TokenType::If => self.parse_if_statement(),
+            TokenType::Return => self.parse_return_declaration(),
             TokenType::Trait => self.parse_if_statement(),
             TokenType::Impl => self.parse_impl_declaration(),
             _ => self.parse_expression(),
@@ -120,6 +121,16 @@ impl Parser {
         Ok(NodeType::ImplDeclaration {
             identifier,
             functions,
+        })
+    }
+    pub fn parse_return_declaration(&mut self) -> Result<NodeType, ParserError> {
+        let _ = self.expect_eat(
+            &TokenType::Return,
+            SyntaxErr::ExpectedKeyword(String::from("return")),
+        )?;
+
+        Ok(NodeType::Return {
+            value: Box::new(self.parse_expression()?),
         })
     }
 

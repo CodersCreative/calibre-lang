@@ -34,7 +34,7 @@ pub fn evaluate_struct_declaration(
         properties,
     } = declaration
     {
-        scope.borrow_mut().push_struct(identifier, &properties);
+        let _ = scope.borrow_mut().push_struct(identifier, &properties)?;
         Ok(RuntimeValue::Null)
     } else {
         Err(InterpreterErr::NotImplemented(declaration))
@@ -58,9 +58,9 @@ pub fn evaluate_impl_declaration(
                 identifier: iden, ..
             } = func.clone()
             {
-                scope
+                let _ = scope
                     .borrow_mut()
-                    .push_struct_function(identifier.clone(), (iden, func, function.1));
+                    .push_struct_function(identifier.clone(), (iden, func, function.1))?;
             } else {
                 return Err(InterpreterErr::ExpectedFunctions);
             }
@@ -92,7 +92,7 @@ pub fn evaluate_function_declaration(
             is_async,
         };
 
-        scope.borrow_mut().push_var(identifier, &value, false);
+        let _ = scope.borrow_mut().push_var(identifier, &value, false)?;
         Ok(value)
     } else {
         Err(InterpreterErr::NotImplemented(declaration))
@@ -102,7 +102,7 @@ pub fn evaluate_function_declaration(
 pub fn evaluate_if_statement(
     declaration: NodeType,
     scope: Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
+) -> Result<(RuntimeValue, bool), InterpreterErr> {
     if let NodeType::IfStatement {
         comparisons,
         bodies,
@@ -113,10 +113,14 @@ pub fn evaluate_if_statement(
                 if x {
                     let mut result: RuntimeValue = RuntimeValue::Null;
                     for statement in bodies[i].iter() {
+                        if let NodeType::Return { value } = statement {
+                            return Ok((evaluate(*value.clone(), scope.clone())?, true));
+                        }
+
                         result = evaluate(statement.clone(), scope.clone())?;
                     }
 
-                    return Ok(result);
+                    return Ok((result, false));
                 }
             } else {
                 return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
@@ -127,13 +131,16 @@ pub fn evaluate_if_statement(
             if let Some(last) = bodies.last() {
                 let mut result: RuntimeValue = RuntimeValue::Null;
                 for statement in last.iter() {
+                    if let NodeType::Return { value } = statement {
+                        return Ok((evaluate(*value.clone(), scope.clone())?, true));
+                    }
                     result = evaluate(statement.clone(), scope.clone())?;
                 }
-                return Ok(result);
+                return Ok((result, false));
             }
         }
 
-        Ok(RuntimeValue::Null)
+        Ok((RuntimeValue::Null, false))
     } else {
         Err(InterpreterErr::NotImplemented(declaration))
     }
@@ -159,7 +166,9 @@ pub fn evaluate_variable_declaration(
             value = value.into_type(scope.clone(), t)?;
         }
 
-        scope.borrow_mut().push_var(identifier, &value, is_mutable);
+        let _ = scope
+            .borrow_mut()
+            .push_var(identifier, &value, is_mutable)?;
 
         Ok(value)
     } else {

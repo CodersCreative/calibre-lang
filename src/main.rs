@@ -15,7 +15,7 @@ fn main() {
     let mut parser = Parser::default();
     let scope = Rc::new(RefCell::new(Scope::new(None)));
 
-    if let Ok(txt) = fs::read_to_string("./src/test.cl") {
+    if let Ok(txt) = fs::read_to_string("./src/test2.cl") {
         let program = parser.produce_ast(txt).unwrap();
         println!(
             "result : {:?}",

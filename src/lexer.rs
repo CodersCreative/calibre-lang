@@ -46,11 +46,11 @@ pub enum TokenType {
     Let,
     Impl,
     For,
+    Range,
     Trait,
     List,
     Arrow,
     Async,
-    Loop,
     Func,
     Return,
     If,
@@ -68,7 +68,6 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("mut"), TokenType::Mut),
         (String::from("const"), TokenType::Const),
         (String::from("let"), TokenType::Let),
-        (String::from("for"), TokenType::Loop),
         (String::from("scope"), TokenType::Scope),
         (String::from("fn"), TokenType::Func),
         (String::from("else"), TokenType::Else),
@@ -88,6 +87,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
 pub fn special_keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("->"), TokenType::Arrow),
+        (String::from(".."), TokenType::Range),
         (
             String::from("&&"),
             TokenType::Boolean(BooleanOperation::And),

@@ -6,7 +6,7 @@ use rand::random_range;
 use crate::{
     ast::{NodeType, RefMutability},
     runtime::{
-        interpreter::{InterpreterErr, evaluate},
+        interpreter::{InterpreterErr, evaluate, statements::evaluate_if_statement},
         scope::{
             Scope, ScopeErr,
             structs::{get_struct_function, resolve_struct_function},
@@ -21,6 +21,70 @@ pub fn evaluate_identifier(
     scope: Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     Ok(get_var(scope, identifier).clone()?)
+}
+
+pub fn assign_member_expression(
+    member: NodeType,
+    value: RuntimeValue,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<(), InterpreterErr> {
+    if let NodeType::MemberExpression {
+        object: old_object,
+        mut property,
+        is_computed,
+    } = member
+    {
+        let mut object = evaluate(*old_object.clone(), scope.clone())?;
+        let mut path = Vec::new();
+
+        if let RuntimeValue::Struct(map, t) = object.clone() {
+            let mut latest = (map.clone(), t.clone());
+
+            while let NodeType::MemberExpression {
+                property: prop,
+                object,
+                ..
+            } = *property
+            {
+                if let NodeType::Identifier(name) = *object {
+                    if let Some(RuntimeValue::Struct(map, t)) = latest.0.0.get(&name) {
+                        latest = (map.clone(), t.clone());
+                        path.push(name);
+                    }
+                }
+                property = prop;
+            }
+
+            if let NodeType::Identifier(prop) = *property {
+                let mut main = get_nested_mut(&mut object, &path);
+
+                if let Some(RuntimeValue::Struct(m, _)) = &mut main {
+                    if let Some(x) = m.0.get_mut(&prop) {
+                        *x = value;
+                    } else {
+                        return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(
+                            prop,
+                        ))));
+                    }
+                }
+                let main = object;
+
+                if let NodeType::Identifier(x) = *old_object {
+                    let _ = scope.borrow_mut().assign_var(x.clone(), &main);
+
+                    return Ok(());
+                }
+            } else {
+                return Err(InterpreterErr::NotImplemented(*property));
+            }
+
+            panic!()
+        } else {
+            Err(InterpreterErr::UnexpectedType(object))
+        }
+    } else {
+        Err(InterpreterErr::NotImplemented(member))
+    }
 }
 
 pub fn evaluate_member_expression(
@@ -79,65 +143,63 @@ pub fn evaluate_member_expression(
             if let NodeType::Identifier(prop) = *property {
                 if let Some(x) = latest.0.0.get(&prop) {
                     return Ok(x.clone());
+                } else {
+                    return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(
+                        prop,
+                    ))));
                 }
             } else if let NodeType::CallExpression(caller, mut args) = *property {
                 let mut main = get_nested_mut(&mut object, &path).unwrap();
                 if let NodeType::Identifier(caller) = *caller {
                     if let Ok(val) = get_struct_function(scope.clone(), &latest.1.unwrap(), &caller)
                     {
-                        let name = [random_range(0..1000).to_string(), path.join("")].join("");
+                        let mut name = None;
+
                         if let RuntimeValue::Function { parameters, .. } = val.0.clone() {
                             let mut arguments = Vec::new();
                             if parameters.len() > 0 {
                                 if parameters[0].0 == "self" {
+                                    name = Some(
+                                        [random_range(0..1000).to_string(), path.join("")].join(""),
+                                    );
                                     let _ = scope.borrow_mut().push_var(
-                                        name.clone(),
+                                        name.clone().unwrap(),
                                         &main.clone(),
                                         true,
-                                    );
-                                    arguments.push(NodeType::Identifier(name.clone()));
+                                    )?;
+                                    arguments.push(NodeType::Identifier(name.clone().unwrap()));
                                 }
                             }
 
                             arguments.append(&mut args);
 
                             let value = evaluate_function(scope.clone(), val.0, arguments)?;
-                            if let RuntimeValue::Struct(m, _) = &mut main {
-                                if let RuntimeValue::Struct(x, _) = get_var(scope.clone(), &name)? {
-                                    *m = x;
+
+                            if let Some(name) = name {
+                                if let RuntimeValue::Struct(m, _) = &mut main {
+                                    if let RuntimeValue::Struct(x, _) =
+                                        get_var(scope.clone(), &name)?
+                                    {
+                                        *m = x;
+                                    }
                                 }
-                            }
-                            if let NodeType::Identifier(x) = *old_object {
-                                let _ = scope.borrow_mut().assign_var(x.clone(), &object);
+
+                                if let NodeType::Identifier(x) = *old_object {
+                                    let _ = scope.borrow_mut().assign_var(x.clone(), &object)?;
+                                }
+
+                                scope.borrow_mut().variables.remove(&name);
+                                scope.borrow_mut().constants.remove(&name);
                             }
 
                             return Ok(value);
                         }
                     }
                 }
-            } else if let NodeType::AssignmentExpression { identifier, value } = *property {
-                let mut main = get_nested_mut(&mut object, &path);
-
-                if let NodeType::Identifier(y) = *identifier {
-                    if let Some(RuntimeValue::Struct(m, _)) = &mut main {
-                        if let Some(x) = m.0.get_mut(&y) {
-                            *x = evaluate(*value, scope.clone())?;
-                        }
-                    }
-                }
-
-                let main = object;
-
-                if let NodeType::Identifier(x) = *old_object {
-                    let _ = scope.borrow_mut().assign_var(x.clone(), &main);
-
-                    return Ok(main.clone());
-                }
             } else {
                 return Err(InterpreterErr::NotImplemented(*property));
             }
-
-            panic!()
+            panic!("2. {:?}", old_object);
         } else {
             Err(InterpreterErr::UnexpectedType(object))
         }
@@ -225,6 +287,11 @@ pub fn evaluate_assignment_expression(
         if let NodeType::Identifier(identifier) = *identifier {
             let value = evaluate(*value, scope.clone())?;
             let _ = scope.borrow_mut().assign_var(identifier, &value)?;
+            return Ok(value);
+        }
+        if let NodeType::MemberExpression { .. } = *identifier {
+            let value = evaluate(*value, scope.clone())?;
+            let _ = assign_member_expression(*identifier, value.clone(), scope)?;
             return Ok(value);
         } else {
             Err(InterpreterErr::AssignNonVariable(*identifier))
@@ -349,7 +416,18 @@ pub fn evaluate_function(
 
         let mut result: RuntimeValue = RuntimeValue::Null;
         for statement in &body.0 {
-            result = evaluate(statement.clone(), new_scope.clone())?;
+            if let NodeType::IfStatement { .. } = statement {
+                let value = evaluate_if_statement(statement.clone(), new_scope.clone())?;
+                result = value.0;
+
+                if value.1 {
+                    return Ok(result);
+                }
+            } else if let NodeType::Return { value } = statement {
+                return evaluate(*value.clone(), new_scope);
+            } else {
+                result = evaluate(statement.clone(), new_scope.clone())?;
+            }
         }
 
         if let Some(t) = return_type {

@@ -8,11 +8,17 @@ struct Language {
 
 impl Language {
   fn print_lang(&mut self) {
+    print("test");
+    if self.code == 50 {
+      print(self);
+      return null;
+    }
+
     print(self.code);
   }
 
   fn new() -> Language {
-    {code : 70}
+    {code : 90}
   }
 }
 
@@ -51,11 +57,11 @@ fn main(number : int) -> string{
 let mut zimbabwe : Country = {name : "Zimbabwe", people : 10, language : {code : 19}}
 
 let english : Language = {code : 25, function : main}
-zimbabwe.language.code = 50;
+// zimbabwe.language.code = 50;
 
 
 print(zimbabwe.language.print_lang());
-print(Language.new().print_lang());
+Language.new().print_lang();
 
 print(zimbabwe.language.code)
 let lst : list(list(int)) = [[10, 10, 100], [0,10]];

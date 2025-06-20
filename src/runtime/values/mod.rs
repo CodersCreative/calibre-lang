@@ -45,6 +45,7 @@ pub enum RuntimeType {
     Str,
     Char,
     List(Box<Option<RuntimeType>>),
+    Range,
     Function {
         return_type: Box<Option<RuntimeType>>,
         parameters: Vec<(RuntimeType, RefMutability)>,
@@ -78,6 +79,7 @@ impl Into<RuntimeType> for RuntimeValue {
             Self::Bool(_) => RuntimeType::Bool,
             Self::Str(_) => RuntimeType::Str,
             Self::Char(_) => RuntimeType::Char,
+            Self::Range(_, _) => RuntimeType::Range,
             Self::List { data, data_type } => RuntimeType::List(data_type),
             Self::Function {
                 identifier,
@@ -106,6 +108,7 @@ pub enum RuntimeValue {
     Null,
     Float(f64),
     Integer(i64),
+    Range(i8, i8),
     Struct(Map<RuntimeValue>, Option<String>),
     Bool(bool),
     Str(String),
@@ -132,6 +135,7 @@ impl ToString for RuntimeValue {
         match self {
             Self::Null => String::from("null"),
             Self::Float(x) => x.to_string(),
+            Self::Range(from, to) => format!("{} -> {}", from, to),
             Self::Integer(x) => x.to_string(),
             Self::Bool(x) => x.to_string(),
             Self::Struct(x, _) => format!("{:?}", x),
@@ -191,12 +195,16 @@ impl RuntimeValue {
         match self {
             RuntimeValue::Null => false,
             RuntimeValue::NativeFunction(_) => false,
-            RuntimeValue::Struct(_, _) => {
-                self.into_type(scope, t);
-                true
-            }
+            RuntimeValue::Struct(_, _) => match self.into_type(scope, t) {
+                Ok(_) => true,
+                Err(_) => false,
+            },
             RuntimeValue::Str(_) => match t {
                 RuntimeType::Str => true,
+                _ => false,
+            },
+            RuntimeValue::Range(_, _) => match t {
+                RuntimeType::Range => true,
                 _ => false,
             },
             RuntimeValue::Bool(_) => match t {
@@ -290,6 +298,7 @@ impl RuntimeValue {
         match self {
             RuntimeValue::Integer(x) => match t {
                 RuntimeType::Integer => Ok(self.clone()),
+                RuntimeType::Range => Ok(RuntimeValue::Range(0, *x as i8)),
                 RuntimeType::Float => Ok(RuntimeValue::Float(*x as f64)),
                 RuntimeType::Bool => Ok(RuntimeValue::Bool(match x {
                     0 => false,
@@ -306,6 +315,7 @@ impl RuntimeValue {
             },
             RuntimeValue::Float(x) => match t {
                 RuntimeType::Integer => Ok(RuntimeValue::Integer(*x as i64)),
+                RuntimeType::Range => Ok(RuntimeValue::Range(0, *x as i8)),
                 RuntimeType::Float => Ok(self.clone()),
                 RuntimeType::Bool => Ok(RuntimeValue::Bool(match x {
                     0.0 => false,
@@ -334,6 +344,7 @@ impl RuntimeValue {
                     })
                 }
                 RuntimeType::List(_) => list_case(),
+                RuntimeType::Range => panic_type(),
                 RuntimeType::Function { .. } => panic_type(),
             },
 
@@ -346,6 +357,7 @@ impl RuntimeValue {
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
+                RuntimeType::Range => panic_type(),
                 RuntimeType::Struct(Some(identifier)) => {
                     let properties =
                         get_struct(resolve_struct(scope.clone(), &identifier)?, &identifier)?;

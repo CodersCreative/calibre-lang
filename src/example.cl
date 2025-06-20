@@ -1,4 +1,4 @@
-import "env/whatever.cl" /* will import the file at this location
+/*import "env/whatever.cl"  will import the file at this location
 by default when code is imported it will run all the code not in functions in order
 the pub keyword is used to expose objects to other files */
 
@@ -22,15 +22,27 @@ enum Language {
 }
 
 // language cannot change || it is a constant
-pub let language = Language.FRENCH;
+let language = Language.FRENCH;
 let language_forced : Language = Language.FRENCH;
 
-var x = 100;
-var y : number = 0;
-var list = [0, 10, 30, 50]; // Arrays are dynamic by default
-var lst : list(number) = [0, 40, 20]; // A static array 
+let mut x = 100;
+let mut y : number = 0;
+let mut list_dyn = [0, 10, 30, 50]; // Arrays are dynamic by default
+let mut lst : list(number) = [0, 40, 20]; // A static array 
 
-fn main(): number {
+for l in lst {
+  x += l;
+}
+
+for i in 0..100 {
+  t += i;
+}
+
+for x == y {
+  print(x + y);
+}
+
+fn main() -> number {
 	x = 50;
 	x++; // should increment by 1
 	x += 4 // same as x = x + 4
@@ -41,8 +53,8 @@ fn main(): number {
 	let w = "b";
 	let d = z + w; // Should give "ab"
 	
-	print(f"{x}");
-	print(f"{y}");
+	print(x);
+	print(y);
 	print("Hello World") // Semicolons have no effect so they can be left out
 
 	return y;

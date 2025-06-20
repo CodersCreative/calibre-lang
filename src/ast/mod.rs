@@ -6,7 +6,11 @@ use std::collections::HashMap;
 use binary::BinaryOperator;
 use comparison::Comparison;
 
-use crate::{ast::comparison::BooleanOperation, lexer::TokenType, runtime::values::RuntimeType};
+use crate::{
+    ast::comparison::BooleanOperation,
+    lexer::TokenType,
+    runtime::values::{RuntimeType, RuntimeValue},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RefMutability {
@@ -52,6 +56,9 @@ pub enum NodeType {
     },
     AssignmentExpression {
         identifier: Box<NodeType>,
+        value: Box<NodeType>,
+    },
+    Return {
         value: Box<NodeType>,
     },
     Identifier(String),
