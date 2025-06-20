@@ -29,21 +29,43 @@ pub fn evaluate_member_expression(
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::MemberExpression {
         object: old_object,
-        property,
+        mut property,
         is_computed,
     } = exp
     {
-        let mut object = evaluate(*old_object.clone(), scope.clone())?;
-        // let (final_object, mut last_property_node) =
-        //     resolve_chained_member_access(&mut object, property, scope.clone())?;
+        let mut object = match evaluate(*old_object.clone(), scope.clone()) {
+            Ok(x) => x,
+            Err(x) => {
+                if let InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(struct_name))) = x {
+                    if let NodeType::CallExpression(caller, args) = *property {
+                        if let NodeType::Identifier(caller) = *caller {
+                            if let Ok(struct_fn) =
+                                get_struct_function(scope.clone(), &struct_name, &caller)
+                            {
+                                return Ok(evaluate_function(scope.clone(), struct_fn.0, *args)?);
+                            }
+                        }
+                    }
+
+                    return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Struct(
+                        struct_name,
+                    ))));
+                } else {
+                    return Err(x);
+                }
+            }
+        };
+
         let mut path = Vec::new();
-        let mut prop = property.clone();
+
         if let RuntimeValue::Struct(map, t) = object.clone() {
             let mut latest = (map.clone(), t.clone());
 
             while let NodeType::MemberExpression {
-                property, object, ..
-            } = *prop
+                property: prop,
+                object,
+                ..
+            } = *property
             {
                 if let NodeType::Identifier(name) = *object {
                     if let Some(RuntimeValue::Struct(map, t)) = latest.0.0.get(&name) {
@@ -51,14 +73,14 @@ pub fn evaluate_member_expression(
                         path.push(name);
                     }
                 }
-                prop = property;
+                property = prop;
             }
 
-            if let NodeType::Identifier(prop) = *prop {
+            if let NodeType::Identifier(prop) = *property {
                 if let Some(x) = latest.0.0.get(&prop) {
                     return Ok(x.clone());
                 }
-            } else if let NodeType::CallExpression(caller, mut args) = *prop {
+            } else if let NodeType::CallExpression(caller, mut args) = *property {
                 let mut main = get_nested_mut(&mut object, &path).unwrap();
                 if let NodeType::Identifier(caller) = *caller {
                     if let Ok(val) = get_struct_function(scope.clone(), &latest.1.unwrap(), &caller)
@@ -93,7 +115,7 @@ pub fn evaluate_member_expression(
                         }
                     }
                 }
-            } else if let NodeType::AssignmentExpression { identifier, value } = *prop {
+            } else if let NodeType::AssignmentExpression { identifier, value } = *property {
                 let mut main = get_nested_mut(&mut object, &path);
 
                 if let NodeType::Identifier(y) = *identifier {
@@ -111,60 +133,19 @@ pub fn evaluate_member_expression(
 
                     return Ok(main.clone());
                 }
+            } else {
+                return Err(InterpreterErr::NotImplemented(*property));
             }
+
             panic!()
-            // return Err(InterpreterErr::ExpectedType(prop?, RuntimeType::Str));
         } else {
-            panic!();
-            /*Err(InterpreterErr::ExpectedType(
-                prop?,
-                RuntimeType::Struct(None),
-            ))*/
+            Err(InterpreterErr::UnexpectedType(object))
         }
     } else {
         Err(InterpreterErr::NotImplemented(exp))
     }
 }
-fn resolve_chained_member_access<'a>(
-    initial_object: &'a mut RuntimeValue,
-    mut property_node: Box<NodeType>,
-    scope: Rc<RefCell<Scope>>,
-) -> Result<(&'a mut RuntimeValue, Box<NodeType>), InterpreterErr> {
-    let mut current_object = initial_object;
-    let mut path = Vec::new();
 
-    // Traverse the member expression chain to find the actual target object and the final property
-    while let NodeType::MemberExpression {
-        object: inner_object_node,
-        property: inner_property_node,
-        is_computed: inner_is_computed,
-    } = *property_node
-    {
-        let member_name = if inner_is_computed {
-            let prop_val = evaluate(*inner_property_node.clone(), scope.clone())?;
-            match prop_val {
-                RuntimeValue::Str(s) => s,
-                _ => {
-                    return Err(InterpreterErr::UnexpectedType(prop_val));
-                }
-            }
-        } else {
-            if let NodeType::Identifier(name) = *inner_object_node {
-                name
-            } else {
-                return Err(InterpreterErr::NotImplemented(*inner_object_node));
-            }
-        };
-        path.push(member_name);
-        property_node = inner_property_node; // Move to the next property in the chain
-    }
-
-    if let Some(final_target_object) = get_nested_mut(current_object, &path) {
-        Ok((final_target_object, property_node))
-    } else {
-        Err(InterpreterErr::PropertyNotFound(path.join(".")))
-    }
-}
 fn get_nested_mut<'a>(
     root: &'a mut RuntimeValue,
     path: &Vec<String>,

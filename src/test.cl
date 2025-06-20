@@ -4,16 +4,15 @@ print(foo)
 
 struct Language {
 	code : int,
-  function : fn(int) -> string,
 }
 
 impl Language {
   fn print_lang(&mut self) {
-    print(10);
     print(self.code);
-    self.code = 100;
-    print(self.code);
-    
+  }
+
+  fn new() -> Language {
+    {code : 70}
   }
 }
 
@@ -49,13 +48,14 @@ fn main(number : int) -> string{
   add(number, 100)
 }
 
-let mut zimbabwe : Country = {name : "Zimbabwe", people : 10, language : {code : 19, function :main}}
+let mut zimbabwe : Country = {name : "Zimbabwe", people : 10, language : {code : 19}}
 
 let english : Language = {code : 25, function : main}
 zimbabwe.language.code = 50;
 
 
 print(zimbabwe.language.print_lang());
+print(Language.new().print_lang());
 
 print(zimbabwe.language.code)
 let lst : list(list(int)) = [[10, 10, 100], [0,10]];

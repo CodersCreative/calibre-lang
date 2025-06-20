@@ -36,6 +36,7 @@ pub struct Scope {
     pub parent: Option<Rc<RefCell<Self>>>,
     pub variables: HashMap<String, RuntimeValue>,
     pub alias: HashMap<String, String>,
+    pub enums: HashMap<String, HashMap<String, Option<RuntimeType>>>,
     pub structs: HashMap<String, HashMap<String, RuntimeType>>,
     pub structs_functions: HashMap<String, HashMap<String, (RuntimeValue, bool)>>,
     pub constants: HashMap<String, RuntimeValue>,
@@ -72,6 +73,7 @@ impl Scope {
                 HashMap::new()
             },
             alias: HashMap::new(),
+            enums: HashMap::new(),
             variables: HashMap::new(),
             structs: HashMap::new(),
             structs_functions: HashMap::new(),
