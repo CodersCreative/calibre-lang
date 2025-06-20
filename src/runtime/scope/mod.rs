@@ -1,3 +1,4 @@
+pub mod enums;
 pub mod structs;
 pub mod variables;
 
@@ -36,7 +37,7 @@ pub struct Scope {
     pub parent: Option<Rc<RefCell<Self>>>,
     pub variables: HashMap<String, RuntimeValue>,
     pub alias: HashMap<String, String>,
-    pub enums: HashMap<String, HashMap<String, Option<RuntimeType>>>,
+    pub enums: HashMap<String, Vec<(String, Option<HashMap<String, RuntimeType>>)>>,
     pub structs: HashMap<String, HashMap<String, RuntimeType>>,
     pub structs_functions: HashMap<String, HashMap<String, (RuntimeValue, bool)>>,
     pub constants: HashMap<String, RuntimeValue>,

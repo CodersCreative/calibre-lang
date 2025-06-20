@@ -44,6 +44,7 @@ pub enum RuntimeType {
     Bool,
     Str,
     Char,
+    Enum(String),
     List(Box<Option<RuntimeType>>),
     Range,
     Function {
@@ -75,6 +76,7 @@ impl Into<RuntimeType> for RuntimeValue {
             Self::Null => panic!("Tried to convert null value to type"),
             Self::Float(_) => RuntimeType::Float,
             Self::Integer(_) => RuntimeType::Integer,
+            Self::Enum(x, _, _) => RuntimeType::Enum(x),
             Self::Struct(_, x) => RuntimeType::Struct(x),
             Self::Bool(_) => RuntimeType::Bool,
             Self::Str(_) => RuntimeType::Str,
@@ -108,11 +110,12 @@ pub enum RuntimeValue {
     Null,
     Float(f64),
     Integer(i64),
-    Range(i8, i8),
+    Range(i32, i32),
     Struct(Map<RuntimeValue>, Option<String>),
     Bool(bool),
     Str(String),
     Char(char),
+    Enum(String, usize, Option<Map<RuntimeValue>>),
     List {
         data: Vec<RuntimeValue>,
         data_type: Box<Option<RuntimeType>>,
@@ -135,6 +138,7 @@ impl ToString for RuntimeValue {
         match self {
             Self::Null => String::from("null"),
             Self::Float(x) => x.to_string(),
+            Self::Enum(x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
             Self::Range(from, to) => format!("{} -> {}", from, to),
             Self::Integer(x) => x.to_string(),
             Self::Bool(x) => x.to_string(),
@@ -201,6 +205,10 @@ impl RuntimeValue {
             },
             RuntimeValue::Str(_) => match t {
                 RuntimeType::Str => true,
+                _ => false,
+            },
+            RuntimeValue::Enum(x, _, _) => match t {
+                RuntimeType::Enum(y) => *x == y,
                 _ => false,
             },
             RuntimeValue::Range(_, _) => match t {
@@ -298,7 +306,7 @@ impl RuntimeValue {
         match self {
             RuntimeValue::Integer(x) => match t {
                 RuntimeType::Integer => Ok(self.clone()),
-                RuntimeType::Range => Ok(RuntimeValue::Range(0, *x as i8)),
+                RuntimeType::Range => Ok(RuntimeValue::Range(0, *x as i32)),
                 RuntimeType::Float => Ok(RuntimeValue::Float(*x as f64)),
                 RuntimeType::Bool => Ok(RuntimeValue::Bool(match x {
                     0 => false,
@@ -312,10 +320,11 @@ impl RuntimeValue {
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::Function { .. } => panic_type(),
+                RuntimeType::Enum { .. } => panic_type(),
             },
             RuntimeValue::Float(x) => match t {
                 RuntimeType::Integer => Ok(RuntimeValue::Integer(*x as i64)),
-                RuntimeType::Range => Ok(RuntimeValue::Range(0, *x as i8)),
+                RuntimeType::Range => Ok(RuntimeValue::Range(0, *x as i32)),
                 RuntimeType::Float => Ok(self.clone()),
                 RuntimeType::Bool => Ok(RuntimeValue::Bool(match x {
                     0.0 => false,
@@ -329,6 +338,7 @@ impl RuntimeValue {
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::Function { .. } => panic_type(),
+                RuntimeType::Enum { .. } => panic_type(),
             },
             RuntimeValue::Range(from, to) => match t {
                 RuntimeType::Range => Ok(self.clone()),
@@ -359,12 +369,31 @@ impl RuntimeValue {
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Function { .. } => panic_type(),
+                RuntimeType::Enum { .. } => panic_type(),
             },
 
             RuntimeValue::Null => panic_type(),
             RuntimeValue::Char(x) => {
                 RuntimeValue::into_type(&RuntimeValue::Str(x.clone().to_string()), scope, t)
             }
+            RuntimeValue::Enum(x, _, Some(z)) => match t {
+                RuntimeType::Struct(None) => Ok(RuntimeValue::Struct(z.clone(), None)),
+                RuntimeType::Struct(Some(_)) => {
+                    RuntimeValue::Struct(z.clone(), None).into_type(scope, t)
+                }
+                RuntimeType::Enum(x) => {
+                    if x == x {
+                        Ok(self.clone())
+                    } else {
+                        panic_type()
+                    }
+                }
+                RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
+                RuntimeType::Char => panic_type(),
+                RuntimeType::Range => panic_type(),
+                RuntimeType::List(_) => list_case(),
+                _ => panic_type(),
+            },
             RuntimeValue::Struct(x, _) => match t {
                 RuntimeType::Struct(None) => Ok(self.clone()),
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),

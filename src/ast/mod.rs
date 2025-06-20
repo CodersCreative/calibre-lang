@@ -54,6 +54,10 @@ pub enum NodeType {
         identifier: String,
         properties: HashMap<String, RuntimeType>,
     },
+    EnumDeclaration {
+        identifier: String,
+        options: Vec<(String, Option<HashMap<String, RuntimeType>>)>,
+    },
     FunctionDeclaration {
         identifier: String,
         parameters: Vec<(String, RuntimeType, RefMutability)>,

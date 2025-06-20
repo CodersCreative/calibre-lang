@@ -29,12 +29,12 @@ if obj.code == 20{
 }
 
 let mut lst : list(number) = [0, 40, 20]; // A static array 
-
-print(lst);
+lst[1] = 80;
+print(lst[1]);
 obj.time.day = 30;
 
 print("Starting")
-for !false {
+for false {
   for l in &mut lst {
     l = l + 50;
   }

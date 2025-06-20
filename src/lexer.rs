@@ -48,6 +48,7 @@ pub enum TokenType {
     For,
     Range,
     Trait,
+    Enum,
     List,
     Arrow,
     Async,
@@ -71,6 +72,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("mut"), TokenType::Mut),
         (String::from("const"), TokenType::Const),
         (String::from("let"), TokenType::Let),
+        (String::from("enum"), TokenType::Enum),
         (String::from("scope"), TokenType::Scope),
         (String::from("fn"), TokenType::Func),
         (String::from("else"), TokenType::Else),
@@ -196,6 +198,8 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                         }
                         number.push(buffer.remove(0));
                     }
+
+                    println!("{:?}", number);
 
                     if is_int {
                         Some(Token::new(TokenType::Integer, number.trim()))

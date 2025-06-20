@@ -70,7 +70,7 @@ pub fn assign_member_expression(
                 let main = object;
 
                 if let NodeType::Identifier(x) = *old_object {
-                    let _ = scope.borrow_mut().assign_var(&x, main);
+                    let _ = scope.borrow_mut().assign_var(&x, main)?;
 
                     return Ok(());
                 }
@@ -79,6 +79,23 @@ pub fn assign_member_expression(
             }
 
             panic!()
+        } else if let RuntimeValue::List {
+            mut data,
+            data_type,
+        } = object
+        {
+            if let RuntimeValue::Integer(index) = evaluate(*property, scope.clone())?
+                .into_type(scope.clone(), RuntimeType::Integer)?
+            {
+                data[index as usize] = value;
+                if let NodeType::Identifier(x) = *old_object {
+                    scope
+                        .borrow_mut()
+                        .assign_var(&x, RuntimeValue::List { data, data_type })?;
+                    return Ok(());
+                }
+            }
+            panic!();
         } else {
             Err(InterpreterErr::UnexpectedType(object))
         }
@@ -197,7 +214,15 @@ pub fn evaluate_member_expression(
                     }
                 }
             } else {
-                return Err(InterpreterErr::NotImplemented(*property));
+
+                // return Err(InterpreterErr::NotImplemented(*property));
+            }
+            panic!("2. {:?}", old_object);
+        } else if let RuntimeValue::List { data, data_type: _ } = object {
+            if let RuntimeValue::Integer(index) =
+                evaluate(*property, scope.clone())?.into_type(scope, RuntimeType::Integer)?
+            {
+                return Ok(data.get(index as usize).unwrap().clone());
             }
             panic!("2. {:?}", old_object);
         } else {
@@ -220,6 +245,13 @@ pub fn evaluate_not<'a>(
             RuntimeValue::Integer(x) => Ok(RuntimeValue::Integer(-x)),
             RuntimeValue::Float(x) => Ok(RuntimeValue::Float(-x)),
             RuntimeValue::Range(f, t) => Ok(RuntimeValue::Range(t, f)),
+            RuntimeValue::List {
+                mut data,
+                data_type,
+            } => {
+                data.reverse();
+                Ok(RuntimeValue::List { data, data_type })
+            }
             _ => Err(InterpreterErr::UnexpectedType(value)),
         }
     } else {
@@ -279,7 +311,7 @@ pub fn evaluate_range_expression(
             {
                 let to = if inclusive { to + 1 } else { to };
 
-                Ok(RuntimeValue::Range(from as i8, to as i8))
+                Ok(RuntimeValue::Range(from as i32, to as i32))
             } else {
                 Err(InterpreterErr::NotImplemented(*to))
             }

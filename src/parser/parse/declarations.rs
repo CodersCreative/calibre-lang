@@ -135,6 +135,45 @@ impl Parser {
         })
     }
 
+    pub fn parse_enum_declaration(&mut self) -> Result<NodeType, ParserError> {
+        let _ = self.expect_eat(
+            &TokenType::Enum,
+            SyntaxErr::ExpectedKeyword(String::from("enum")),
+        )?;
+
+        let identifier = self
+            .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
+            .value;
+
+        let _ = self.expect_eat(
+            &TokenType::OpenCurly,
+            SyntaxErr::ExpectedOpeningBracket(TokenType::OpenCurly),
+        )?;
+
+        let mut options = Vec::new();
+
+        while self.first().token_type == TokenType::Identifier {
+            let option = self.eat().value;
+
+            if self.first().token_type == TokenType::OpenCurly {
+                let data = self.parse_key_type_list(TokenType::OpenCurly, TokenType::CloseCurly)?;
+                options.push((option, Some(data)));
+            } else {
+                options.push((option, None));
+            }
+        }
+
+        let _ = self.expect_eat(
+            &TokenType::CloseCurly,
+            SyntaxErr::ExpectedClosingBracket(TokenType::CloseCurly),
+        );
+
+        Ok(NodeType::EnumDeclaration {
+            identifier,
+            options,
+        })
+    }
+
     pub fn parse_struct_declaration(&mut self) -> Result<NodeType, ParserError> {
         let _ = self.expect_eat(
             &TokenType::Struct,

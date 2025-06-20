@@ -34,7 +34,7 @@ pub fn evaluate_struct_declaration(
         properties,
     } = declaration
     {
-        let _ = scope.borrow_mut().push_struct(identifier, &properties)?;
+        let _ = scope.borrow_mut().push_struct(identifier, properties)?;
         Ok(RuntimeValue::Null)
     } else {
         Err(InterpreterErr::NotImplemented(declaration))

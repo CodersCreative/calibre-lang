@@ -11,10 +11,10 @@ impl Scope {
     pub fn push_struct(
         &mut self,
         key: String,
-        value: &HashMap<String, RuntimeType>,
+        value: HashMap<String, RuntimeType>,
     ) -> Result<(), ScopeErr> {
         if !self.structs.contains_key(&key) {
-            self.structs.insert(key, value.clone());
+            self.structs.insert(key, value);
         } else {
             return Err(ScopeErr::Struct(key));
         }

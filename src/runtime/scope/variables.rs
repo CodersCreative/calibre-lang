@@ -32,6 +32,29 @@ impl Scope {
         }
     }
 
+    pub fn update_var<F>(&mut self, og_key: &str, mut f: F) -> Result<(), ScopeErr>
+    where
+        F: FnMut(&mut RuntimeValue),
+    {
+        let key = self.resolve_alias(&og_key).to_string();
+
+        if key == key {
+            if let Some(v) = self.variables.get_mut(&key) {
+                f(v);
+            } else if self.constants.contains_key(&key) {
+                return Err(ScopeErr::AssignConstant(key));
+            }
+        }
+
+        if let Some(parent) = &self.parent {
+            let _ = parent.borrow_mut().update_var(og_key, f)?;
+        } else {
+            return Err(ScopeErr::Variable(key.to_string()));
+        }
+
+        Ok(())
+    }
+
     pub fn assign_var(&mut self, og_key: &str, value: RuntimeValue) -> Result<(), ScopeErr> {
         let key = self.resolve_alias(&og_key).to_string();
 
