@@ -111,11 +111,11 @@ impl Parser {
 
     pub fn parse_boolean_expression(&mut self) -> Result<NodeType, ParserError> {
         let mut left = self.parse_comparison_expression()?;
-        if let TokenType::Comparison(comparison) = self.first().token_type.clone() {
+        if let TokenType::Boolean(comparison) = self.first().token_type.clone() {
             let _ = self.eat();
             let right = self.parse_comparison_expression()?;
 
-            left = NodeType::ComparisonExpression {
+            left = NodeType::BooleanExpression {
                 left: Box::new(left),
                 right: Box::new(right),
                 operator: comparison,

@@ -30,11 +30,17 @@ if obj.code == 20{
 
 let mut lst : list(number) = [0, 40, 20]; // A static array 
 
+print(lst);
 obj.time.day = 30;
 
-for l in &mut lst {
-  l = l + 50;
+print("Starting")
+for true || false{
+  for l in &mut lst {
+    l = l + 50;
+  }
+  print(lst)
 }
+
 
 for l in lst {
   print(l);
