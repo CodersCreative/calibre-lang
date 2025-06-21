@@ -41,10 +41,7 @@ fn main() -> Result<(), CalibreError> {
     let scope = Rc::new(RefCell::new(Scope::new(None)));
 
     if let Ok(txt) = fs::read_to_string("./src/test3.cl") {
-        println!("Hi");
         let program = parser.produce_ast(txt)?;
-        // println!("{:?}", program);
-        println!("Hi");
         println!("result : {:?}", evaluate(program, scope)?);
     } else {
         println!("Failed to read");

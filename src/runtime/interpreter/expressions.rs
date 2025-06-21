@@ -84,7 +84,7 @@ pub fn evaluate_member_expression(
         NodeType::MemberExpression {
             object, property, ..
         } => {
-            let object_val = match *object {
+            let object_val = match *object.clone() {
                 NodeType::Identifier(object_name) => {
                     if let Ok(var) = get_var(scope.clone(), &object_name) {
                         var
@@ -156,22 +156,25 @@ pub fn evaluate_member_expression(
                     }
                 }
                 NodeType::CallExpression(caller, args) => {
-                    if let NodeType::Identifier(ref method_name) = *caller {
-                        if let RuntimeValue::Struct(_, Some(ref struct_name)) = object_val {
-                            if let Ok(val) =
-                                get_struct_function(scope.clone(), struct_name, method_name)
-                            {
-                                let mut arguments = Vec::new();
+                    if let NodeType::Identifier(ref var_name) = *object {
+                        if let NodeType::Identifier(ref method_name) = *caller {
+                            if let RuntimeValue::Struct(_, Some(ref struct_name)) = object_val {
+                                if let Ok(val) =
+                                    get_struct_function(scope.clone(), struct_name, method_name)
+                                {
+                                    let mut arguments = Vec::new();
 
-                                if val.1 {
-                                    arguments = vec![NodeType::Identifier(struct_name.clone())];
+                                    if val.1 {
+                                        arguments = vec![NodeType::Identifier(var_name.clone())];
+                                    }
+
+                                    arguments.extend(*args);
+                                    return evaluate_function(scope, val.0, arguments);
                                 }
-
-                                arguments.extend(*args);
-                                return evaluate_function(scope, val.0, arguments);
                             }
                         }
                     }
+
                     panic!()
                 }
                 _ => Err(InterpreterErr::NotImplemented(*property)),
