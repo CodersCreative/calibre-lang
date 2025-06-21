@@ -1,17 +1,16 @@
 let mut second = 0;
-let mut first = 0;
 
-for true{
+for first in 100{
+  print(first);
+  
   if first > 9 {
     second++;
     if second > 30{
-      print("Done")
+
       print(second);
       print(first);
       break;
     }
-  }else{
-    first++;
   }
 }
 

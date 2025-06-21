@@ -86,6 +86,19 @@ impl Add for RuntimeValue {
         };
 
         match self {
+            Self::Char(x) => {
+                if let RuntimeValue::List { .. } = rhs {
+                    Err(ASTError::BinaryOperator(
+                        Self::Char(x),
+                        rhs.clone(),
+                        BinaryOperator::Add,
+                    ))
+                } else {
+                    let mut x = x.to_string();
+                    x.push_str(&rhs.to_string());
+                    Ok(Self::Str(x))
+                }
+            }
             Self::Str(mut x) => {
                 if let RuntimeValue::List { .. } = rhs {
                     Err(ASTError::BinaryOperator(
@@ -102,12 +115,14 @@ impl Add for RuntimeValue {
                 Self::Integer(y) => Ok(RuntimeValue::Integer(x + y)),
                 Self::Float(y) => Ok(RuntimeValue::Float(x as f64 + y)),
                 Self::Str(_) => add_str(),
+                Self::Char(_) => add_str(),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Add),
             },
             Self::Float(x) => match rhs {
                 Self::Integer(y) => Ok(RuntimeValue::Float(x + y as f64)),
                 Self::Float(y) => Ok(RuntimeValue::Float(x as f64 + y)),
                 Self::Str(_) => add_str(),
+                Self::Char(_) => add_str(),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Add),
             },
             Self::List {
@@ -119,6 +134,7 @@ impl Add for RuntimeValue {
             }
             _ => match rhs {
                 Self::Str(_) => add_str(),
+                Self::Char(_) => add_str(),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Add),
             },
         }

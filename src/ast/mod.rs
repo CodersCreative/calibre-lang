@@ -9,7 +9,7 @@ use comparison::Comparison;
 use crate::{
     ast::comparison::BooleanOperation,
     lexer::TokenType,
-    runtime::values::{RuntimeType, RuntimeValue},
+    runtime::values::RuntimeType,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::runtime::{
     scope::ScopeErr,
-    values::{RuntimeType, RuntimeValue},
+    values::RuntimeType,
 };
 
 use super::Scope;

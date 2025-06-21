@@ -4,7 +4,7 @@ use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
         interpreter::{InterpreterErr, evaluate, expressions::get_new_scope},
-        scope::{Scope, StackValue, variables::get_var},
+        scope::{Scope, StopValue, variables::get_var},
         values::{RuntimeType, RuntimeValue, helper::Block},
     },
 };
@@ -49,31 +49,25 @@ pub fn evaluate_loop_declaration(
         let handle_body = |new_scope: Rc<RefCell<Scope>>| -> Result<RuntimeValue, InterpreterErr> {
             let mut result = RuntimeValue::Null;
             for statement in body.iter() {
-                println!("{:?}", new_scope.borrow().stack);
-                if let Some(_) = new_scope
-                    .borrow()
-                    .stack
-                    .iter()
-                    .find(|x| *x == &StackValue::Break || *x == &StackValue::Return)
-                {
-                    break;
-                } else if let Some(_) = new_scope
-                    .borrow()
-                    .stack
-                    .iter()
-                    .find(|x| *x == &StackValue::Continue)
-                {
-                    new_scope
-                        .borrow_mut()
-                        .stack
-                        .retain_mut(|x| x == &StackValue::Return);
-                    continue;
-                } else if let NodeType::Return { value } = statement {
-                    new_scope.borrow_mut().stack.push(StackValue::Return);
+                match new_scope.borrow().stop {
+                    Some(StopValue::Return) => break,
+                    Some(StopValue::Break) => break,
+                    Some(StopValue::Continue) => {
+                        new_scope.borrow_mut().stop = None;
+                        break;
+                    }
+                    _ => {}
+                };
+                if let NodeType::Return { value } = statement {
+                    new_scope.borrow_mut().stop = Some(StopValue::Return);
                     return Ok(evaluate(*value.clone(), new_scope.clone())?);
                 } else if let NodeType::Break = statement {
-                    new_scope.borrow_mut().stack.push(StackValue::Break);
-                    return Ok(result);
+                    if scope.borrow_mut().stop != Some(StopValue::Return) {
+                        new_scope.borrow_mut().stop = Some(StopValue::Break);
+                    }
+                    break;
+                } else if let NodeType::Continue = statement {
+                    break;
                 } else {
                     result = evaluate(statement.clone(), new_scope.clone())?;
                 }
@@ -100,22 +94,14 @@ pub fn evaluate_loop_declaration(
                     )?;
                     result = handle_body(new_scope.clone())?;
 
-                    if let Some(x) = new_scope
-                        .borrow()
-                        .stack
-                        .iter()
-                        .find(|x| *x == &StackValue::Break || *x == &StackValue::Return)
-                    {
-                        if let Some(_) = new_scope
-                            .borrow()
-                            .stack
-                            .iter()
-                            .find(|x| *x == &StackValue::Return)
-                        {
-                            scope.borrow_mut().stack.push(StackValue::Return);
+                    match new_scope.borrow().stop {
+                        Some(StopValue::Break) => return Ok(result),
+                        Some(StopValue::Return) => {
+                            scope.borrow_mut().stop = Some(StopValue::Return);
+                            return Ok(result);
                         }
-                        return Ok(result);
-                    }
+                        _ => {}
+                    };
                 }
             }
         } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
@@ -137,22 +123,14 @@ pub fn evaluate_loop_declaration(
 
                     result = handle_body(new_scope.clone())?;
 
-                    if let Some(x) = new_scope
-                        .borrow()
-                        .stack
-                        .iter()
-                        .find(|x| *x == &StackValue::Break || *x == &StackValue::Return)
-                    {
-                        if let Some(_) = new_scope
-                            .borrow()
-                            .stack
-                            .iter()
-                            .find(|x| *x == &StackValue::Return)
-                        {
-                            scope.borrow_mut().stack.push(StackValue::Return);
+                    match new_scope.borrow().stop {
+                        Some(StopValue::Break) => return Ok(result),
+                        Some(StopValue::Return) => {
+                            scope.borrow_mut().stop = Some(StopValue::Return);
+                            return Ok(result);
                         }
-                        return Ok(result);
-                    }
+                        _ => {}
+                    };
 
                     *d = get_var(new_scope, &identifier)?;
                 }
@@ -163,7 +141,7 @@ pub fn evaluate_loop_declaration(
                         data: data.clone(),
                         data_type: data_type.clone(),
                     },
-                );
+                )?;
             }
         } else if let LoopType::While(condition) = *loop_type {
             while let RuntimeValue::Bool(x) = evaluate(condition.clone(), scope.clone())? {
@@ -173,22 +151,14 @@ pub fn evaluate_loop_declaration(
                 let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
                 result = handle_body(new_scope.clone())?;
 
-                if let Some(x) = new_scope
-                    .borrow()
-                    .stack
-                    .iter()
-                    .find(|x| *x == &StackValue::Break || *x == &StackValue::Return)
-                {
-                    if let Some(_) = new_scope
-                        .borrow()
-                        .stack
-                        .iter()
-                        .find(|x| *x == &StackValue::Return)
-                    {
-                        scope.borrow_mut().stack.push(StackValue::Return);
+                match new_scope.borrow().stop {
+                    Some(StopValue::Break) => return Ok(result),
+                    Some(StopValue::Return) => {
+                        scope.borrow_mut().stop = Some(StopValue::Return);
+                        return Ok(result);
                     }
-                    return Ok(result);
-                }
+                    _ => {}
+                };
             }
         }
 
@@ -270,13 +240,17 @@ pub fn evaluate_if_statement(
                     let mut result: RuntimeValue = RuntimeValue::Null;
                     for statement in bodies[i].iter() {
                         if let NodeType::Return { value } = statement {
-                            scope.borrow_mut().stack.push(StackValue::Return);
+                            scope.borrow_mut().stop = Some(StopValue::Return);
                             return Ok(evaluate(*value.clone(), scope.clone())?);
                         } else if let NodeType::Break = statement {
-                            scope.borrow_mut().stack.push(StackValue::Break);
+                            if scope.borrow().stop != Some(StopValue::Return) {
+                                scope.borrow_mut().stop = Some(StopValue::Break);
+                            }
                             return Ok(result);
                         } else if let NodeType::Continue = statement {
-                            scope.borrow_mut().stack.push(StackValue::Continue);
+                            if scope.borrow().stop == None {
+                                scope.borrow_mut().stop = Some(StopValue::Continue);
+                            }
                             return Ok(result);
                         }
 
@@ -295,10 +269,17 @@ pub fn evaluate_if_statement(
                 let mut result: RuntimeValue = RuntimeValue::Null;
                 for statement in last.iter() {
                     if let NodeType::Return { value } = statement {
-                        scope.borrow_mut().stack.push(StackValue::Return);
+                        scope.borrow_mut().stop = Some(StopValue::Return);
                         return Ok(evaluate(*value.clone(), scope.clone())?);
                     } else if let NodeType::Break = statement {
-                        scope.borrow_mut().stack.push(StackValue::Break);
+                        if scope.borrow().stop != Some(StopValue::Return) {
+                            scope.borrow_mut().stop = Some(StopValue::Break);
+                        }
+                        return Ok(result);
+                    } else if let NodeType::Continue = statement {
+                        if scope.borrow().stop == None {
+                            scope.borrow_mut().stop = Some(StopValue::Continue);
+                        }
                         return Ok(result);
                     }
                     result = evaluate(statement.clone(), scope.clone())?;

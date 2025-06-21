@@ -199,8 +199,6 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                         number.push(buffer.remove(0));
                     }
 
-                    println!("{:?}", number);
-
                     if is_int {
                         Some(Token::new(TokenType::Integer, number.trim()))
                     } else {

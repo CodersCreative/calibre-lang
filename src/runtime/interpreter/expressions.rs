@@ -6,10 +6,10 @@ use rand::random_range;
 use crate::{
     ast::{NodeType, RefMutability},
     runtime::{
-        interpreter::{InterpreterErr, evaluate, statements::evaluate_if_statement},
+        interpreter::{InterpreterErr, evaluate},
         scope::{
-            Scope, ScopeErr, StackValue,
-            structs::{get_struct_function, resolve_struct_function},
+            Scope, ScopeErr, StopValue,
+            structs::get_struct_function,
             variables::{get_var, resolve_var},
         },
         values::{RuntimeType, RuntimeValue, ValueErr, helper::Map},
@@ -506,12 +506,7 @@ pub fn evaluate_function(
 
         let mut result: RuntimeValue = RuntimeValue::Null;
         for statement in &body.0 {
-            if let Some(_) = new_scope
-                .borrow()
-                .stack
-                .iter()
-                .find(|x| *x == &StackValue::Return)
-            {
+            if let Some(StopValue::Return) = new_scope.borrow().stop {
                 break;
             } else if let NodeType::Return { value } = statement {
                 return evaluate(*value.clone(), new_scope);
