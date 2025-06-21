@@ -20,8 +20,14 @@ impl Parser {
             }
             TokenType::Stop(x) => match x {
                 StopValue::Return => self.parse_return_declaration()?,
-                StopValue::Break => NodeType::Break,
-                StopValue::Continue => NodeType::Continue,
+                StopValue::Break => {
+                    self.eat();
+                    NodeType::Break
+                }
+                StopValue::Continue => {
+                    self.eat();
+                    NodeType::Continue
+                }
             },
             TokenType::String => {
                 let val = self.eat().value;

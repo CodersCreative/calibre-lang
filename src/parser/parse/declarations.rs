@@ -15,8 +15,14 @@ impl Parser {
             TokenType::If => self.parse_if_statement(),
             TokenType::Stop(x) => match x {
                 StopValue::Return => self.parse_return_declaration(),
-                StopValue::Break => Ok(NodeType::Break),
-                StopValue::Continue => Ok(NodeType::Continue),
+                StopValue::Break => {
+                    self.eat();
+                    Ok(NodeType::Break)
+                }
+                StopValue::Continue => {
+                    self.eat();
+                    Ok(NodeType::Continue)
+                }
             },
             TokenType::Trait => self.parse_if_statement(),
             TokenType::Impl => self.parse_impl_declaration(),
