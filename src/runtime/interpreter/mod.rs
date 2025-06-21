@@ -38,6 +38,8 @@ pub enum InterpreterErr {
     ExpectedType(RuntimeValue, RuntimeType),
     #[error("Variable {0:?} has an unexpected type.")]
     UnexpectedType(RuntimeValue),
+    #[error("Node {0:?} has an unexpected type.")]
+    UnexpectedNode(NodeType),
     #[error("No associated enum item : {1:?} in enum {0:?}")]
     UnexpectedEnumItem(String, String),
     #[error("Setters can only have one argument, {0:?}")]

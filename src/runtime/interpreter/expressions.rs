@@ -98,8 +98,9 @@ pub fn evaluate_member_expression(
                                 },
                                 scope,
                             );
+                        } else {
+                            return Err(InterpreterErr::UnexpectedNode(*property));
                         }
-                        panic!()
                     } else if let Ok(_) = get_struct(scope.clone(), &object_name) {
                         if let NodeType::CallExpression(caller, args) = *property {
                             if let NodeType::Identifier(ref method_name) = *caller {
@@ -107,16 +108,26 @@ pub fn evaluate_member_expression(
                                     get_struct_function(scope.clone(), &object_name, method_name)
                                 {
                                     return evaluate_function(scope, val.0, *args);
+                                } else {
+                                    return Err(InterpreterErr::Value(ValueErr::Scope(
+                                        ScopeErr::StructFunction(method_name.to_string()),
+                                    )));
                                 }
+                            } else {
+                                return Err(InterpreterErr::UnexpectedNode(*caller));
                             }
+                        } else {
+                            return Err(InterpreterErr::UnexpectedNode(*property));
                         }
-                        panic!()
                     } else {
-                        panic!()
+                        return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(
+                            object_name,
+                        ))));
                     }
                 }
-                _ => panic!(),
+                _ => return Err(InterpreterErr::UnexpectedNode(*object)),
             };
+
             match *property {
                 NodeType::MemberExpression { .. } => evaluate_member_expression(*property, scope),
                 NodeType::Identifier(ref prop) => {
