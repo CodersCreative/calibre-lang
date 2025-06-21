@@ -8,7 +8,7 @@ use crate::{
         scope::{
             Scope, ScopeErr, StopValue,
             enums::get_enum,
-            structs::get_struct_function,
+            structs::{get_struct, get_struct_function},
             variables::{get_var, resolve_var},
         },
         values::{RuntimeType, RuntimeValue, ValueErr, helper::Map},
@@ -84,7 +84,39 @@ pub fn evaluate_member_expression(
         NodeType::MemberExpression {
             object, property, ..
         } => {
-            let object_val = evaluate(*object.clone(), scope.clone())?;
+            let object_val = match *object {
+                NodeType::Identifier(object_name) => {
+                    if let Ok(var) = get_var(scope.clone(), &object_name) {
+                        var
+                    } else if let Ok(_) = get_enum(scope.clone(), &object_name) {
+                        if let NodeType::Identifier(value) = *property {
+                            return evaluate(
+                                NodeType::EnumExpression {
+                                    identifier: object_name,
+                                    value,
+                                    data: None,
+                                },
+                                scope,
+                            );
+                        }
+                        panic!()
+                    } else if let Ok(_) = get_struct(scope.clone(), &object_name) {
+                        if let NodeType::CallExpression(caller, args) = *property {
+                            if let NodeType::Identifier(ref method_name) = *caller {
+                                if let Ok(val) =
+                                    get_struct_function(scope.clone(), &object_name, method_name)
+                                {
+                                    return evaluate_function(scope, val.0, *args);
+                                }
+                            }
+                        }
+                        panic!()
+                    } else {
+                        panic!()
+                    }
+                }
+                _ => panic!(),
+            };
             match *property {
                 NodeType::MemberExpression { .. } => evaluate_member_expression(*property, scope),
                 NodeType::Identifier(ref prop) => {
@@ -118,7 +150,12 @@ pub fn evaluate_member_expression(
                             if let Ok(val) =
                                 get_struct_function(scope.clone(), struct_name, method_name)
                             {
-                                let mut arguments = vec![NodeType::Identifier(struct_name.clone())];
+                                let mut arguments = Vec::new();
+
+                                if val.1 {
+                                    arguments = vec![NodeType::Identifier(struct_name.clone())];
+                                }
+
                                 arguments.extend(*args);
                                 return evaluate_function(scope, val.0, arguments);
                             }
