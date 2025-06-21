@@ -1,8 +1,13 @@
 use std::{cell::RefCell, fs, rc::Rc};
 
+use thiserror::Error;
+
 use crate::{
-    parser::Parser,
-    runtime::{interpreter::evaluate, scope::Scope},
+    parser::{Parser, ParserError},
+    runtime::{
+        interpreter::{InterpreterErr, evaluate},
+        scope::Scope,
+    },
 };
 
 pub mod ast;
@@ -11,19 +16,41 @@ pub mod parser;
 pub mod runtime;
 pub mod utils;
 
-fn main() {
+#[derive(Error, Debug)]
+pub enum CalibreError {
+    #[error("{0}")]
+    Interpreter(InterpreterErr),
+    #[error("{0}")]
+    Parser(ParserError),
+}
+
+impl From<InterpreterErr> for CalibreError {
+    fn from(value: InterpreterErr) -> Self {
+        Self::Interpreter(value)
+    }
+}
+
+impl From<ParserError> for CalibreError {
+    fn from(value: ParserError) -> Self {
+        Self::Parser(value)
+    }
+}
+
+fn main() -> Result<(), CalibreError> {
     let mut parser = Parser::default();
     let scope = Rc::new(RefCell::new(Scope::new(None)));
 
     if let Ok(txt) = fs::read_to_string("./src/test3.cl") {
-        let program = parser.produce_ast(txt).unwrap();
-        println!(
-            "result : {:?}",
-            evaluate(program, scope).map_err(|e| e.to_string())
-        );
+        println!("Hi");
+        let program = parser.produce_ast(txt)?;
+        // println!("{:?}", program);
+        println!("Hi");
+        println!("result : {:?}", evaluate(program, scope)?);
     } else {
         println!("Failed to read");
     }
+
+    Ok(())
 
     // loop {
     //     if let Ok(input) = read_input() {

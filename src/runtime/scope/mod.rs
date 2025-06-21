@@ -32,7 +32,7 @@ pub enum ScopeErr {
     StructFunction(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StopValue {
     Return,
     Break,

@@ -489,6 +489,32 @@ pub fn get_new_scope(
     Ok(new_scope)
 }
 
+pub fn evaluate_scope(
+    node: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let NodeType::ScopeDeclaration { body } = node {
+        let new_scope = get_new_scope(scope, Vec::new(), Vec::new())?;
+
+        let mut result: RuntimeValue = RuntimeValue::Null;
+        for statement in body.into_iter() {
+            if let Some(StopValue::Return) = new_scope.borrow().stop {
+                break;
+            } else if let NodeType::Return { value } = statement {
+                result = evaluate(*value.clone(), new_scope.clone())?;
+                new_scope.borrow_mut().stop = Some(StopValue::Return);
+                break;
+            } else {
+                result = evaluate(statement, new_scope.clone())?;
+            }
+        }
+
+        Ok(result)
+    } else {
+        panic!()
+    }
+}
+
 pub fn evaluate_function(
     scope: Rc<RefCell<Scope>>,
     func: RuntimeValue,
@@ -509,7 +535,8 @@ pub fn evaluate_function(
             if let Some(StopValue::Return) = new_scope.borrow().stop {
                 break;
             } else if let NodeType::Return { value } = statement {
-                return evaluate(*value.clone(), new_scope);
+                result = evaluate(*value.clone(), new_scope.clone())?;
+                break;
             } else {
                 result = evaluate(statement.clone(), new_scope.clone())?;
             }

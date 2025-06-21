@@ -2,9 +2,12 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
-use crate::ast::{
-    binary::BinaryOperator,
-    comparison::{BooleanOperation, Comparison},
+use crate::{
+    ast::{
+        binary::BinaryOperator,
+        comparison::{BooleanOperation, Comparison},
+    },
+    runtime::scope::StopValue,
 };
 
 const IGNORE: [char; 1] = [';'];
@@ -38,6 +41,7 @@ pub enum TokenType {
     BinaryOperator(BinaryOperator),
     BinaryAssign(BinaryOperator),
     UnaryAssign(BinaryOperator),
+    Stop(StopValue),
     Not,
     Ref,
     RefMut,
@@ -53,14 +57,10 @@ pub enum TokenType {
     Arrow,
     Async,
     Func,
-    Return,
-    Break,
-    Continue,
     If,
     In,
     Or,
     This,
-    Scope,
     FullStop,
     EOF,
     Struct,
@@ -73,14 +73,16 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("const"), TokenType::Const),
         (String::from("let"), TokenType::Let),
         (String::from("enum"), TokenType::Enum),
-        (String::from("scope"), TokenType::Scope),
         (String::from("fn"), TokenType::Func),
         (String::from("else"), TokenType::Else),
         (String::from("list"), TokenType::List),
-        (String::from("return"), TokenType::Return),
+        (String::from("return"), TokenType::Stop(StopValue::Return)),
         (String::from("in"), TokenType::In),
-        (String::from("break"), TokenType::Break),
-        (String::from("continue"), TokenType::Continue),
+        (String::from("break"), TokenType::Stop(StopValue::Break)),
+        (
+            String::from("continue"),
+            TokenType::Stop(StopValue::Continue),
+        ),
         (String::from("if"), TokenType::If),
         (String::from("func"), TokenType::Func),
         (String::from("struct"), TokenType::Struct),

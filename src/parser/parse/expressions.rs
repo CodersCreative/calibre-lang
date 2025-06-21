@@ -1,6 +1,7 @@
 use crate::{
     lexer::LexerError,
     parser::{Parser, ParserError, SyntaxErr},
+    runtime::scope::StopValue,
 };
 use std::collections::HashMap;
 
@@ -17,6 +18,11 @@ impl Parser {
             TokenType::Integer => {
                 NodeType::IntegerLiteral(self.eat().value.trim().parse().unwrap())
             }
+            TokenType::Stop(x) => match x {
+                StopValue::Return => self.parse_return_declaration()?,
+                StopValue::Break => NodeType::Break,
+                StopValue::Continue => NodeType::Continue,
+            },
             TokenType::String => {
                 let val = self.eat().value;
                 if val.len() == 1 {

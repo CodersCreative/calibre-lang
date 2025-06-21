@@ -1,23 +1,29 @@
 use crate::{
     ast::{LoopType, RefMutability},
     parser::{Parser, ParserError, SyntaxErr},
+    runtime::scope::StopValue,
 };
 
 use crate::{ast::NodeType, lexer::TokenType, runtime::values::RuntimeType};
 
 impl Parser {
     pub fn parse_statement(&mut self) -> Result<NodeType, ParserError> {
-        match self.first().token_type {
+        match &self.first().token_type {
             TokenType::Let => self.parse_variable_declaration(),
             TokenType::Struct => self.parse_struct_declaration(),
             TokenType::Func => self.parse_function_declaration(false),
             TokenType::If => self.parse_if_statement(),
-            TokenType::Return => self.parse_return_declaration(),
+            TokenType::Stop(x) => match x {
+                StopValue::Return => self.parse_return_declaration(),
+                StopValue::Break => Ok(NodeType::Break),
+                StopValue::Continue => Ok(NodeType::Continue),
+            },
             TokenType::Trait => self.parse_if_statement(),
             TokenType::Impl => self.parse_impl_declaration(),
-            TokenType::Continue => Ok(NodeType::Continue),
-            TokenType::Break => Ok(NodeType::Break),
             TokenType::For => self.parse_loop_declaration(),
+            TokenType::OpenCurly => Ok(NodeType::ScopeDeclaration {
+                body: Box::new(self.parse_block()?),
+            }),
             _ => self.parse_expression(),
         }
     }
@@ -128,7 +134,7 @@ impl Parser {
     }
     pub fn parse_return_declaration(&mut self) -> Result<NodeType, ParserError> {
         let _ = self.expect_eat(
-            &TokenType::Return,
+            &TokenType::Stop(StopValue::Return),
             SyntaxErr::ExpectedKeyword(String::from("return")),
         )?;
 

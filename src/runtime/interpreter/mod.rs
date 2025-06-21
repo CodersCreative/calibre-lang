@@ -68,6 +68,22 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::IntegerLiteral(x) => Ok(RuntimeValue::Integer(x)),
         NodeType::StringLiteral(x) => Ok(RuntimeValue::Str(x)),
         NodeType::CharLiteral(x) => Ok(RuntimeValue::Char(x)),
+        NodeType::Return { value } => {
+            scope.borrow_mut().stop = Some(super::scope::StopValue::Return);
+            evaluate(*value, scope)
+        }
+        NodeType::Break => {
+            if scope.borrow().stop != Some(super::scope::StopValue::Return) {
+                scope.borrow_mut().stop = Some(super::scope::StopValue::Break);
+            }
+            Ok(RuntimeValue::Null)
+        }
+        NodeType::Continue => {
+            if scope.borrow().stop == None {
+                scope.borrow_mut().stop = Some(super::scope::StopValue::Continue);
+            }
+            Ok(RuntimeValue::Null)
+        }
         NodeType::BinaryExpression { .. } => evaluate_binary_expression(node, scope),
         NodeType::Program(_) => evaluate_program(node, scope),
         NodeType::Identifier(x) => evaluate_identifier(&x, scope),
@@ -84,6 +100,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::IfStatement { .. } => evaluate_if_statement(node, scope),
         NodeType::MemberExpression { .. } => evaluate_member_expression(node, scope),
         NodeType::ImplDeclaration { .. } => evaluate_impl_declaration(node, scope),
+        NodeType::ScopeDeclaration { .. } => evaluate_scope(node, scope),
         NodeType::NotExpression { .. } => evaluate_not(node, scope),
         NodeType::LoopDeclaration { .. } => evaluate_loop_declaration(node, scope),
         _ => Err(InterpreterErr::NotImplemented(node)),

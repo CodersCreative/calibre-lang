@@ -60,7 +60,8 @@ pub fn evaluate_loop_declaration(
                 };
                 if let NodeType::Return { value } = statement {
                     new_scope.borrow_mut().stop = Some(StopValue::Return);
-                    return Ok(evaluate(*value.clone(), new_scope.clone())?);
+                    result = evaluate(*value.clone(), new_scope.clone())?;
+                    break;
                 } else if let NodeType::Break = statement {
                     if scope.borrow_mut().stop != Some(StopValue::Return) {
                         new_scope.borrow_mut().stop = Some(StopValue::Break);
@@ -95,10 +96,10 @@ pub fn evaluate_loop_declaration(
                     result = handle_body(new_scope.clone())?;
 
                     match new_scope.borrow().stop {
-                        Some(StopValue::Break) => return Ok(result),
+                        Some(StopValue::Break) => break,
                         Some(StopValue::Return) => {
                             scope.borrow_mut().stop = Some(StopValue::Return);
-                            return Ok(result);
+                            break;
                         }
                         _ => {}
                     };
@@ -124,10 +125,10 @@ pub fn evaluate_loop_declaration(
                     result = handle_body(new_scope.clone())?;
 
                     match new_scope.borrow().stop {
-                        Some(StopValue::Break) => return Ok(result),
+                        Some(StopValue::Break) => break,
                         Some(StopValue::Return) => {
                             scope.borrow_mut().stop = Some(StopValue::Return);
-                            return Ok(result);
+                            break;
                         }
                         _ => {}
                     };
@@ -152,10 +153,10 @@ pub fn evaluate_loop_declaration(
                 result = handle_body(new_scope.clone())?;
 
                 match new_scope.borrow().stop {
-                    Some(StopValue::Break) => return Ok(result),
+                    Some(StopValue::Break) => break,
                     Some(StopValue::Return) => {
                         scope.borrow_mut().stop = Some(StopValue::Return);
-                        return Ok(result);
+                        break;
                     }
                     _ => {}
                 };

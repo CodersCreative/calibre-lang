@@ -6,11 +6,7 @@ use std::collections::HashMap;
 use binary::BinaryOperator;
 use comparison::Comparison;
 
-use crate::{
-    ast::comparison::BooleanOperation,
-    lexer::TokenType,
-    runtime::values::RuntimeType,
-};
+use crate::{ast::comparison::BooleanOperation, lexer::TokenType, runtime::values::RuntimeType};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RefMutability {
@@ -60,6 +56,9 @@ pub enum NodeType {
         identifier: String,
         options: Vec<(String, Option<HashMap<String, RuntimeType>>)>,
     },
+    ScopeDeclaration {
+        body: Box<Vec<NodeType>>,
+    },
     FunctionDeclaration {
         identifier: String,
         parameters: Vec<(String, RuntimeType, RefMutability)>,
@@ -98,7 +97,6 @@ pub enum NodeType {
         is_computed: bool,
     },
     CallExpression(Box<NodeType>, Box<Vec<NodeType>>),
-    EOL,
     BinaryExpression {
         left: Box<NodeType>,
         right: Box<NodeType>,
