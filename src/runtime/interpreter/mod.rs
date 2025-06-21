@@ -81,7 +81,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::FunctionDeclaration { .. } => evaluate_function_declaration(node, scope),
         NodeType::ComparisonExpression { .. } => evaluate_comparison_expression(node, scope),
         NodeType::BooleanExpression { .. } => evaluate_boolean_expression(node, scope),
-        NodeType::IfStatement { .. } => Ok(evaluate_if_statement(node, scope)?.0),
+        NodeType::IfStatement { .. } => evaluate_if_statement(node, scope),
         NodeType::MemberExpression { .. } => evaluate_member_expression(node, scope),
         NodeType::ImplDeclaration { .. } => evaluate_impl_declaration(node, scope),
         NodeType::NotExpression { .. } => evaluate_not(node, scope),

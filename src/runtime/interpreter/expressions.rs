@@ -8,7 +8,7 @@ use crate::{
     runtime::{
         interpreter::{InterpreterErr, evaluate, statements::evaluate_if_statement},
         scope::{
-            Scope, ScopeErr,
+            Scope, ScopeErr, StackValue,
             structs::{get_struct_function, resolve_struct_function},
             variables::{get_var, resolve_var},
         },
@@ -506,13 +506,13 @@ pub fn evaluate_function(
 
         let mut result: RuntimeValue = RuntimeValue::Null;
         for statement in &body.0 {
-            if let NodeType::IfStatement { .. } = statement {
-                let value = evaluate_if_statement(statement.clone(), new_scope.clone())?;
-                result = value.0;
-
-                if value.1 {
-                    return Ok(result);
-                }
+            if let Some(_) = new_scope
+                .borrow()
+                .stack
+                .iter()
+                .find(|x| *x == &StackValue::Return)
+            {
+                break;
             } else if let NodeType::Return { value } = statement {
                 return evaluate(*value.clone(), new_scope);
             } else {

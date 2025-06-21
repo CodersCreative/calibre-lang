@@ -4,7 +4,7 @@ use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
         interpreter::{InterpreterErr, evaluate, expressions::get_new_scope},
-        scope::{Scope, variables::get_var},
+        scope::{Scope, StackValue, variables::get_var},
         values::{RuntimeType, RuntimeValue, helper::Block},
     },
 };
@@ -46,19 +46,40 @@ pub fn evaluate_loop_declaration(
     scope: Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::LoopDeclaration { loop_type, body } = declaration {
-        let handle_body = |new_scope: Rc<RefCell<Scope>>| {
+        let handle_body = |new_scope: Rc<RefCell<Scope>>| -> Result<RuntimeValue, InterpreterErr> {
             let mut result = RuntimeValue::Null;
             for statement in body.iter() {
-                if let NodeType::IfStatement { .. } = statement {
-                    return evaluate_if_statement(statement.clone(), new_scope.clone());
+                println!("{:?}", new_scope.borrow().stack);
+                if let Some(_) = new_scope
+                    .borrow()
+                    .stack
+                    .iter()
+                    .find(|x| *x == &StackValue::Break || *x == &StackValue::Return)
+                {
+                    break;
+                } else if let Some(_) = new_scope
+                    .borrow()
+                    .stack
+                    .iter()
+                    .find(|x| *x == &StackValue::Continue)
+                {
+                    new_scope
+                        .borrow_mut()
+                        .stack
+                        .retain_mut(|x| x == &StackValue::Return);
+                    continue;
                 } else if let NodeType::Return { value } = statement {
-                    return Ok((evaluate(*value.clone(), new_scope)?, true));
+                    new_scope.borrow_mut().stack.push(StackValue::Return);
+                    return Ok(evaluate(*value.clone(), new_scope.clone())?);
+                } else if let NodeType::Break = statement {
+                    new_scope.borrow_mut().stack.push(StackValue::Break);
+                    return Ok(result);
                 } else {
                     result = evaluate(statement.clone(), new_scope.clone())?;
                 }
             }
 
-            Ok((result, false))
+            Ok(result)
         };
 
         let mut result = RuntimeValue::Null;
@@ -77,9 +98,22 @@ pub fn evaluate_loop_declaration(
                         )],
                         vec![NodeType::IntegerLiteral(i as i64)],
                     )?;
-                    let value = handle_body(new_scope)?;
-                    result = value.0;
-                    if value.1 {
+                    result = handle_body(new_scope.clone())?;
+
+                    if let Some(x) = new_scope
+                        .borrow()
+                        .stack
+                        .iter()
+                        .find(|x| *x == &StackValue::Break || *x == &StackValue::Return)
+                    {
+                        if let Some(_) = new_scope
+                            .borrow()
+                            .stack
+                            .iter()
+                            .find(|x| *x == &StackValue::Return)
+                        {
+                            scope.borrow_mut().stack.push(StackValue::Return);
+                        }
                         return Ok(result);
                     }
                 }
@@ -101,16 +135,22 @@ pub fn evaluate_loop_declaration(
                         },
                     );
 
-                    let value = handle_body(new_scope.clone())?;
-                    result = value.0;
-                    if value.1 {
-                        scope.borrow_mut().assign_var(
-                            &loop_name,
-                            RuntimeValue::List {
-                                data: data.clone(),
-                                data_type: data_type.clone(),
-                            },
-                        );
+                    result = handle_body(new_scope.clone())?;
+
+                    if let Some(x) = new_scope
+                        .borrow()
+                        .stack
+                        .iter()
+                        .find(|x| *x == &StackValue::Break || *x == &StackValue::Return)
+                    {
+                        if let Some(_) = new_scope
+                            .borrow()
+                            .stack
+                            .iter()
+                            .find(|x| *x == &StackValue::Return)
+                        {
+                            scope.borrow_mut().stack.push(StackValue::Return);
+                        }
                         return Ok(result);
                     }
 
@@ -131,9 +171,22 @@ pub fn evaluate_loop_declaration(
                     break;
                 }
                 let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
-                let value = handle_body(new_scope)?;
-                result = value.0;
-                if value.1 {
+                result = handle_body(new_scope.clone())?;
+
+                if let Some(x) = new_scope
+                    .borrow()
+                    .stack
+                    .iter()
+                    .find(|x| *x == &StackValue::Break || *x == &StackValue::Return)
+                {
+                    if let Some(_) = new_scope
+                        .borrow()
+                        .stack
+                        .iter()
+                        .find(|x| *x == &StackValue::Return)
+                    {
+                        scope.borrow_mut().stack.push(StackValue::Return);
+                    }
                     return Ok(result);
                 }
             }
@@ -205,7 +258,7 @@ pub fn evaluate_function_declaration(
 pub fn evaluate_if_statement(
     declaration: NodeType,
     scope: Rc<RefCell<Scope>>,
-) -> Result<(RuntimeValue, bool), InterpreterErr> {
+) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::IfStatement {
         comparisons,
         bodies,
@@ -217,13 +270,20 @@ pub fn evaluate_if_statement(
                     let mut result: RuntimeValue = RuntimeValue::Null;
                     for statement in bodies[i].iter() {
                         if let NodeType::Return { value } = statement {
-                            return Ok((evaluate(*value.clone(), scope.clone())?, true));
+                            scope.borrow_mut().stack.push(StackValue::Return);
+                            return Ok(evaluate(*value.clone(), scope.clone())?);
+                        } else if let NodeType::Break = statement {
+                            scope.borrow_mut().stack.push(StackValue::Break);
+                            return Ok(result);
+                        } else if let NodeType::Continue = statement {
+                            scope.borrow_mut().stack.push(StackValue::Continue);
+                            return Ok(result);
                         }
 
                         result = evaluate(statement.clone(), scope.clone())?;
                     }
 
-                    return Ok((result, false));
+                    return Ok(result);
                 }
             } else {
                 return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
@@ -235,15 +295,19 @@ pub fn evaluate_if_statement(
                 let mut result: RuntimeValue = RuntimeValue::Null;
                 for statement in last.iter() {
                     if let NodeType::Return { value } = statement {
-                        return Ok((evaluate(*value.clone(), scope.clone())?, true));
+                        scope.borrow_mut().stack.push(StackValue::Return);
+                        return Ok(evaluate(*value.clone(), scope.clone())?);
+                    } else if let NodeType::Break = statement {
+                        scope.borrow_mut().stack.push(StackValue::Break);
+                        return Ok(result);
                     }
                     result = evaluate(statement.clone(), scope.clone())?;
                 }
-                return Ok((result, false));
+                return Ok(result);
             }
         }
 
-        Ok((RuntimeValue::Null, false))
+        Ok(RuntimeValue::Null)
     } else {
         Err(InterpreterErr::NotImplemented(declaration))
     }

@@ -15,6 +15,8 @@ impl Parser {
             TokenType::Return => self.parse_return_declaration(),
             TokenType::Trait => self.parse_if_statement(),
             TokenType::Impl => self.parse_impl_declaration(),
+            TokenType::Continue => Ok(NodeType::Continue),
+            TokenType::Break => Ok(NodeType::Break),
             TokenType::For => self.parse_loop_declaration(),
             _ => self.parse_expression(),
         }

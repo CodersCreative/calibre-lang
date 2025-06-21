@@ -33,6 +33,13 @@ pub enum ScopeErr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum StackValue {
+    Return,
+    Break,
+    Continue,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Scope {
     pub parent: Option<Rc<RefCell<Self>>>,
     pub variables: HashMap<String, RuntimeValue>,
@@ -41,6 +48,7 @@ pub struct Scope {
     pub structs: HashMap<String, HashMap<String, RuntimeType>>,
     pub structs_functions: HashMap<String, HashMap<String, (RuntimeValue, bool)>>,
     pub constants: HashMap<String, RuntimeValue>,
+    pub stack: Vec<StackValue>,
 }
 
 fn get_global_variables() -> HashMap<String, RuntimeValue> {
@@ -77,6 +85,7 @@ impl Scope {
             enums: HashMap::new(),
             variables: HashMap::new(),
             structs: HashMap::new(),
+            stack: Vec::new(),
             structs_functions: HashMap::new(),
             parent,
         }

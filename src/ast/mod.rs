@@ -40,6 +40,8 @@ pub enum LoopType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
     Program(Box<Vec<NodeType>>),
+    Break,
+    Continue,
     VariableDeclaration {
         is_mutable: bool,
         identifier: String,
