@@ -376,13 +376,26 @@ impl RuntimeValue {
             RuntimeValue::Char(x) => {
                 RuntimeValue::into_type(&RuntimeValue::Str(x.clone().to_string()), scope, t)
             }
-            RuntimeValue::Enum(x, _, Some(z)) => match t {
-                RuntimeType::Struct(None) => Ok(RuntimeValue::Struct(z.clone(), None)),
-                RuntimeType::Struct(Some(_)) => {
-                    RuntimeValue::Struct(z.clone(), None).into_type(scope, t)
+            RuntimeValue::Enum(x, _, z) => match t.clone() {
+                RuntimeType::Struct(None) => {
+                    if let Some(z) = z {
+                        Ok(RuntimeValue::Struct(z.clone(), None))
+                    } else {
+                        panic_type()
+                    }
                 }
-                RuntimeType::Enum(x) => {
-                    if x == x {
+                RuntimeType::Struct(Some(y)) => {
+                    if let Some(z) = z {
+                        match RuntimeValue::Struct(z.clone(), None).into_type(scope.clone(), t) {
+                            Ok(x) => Ok(x),
+                            Err(_) => self.into_type(scope, RuntimeType::Enum(y)),
+                        }
+                    } else {
+                        self.into_type(scope, RuntimeType::Enum(y))
+                    }
+                }
+                RuntimeType::Enum(y) => {
+                    if x == &y {
                         Ok(self.clone())
                     } else {
                         panic_type()

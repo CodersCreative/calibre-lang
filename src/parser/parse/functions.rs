@@ -52,9 +52,6 @@ impl Parser {
                 if let NodeType::Identifier(identifier) = &object {
                     if let NodeType::Identifier(value) = &property {
                         let data = self.parse_potential_key_value()?;
-
-                        println!("{:?}::{:?}", &identifier, &property);
-
                         return Ok(NodeType::EnumExpression {
                             identifier: identifier.to_string(),
                             value: value.to_string(),
@@ -92,14 +89,14 @@ impl Parser {
 
         let _ = self.expect_eat(
             &close_token,
-            SyntaxErr::ExpectedOpeningBracket(close_token.clone()),
+            SyntaxErr::ExpectedClosingBracket(close_token.clone()),
         )?;
 
         Ok(args)
     }
 
     pub fn parse_arguments_list(&mut self) -> Result<Vec<NodeType>, ParserError> {
-        let mut args = vec![self.parse_assignment_expression()?];
+        let mut args = vec![self.parse_expression()?];
 
         while self.first().token_type == TokenType::Comma {
             let _ = self.eat();
@@ -107,7 +104,7 @@ impl Parser {
             {
                 break;
             }
-            args.push(self.parse_assignment_expression()?);
+            args.push(self.parse_expression()?);
         }
 
         Ok(args)
