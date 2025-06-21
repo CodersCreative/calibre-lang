@@ -38,6 +38,8 @@ pub enum InterpreterErr {
     ExpectedType(RuntimeValue, RuntimeType),
     #[error("Variable {0:?} has an unexpected type.")]
     UnexpectedType(RuntimeValue),
+    #[error("No associated enum item : {1:?} in enum {0:?}")]
+    UnexpectedEnumItem(String, String),
     #[error("Setters can only have one argument, {0:?}")]
     SetterArgs(Box<Vec<NodeType>>),
     #[error("Property not found, {0:?}")]
@@ -102,6 +104,8 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::ImplDeclaration { .. } => evaluate_impl_declaration(node, scope),
         NodeType::ScopeDeclaration { .. } => evaluate_scope(node, scope),
         NodeType::NotExpression { .. } => evaluate_not(node, scope),
+        NodeType::EnumDeclaration { .. } => evaluate_enum_declaration(node, scope),
+        NodeType::EnumExpression { .. } => evaluate_enum_expression(node, scope),
         NodeType::LoopDeclaration { .. } => evaluate_loop_declaration(node, scope),
         _ => Err(InterpreterErr::NotImplemented(node)),
     }

@@ -22,7 +22,7 @@ enum Language {
 }
 
 // language cannot change || it is a constant
-let language = Language.FRENCH;
+let language = Language.FRENCH{data : 1};
 let language_forced : Language = Language.FRENCH;
 
 let mut x = 100;

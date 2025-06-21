@@ -61,13 +61,15 @@ impl Parser {
             _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
         })
     }
-    pub fn parse_object_expression(&mut self) -> Result<NodeType, ParserError> {
-        if self.first().token_type != TokenType::OpenCurly {
-            return self.parse_boolean_expression();
-        }
 
+    pub fn parse_potential_key_value(
+        &mut self,
+    ) -> Result<HashMap<String, Option<NodeType>>, ParserError> {
+        let _ = self.expect_eat(
+            &TokenType::OpenCurly,
+            SyntaxErr::ExpectedOpeningBracket(TokenType::OpenCurly),
+        );
         let mut properties = HashMap::new();
-        let _ = self.eat();
 
         while !self.is_eof() && self.first().token_type != TokenType::CloseCurly {
             let key = self
@@ -97,7 +99,15 @@ impl Parser {
             SyntaxErr::ExpectedClosingBracket(TokenType::CloseCurly),
         )?;
 
-        Ok(NodeType::StructLiteral(properties))
+        Ok(properties)
+    }
+
+    pub fn parse_object_expression(&mut self) -> Result<NodeType, ParserError> {
+        if self.first().token_type != TokenType::OpenCurly {
+            return self.parse_boolean_expression();
+        }
+
+        Ok(NodeType::StructLiteral(self.parse_potential_key_value()?))
     }
 
     pub fn parse_assignment_expression(&mut self) -> Result<NodeType, ParserError> {

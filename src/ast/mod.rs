@@ -56,6 +56,11 @@ pub enum NodeType {
         identifier: String,
         options: Vec<(String, Option<HashMap<String, RuntimeType>>)>,
     },
+    EnumExpression {
+        identifier: String,
+        value: String,
+        data: Option<HashMap<String, Option<NodeType>>>,
+    },
     ScopeDeclaration {
         body: Box<Vec<NodeType>>,
     },

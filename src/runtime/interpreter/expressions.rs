@@ -9,6 +9,7 @@ use crate::{
         interpreter::{InterpreterErr, evaluate},
         scope::{
             Scope, ScopeErr, StopValue,
+            enums::get_enum,
             structs::get_struct_function,
             variables::{get_var, resolve_var},
         },
@@ -123,8 +124,19 @@ pub fn evaluate_member_expression(
                             if let Ok(struct_fn) =
                                 get_struct_function(scope.clone(), &struct_name, &caller)
                             {
-                                return Ok(evaluate_function(scope.clone(), struct_fn.0, *args)?);
+                                return evaluate_function(scope.clone(), struct_fn.0, *args);
                             }
+                        }
+                    } else if let NodeType::Identifier(value) = *property {
+                        if let Ok(_) = get_enum(scope.clone(), &struct_name) {
+                            return evaluate(
+                                NodeType::EnumExpression {
+                                    identifier: struct_name,
+                                    value,
+                                    data: None,
+                                },
+                                scope,
+                            );
                         }
                     }
 
@@ -272,6 +284,60 @@ fn get_nested_mut<'a>(
         }
     }
     Some(current_val)
+}
+
+pub fn evaluate_enum_expression(
+    exp: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let NodeType::EnumExpression {
+        identifier,
+        value,
+        data,
+    } = exp
+    {
+        let enm_class = get_enum(scope.clone(), &identifier)?;
+        if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
+            let mut new_data_vals = HashMap::new();
+            if let Some(properties) = &enm.1 {
+                let mut data_vals = HashMap::new();
+                if let Some(data) = data {
+                    for (k, v) in data {
+                        let value = if let Some(value) = v {
+                            evaluate(value, scope.clone())?
+                        } else {
+                            get_var(scope.clone(), &k)?
+                        };
+
+                        data_vals.insert(k, value);
+                    }
+                }
+
+                for property in properties {
+                    if let Some(val) = data_vals.get(property.0) {
+                        new_data_vals.insert(
+                            property.0.clone(),
+                            val.into_type(scope.clone(), property.1.clone())?,
+                        );
+                    } else {
+                        panic!();
+                    }
+                }
+            }
+
+            let data = if new_data_vals.is_empty() {
+                None
+            } else {
+                Some(Map(new_data_vals))
+            };
+
+            Ok(RuntimeValue::Enum(identifier, i, data))
+        } else {
+            Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
+        }
+    } else {
+        Err(InterpreterErr::NotImplemented(exp))
+    }
 }
 
 pub fn evaluate_binary_expression(

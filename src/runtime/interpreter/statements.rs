@@ -25,6 +25,22 @@ pub fn evaluate_program(
 
     Ok(last)
 }
+pub fn evaluate_enum_declaration(
+    declaration: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let NodeType::EnumDeclaration {
+        identifier,
+        options,
+    } = declaration
+    {
+        let _ = scope.borrow_mut().push_enum(identifier, options)?;
+        Ok(RuntimeValue::Null)
+    } else {
+        Err(InterpreterErr::NotImplemented(declaration))
+    }
+}
+
 pub fn evaluate_struct_declaration(
     declaration: NodeType,
     scope: Rc<RefCell<Scope>>,

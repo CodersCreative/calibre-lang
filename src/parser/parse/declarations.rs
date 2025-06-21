@@ -26,6 +26,7 @@ impl Parser {
             },
             TokenType::Trait => self.parse_if_statement(),
             TokenType::Impl => self.parse_impl_declaration(),
+            TokenType::Enum => self.parse_enum_declaration(),
             TokenType::For => self.parse_loop_declaration(),
             TokenType::OpenCurly => Ok(NodeType::ScopeDeclaration {
                 body: Box::new(self.parse_block()?),
@@ -174,6 +175,10 @@ impl Parser {
                 options.push((option, Some(data)));
             } else {
                 options.push((option, None));
+            }
+
+            if self.first().token_type == TokenType::Comma {
+                let _ = self.eat();
             }
         }
 

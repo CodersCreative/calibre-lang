@@ -48,6 +48,21 @@ impl Parser {
             };
 
             // let _ = self.eat();
+            if !is_computed && self.first().token_type == TokenType::OpenCurly {
+                if let NodeType::Identifier(identifier) = &object {
+                    if let NodeType::Identifier(value) = &property {
+                        let data = self.parse_potential_key_value()?;
+
+                        println!("{:?}::{:?}", &identifier, &property);
+
+                        return Ok(NodeType::EnumExpression {
+                            identifier: identifier.to_string(),
+                            value: value.to_string(),
+                            data: Some(data),
+                        });
+                    }
+                }
+            }
 
             object = NodeType::MemberExpression {
                 object: Box::new(object),
