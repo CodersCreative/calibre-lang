@@ -10,7 +10,7 @@ use crate::{
     runtime::{
         interpreter::{expressions::*, statements::*},
         scope::{Scope, ScopeErr},
-        values::{RuntimeType, RuntimeValue, ValueErr},
+        values::{RuntimeType, RuntimeValue, ValueErr, helper::StopValue},
     },
 };
 
@@ -73,18 +73,18 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::StringLiteral(x) => Ok(RuntimeValue::Str(x)),
         NodeType::CharLiteral(x) => Ok(RuntimeValue::Char(x)),
         NodeType::Return { value } => {
-            scope.borrow_mut().stop = Some(super::scope::StopValue::Return);
+            scope.borrow_mut().stop = Some(StopValue::Return);
             evaluate(*value, scope)
         }
         NodeType::Break => {
-            if scope.borrow().stop != Some(super::scope::StopValue::Return) {
-                scope.borrow_mut().stop = Some(super::scope::StopValue::Break);
+            if scope.borrow().stop != Some(StopValue::Return) {
+                scope.borrow_mut().stop = Some(StopValue::Break);
             }
             Ok(RuntimeValue::Null)
         }
         NodeType::Continue => {
             if scope.borrow().stop == None {
-                scope.borrow_mut().stop = Some(super::scope::StopValue::Continue);
+                scope.borrow_mut().stop = Some(StopValue::Continue);
             }
             Ok(RuntimeValue::Null)
         }

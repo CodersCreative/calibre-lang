@@ -7,7 +7,7 @@ use crate::{
         binary::BinaryOperator,
         comparison::{BooleanOperation, Comparison},
     },
-    runtime::scope::StopValue,
+    runtime::values::helper::StopValue,
 };
 
 const IGNORE: [char; 1] = [';'];

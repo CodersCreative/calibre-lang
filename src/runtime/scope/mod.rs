@@ -11,7 +11,10 @@ use std::{
 
 use thiserror::Error;
 
-use crate::runtime::values::{NativeFunctions, RuntimeValue};
+use crate::runtime::values::{
+    NativeFunctions, RuntimeValue,
+    helper::{Map, ObjectType, StopValue, VarType},
+};
 
 use super::values::RuntimeType;
 
@@ -31,24 +34,10 @@ pub enum ScopeErr {
     Function(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum StopValue {
-    Return,
-    Break,
-    Continue,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum VarType {
-    Mutable(Option<String>),
-    Immutable(Option<String>),
-    Constant,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object {
-    Enum(Vec<(String, Option<HashMap<String, RuntimeType>>)>),
-    Struct(HashMap<String, RuntimeType>),
+    Enum(Vec<(String, Option<ObjectType<RuntimeType>>)>),
+    Struct(ObjectType<RuntimeType>),
     NewType(RuntimeType),
 }
 

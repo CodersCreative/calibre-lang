@@ -9,7 +9,7 @@ use crate::{
     ast::{NodeType, RefMutability},
     lexer::{Token, TokenType},
     parser::{Parser, ParserError, SyntaxErr},
-    runtime::values::RuntimeType,
+    runtime::values::{RuntimeType, helper::ObjectType},
 };
 
 impl Parser {
@@ -113,6 +113,51 @@ impl Parser {
         )?;
 
         Ok(properties)
+    }
+
+    fn parse_key_type_list_object_val(
+        &mut self,
+        open_token: TokenType,
+        close_token: TokenType,
+    ) -> Result<ObjectType<RuntimeType>, ParserError> {
+        let mut tuple = Vec::new();
+        let mut properties = HashMap::new();
+
+        let _ = self.expect_eat(
+            &open_token,
+            SyntaxErr::ExpectedOpeningBracket(open_token.clone()),
+        );
+
+        let is_tuple = self.nth(1).token_type != TokenType::Colon;
+
+        while !self.is_eof() && self.first().token_type != close_token {
+            if is_tuple {
+                tuple.push(self.parse_type()?.expect("Expected data type."));
+            } else {
+                let key = self
+                    .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)?
+                    .value;
+
+                let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
+
+                properties.insert(key, self.parse_type()?.expect("Expected data type."));
+            }
+
+            if self.first().token_type != close_token {
+                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
+            }
+        }
+
+        let _ = self.expect_eat(
+            &close_token,
+            SyntaxErr::ExpectedClosingBracket(close_token.clone()),
+        )?;
+
+        if is_tuple {
+            Ok(ObjectType::Tuple(tuple))
+        } else {
+            Ok(ObjectType::Map(properties))
+        }
     }
 
     fn parse_key_type_list(
@@ -280,9 +325,11 @@ impl Parser {
         if self.first().token_type != TokenType::OpenBrackets {
             return self.parse_list_expression();
         }
-
         let mut values = Vec::new();
-        let _ = self.eat();
+        let _ = self.expect_eat(
+            &TokenType::OpenBrackets,
+            SyntaxErr::ExpectedOpeningBracket(TokenType::OpenBrackets),
+        );
 
         while !self.is_eof() && self.first().token_type != TokenType::CloseBrackets {
             values.push(self.parse_expression()?);
@@ -296,7 +343,6 @@ impl Parser {
             &TokenType::CloseBrackets,
             SyntaxErr::ExpectedClosingBracket(TokenType::CloseBrackets),
         );
-
         Ok(NodeType::TupleLiteral(Box::new(values)))
     }
 

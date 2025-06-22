@@ -4,8 +4,11 @@ use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
         interpreter::{InterpreterErr, evaluate, expressions::get_new_scope},
-        scope::{Object, Scope, StopValue, VarType, variables::get_var},
-        values::{RuntimeType, RuntimeValue, helper::Block},
+        scope::{Object, Scope, variables::get_var},
+        values::{
+            RuntimeType, RuntimeValue,
+            helper::{Block, StopValue, VarType},
+        },
     },
 };
 
@@ -146,7 +149,6 @@ pub fn evaluate_loop_declaration(
                 }
             }
         } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
-            println!("{:?}", loop_name);
             let (var, _) = get_var(scope.clone(), &loop_name)?;
             if let RuntimeValue::List {
                 mut data,

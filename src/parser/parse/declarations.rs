@@ -1,7 +1,7 @@
 use crate::{
     ast::{LoopType, RefMutability},
     parser::{Parser, ParserError, SyntaxErr},
-    runtime::scope::{StopValue, VarType},
+    runtime::values::helper::{ObjectType, StopValue, VarType},
 };
 
 use crate::{ast::NodeType, lexer::TokenType, runtime::values::RuntimeType};
@@ -176,8 +176,13 @@ impl Parser {
             let option = self.eat().value;
 
             if self.first().token_type == TokenType::OpenCurly {
-                let data = self.parse_key_type_list(TokenType::OpenCurly, TokenType::CloseCurly)?;
-                options.push((option, Some(data)));
+                options.push((
+                    option,
+                    Some(self.parse_key_type_list_object_val(
+                        TokenType::OpenCurly,
+                        TokenType::CloseCurly,
+                    )?),
+                ));
             } else {
                 options.push((option, None));
             }
@@ -208,9 +213,15 @@ impl Parser {
             .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
             .value;
 
+        let properties = if self.nth(2).token_type == TokenType::Colon {
+            ObjectType::Map(self.parse_key_type_list(TokenType::OpenCurly, TokenType::CloseCurly)?)
+        } else {
+            ObjectType::Tuple(self.parse_type_list(TokenType::OpenCurly, TokenType::CloseCurly)?)
+        };
+
         Ok(NodeType::StructDeclaration {
             identifier,
-            properties: self.parse_key_type_list(TokenType::OpenCurly, TokenType::CloseCurly)?,
+            properties,
         })
     }
 

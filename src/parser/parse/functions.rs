@@ -1,5 +1,6 @@
 use crate::parser::{Parser, ParserError, SyntaxErr};
 
+use crate::runtime::values::helper::ObjectType;
 use crate::{ast::NodeType, lexer::TokenType};
 
 impl Parser {
@@ -48,15 +49,17 @@ impl Parser {
             };
 
             // let _ = self.eat();
-            if !is_computed && self.first().token_type == TokenType::OpenCurly {
+            if !is_computed {
                 if let NodeType::Identifier(identifier) = &object {
                     if let NodeType::Identifier(value) = &property {
-                        let data = self.parse_potential_key_value()?;
-                        return Ok(NodeType::EnumExpression {
-                            identifier: identifier.to_string(),
-                            value: value.to_string(),
-                            data: Some(data),
-                        });
+                        if self.first().token_type == TokenType::OpenCurly {
+                            let data = self.parse_potential_key_value()?;
+                            return Ok(NodeType::EnumExpression {
+                                identifier: identifier.to_string(),
+                                value: value.to_string(),
+                                data: Some(data),
+                            });
+                        }
                     }
                 }
             }

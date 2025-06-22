@@ -4,7 +4,7 @@ the pub keyword is used to expose objects to other files */
 
 enum Language {
 	FRENCH { data : int},
-	ENGLISH,
+	ENGLISH { int},
 	SPANISH,
 }
 
@@ -12,7 +12,7 @@ struct CountryBase {
 	language : Language,
 }
 
-struct Country {}
+struct Country {Language}
 
 impl CountryBase {
 	fn get_language(&self) -> Language {
@@ -22,7 +22,11 @@ impl CountryBase {
 
 // language cannot change || it is a constant
 let language = Language.FRENCH{data : 1};
-const language_forced : Language = Language.ENGLISH;
+const language_forced : Language = Language.ENGLISH {6};
+
+let country : Country= {Language.SPANISH}
+
+print(language_forced);
 
 let mut x = 100;
 let mut b : (int, int) = (10, 10);
@@ -44,12 +48,15 @@ for x == y {
   print(x + y);
 }
 
-for i in range(0, 100, 5) {
+fn range2(start : int, stop : int, step : int) -> list(int) {
+  range(start, stop * 2, step * 2)
+}
+
+for i in range2(0, 100, 10) {
   print("val: " + i);
 }
 
-fn main(b : (int, int)) -> int {
-  print(b);
+fn main() -> int {
 	x = 50;
 	x++; // should increment by 1
 	x += 4 // same as x = x + 4
@@ -69,4 +76,4 @@ fn main(b : (int, int)) -> int {
 	return y;
 }
 
-main(b)
+main()

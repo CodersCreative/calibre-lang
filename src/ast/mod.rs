@@ -9,7 +9,10 @@ use comparison::Comparison;
 use crate::{
     ast::comparison::BooleanOperation,
     lexer::TokenType,
-    runtime::{scope::VarType, values::RuntimeType},
+    runtime::values::{
+        RuntimeType,
+        helper::{ObjectType, VarType},
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -54,16 +57,16 @@ pub enum NodeType {
     },
     StructDeclaration {
         identifier: String,
-        properties: HashMap<String, RuntimeType>,
+        properties: ObjectType<RuntimeType>,
     },
     EnumDeclaration {
         identifier: String,
-        options: Vec<(String, Option<HashMap<String, RuntimeType>>)>,
+        options: Vec<(String, Option<ObjectType<RuntimeType>>)>,
     },
     EnumExpression {
         identifier: String,
         value: String,
-        data: Option<HashMap<String, Option<NodeType>>>,
+        data: Option<ObjectType<Option<NodeType>>>,
     },
     ScopeDeclaration {
         body: Box<Vec<NodeType>>,
@@ -126,5 +129,5 @@ pub enum NodeType {
         comparisons: Box<Vec<NodeType>>,
         bodies: Vec<Box<Vec<NodeType>>>,
     },
-    StructLiteral(HashMap<String, Option<NodeType>>),
+    StructLiteral(ObjectType<Option<NodeType>>),
 }

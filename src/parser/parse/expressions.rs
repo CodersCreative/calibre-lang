@@ -1,7 +1,7 @@
 use crate::{
     lexer::LexerError,
     parser::{Parser, ParserError, SyntaxErr},
-    runtime::scope::StopValue,
+    runtime::values::helper::{ObjectType, StopValue},
 };
 use std::collections::HashMap;
 
@@ -64,17 +64,18 @@ impl Parser {
 
     pub fn parse_potential_key_value(
         &mut self,
-    ) -> Result<HashMap<String, Option<NodeType>>, ParserError> {
+    ) -> Result<ObjectType<Option<NodeType>>, ParserError> {
         let _ = self.expect_eat(
             &TokenType::OpenCurly,
             SyntaxErr::ExpectedOpeningBracket(TokenType::OpenCurly),
         );
+        let mut is_tuple = true;
+        let mut tuple = Vec::new();
         let mut properties = HashMap::new();
 
         while !self.is_eof() && self.first().token_type != TokenType::CloseCurly {
-            let key = self
-                .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)?
-                .value;
+            let key = self.first().value.clone();
+            tuple.push(Some(self.parse_expression()?));
 
             if [TokenType::Comma, TokenType::CloseCurly].contains(&self.first().token_type) {
                 if self.first().token_type != TokenType::CloseCurly {
@@ -84,6 +85,8 @@ impl Parser {
                 properties.insert(key, None);
                 continue;
             }
+
+            is_tuple = false;
 
             let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
 
@@ -99,7 +102,11 @@ impl Parser {
             SyntaxErr::ExpectedClosingBracket(TokenType::CloseCurly),
         )?;
 
-        Ok(properties)
+        if is_tuple {
+            Ok(ObjectType::Tuple(tuple))
+        } else {
+            Ok(ObjectType::Map(properties))
+        }
     }
 
     pub fn parse_object_expression(&mut self) -> Result<NodeType, ParserError> {

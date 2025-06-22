@@ -12,9 +12,12 @@ use thiserror::Error;
 
 use crate::{
     ast::RefMutability,
-    runtime::scope::{
-        Object, Scope, ScopeErr,
-        objects::{get_object, resolve_object},
+    runtime::{
+        scope::{
+            Object, Scope, ScopeErr,
+            objects::{get_object, resolve_object},
+        },
+        values::helper::ObjectType,
     },
 };
 
@@ -115,11 +118,11 @@ pub enum RuntimeValue {
     Float(f64),
     Integer(i64),
     Range(i32, i32),
-    Struct(Map<RuntimeValue>, Option<String>),
+    Struct(ObjectType<RuntimeValue>, Option<String>),
     Bool(bool),
     Str(String),
     Char(char),
-    Enum(String, usize, Option<Map<RuntimeValue>>),
+    Enum(String, usize, Option<ObjectType<RuntimeValue>>),
     Tuple(Vec<RuntimeValue>),
     List {
         data: Vec<RuntimeValue>,
@@ -200,10 +203,7 @@ impl RuntimeValue {
                         let RuntimeValue::Integer(amt) = args[0] else {
                             panic!()
                         };
-                        RuntimeValue::List {
-                            data: (0..amt).map(|x| RuntimeValue::Integer(x)).collect(),
-                            data_type: Box::new(Some(RuntimeType::Integer)),
-                        }
+                        RuntimeValue::Range(0, amt as i32)
                     } else if args.len() == 2 {
                         let RuntimeValue::Integer(start) = args[0] else {
                             panic!()
@@ -211,10 +211,7 @@ impl RuntimeValue {
                         let RuntimeValue::Integer(stop) = args[1] else {
                             panic!()
                         };
-                        RuntimeValue::List {
-                            data: (start..stop).map(|x| RuntimeValue::Integer(x)).collect(),
-                            data_type: Box::new(Some(RuntimeType::Integer)),
-                        }
+                        RuntimeValue::Range(start as i32, stop as i32)
                     } else if args.len() == 3 {
                         let RuntimeValue::Integer(start) = args[0] else {
                             panic!()
@@ -488,22 +485,55 @@ impl RuntimeValue {
                 RuntimeType::List(_) => list_case(),
                 _ => panic_type(),
             },
-            RuntimeValue::Struct(x, _) => match t {
+            RuntimeValue::Struct(ObjectType::Tuple(x), _) => match t {
                 RuntimeType::Struct(None) => Ok(self.clone()),
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Struct(Some(identifier)) => {
-                    let Object::Struct(properties) =
+                    let Object::Struct(ObjectType::Tuple(properties)) =
                         get_object(resolve_object(scope.clone(), &identifier)?, &identifier)?
                     else {
-                        panic!()
+                        return panic_type();
+                    };
+                    let mut new_values = Vec::new();
+
+                    for (i, property) in properties.iter().enumerate() {
+                        if let Some(val) = x.get(i as usize) {
+                            new_values.push(val.into_type(scope.clone(), property.clone())?);
+                        } else {
+                            return panic_type();
+                        }
+                    }
+
+                    Ok(RuntimeValue::Struct(
+                        ObjectType::Tuple(new_values),
+                        Some(identifier),
+                    ))
+                }
+                RuntimeType::Function { .. } => match t {
+                    RuntimeType::List(_) => list_case(),
+                    _ => panic_type(),
+                },
+                _ => panic_type(),
+            },
+            RuntimeValue::Struct(ObjectType::Map(x), _) => match t {
+                RuntimeType::Struct(None) => Ok(self.clone()),
+                RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
+                RuntimeType::Char => panic_type(),
+                RuntimeType::List(_) => list_case(),
+                RuntimeType::Range => panic_type(),
+                RuntimeType::Struct(Some(identifier)) => {
+                    let Object::Struct(ObjectType::Map(properties)) =
+                        get_object(resolve_object(scope.clone(), &identifier)?, &identifier)?
+                    else {
+                        return panic_type();
                     };
                     let mut new_values = HashMap::new();
 
                     for property in &properties {
-                        if let Some(val) = x.0.get(property.0) {
+                        if let Some(val) = x.get(property.0) {
                             new_values.insert(
                                 property.0.clone(),
                                 val.into_type(scope.clone(), property.1.clone())?,
@@ -513,7 +543,10 @@ impl RuntimeValue {
                         }
                     }
 
-                    Ok(RuntimeValue::Struct(Map(new_values), Some(identifier)))
+                    Ok(RuntimeValue::Struct(
+                        ObjectType::Map(new_values),
+                        Some(identifier),
+                    ))
                 }
                 RuntimeType::Function { .. } => match t {
                     RuntimeType::List(_) => list_case(),
