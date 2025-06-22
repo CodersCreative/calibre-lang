@@ -100,8 +100,28 @@ pub fn evaluate_loop_declaration(
         let mut result = RuntimeValue::Null;
 
         if let LoopType::For(identifier, range) = *loop_type {
-            if let RuntimeValue::Range(from, to) =
-                evaluate(range, scope.clone())?.into_type(scope.clone(), RuntimeType::Range)?
+            let range = evaluate(range, scope.clone())?;
+            if let RuntimeValue::List { data, data_type: _ } = range {
+                for d in data.into_iter() {
+                    let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
+                    let _ = new_scope.borrow_mut().push_var(
+                        identifier.clone(),
+                        d.clone(),
+                        VarType::Immutable(None),
+                    );
+                    result = handle_body(new_scope.clone())?;
+
+                    match new_scope.borrow().stop {
+                        Some(StopValue::Break) => break,
+                        Some(StopValue::Return) => {
+                            scope.borrow_mut().stop = Some(StopValue::Return);
+                            break;
+                        }
+                        _ => {}
+                    };
+                }
+            } else if let RuntimeValue::Range(from, to) =
+                range.into_type(scope.clone(), RuntimeType::Range)?
             {
                 for i in from..to {
                     let new_scope = get_new_scope(
@@ -126,6 +146,7 @@ pub fn evaluate_loop_declaration(
                 }
             }
         } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
+            println!("{:?}", loop_name);
             let (var, _) = get_var(scope.clone(), &loop_name)?;
             if let RuntimeValue::List {
                 mut data,

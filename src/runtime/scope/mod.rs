@@ -75,6 +75,10 @@ fn get_global_variables() -> HashMap<String, (RuntimeValue, VarType)> {
             String::from("print"),
             RuntimeValue::NativeFunction(NativeFunctions::Print),
         ),
+        (
+            String::from("range"),
+            RuntimeValue::NativeFunction(NativeFunctions::Range),
+        ),
         (String::from("INFINITY"), RuntimeValue::Float(f64::INFINITY)),
         (
             String::from("NEG_INFINITY"),

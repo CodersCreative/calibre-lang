@@ -34,6 +34,7 @@ impl From<ScopeErr> for ValueErr {
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum NativeFunctions {
     Print,
+    Range,
 }
 
 impl NativeFunctions {}
@@ -193,6 +194,47 @@ impl RuntimeValue {
                     println!("{}", output.trim());
 
                     RuntimeValue::Null
+                }
+                NativeFunctions::Range => {
+                    if args.len() <= 1 {
+                        let RuntimeValue::Integer(amt) = args[0] else {
+                            panic!()
+                        };
+                        RuntimeValue::List {
+                            data: (0..amt).map(|x| RuntimeValue::Integer(x)).collect(),
+                            data_type: Box::new(Some(RuntimeType::Integer)),
+                        }
+                    } else if args.len() == 2 {
+                        let RuntimeValue::Integer(start) = args[0] else {
+                            panic!()
+                        };
+                        let RuntimeValue::Integer(stop) = args[1] else {
+                            panic!()
+                        };
+                        RuntimeValue::List {
+                            data: (start..stop).map(|x| RuntimeValue::Integer(x)).collect(),
+                            data_type: Box::new(Some(RuntimeType::Integer)),
+                        }
+                    } else if args.len() == 3 {
+                        let RuntimeValue::Integer(start) = args[0] else {
+                            panic!()
+                        };
+                        let RuntimeValue::Integer(stop) = args[1] else {
+                            panic!()
+                        };
+                        let RuntimeValue::Integer(step) = args[2] else {
+                            panic!()
+                        };
+                        RuntimeValue::List {
+                            data: (start..stop)
+                                .step_by(step as usize)
+                                .map(|x| RuntimeValue::Integer(x))
+                                .collect(),
+                            data_type: Box::new(Some(RuntimeType::Integer)),
+                        }
+                    } else {
+                        RuntimeValue::Null
+                    }
                 }
             }
         } else {

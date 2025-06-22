@@ -44,8 +44,12 @@ for x == y {
   print(x + y);
 }
 
+for i in range(0, 100, 5) {
+  print("val: " + i);
+}
+
 fn main(b : (int, int)) -> int {
-print(b);
+  print(b);
 	x = 50;
 	x++; // should increment by 1
 	x += 4 // same as x = x + 4
