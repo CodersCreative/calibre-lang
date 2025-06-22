@@ -12,8 +12,8 @@ use thiserror::Error;
 use crate::{
     ast::RefMutability,
     runtime::scope::{
-        Scope, ScopeErr,
-        structs::{get_struct, resolve_struct},
+        Object, Scope, ScopeErr,
+        objects::{get_object, resolve_object},
     },
 };
 
@@ -414,8 +414,11 @@ impl RuntimeValue {
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Struct(Some(identifier)) => {
-                    let properties =
-                        get_struct(resolve_struct(scope.clone(), &identifier)?, &identifier)?;
+                    let Object::Struct(properties) =
+                        get_object(resolve_object(scope.clone(), &identifier)?, &identifier)?
+                    else {
+                        panic!()
+                    };
                     let mut new_values = HashMap::new();
 
                     for property in &properties {

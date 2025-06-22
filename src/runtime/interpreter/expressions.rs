@@ -6,9 +6,8 @@ use crate::{
     runtime::{
         interpreter::{InterpreterErr, evaluate},
         scope::{
-            Scope, ScopeErr, StopValue,
-            enums::get_enum,
-            structs::{get_struct, get_struct_function},
+            Object, Scope, ScopeErr, StopValue, VarType,
+            objects::{get_function, get_object},
             variables::{get_var, resolve_var},
         },
         values::{RuntimeType, RuntimeValue, ValueErr, helper::Map},
@@ -19,7 +18,7 @@ pub fn evaluate_identifier(
     identifier: &str,
     scope: Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
-    Ok(get_var(scope, identifier).clone()?)
+    Ok(get_var(scope, identifier)?.0)
 }
 
 pub fn assign_member_expression(
@@ -87,37 +86,43 @@ pub fn evaluate_member_expression(
             let object_val = match *object.clone() {
                 NodeType::Identifier(object_name) => {
                     if let Ok(var) = get_var(scope.clone(), &object_name) {
-                        var
-                    } else if let Ok(_) = get_enum(scope.clone(), &object_name) {
-                        if let NodeType::Identifier(value) = *property {
-                            return evaluate(
-                                NodeType::EnumExpression {
-                                    identifier: object_name,
-                                    value,
-                                    data: None,
-                                },
-                                scope,
-                            );
-                        } else {
-                            return Err(InterpreterErr::UnexpectedNode(*property));
-                        }
-                    } else if let Ok(_) = get_struct(scope.clone(), &object_name) {
-                        if let NodeType::CallExpression(caller, args) = *property {
-                            if let NodeType::Identifier(ref method_name) = *caller {
-                                if let Ok(val) =
-                                    get_struct_function(scope.clone(), &object_name, method_name)
-                                {
-                                    return evaluate_function(scope, val.0, *args);
+                        var.0
+                    } else if let Ok(obj) = get_object(scope.clone(), &object_name) {
+                        match obj {
+                            Object::Enum(_) => {
+                                if let NodeType::Identifier(value) = *property {
+                                    return evaluate(
+                                        NodeType::EnumExpression {
+                                            identifier: object_name,
+                                            value,
+                                            data: None,
+                                        },
+                                        scope,
+                                    );
                                 } else {
-                                    return Err(InterpreterErr::Value(ValueErr::Scope(
-                                        ScopeErr::StructFunction(method_name.to_string()),
-                                    )));
+                                    return Err(InterpreterErr::UnexpectedNode(*property));
                                 }
-                            } else {
-                                return Err(InterpreterErr::UnexpectedNode(*caller));
                             }
-                        } else {
-                            return Err(InterpreterErr::UnexpectedNode(*property));
+                            Object::Struct(_) => {
+                                if let NodeType::CallExpression(caller, args) = *property {
+                                    if let NodeType::Identifier(ref method_name) = *caller {
+                                        if let Ok(val) =
+                                            get_function(scope.clone(), &object_name, method_name)
+                                        {
+                                            return evaluate_function(scope, val.0, *args);
+                                        } else {
+                                            return Err(InterpreterErr::Value(ValueErr::Scope(
+                                                ScopeErr::Function(method_name.to_string()),
+                                            )));
+                                        }
+                                    } else {
+                                        return Err(InterpreterErr::UnexpectedNode(*caller));
+                                    }
+                                } else {
+                                    return Err(InterpreterErr::UnexpectedNode(*property));
+                                }
+                            }
+                            _ => todo!(),
                         }
                     } else {
                         return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(
@@ -160,7 +165,7 @@ pub fn evaluate_member_expression(
                         if let NodeType::Identifier(ref method_name) = *caller {
                             if let RuntimeValue::Struct(_, Some(ref struct_name)) = object_val {
                                 if let Ok(val) =
-                                    get_struct_function(scope.clone(), struct_name, method_name)
+                                    get_function(scope.clone(), struct_name, method_name)
                                 {
                                     let mut arguments = Vec::new();
 
@@ -220,7 +225,10 @@ pub fn evaluate_enum_expression(
         data,
     } = exp
     {
-        let enm_class = get_enum(scope.clone(), &identifier)?;
+        let Object::Enum(enm_class) = get_object(scope.clone(), &identifier)? else {
+            panic!()
+        };
+
         if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
             let mut new_data_vals = HashMap::new();
             if let Some(properties) = &enm.1 {
@@ -230,7 +238,7 @@ pub fn evaluate_enum_expression(
                         let value = if let Some(value) = v {
                             evaluate(value, scope.clone())?
                         } else {
-                            get_var(scope.clone(), &k)?
+                            get_var(scope.clone(), &k)?.0
                         };
 
                         data_vals.insert(k, value);
@@ -383,7 +391,7 @@ pub fn evaluate_struct_expression(
             let value = if let Some(value) = v {
                 evaluate(value, scope.clone())?
             } else {
-                get_var(scope.clone(), &k)?
+                get_var(scope.clone(), &k)?.0
             };
 
             properties.insert(k, value);
@@ -437,21 +445,25 @@ pub fn get_new_scope(
                 if let NodeType::Identifier(x) = &arguments[i] {
                     let (env, name) = resolve_var(new_scope.clone(), x)?;
 
-                    if m == &RefMutability::MutRef && env.borrow().constants.contains_key(&name) {
-                        return Err(InterpreterErr::MutRefNonMut(
-                            env.borrow().constants.get(&name).unwrap().clone(),
-                        ));
+                    let (var, var_type) = env.borrow().variables.get(&name).unwrap().clone();
+
+                    match var_type {
+                        VarType::Mutable(_) => {}
+                        _ if m == &RefMutability::MutRef => {
+                            return Err(InterpreterErr::MutRefNonMut(var));
+                        }
+                        _ => {}
                     }
-                    let var = get_var(env, &name)?;
                     let x = name.clone();
                     if var.is_type(scope.clone(), v.clone()) {
-                        new_scope.borrow_mut().alias.insert(k.to_string(), x);
                         let _ = new_scope.borrow_mut().push_var(
                             k.to_string(),
-                            &RuntimeValue::Null,
+                            RuntimeValue::Null,
                             match m {
-                                RefMutability::MutRef | RefMutability::MutValue => true,
-                                _ => false,
+                                RefMutability::MutRef | RefMutability::MutValue => {
+                                    VarType::Mutable(Some(x))
+                                }
+                                _ => VarType::Immutable(Some(x)),
                             },
                         )?;
                     } else {
@@ -466,10 +478,10 @@ pub fn get_new_scope(
                     .into_type(new_scope.clone(), v.clone())?;
                 new_scope.borrow_mut().push_var(
                     k.to_string(),
-                    &arg,
+                    arg,
                     match m {
-                        RefMutability::MutRef | RefMutability::MutValue => true,
-                        _ => false,
+                        RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable(None),
+                        _ => VarType::Immutable(None),
                     },
                 )?;
             }
@@ -578,30 +590,33 @@ pub fn evaluate_call_expression(
 
         if let NodeType::Identifier(caller) = *caller.clone() {
             if let Ok(scope_b) = resolve_var(scope, &caller) {
-                if scope_b.0.borrow().variables.contains_key(&scope_b.1) {
-                    if arguments.len() <= 0 {
-                        return Ok(get_var(scope_b.0, &scope_b.1)?);
-                    } else if arguments.len() == 1 {
-                        let _ = scope_b.0.borrow_mut().assign_var(
-                            &caller,
-                            evaluate(arguments[0].clone(), scope_b.0.clone())?,
-                        )?;
-                        return Ok(RuntimeValue::Null);
-                    } else {
-                        return Err(InterpreterErr::SetterArgs(arguments));
-                    }
-                } else if let Some(var) = scope_b.0.borrow().constants.get(&scope_b.1) {
-                    match var {
-                        NativeFunctions => {}
-                        _ => {
+                if let Some((var, var_type)) = scope_b.0.borrow().variables.get(&scope_b.1) {
+                    match var_type {
+                        VarType::Mutable(_) => {
                             if arguments.len() <= 0 {
-                                return Ok(get_var(scope_b.0.clone(), &scope_b.1)?);
+                                return Ok(var.clone());
+                            } else if arguments.len() == 1 {
+                                let _ = scope_b.0.borrow_mut().assign_var(
+                                    &caller,
+                                    evaluate(arguments[0].clone(), scope_b.0.clone())?,
+                                )?;
+                                return Ok(RuntimeValue::Null);
                             } else {
-                                return Err(InterpreterErr::Value(ValueErr::Scope(
-                                    ScopeErr::AssignConstant(scope_b.1),
-                                )));
+                                return Err(InterpreterErr::SetterArgs(arguments));
                             }
                         }
+                        _ => match var {
+                            NativeFunctions => {}
+                            _ => {
+                                if arguments.len() <= 0 {
+                                    return Ok(var.clone());
+                                } else {
+                                    return Err(InterpreterErr::Value(ValueErr::Scope(
+                                        ScopeErr::AssignConstant(scope_b.1),
+                                    )));
+                                }
+                            }
+                        },
                     }
                 }
             }

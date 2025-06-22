@@ -22,7 +22,7 @@ impl CountryBase {
 
 // language cannot change || it is a constant
 let language = Language.FRENCH{data : 1};
-let language_forced : Language = Language.ENGLISH;
+const language_forced : Language = Language.ENGLISH;
 
 let mut x = 100;
 let mut y : int = 0;

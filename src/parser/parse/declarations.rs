@@ -1,7 +1,7 @@
 use crate::{
     ast::{LoopType, RefMutability},
     parser::{Parser, ParserError, SyntaxErr},
-    runtime::scope::StopValue,
+    runtime::scope::{StopValue, VarType},
 };
 
 use crate::{ast::NodeType, lexer::TokenType, runtime::values::RuntimeType};
@@ -9,7 +9,7 @@ use crate::{ast::NodeType, lexer::TokenType, runtime::values::RuntimeType};
 impl Parser {
     pub fn parse_statement(&mut self) -> Result<NodeType, ParserError> {
         match &self.first().token_type {
-            TokenType::Let => self.parse_variable_declaration(),
+            TokenType::Let | TokenType::Const => self.parse_variable_declaration(),
             TokenType::Struct => self.parse_struct_declaration(),
             TokenType::Func => self.parse_function_declaration(false),
             TokenType::If => self.parse_if_statement(),
@@ -36,14 +36,19 @@ impl Parser {
     }
 
     pub fn parse_variable_declaration(&mut self) -> Result<NodeType, ParserError> {
-        let _ = self.expect_eat(
-            &TokenType::Let,
-            SyntaxErr::ExpectedKeyword(String::from("let")),
-        )?;
-        let is_mutable = self.first().token_type == TokenType::Mut;
-        if is_mutable {
-            let _ = self.eat();
-        }
+        let var_type = match self.eat().token_type {
+            TokenType::Const => VarType::Constant,
+            TokenType::Let => {
+                if let TokenType::Mut = self.first().token_type {
+                    let _ = self.eat();
+                    VarType::Mutable(None)
+                } else {
+                    VarType::Immutable(None)
+                }
+            }
+            _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
+        };
+
         let identifier = self
             .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedName)?
             .value;
@@ -58,21 +63,21 @@ impl Parser {
 
         Ok(match self.eat().token_type {
             TokenType::Equals => NodeType::VariableDeclaration {
-                is_mutable,
+                var_type,
                 identifier,
                 data_type,
                 value: Some(Box::new(self.parse_expression()?)),
             },
             _ => {
-                if !is_mutable {
+                if let VarType::Mutable(_) = var_type {
+                    NodeType::VariableDeclaration {
+                        var_type,
+                        identifier,
+                        value: None,
+                        data_type,
+                    }
+                } else {
                     return Err(self.get_err(SyntaxErr::NullConstant));
-                }
-
-                NodeType::VariableDeclaration {
-                    is_mutable,
-                    identifier,
-                    value: None,
-                    data_type,
                 }
             }
         })

@@ -4,7 +4,7 @@ use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
         interpreter::{InterpreterErr, evaluate, expressions::get_new_scope},
-        scope::{Scope, StopValue, variables::get_var},
+        scope::{Object, Scope, StopValue, VarType, variables::get_var},
         values::{RuntimeType, RuntimeValue, helper::Block},
     },
 };
@@ -34,7 +34,9 @@ pub fn evaluate_enum_declaration(
         options,
     } = declaration
     {
-        let _ = scope.borrow_mut().push_enum(identifier, options)?;
+        let _ = scope
+            .borrow_mut()
+            .push_object(identifier, Object::Enum(options))?;
         Ok(RuntimeValue::Null)
     } else {
         Err(InterpreterErr::NotImplemented(declaration))
@@ -50,7 +52,9 @@ pub fn evaluate_struct_declaration(
         properties,
     } = declaration
     {
-        let _ = scope.borrow_mut().push_struct(identifier, properties)?;
+        let _ = scope
+            .borrow_mut()
+            .push_object(identifier, Object::Struct(properties))?;
         Ok(RuntimeValue::Null)
     } else {
         Err(InterpreterErr::NotImplemented(declaration))
@@ -122,19 +126,22 @@ pub fn evaluate_loop_declaration(
                 }
             }
         } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
+            let (var, _) = get_var(scope.clone(), &loop_name)?;
             if let RuntimeValue::List {
                 mut data,
                 data_type,
-            } = get_var(scope.clone(), &loop_name)?
+            } = var
             {
                 for d in data.iter_mut() {
                     let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
                     let _ = new_scope.borrow_mut().push_var(
                         identifier.clone(),
-                        &d,
+                        d.clone(),
                         match mutability {
-                            RefMutability::MutRef | RefMutability::MutValue => true,
-                            _ => false,
+                            RefMutability::MutRef | RefMutability::MutValue => {
+                                VarType::Mutable(None)
+                            }
+                            _ => VarType::Immutable(None),
                         },
                     );
 
@@ -149,7 +156,7 @@ pub fn evaluate_loop_declaration(
                         _ => {}
                     };
 
-                    *d = get_var(new_scope, &identifier)?;
+                    *d = get_var(new_scope, &identifier)?.0;
                 }
 
                 scope.borrow_mut().assign_var(
@@ -203,7 +210,7 @@ pub fn evaluate_impl_declaration(
             {
                 let _ = scope
                     .borrow_mut()
-                    .push_struct_function(identifier.clone(), (iden, func, function.1))?;
+                    .push_function(identifier.clone(), (iden, func, function.1))?;
             } else {
                 return Err(InterpreterErr::ExpectedFunctions);
             }
@@ -235,7 +242,9 @@ pub fn evaluate_function_declaration(
             is_async,
         };
 
-        let _ = scope.borrow_mut().push_var(identifier, &value, false)?;
+        let _ = scope
+            .borrow_mut()
+            .push_var(identifier, value.clone(), VarType::Immutable(None))?;
         Ok(value)
     } else {
         Err(InterpreterErr::NotImplemented(declaration))
@@ -316,7 +325,7 @@ pub fn evaluate_variable_declaration(
     scope: Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::VariableDeclaration {
-        is_mutable,
+        var_type,
         identifier,
         value,
         data_type,
@@ -333,7 +342,7 @@ pub fn evaluate_variable_declaration(
 
         let _ = scope
             .borrow_mut()
-            .push_var(identifier, &value, is_mutable)?;
+            .push_var(identifier, value.clone(), var_type)?;
 
         Ok(value)
     } else {
