@@ -400,6 +400,22 @@ pub fn evaluate_struct_expression(
 
     Ok(RuntimeValue::Struct(Map(properties), None))
 }
+pub fn evaluate_tuple_expression(
+    obj: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    let mut values = Vec::new();
+
+    if let NodeType::TupleLiteral(vals) = obj {
+        for val in vals.iter() {
+            values.push(evaluate(val.clone(), scope.clone())?);
+        }
+    }
+
+    // let types: Vec<RuntimeType> = values.into_iter().map(|x| x.into()).collect();
+
+    Ok(RuntimeValue::Tuple(values))
+}
 
 pub fn evaluate_list_expression(
     obj: NodeType,

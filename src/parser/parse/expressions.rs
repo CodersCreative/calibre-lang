@@ -111,7 +111,7 @@ impl Parser {
     }
 
     pub fn parse_assignment_expression(&mut self) -> Result<NodeType, ParserError> {
-        let mut left = self.parse_list_expression()?;
+        let mut left = self.parse_tuple_expression()?;
 
         if let TokenType::UnaryAssign(op) = self.first().token_type.clone() {
             let _ = self.eat();
@@ -139,13 +139,13 @@ impl Parser {
                 identifier: Box::new(left.clone()),
                 value: Box::new(NodeType::BinaryExpression {
                     left: Box::new(left),
-                    right: Box::new(self.parse_list_expression()?),
+                    right: Box::new(self.parse_tuple_expression()?),
                     operator: op,
                 }),
             };
         } else if [TokenType::Equals].contains(&self.first().token_type) {
             let _ = self.eat();
-            let right = self.parse_list_expression()?;
+            let right = self.parse_tuple_expression()?;
             left = NodeType::AssignmentExpression {
                 identifier: Box::new(left),
                 value: Box::new(right),

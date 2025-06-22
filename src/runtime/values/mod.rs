@@ -7,6 +7,7 @@ use std::{
 };
 
 use helper::{Block, Map};
+use rand::seq::IndexedRandom;
 use thiserror::Error;
 
 use crate::{
@@ -45,6 +46,7 @@ pub enum RuntimeType {
     Str,
     Char,
     Enum(String),
+    Tuple(Vec<RuntimeType>),
     List(Box<Option<RuntimeType>>),
     Range,
     Function {
@@ -82,6 +84,7 @@ impl Into<RuntimeType> for RuntimeValue {
             Self::Str(_) => RuntimeType::Str,
             Self::Char(_) => RuntimeType::Char,
             Self::Range(_, _) => RuntimeType::Range,
+            Self::Tuple(data) => RuntimeType::Tuple(data.into_iter().map(|x| x.into()).collect()),
             Self::List { data, data_type } => RuntimeType::List(data_type),
             Self::Function {
                 identifier,
@@ -116,6 +119,7 @@ pub enum RuntimeValue {
     Str(String),
     Char(char),
     Enum(String, usize, Option<Map<RuntimeValue>>),
+    Tuple(Vec<RuntimeValue>),
     List {
         data: Vec<RuntimeValue>,
         data_type: Box<Option<RuntimeType>>,
@@ -145,6 +149,7 @@ impl ToString for RuntimeValue {
             Self::Struct(x, _) => format!("{:?}", x),
             Self::NativeFunction(x) => format!("native function : {:?}", x),
             Self::List { data, data_type: _ } => format!("{:?}", data),
+            Self::Tuple(data) => format!("{:?}", data),
             Self::Str(x) => x.to_string(),
             Self::Char(x) => x.to_string(),
             Self::Function {
@@ -202,6 +207,23 @@ impl RuntimeValue {
             RuntimeValue::Struct(_, _) => match self.into_type(scope, t) {
                 Ok(_) => true,
                 Err(_) => false,
+            },
+            RuntimeValue::Tuple(data) => match t {
+                RuntimeType::Tuple(data_types) => {
+                    if data.len() != data_types.len() {
+                        false
+                    } else {
+                        let mut valid = true;
+                        for i in 0..data.len() {
+                            if !data[i].is_type(scope.clone(), data_types[i].clone()) {
+                                valid = false;
+                                break;
+                            }
+                        }
+                        valid
+                    }
+                }
+                _ => false,
             },
             RuntimeValue::Str(_) => match t {
                 RuntimeType::Str => true,
@@ -318,9 +340,24 @@ impl RuntimeValue {
                 RuntimeType::Struct(_) => panic_type(),
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::List(_) => list_case(),
+                RuntimeType::Tuple(_) => panic_type(),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::Function { .. } => panic_type(),
                 RuntimeType::Enum { .. } => panic_type(),
+            },
+            RuntimeValue::Tuple(data) => match t {
+                RuntimeType::Tuple(data_types) => {
+                    if data.len() == data_types.len() {
+                        let mut valid = Vec::new();
+                        for i in 0..data.len() {
+                            valid.push(data[i].into_type(scope.clone(), data_types[i].clone())?);
+                        }
+                        Ok(RuntimeValue::Tuple(valid))
+                    } else {
+                        panic_type()
+                    }
+                }
+                _ => panic_type(),
             },
             RuntimeValue::Float(x) => match t {
                 RuntimeType::Integer => Ok(RuntimeValue::Integer(*x as i64)),
@@ -339,6 +376,7 @@ impl RuntimeValue {
                 RuntimeType::Char => panic_type(),
                 RuntimeType::Function { .. } => panic_type(),
                 RuntimeType::Enum { .. } => panic_type(),
+                RuntimeType::Tuple(_) => panic_type(),
             },
             RuntimeValue::Range(from, to) => match t {
                 RuntimeType::Range => Ok(self.clone()),
@@ -367,6 +405,7 @@ impl RuntimeValue {
                     })
                 }
                 RuntimeType::List(_) => list_case(),
+                RuntimeType::Tuple(_) => panic_type(),
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Function { .. } => panic_type(),
                 RuntimeType::Enum { .. } => panic_type(),

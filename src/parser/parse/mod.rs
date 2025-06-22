@@ -216,9 +216,15 @@ impl Parser {
     }
 
     pub fn parse_type(&mut self) -> Result<Option<RuntimeType>, ParserError> {
-        let t = self.eat();
+        let t = self.first().clone();
 
-        if t.token_type == TokenType::Func || t.token_type == TokenType::Async {
+        if t.token_type == TokenType::OpenBrackets {
+            Ok(Some(RuntimeType::Tuple(self.parse_type_list(
+                TokenType::OpenBrackets,
+                TokenType::CloseBrackets,
+            )?)))
+        } else if t.token_type == TokenType::Func || t.token_type == TokenType::Async {
+            let _ = self.eat();
             let is_async = if t.token_type == TokenType::Async {
                 let _ = self.expect_eat(
                     &TokenType::Func,
@@ -244,6 +250,7 @@ impl Parser {
                 is_async,
             }))
         } else if t.token_type == TokenType::List {
+            let _ = self.eat();
             let t = if self.first().token_type == TokenType::OpenBrackets {
                 let _ = self.eat();
                 let t = Some(self.parse_type()?.expect("Expected data type"));
@@ -257,6 +264,7 @@ impl Parser {
             };
             Ok(Some(RuntimeType::List(Box::new(t))))
         } else {
+            let _ = self.eat();
             match RuntimeType::from_str(&t.value) {
                 Ok(x) => Ok(Some(x)),
                 Err(_) => Ok(None),
@@ -266,6 +274,30 @@ impl Parser {
 
     pub fn parse_expression(&mut self) -> Result<NodeType, ParserError> {
         self.parse_assignment_expression()
+    }
+
+    pub fn parse_tuple_expression(&mut self) -> Result<NodeType, ParserError> {
+        if self.first().token_type != TokenType::OpenBrackets {
+            return self.parse_list_expression();
+        }
+
+        let mut values = Vec::new();
+        let _ = self.eat();
+
+        while !self.is_eof() && self.first().token_type != TokenType::CloseBrackets {
+            values.push(self.parse_expression()?);
+
+            if self.first().token_type != TokenType::CloseBrackets {
+                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
+            }
+        }
+
+        let _ = self.expect_eat(
+            &TokenType::CloseBrackets,
+            SyntaxErr::ExpectedClosingBracket(TokenType::CloseBrackets),
+        );
+
+        Ok(NodeType::TupleLiteral(Box::new(values)))
     }
 
     pub fn parse_list_expression(&mut self) -> Result<NodeType, ParserError> {

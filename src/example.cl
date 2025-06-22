@@ -25,6 +25,9 @@ let language = Language.FRENCH{data : 1};
 const language_forced : Language = Language.ENGLISH;
 
 let mut x = 100;
+let mut b : (int, int) = (10, 10);
+
+
 let mut y : int = 0;
 let mut list_dyn = [0, 10, 30, 50]; // Arrays are dynamic by default
 let mut lst : list(int) = [0, 40, 20]; // A static array 
@@ -41,7 +44,8 @@ for x == y {
   print(x + y);
 }
 
-fn main() -> int {
+fn main(b : (int, int)) -> int {
+print(b);
 	x = 50;
 	x++; // should increment by 1
 	x += 4 // same as x = x + 4
@@ -61,4 +65,4 @@ fn main() -> int {
 	return y;
 }
 
-main()
+main(b)
