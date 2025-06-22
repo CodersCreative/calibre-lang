@@ -187,7 +187,8 @@ pub fn evaluate_member_expression(
                                     let mut arguments = Vec::new();
 
                                     if val.1 {
-                                        arguments = vec![NodeType::Identifier(var_name.clone())];
+                                        arguments =
+                                            vec![(NodeType::Identifier(var_name.clone()), None)];
                                     }
 
                                     arguments.extend(*args);
@@ -502,47 +503,54 @@ pub fn evaluate_list_expression(
 
 pub fn get_new_scope(
     scope: Rc<RefCell<Scope>>,
-    parameters: Vec<(String, RuntimeType, RefMutability)>,
-    arguments: Vec<NodeType>,
+    parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)>,
+    arguments: Vec<(NodeType, Option<NodeType>)>,
 ) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
+    // println!("{:?}", arguments);
     let new_scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
 
-    for (i, (k, v, m)) in parameters.iter().enumerate() {
-        match m {
-            RefMutability::MutRef | RefMutability::Ref => {
-                if let NodeType::Identifier(x) = &arguments[i] {
-                    let (env, name) = resolve_var(new_scope.clone(), x)?;
+    for (i, (k, v, m, d)) in parameters.iter().enumerate() {
+        if m == &RefMutability::MutRef || m == &RefMutability::Ref {
+            if let Some(arg) = &arguments.get(i) {
+                if let None = arg.1 {
+                    if let NodeType::Identifier(x) = &arg.0 {
+                        let (env, name) = resolve_var(new_scope.clone(), x)?;
 
-                    let (var, var_type) = env.borrow().variables.get(&name).unwrap().clone();
+                        let (var, var_type) = env.borrow().variables.get(&name).unwrap().clone();
 
-                    match var_type {
-                        VarType::Mutable(_) => {}
-                        _ if m == &RefMutability::MutRef => {
-                            return Err(InterpreterErr::MutRefNonMut(var));
+                        match var_type {
+                            VarType::Mutable(_) => {}
+                            _ if m == &RefMutability::MutRef => {
+                                return Err(InterpreterErr::MutRefNonMut(var));
+                            }
+                            _ => {}
                         }
-                        _ => {}
-                    }
-                    let x = name.clone();
-                    if var.is_type(scope.clone(), v.clone()) {
-                        let _ = new_scope.borrow_mut().push_var(
-                            k.to_string(),
-                            RuntimeValue::Null,
-                            match m {
-                                RefMutability::MutRef | RefMutability::MutValue => {
-                                    VarType::Mutable(Some(x))
-                                }
-                                _ => VarType::Immutable(Some(x)),
-                            },
-                        )?;
+                        let x = name.clone();
+                        if var.is_type(scope.clone(), v.clone()) {
+                            let _ = new_scope.borrow_mut().push_var(
+                                k.to_string(),
+                                RuntimeValue::Null,
+                                match m {
+                                    RefMutability::MutRef | RefMutability::MutValue => {
+                                        VarType::Mutable(Some(x))
+                                    }
+                                    _ => VarType::Immutable(Some(x)),
+                                },
+                            )?;
+                        } else {
+                            return Err(InterpreterErr::UnexpectedType(var));
+                        }
+
+                        continue;
                     } else {
-                        return Err(InterpreterErr::UnexpectedType(var));
+                        return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
                     }
-                } else {
-                    return Err(InterpreterErr::RefNonVar(arguments[0].clone()));
                 }
             }
-            _ => {
-                let arg = evaluate(arguments[i].clone(), new_scope.clone())?
+        }
+        if let Some(arg) = arguments.get(i) {
+            if let None = arg.1 {
+                let arg = evaluate(arg.0.clone(), new_scope.clone())?
                     .into_type(new_scope.clone(), v.clone())?;
                 new_scope.borrow_mut().push_var(
                     k.to_string(),
@@ -552,8 +560,40 @@ pub fn get_new_scope(
                         _ => VarType::Immutable(None),
                     },
                 )?;
+                continue;
             }
         }
+        if let Some(d) = arguments.iter().find(|x| {
+            if let NodeType::Identifier(key) = &x.0 {
+                key == k && x.1.is_some()
+            } else {
+                false
+            }
+        }) {
+            let _ = new_scope.borrow_mut().push_var(
+                k.to_string(),
+                evaluate(d.1.clone().unwrap(), scope.clone())?,
+                match m {
+                    RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable(None),
+                    _ => VarType::Immutable(None),
+                },
+            )?;
+            continue;
+        }
+
+        if let Some(d) = d {
+            let _ = new_scope.borrow_mut().push_var(
+                k.to_string(),
+                d.clone(),
+                match m {
+                    RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable(None),
+                    _ => VarType::Immutable(None),
+                },
+            )?;
+            continue;
+        }
+
+        return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
     }
 
     Ok(new_scope)
@@ -588,7 +628,7 @@ pub fn evaluate_scope(
 pub fn evaluate_function(
     scope: Rc<RefCell<Scope>>,
     func: RuntimeValue,
-    arguments: Vec<NodeType>,
+    arguments: Vec<(NodeType, Option<NodeType>)>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let RuntimeValue::Function {
         identifier,
@@ -634,21 +674,32 @@ pub fn evaluate_call_expression(
                 return evaluate_function(scope, func, *arguments);
             }
             RuntimeValue::List { data, data_type } if arguments.len() == 1 => {
-                match evaluate(arguments[0].clone(), scope)? {
+                match evaluate(arguments[0].0.clone(), scope)? {
                     RuntimeValue::Integer(i) if arguments.len() == 1 => {
                         return Ok(data
                             .get(i as usize)
                             .expect("Tried to get index that is larger than list size")
                             .clone());
                     }
-                    _ => return Err(InterpreterErr::IndexNonList(arguments[0].clone())),
+                    _ => return Err(InterpreterErr::IndexNonList(arguments[0].0.clone())),
                 }
             }
             RuntimeValue::NativeFunction(_) => {
                 let mut evaluated_arguments = Vec::new();
 
                 for arg in arguments.iter() {
-                    evaluated_arguments.push(evaluate(arg.clone(), scope.clone())?);
+                    evaluated_arguments.push(if let Some(d) = &arg.1 {
+                        if let NodeType::Identifier(name) = &arg.0 {
+                            (
+                                RuntimeValue::Str(name.clone()),
+                                Some(evaluate(d.clone(), scope.clone())?),
+                            )
+                        } else {
+                            panic!()
+                        }
+                    } else {
+                        (evaluate(arg.0.clone(), scope.clone())?, None)
+                    });
                 }
 
                 return Ok(func.call_native(evaluated_arguments, scope));
@@ -666,7 +717,7 @@ pub fn evaluate_call_expression(
                             } else if arguments.len() == 1 {
                                 let _ = scope_b.0.borrow_mut().assign_var(
                                     &caller,
-                                    evaluate(arguments[0].clone(), scope_b.0.clone())?,
+                                    evaluate(arguments[0].0.clone(), scope_b.0.clone())?,
                                 )?;
                                 return Ok(RuntimeValue::Null);
                             } else {

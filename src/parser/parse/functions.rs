@@ -1,3 +1,5 @@
+use std::default;
+
 use crate::parser::{Parser, ParserError, SyntaxErr};
 
 use crate::runtime::values::helper::ObjectType;
@@ -78,7 +80,7 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Result<Vec<NodeType>, ParserError> {
+    ) -> Result<Vec<(NodeType, Option<NodeType>)>, ParserError> {
         let _ = self.expect_eat(
             &open_token,
             SyntaxErr::ExpectedOpeningBracket(open_token.clone()),
@@ -98,16 +100,43 @@ impl Parser {
         Ok(args)
     }
 
-    pub fn parse_arguments_list(&mut self) -> Result<Vec<NodeType>, ParserError> {
-        let mut args = vec![self.parse_expression()?];
+    pub fn parse_arguments_list(
+        &mut self,
+    ) -> Result<Vec<(NodeType, Option<NodeType>)>, ParserError> {
+        let mut defaulted = false;
+
+        let mut args = vec![{
+            if defaulted || self.nth(1).token_type == TokenType::Equals {
+                (self.parse_primary_expression()?, {
+                    let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
+                    defaulted = true;
+                    Some(self.parse_expression()?)
+                })
+            } else {
+                (self.parse_expression()?, None)
+            }
+        }];
 
         while self.first().token_type == TokenType::Comma {
             let _ = self.eat();
+
+            args.push({
+                if defaulted || self.nth(1).token_type == TokenType::Equals {
+                    (self.parse_primary_expression()?, {
+                        let _ =
+                            self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
+                        defaulted = true;
+                        Some(self.parse_expression()?)
+                    })
+                } else {
+                    (self.parse_expression()?, None)
+                }
+            });
+
             if [TokenType::CloseCurly, TokenType::CloseBrackets].contains(&self.first().token_type)
             {
                 break;
             }
-            args.push(self.parse_expression()?);
         }
 
         Ok(args)

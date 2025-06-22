@@ -296,7 +296,7 @@ impl Parser {
                 let _ = self.eat();
             }
 
-            parameters.push((self.eat().value, RuntimeType::Str, ref_mutability));
+            parameters.push((self.eat().value, RuntimeType::Str, ref_mutability, None));
 
             if self.first().token_type == TokenType::Comma {
                 let mut other = self.parse_key_type_list_ordered_with_ref(

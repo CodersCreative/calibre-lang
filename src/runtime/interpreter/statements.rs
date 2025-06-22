@@ -133,8 +133,9 @@ pub fn evaluate_loop_declaration(
                             identifier.clone(),
                             RuntimeType::Integer,
                             RefMutability::Value,
+                            None,
                         )],
-                        vec![NodeType::IntegerLiteral(i as i64)],
+                        vec![(NodeType::IntegerLiteral(i as i64), None)],
                     )?;
                     result = handle_body(new_scope.clone())?;
 
@@ -257,9 +258,21 @@ pub fn evaluate_function_declaration(
         is_async,
     } = declaration
     {
+        let mut params = Vec::new();
+
+        for p in parameters.into_iter() {
+            let default = if let Some(node) = p.3 {
+                Some(evaluate(node, scope.clone())?)
+            } else {
+                None
+            };
+
+            params.push((p.0, p.1, p.2, default));
+        }
+
         let value = RuntimeValue::Function {
             identifier: identifier.clone(),
-            parameters,
+            parameters: params,
             body: Block(*body),
             return_type,
             is_async,

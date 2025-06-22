@@ -48,11 +48,11 @@ for x == y {
   print(x + y);
 }
 
-fn range2(start : int, stop : int, step : int) -> list(int) {
+fn range2(stop : int, start : int = 0, step : int = 10) -> list(int) {
   range(start, stop * 2, step * 2)
 }
 
-for i in range2(0, 100, 10) {
+for i in range2(100, step = 10) {
   print("val: " + i);
 }
 

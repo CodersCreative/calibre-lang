@@ -43,8 +43,9 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Result<Vec<(String, RuntimeType, RefMutability)>, ParserError> {
+    ) -> Result<Vec<(String, RuntimeType, RefMutability, Option<NodeType>)>, ParserError> {
         let mut properties = Vec::new();
+        let mut defaulted = false;
         let _ = self.expect_eat(
             &open_token,
             SyntaxErr::ExpectedOpeningBracket(open_token.clone()),
@@ -63,11 +64,17 @@ impl Parser {
                 let _ = self.eat();
             }
 
-            properties.push((
-                key,
-                self.parse_type()?.expect("Expected data type."),
-                ref_mutability,
-            ));
+            let typ = self.parse_type()?.expect("Expected data type.");
+
+            let default = if defaulted || self.first().token_type == TokenType::Equals {
+                let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
+                defaulted = true;
+                Some(self.parse_expression()?)
+            } else {
+                None
+            };
+
+            properties.push((key, typ, ref_mutability, default));
 
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;

@@ -73,7 +73,7 @@ pub enum NodeType {
     },
     FunctionDeclaration {
         identifier: String,
-        parameters: Vec<(String, RuntimeType, RefMutability)>,
+        parameters: Vec<(String, RuntimeType, RefMutability, Option<NodeType>)>,
         body: Box<Vec<NodeType>>,
         return_type: Option<RuntimeType>,
         is_async: bool,
@@ -109,7 +109,7 @@ pub enum NodeType {
         property: Box<NodeType>,
         is_computed: bool,
     },
-    CallExpression(Box<NodeType>, Box<Vec<NodeType>>),
+    CallExpression(Box<NodeType>, Box<Vec<(NodeType, Option<NodeType>)>>),
     BinaryExpression {
         left: Box<NodeType>,
         right: Box<NodeType>,

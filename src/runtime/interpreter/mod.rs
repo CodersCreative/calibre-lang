@@ -43,7 +43,7 @@ pub enum InterpreterErr {
     #[error("No associated enum item : {1:?} in enum {0:?}")]
     UnexpectedEnumItem(String, String),
     #[error("Setters can only have one argument, {0:?}")]
-    SetterArgs(Box<Vec<NodeType>>),
+    SetterArgs(Box<Vec<(NodeType, Option<NodeType>)>>),
     #[error("Property not found, {0:?}")]
     PropertyNotFound(String),
 }
