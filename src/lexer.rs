@@ -290,7 +290,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
 
     Ok(tokens)
 }
-// write unit tests for the tokenize function
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -323,5 +323,107 @@ mod tests {
             assert_eq!(fin_tokens[i], token.token_type);
         }
     }
-}
 
+    #[test]
+    fn test_tokenize_float_and_string() {
+        let input = String::from("let pi = 3.14; let msg = \"hello\";");
+        let fin_tokens = vec![
+            TokenType::Let,
+            TokenType::Identifier,
+            TokenType::Equals,
+            TokenType::Float,
+            TokenType::Let,
+            TokenType::Identifier,
+            TokenType::Equals,
+            TokenType::String,
+            TokenType::EOF,
+        ];
+        let tokens = tokenize(input).unwrap();
+        for (i, token) in tokens.iter().enumerate() {
+            assert_eq!(fin_tokens[i], token.token_type);
+        }
+    }
+
+    #[test]
+    fn test_tokenize_operators_and_assignments() {
+        let input = String::from("x += 2; y--; z *= 3;");
+        let fin_tokens = vec![
+            TokenType::Identifier,
+            TokenType::BinaryAssign(BinaryOperator::Add),
+            TokenType::Integer,
+            TokenType::Identifier,
+            TokenType::UnaryAssign(BinaryOperator::Subtract),
+            TokenType::Identifier,
+            TokenType::BinaryAssign(BinaryOperator::Multiply),
+            TokenType::Integer,
+            TokenType::EOF,
+        ];
+        let tokens = tokenize(input).unwrap();
+        for (i, token) in tokens.iter().enumerate() {
+            assert_eq!(fin_tokens[i], token.token_type);
+        }
+    }
+
+    #[test]
+    fn test_tokenize_special_keywords() {
+        let input = String::from("if x >= 10 && y <= 5 { return; }");
+        let fin_tokens = vec![
+            TokenType::If,
+            TokenType::Identifier,
+            TokenType::Comparison(Comparison::GreaterEqual),
+            TokenType::Integer,
+            TokenType::Boolean(BooleanOperation::And),
+            TokenType::Identifier,
+            TokenType::Comparison(Comparison::LesserEqual),
+            TokenType::Integer,
+            TokenType::OpenCurly,
+            TokenType::Stop(StopValue::Return),
+            TokenType::CloseCurly,
+            TokenType::EOF,
+        ];
+        let tokens = tokenize(input).unwrap();
+        for (i, token) in tokens.iter().enumerate() {
+            assert_eq!(fin_tokens[i], token.token_type);
+        }
+    }
+
+    #[test]
+    fn test_tokenize_comment_skipping() {
+        let input = String::from("let x = 1; // this is a comment\nx = x + 1;");
+        let fin_tokens = vec![
+            TokenType::Let,
+            TokenType::Identifier,
+            TokenType::Equals,
+            TokenType::Integer,
+            TokenType::Identifier,
+            TokenType::Equals,
+            TokenType::Identifier,
+            TokenType::BinaryOperator(BinaryOperator::Add),
+            TokenType::Integer,
+            TokenType::EOF,
+        ];
+        let tokens = tokenize(input).unwrap();
+        for (i, token) in tokens.iter().enumerate() {
+            assert_eq!(fin_tokens[i], token.token_type);
+        }
+    }
+
+    #[test]
+    fn test_tokenize_multiline_comment() {
+        let input = String::from("let x = 1; /* comment \n block */ x = 2;");
+        let fin_tokens = vec![
+            TokenType::Let,
+            TokenType::Identifier,
+            TokenType::Equals,
+            TokenType::Integer,
+            TokenType::Identifier,
+            TokenType::Equals,
+            TokenType::Integer,
+            TokenType::EOF,
+        ];
+        let tokens = tokenize(input).unwrap();
+        for (i, token) in tokens.iter().enumerate() {
+            assert_eq!(fin_tokens[i], token.token_type);
+        }
+    }
+}
