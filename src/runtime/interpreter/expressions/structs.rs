@@ -121,3 +121,124 @@ pub fn evaluate_enum_expression(
         Err(InterpreterErr::NotImplemented(exp))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::NodeType;
+    use crate::runtime::interpreter::statements::structs::{
+        evaluate_enum_declaration, evaluate_struct_declaration,
+    };
+    use crate::runtime::scope::{Object, Scope};
+    use crate::runtime::values::RuntimeType;
+    use crate::runtime::values::{RuntimeValue, helper::ObjectType};
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::rc::Rc;
+
+    fn new_scope() -> Rc<RefCell<Scope>> {
+        Rc::new(RefCell::new(Scope::new(None)))
+    }
+
+    #[test]
+    fn test_evaluate_struct_expression_map() {
+        let scope = new_scope();
+        let mut props = HashMap::new();
+        props.insert("a".to_string(), Some(NodeType::IntegerLiteral(1)));
+        props.insert("b".to_string(), Some(NodeType::IntegerLiteral(2)));
+        let node = NodeType::StructLiteral(ObjectType::Map(props));
+        let result = evaluate_struct_expression(node, scope).unwrap();
+        match result {
+            RuntimeValue::Struct(ObjectType::Map(map), _) => {
+                assert_eq!(map.get("a"), Some(&RuntimeValue::Integer(1)));
+                assert_eq!(map.get("b"), Some(&RuntimeValue::Integer(2)));
+            }
+            _ => panic!("Expected Struct(Map)"),
+        }
+    }
+
+    #[test]
+    fn test_evaluate_struct_expression_tuple() {
+        let scope = new_scope();
+        let node = NodeType::StructLiteral(ObjectType::Tuple(vec![
+            Some(NodeType::IntegerLiteral(1)),
+            Some(NodeType::IntegerLiteral(2)),
+        ]));
+        let result = evaluate_struct_expression(node, scope).unwrap();
+        match result {
+            RuntimeValue::Struct(ObjectType::Tuple(vals), _) => {
+                assert_eq!(
+                    vals,
+                    vec![RuntimeValue::Integer(1), RuntimeValue::Integer(2)]
+                );
+            }
+            _ => panic!("Expected Struct(Tuple)"),
+        }
+    }
+
+    #[test]
+    fn test_evaluate_struct_expression_null() {
+        let scope = new_scope();
+        let node = NodeType::IntegerLiteral(42);
+        let result = evaluate_struct_expression(node, scope).unwrap();
+        assert_eq!(result, RuntimeValue::Null);
+    }
+
+    #[test]
+    fn test_evaluate_enum_expression_map() {
+        let scope = new_scope();
+        let mut enum_props = HashMap::new();
+        enum_props.insert("y".to_string(), RuntimeType::Integer);
+        let enum_node = NodeType::EnumDeclaration {
+            identifier: "MyEnum".to_string(),
+            options: vec![(String::from("x"), Some(ObjectType::Map(enum_props)))],
+        };
+        evaluate_enum_declaration(enum_node, scope.clone()).unwrap();
+
+        let exp = NodeType::EnumExpression {
+            identifier: "MyEnum".to_string(),
+            value: "x".to_string(),
+            data: Some(ObjectType::Map(HashMap::from([(
+                "y".to_string(),
+                Some(NodeType::IntegerLiteral(10)),
+            )]))),
+        };
+        let result = evaluate_enum_expression(exp, scope).unwrap();
+        match result {
+            RuntimeValue::Enum(ident, variant_index, data) => {
+                assert_eq!(ident, "MyEnum");
+                assert_eq!(variant_index, 0);
+                assert!(data.is_some());
+            }
+            _ => panic!("Expected Enum"),
+        }
+    }
+
+    #[test]
+    fn test_evaluate_enum_expression_tuple() {
+        let scope = new_scope();
+        let enum_node = NodeType::EnumDeclaration {
+            identifier: "MyEnum".to_string(),
+            options: vec![(
+                String::from("Foo"),
+                Some(ObjectType::Tuple(vec![RuntimeType::Integer])),
+            )],
+        };
+        evaluate_enum_declaration(enum_node, scope.clone()).unwrap();
+
+        let exp = NodeType::EnumExpression {
+            identifier: "MyEnum".to_string(),
+            value: "Foo".to_string(),
+            data: Some(ObjectType::Tuple(vec![Some(NodeType::IntegerLiteral(10))])),
+        };
+        let result = evaluate_enum_expression(exp, scope).unwrap();
+        match result {
+            RuntimeValue::Enum(ident, variant_index, data) => {
+                assert_eq!(ident, "MyEnum");
+                assert_eq!(variant_index, 0);
+                assert!(data.is_some());
+            }
+            _ => panic!("Expected Enum"),
+        }
+    }
+}

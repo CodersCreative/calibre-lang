@@ -95,18 +95,16 @@ pub fn evaluate_call_expression(
         }
 
         if let NodeType::Identifier(caller) = *caller.clone() {
-            if let Ok(scope_b) = resolve_var(scope, &caller) {
-                if let Some((var, var_type)) = scope_b.0.borrow().variables.get(&scope_b.1) {
+            if let Ok((scope, name)) = resolve_var(scope, &caller) {
+                if let Some((var, var_type)) = scope.borrow().variables.get(&name).clone() {
                     match var_type {
                         VarType::Mutable(_) => {
                             if arguments.len() <= 0 {
                                 return Ok(var.clone());
                             } else if arguments.len() == 1 {
-                                let _ = scope_b.0.borrow_mut().assign_var(
-                                    &caller,
-                                    evaluate(arguments[0].0.clone(), scope_b.0.clone())?,
-                                )?;
-                                return Ok(RuntimeValue::Null);
+                                let value = evaluate(arguments[0].0.clone(), scope.clone())?;
+                                let _ = scope.borrow_mut().assign_var(&caller, value.clone())?;
+                                return Ok(value);
                             } else {
                                 return Err(InterpreterErr::SetterArgs(arguments));
                             }
@@ -118,7 +116,7 @@ pub fn evaluate_call_expression(
                                     return Ok(var.clone());
                                 } else {
                                     return Err(InterpreterErr::Value(ValueErr::Scope(
-                                        ScopeErr::AssignConstant(scope_b.1),
+                                        ScopeErr::AssignConstant(name),
                                     )));
                                 }
                             }
@@ -130,5 +128,105 @@ pub fn evaluate_call_expression(
         panic!("Cannot call non-variable or function value, {:?}", func);
     } else {
         Err(InterpreterErr::NotImplemented(exp))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::NodeType;
+    use crate::runtime::scope::Scope;
+    use crate::runtime::values::RuntimeType;
+    use crate::runtime::values::helper::Block;
+    use crate::runtime::values::{
+        RuntimeValue,
+        helper::{StopValue, VarType},
+    };
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    fn new_scope() -> Rc<RefCell<Scope>> {
+        Rc::new(RefCell::new(Scope::new(None)))
+    }
+
+    #[test]
+    fn test_evaluate_function_simple_return() {
+        let scope = new_scope();
+        let func = RuntimeValue::Function {
+            identifier: "foo".to_string(),
+            parameters: vec![],
+            body: Block(vec![NodeType::Return {
+                value: Box::new(NodeType::IntegerLiteral(42)),
+            }]),
+            return_type: Some(RuntimeType::Integer),
+            is_async: false,
+        };
+        let result = evaluate_function(scope, func, vec![]).unwrap();
+        assert_eq!(result, RuntimeValue::Integer(42));
+    }
+
+    #[test]
+    fn test_evaluate_call_expression_function() {
+        let scope = new_scope();
+        let func = RuntimeValue::Function {
+            identifier: "foo".to_string(),
+            parameters: vec![],
+            body: Block(vec![NodeType::Return {
+                value: Box::new(NodeType::IntegerLiteral(7)),
+            }]),
+            return_type: Some(RuntimeType::Integer),
+            is_async: false,
+        };
+        scope
+            .borrow_mut()
+            .push_var("foo".to_string(), func.clone(), VarType::Constant)
+            .unwrap();
+
+        let call_node = NodeType::CallExpression(
+            Box::new(NodeType::Identifier("foo".to_string())),
+            Box::new(vec![]),
+        );
+        let result = evaluate_call_expression(call_node, scope).unwrap();
+        assert_eq!(result, RuntimeValue::Integer(7));
+    }
+
+    #[test]
+    fn test_evaluate_call_expression_variable_get() {
+        let scope = new_scope();
+        scope
+            .borrow_mut()
+            .push_var(
+                "x".to_string(),
+                RuntimeValue::Integer(99),
+                VarType::Mutable(None),
+            )
+            .unwrap();
+
+        let call_node = NodeType::CallExpression(
+            Box::new(NodeType::Identifier("x".to_string())),
+            Box::new(vec![]),
+        );
+        let result = evaluate_call_expression(call_node, scope).unwrap();
+        assert_eq!(result, RuntimeValue::Integer(99));
+    }
+
+    #[test]
+    fn test_evaluate_call_expression_list_index() {
+        let scope = new_scope();
+        let list = RuntimeValue::List {
+            data: vec![RuntimeValue::Integer(10), RuntimeValue::Integer(20)],
+            data_type: Box::new(None),
+        };
+        scope
+            .borrow_mut()
+            .push_var("lst".to_string(), list, VarType::Constant)
+            .unwrap();
+
+        let call_node = NodeType::CallExpression(
+            Box::new(NodeType::Identifier("lst".to_string())),
+            Box::new(vec![(NodeType::IntegerLiteral(1), None)]),
+        );
+        let result = evaluate_call_expression(call_node, scope).unwrap();
+        assert_eq!(result, RuntimeValue::Integer(20));
     }
 }
