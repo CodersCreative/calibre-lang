@@ -8,7 +8,25 @@ use thiserror::Error;
 use crate::{
     ast::{NodeType, binary::ASTError},
     runtime::{
-        interpreter::{expressions::*, statements::*},
+        interpreter::{
+            expressions::{
+                call::evaluate_call_expression,
+                lists::{evaluate_list_expression, evaluate_tuple_expression},
+                member::evaluate_member_expression,
+                scope::evaluate_scope,
+                structs::{evaluate_enum_expression, evaluate_struct_expression},
+                *,
+            },
+            statements::{
+                comparisons::evaluate_if_statement,
+                loops::evaluate_loop_declaration,
+                structs::{
+                    evaluate_enum_declaration, evaluate_impl_declaration,
+                    evaluate_struct_declaration,
+                },
+                *,
+            },
+        },
         scope::{Scope, ScopeErr},
         values::{RuntimeType, RuntimeValue, ValueErr, helper::StopValue},
     },

@@ -142,3 +142,111 @@ impl Parser {
         Ok(args)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::NodeType;
+    use crate::lexer::{Token, TokenType, tokenize};
+
+    fn parser_with_tokens(tokens: Vec<Token>) -> Parser {
+        Parser { tokens }
+    }
+
+    #[test]
+    fn test_parse_call_member_expression_simple_call() {
+        let tokens = tokenize(String::from("foo()")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let result = parser.parse_call_member_expression();
+        assert!(result.is_ok());
+        match result.unwrap() {
+            NodeType::CallExpression(_, _) => {}
+            _ => panic!("Expected CallExpression"),
+        }
+    }
+    #[test]
+    fn test_parse_call_expression_member_nested() {
+        let tokens = tokenize(String::from("foo.bar()")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let first_call = parser.parse_call_member_expression().unwrap();
+        match first_call {
+            NodeType::MemberExpression { property, .. } => match *property {
+                NodeType::CallExpression(_, _) | NodeType::Identifier(_) => {}
+                _ => panic!("Expected nested CallExpression or Identifier"),
+            },
+            _ => panic!("Expected CallExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_call_expression_nested() {
+        let tokens = tokenize(String::from("foo()()")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let first_call = parser.parse_call_member_expression().unwrap();
+        match first_call {
+            NodeType::CallExpression(inner, _) => match *inner {
+                NodeType::CallExpression(_, _) | NodeType::Identifier(_) => {}
+                _ => panic!("Expected nested CallExpression or Identifier"),
+            },
+            _ => panic!("Expected CallExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_member_expression_dot_access() {
+        let tokens = tokenize(String::from("foo.bar")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let result = parser.parse_member_expression();
+        assert!(result.is_ok());
+        match result.unwrap() {
+            NodeType::MemberExpression { .. } => {}
+            _ => panic!("Expected MemberExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_member_expression_computed_access() {
+        let tokens = tokenize(String::from("foo[bar]")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let result = parser.parse_member_expression();
+        assert!(result.is_ok());
+        match result.unwrap() {
+            NodeType::MemberExpression {
+                is_computed: true, ..
+            } => {}
+            _ => panic!("Expected computed MemberExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_arguments_empty() {
+        let tokens = tokenize(String::from("()")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let result = parser.parse_arguments(TokenType::OpenBrackets, TokenType::CloseBrackets);
+        assert!(result.is_ok());
+        let args = result.unwrap();
+        assert_eq!(args.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_arguments_with_values() {
+        let tokens = tokenize(String::from("(a, b)")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let result = parser.parse_arguments(TokenType::OpenBrackets, TokenType::CloseBrackets);
+        assert!(result.is_ok());
+        let args = result.unwrap();
+        assert_eq!(args.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_arguments_with_default() {
+        let tokens = tokenize(String::from("(a, b = 1)")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let result = parser.parse_arguments(TokenType::OpenBrackets, TokenType::CloseBrackets);
+        assert!(result.is_ok());
+        let args = result.unwrap();
+        assert_eq!(args.len(), 2);
+        assert!(args[0].1.is_none());
+        assert!(args[1].1.is_some());
+    }
+}

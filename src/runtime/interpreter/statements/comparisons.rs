@@ -1,0 +1,121 @@
+use std::{cell::RefCell, rc::Rc};
+
+use crate::{
+    ast::NodeType,
+    runtime::{
+        interpreter::{InterpreterErr, evaluate},
+        scope::Scope,
+        values::{RuntimeValue, helper::StopValue},
+    },
+};
+
+pub fn evaluate_if_statement(
+    declaration: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let NodeType::IfStatement {
+        comparisons,
+        bodies,
+    } = declaration
+    {
+        for (i, comparison) in comparisons.iter().enumerate() {
+            if let RuntimeValue::Bool(x) = evaluate(comparison.clone(), scope.clone())? {
+                if x {
+                    let mut result: RuntimeValue = RuntimeValue::Null;
+                    for statement in bodies[i].iter() {
+                        if let NodeType::Return { value } = statement {
+                            scope.borrow_mut().stop = Some(StopValue::Return);
+                            return Ok(evaluate(*value.clone(), scope.clone())?);
+                        } else if let NodeType::Break = statement {
+                            if scope.borrow().stop != Some(StopValue::Return) {
+                                scope.borrow_mut().stop = Some(StopValue::Break);
+                            }
+                            return Ok(result);
+                        } else if let NodeType::Continue = statement {
+                            if scope.borrow().stop == None {
+                                scope.borrow_mut().stop = Some(StopValue::Continue);
+                            }
+                            return Ok(result);
+                        }
+
+                        result = evaluate(statement.clone(), scope.clone())?;
+                    }
+
+                    return Ok(result);
+                }
+            } else {
+                return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
+            }
+        }
+
+        if comparisons.len() < bodies.len() {
+            if let Some(last) = bodies.last() {
+                let mut result: RuntimeValue = RuntimeValue::Null;
+                for statement in last.iter() {
+                    if let NodeType::Return { value } = statement {
+                        scope.borrow_mut().stop = Some(StopValue::Return);
+                        return Ok(evaluate(*value.clone(), scope.clone())?);
+                    } else if let NodeType::Break = statement {
+                        if scope.borrow().stop != Some(StopValue::Return) {
+                            scope.borrow_mut().stop = Some(StopValue::Break);
+                        }
+                        return Ok(result);
+                    } else if let NodeType::Continue = statement {
+                        if scope.borrow().stop == None {
+                            scope.borrow_mut().stop = Some(StopValue::Continue);
+                        }
+                        return Ok(result);
+                    }
+                    result = evaluate(statement.clone(), scope.clone())?;
+                }
+                return Ok(result);
+            }
+        }
+
+        Ok(RuntimeValue::Null)
+    } else {
+        Err(InterpreterErr::NotImplemented(declaration))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
+    use crate::{
+        ast::NodeType,
+        runtime::{
+            interpreter::statements::comparisons::evaluate_if_statement, scope::Scope,
+            values::RuntimeValue,
+        },
+    };
+
+    fn new_scope() -> Rc<RefCell<Scope>> {
+        Rc::new(RefCell::new(Scope::new(None)))
+    }
+
+    #[test]
+    fn test_evaluate_if_statement_true_branch() {
+        let scope = new_scope();
+        let node = NodeType::IfStatement {
+            comparisons: Box::new(vec![NodeType::Identifier(String::from("true"))]),
+            bodies: vec![Box::new(vec![NodeType::IntegerLiteral(123)])],
+        };
+        let result = evaluate_if_statement(node, scope.clone()).unwrap();
+        assert_eq!(result, RuntimeValue::Integer(123));
+    }
+
+    #[test]
+    fn test_evaluate_if_statement_false_else() {
+        let scope = new_scope();
+        let node = NodeType::IfStatement {
+            comparisons: Box::new(vec![NodeType::Identifier(String::from("false"))]),
+            bodies: vec![
+                Box::new(vec![NodeType::IntegerLiteral(1)]),
+                Box::new(vec![NodeType::IntegerLiteral(2)]),
+            ],
+        };
+        let result = evaluate_if_statement(node, scope.clone()).unwrap();
+        assert_eq!(result, RuntimeValue::Integer(2));
+    }
+}

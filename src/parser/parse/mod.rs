@@ -377,3 +377,66 @@ impl Parser {
         Ok(NodeType::ListLiteral(Box::new(values)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::{Token, TokenType, tokenize};
+
+    fn parser_with_tokens(tokens: Vec<Token>) -> Parser {
+        Parser { tokens }
+    }
+
+    #[test]
+    fn test_parse_key_type_list_ordered() {
+        let tokens = tokenize(String::from("{a : int, b : float}")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let result =
+            parser.parse_key_type_list_ordered(TokenType::OpenCurly, TokenType::CloseCurly);
+        assert!(result.is_ok());
+        let props = result.unwrap();
+        assert_eq!(props.len(), 2);
+        assert_eq!(props[0].0, "a");
+        assert_eq!(props[1].0, "b");
+    }
+
+    #[test]
+    fn test_parse_type_list() {
+        let tokens = tokenize(String::from("(int, float)")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let result = parser.parse_type_list(TokenType::OpenBrackets, TokenType::CloseBrackets);
+        assert!(result.is_ok());
+        let types = result.unwrap();
+        assert_eq!(types.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_key_type_list_object_val_tuple() {
+        let tokens = tokenize(String::from("(int, float)")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let result = parser
+            .parse_key_type_list_object_val(TokenType::OpenBrackets, TokenType::CloseBrackets);
+        assert!(result.is_ok());
+        match result.unwrap() {
+            ObjectType::Tuple(v) => assert_eq!(v.len(), 2),
+            _ => panic!("Expected tuple"),
+        }
+    }
+
+    #[test]
+    fn test_parse_key_type_list_object_val_map() {
+        let tokens = tokenize(String::from("{a : int, b : float}")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let result =
+            parser.parse_key_type_list_object_val(TokenType::OpenCurly, TokenType::CloseCurly);
+        assert!(result.is_ok());
+        match result.unwrap() {
+            ObjectType::Map(m) => {
+                assert_eq!(m.len(), 2);
+                assert!(m.contains_key("a"));
+                assert!(m.contains_key("b"));
+            }
+            _ => panic!("Expected map"),
+        }
+    }
+}

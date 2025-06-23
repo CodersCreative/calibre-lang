@@ -387,3 +387,165 @@ impl Parser {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::{Token, TokenType, tokenize};
+    use crate::ast::NodeType;
+    use crate::runtime::values::helper::{ObjectType, VarType, StopValue};
+    use crate::parser::Parser;
+
+    fn parser_with_tokens(tokens: Vec<Token>) -> Parser {
+        Parser { tokens }
+    }
+
+    #[test]
+    fn test_parse_variable_declaration_let() {
+        let tokens = tokenize(String::from("let x = 42")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_variable_declaration().unwrap();
+        match node {
+            NodeType::VariableDeclaration { var_type, identifier, value, .. } => {
+                assert_eq!(identifier, "x");
+                assert!(matches!(var_type, VarType::Immutable(_)));
+                assert!(value.is_some());
+            }
+            _ => panic!("Expected VariableDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_variable_declaration_let_mut() {
+        let tokens = tokenize(String::from("let mut x = 42")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_variable_declaration().unwrap();
+        match node {
+            NodeType::VariableDeclaration { var_type, identifier, value, .. } => {
+                assert_eq!(identifier, "x");
+                assert!(matches!(var_type, VarType::Mutable(_)));
+                assert!(value.is_some());
+            }
+            _ => panic!("Expected VariableDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_variable_declaration_const() {
+        let tokens = tokenize(String::from("const y = 3.14")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_variable_declaration().unwrap();
+        match node {
+            NodeType::VariableDeclaration { var_type, identifier, value, .. } => {
+                assert_eq!(identifier, "y");
+                assert!(matches!(var_type, VarType::Constant));
+                assert!(value.is_some());
+            }
+            _ => panic!("Expected VariableDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_struct_declaration_tuple_one() {
+        let tokens = tokenize(String::from("struct Point { int }")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_struct_declaration().unwrap();
+        match node {
+            NodeType::StructDeclaration { identifier, properties } => {
+                assert_eq!(identifier, "Point");
+                match properties {
+                    ObjectType::Tuple(v) => assert!(!v.is_empty()),
+                    _ => panic!("Expected Tuple properties"),
+                }
+            }
+            _ => panic!("Expected StructDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_struct_declaration_tuple() {
+        let tokens = tokenize(String::from("struct Point { int, int }")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_struct_declaration().unwrap();
+        match node {
+            NodeType::StructDeclaration { identifier, properties } => {
+                assert_eq!(identifier, "Point");
+                match properties {
+                    ObjectType::Tuple(v) => assert!(!v.is_empty()),
+                    _ => panic!("Expected Tuple properties"),
+                }
+            }
+            _ => panic!("Expected StructDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_struct_declaration_map() {
+        let tokens = tokenize(String::from("struct Person { name: str, age: int }")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_struct_declaration().unwrap();
+        match node {
+            NodeType::StructDeclaration { identifier, properties } => {
+                assert_eq!(identifier, "Person");
+                match properties {
+                    ObjectType::Map(m) => {
+                        assert!(m.contains_key("name"));
+                        assert!(m.contains_key("age"));
+                    }
+                    _ => panic!("Expected Map properties"),
+                }
+            }
+            _ => panic!("Expected StructDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_enum_declaration_simple() {
+        let tokens = tokenize(String::from("enum Color { Red, Green, Blue }")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_enum_declaration().unwrap();
+        match node {
+            NodeType::EnumDeclaration { identifier, options } => {
+                assert_eq!(identifier, "Color");
+                assert_eq!(options.len(), 3);
+            }
+            _ => panic!("Expected EnumDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_function_declaration_simple() {
+        let tokens = tokenize(String::from("func foo(x: int, y: int) { return x + y }")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_function_declaration(false).unwrap();
+        match node {
+            NodeType::FunctionDeclaration { identifier, parameters, .. } => {
+                assert_eq!(identifier, "foo");
+                assert_eq!(parameters.len(), 2);
+            }
+            _ => panic!("Expected FunctionDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_loop_declaration_for() {
+        let tokens = tokenize(String::from("for i in xs { x = x + 1 }")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_loop_declaration().unwrap();
+        match node {
+            NodeType::LoopDeclaration { .. } => {}
+            _ => panic!("Expected LoopDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_return_declaration() {
+        let tokens = tokenize(String::from("return 123")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_return_declaration().unwrap();
+        match node {
+            NodeType::Return { .. } => {}
+            _ => panic!("Expected Return"),
+        }
+    }
+}

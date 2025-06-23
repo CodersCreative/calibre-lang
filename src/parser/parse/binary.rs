@@ -128,3 +128,103 @@ impl Parser {
         Ok(left)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::comparison::{BooleanOperation, Comparison};
+    use crate::lexer::{Token, TokenType, tokenize};
+    use crate::ast::{NodeType, binary::BinaryOperator};
+    use crate::parser::Parser;
+
+    fn parser_with_tokens(tokens: Vec<Token>) -> Parser {
+        Parser { tokens }
+    }
+
+    #[test]
+    fn test_parse_range_expression_exclusive() {
+        let tokens = tokenize(String::from("1..10")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_range_expression().unwrap();
+        match node {
+            NodeType::RangeDeclaration { inclusive, .. } => assert!(!inclusive),
+            _ => panic!("Expected RangeDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_range_expression_inclusive() {
+        let tokens = tokenize(String::from("1..=10")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_range_expression().unwrap();
+        match node {
+            NodeType::RangeDeclaration { inclusive, .. } => assert!(inclusive),
+            _ => panic!("Expected RangeDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_additive_expression() {
+        let tokens = tokenize(String::from("1 + 2 - 3")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_additive_expression().unwrap();
+        match node {
+            NodeType::BinaryExpression { operator, .. } => {
+                assert_eq!(operator, BinaryOperator::Subtract);
+            }
+            _ => panic!("Expected BinaryExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multiplicative_expression() {
+        let tokens = tokenize(String::from("2 * 3 / 4")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_multiplicative_expression().unwrap();
+        match node {
+            NodeType::BinaryExpression { operator, .. } => {
+                assert_eq!(operator, BinaryOperator::Divide);
+            }
+            _ => panic!("Expected BinaryExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_power_expression() {
+        let tokens = tokenize(String::from("2 ^ 3")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_power_expression().unwrap();
+        match node {
+            NodeType::BinaryExpression { operator, .. } => {
+                assert_eq!(operator, BinaryOperator::Power);
+            }
+            _ => panic!("Expected BinaryExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_comparison_expression() {
+        let tokens = tokenize(String::from("1 < 2 > 3")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_comparison_expression().unwrap();
+        match node {
+            NodeType::ComparisonExpression { operator, .. } => {
+                assert_eq!(operator, Comparison::Lesser);
+            }
+            _ => panic!("Expected ComparisonExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_boolean_expression() {
+        let tokens = tokenize(String::from("true && false || !true")).unwrap();
+        let mut parser = parser_with_tokens(tokens);
+        let node = parser.parse_boolean_expression().unwrap();
+        match node {
+            NodeType::BooleanExpression { operator, .. } => {
+                assert_eq!(operator, BooleanOperation::Or);
+            }
+            _ => panic!("Expected BooleanExpression"),
+        }
+    }
+}
