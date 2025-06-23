@@ -290,3 +290,38 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
 
     Ok(tokens)
 }
+// write unit tests for the tokenize function
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_tokenize_same_line() {
+        let input = String::from("let x = 5; if x > 3 { x = x + 1; }");
+
+        let fin_tokens = vec![
+            TokenType::Let,
+            TokenType::Identifier,
+            TokenType::Equals,
+            TokenType::Integer,
+            TokenType::If,
+            TokenType::Identifier,
+            TokenType::Comparison(Comparison::Lesser),
+            TokenType::Integer,
+            TokenType::OpenCurly,
+            TokenType::Identifier,
+            TokenType::Equals,
+            TokenType::Identifier,
+            TokenType::BinaryOperator(BinaryOperator::Add),
+            TokenType::Integer,
+            TokenType::CloseCurly,
+            TokenType::EOF,
+        ];
+
+        let tokens = tokenize(input).unwrap();
+
+        for (i, token) in tokens.iter().enumerate() {
+            assert_eq!(fin_tokens[i], token.token_type);
+        }
+    }
+}
+
