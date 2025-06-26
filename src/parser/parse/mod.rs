@@ -6,10 +6,10 @@ pub mod functions;
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
-    ast::{NodeType, RefMutability},
+    ast::{LoopType, NodeType, RefMutability},
     lexer::{Token, TokenType},
     parser::{Parser, ParserError, SyntaxErr},
-    runtime::values::{RuntimeType, helper::ObjectType},
+    runtime::values::{helper::ObjectType, RuntimeType},
 };
 
 impl Parser {
@@ -363,8 +363,28 @@ impl Parser {
 
         while !self.is_eof() && self.first().token_type != TokenType::CloseSquare {
             values.push(self.parse_expression()?);
+            if self.first().token_type == TokenType::For {
+                let _ = self.eat();
+                let loop_type = self.get_loop_type()?;
 
-            if self.first().token_type != TokenType::CloseSquare {
+                if let LoopType::While(_) = loop_type{
+                    return Err(self.get_err(SyntaxErr::UnexpectedWhileLoop));
+                }
+
+                let mut conditionals = Vec::new();
+
+                while self.first().token_type == TokenType::If{
+                    let _ = self.eat();
+                    conditionals.push(self.parse_expression()?);
+                }
+
+                let _ = self.expect_eat(
+                    &TokenType::CloseSquare,
+                    SyntaxErr::ExpectedClosingBracket(TokenType::CloseSquare),
+                );
+
+                return Ok(NodeType::IterExpression { map : Box::new(values[0].clone()), loop_type : Box::new(loop_type), conditionals: Box::new(conditionals) })
+            }else if self.first().token_type != TokenType::CloseSquare {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
             }
         }

@@ -66,6 +66,8 @@ pub enum SyntaxErr {
     ExpectedType,
     #[error("Expected only functions.")]
     ExpectedFunctions,
+    #[error("Cant use while loop with iterators syntax.")]
+    UnexpectedWhileLoop,
     #[error("Constants cannot be null.")]
     NullConstant,
     #[error("Cannot use self outside of an implementation block.")]

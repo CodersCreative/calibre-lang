@@ -1,13 +1,15 @@
 use std::{cell::RefCell, mem::discriminant, rc::Rc};
 
 use crate::{
-    ast::NodeType,
+    ast::{LoopType, NodeType, RefMutability},
     runtime::{
         interpreter::{evaluate, InterpreterErr},
-        scope::Scope,
-        values::RuntimeValue,
+        scope::{variables::get_var, Scope},
+        values::{helper::VarType, RuntimeType, RuntimeValue},
     },
 };
+
+use super::scope::get_new_scope;
 
 pub fn evaluate_tuple_expression(
     obj: NodeType,
@@ -57,6 +59,95 @@ pub fn evaluate_list_expression(
     })
 }
 
+pub fn evaluate_iter_expression(
+    declaration: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let NodeType::IterExpression {map, loop_type, conditionals } = declaration {
+        let handle_conditionals = |new_scope: Rc<RefCell<Scope>>| -> Result<bool, InterpreterErr> {
+            let mut result = true;
+
+            for condition in conditionals.iter() {
+                if let RuntimeValue::Bool(value) = evaluate(condition.clone(), new_scope.clone())?{
+                    result = result && value;
+                }
+            }
+
+            Ok(result)
+        };
+
+        let mut result = Vec::new();
+
+        if let LoopType::For(identifier, range) = *loop_type {
+            let range = evaluate(range, scope.clone())?;
+            if let RuntimeValue::List { data, data_type: _ } = range {
+                for d in data.into_iter() {
+                    let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
+                    let _ = new_scope.borrow_mut().push_var(
+                        identifier.clone(),
+                        d.clone(),
+                        VarType::Immutable(None),
+                    );
+
+                    if handle_conditionals(new_scope.clone())? {
+                        result.push(evaluate(*map.clone(), new_scope)?);
+                    }
+                }
+            } else if let RuntimeValue::Range(from, to) =
+                range.into_type(scope.clone(), RuntimeType::Range)?
+            {
+                for i in from..to {
+                    let new_scope = get_new_scope(
+                        scope.clone(),
+                        vec![(
+                            identifier.clone(),
+                            RuntimeType::Integer,
+                            RefMutability::Value,
+                            None,
+                        )],
+                        vec![(NodeType::IntegerLiteral(i as i64), None)],
+                    )?;
+                    if handle_conditionals(new_scope.clone())? {
+                        result.push(evaluate(*map.clone(), new_scope)?);
+                        // result.push(RuntimeValue::Integer(i as i64));
+                    }
+                }
+            }
+        } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
+            let (var, _) = get_var(scope.clone(), &loop_name)?;
+            if let RuntimeValue::List {
+                mut data,
+                data_type,
+            } = var
+            {
+                for d in data.into_iter() {
+                    let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
+                    let _ = new_scope.borrow_mut().push_var(
+                        identifier.clone(),
+                        d.clone(),
+                        match mutability {
+                            RefMutability::MutRef | RefMutability::MutValue => {
+                                VarType::Mutable(None)
+                            }
+                            _ => VarType::Immutable(None),
+                        },
+                    );
+
+                    if handle_conditionals(new_scope.clone())? {
+                        result.push(evaluate(*map.clone(), new_scope)?);
+                        // result.push(d);
+                    }
+                }
+            }
+        } else if let LoopType::While(condition) = *loop_type {
+            panic!()
+        }
+
+        Ok(RuntimeValue::List { data: result, data_type: Box::new(None)})
+    } else {
+        Err(InterpreterErr::NotImplemented(declaration))
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

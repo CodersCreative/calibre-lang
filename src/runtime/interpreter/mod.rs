@@ -3,6 +3,7 @@ pub mod statements;
 
 use std::{cell::RefCell, rc::Rc};
 
+use expressions::lists::evaluate_iter_expression;
 use thiserror::Error;
 
 use crate::{
@@ -128,6 +129,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::EnumDeclaration { .. } => evaluate_enum_declaration(node, scope),
         NodeType::EnumExpression { .. } => evaluate_enum_expression(node, scope),
         NodeType::LoopDeclaration { .. } => evaluate_loop_declaration(node, scope),
+        NodeType::IterExpression { .. } => evaluate_iter_expression(node, scope),
         _ => Err(InterpreterErr::NotImplemented(node)),
     }
 }

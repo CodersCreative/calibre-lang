@@ -225,13 +225,8 @@ impl Parser {
         })
     }
 
-    pub fn parse_loop_declaration(&mut self) -> Result<NodeType, ParserError> {
-        let _ = self.expect_eat(
-            &TokenType::For,
-            SyntaxErr::ExpectedKeyword(String::from("for")),
-        )?;
-
-        let loop_type = if self.first().token_type == TokenType::Identifier
+    pub fn get_loop_type(&mut self) -> Result<LoopType, ParserError>{
+        Ok(if self.first().token_type == TokenType::Identifier
             && self.nth(1).token_type == TokenType::In
         {
             let identifier = self
@@ -262,7 +257,16 @@ impl Parser {
         } else {
             let task = self.parse_expression()?;
             LoopType::While(task)
-        };
+        })
+    }
+
+    pub fn parse_loop_declaration(&mut self) -> Result<NodeType, ParserError> {
+        let _ = self.expect_eat(
+            &TokenType::For,
+            SyntaxErr::ExpectedKeyword(String::from("for")),
+        )?;
+
+        let loop_type = self.get_loop_type()?;
 
         Ok(NodeType::LoopDeclaration {
             loop_type: Box::new(loop_type),

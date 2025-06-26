@@ -34,7 +34,9 @@ let mut b : (int, int) = (10, 10);
 
 let mut y : int = 0;
 let mut list_dyn = [0, 10, 30, 50]; // Arrays are dynamic by default
-let mut lst : list(int) = [0, 40, 20]; // A static array 
+let mut lst : list(int) = [x^2 for x in 0..100 if x % 2 == 0];
+
+print(lst);// A static array 
 
 for l in lst {
   x += l;

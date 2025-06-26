@@ -90,6 +90,11 @@ pub enum NodeType {
         to: Box<NodeType>,
         inclusive: bool,
     },
+    IterExpression {
+        map: Box<NodeType>,
+        loop_type: Box<LoopType>,
+        conditionals: Box<Vec<NodeType>>,
+    },
     LoopDeclaration {
         loop_type: Box<LoopType>,
         body: Box<Vec<NodeType>>,
