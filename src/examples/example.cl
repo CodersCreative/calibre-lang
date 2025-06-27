@@ -1,20 +1,27 @@
-/*import "env/whatever.cl"  will import the file at this location
-by default when code is imported it will run all the code not in functions in order
-the pub keyword is used to expose objects to other files */
+/*import "env/whatever.cl"  will import the file at this locatioon
+by default when code is imported it will run all the code not in functions in order*/
 
+// Enums declaration
 enum Language {
+  // Enums can have hasmap type data structuress.
 	FRENCH { data : int},
+  // Enums can have tuple type data structuress.
 	ENGLISH { int},
 	SPANISH,
 }
 
+// Struct declaration
 struct CountryBase {
+  // Fields in a struct must be explicitly typed..
 	language : Language,
 }
 
+// Structs can also be declaratied using a tuole structures.
 struct Country {Language}
 
+// To add static functions to an object(struct or enum) the impl keyword is used.
 impl CountryBase {
+  // In impl blocks the self keyword can be used to referec
 	fn get_language(&self) -> Language {
 		self.language
 	}
@@ -30,7 +37,11 @@ print(language_forced);
 
 let mut x = 100;
 let mut b : (int, int) = (10, 10);
+let bg = input("Hello enter 1: ");
 
+if trim(bg) == "Yes" {
+  print("Yes");
+}
 
 let mut y : int = 0;
 let mut list_dyn = [0, 10, 30, 50]; // Arrays are dynamic by default

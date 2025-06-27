@@ -61,6 +61,14 @@ fn get_global_variables() -> HashMap<String, (RuntimeValue, VarType)> {
         (String::from("false"), RuntimeValue::Bool(false)),
         (String::from("null"), RuntimeValue::Null),
         (
+            String::from("input"),
+            RuntimeValue::NativeFunction(NativeFunctions::Input),
+        ),
+        (
+            String::from("trim"),
+            RuntimeValue::NativeFunction(NativeFunctions::Trim),
+        ),
+        (
             String::from("print"),
             RuntimeValue::NativeFunction(NativeFunctions::Print),
         ),

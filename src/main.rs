@@ -1,5 +1,7 @@
-use std::{cell::RefCell, fs, rc::Rc};
+use std::{cell::RefCell, error::Error, fs, rc::Rc};
 
+use runtime::values::RuntimeValue;
+use rustyline::{error::ReadlineError, DefaultEditor, Editor};
 use thiserror::Error;
 
 use crate::{
@@ -36,7 +38,41 @@ impl From<ParserError> for CalibreError {
     }
 }
 
-fn main() -> Result<(), CalibreError> {
+fn repl() -> Result<(), Box<dyn Error>> {
+    let mut parser = Parser::default();
+    let scope = Rc::new(RefCell::new(Scope::new(None)));
+    let mut editor = DefaultEditor::new()?;
+    loop {
+        let readline = editor.readline(">> ");
+        match readline{
+            Ok(line) => {
+                let program = parser.produce_ast(line)?;
+                let val = evaluate(program, scope.clone())?;
+
+                if val != RuntimeValue::Null{
+                    println!("{}", val.to_string());
+                }
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("CTRL-C");
+                break;
+            }
+            Err(ReadlineError::Eof) => {
+                println!("CTRL-D");
+                break;
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    // repl()
     let mut parser = Parser::default();
     let scope = Rc::new(RefCell::new(Scope::new(None)));
 

@@ -8,6 +8,7 @@ use std::{
 
 use helper::{Block, Map};
 use rand::seq::IndexedRandom;
+use rustyline::DefaultEditor;
 use thiserror::Error;
 
 use crate::{
@@ -37,6 +38,8 @@ impl From<ScopeErr> for ValueErr {
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum NativeFunctions {
     Print,
+    Input,
+    Trim,
     Range,
 }
 
@@ -235,6 +238,30 @@ impl RuntimeValue {
                         }
                     } else {
                         RuntimeValue::Null
+                    }
+                },
+                NativeFunctions::Trim => {
+                    if let Some((RuntimeValue::Str(x), _)) = args.get(0) {
+                        RuntimeValue::Str(x.trim().to_string())
+                    }else{
+                        RuntimeValue::Null
+                    }
+                },
+                NativeFunctions::Input => {
+                    let mut editor = DefaultEditor::new().unwrap();
+                    let txt = match args.get(0) {
+                        Some(x) => x.0.clone(),
+                        None => RuntimeValue::Str("".to_string()),
+                    };
+
+                    let readline = editor.readline(&txt.to_string());
+                    match readline{
+                        Ok(line) => {
+                            RuntimeValue::Str(line)
+                        }
+                        Err(_) => {
+                            RuntimeValue::Null
+                        }
                     }
                 }
             }
