@@ -116,7 +116,7 @@ pub fn evaluate_iter_expression(
         } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
             let (var, _) = get_var(scope.clone(), &loop_name)?;
             if let RuntimeValue::List {
-                mut data,
+                data,
                 data_type,
             } = var
             {

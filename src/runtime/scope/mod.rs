@@ -13,7 +13,7 @@ use thiserror::Error;
 
 use crate::runtime::values::{
     NativeFunctions, RuntimeValue,
-    helper::{Map, ObjectType, StopValue, VarType},
+    helper::{ObjectType, StopValue, VarType},
 };
 
 use super::values::RuntimeType;

@@ -1,8 +1,6 @@
-use std::default;
 
 use crate::parser::{Parser, ParserError, SyntaxErr};
 
-use crate::runtime::values::helper::ObjectType;
 use crate::{ast::NodeType, lexer::TokenType};
 
 impl Parser {

@@ -1,11 +1,13 @@
 use std::{cell::RefCell, error::Error, fs, rc::Rc};
 
+use clap::Parser;
+// use clap::Parser as ClapParser;
 use runtime::values::RuntimeValue;
-use rustyline::{error::ReadlineError, DefaultEditor, Editor};
+use rustyline::{DefaultEditor, error::ReadlineError};
 use thiserror::Error;
 
 use crate::{
-    parser::{Parser, ParserError},
+    parser::ParserError,
     runtime::{
         interpreter::{InterpreterErr, evaluate},
         scope::Scope,
@@ -39,17 +41,17 @@ impl From<ParserError> for CalibreError {
 }
 
 fn repl() -> Result<(), Box<dyn Error>> {
-    let mut parser = Parser::default();
+    let mut parser = parser::Parser::default();
     let scope = Rc::new(RefCell::new(Scope::new(None)));
     let mut editor = DefaultEditor::new()?;
     loop {
         let readline = editor.readline(">> ");
-        match readline{
+        match readline {
             Ok(line) => {
                 let program = parser.produce_ast(line)?;
                 let val = evaluate(program, scope.clone())?;
 
-                if val != RuntimeValue::Null{
+                if val != RuntimeValue::Null {
                     println!("{}", val.to_string());
                 }
             }
@@ -71,12 +73,11 @@ fn repl() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    // repl()
-    let mut parser = Parser::default();
+fn file(path: &str) -> Result<(), Box<dyn Error>> {
+    let mut parser = parser::Parser::default();
     let scope = Rc::new(RefCell::new(Scope::new(None)));
 
-    if let Ok(txt) = fs::read_to_string("./src/example.cl") {
+    if let Ok(txt) = fs::read_to_string(path) {
         let program = parser.produce_ast(txt)?;
         println!("result : {:?}", evaluate(program, scope)?);
     } else {
@@ -84,18 +85,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
 
-    // loop {
-    //     if let Ok(input) = read_input() {
-    //         if input.trim() == "exit" {
-    //             break;
-    //         }
-    //
-    //         let program = parser.produce_ast(input);
-    //         println!("{:?}", program);
-    //         println!("result : {:?}", evaluate(program, &mut scope));
-    //     } else {
-    //         break;
-    //     }
-    // }
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long)]
+    path: Option<String>,
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let args = Args::parse();
+
+    if let Some(path) = args.path {
+        file(&path)
+    } else {
+        repl()
+    }
 }

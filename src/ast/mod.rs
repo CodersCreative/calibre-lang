@@ -1,7 +1,6 @@
 pub mod binary;
 pub mod comparison;
 
-use std::collections::HashMap;
 
 use binary::BinaryOperator;
 use comparison::Comparison;

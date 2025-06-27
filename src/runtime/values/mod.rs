@@ -6,7 +6,7 @@ use std::{
     string::ParseError,
 };
 
-use helper::{Block, Map};
+use helper::Block;
 use rand::seq::IndexedRandom;
 use rustyline::DefaultEditor;
 use thiserror::Error;
