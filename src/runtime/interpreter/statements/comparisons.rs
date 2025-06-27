@@ -9,6 +9,45 @@ use crate::{
     },
 };
 
+pub fn evaluate_in_statement(
+    declaration: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let NodeType::InDeclaration { identifier, expression } = declaration
+    {
+        let value = evaluate(*expression, scope.clone())?;
+        let ident = evaluate(*identifier, scope.clone())?;
+
+        match value{
+            RuntimeValue::Str(x) => match ident{
+                RuntimeValue::Char(y) => return Ok(RuntimeValue::Bool(x.contains(y))), 
+                RuntimeValue::Char(y) => return Ok(RuntimeValue::Bool(x.contains(y))), 
+                _ => {},
+            }
+            RuntimeValue::List { data, data_type } => {
+                return Ok(RuntimeValue::Bool(data.contains(&ident))); 
+            }
+            RuntimeValue::Tuple(data) => {
+                return Ok(RuntimeValue::Bool(data.contains(&ident))); 
+            }
+            _ => {},
+            RuntimeValue::Range(from, to) => {
+                let num : f32 = match ident {
+                    RuntimeValue::Range(x, y) => (x as f32 + y as f32) / 2.0,
+                    RuntimeValue::Integer(x) => x as f32,
+                    RuntimeValue::Float(x) => x as f32,
+                    _ => return Ok(RuntimeValue::Bool(false)),
+                };
+                return Ok(RuntimeValue::Bool(num >= from as f32 && num < to as f32)); 
+            }
+        }
+
+        Ok(RuntimeValue::Bool(false))
+    } else {
+        Err(InterpreterErr::NotImplemented(declaration))
+    }
+}
+
 pub fn evaluate_if_statement(
     declaration: NodeType,
     scope: Rc<RefCell<Scope>>,

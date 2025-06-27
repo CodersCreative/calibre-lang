@@ -85,6 +85,10 @@ pub enum NodeType {
     NotExpression {
         value: Box<NodeType>,
     },
+    InDeclaration {
+        identifier: Box<NodeType>,
+        expression: Box<NodeType>,
+    },
     RangeDeclaration {
         from: Box<NodeType>,
         to: Box<NodeType>,

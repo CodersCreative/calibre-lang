@@ -78,4 +78,7 @@ fn main() -> int {
 	return y;
 }
 
-main()
+if 4 in lst {
+  main()
+  print("Success")
+}
