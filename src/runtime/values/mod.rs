@@ -115,7 +115,7 @@ impl Into<RuntimeType> for RuntimeValue {
     }
 }
 
-#[derive(Clone, PartialEq, PartialOrd)]
+#[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum RuntimeValue {
     Null,
     Float(f64),
@@ -172,11 +172,11 @@ impl ToString for RuntimeValue {
     }
 }
 
-impl Debug for RuntimeValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
-    }
-}
+// impl Debug for RuntimeValue {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.to_string())
+//     }
+// }
 
 impl RuntimeValue {
     pub fn is_number(&self) -> bool {
@@ -239,14 +239,14 @@ impl RuntimeValue {
                     } else {
                         RuntimeValue::Null
                     }
-                },
+                }
                 NativeFunctions::Trim => {
                     if let Some((RuntimeValue::Str(x), _)) = args.get(0) {
                         RuntimeValue::Str(x.trim().to_string())
-                    }else{
+                    } else {
                         RuntimeValue::Null
                     }
-                },
+                }
                 NativeFunctions::Input => {
                     let mut editor = DefaultEditor::new().unwrap();
                     let txt = match args.get(0) {
@@ -255,13 +255,9 @@ impl RuntimeValue {
                     };
 
                     let readline = editor.readline(&txt.to_string());
-                    match readline{
-                        Ok(line) => {
-                            RuntimeValue::Str(line)
-                        }
-                        Err(_) => {
-                            RuntimeValue::Null
-                        }
+                    match readline {
+                        Ok(line) => RuntimeValue::Str(line),
+                        Err(_) => RuntimeValue::Null,
                     }
                 }
             }
@@ -619,7 +615,17 @@ impl RuntimeValue {
                 }
                 _ => panic_type(),
             },
-            RuntimeValue::List { data, data_type: _ } => {
+            RuntimeValue::List { data, data_type } => {
+                if let Some(RuntimeType::Struct(Some(x))) = *data_type.clone() {
+                    if let RuntimeType::Struct(Some(ref y)) = t {
+                        if &x == y {
+                            return Ok(RuntimeValue::Struct(
+                                ObjectType::Tuple(data.to_vec()),
+                                Some(x),
+                            ));
+                        }
+                    }
+                }
                 if data.len() > 0 {
                     let t2 = discriminant(&data[0]);
                     let filtered: Vec<&RuntimeValue> =

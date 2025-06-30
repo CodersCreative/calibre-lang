@@ -100,10 +100,10 @@ pub fn evaluate_member_expression(
         NodeType::MemberExpression {
             object, property, ..
         } => {
-            let object_val = match *object.clone() {
+            let (object_val, object_type) = match *object.clone() {
                 NodeType::Identifier(object_name) => {
                     if let Ok(var) = get_var(scope.clone(), &object_name) {
-                        var.0
+                        (var.0, var.1)
                     } else if let Ok(obj) = get_object(scope.clone(), &object_name) {
                         match obj {
                             Object::Enum(_) => {
@@ -116,6 +116,20 @@ pub fn evaluate_member_expression(
                                         },
                                         scope,
                                     );
+                                } else if let NodeType::CallExpression(caller, args) = *property {
+                                    if let NodeType::Identifier(ref method_name) = *caller {
+                                        if let Ok(val) =
+                                            get_function(scope.clone(), &object_name, method_name)
+                                        {
+                                            return evaluate_function(scope, val.0, *args);
+                                        } else {
+                                            return Err(InterpreterErr::Value(ValueErr::Scope(
+                                                ScopeErr::Function(method_name.to_string()),
+                                            )));
+                                        }
+                                    } else {
+                                        return Err(InterpreterErr::UnexpectedNode(*caller));
+                                    }
                                 } else {
                                     return Err(InterpreterErr::UnexpectedNode(*property));
                                 }
@@ -178,6 +192,7 @@ pub fn evaluate_member_expression(
                     }
                 }
                 NodeType::IntegerLiteral(ref index) => {
+                    println!("yes");
                     if let RuntimeValue::Struct(ObjectType::Tuple(ref map), _) = object_val {
                         if let Some(val) = map.get(*index as usize) {
                             Ok(val.clone())
@@ -211,28 +226,34 @@ pub fn evaluate_member_expression(
                         Err(InterpreterErr::UnexpectedType(object_val))
                     }
                 }
+
                 NodeType::CallExpression(caller, args) => {
                     if let NodeType::Identifier(ref var_name) = *object {
                         if let NodeType::Identifier(ref method_name) = *caller {
-                            if let RuntimeValue::Struct(_, Some(ref struct_name)) = object_val {
-                                if let Ok(val) =
-                                    get_function(scope.clone(), struct_name, method_name)
-                                {
-                                    let mut arguments = Vec::new();
+                            let struct_name = match object_val.clone() {
+                                RuntimeValue::Struct(_, Some(ref name)) => name.to_string(),
+                                RuntimeValue::List { data, data_type } => match *data_type {
+                                    Some(RuntimeType::Enum(x)) => x,
+                                    Some(RuntimeType::Struct(Some(x))) => x,
+                                    _ => panic!(),
+                                },
+                                _ => panic!(),
+                            };
+                            if let Ok(val) = get_function(scope.clone(), &struct_name, method_name)
+                            {
+                                let mut arguments = Vec::new();
 
-                                    if val.1 {
-                                        arguments =
-                                            vec![(NodeType::Identifier(var_name.clone()), None)];
-                                    }
-
-                                    arguments.extend(*args);
-                                    return evaluate_function(scope, val.0, arguments);
+                                if val.1 {
+                                    arguments =
+                                        vec![(NodeType::Identifier(var_name.clone()), None)];
                                 }
+
+                                arguments.extend(*args);
+                                return evaluate_function(scope, val.0, arguments);
                             }
                         }
                     }
-
-                    panic!()
+                    panic!("{:?}.{:?}", object, caller);
                 }
                 _ => Err(InterpreterErr::NotImplemented(*property)),
             }

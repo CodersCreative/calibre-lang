@@ -140,21 +140,66 @@ pub fn evaluate_loop_declaration(
                 )?;
             }
         } else if let LoopType::While(condition) = *loop_type {
-            while let RuntimeValue::Bool(x) = evaluate(condition.clone(), scope.clone())? {
-                if !x {
-                    break;
-                }
-                let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
-                result = handle_body(new_scope.clone())?;
+            match evaluate(condition.clone(), scope.clone())? {
+                RuntimeValue::Bool(_) => {
+                    while let RuntimeValue::Bool(x) = evaluate(condition.clone(), scope.clone())? {
+                        if !x {
+                            break;
+                        }
+                        let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
+                        result = handle_body(new_scope.clone())?;
 
-                match new_scope.borrow().stop {
-                    Some(StopValue::Break) => break,
-                    Some(StopValue::Return) => {
-                        scope.borrow_mut().stop = Some(StopValue::Return);
-                        break;
+                        match new_scope.borrow().stop {
+                            Some(StopValue::Break) => break,
+                            Some(StopValue::Return) => {
+                                scope.borrow_mut().stop = Some(StopValue::Return);
+                                break;
+                            }
+                            _ => {}
+                        };
                     }
-                    _ => {}
-                };
+                }
+                RuntimeValue::Range(from, to) => {
+                    return evaluate_loop_declaration(
+                        NodeType::LoopDeclaration {
+                            loop_type: Box::new(LoopType::For(
+                                String::from("hidden_index"),
+                                NodeType::RangeDeclaration {
+                                    from: Box::new(NodeType::IntegerLiteral(from as i64)),
+                                    to: Box::new(NodeType::IntegerLiteral(to as i64)),
+                                    inclusive: false,
+                                },
+                            )),
+                            body,
+                        },
+                        scope,
+                    );
+                }
+                RuntimeValue::Integer(x) => {
+                    return evaluate_loop_declaration(
+                        NodeType::LoopDeclaration {
+                            loop_type: Box::new(LoopType::For(
+                                String::from("hidden_index"),
+                                NodeType::IntegerLiteral(x as i64),
+                            )),
+                            body,
+                        },
+                        scope,
+                    );
+                }
+                RuntimeValue::Float(x) => {
+                    return evaluate_loop_declaration(
+                        NodeType::LoopDeclaration {
+                            loop_type: Box::new(LoopType::For(
+                                String::from("hidden_index"),
+                                NodeType::FloatLiteral(x as f64),
+                            )),
+                            body,
+                        },
+                        scope,
+                    );
+                }
+                _ => {}
             }
         }
 
