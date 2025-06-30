@@ -341,9 +341,7 @@ pub fn evaluate_member_expression(
                             NodeType::IntegerLiteral(index as i64),
                         )
                     }),
-                    RuntimeValue::Str(text) => {
-                        panic!()
-                    }
+                    RuntimeValue::Str(field) => get_struct_field(&object_val, &field),
                     _ => panic!(),
                 },
                 _ => Err(InterpreterErr::NotImplemented(*property)),
