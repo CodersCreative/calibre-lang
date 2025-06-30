@@ -13,6 +13,80 @@ use crate::{
     },
 };
 
+fn assign_to_struct_field(
+    object_val: &mut RuntimeValue,
+    field: &str,
+    value: RuntimeValue,
+    object: &NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<(), InterpreterErr> {
+    if let RuntimeValue::Struct(ObjectType::Map(map), _) = object_val {
+        if let Some(field_val) = map.get_mut(field) {
+            *field_val = value;
+            if let NodeType::Identifier(obj_name) = object {
+                scope
+                    .borrow_mut()
+                    .assign_var(obj_name, object_val.clone())?;
+            }
+            Ok(())
+        } else {
+            Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(
+                field.to_string(),
+            ))))
+        }
+    } else {
+        Err(InterpreterErr::UnexpectedType(object_val.clone()))
+    }
+}
+
+fn assign_to_list_index(
+    object_val: &mut RuntimeValue,
+    index: usize,
+    value: RuntimeValue,
+    object: &NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<(), InterpreterErr> {
+    if let RuntimeValue::List { data, .. } = object_val {
+        if let Some(elem) = data.get_mut(index) {
+            *elem = value;
+            if let NodeType::Identifier(obj_name) = object {
+                scope
+                    .borrow_mut()
+                    .assign_var(obj_name, object_val.clone())?;
+            }
+            Ok(())
+        } else {
+            Err(InterpreterErr::IndexNonList(object.clone()))
+        }
+    } else {
+        Err(InterpreterErr::UnexpectedType(object_val.clone()))
+    }
+}
+
+fn assign_to_tuple_index(
+    object_val: &mut RuntimeValue,
+    index: usize,
+    value: RuntimeValue,
+    object: &NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<(), InterpreterErr> {
+    if let RuntimeValue::Struct(ObjectType::Tuple(data), _) = object_val {
+        if let Some(field) = data.get_mut(index) {
+            *field = value;
+            if let NodeType::Identifier(obj_name) = object {
+                scope
+                    .borrow_mut()
+                    .assign_var(obj_name, object_val.clone())?;
+            }
+            Ok(())
+        } else {
+            Err(InterpreterErr::IndexNonList(object.clone()))
+        }
+    } else {
+        Err(InterpreterErr::UnexpectedType(object_val.clone()))
+    }
+}
+
 pub fn assign_member_expression(
     member: NodeType,
     value: RuntimeValue,
@@ -27,68 +101,79 @@ pub fn assign_member_expression(
                 NodeType::MemberExpression { .. } => {
                     assign_member_expression(*property, value, scope)
                 }
-                NodeType::IntegerLiteral(index) => {
-                    if let RuntimeValue::Struct(ObjectType::Tuple(ref mut map), _) = object_val {
-                        if let Some(field) = map.get_mut(index as usize) {
-                            *field = value;
-                            if let NodeType::Identifier(obj_name) = *object {
-                                scope.borrow_mut().assign_var(&obj_name, object_val)?;
-                            }
-                            Ok(())
-                        } else {
-                            panic!()
-                        }
-                    } else if let RuntimeValue::List { ref mut data, .. } = object_val {
-                        if let Some(elem) = data.get_mut(index as usize) {
-                            *elem = value;
-                            if let NodeType::Identifier(obj_name) = *object {
-                                scope.borrow_mut().assign_var(&obj_name, object_val)?;
-                            }
-                            Ok(())
-                        } else {
-                            panic!()
-                        }
+                NodeType::IntegerLiteral(index) => assign_to_tuple_index(
+                    &mut object_val,
+                    index as usize,
+                    value.clone(),
+                    &*object,
+                    scope.clone(),
+                )
+                .or_else(|_| {
+                    assign_to_list_index(&mut object_val, index as usize, value, &*object, scope)
+                }),
+                NodeType::Identifier(ref prop) => assign_to_struct_field(
+                    &mut object_val,
+                    prop,
+                    value.clone(),
+                    &*object,
+                    scope.clone(),
+                )
+                .or_else(|_| {
+                    let idx_val = evaluate(NodeType::Identifier(prop.clone()), scope.clone())?
+                        .into_type(scope.clone(), RuntimeType::Integer)?;
+                    if let RuntimeValue::Integer(idx) = idx_val {
+                        assign_to_list_index(&mut object_val, idx as usize, value, &*object, scope)
                     } else {
-                        Err(InterpreterErr::UnexpectedType(object_val))
+                        Err(InterpreterErr::IndexNonList(NodeType::Identifier(
+                            prop.clone(),
+                        )))
                     }
-                }
-                NodeType::Identifier(prop) => {
-                    if let RuntimeValue::Struct(ObjectType::Map(ref mut map), _) = object_val {
-                        if let Some(field) = map.get_mut(&prop) {
-                            *field = value;
-                            if let NodeType::Identifier(obj_name) = *object {
-                                scope.borrow_mut().assign_var(&obj_name, object_val)?;
-                            }
-                            Ok(())
-                        } else {
-                            Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(
-                                prop,
-                            ))))
-                        }
-                    } else if let RuntimeValue::List { ref mut data, .. } = object_val {
-                        let idx_val = evaluate(NodeType::Identifier(prop.clone()), scope.clone())?
-                            .into_type(scope.clone(), RuntimeType::Integer)?;
-                        if let RuntimeValue::Integer(idx) = idx_val {
-                            if let Some(elem) = data.get_mut(idx as usize) {
-                                *elem = value;
-                                if let NodeType::Identifier(obj_name) = *object {
-                                    scope.borrow_mut().assign_var(&obj_name, object_val)?;
-                                }
-                                Ok(())
-                            } else {
-                                Err(InterpreterErr::IndexNonList(NodeType::Identifier(prop)))
-                            }
-                        } else {
-                            Err(InterpreterErr::IndexNonList(NodeType::Identifier(prop)))
-                        }
-                    } else {
-                        Err(InterpreterErr::UnexpectedType(object_val))
-                    }
-                }
+                }),
                 _ => Err(InterpreterErr::NotImplemented(*property)),
             }
         }
         _ => Err(InterpreterErr::NotImplemented(member)),
+    }
+}
+
+fn get_struct_field(
+    object_val: &RuntimeValue,
+    field: &str,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let RuntimeValue::Struct(ObjectType::Map(map), _) = object_val {
+        map.get(field).cloned().ok_or_else(|| {
+            InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(field.to_string())))
+        })
+    } else {
+        Err(InterpreterErr::UnexpectedType(object_val.clone()))
+    }
+}
+
+fn get_list_index(
+    object_val: &RuntimeValue,
+    index: usize,
+    prop: NodeType,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let RuntimeValue::List { data, .. } = object_val {
+        data.get(index)
+            .cloned()
+            .ok_or_else(|| InterpreterErr::IndexNonList(prop))
+    } else {
+        Err(InterpreterErr::UnexpectedType(object_val.clone()))
+    }
+}
+
+fn get_tuple_index(
+    object_val: &RuntimeValue,
+    index: usize,
+    prop: NodeType,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let RuntimeValue::Struct(ObjectType::Tuple(data), _) = object_val {
+        data.get(index)
+            .cloned()
+            .ok_or_else(|| InterpreterErr::IndexNonList(prop))
+    } else {
+        Err(InterpreterErr::UnexpectedType(object_val.clone()))
     }
 }
 
@@ -100,17 +185,17 @@ pub fn evaluate_member_expression(
         NodeType::MemberExpression {
             object, property, ..
         } => {
-            let (object_val, object_type) = match *object.clone() {
-                NodeType::Identifier(object_name) => {
-                    if let Ok(var) = get_var(scope.clone(), &object_name) {
-                        (var.0, var.1)
-                    } else if let Ok(obj) = get_object(scope.clone(), &object_name) {
+            let object_val = match *object.clone() {
+                NodeType::Identifier(ref object_name) => {
+                    if let Ok(var) = get_var(scope.clone(), object_name) {
+                        var.0
+                    } else if let Ok(obj) = get_object(scope.clone(), object_name) {
                         match obj {
                             Object::Enum(_) => {
                                 if let NodeType::Identifier(value) = *property {
                                     return evaluate(
                                         NodeType::EnumExpression {
-                                            identifier: object_name,
+                                            identifier: object_name.to_string(),
                                             value,
                                             data: None,
                                         },
@@ -153,11 +238,11 @@ pub fn evaluate_member_expression(
                                     return Err(InterpreterErr::UnexpectedNode(*property));
                                 }
                             }
-                            _ => todo!(),
+                            _ => return Err(InterpreterErr::NotImplemented(*object.clone())),
                         }
                     } else {
                         return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(
-                            object_name,
+                            object_name.clone(),
                         ))));
                     }
                 }
@@ -165,120 +250,102 @@ pub fn evaluate_member_expression(
             };
 
             match *property {
+                NodeType::Identifier(ref prop) => {
+                    get_struct_field(&object_val, prop).or_else(|_| {
+                        let idx_val = evaluate(NodeType::Identifier(prop.clone()), scope.clone())?
+                            .into_type(scope.clone(), RuntimeType::Integer)?;
+                        if let RuntimeValue::Integer(idx) = idx_val {
+                            get_list_index(
+                                &object_val,
+                                idx as usize,
+                                NodeType::Identifier(prop.clone()),
+                            )
+                        } else {
+                            Err(InterpreterErr::IndexNonList(NodeType::Identifier(
+                                prop.clone(),
+                            )))
+                        }
+                    })
+                }
                 NodeType::MemberExpression {
                     object,
                     property,
                     is_computed,
                 } => {
                     if is_computed {
-                        let idx_val = evaluate(*property.clone(), scope.clone())?
-                            .into_type(scope.clone(), RuntimeType::Integer)?;
-                        if let RuntimeValue::Integer(idx) = idx_val {
-                            if let RuntimeValue::List { data, data_type } = object_val {
-                                return data.get(idx as usize).cloned().ok_or_else(|| {
-                                    InterpreterErr::IndexNonList(*property.clone())
-                                });
-                            } else if let RuntimeValue::Struct(ObjectType::Tuple(data), _) =
-                                object_val
-                            {
-                                return data.get(idx as usize).cloned().ok_or_else(|| {
-                                    InterpreterErr::IndexNonList(*property.clone())
-                                });
-                            }
-                        } else {
-                            return Err(InterpreterErr::IndexNonList(*property.clone()));
-                        }
-                    }
-                    evaluate_member_expression(*property, scope)
-                }
-                NodeType::Identifier(ref prop) => {
-                    if let RuntimeValue::Struct(ObjectType::Map(ref map), _) = object_val {
-                        if let Some(val) = map.get(prop) {
-                            Ok(val.clone())
-                        } else {
-                            Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(
-                                prop.clone(),
-                            ))))
-                        }
-                    } else if let RuntimeValue::List { ref data, .. } = object_val {
-                        let idx_val = evaluate(NodeType::Identifier(prop.clone()), scope.clone())?
-                            .into_type(scope.clone(), RuntimeType::Integer)?;
-                        if let RuntimeValue::Integer(idx) = idx_val {
-                            data.get(idx as usize).cloned().ok_or_else(|| {
-                                InterpreterErr::IndexNonList(NodeType::Identifier(prop.clone()))
+                        if let RuntimeValue::Integer(index) =
+                            evaluate(*property.clone(), scope.clone())?
+                        {
+                            get_tuple_index(
+                                &object_val,
+                                index as usize,
+                                NodeType::IntegerLiteral(index),
+                            )
+                            .or_else(|_| {
+                                get_list_index(
+                                    &object_val,
+                                    index as usize,
+                                    NodeType::IntegerLiteral(index),
+                                )
                             })
                         } else {
-                            Err(InterpreterErr::IndexNonList(NodeType::Identifier(
-                                prop.clone(),
-                            )))
+                            evaluate_member_expression(*property, scope)
                         }
                     } else {
-                        Err(InterpreterErr::UnexpectedType(object_val))
+                        evaluate_member_expression(*property, scope)
                     }
                 }
-                NodeType::IntegerLiteral(ref index) => {
-                    if let RuntimeValue::Struct(ObjectType::Tuple(ref map), _) = object_val {
-                        if let Some(val) = map.get(*index as usize) {
-                            Ok(val.clone())
-                        } else {
-                            panic!()
-                            // Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(
-                            //     prop.clone(),
-                            // ))))
-                        }
-                    } else if let RuntimeValue::Enum(name, i, Some(ObjectType::Tuple(data))) =
-                        object_val
-                    {
-                        if let Some(val) = data.get(*index as usize) {
-                            Ok(val.clone())
-                        } else {
-                            panic!()
-                            // Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(
-                            //     prop.clone(),
-                            // ))))
-                        }
-                    } else if let RuntimeValue::List { data, data_type: _ } = object_val {
-                        if let Some(val) = data.get(*index as usize) {
-                            Ok(val.clone())
-                        } else {
-                            panic!()
-                            // Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Variable(
-                            //     prop.clone(),
-                            // ))))
-                        }
-                    } else {
-                        Err(InterpreterErr::UnexpectedType(object_val))
-                    }
-                }
-
                 NodeType::CallExpression(caller, args) => {
                     if let NodeType::Identifier(ref var_name) = *object {
                         if let NodeType::Identifier(ref method_name) = *caller {
                             let struct_name = match object_val.clone() {
                                 RuntimeValue::Struct(_, Some(ref name)) => name.to_string(),
-                                RuntimeValue::List { data, data_type } => match *data_type {
-                                    Some(RuntimeType::Enum(x)) => x,
-                                    Some(RuntimeType::Struct(Some(x))) => x,
-                                    _ => panic!(),
+                                RuntimeValue::List { data: _, data_type } => match *data_type {
+                                    Some(RuntimeType::Enum(ref x)) => x.clone(),
+                                    Some(RuntimeType::Struct(Some(ref x))) => x.clone(),
+                                    _ => return Err(InterpreterErr::NotImplemented(*caller)),
                                 },
-                                _ => panic!(),
+                                _ => return Err(InterpreterErr::NotImplemented(*caller)),
                             };
                             if let Ok(val) = get_function(scope.clone(), &struct_name, method_name)
                             {
                                 let mut arguments = Vec::new();
-
                                 if val.1 {
-                                    arguments =
-                                        vec![(NodeType::Identifier(var_name.clone()), None)];
+                                    arguments.push((NodeType::Identifier(var_name.clone()), None));
                                 }
-
                                 arguments.extend(*args);
                                 return evaluate_function(scope, val.0, arguments);
                             }
                         }
                     }
-                    panic!("{:?}.{:?}", object, caller);
+                    Err(InterpreterErr::NotImplemented(*caller))
                 }
+                _ => match evaluate(*property, scope)? {
+                    RuntimeValue::Integer(index) => get_tuple_index(
+                        &object_val,
+                        index as usize,
+                        NodeType::IntegerLiteral(index),
+                    )
+                    .or_else(|_| {
+                        get_list_index(&object_val, index as usize, NodeType::IntegerLiteral(index))
+                    }),
+                    RuntimeValue::Float(index) => get_tuple_index(
+                        &object_val,
+                        index as usize,
+                        NodeType::IntegerLiteral(index as i64),
+                    )
+                    .or_else(|_| {
+                        get_list_index(
+                            &object_val,
+                            index as usize,
+                            NodeType::IntegerLiteral(index as i64),
+                        )
+                    }),
+                    RuntimeValue::Str(text) => {
+                        panic!()
+                    }
+                    _ => panic!(),
+                },
                 _ => Err(InterpreterErr::NotImplemented(*property)),
             }
         }
