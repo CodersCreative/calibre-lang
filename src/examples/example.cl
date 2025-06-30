@@ -99,10 +99,13 @@ fn main() -> int {
 	let mut x = true;
 
 	let z = "a";
-	let w = "b";
-	let d = z + w ; // Should give "ab"
-	
-	print(d + " ; " + x + " ; " + y);
+  if z == "a" {
+    let w = "b";
+    let d = z + w ; // Should give "ab"
+    
+    print(d + " ; " + x + " ; " + y);
+  }
+
 	print(x);
 	print(y);
 	print("Hello World") // Semicolons have no effect so they can be left out

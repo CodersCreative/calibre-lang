@@ -8,6 +8,16 @@ impl Player {
   fn default() -> Player {
     return Player.None;
   }
+
+  fn to_str(&self) -> char {
+    if self == Player.O{
+      return "O";
+    }
+    if self == Player.X{
+      return "X";
+    }
+    return " ";
+  }
 }
 
 struct Board{list(Player)}
@@ -24,7 +34,7 @@ impl Board {
       out += "| "
       for x in 0..3{
         //print("Yass")
-        print(self.0(y * 3 + x))
+        print(self.0[y * 3 + x])
       }
     }
   }

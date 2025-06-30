@@ -165,7 +165,32 @@ pub fn evaluate_member_expression(
             };
 
             match *property {
-                NodeType::MemberExpression { .. } => evaluate_member_expression(*property, scope),
+                NodeType::MemberExpression {
+                    object,
+                    property,
+                    is_computed,
+                } => {
+                    if is_computed {
+                        let idx_val = evaluate(*property.clone(), scope.clone())?
+                            .into_type(scope.clone(), RuntimeType::Integer)?;
+                        if let RuntimeValue::Integer(idx) = idx_val {
+                            if let RuntimeValue::List { data, data_type } = object_val {
+                                return data.get(idx as usize).cloned().ok_or_else(|| {
+                                    InterpreterErr::IndexNonList(*property.clone())
+                                });
+                            } else if let RuntimeValue::Struct(ObjectType::Tuple(data), _) =
+                                object_val
+                            {
+                                return data.get(idx as usize).cloned().ok_or_else(|| {
+                                    InterpreterErr::IndexNonList(*property.clone())
+                                });
+                            }
+                        } else {
+                            return Err(InterpreterErr::IndexNonList(*property.clone()));
+                        }
+                    }
+                    evaluate_member_expression(*property, scope)
+                }
                 NodeType::Identifier(ref prop) => {
                     if let RuntimeValue::Struct(ObjectType::Map(ref map), _) = object_val {
                         if let Some(val) = map.get(prop) {
@@ -192,7 +217,6 @@ pub fn evaluate_member_expression(
                     }
                 }
                 NodeType::IntegerLiteral(ref index) => {
-                    println!("yes");
                     if let RuntimeValue::Struct(ObjectType::Tuple(ref map), _) = object_val {
                         if let Some(val) = map.get(*index as usize) {
                             Ok(val.clone())
