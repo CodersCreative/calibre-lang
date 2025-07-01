@@ -15,7 +15,7 @@ use crate::{
 pub mod comparisons;
 pub mod loops;
 pub mod structs;
-pub mod patterns;
+pub mod matching;
 
 pub fn evaluate_program(
     exp: NodeType,

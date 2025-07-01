@@ -4,7 +4,7 @@ pub mod statements;
 use std::{cell::RefCell, rc::Rc};
 
 use expressions::lists::evaluate_iter_expression;
-use statements::{comparisons::evaluate_in_statement, patterns::evaluate_match_statement};
+use statements::{comparisons::evaluate_in_statement, matching::evaluate_match_statement};
 use thiserror::Error;
 
 use crate::{

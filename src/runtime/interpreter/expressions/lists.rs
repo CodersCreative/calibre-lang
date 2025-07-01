@@ -3,7 +3,7 @@ use std::{cell::RefCell, mem::discriminant, rc::Rc};
 use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
-        interpreter::{evaluate, statements::patterns::handle_conditionals, InterpreterErr},
+        interpreter::{evaluate, statements::matching::handle_conditionals, InterpreterErr},
         scope::{variables::get_var, Scope},
         values::{helper::VarType, RuntimeType, RuntimeValue},
     },
