@@ -237,12 +237,12 @@ mod tests {
                 inclusive: false,
             },
         ));
-        let body = Box::new(vec![NodeType::VariableDeclaration {
+        let body = vec![NodeType::VariableDeclaration {
             var_type: VarType::Mutable(None),
             identifier: "x".to_string(),
             value: Some(Box::new(NodeType::Identifier("i".to_string()))),
             data_type: None,
-        }]);
+        }];
         let node = NodeType::LoopDeclaration { loop_type, body };
         let result = evaluate_loop_declaration(node, scope.clone()).unwrap();
         assert_eq!(result, RuntimeValue::Integer(2));

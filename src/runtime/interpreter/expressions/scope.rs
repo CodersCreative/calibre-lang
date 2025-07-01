@@ -17,7 +17,6 @@ pub fn get_new_scope(
     parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)>,
     arguments: Vec<(NodeType, Option<NodeType>)>,
 ) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
-    // println!("{:?}", arguments);
     let new_scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
 
     for (i, (k, v, m, d)) in parameters.iter().enumerate() {
@@ -200,9 +199,9 @@ mod tests {
     fn test_evaluate_scope_return() {
         let parent_scope = new_scope();
         let node = NodeType::ScopeDeclaration {
-            body: Box::new(vec![
+            body: vec![
                 NodeType::Return { value: Box::new(NodeType::IntegerLiteral(42)) }
-            ])
+            ]
         };
         let result = evaluate_scope(node, parent_scope).unwrap();
         assert_eq!(result, RuntimeValue::Integer(42));
@@ -212,9 +211,9 @@ mod tests {
     fn test_evaluate_scope_no_return() {
         let parent_scope = new_scope();
         let node = NodeType::ScopeDeclaration {
-            body: Box::new(vec![
+            body: vec![
                 NodeType::IntegerLiteral(7)
-            ])
+            ]
         };
         let result = evaluate_scope(node, parent_scope).unwrap();
         assert_eq!(result, RuntimeValue::Integer(7));

@@ -2,6 +2,8 @@ pub mod binary;
 pub mod comparison;
 
 
+use std::collections::HashMap;
+
 use binary::BinaryOperator;
 use comparison::Comparison;
 
@@ -68,12 +70,16 @@ pub enum NodeType {
         data: Option<ObjectType<Option<NodeType>>>,
     },
     ScopeDeclaration {
-        body: Box<Vec<NodeType>>,
+        body: Vec<NodeType>,
+    },
+    MatchDeclaration {
+        value : Box<NodeType>,
+        patterns : Vec<(NodeType, Vec<NodeType>, Vec<NodeType>)>
     },
     FunctionDeclaration {
         identifier: String,
         parameters: Vec<(String, RuntimeType, RefMutability, Option<NodeType>)>,
-        body: Box<Vec<NodeType>>,
+        body: Vec<NodeType>,
         return_type: Option<RuntimeType>,
         is_async: bool,
     },
@@ -96,19 +102,19 @@ pub enum NodeType {
     IterExpression {
         map: Box<NodeType>,
         loop_type: Box<LoopType>,
-        conditionals: Box<Vec<NodeType>>,
+        conditionals: Vec<NodeType>,
     },
     LoopDeclaration {
         loop_type: Box<LoopType>,
-        body: Box<Vec<NodeType>>,
+        body: Vec<NodeType>,
     },
     Return {
         value: Box<NodeType>,
     },
     Identifier(String),
     StringLiteral(String),
-    ListLiteral(Box<Vec<NodeType>>),
-    TupleLiteral(Box<Vec<NodeType>>),
+    ListLiteral(Vec<NodeType>),
+    TupleLiteral(Vec<NodeType>),
     CharLiteral(char),
     FloatLiteral(f64),
     IntegerLiteral(i64),
@@ -117,7 +123,7 @@ pub enum NodeType {
         property: Box<NodeType>,
         is_computed: bool,
     },
-    CallExpression(Box<NodeType>, Box<Vec<(NodeType, Option<NodeType>)>>),
+    CallExpression(Box<NodeType>, Vec<(NodeType, Option<NodeType>)>),
     BinaryExpression {
         left: Box<NodeType>,
         right: Box<NodeType>,
@@ -134,8 +140,8 @@ pub enum NodeType {
         operator: BooleanOperation,
     },
     IfStatement {
-        comparisons: Box<Vec<NodeType>>,
-        bodies: Vec<Box<Vec<NodeType>>>,
+        comparisons: Vec<NodeType>,
+        bodies: Vec<Vec<NodeType>>,
     },
     StructLiteral(ObjectType<Option<NodeType>>),
 }

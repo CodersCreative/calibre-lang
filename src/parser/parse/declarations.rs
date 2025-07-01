@@ -13,6 +13,7 @@ impl Parser {
             TokenType::Struct => self.parse_struct_declaration(),
             TokenType::Func => self.parse_function_declaration(false),
             TokenType::If => self.parse_if_statement(),
+            TokenType::Match => self.parse_match_declaration(),
             TokenType::Stop(x) => match x {
                 StopValue::Return => self.parse_return_declaration(),
                 StopValue::Break => {
@@ -29,7 +30,7 @@ impl Parser {
             TokenType::Enum => self.parse_enum_declaration(),
             TokenType::For => self.parse_loop_declaration(),
             TokenType::OpenCurly => Ok(NodeType::ScopeDeclaration {
-                body: Box::new(self.parse_block()?),
+                body: self.parse_block()?,
             }),
             _ => self.parse_expression(),
         }
@@ -202,6 +203,65 @@ impl Parser {
             options,
         })
     }
+    
+    pub fn parse_match_declaration(&mut self) -> Result<NodeType, ParserError> {
+        let _ = self.expect_eat(
+            &TokenType::Match,
+            SyntaxErr::ExpectedKeyword(String::from("match")),
+        )?;
+
+        let value = Box::new(self.parse_expression()?);
+
+        let _ = self.expect_eat(
+            &TokenType::OpenCurly,
+            SyntaxErr::ExpectedOpeningBracket(TokenType::OpenCurly),
+        )?;
+
+        let mut patterns = Vec::new();
+
+        while self.first().token_type != TokenType::CloseCurly{
+            let primary = self.parse_expression()?;
+            let mut conditions = Vec::new();
+            while self.first().token_type == TokenType::If{
+                let _ = self.eat();
+                conditions.push(self.parse_expression()?);
+            }
+
+            let _ = self.expect_eat(
+                &TokenType::Arrow,
+                SyntaxErr::ExpectedKeyword(String::from("->")),
+            )?;
+
+            if self.first().token_type == TokenType::OpenCurly{
+                patterns.push(
+                    (
+                        primary,
+                        conditions,
+                        self.parse_block()?,
+                    )
+                )
+            }else{
+                patterns.push(
+                    (
+                        primary,
+                        conditions,
+                        vec![self.parse_statement()?],
+                    )
+                )
+            }
+
+            if self.first().token_type == TokenType::Comma{
+                let _ = self.eat();
+            }
+        }
+
+        let _ = self.expect_eat(
+            &TokenType::CloseCurly,
+            SyntaxErr::ExpectedClosingBracket(TokenType::CloseCurly),
+        );
+
+        Ok(NodeType::MatchDeclaration { value, patterns })
+    }
 
     pub fn parse_struct_declaration(&mut self) -> Result<NodeType, ParserError> {
         let _ = self.expect_eat(
@@ -270,7 +330,7 @@ impl Parser {
 
         Ok(NodeType::LoopDeclaration {
             loop_type: Box::new(loop_type),
-            body: Box::new(self.parse_block()?),
+            body: self.parse_block()?,
         })
     }
 
@@ -340,7 +400,7 @@ impl Parser {
         Ok(NodeType::FunctionDeclaration {
             identifier,
             parameters,
-            body: Box::new(self.parse_block()?),
+            body: self.parse_block()?,
             return_type,
             is_async,
         })
@@ -373,12 +433,12 @@ impl Parser {
         while self.first().token_type == TokenType::If {
             let _ = self.eat();
             comparisons.push(self.parse_expression()?);
-            bodies.push(Box::new(self.parse_block()?));
+            bodies.push(self.parse_block()?);
 
             if self.first().token_type == TokenType::Else {
                 let _ = self.eat();
                 if self.first().token_type == TokenType::OpenCurly {
-                    bodies.push(Box::new(self.parse_block()?));
+                    bodies.push(self.parse_block()?);
                     break;
                 }
             } else {
@@ -386,7 +446,7 @@ impl Parser {
             }
         }
         Ok(NodeType::IfStatement {
-            comparisons: Box::new(comparisons),
+            comparisons,
             bodies,
         })
     }

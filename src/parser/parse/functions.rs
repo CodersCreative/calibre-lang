@@ -17,7 +17,7 @@ impl Parser {
     pub fn parse_call_expression(&mut self, caller: NodeType) -> Result<NodeType, ParserError> {
         let mut expression = NodeType::CallExpression(
             Box::new(caller),
-            Box::new(self.parse_arguments(TokenType::OpenBrackets, TokenType::CloseBrackets)?),
+            self.parse_arguments(TokenType::OpenBrackets, TokenType::CloseBrackets)?,
         );
 
         if self.first().token_type == TokenType::OpenBrackets {

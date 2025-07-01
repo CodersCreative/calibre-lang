@@ -137,8 +137,8 @@ mod tests {
     fn test_evaluate_if_statement_true_branch() {
         let scope = new_scope();
         let node = NodeType::IfStatement {
-            comparisons: Box::new(vec![NodeType::Identifier(String::from("true"))]),
-            bodies: vec![Box::new(vec![NodeType::IntegerLiteral(123)])],
+            comparisons: vec![NodeType::Identifier(String::from("true"))],
+            bodies: vec![vec![NodeType::IntegerLiteral(123)]],
         };
         let result = evaluate_if_statement(node, scope.clone()).unwrap();
         assert_eq!(result, RuntimeValue::Integer(123));
@@ -148,10 +148,10 @@ mod tests {
     fn test_evaluate_if_statement_false_else() {
         let scope = new_scope();
         let node = NodeType::IfStatement {
-            comparisons: Box::new(vec![NodeType::Identifier(String::from("false"))]),
+            comparisons: vec![NodeType::Identifier(String::from("false"))],
             bodies: vec![
-                Box::new(vec![NodeType::IntegerLiteral(1)]),
-                Box::new(vec![NodeType::IntegerLiteral(2)]),
+                vec![NodeType::IntegerLiteral(1)],
+                vec![NodeType::IntegerLiteral(2)],
             ],
         };
         let result = evaluate_if_statement(node, scope.clone()).unwrap();

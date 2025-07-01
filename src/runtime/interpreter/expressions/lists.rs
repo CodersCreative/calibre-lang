@@ -23,8 +23,6 @@ pub fn evaluate_tuple_expression(
         }
     }
 
-    // let types: Vec<RuntimeType> = values.into_iter().map(|x| x.into()).collect();
-
     Ok(RuntimeValue::Tuple(values))
 }
 
@@ -109,7 +107,6 @@ pub fn evaluate_iter_expression(
                     )?;
                     if handle_conditionals(new_scope.clone())? {
                         result.push(evaluate(*map.clone(), new_scope)?);
-                        // result.push(RuntimeValue::Integer(i as i64));
                     }
                 }
             }
@@ -135,7 +132,6 @@ pub fn evaluate_iter_expression(
 
                     if handle_conditionals(new_scope.clone())? {
                         result.push(evaluate(*map.clone(), new_scope)?);
-                        // result.push(d);
                     }
                 }
             }
@@ -164,10 +160,10 @@ mod tests {
     #[test]
     fn test_evaluate_tuple_expression_basic() {
         let scope = new_scope();
-        let node = NodeType::TupleLiteral(Box::new(vec![
+        let node = NodeType::TupleLiteral(vec![
             NodeType::IntegerLiteral(1),
             NodeType::FloatLiteral(2.0),
-        ]));
+        ]);
         let result = evaluate_tuple_expression(node, scope).unwrap();
         assert_eq!(
             result,
@@ -178,11 +174,11 @@ mod tests {
     #[test]
     fn test_evaluate_list_expression_homogeneous() {
         let scope = new_scope();
-        let node = NodeType::ListLiteral(Box::new(vec![
+        let node = NodeType::ListLiteral(vec![
             NodeType::IntegerLiteral(1),
             NodeType::IntegerLiteral(2),
             NodeType::IntegerLiteral(3),
-        ]));
+        ]);
         let result = evaluate_list_expression(node, scope).unwrap();
         match result {
             RuntimeValue::List { data, data_type } => {
@@ -203,10 +199,10 @@ mod tests {
     #[test]
     fn test_evaluate_list_expression_heterogeneous() {
         let scope = new_scope();
-        let node = NodeType::ListLiteral(Box::new(vec![
+        let node = NodeType::ListLiteral(vec![
             NodeType::IntegerLiteral(1),
             NodeType::FloatLiteral(2.0),
-        ]));
+        ]);
         let result = evaluate_list_expression(node, scope).unwrap();
         match result {
             RuntimeValue::List { data, data_type } => {
@@ -223,7 +219,7 @@ mod tests {
     #[test]
     fn test_evaluate_list_expression_empty() {
         let scope = new_scope();
-        let node = NodeType::ListLiteral(Box::new(vec![]));
+        let node = NodeType::ListLiteral(Vec::new());
         let result = evaluate_list_expression(node, scope).unwrap();
         match result {
             RuntimeValue::List { data, data_type } => {

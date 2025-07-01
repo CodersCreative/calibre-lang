@@ -206,7 +206,7 @@ pub fn evaluate_member_expression(
                                         if let Ok(val) =
                                             get_function(scope.clone(), &object_name, method_name)
                                         {
-                                            return evaluate_function(scope, val.0, *args);
+                                            return evaluate_function(scope, val.0, args);
                                         } else {
                                             return Err(InterpreterErr::Value(ValueErr::Scope(
                                                 ScopeErr::Function(method_name.to_string()),
@@ -225,7 +225,7 @@ pub fn evaluate_member_expression(
                                         if let Ok(val) =
                                             get_function(scope.clone(), &object_name, method_name)
                                         {
-                                            return evaluate_function(scope, val.0, *args);
+                                            return evaluate_function(scope, val.0, args);
                                         } else {
                                             return Err(InterpreterErr::Value(ValueErr::Scope(
                                                 ScopeErr::Function(method_name.to_string()),
@@ -313,7 +313,7 @@ pub fn evaluate_member_expression(
                                 if val.1 {
                                     arguments.push((NodeType::Identifier(var_name.clone()), None));
                                 }
-                                arguments.extend(*args);
+                                arguments.extend(args);
                                 return evaluate_function(scope, val.0, arguments);
                             }
                         }

@@ -217,11 +217,11 @@ mod tests {
     #[test]
     fn test_evaluate_not_list() {
         let scope = new_scope();
-        let node = NodeType::NotExpression { value: Box::new(NodeType::ListLiteral(Box::new(vec![
+        let node = NodeType::NotExpression { value: Box::new(NodeType::ListLiteral(vec![
             NodeType::IntegerLiteral(1),
             NodeType::IntegerLiteral(2),
             NodeType::IntegerLiteral(3),
-        ]))) };
+        ])) };
         let result = evaluate_not(node, scope).unwrap();
         match result {
             RuntimeValue::List { data, .. } => assert_eq!(data, vec![RuntimeValue::Integer(3), RuntimeValue::Integer(2), RuntimeValue::Integer(1)]),

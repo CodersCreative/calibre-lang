@@ -58,7 +58,7 @@ pub fn evaluate_call_expression(
 
         match func {
             RuntimeValue::Function { .. } => {
-                return evaluate_function(scope, func, *arguments);
+                return evaluate_function(scope, func, arguments);
             }
             RuntimeValue::List { data, data_type } if arguments.len() == 1 => {
                 match evaluate(arguments[0].0.clone(), scope)? {
@@ -161,7 +161,7 @@ mod tests {
             return_type: Some(RuntimeType::Integer),
             is_async: false,
         };
-        let result = evaluate_function(scope, func, vec![]).unwrap();
+        let result = evaluate_function(scope, func, Vec::new()).unwrap();
         assert_eq!(result, RuntimeValue::Integer(42));
     }
 
@@ -170,7 +170,7 @@ mod tests {
         let scope = new_scope();
         let func = RuntimeValue::Function {
             identifier: "foo".to_string(),
-            parameters: vec![],
+            parameters: Vec::new(),
             body: Block(vec![NodeType::Return {
                 value: Box::new(NodeType::IntegerLiteral(7)),
             }]),
@@ -184,7 +184,7 @@ mod tests {
 
         let call_node = NodeType::CallExpression(
             Box::new(NodeType::Identifier("foo".to_string())),
-            Box::new(vec![]),
+            Vec::new(),
         );
         let result = evaluate_call_expression(call_node, scope).unwrap();
         assert_eq!(result, RuntimeValue::Integer(7));
@@ -204,7 +204,7 @@ mod tests {
 
         let call_node = NodeType::CallExpression(
             Box::new(NodeType::Identifier("x".to_string())),
-            Box::new(vec![]),
+            Vec::new(),
         );
         let result = evaluate_call_expression(call_node, scope).unwrap();
         assert_eq!(result, RuntimeValue::Integer(99));
@@ -224,7 +224,7 @@ mod tests {
 
         let call_node = NodeType::CallExpression(
             Box::new(NodeType::Identifier("lst".to_string())),
-            Box::new(vec![(NodeType::IntegerLiteral(1), None)]),
+            vec![(NodeType::IntegerLiteral(1), None)],
         );
         let result = evaluate_call_expression(call_node, scope).unwrap();
         assert_eq!(result, RuntimeValue::Integer(20));

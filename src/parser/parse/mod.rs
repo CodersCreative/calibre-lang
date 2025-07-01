@@ -350,7 +350,7 @@ impl Parser {
             &TokenType::CloseBrackets,
             SyntaxErr::ExpectedClosingBracket(TokenType::CloseBrackets),
         );
-        Ok(NodeType::TupleLiteral(Box::new(values)))
+        Ok(NodeType::TupleLiteral(values))
     }
 
     pub fn parse_list_expression(&mut self) -> Result<NodeType, ParserError> {
@@ -383,7 +383,7 @@ impl Parser {
                     SyntaxErr::ExpectedClosingBracket(TokenType::CloseSquare),
                 );
 
-                return Ok(NodeType::IterExpression { map : Box::new(values[0].clone()), loop_type : Box::new(loop_type), conditionals: Box::new(conditionals) })
+                return Ok(NodeType::IterExpression { map : Box::new(values[0].clone()), loop_type : Box::new(loop_type), conditionals })
             }else if self.first().token_type != TokenType::CloseSquare {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
             }
@@ -394,7 +394,7 @@ impl Parser {
             SyntaxErr::ExpectedClosingBracket(TokenType::CloseSquare),
         );
 
-        Ok(NodeType::ListLiteral(Box::new(values)))
+        Ok(NodeType::ListLiteral(values))
     }
 }
 

@@ -60,7 +60,7 @@ pub fn evaluate_function_declaration(
         let value = RuntimeValue::Function {
             identifier: identifier.clone(),
             parameters: params,
-            body: Block(*body),
+            body: Block(body),
             return_type,
             is_async,
         };
@@ -143,9 +143,9 @@ mod tests {
         let node = NodeType::FunctionDeclaration {
             identifier: "foo".to_string(),
             parameters: vec![],
-            body: Box::new(vec![NodeType::Return {
+            body: vec![NodeType::Return {
                 value: Box::new(NodeType::IntegerLiteral(1)),
-            }]),
+            }],
             return_type: None,
             is_async: false,
         };
