@@ -3,7 +3,7 @@ use std::{cell::RefCell, mem::discriminant, rc::Rc};
 use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
-        interpreter::{evaluate, InterpreterErr},
+        interpreter::{evaluate, statements::patterns::handle_conditionals, InterpreterErr},
         scope::{variables::get_var, Scope},
         values::{helper::VarType, RuntimeType, RuntimeValue},
     },
@@ -62,18 +62,6 @@ pub fn evaluate_iter_expression(
     scope: Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::IterExpression {map, loop_type, conditionals } = declaration {
-        let handle_conditionals = |new_scope: Rc<RefCell<Scope>>| -> Result<bool, InterpreterErr> {
-            let mut result = true;
-
-            for condition in conditionals.iter() {
-                if let RuntimeValue::Bool(value) = evaluate(condition.clone(), new_scope.clone())?{
-                    result = result && value;
-                }
-            }
-
-            Ok(result)
-        };
-
         let mut result = Vec::new();
 
         if let LoopType::For(identifier, range) = *loop_type {
@@ -87,7 +75,7 @@ pub fn evaluate_iter_expression(
                         VarType::Immutable(None),
                     );
 
-                    if handle_conditionals(new_scope.clone())? {
+                    if handle_conditionals(new_scope.clone(), conditionals.clone())? {
                         result.push(evaluate(*map.clone(), new_scope)?);
                     }
                 }
@@ -105,7 +93,7 @@ pub fn evaluate_iter_expression(
                         )],
                         vec![(NodeType::IntegerLiteral(i as i64), None)],
                     )?;
-                    if handle_conditionals(new_scope.clone())? {
+                    if handle_conditionals(new_scope.clone(), conditionals.clone())? {
                         result.push(evaluate(*map.clone(), new_scope)?);
                     }
                 }
@@ -130,7 +118,7 @@ pub fn evaluate_iter_expression(
                         },
                     );
 
-                    if handle_conditionals(new_scope.clone())? {
+                    if handle_conditionals(new_scope.clone(), conditionals.clone())? {
                         result.push(evaluate(*map.clone(), new_scope)?);
                     }
                 }

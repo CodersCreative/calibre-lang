@@ -1,11 +1,13 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use clap::ValueEnum;
+
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{InterpreterErr, evaluate},
-        scope::{Object, Scope, objects::get_object, variables::get_var},
-        values::{RuntimeValue, helper::ObjectType},
+        interpreter::{evaluate, InterpreterErr},
+        scope::{objects::get_object, variables::get_var, Object, Scope, ScopeErr},
+        values::{helper::ObjectType, RuntimeValue, ValueErr},
     },
 };
 
@@ -51,8 +53,9 @@ pub fn evaluate_enum_expression(
         data,
     } = exp
     {
+        // println!("{:?}.{:?}({:?})", identifier, value, data);
         let Object::Enum(enm_class) = get_object(scope.clone(), &identifier)? else {
-            panic!()
+            return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(identifier))))
         };
 
         if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
@@ -78,7 +81,7 @@ pub fn evaluate_enum_expression(
                             val.into_type(scope.clone(), property.1.clone())?,
                         );
                     } else {
-                        panic!();
+                        return Err(InterpreterErr::PropertyNotFound(property.0.to_string()))
                     }
                 }
 
@@ -102,6 +105,9 @@ pub fn evaluate_enum_expression(
 
                 let mut new_data_vals = Vec::new();
                 for (i, property) in properties.into_iter().enumerate() {
+                    if data_vals.len() <= i {
+                        return Err(InterpreterErr::OutOfBounds(String::from("Tuple Object Type"), i as i16));
+                    } 
                     new_data_vals.push(data_vals[i].into_type(scope.clone(), property.clone())?);
                 }
 

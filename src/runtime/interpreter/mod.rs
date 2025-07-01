@@ -4,7 +4,7 @@ pub mod statements;
 use std::{cell::RefCell, rc::Rc};
 
 use expressions::lists::evaluate_iter_expression;
-use statements::comparisons::evaluate_in_statement;
+use statements::{comparisons::evaluate_in_statement, patterns::evaluate_match_statement};
 use thiserror::Error;
 
 use crate::{
@@ -66,6 +66,8 @@ pub enum InterpreterErr {
     SetterArgs(Vec<(NodeType, Option<NodeType>)>),
     #[error("Property not found, {0:?}")]
     PropertyNotFound(String),
+    #[error("Out of bounds of a array: {0:?} - Value : {1:?}")]
+    OutOfBounds(String, i16),
 }
 
 impl From<ASTError> for InterpreterErr {
@@ -123,6 +125,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::ComparisonExpression { .. } => evaluate_comparison_expression(node, scope),
         NodeType::BooleanExpression { .. } => evaluate_boolean_expression(node, scope),
         NodeType::IfStatement { .. } => evaluate_if_statement(node, scope),
+        NodeType::MatchDeclaration { .. } => evaluate_match_statement(node, scope),
         NodeType::InDeclaration { .. } => evaluate_in_statement(node, scope),
         NodeType::MemberExpression { .. } => evaluate_member_expression(node, scope),
         NodeType::ImplDeclaration { .. } => evaluate_impl_declaration(node, scope),

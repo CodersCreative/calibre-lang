@@ -4,7 +4,7 @@ by default when code is imported it will run all the code not in functions in or
 // Enums declaration
 enum Language {
   // Enums can have hasmap type data structuress.
-	FRENCH { data : int},
+	FRENCH { data : int, code : int},
   // Enums can have tuple type data structuress.
 	ENGLISH {int},
 	SPANISH,
@@ -30,10 +30,21 @@ impl CountryBase {
 
 // By default the type of a variable will be infered by what is being assigned to it.
 // The let keyword creates an immutable variable that can be shadowed.
-let language = Language.FRENCH{data : 1};
+let language = Language.FRENCH{data : 1, code : 5};
 
+// A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
+match language {
+  Language.FRENCH{data} -> print("Enum: " + data),
+}
 // The const keyword creates an immutable variable that cannot be shadowed.
 const language_forced : Language = Language.ENGLISH {6};
+
+// By not putting any data by the match it will only check for the enum member.
+// Ifs can be added for further selection.
+match language_forced {
+  Language.ENGLISH if false -> print("Enum: ENGLISH?"), 
+  Language.ENGLISH -> print("Enum: ENGLISH"),
+}
 
 // The mut keyword can be added for mutable variable that can be shadowed.
 let mut y : int = 0;

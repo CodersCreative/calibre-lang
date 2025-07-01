@@ -21,7 +21,7 @@ pub fn evaluate_in_statement(
         match value{
             RuntimeValue::Str(x) => match ident{
                 RuntimeValue::Char(y) => return Ok(RuntimeValue::Bool(x.contains(y))), 
-                RuntimeValue::Char(y) => return Ok(RuntimeValue::Bool(x.contains(y))), 
+                RuntimeValue::Str(y) => return Ok(RuntimeValue::Bool(x.contains(&y))), 
                 _ => {},
             }
             RuntimeValue::List { data, data_type } => {
@@ -30,7 +30,6 @@ pub fn evaluate_in_statement(
             RuntimeValue::Tuple(data) => {
                 return Ok(RuntimeValue::Bool(data.contains(&ident))); 
             }
-            _ => {},
             RuntimeValue::Range(from, to) => {
                 let num : f32 = match ident {
                     RuntimeValue::Range(x, y) => (x as f32 + y as f32) / 2.0,
@@ -40,6 +39,7 @@ pub fn evaluate_in_statement(
                 };
                 return Ok(RuntimeValue::Bool(num >= from as f32 && num < to as f32)); 
             }
+            _ => {}
         }
 
         Ok(RuntimeValue::Bool(false))

@@ -12,6 +12,32 @@ use crate::{
     },
 };
 
+pub fn get_new_scope_with_values(
+    scope: Rc<RefCell<Scope>>,
+    arguments: Vec<(String, RuntimeValue, RefMutability)>,
+) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
+    let new_scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
+    for (k, v, m) in arguments.into_iter() {
+        if m == RefMutability::MutRef || m == RefMutability::Ref {
+            todo!()
+        }else{
+            let _ = new_scope.borrow_mut().push_var(
+                k.to_string(),
+                v,
+                match m {
+                    RefMutability::MutRef | RefMutability::MutValue => {
+                        VarType::Mutable(None)
+                    }
+                    _ => VarType::Immutable(None),
+                },
+            )?;
+        }
+    }
+
+    Ok(new_scope)
+
+}
+
 pub fn get_new_scope(
     scope: Rc<RefCell<Scope>>,
     parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)>,
@@ -48,6 +74,7 @@ pub fn get_new_scope(
                                 },
                             )?;
                         } else {
+                            println!("{:?} - {:?}", var, v);
                             return Err(InterpreterErr::UnexpectedType(var));
                         }
 

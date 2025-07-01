@@ -300,6 +300,7 @@ pub fn evaluate_member_expression(
                         if let NodeType::Identifier(ref method_name) = *caller {
                             let struct_name = match object_val.clone() {
                                 RuntimeValue::Struct(_, Some(ref name)) => name.to_string(),
+                                RuntimeValue::Enum(x, _, _) => x.to_string(),
                                 RuntimeValue::List { data: _, data_type } => match *data_type {
                                     Some(RuntimeType::Enum(ref x)) => x.clone(),
                                     Some(RuntimeType::Struct(Some(ref x))) => x.clone(),

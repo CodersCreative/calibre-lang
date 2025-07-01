@@ -297,6 +297,7 @@ impl RuntimeValue {
             },
             RuntimeValue::Enum(x, _, _) => match t {
                 RuntimeType::Enum(y) => *x == y,
+                RuntimeType::Struct(Some(y)) => *x == y,
                 _ => false,
             },
             RuntimeValue::Range(_, _) => match t {

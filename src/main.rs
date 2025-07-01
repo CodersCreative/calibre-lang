@@ -77,12 +77,8 @@ fn file(path: &str) -> Result<(), Box<dyn Error>> {
     let mut parser = parser::Parser::default();
     let scope = Rc::new(RefCell::new(Scope::new(None)));
 
-    if let Ok(txt) = fs::read_to_string(path) {
-        let program = parser.produce_ast(txt)?;
-        println!("result : {:?}", evaluate(program, scope)?);
-    } else {
-        println!("Failed to read");
-    }
+    let program = parser.produce_ast(fs::read_to_string(path)?)?;
+    let _ = evaluate(program, scope)?;
 
     Ok(())
 }
