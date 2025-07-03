@@ -1,5 +1,5 @@
 use crate::{
-    lexer::LexerError,
+    lexer::{Bracket, LexerError},
     parser::{Parser, ParserError, SyntaxErr},
     runtime::values::helper::{ObjectType, StopValue},
 };
@@ -37,27 +37,28 @@ impl Parser {
                     NodeType::StringLiteral(val.to_string())
                 }
             }
-            TokenType::OpenBrackets => {
+            TokenType::Open(Bracket::Paren) => {
                 self.eat();
-                let value = self.parse_expression()?;
+                let value = self.parse_statement()?;
                 let _ = self.expect_eat(
-                    &TokenType::CloseBrackets,
-                    SyntaxErr::ExpectedClosingBracket(TokenType::CloseBrackets),
+                    &TokenType::Close(Bracket::Paren),
+                    SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
                 )?;
                 value
             }
             TokenType::BinaryOperator(x) if x == &BinaryOperator::Subtract => {
                 self.eat();
                 NodeType::NotExpression {
-                    value: Box::new(self.parse_expression()?),
+                    value: Box::new(self.parse_statement()?),
                 }
             }
             TokenType::Not => {
                 self.eat();
                 NodeType::NotExpression {
-                    value: Box::new(self.parse_expression()?),
+                    value: Box::new(self.parse_statement()?),
                 }
             }
+            // _ => todo!(),
             _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
         })
     }
@@ -66,19 +67,21 @@ impl Parser {
         &mut self,
     ) -> Result<ObjectType<Option<NodeType>>, ParserError> {
         let _ = self.expect_eat(
-            &TokenType::OpenCurly,
-            SyntaxErr::ExpectedOpeningBracket(TokenType::OpenCurly),
+            &TokenType::Open(Bracket::Curly),
+            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
         );
         let mut is_tuple = true;
         let mut tuple = Vec::new();
         let mut properties = HashMap::new();
 
-        while !self.is_eof() && self.first().token_type != TokenType::CloseCurly {
+        while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Curly) {
             let key = self.first().value.clone();
-            tuple.push(Some(self.parse_expression()?));
+            tuple.push(Some(self.parse_statement()?));
 
-            if [TokenType::Comma, TokenType::CloseCurly].contains(&self.first().token_type) {
-                if self.first().token_type != TokenType::CloseCurly {
+            if [TokenType::Comma, TokenType::Close(Bracket::Curly)]
+                .contains(&self.first().token_type)
+            {
+                if self.first().token_type != TokenType::Close(Bracket::Curly) {
                     let _ = self.eat();
                 }
 
@@ -90,16 +93,16 @@ impl Parser {
 
             let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
 
-            properties.insert(key, Some(self.parse_expression()?));
+            properties.insert(key, Some(self.parse_statement()?));
 
-            if self.first().token_type != TokenType::CloseCurly {
+            if self.first().token_type != TokenType::Close(Bracket::Curly) {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
             }
         }
 
         let _ = self.expect_eat(
-            &TokenType::CloseCurly,
-            SyntaxErr::ExpectedClosingBracket(TokenType::CloseCurly),
+            &TokenType::Close(Bracket::Curly),
+            SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
         )?;
 
         if is_tuple {
@@ -110,7 +113,7 @@ impl Parser {
     }
 
     pub fn parse_object_expression(&mut self) -> Result<NodeType, ParserError> {
-        if self.first().token_type != TokenType::OpenCurly {
+        if self.first().token_type != TokenType::Open(Bracket::Curly) {
             return self.parse_boolean_expression();
         }
 
@@ -166,10 +169,10 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lexer::{Token, TokenType, tokenize};
     use crate::ast::NodeType;
-    use crate::runtime::values::helper::{ObjectType, StopValue};
+    use crate::lexer::{Token, TokenType, tokenize};
     use crate::parser::Parser;
+    use crate::runtime::values::helper::{ObjectType, StopValue};
 
     fn parser_with_tokens(tokens: Vec<Token>) -> Parser {
         Parser { tokens }

@@ -34,9 +34,9 @@ fn get_pos(x : int, y : int) -> int {
   y * 3 + x
 }
 
-fn get_user_input() int {
-  let x : int = input("Enter x position (min = 1, max = 3): ");
-  let y : int = input("Enter y position (min = 1, max = 3): ");
+fn get_user_input() -> int {
+  let mut x : int = input("Enter x position (min = 1, max = 3): ");
+  let mut y : int = input("Enter y position (min = 1, max = 3): ");
   x--; y--;
   get_pos(x, y);
 }
@@ -55,7 +55,6 @@ impl Board {
     for y in 0..3{
       let mut out = "| ";
       for x in 0..3{
-        print(y * 3 + x)
         let point : Player = self.0[y * 3 + x];
         out += point.to_char();
         out += " | "; 
@@ -72,7 +71,7 @@ impl Board {
       } 
     }
     true
-  }
+  } 
 
   fn get_winner(&self) -> Player {
     for y in 3 {
@@ -107,7 +106,7 @@ impl Board {
     let mut index = -1;
 
     for index < 0 || index > 9 || self.board[index] != Player.None {
-      clear();
+      clear()
       self.print_board();
       if index != -1 {
         print("Try again.");
@@ -122,7 +121,7 @@ impl Board {
     self.0[self.get_user_input()] = player;
   }
 
-  fn get_best_position(&mut self, player : Player) int {
+  fn get_best_position(&mut self, player : Player) -> int {
     let maximising = if player == Player.X {true} else {false}
     let mut best_pos = 0;
     let mut best_value = if maximising {INT_MAX} else {INT_MIN}
@@ -152,7 +151,7 @@ impl Board {
     best_pos
   }
 
-  fn minimax(&mut self, player : Player, depth : int = 0) int {
+  fn minimax(&mut self, player : Player, depth : int = 0) -> int {
     match board.get_winner() {
       Player.X -> return 100 - depth,
       Player.Y -> return -100 + depth,
@@ -185,19 +184,15 @@ impl Board {
   }
 }
 
-fn get_ais() -> list(int) {
-  let mut ais = [];
+fn get_ais() -> (bool, bool) {
+  let mut ais = (false, false);
 
   if trim(input("Enter 'y' to make Player X (1) an AI: ")) == "y" {
-    ais[0] = Player.X;
-  }else {
-    ais[0] = Player.None
+    ais.0 = true;
   }
   
   if trim(input("Enter 'y' to make Player O (2) an AI: ")) == "y" {
-    ais[1] = Player.O;
-  }else {
-    ais[1] = Player.None
+    ais.1 = true;
   }
 
   ais
@@ -206,14 +201,14 @@ fn get_ais() -> list(int) {
 fn main() {
   for true {
     let ais = get_ais();
-    let both_ais = ais[0] != Player.None && ais[1] != Player.None;
+    let both_ais = ais.0 && ais.1;
     let mut board : Board = Board.default();
     let mut player : Player = Player.X;
 
     for !board.is_full() && board.get_winner() == Player.None {
-      clear;
+      clear();
       board.print_board();
-      if ais[0] == player || ais[1] == player {
+      if ais.0 && Player.X == player || ais.1 && Player.O == player {
         board.0[board.get_best_position(player)] = player; 
         if both {
           wait(4);
@@ -225,7 +220,7 @@ fn main() {
       self.set_user_input(player);
       player.switch();
     }
-    clear;
+    clear();
     board.print_board();
 
     match board.get_winner() {

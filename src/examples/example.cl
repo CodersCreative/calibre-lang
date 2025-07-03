@@ -6,7 +6,7 @@ enum Language {
   // Enums can have hasmap type data structuress.
 	FRENCH { data : int, code : int},
   // Enums can have tuple type data structuress.
-	ENGLISH {int},
+	ENGLISH (int),
 	SPANISH,
 }
 
@@ -17,13 +17,12 @@ struct CountryBase {
 }
 
 // Structs can also be declaratied using a tuole structures.
-struct Country {Language}
+struct Country (Language)
 
 // To add static functions to an object (struct or enum) the impl keyword is used.
 impl CountryBase {
-  // In impl blocks the self keyword can be used to referece the object variable.
   // Methods in the impl block can also be invoked by Object.function()
-	fn get_language(&self) -> Language {
+	fn get_language(self : &CountryBase) -> Language {
 		self.language
 	}
 }
@@ -37,7 +36,7 @@ match language {
   Language.FRENCH{data} -> print("Enum: " + data),
 }
 // The const keyword creates an immutable variable that cannot be shadowed.
-const language_forced : Language = Language.ENGLISH {6};
+const language_forced : Language = Language.ENGLISH (6);
 
 // By not putting any data by the match it will only check for the enum member.
 // Ifs can be added for further selection.
@@ -50,13 +49,16 @@ match language_forced {
 let mut y : int = 0;
 
 // If a type is specified the data will automatically be converted to the type.
-let country : Country= {Language.SPANISH}
+let country : Country = Country(Language.SPANISH)
 
 // print function to output to stdout.
 print(language_forced);
 
 let mut x = 100;
-let mut b : (int, int) = (10, 10);
+
+// statements will automatically return the last value they use.
+/*let mut b : <int, int> = (10, if x == 100 {100} else {10});
+print("b -> " + b);*/
 
 /* input function to get an input from the user. 
 A value can be inputted to this function and will outputted to the user.*/
@@ -71,7 +73,7 @@ let mut list_dyn = [0, 10, 30, "Hello"];
 
 // The language has support for list comprehension to iter and filter an iterable value.
 // Typed arrays are created using the following syntax:
-let mut lst : list(int) = [x^2 for x in 0..100 if x % 2 == 0 if x % 8 != 0];
+let mut lst : list<int> = [x^2 for x in 0..100 if x % 2 == 0 if x % 8 != 0];
 
 print(lst);// A static array 
 

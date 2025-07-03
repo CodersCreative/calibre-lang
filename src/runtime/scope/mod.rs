@@ -12,8 +12,9 @@ use std::{
 use thiserror::Error;
 
 use crate::runtime::values::{
-    NativeFunctions, RuntimeValue,
+    RuntimeValue,
     helper::{ObjectType, StopValue, VarType},
+    native::NativeFunctions,
 };
 
 use super::values::RuntimeType;
@@ -73,6 +74,10 @@ fn get_global_variables() -> HashMap<String, (RuntimeValue, VarType)> {
             RuntimeValue::NativeFunction(NativeFunctions::Print),
         ),
         (
+            String::from("wait"),
+            RuntimeValue::NativeFunction(NativeFunctions::Wait),
+        ),
+        (
             String::from("range"),
             RuntimeValue::NativeFunction(NativeFunctions::Range),
         ),
@@ -111,10 +116,10 @@ impl Scope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::values::{RuntimeValue, helper::{VarType}};
-    use crate::runtime::scope::objects::{get_object, get_function};
-    use std::rc::Rc;
+    use crate::runtime::scope::objects::{get_function, get_object};
+    use crate::runtime::values::{RuntimeValue, helper::VarType};
     use std::cell::RefCell;
+    use std::rc::Rc;
 
     #[test]
     fn test_scope_global_variables() {
@@ -128,14 +133,29 @@ mod tests {
     #[test]
     fn test_scope_push_and_get_var() {
         let mut scope = Scope::new(None);
-        scope.push_var("x".to_string(), RuntimeValue::Integer(42), VarType::Mutable(None)).unwrap();
-        assert_eq!(scope.variables.get("x").unwrap().0, RuntimeValue::Integer(42));
+        scope
+            .push_var(
+                "x".to_string(),
+                RuntimeValue::Integer(42),
+                VarType::Mutable(None),
+            )
+            .unwrap();
+        assert_eq!(
+            scope.variables.get("x").unwrap().0,
+            RuntimeValue::Integer(42)
+        );
     }
 
     #[test]
     fn test_scope_assign_var_and_type_mismatch() {
         let mut scope = Scope::new(None);
-        scope.push_var("x".to_string(), RuntimeValue::Integer(1), VarType::Mutable(None)).unwrap();
+        scope
+            .push_var(
+                "x".to_string(),
+                RuntimeValue::Integer(1),
+                VarType::Mutable(None),
+            )
+            .unwrap();
         assert!(scope.assign_var("x", RuntimeValue::Integer(2)).is_ok());
         let err = scope.assign_var("x", RuntimeValue::Bool(true)).unwrap_err();
         match err {
@@ -147,7 +167,9 @@ mod tests {
     #[test]
     fn test_scope_assign_const_var_error() {
         let mut scope = Scope::new(None);
-        scope.push_var("y".to_string(), RuntimeValue::Integer(1), VarType::Constant).unwrap();
+        scope
+            .push_var("y".to_string(), RuntimeValue::Integer(1), VarType::Constant)
+            .unwrap();
         let err = scope.assign_var("y", RuntimeValue::Integer(2)).unwrap_err();
         match err {
             ScopeErr::AssignConstant(ref name) if name == "y" => {}
@@ -158,16 +180,36 @@ mod tests {
     #[test]
     fn test_scope_variable_shadowing() {
         let parent = Rc::new(RefCell::new(Scope::new(None)));
-        parent.borrow_mut().push_var("z".to_string(), RuntimeValue::Integer(1), VarType::Constant).unwrap();
+        parent
+            .borrow_mut()
+            .push_var("z".to_string(), RuntimeValue::Integer(1), VarType::Constant)
+            .unwrap();
         let child = Rc::new(RefCell::new(Scope::new(Some(parent.clone()))));
-        child.borrow_mut().push_var("z".to_string(), RuntimeValue::Integer(2), VarType::Mutable(None)).unwrap();
-        assert_eq!(child.borrow().variables.get("z").unwrap().0, RuntimeValue::Integer(2));
+        child
+            .borrow_mut()
+            .push_var(
+                "z".to_string(),
+                RuntimeValue::Integer(2),
+                VarType::Mutable(None),
+            )
+            .unwrap();
+        assert_eq!(
+            child.borrow().variables.get("z").unwrap().0,
+            RuntimeValue::Integer(2)
+        );
     }
 
     #[test]
     fn test_scope_get_var_and_resolve_var() {
         let parent = Rc::new(RefCell::new(Scope::new(None)));
-        parent.borrow_mut().push_var("a".to_string(), RuntimeValue::Integer(10), VarType::Mutable(None)).unwrap();
+        parent
+            .borrow_mut()
+            .push_var(
+                "a".to_string(),
+                RuntimeValue::Integer(10),
+                VarType::Mutable(None),
+            )
+            .unwrap();
         let child = Rc::new(RefCell::new(Scope::new(Some(parent.clone()))));
         let (val, vtype) = crate::runtime::scope::variables::get_var(child.clone(), "a").unwrap();
         assert_eq!(val, RuntimeValue::Integer(10));
@@ -178,7 +220,9 @@ mod tests {
     fn test_scope_push_and_get_object() {
         let mut scope = Scope::new(None);
         let obj = Object::NewType(RuntimeType::Integer);
-        scope.push_object("MyType".to_string(), obj.clone()).unwrap();
+        scope
+            .push_object("MyType".to_string(), obj.clone())
+            .unwrap();
         let rc_scope = Rc::new(RefCell::new(scope));
         let fetched = get_object(rc_scope.clone(), "MyType").unwrap();
         assert_eq!(fetched, obj);
@@ -189,7 +233,12 @@ mod tests {
         let mut scope = Scope::new(None);
         let obj = Object::NewType(RuntimeType::Integer);
         scope.push_object("MyStruct".to_string(), obj).unwrap();
-        scope.push_function("MyStruct".to_string(), ("foo".to_string(), RuntimeValue::Integer(1), false)).unwrap();
+        scope
+            .push_function(
+                "MyStruct".to_string(),
+                ("foo".to_string(), RuntimeValue::Integer(1), false),
+            )
+            .unwrap();
         let rc_scope = Rc::new(RefCell::new(scope));
         let (val, is_static) = get_function(rc_scope.clone(), "MyStruct", "foo").unwrap();
         assert_eq!(val, RuntimeValue::Integer(1));

@@ -22,18 +22,22 @@ pub enum LexerError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Bracket {
+    Curly,
+    Paren,
+    // Angle,
+    Square,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TokenType {
     Float,
     Integer,
     String,
     Identifier,
     Equals,
-    OpenBrackets,
-    CloseBrackets,
-    OpenCurly,
-    CloseCurly,
-    OpenSquare,
-    CloseSquare,
+    Open(Bracket),
+    Close(Bracket),
     Colon,
     Comma,
     Comparison(Comparison),
@@ -56,6 +60,7 @@ pub enum TokenType {
     Enum,
     List,
     Arrow,
+    Object,
     Async,
     Func,
     If,
@@ -75,6 +80,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("let"), TokenType::Let),
         (String::from("enum"), TokenType::Enum),
         (String::from("match"), TokenType::Match),
+        (String::from("obj"), TokenType::Object),
         (String::from("fn"), TokenType::Func),
         (String::from("else"), TokenType::Else),
         (String::from("list"), TokenType::List),
@@ -146,13 +152,13 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
 
         let get_token = |c: char| -> Option<TokenType> {
             match c {
-                '(' => Some(TokenType::OpenBrackets),
+                '(' => Some(TokenType::Open(Bracket::Paren)),
                 '|' => Some(TokenType::Or),
-                ')' => Some(TokenType::CloseBrackets),
-                '{' => Some(TokenType::OpenCurly),
-                '}' => Some(TokenType::CloseCurly),
-                '[' => Some(TokenType::OpenSquare),
-                ']' => Some(TokenType::CloseSquare),
+                ')' => Some(TokenType::Close(Bracket::Paren)),
+                '{' => Some(TokenType::Open(Bracket::Curly)),
+                '}' => Some(TokenType::Close(Bracket::Curly)),
+                '[' => Some(TokenType::Open(Bracket::Square)),
+                ']' => Some(TokenType::Close(Bracket::Square)),
                 ',' => Some(TokenType::Comma),
                 '&' => Some(TokenType::Ref),
                 '<' | '>' => Some(TokenType::Comparison(
@@ -309,13 +315,13 @@ mod tests {
             TokenType::Identifier,
             TokenType::Comparison(Comparison::Lesser),
             TokenType::Integer,
-            TokenType::OpenCurly,
+            TokenType::Open(Bracket::Curly),
             TokenType::Identifier,
             TokenType::Equals,
             TokenType::Identifier,
             TokenType::BinaryOperator(BinaryOperator::Add),
             TokenType::Integer,
-            TokenType::CloseCurly,
+            TokenType::Close(Bracket::Curly),
             TokenType::EOF,
         ];
 
@@ -378,9 +384,9 @@ mod tests {
             TokenType::Identifier,
             TokenType::Comparison(Comparison::LesserEqual),
             TokenType::Integer,
-            TokenType::OpenCurly,
+            TokenType::Open(Bracket::Curly),
             TokenType::Stop(StopValue::Return),
-            TokenType::CloseCurly,
+            TokenType::Close(Bracket::Curly),
             TokenType::EOF,
         ];
         let tokens = tokenize(input).unwrap();

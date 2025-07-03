@@ -1,4 +1,5 @@
 pub mod helper;
+pub mod native;
 
 use core::panic;
 use std::{
@@ -18,7 +19,7 @@ use crate::{
             Object, Scope, ScopeErr,
             objects::{get_object, resolve_object},
         },
-        values::helper::ObjectType,
+        values::{helper::ObjectType, native::NativeFunctions},
     },
 };
 
@@ -35,15 +36,6 @@ impl From<ScopeErr> for ValueErr {
         Self::Scope(value)
     }
 }
-#[derive(Clone, PartialEq, PartialOrd, Debug)]
-pub enum NativeFunctions {
-    Print,
-    Input,
-    Trim,
-    Range,
-}
-
-impl NativeFunctions {}
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum RuntimeType {
@@ -184,85 +176,6 @@ impl RuntimeValue {
             RuntimeValue::Float(_) => true,
             RuntimeValue::Integer(_) => true,
             _ => false,
-        }
-    }
-
-    pub fn call_native(
-        &self,
-        args: Vec<(RuntimeValue, Option<RuntimeValue>)>,
-        scope: Rc<RefCell<Scope>>,
-    ) -> RuntimeValue {
-        if let Self::NativeFunction(func) = self {
-            match func {
-                NativeFunctions::Print => {
-                    let mut output = String::new();
-
-                    for arg in args {
-                        output.push_str(&format!("{} ", arg.0.to_string()));
-                    }
-
-                    println!("{}", output.trim());
-
-                    RuntimeValue::Null
-                }
-                NativeFunctions::Range => {
-                    if args.len() <= 1 {
-                        let RuntimeValue::Integer(amt) = args[0].0 else {
-                            panic!()
-                        };
-                        RuntimeValue::Range(0, amt as i32)
-                    } else if args.len() == 2 {
-                        let RuntimeValue::Integer(start) = args[0].0 else {
-                            panic!()
-                        };
-                        let RuntimeValue::Integer(stop) = args[1].0 else {
-                            panic!()
-                        };
-                        RuntimeValue::Range(start as i32, stop as i32)
-                    } else if args.len() == 3 {
-                        let RuntimeValue::Integer(start) = args[0].0 else {
-                            panic!()
-                        };
-                        let RuntimeValue::Integer(stop) = args[1].0 else {
-                            panic!()
-                        };
-                        let RuntimeValue::Integer(step) = args[2].0 else {
-                            panic!()
-                        };
-                        RuntimeValue::List {
-                            data: (start..stop)
-                                .step_by(step as usize)
-                                .map(|x| RuntimeValue::Integer(x))
-                                .collect(),
-                            data_type: Box::new(Some(RuntimeType::Integer)),
-                        }
-                    } else {
-                        RuntimeValue::Null
-                    }
-                }
-                NativeFunctions::Trim => {
-                    if let Some((RuntimeValue::Str(x), _)) = args.get(0) {
-                        RuntimeValue::Str(x.trim().to_string())
-                    } else {
-                        RuntimeValue::Null
-                    }
-                }
-                NativeFunctions::Input => {
-                    let mut editor = DefaultEditor::new().unwrap();
-                    let txt = match args.get(0) {
-                        Some(x) => x.0.clone(),
-                        None => RuntimeValue::Str("".to_string()),
-                    };
-
-                    let readline = editor.readline(&txt.to_string());
-                    match readline {
-                        Ok(line) => RuntimeValue::Str(line),
-                        Err(_) => RuntimeValue::Null,
-                    }
-                }
-            }
-        } else {
-            panic!();
         }
     }
 

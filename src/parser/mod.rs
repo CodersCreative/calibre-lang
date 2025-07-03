@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::{
     ast::NodeType,
-    lexer::{LexerError, Token, TokenType, tokenize},
+    lexer::{Bracket, LexerError, Token, TokenType, tokenize},
 };
 
 pub mod parse;
@@ -49,9 +49,11 @@ pub enum ParserError {
 #[derive(Error, Debug)]
 pub enum SyntaxErr {
     #[error("Expected opening bracket, {0:?}.")]
-    ExpectedOpeningBracket(TokenType),
+    ExpectedOpeningBracket(Bracket),
     #[error("Expected closing bracket, {0:?}.")]
-    ExpectedClosingBracket(TokenType),
+    ExpectedClosingBracket(Bracket),
+    #[error("Expected token, {0:?}.")]
+    ExpectedToken(TokenType),
     #[error("Expected identifier.")]
     ExpectedIdentifier,
     #[error("Expected name.")]
