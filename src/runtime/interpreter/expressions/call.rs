@@ -3,11 +3,10 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{InterpreterErr, evaluate, expressions::scope::get_new_scope},
-        scope::{Scope, ScopeErr, variables::resolve_var},
+        interpreter::{evaluate, expressions::{scope::get_new_scope, structs::evaluate_struct_expression}, InterpreterErr},
+        scope::{objects::get_object, variables::resolve_var, Object, Scope, ScopeErr},
         values::{
-            RuntimeValue, ValueErr,
-            helper::{StopValue, VarType},
+            helper::{ObjectType, StopValue, VarType}, RuntimeValue, ValueErr
         },
     },
 };
@@ -54,6 +53,15 @@ pub fn evaluate_call_expression(
     scope: Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::CallExpression(caller, arguments) = exp {
+        if let NodeType::Identifier(object_name) = *caller.clone() {
+            if let Ok(Object::Struct(obj)) = get_object(scope.clone(), &object_name){
+                let mut args = Vec::new();
+                for arg in arguments{
+                    args.push(evaluate(arg.0, scope.clone())?);
+                }
+                return Ok(RuntimeValue::Struct(ObjectType::Tuple(args), Some(object_name)));
+            }
+        }
         let func = evaluate(*caller.clone(), scope.clone())?;
 
         match func {

@@ -1,6 +1,5 @@
 /*import "env/whatever.cl"  will import the file at this locatioon
 by default when code is imported it will run all the code not in functions in order*/
-
 // Enums declaration
 enum Language {
   // Enums can have hasmap type data structuress.
@@ -57,8 +56,8 @@ print(language_forced);
 let mut x = 100;
 
 // statements will automatically return the last value they use.
-/*let mut b : <int, int> = (10, if x == 100 {100} else {10});
-print("b -> " + b);*/
+let mut b : <int, int> = (10, if x == 100 {100} else {10});
+print("b -> " + b);
 
 /* input function to get an input from the user. 
 A value can be inputted to this function and will outputted to the user.*/
@@ -94,7 +93,7 @@ for x == y {
 
 /* Functions require all variables to have a specified type including those with default values.
 Return types of functions are recommended to specify their return type if they have any*/
-fn range2(stop : int, start : int = 0, step : int = 10) -> list(int) {
+fn range2(stop : int, start : int = 0, step : int = 10) -> list<int> {
   range(start, stop * 2, step * 2)
 }
 

@@ -163,7 +163,7 @@ impl Parser {
         Ok(properties)
     }
 
-    fn parse_type_list_with_ref(
+    fn parse_type_list(
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
@@ -194,30 +194,6 @@ impl Parser {
         Ok(properties)
     }
 
-    fn parse_type_list(
-        &mut self,
-        open_token: TokenType,
-        close_token: TokenType,
-    ) -> Result<Vec<RuntimeType>, ParserError> {
-        let mut properties = Vec::new();
-        let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
-
-        while !self.is_eof() && self.first().token_type != close_token {
-            properties.push(
-                self.parse_type()?
-                    .expect("Expected data type after identifier"),
-            );
-
-            if self.first().token_type != close_token {
-                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
-            }
-        }
-
-        let _ = self.expect_eat(&close_token, SyntaxErr::ExpectedToken(close_token.clone()))?;
-
-        Ok(properties)
-    }
-
     pub fn parse_type(&mut self) -> Result<Option<RuntimeType>, ParserError> {
         let t = self.first().clone();
 
@@ -225,7 +201,7 @@ impl Parser {
             Ok(Some(RuntimeType::Tuple(self.parse_type_list(
                 TokenType::Comparison(Comparison::Greater),
                 TokenType::Comparison(Comparison::Lesser),
-            )?)))
+            )?.into_iter().map(|x| x.0).collect())))
         } else if t.token_type == TokenType::Func || t.token_type == TokenType::Async {
             let _ = self.eat();
             let is_async = if t.token_type == TokenType::Async {
@@ -238,7 +214,7 @@ impl Parser {
                 false
             };
 
-            let args = self.parse_type_list_with_ref(
+            let args = self.parse_type_list(
                 TokenType::Open(Bracket::Paren),
                 TokenType::Close(Bracket::Paren),
             )?;
@@ -259,6 +235,11 @@ impl Parser {
             let t = if self.first().token_type == TokenType::Comparison(Comparison::Greater) {
                 let _ = self.eat();
                 let t = Some(self.parse_type()?.expect("Expected data type"));
+                if self.first().token_type == TokenType::Comparison(Comparison::LesserEqual) {
+                    let former = self.eat();
+                    self.tokens.push(Token { value: String::from(">"), token_type: TokenType::Comparison(Comparison::Lesser), ..former });
+                    self.tokens.push(Token { value: String::from("="), token_type: TokenType::Equals, ..former });
+                }
                 let _ = self.expect_eat(
                     &TokenType::Comparison(Comparison::Lesser),
                     SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Lesser)),
@@ -321,7 +302,7 @@ impl Parser {
                 }
 
                 let mut conditionals = Vec::new();
-
+                
                 while self.first().token_type == TokenType::If {
                     let _ = self.eat();
                     conditionals.push(self.parse_statement()?);

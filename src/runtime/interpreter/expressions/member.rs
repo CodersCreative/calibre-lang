@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{ascii::AsciiExt, cell::RefCell, rc::Rc};
 
 use crate::{
     ast::NodeType,
@@ -12,6 +12,8 @@ use crate::{
         values::{RuntimeType, RuntimeValue, ValueErr, helper::ObjectType},
     },
 };
+
+use super::structs::evaluate_enum_expression;
 
 fn assign_to_struct_field(
     object_val: &mut RuntimeValue,
@@ -191,7 +193,7 @@ pub fn evaluate_member_expression(
                         var.0
                     } else if let Ok(obj) = get_object(scope.clone(), object_name) {
                         match obj {
-                            Object::Enum(_) => {
+                            Object::Enum(enm_name) => {
                                 if let NodeType::Identifier(value) = *property {
                                     return evaluate(
                                         NodeType::EnumExpression {
@@ -208,9 +210,10 @@ pub fn evaluate_member_expression(
                                         {
                                             return evaluate_function(scope, val.0, args);
                                         } else {
-                                            return Err(InterpreterErr::Value(ValueErr::Scope(
-                                                ScopeErr::Function(method_name.to_string()),
-                                            )));
+                                            return evaluate_enum_expression(NodeType::EnumExpression { identifier: object_name.to_string(), value: method_name.to_string(), data: Some(ObjectType::Tuple(args.into_iter().map(|x| Some(x.0)).collect())) }, scope);
+                                            // return Err(InterpreterErr::Value(ValueErr::Scope(
+                                            //     ScopeErr::Function(method_name.to_string()),
+                                            // )));
                                         }
                                     } else {
                                         return Err(InterpreterErr::UnexpectedNode(*caller));

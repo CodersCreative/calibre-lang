@@ -132,23 +132,46 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
 pub struct Token {
     pub value: String,
     pub token_type: TokenType,
+    pub line : usize,
+    pub col : usize,
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, value: &str) -> Self {
+    pub fn new(token_type: TokenType, value: &str, line : usize, col : usize) -> Self {
         Self {
             value: value.to_string(),
             token_type,
+            line,
+            col,
         }
+    }
+}
+
+fn increment_line_col(line : &mut usize, col : &mut usize, c : &char) {
+    if c == &'\n' {
+        *line += 1;
+        *col = 0;
+    }else if c.is_whitespace(){
+        *col += 1;
     }
 }
 
 pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut buffer: Vec<char> = txt.chars().collect();
+    // println!("{buffer:?}");
+    let mut line : usize = 1;
+    let mut col : usize = 0;
 
     while buffer.len() > 0 {
         let first = buffer.first().unwrap();
+        increment_line_col(&mut line, &mut col, first);
+        if buffer[0] == '\n' {
+            line += 1;
+            col = 0;
+        }else if buffer[0].is_whitespace(){
+            col += 1;
+        }
 
         let get_token = |c: char| -> Option<TokenType> {
             match c {
@@ -176,7 +199,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
         };
 
         let token = match get_token(*first) {
-            Some(t) => Some(Token::new(t, buffer.remove(0).to_string().trim())),
+            Some(t) => Some(Token::new(t, buffer.remove(0).to_string().trim(), line, col)),
             _ => {
                 let ignore = IGNORE.contains(first);
 
@@ -186,12 +209,13 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                     let _ = buffer.remove(0);
 
                     while buffer[0] != '"' {
+                        increment_line_col(&mut line, &mut col, &buffer[0]);
                         txt.push(buffer.remove(0));
                     }
 
                     let _ = buffer.remove(0);
 
-                    Some(Token::new(TokenType::String, &txt))
+                    Some(Token::new(TokenType::String, &txt, line, col))
                 } else if first.is_whitespace() && !ignore {
                     let _ = buffer.remove(0);
                     None
@@ -210,9 +234,9 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                     }
 
                     if is_int {
-                        Some(Token::new(TokenType::Integer, number.trim()))
+                        Some(Token::new(TokenType::Integer, number.trim(), line, col))
                     } else {
-                        Some(Token::new(TokenType::Float, number.trim()))
+                        Some(Token::new(TokenType::Float, number.trim(), line, col))
                     }
                 } else if (first.is_alphabetic() || first == &'_') && !ignore {
                     let mut txt = String::new();
@@ -224,9 +248,9 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                     }
 
                     if let Some(identifier) = keywords().get(txt.trim()) {
-                        Some(Token::new(identifier.clone(), txt.trim()))
+                        Some(Token::new(identifier.clone(), txt.trim(), line, col))
                     } else {
-                        Some(Token::new(TokenType::Identifier, txt.trim()))
+                        Some(Token::new(TokenType::Identifier, txt.trim(), line, col))
                     }
                 } else if ignore {
                     let _ = buffer.remove(0);
@@ -240,7 +264,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
         if let Some(token) = token {
             if let Some(last) = tokens.last() {
                 if last.value == "/" && (token.value == "*" || token.value == "/") {
-                    tokens.pop();
+                    let _ = tokens.pop();
                     let mut first = '/';
                     let mut second = '*';
 
@@ -255,6 +279,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                     while buffer.len() > 0 && can_continue(first, second, token.value == "/") {
                         first = second;
                         second = buffer.remove(0);
+                        increment_line_col(&mut line, &mut col, &second);
                     }
 
                     continue;
@@ -263,15 +288,17 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                 let combined = format!("{}{}", last.value, token.value);
 
                 if let Some(t) = special_keywords().get(&combined) {
-                    let token = Token::new(t.clone(), &combined);
-                    tokens.pop();
-                    tokens.push(token);
-                    continue;
+                    if last.col / token.col == 1{
+                        let token = Token::new(t.clone(), &combined, line, col);
+                        tokens.pop();
+                        tokens.push(token);
+                        continue;
+                    }
                 }
 
                 if let TokenType::BinaryOperator(x) = &last.token_type {
                     if token.token_type == TokenType::Equals {
-                        let token = Token::new(TokenType::BinaryAssign(x.clone()), &last.value);
+                        let token = Token::new(TokenType::BinaryAssign(x.clone()), &last.value, line, col);
                         tokens.pop();
                         tokens.push(token);
                         continue;
@@ -283,7 +310,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                         if x != &y {
                             return Err(LexerError::BinaryOperatorShortHand);
                         }
-                        let token = Token::new(TokenType::UnaryAssign(y), &last.value);
+                        let token = Token::new(TokenType::UnaryAssign(y), &last.value, line, col);
                         tokens.pop();
                         tokens.push(token);
                         continue;
@@ -294,7 +321,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
         }
     }
 
-    tokens.push(Token::new(TokenType::EOF, "EndOfFile"));
+    tokens.push(Token::new(TokenType::EOF, "EndOfFile", line, col));
 
     Ok(tokens)
 }

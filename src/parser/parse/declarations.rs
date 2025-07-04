@@ -18,7 +18,7 @@ impl Parser {
         match &self.first().token_type {
             TokenType::Let | TokenType::Const => self.parse_variable_declaration(),
             TokenType::Struct => self.parse_struct_declaration(),
-            TokenType::Func => self.parse_function_declaration(false),
+            TokenType::Func => self.parse_function_declaration(),
             TokenType::If => self.parse_if_statement(),
             TokenType::Match => self.parse_match_declaration(),
             TokenType::Stop(x) => match x {
@@ -70,13 +70,13 @@ impl Parser {
             _ => None,
         };
 
-        Ok(match self.eat().token_type {
-            TokenType::Equals => NodeType::VariableDeclaration {
+        Ok(match self.first().token_type {
+            TokenType::Equals => {let _ = self.eat(); NodeType::VariableDeclaration {
                 var_type,
                 identifier,
                 data_type,
                 value: Some(Box::new(self.parse_statement()?)),
-            },
+            }},
             _ => {
                 if let VarType::Mutable(_) = var_type {
                     NodeType::VariableDeclaration {
@@ -110,7 +110,7 @@ impl Parser {
         )?;
 
         while self.first().token_type == TokenType::Func {
-            let func = self.parse_function_declaration(true)?;
+            let func = self.parse_function_declaration()?;
 
             match func {
                 NodeType::FunctionDeclaration {
@@ -288,7 +288,7 @@ impl Parser {
                 _ => ObjectType::Tuple(self.parse_type_list(
                     TokenType::Open(Bracket::Paren),
                     TokenType::Close(Bracket::Paren),
-                )?),
+                )?.into_iter().map(|x| x.0).collect()),
             },
         })
     }
@@ -344,7 +344,6 @@ impl Parser {
 
     pub fn parse_function_declaration(
         &mut self,
-        self_valid: bool,
     ) -> Result<NodeType, ParserError> {
         let _ = self.eat();
         let identifier = self
@@ -502,7 +501,7 @@ mod tests {
 
     #[test]
     fn test_parse_struct_declaration_tuple_one() {
-        let tokens = tokenize(String::from("struct Point { int }")).unwrap();
+        let tokens = tokenize(String::from("struct Point (int)")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let node = parser.parse_struct_declaration().unwrap();
         match node {
@@ -522,7 +521,7 @@ mod tests {
 
     #[test]
     fn test_parse_struct_declaration_tuple() {
-        let tokens = tokenize(String::from("struct Point { int, int }")).unwrap();
+        let tokens = tokenize(String::from("struct Point (int, int)")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let node = parser.parse_struct_declaration().unwrap();
         match node {
