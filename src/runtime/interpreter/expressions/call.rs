@@ -3,10 +3,14 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{evaluate, expressions::{scope::get_new_scope, structs::evaluate_struct_expression}, InterpreterErr},
-        scope::{objects::get_object, variables::resolve_var, Object, Scope, ScopeErr},
+        interpreter::{
+            InterpreterErr, evaluate,
+            expressions::{scope::get_new_scope, structs::evaluate_struct_expression},
+        },
+        scope::{Object, Scope, ScopeErr, objects::get_object, variables::resolve_var},
         values::{
-            helper::{ObjectType, StopValue, VarType}, RuntimeValue, ValueErr
+            RuntimeValue, ValueErr,
+            helper::{ObjectType, StopValue, VarType},
         },
     },
 };
@@ -54,12 +58,15 @@ pub fn evaluate_call_expression(
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::CallExpression(caller, arguments) = exp {
         if let NodeType::Identifier(object_name) = *caller.clone() {
-            if let Ok(Object::Struct(obj)) = get_object(scope.clone(), &object_name){
+            if let Ok(Object::Struct(obj)) = get_object(scope.clone(), &object_name) {
                 let mut args = Vec::new();
-                for arg in arguments{
+                for arg in arguments {
                     args.push(evaluate(arg.0, scope.clone())?);
                 }
-                return Ok(RuntimeValue::Struct(ObjectType::Tuple(args), Some(object_name)));
+                return Ok(RuntimeValue::Struct(
+                    ObjectType::Tuple(args),
+                    Some(object_name),
+                ));
             }
         }
         let func = evaluate(*caller.clone(), scope.clone())?;
@@ -70,7 +77,7 @@ pub fn evaluate_call_expression(
             }
             RuntimeValue::List { data, data_type } if arguments.len() == 1 => {
                 match evaluate(arguments[0].0.clone(), scope)? {
-                    RuntimeValue::Integer(i) if arguments.len() == 1 => {
+                    RuntimeValue::Int(i) if arguments.len() == 1 => {
                         return Ok(data
                             .get(i as usize)
                             .expect("Tried to get index that is larger than list size")
@@ -164,13 +171,13 @@ mod tests {
             identifier: "foo".to_string(),
             parameters: vec![],
             body: Block(vec![NodeType::Return {
-                value: Box::new(NodeType::IntegerLiteral(42)),
+                value: Box::new(NodeType::IntLiteral(42)),
             }]),
-            return_type: Some(RuntimeType::Integer),
+            return_type: Some(RuntimeType::Int),
             is_async: false,
         };
         let result = evaluate_function(scope, func, Vec::new()).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(42));
+        assert_eq!(result, RuntimeValue::Int(42));
     }
 
     #[test]
@@ -180,9 +187,9 @@ mod tests {
             identifier: "foo".to_string(),
             parameters: Vec::new(),
             body: Block(vec![NodeType::Return {
-                value: Box::new(NodeType::IntegerLiteral(7)),
+                value: Box::new(NodeType::IntLiteral(7)),
             }]),
-            return_type: Some(RuntimeType::Integer),
+            return_type: Some(RuntimeType::Int),
             is_async: false,
         };
         scope
@@ -195,7 +202,7 @@ mod tests {
             Vec::new(),
         );
         let result = evaluate_call_expression(call_node, scope).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(7));
+        assert_eq!(result, RuntimeValue::Int(7));
     }
 
     #[test]
@@ -205,24 +212,22 @@ mod tests {
             .borrow_mut()
             .push_var(
                 "x".to_string(),
-                RuntimeValue::Integer(99),
+                RuntimeValue::Int(99),
                 VarType::Mutable(None),
             )
             .unwrap();
 
-        let call_node = NodeType::CallExpression(
-            Box::new(NodeType::Identifier("x".to_string())),
-            Vec::new(),
-        );
+        let call_node =
+            NodeType::CallExpression(Box::new(NodeType::Identifier("x".to_string())), Vec::new());
         let result = evaluate_call_expression(call_node, scope).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(99));
+        assert_eq!(result, RuntimeValue::Int(99));
     }
 
     #[test]
     fn test_evaluate_call_expression_list_index() {
         let scope = new_scope();
         let list = RuntimeValue::List {
-            data: vec![RuntimeValue::Integer(10), RuntimeValue::Integer(20)],
+            data: vec![RuntimeValue::Int(10), RuntimeValue::Int(20)],
             data_type: Box::new(None),
         };
         scope
@@ -232,9 +237,9 @@ mod tests {
 
         let call_node = NodeType::CallExpression(
             Box::new(NodeType::Identifier("lst".to_string())),
-            vec![(NodeType::IntegerLiteral(1), None)],
+            vec![(NodeType::IntLiteral(1), None)],
         );
         let result = evaluate_call_expression(call_node, scope).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(20));
+        assert_eq!(result, RuntimeValue::Int(20));
     }
 }

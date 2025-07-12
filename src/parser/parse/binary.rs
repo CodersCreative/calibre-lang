@@ -52,7 +52,7 @@ impl Parser {
         let mut left = self.parse_multiplicative_expression()?;
 
         while let TokenType::BinaryOperator(op) = self.first().token_type.clone() {
-            if [BinaryOperator::Add, BinaryOperator::Subtract].contains(&op) {
+            if [BinaryOperator::Add, BinaryOperator::Sub].contains(&op) {
                 let _ = self.eat();
                 let right = self.parse_multiplicative_expression()?;
 
@@ -73,9 +73,9 @@ impl Parser {
         let mut left = self.parse_power_expression()?;
         while let TokenType::BinaryOperator(op) = self.first().token_type.clone() {
             if [
-                BinaryOperator::Multiply,
-                BinaryOperator::Divide,
-                BinaryOperator::Modulus,
+                BinaryOperator::Mul,
+                BinaryOperator::Div,
+                BinaryOperator::Mod,
             ]
             .contains(&op)
             {
@@ -98,7 +98,7 @@ impl Parser {
     pub fn parse_power_expression(&mut self) -> Result<NodeType, ParserError> {
         let mut left = self.parse_call_member_expression()?;
 
-        while let TokenType::BinaryOperator(BinaryOperator::Power) = self.first().token_type.clone()
+        while let TokenType::BinaryOperator(BinaryOperator::Pow) = self.first().token_type.clone()
         {
             let _ = self.eat();
             let right = self.parse_call_member_expression()?;
@@ -106,7 +106,7 @@ impl Parser {
             left = NodeType::BinaryExpression {
                 left: Box::new(left),
                 right: Box::new(right),
-                operator: BinaryOperator::Power,
+                operator: BinaryOperator::Pow,
             };
         }
 
@@ -187,7 +187,7 @@ mod tests {
         let node = parser.parse_additive_expression().unwrap();
         match node {
             NodeType::BinaryExpression { operator, .. } => {
-                assert_eq!(operator, BinaryOperator::Subtract);
+                assert_eq!(operator, BinaryOperator::Sub);
             }
             _ => panic!("Expected BinaryExpression"),
         }
@@ -200,7 +200,7 @@ mod tests {
         let node = parser.parse_multiplicative_expression().unwrap();
         match node {
             NodeType::BinaryExpression { operator, .. } => {
-                assert_eq!(operator, BinaryOperator::Divide);
+                assert_eq!(operator, BinaryOperator::Div);
             }
             _ => panic!("Expected BinaryExpression"),
         }
@@ -213,7 +213,7 @@ mod tests {
         let node = parser.parse_power_expression().unwrap();
         match node {
             NodeType::BinaryExpression { operator, .. } => {
-                assert_eq!(operator, BinaryOperator::Power);
+                assert_eq!(operator, BinaryOperator::Pow);
             }
             _ => panic!("Expected BinaryExpression"),
         }

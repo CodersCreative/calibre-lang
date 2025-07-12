@@ -10,6 +10,9 @@ use crate::runtime::{
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum NativeFunctions {
     Print,
+    Some,
+    Err,
+    Ok,
     Input,
     Trim,
     Range,
@@ -41,50 +44,98 @@ impl RuntimeValue {
 
                     RuntimeValue::Null
                 }
+                NativeFunctions::Err => {
+                    if let Some(x) = args.get(0) {
+                        RuntimeValue::Result(
+                            Err(Box::new(x.0.clone())),
+                            RuntimeType::Result(
+                                Box::new((&x.0).into()),
+                                Box::new(RuntimeType::Str),
+                            ),
+                        )
+                    } else {
+                        RuntimeValue::Result(
+                            Err(Box::new(RuntimeValue::Str(String::from("Add parameter")))),
+                            RuntimeType::Result(
+                                Box::new(RuntimeType::Str),
+                                Box::new(RuntimeType::Str),
+                            ),
+                        )
+                    }
+                }
+                NativeFunctions::Ok => {
+                    if let Some(x) = args.get(0) {
+                        RuntimeValue::Result(
+                            Ok(Box::new(x.0.clone())),
+                            RuntimeType::Result(
+                                Box::new(RuntimeType::Str),
+                                Box::new((&x.0).into()),
+                            ),
+                        )
+                    } else {
+                        RuntimeValue::Result(
+                            Err(Box::new(RuntimeValue::Str(String::from("Add parameter")))),
+                            RuntimeType::Result(
+                                Box::new(RuntimeType::Str),
+                                Box::new(RuntimeType::Str),
+                            ),
+                        )
+                    }
+                }
+                NativeFunctions::Some => {
+                    if let Some(x) = args.get(0) {
+                        RuntimeValue::Option(
+                            Some(Box::new(x.0.clone())),
+                            RuntimeType::Option(Box::new((&x.0).into())),
+                        )
+                    } else {
+                        RuntimeValue::Option(None, RuntimeType::Option(Box::new(RuntimeType::Str)))
+                    }
+                }
                 NativeFunctions::Clear => {
                     print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
                     RuntimeValue::Null
                 }
                 NativeFunctions::Range => {
                     if args.len() <= 1 {
-                        let RuntimeValue::Integer(amt) = args[0].0 else {
+                        let RuntimeValue::Int(amt) = args[0].0 else {
                             panic!()
                         };
                         RuntimeValue::Range(0, amt as i32)
                     } else if args.len() == 2 {
-                        let RuntimeValue::Integer(start) = args[0].0 else {
+                        let RuntimeValue::Int(start) = args[0].0 else {
                             panic!()
                         };
-                        let RuntimeValue::Integer(stop) = args[1].0 else {
+                        let RuntimeValue::Int(stop) = args[1].0 else {
                             panic!()
                         };
                         RuntimeValue::Range(start as i32, stop as i32)
                     } else if args.len() == 3 {
-                        let RuntimeValue::Integer(start) = args[0].0 else {
+                        let RuntimeValue::Int(start) = args[0].0 else {
                             panic!()
                         };
-                        let RuntimeValue::Integer(stop) = args[1].0 else {
+                        let RuntimeValue::Int(stop) = args[1].0 else {
                             panic!()
                         };
-                        let RuntimeValue::Integer(step) = args[2].0 else {
+                        let RuntimeValue::Int(step) = args[2].0 else {
                             panic!()
                         };
                         RuntimeValue::List {
                             data: (start..stop)
                                 .step_by(step as usize)
-                                .map(|x| RuntimeValue::Integer(x))
+                                .map(|x| RuntimeValue::Int(x))
                                 .collect(),
-                            data_type: Box::new(Some(RuntimeType::Integer)),
+                            data_type: Box::new(Some(RuntimeType::Int)),
                         }
                     } else {
                         RuntimeValue::Null
                     }
                 }
                 NativeFunctions::Wait => {
-                    if let Some((RuntimeValue::Integer(x), _)) = args.get(0) {
+                    if let Some((RuntimeValue::Int(x), _)) = args.get(0) {
                         thread::sleep(Duration::from_secs(*x as u64));
                     } else if let Some((RuntimeValue::Float(x), _)) = args.get(0) {
-                        thread::sleep(Duration::from_secs_f64(*x));
+                        thread::sleep(Duration::from_secs_f32(*x));
                     }
                     RuntimeValue::Null
                 }

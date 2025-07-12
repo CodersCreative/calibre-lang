@@ -31,7 +31,7 @@ pub fn evaluate_not<'a>(
 
         match value {
             RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
-            RuntimeValue::Integer(x) => Ok(RuntimeValue::Integer(-x)),
+            RuntimeValue::Int(x) => Ok(RuntimeValue::Int(-x)),
             RuntimeValue::Float(x) => Ok(RuntimeValue::Float(-x)),
             RuntimeValue::Range(f, t) => Ok(RuntimeValue::Range(t, f)),
             RuntimeValue::List {
@@ -77,11 +77,11 @@ pub fn evaluate_range_expression(
         inclusive,
     } = exp
     {
-        if let RuntimeValue::Integer(from) = evaluate(*from.clone(), scope.clone())?
-            .into_type(scope.clone(), RuntimeType::Integer)?
+        if let RuntimeValue::Int(from) = evaluate(*from.clone(), scope.clone())?
+            .into_type(scope.clone(), RuntimeType::Int)?
         {
-            if let RuntimeValue::Integer(to) = evaluate(*to.clone(), scope.clone())?
-                .into_type(scope.clone(), RuntimeType::Integer)?
+            if let RuntimeValue::Int(to) = evaluate(*to.clone(), scope.clone())?
+                .into_type(scope.clone(), RuntimeType::Int)?
             {
                 let to = if inclusive { to + 1 } else { to };
 
@@ -173,9 +173,9 @@ mod tests {
     #[test]
     fn test_evaluate_identifier() {
         let scope = new_scope();
-        scope.borrow_mut().push_var("x".to_string(), RuntimeValue::Integer(5), VarType::Mutable(None)).unwrap();
+        scope.borrow_mut().push_var("x".to_string(), RuntimeValue::Int(5), VarType::Mutable(None)).unwrap();
         let result = evaluate_identifier("x", scope).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(5));
+        assert_eq!(result, RuntimeValue::Int(5));
     }
 
     #[test]
@@ -187,11 +187,11 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluate_not_integer() {
+    fn test_evaluate_not_Int() {
         let scope = new_scope();
-        let node = NodeType::NotExpression { value: Box::new(NodeType::IntegerLiteral(7)) };
+        let node = NodeType::NotExpression { value: Box::new(NodeType::IntLiteral(7)) };
         let result = evaluate_not(node, scope).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(-7));
+        assert_eq!(result, RuntimeValue::Int(-7));
     }
 
     #[test]
@@ -206,8 +206,8 @@ mod tests {
     fn test_evaluate_not_range() {
         let scope = new_scope();
         let node = NodeType::NotExpression { value: Box::new(NodeType::RangeDeclaration {
-            from: Box::new(NodeType::IntegerLiteral(1)),
-            to: Box::new(NodeType::IntegerLiteral(3)),
+            from: Box::new(NodeType::IntLiteral(1)),
+            to: Box::new(NodeType::IntLiteral(3)),
             inclusive: false,
         })};
         let result = evaluate_not(node, scope).unwrap();
@@ -218,13 +218,13 @@ mod tests {
     fn test_evaluate_not_list() {
         let scope = new_scope();
         let node = NodeType::NotExpression { value: Box::new(NodeType::ListLiteral(vec![
-            NodeType::IntegerLiteral(1),
-            NodeType::IntegerLiteral(2),
-            NodeType::IntegerLiteral(3),
+            NodeType::IntLiteral(1),
+            NodeType::IntLiteral(2),
+            NodeType::IntLiteral(3),
         ])) };
         let result = evaluate_not(node, scope).unwrap();
         match result {
-            RuntimeValue::List { data, .. } => assert_eq!(data, vec![RuntimeValue::Integer(3), RuntimeValue::Integer(2), RuntimeValue::Integer(1)]),
+            RuntimeValue::List { data, .. } => assert_eq!(data, vec![RuntimeValue::Int(3), RuntimeValue::Int(2), RuntimeValue::Int(1)]),
             _ => panic!("Expected List"),
         }
     }
@@ -233,20 +233,20 @@ mod tests {
     fn test_evaluate_binary_expression_add() {
         let scope = new_scope();
         let node = NodeType::BinaryExpression {
-            left: Box::new(NodeType::IntegerLiteral(2)),
-            right: Box::new(NodeType::IntegerLiteral(3)),
+            left: Box::new(NodeType::IntLiteral(2)),
+            right: Box::new(NodeType::IntLiteral(3)),
             operator: BinaryOperator::Add,
         };
         let result = evaluate_binary_expression(node, scope).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(5));
+        assert_eq!(result, RuntimeValue::Int(5));
     }
 
     #[test]
     fn test_evaluate_range_expression_inclusive() {
         let scope = new_scope();
         let node = NodeType::RangeDeclaration {
-            from: Box::new(NodeType::IntegerLiteral(1)),
-            to: Box::new(NodeType::IntegerLiteral(3)),
+            from: Box::new(NodeType::IntLiteral(1)),
+            to: Box::new(NodeType::IntLiteral(3)),
             inclusive: true,
         };
         let result = evaluate_range_expression(node, scope).unwrap();
@@ -257,8 +257,8 @@ mod tests {
     fn test_evaluate_range_expression_exclusive() {
         let scope = new_scope();
         let node = NodeType::RangeDeclaration {
-            from: Box::new(NodeType::IntegerLiteral(1)),
-            to: Box::new(NodeType::IntegerLiteral(3)),
+            from: Box::new(NodeType::IntLiteral(1)),
+            to: Box::new(NodeType::IntLiteral(3)),
             inclusive: false,
         };
         let result = evaluate_range_expression(node, scope).unwrap();
@@ -281,8 +281,8 @@ mod tests {
     fn test_evaluate_comparison_expression_lesser() {
         let scope = new_scope();
         let node = NodeType::ComparisonExpression {
-            left: Box::new(NodeType::IntegerLiteral(3)),
-            right: Box::new(NodeType::IntegerLiteral(2)),
+            left: Box::new(NodeType::IntLiteral(3)),
+            right: Box::new(NodeType::IntLiteral(2)),
             operator: crate::ast::comparison::Comparison::Lesser,
         };
         let result = evaluate_comparison_expression(node, scope).unwrap();
@@ -292,13 +292,13 @@ mod tests {
     #[test]
     fn test_evaluate_assignment_expression_identifier() {
         let scope = new_scope();
-        scope.borrow_mut().push_var("x".to_string(), RuntimeValue::Integer(0), VarType::Mutable(None)).unwrap();
+        scope.borrow_mut().push_var("x".to_string(), RuntimeValue::Int(0), VarType::Mutable(None)).unwrap();
         let node = NodeType::AssignmentExpression {
             identifier: Box::new(NodeType::Identifier("x".to_string())),
-            value: Box::new(NodeType::IntegerLiteral(42)),
+            value: Box::new(NodeType::IntLiteral(42)),
         };
         let result = evaluate_assignment_expression(node, scope.clone()).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(42));
-        assert_eq!(scope.borrow().variables.get("x").unwrap().0, RuntimeValue::Integer(42));
+        assert_eq!(result, RuntimeValue::Int(42));
+        assert_eq!(scope.borrow().variables.get("x").unwrap().0, RuntimeValue::Int(42));
     }
 }

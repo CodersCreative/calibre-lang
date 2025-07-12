@@ -79,11 +79,11 @@ pub fn evaluate_loop_declaration(
                         scope.clone(),
                         vec![(
                             identifier.clone(),
-                            RuntimeType::Integer,
+                            RuntimeType::Int,
                             RefMutability::Value,
                             None,
                         )],
-                        vec![(NodeType::IntegerLiteral(i as i64), None)],
+                        vec![(NodeType::IntLiteral(i as i128), None)],
                     )?;
                     result = handle_body(new_scope.clone())?;
 
@@ -165,8 +165,8 @@ pub fn evaluate_loop_declaration(
                             loop_type: Box::new(LoopType::For(
                                 String::from("hidden_index"),
                                 NodeType::RangeDeclaration {
-                                    from: Box::new(NodeType::IntegerLiteral(from as i64)),
-                                    to: Box::new(NodeType::IntegerLiteral(to as i64)),
+                                    from: Box::new(NodeType::IntLiteral(from as i128)),
+                                    to: Box::new(NodeType::IntLiteral(to as i128)),
                                     inclusive: false,
                                 },
                             )),
@@ -175,12 +175,12 @@ pub fn evaluate_loop_declaration(
                         scope,
                     );
                 }
-                RuntimeValue::Integer(x) => {
+                RuntimeValue::Int(x) => {
                     return evaluate_loop_declaration(
                         NodeType::LoopDeclaration {
                             loop_type: Box::new(LoopType::For(
                                 String::from("hidden_index"),
-                                NodeType::IntegerLiteral(x as i64),
+                                NodeType::IntLiteral(x as i128),
                             )),
                             body,
                         },
@@ -232,8 +232,8 @@ mod tests {
         let loop_type = Box::new(LoopType::For(
             "i".to_string(),
             NodeType::RangeDeclaration {
-                from: Box::new(NodeType::IntegerLiteral(0)),
-                to: Box::new(NodeType::IntegerLiteral(3)),
+                from: Box::new(NodeType::IntLiteral(0)),
+                to: Box::new(NodeType::IntLiteral(3)),
                 inclusive: false,
             },
         ));
@@ -245,6 +245,6 @@ mod tests {
         }];
         let node = NodeType::LoopDeclaration { loop_type, body };
         let result = evaluate_loop_declaration(node, scope.clone()).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(2));
+        assert_eq!(result, RuntimeValue::Int(2));
     }
 }

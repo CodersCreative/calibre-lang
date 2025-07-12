@@ -16,7 +16,7 @@ impl Parser {
             TokenType::Identifier => NodeType::Identifier(self.eat().value),
             TokenType::Float => NodeType::FloatLiteral(self.eat().value.trim().parse().unwrap()),
             TokenType::Integer => {
-                NodeType::IntegerLiteral(self.eat().value.trim().parse().unwrap())
+                NodeType::IntLiteral(self.eat().value.trim().parse().unwrap())
             }
             TokenType::Stop(x) => match x {
                 StopValue::Return => self.parse_return_declaration()?,
@@ -46,7 +46,7 @@ impl Parser {
                 )?;
                 value
             }
-            TokenType::BinaryOperator(x) if x == &BinaryOperator::Subtract => {
+            TokenType::BinaryOperator(x) if x == &BinaryOperator::Sub => {
                 self.eat();
                 NodeType::NotExpression {
                     value: Box::new(self.parse_statement()?),
@@ -137,9 +137,9 @@ impl Parser {
         if let TokenType::UnaryAssign(op) = self.first().token_type.clone() {
             let _ = self.eat();
             if [
-                BinaryOperator::Power,
-                BinaryOperator::Divide,
-                BinaryOperator::Multiply,
+                BinaryOperator::Pow,
+                BinaryOperator::Div,
+                BinaryOperator::Mul,
             ]
             .contains(&op)
             {
@@ -150,7 +150,7 @@ impl Parser {
                 identifier: Box::new(left.clone()),
                 value: Box::new(NodeType::BinaryExpression {
                     left: Box::new(left),
-                    right: Box::new(NodeType::IntegerLiteral(1)),
+                    right: Box::new(NodeType::IntLiteral(1)),
                     operator: op,
                 }),
             };
@@ -201,13 +201,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_primary_expression_integer() {
+    fn test_parse_primary_expression_Int() {
         let tokens = tokenize(String::from("42")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let node = parser.parse_primary_expression().unwrap();
         match node {
-            NodeType::IntegerLiteral(42) => {}
-            _ => panic!("Expected IntegerLiteral"),
+            NodeType::IntLiteral(42) => {}
+            _ => panic!("Expected IntLiteral"),
         }
     }
 
@@ -250,8 +250,8 @@ mod tests {
         let mut parser = parser_with_tokens(tokens);
         let node = parser.parse_primary_expression().unwrap();
         match node {
-            NodeType::IntegerLiteral(42) => {}
-            _ => panic!("Expected IntegerLiteral inside parentheses"),
+            NodeType::IntLiteral(42) => {}
+            _ => panic!("Expected IntLiteral inside parentheses"),
         }
     }
 

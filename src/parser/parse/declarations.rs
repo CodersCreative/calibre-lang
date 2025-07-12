@@ -600,7 +600,7 @@ mod tests {
     fn test_parse_function_declaration_simple() {
         let tokens = tokenize(String::from("func foo(x: int, y: int) { return x + y }")).unwrap();
         let mut parser = parser_with_tokens(tokens);
-        let node = parser.parse_function_declaration(false).unwrap();
+        let node = parser.parse_function_declaration().unwrap();
         match node {
             NodeType::FunctionDeclaration {
                 identifier,

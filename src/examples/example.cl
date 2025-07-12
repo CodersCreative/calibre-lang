@@ -31,9 +31,9 @@ impl CountryBase {
 let language = Language.FRENCH{data : 1, code : 5};
 
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
-match language {
+/*match language {
   Language.FRENCH{data} -> print("Enum: " + data),
-}
+}*/
 // The const keyword creates an immutable variable that cannot be shadowed.
 const language_forced : Language = Language.ENGLISH (6);
 
@@ -116,6 +116,16 @@ fn smth_optional(y : int) -> int? {
   }
 
   none
+}
+
+match smth_result(8) {
+  Ok(x) -> print(x),
+  Err(e) -> print(e),
+}
+
+match smth_optional(18) {
+  Some(x) -> print(x),
+  None -> print(none),
 }
 
 fn main() -> int {

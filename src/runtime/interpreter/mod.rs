@@ -90,8 +90,24 @@ impl From<ScopeErr> for InterpreterErr {
 
 pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValue, InterpreterErr> {
     match node {
-        NodeType::FloatLiteral(x) => Ok(RuntimeValue::Float(x)),
-        NodeType::IntegerLiteral(x) => Ok(RuntimeValue::Integer(x)),
+        NodeType::FloatLiteral(x) => Ok(if x > f32::MAX as f64 {
+            RuntimeValue::Double(x as f64)
+        } else {
+            RuntimeValue::Float(x as f32)
+        }),
+        NodeType::IntLiteral(x) => Ok(if x > i64::MAX as i128 {
+            if x.is_negative() {
+                RuntimeValue::Long(x)
+            } else {
+                RuntimeValue::ULong(x as u128)
+            }
+        } else {
+            if x.is_negative() {
+                RuntimeValue::Int(x as i64)
+            } else {
+                RuntimeValue::UInt(x as u64)
+            }
+        }),
         NodeType::StringLiteral(x) => Ok(RuntimeValue::Str(x)),
         NodeType::CharLiteral(x) => Ok(RuntimeValue::Char(x)),
         NodeType::Try { value } => {

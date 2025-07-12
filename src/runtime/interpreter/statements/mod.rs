@@ -127,14 +127,14 @@ mod tests {
         let node = NodeType::VariableDeclaration {
             var_type: VarType::Mutable(None),
             identifier: "x".to_string(),
-            value: Some(Box::new(NodeType::IntegerLiteral(42))),
+            value: Some(Box::new(NodeType::IntLiteral(42))),
             data_type: None,
         };
         let result = evaluate_variable_declaration(node, scope.clone()).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(42));
+        assert_eq!(result, RuntimeValue::Int(42));
         assert_eq!(
             scope.borrow().variables.get("x").unwrap().0,
-            RuntimeValue::Integer(42)
+            RuntimeValue::Int(42)
         );
     }
 
@@ -145,7 +145,7 @@ mod tests {
             identifier: "foo".to_string(),
             parameters: vec![],
             body: vec![NodeType::Return {
-                value: Box::new(NodeType::IntegerLiteral(1)),
+                value: Box::new(NodeType::IntLiteral(1)),
             }],
             return_type: None,
             is_async: false,

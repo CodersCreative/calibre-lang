@@ -280,7 +280,9 @@ impl Parser {
             let _ = self.eat();
 
             typ = Ok(Some(RuntimeType::Option(Box::new(typ?.unwrap()))));
-        } else if self.first().token_type == TokenType::Not {
+        }
+
+        if self.first().token_type == TokenType::Not {
             let _ = self.eat();
             let t = self.parse_type();
 

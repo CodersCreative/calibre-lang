@@ -119,7 +119,7 @@ pub enum NodeType {
     TupleLiteral(Vec<NodeType>),
     CharLiteral(char),
     FloatLiteral(f64),
-    IntegerLiteral(i64),
+    IntLiteral(i128),
     MemberExpression {
         object: Box<NodeType>,
         property: Box<NodeType>,

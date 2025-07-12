@@ -103,7 +103,7 @@ pub fn assign_member_expression(
                 NodeType::MemberExpression { .. } => {
                     assign_member_expression(*property, value, scope)
                 }
-                NodeType::IntegerLiteral(index) => assign_to_tuple_index(
+                NodeType::IntLiteral(index) => assign_to_tuple_index(
                     &mut object_val,
                     index as usize,
                     value.clone(),
@@ -122,8 +122,8 @@ pub fn assign_member_expression(
                 )
                 .or_else(|_| {
                     let idx_val = evaluate(NodeType::Identifier(prop.clone()), scope.clone())?
-                        .into_type(scope.clone(), RuntimeType::Integer)?;
-                    if let RuntimeValue::Integer(idx) = idx_val {
+                        .into_type(scope.clone(), RuntimeType::Int)?;
+                    if let RuntimeValue::Int(idx) = idx_val {
                         assign_to_list_index(&mut object_val, idx as usize, value, &*object, scope)
                     } else {
                         Err(InterpreterErr::IndexNonList(NodeType::Identifier(
@@ -256,8 +256,8 @@ pub fn evaluate_member_expression(
                 NodeType::Identifier(ref prop) => {
                     get_struct_field(&object_val, prop).or_else(|_| {
                         let idx_val = evaluate(NodeType::Identifier(prop.clone()), scope.clone())?
-                            .into_type(scope.clone(), RuntimeType::Integer)?;
-                        if let RuntimeValue::Integer(idx) = idx_val {
+                            .into_type(scope.clone(), RuntimeType::Int)?;
+                        if let RuntimeValue::Int(idx) = idx_val {
                             get_list_index(
                                 &object_val,
                                 idx as usize,
@@ -276,19 +276,19 @@ pub fn evaluate_member_expression(
                     is_computed,
                 } => {
                     if is_computed {
-                        if let RuntimeValue::Integer(index) =
+                        if let RuntimeValue::Int(index) =
                             evaluate(*property.clone(), scope.clone())?
                         {
                             get_tuple_index(
                                 &object_val,
                                 index as usize,
-                                NodeType::IntegerLiteral(index),
+                                NodeType::IntLiteral(index as i128),
                             )
                             .or_else(|_| {
                                 get_list_index(
                                     &object_val,
                                     index as usize,
-                                    NodeType::IntegerLiteral(index),
+                                    NodeType::IntLiteral(index as i128),
                                 )
                             })
                         } else {
@@ -325,24 +325,24 @@ pub fn evaluate_member_expression(
                     Err(InterpreterErr::NotImplemented(*caller))
                 }
                 _ => match evaluate(*property, scope)? {
-                    RuntimeValue::Integer(index) => get_tuple_index(
+                    RuntimeValue::Int(index) => get_tuple_index(
                         &object_val,
                         index as usize,
-                        NodeType::IntegerLiteral(index),
+                        NodeType::IntLiteral(index as i128),
                     )
                     .or_else(|_| {
-                        get_list_index(&object_val, index as usize, NodeType::IntegerLiteral(index))
+                        get_list_index(&object_val, index as usize, NodeType::IntLiteral(index as i128))
                     }),
                     RuntimeValue::Float(index) => get_tuple_index(
                         &object_val,
                         index as usize,
-                        NodeType::IntegerLiteral(index as i64),
+                        NodeType::IntLiteral(index as i128),
                     )
                     .or_else(|_| {
                         get_list_index(
                             &object_val,
                             index as usize,
-                            NodeType::IntegerLiteral(index as i64),
+                            NodeType::IntLiteral(index as i128),
                         )
                     }),
                     RuntimeValue::Str(field) => get_struct_field(&object_val, &field),
@@ -373,7 +373,7 @@ mod tests {
     fn test_assign_member_expression_struct_field() {
         let scope = new_scope();
         let mut map = std::collections::HashMap::new();
-        map.insert("field".to_string(), RuntimeValue::Integer(1));
+        map.insert("field".to_string(), RuntimeValue::Int(1));
         let struct_val = RuntimeValue::Struct(ObjectType::Map(map.clone()), None);
         scope
             .borrow_mut()
@@ -389,11 +389,11 @@ mod tests {
             property: Box::new(NodeType::Identifier("field".to_string())),
             is_computed: false,
         };
-        assign_member_expression(member, RuntimeValue::Integer(42), scope.clone()).unwrap();
+        assign_member_expression(member, RuntimeValue::Int(42), scope.clone()).unwrap();
 
         let updated = scope.borrow().variables.get("obj").unwrap().0.clone();
         if let RuntimeValue::Struct(ObjectType::Map(m), _) = updated {
-            assert_eq!(m.get("field"), Some(&RuntimeValue::Integer(42)));
+            assert_eq!(m.get("field"), Some(&RuntimeValue::Int(42)));
         } else {
             panic!("Expected struct value");
         }
@@ -403,8 +403,8 @@ mod tests {
     fn test_assign_member_expression_list_index() {
         let scope = new_scope();
         let list_val = RuntimeValue::List {
-            data: vec![RuntimeValue::Integer(1), RuntimeValue::Integer(2)],
-            data_type: Box::new(Some(crate::runtime::values::RuntimeType::Integer)),
+            data: vec![RuntimeValue::Int(1), RuntimeValue::Int(2)],
+            data_type: Box::new(Some(crate::runtime::values::RuntimeType::Int)),
         };
         scope
             .borrow_mut()
@@ -413,14 +413,14 @@ mod tests {
 
         let member = NodeType::MemberExpression {
             object: Box::new(NodeType::Identifier("lst".to_string())),
-            property: Box::new(NodeType::IntegerLiteral(1)),
+            property: Box::new(NodeType::IntLiteral(1)),
             is_computed: false,
         };
-        assign_member_expression(member, RuntimeValue::Integer(99), scope.clone()).unwrap();
+        assign_member_expression(member, RuntimeValue::Int(99), scope.clone()).unwrap();
 
         let updated = scope.borrow().variables.get("lst").unwrap().0.clone();
         if let RuntimeValue::List { data, .. } = updated {
-            assert_eq!(data[1], RuntimeValue::Integer(99));
+            assert_eq!(data[1], RuntimeValue::Int(99));
         } else {
             panic!("Expected list value");
         }
@@ -430,7 +430,7 @@ mod tests {
     fn test_evaluate_member_expression_struct_field() {
         let scope = new_scope();
         let mut map = std::collections::HashMap::new();
-        map.insert("foo".to_string(), RuntimeValue::Integer(123));
+        map.insert("foo".to_string(), RuntimeValue::Int(123));
         let struct_val = RuntimeValue::Struct(ObjectType::Map(map.clone()), None);
         scope
             .borrow_mut()
@@ -443,15 +443,15 @@ mod tests {
             is_computed: false,
         };
         let result = evaluate_member_expression(member, scope).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(123));
+        assert_eq!(result, RuntimeValue::Int(123));
     }
 
     #[test]
     fn test_evaluate_member_expression_list_index() {
         let scope = new_scope();
         let list_val = RuntimeValue::List {
-            data: vec![RuntimeValue::Integer(10), RuntimeValue::Integer(20)],
-            data_type: Box::new(Some(crate::runtime::values::RuntimeType::Integer)),
+            data: vec![RuntimeValue::Int(10), RuntimeValue::Int(20)],
+            data_type: Box::new(Some(crate::runtime::values::RuntimeType::Int)),
         };
         scope
             .borrow_mut()
@@ -460,11 +460,11 @@ mod tests {
 
         let member = NodeType::MemberExpression {
             object: Box::new(NodeType::Identifier("lst".to_string())),
-            property: Box::new(NodeType::IntegerLiteral(1)),
+            property: Box::new(NodeType::IntLiteral(1)),
             is_computed: false,
         };
         let result = evaluate_member_expression(member, scope).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(20));
+        assert_eq!(result, RuntimeValue::Int(20));
     }
 
     #[test]

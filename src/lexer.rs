@@ -397,9 +397,9 @@ mod tests {
             TokenType::BinaryAssign(BinaryOperator::Add),
             TokenType::Integer,
             TokenType::Identifier,
-            TokenType::UnaryAssign(BinaryOperator::Subtract),
+            TokenType::UnaryAssign(BinaryOperator::Sub),
             TokenType::Identifier,
-            TokenType::BinaryAssign(BinaryOperator::Multiply),
+            TokenType::BinaryAssign(BinaryOperator::Mul),
             TokenType::Integer,
             TokenType::EOF,
         ];

@@ -179,45 +179,45 @@ mod tests {
     fn test_get_new_scope_basic_value() {
         let parent_scope = new_scope();
         let params = vec![
-            ("x".to_string(), RuntimeType::Integer, RefMutability::Value, None)
+            ("x".to_string(), RuntimeType::Int, RefMutability::Value, None)
         ];
-        let args = vec![(NodeType::IntegerLiteral(5), None)];
+        let args = vec![(NodeType::IntLiteral(5), None)];
         let scope = get_new_scope(parent_scope.clone(), params, args).unwrap();
         let val = scope.borrow().variables.get("x").unwrap().0.clone();
-        assert_eq!(val, RuntimeValue::Integer(5));
+        assert_eq!(val, RuntimeValue::Int(5));
     }
 
     #[test]
     fn test_get_new_scope_default_value() {
         let parent_scope = new_scope();
         let params = vec![
-            ("y".to_string(), RuntimeType::Integer, RefMutability::Value, Some(RuntimeValue::Integer(10)))
+            ("y".to_string(), RuntimeType::Int, RefMutability::Value, Some(RuntimeValue::Int(10)))
         ];
         let args = vec![];
         let scope = get_new_scope(parent_scope.clone(), params, args).unwrap();
         let val = scope.borrow().variables.get("y").unwrap().0.clone();
-        assert_eq!(val, RuntimeValue::Integer(10));
+        assert_eq!(val, RuntimeValue::Int(10));
     }
 
     #[test]
     fn test_get_new_scope_named_argument() {
         let parent_scope = new_scope();
         let params = vec![
-            ("z".to_string(), RuntimeType::Integer, RefMutability::Value, Some(RuntimeValue::Integer(1)))
+            ("z".to_string(), RuntimeType::Int, RefMutability::Value, Some(RuntimeValue::Int(1)))
         ];
-        let args = vec![(NodeType::Identifier("z".to_string()), Some(NodeType::IntegerLiteral(99)))];
+        let args = vec![(NodeType::Identifier("z".to_string()), Some(NodeType::IntLiteral(99)))];
         let scope = get_new_scope(parent_scope.clone(), params, args).unwrap();
         let val = scope.borrow().variables.get("z").unwrap().0.clone();
-        assert_eq!(val, RuntimeValue::Integer(99));
+        assert_eq!(val, RuntimeValue::Int(99));
     }
 
     #[test]
     fn test_get_new_scope_mut_ref_error() {
         let parent_scope = new_scope();
         let params = vec![
-            ("a".to_string(), RuntimeType::Integer, RefMutability::MutRef, None)
+            ("a".to_string(), RuntimeType::Int, RefMutability::MutRef, None)
         ];
-        let args = vec![(NodeType::IntegerLiteral(5), None)];
+        let args = vec![(NodeType::IntLiteral(5), None)];
         let result = get_new_scope(parent_scope.clone(), params, args);
         assert!(result.is_err());
     }
@@ -227,11 +227,11 @@ mod tests {
         let parent_scope = new_scope();
         let node = NodeType::ScopeDeclaration {
             body: vec![
-                NodeType::Return { value: Box::new(NodeType::IntegerLiteral(42)) }
+                NodeType::Return { value: Box::new(NodeType::IntLiteral(42)) }
             ]
         };
         let result = evaluate_scope(node, parent_scope).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(42));
+        assert_eq!(result, RuntimeValue::Int(42));
     }
 
     #[test]
@@ -239,10 +239,10 @@ mod tests {
         let parent_scope = new_scope();
         let node = NodeType::ScopeDeclaration {
             body: vec![
-                NodeType::IntegerLiteral(7)
+                NodeType::IntLiteral(7)
             ]
         };
         let result = evaluate_scope(node, parent_scope).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(7));
+        assert_eq!(result, RuntimeValue::Int(7));
     }
 }

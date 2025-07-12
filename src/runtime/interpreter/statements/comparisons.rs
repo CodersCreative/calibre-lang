@@ -33,7 +33,7 @@ pub fn evaluate_in_statement(
             RuntimeValue::Range(from, to) => {
                 let num : f32 = match ident {
                     RuntimeValue::Range(x, y) => (x as f32 + y as f32) / 2.0,
-                    RuntimeValue::Integer(x) => x as f32,
+                    RuntimeValue::Int(x) => x as f32,
                     RuntimeValue::Float(x) => x as f32,
                     _ => return Ok(RuntimeValue::Bool(false)),
                 };
@@ -138,10 +138,10 @@ mod tests {
         let scope = new_scope();
         let node = NodeType::IfStatement {
             comparisons: vec![NodeType::Identifier(String::from("true"))],
-            bodies: vec![vec![NodeType::IntegerLiteral(123)]],
+            bodies: vec![vec![NodeType::IntLiteral(123)]],
         };
         let result = evaluate_if_statement(node, scope.clone()).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(123));
+        assert_eq!(result, RuntimeValue::Int(123));
     }
 
     #[test]
@@ -150,11 +150,11 @@ mod tests {
         let node = NodeType::IfStatement {
             comparisons: vec![NodeType::Identifier(String::from("false"))],
             bodies: vec![
-                vec![NodeType::IntegerLiteral(1)],
-                vec![NodeType::IntegerLiteral(2)],
+                vec![NodeType::IntLiteral(1)],
+                vec![NodeType::IntLiteral(2)],
             ],
         };
         let result = evaluate_if_statement(node, scope.clone()).unwrap();
-        assert_eq!(result, RuntimeValue::Integer(2));
+        assert_eq!(result, RuntimeValue::Int(2));
     }
 }

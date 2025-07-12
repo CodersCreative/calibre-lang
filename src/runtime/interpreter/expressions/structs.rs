@@ -150,14 +150,14 @@ mod tests {
     fn test_evaluate_struct_expression_map() {
         let scope = new_scope();
         let mut props = HashMap::new();
-        props.insert("a".to_string(), Some(NodeType::IntegerLiteral(1)));
-        props.insert("b".to_string(), Some(NodeType::IntegerLiteral(2)));
+        props.insert("a".to_string(), Some(NodeType::IntLiteral(1)));
+        props.insert("b".to_string(), Some(NodeType::IntLiteral(2)));
         let node = NodeType::StructLiteral(ObjectType::Map(props));
         let result = evaluate_struct_expression(node, scope).unwrap();
         match result {
             RuntimeValue::Struct(ObjectType::Map(map), _) => {
-                assert_eq!(map.get("a"), Some(&RuntimeValue::Integer(1)));
-                assert_eq!(map.get("b"), Some(&RuntimeValue::Integer(2)));
+                assert_eq!(map.get("a"), Some(&RuntimeValue::Int(1)));
+                assert_eq!(map.get("b"), Some(&RuntimeValue::Int(2)));
             }
             _ => panic!("Expected Struct(Map)"),
         }
@@ -167,15 +167,15 @@ mod tests {
     fn test_evaluate_struct_expression_tuple() {
         let scope = new_scope();
         let node = NodeType::StructLiteral(ObjectType::Tuple(vec![
-            Some(NodeType::IntegerLiteral(1)),
-            Some(NodeType::IntegerLiteral(2)),
+            Some(NodeType::IntLiteral(1)),
+            Some(NodeType::IntLiteral(2)),
         ]));
         let result = evaluate_struct_expression(node, scope).unwrap();
         match result {
             RuntimeValue::Struct(ObjectType::Tuple(vals), _) => {
                 assert_eq!(
                     vals,
-                    vec![RuntimeValue::Integer(1), RuntimeValue::Integer(2)]
+                    vec![RuntimeValue::Int(1), RuntimeValue::Int(2)]
                 );
             }
             _ => panic!("Expected Struct(Tuple)"),
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn test_evaluate_struct_expression_null() {
         let scope = new_scope();
-        let node = NodeType::IntegerLiteral(42);
+        let node = NodeType::IntLiteral(42);
         let result = evaluate_struct_expression(node, scope).unwrap();
         assert_eq!(result, RuntimeValue::Null);
     }
@@ -194,7 +194,7 @@ mod tests {
     fn test_evaluate_enum_expression_map() {
         let scope = new_scope();
         let mut enum_props = HashMap::new();
-        enum_props.insert("y".to_string(), RuntimeType::Integer);
+        enum_props.insert("y".to_string(), RuntimeType::Int);
         let enum_node = NodeType::EnumDeclaration {
             identifier: "MyEnum".to_string(),
             options: vec![(String::from("x"), Some(ObjectType::Map(enum_props)))],
@@ -206,7 +206,7 @@ mod tests {
             value: "x".to_string(),
             data: Some(ObjectType::Map(HashMap::from([(
                 "y".to_string(),
-                Some(NodeType::IntegerLiteral(10)),
+                Some(NodeType::IntLiteral(10)),
             )]))),
         };
         let result = evaluate_enum_expression(exp, scope).unwrap();
@@ -227,7 +227,7 @@ mod tests {
             identifier: "MyEnum".to_string(),
             options: vec![(
                 String::from("Foo"),
-                Some(ObjectType::Tuple(vec![RuntimeType::Integer])),
+                Some(ObjectType::Tuple(vec![RuntimeType::Int])),
             )],
         };
         evaluate_enum_declaration(enum_node, scope.clone()).unwrap();
@@ -235,7 +235,7 @@ mod tests {
         let exp = NodeType::EnumExpression {
             identifier: "MyEnum".to_string(),
             value: "Foo".to_string(),
-            data: Some(ObjectType::Tuple(vec![Some(NodeType::IntegerLiteral(10))])),
+            data: Some(ObjectType::Tuple(vec![Some(NodeType::IntLiteral(10))])),
         };
         let result = evaluate_enum_expression(exp, scope).unwrap();
         match result {

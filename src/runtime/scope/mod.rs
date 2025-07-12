@@ -4,7 +4,7 @@ pub mod variables;
 use std::{
     cell::RefCell,
     collections::HashMap,
-    f64::{self, consts::PI},
+    f32::{self, consts::PI},
     i64,
     rc::Rc,
 };
@@ -54,15 +54,31 @@ pub struct Scope {
 fn get_global_variables() -> HashMap<String, (RuntimeValue, VarType)> {
     let vars = vec![
         (String::from("PI"), RuntimeValue::Float(PI)),
-        (String::from("FLOAT_MAX"), RuntimeValue::Float(f64::MAX)),
-        (String::from("INT_MAX"), RuntimeValue::Integer(i64::MAX)),
-        (String::from("FLOAT_MIN"), RuntimeValue::Float(f64::MIN)),
-        (String::from("INT_MIN"), RuntimeValue::Integer(i64::MIN)),
+        (String::from("FLOAT_MAX"), RuntimeValue::Float(f32::MAX)),
+        (String::from("DOUBLE_MAX"), RuntimeValue::Double(f64::MAX)),
+        (String::from("INT_MAX"), RuntimeValue::Int(i64::MAX)),
+        (String::from("LONG_MAX"), RuntimeValue::Long(i128::MAX)),
+        (String::from("FLOAT_MIN"), RuntimeValue::Float(f32::MIN)),
+        (String::from("DOUBLE_MIN"), RuntimeValue::Double(f64::MIN)),
+        (String::from("INT_MIN"), RuntimeValue::Int(i64::MIN)),
+        (String::from("LONG_MIN"), RuntimeValue::Long(i128::MIN)),
         (String::from("true"), RuntimeValue::Bool(true)),
         (String::from("false"), RuntimeValue::Bool(false)),
         (
             String::from("none"),
             RuntimeValue::Option(None, RuntimeType::Str),
+        ),
+        (
+            String::from("some"),
+            RuntimeValue::NativeFunction(NativeFunctions::Some),
+        ),
+        (
+            String::from("ok"),
+            RuntimeValue::NativeFunction(NativeFunctions::Ok),
+        ),
+        (
+            String::from("err"),
+            RuntimeValue::NativeFunction(NativeFunctions::Err),
         ),
         (
             String::from("input"),
@@ -88,10 +104,10 @@ fn get_global_variables() -> HashMap<String, (RuntimeValue, VarType)> {
             String::from("range"),
             RuntimeValue::NativeFunction(NativeFunctions::Range),
         ),
-        (String::from("INFINITY"), RuntimeValue::Float(f64::INFINITY)),
+        (String::from("INFINITY"), RuntimeValue::Float(f32::INFINITY)),
         (
             String::from("NEG_INFINITY"),
-            RuntimeValue::Float(f64::NEG_INFINITY),
+            RuntimeValue::Float(f32::NEG_INFINITY),
         ),
     ];
 
@@ -143,14 +159,11 @@ mod tests {
         scope
             .push_var(
                 "x".to_string(),
-                RuntimeValue::Integer(42),
+                RuntimeValue::Int(42),
                 VarType::Mutable(None),
             )
             .unwrap();
-        assert_eq!(
-            scope.variables.get("x").unwrap().0,
-            RuntimeValue::Integer(42)
-        );
+        assert_eq!(scope.variables.get("x").unwrap().0, RuntimeValue::Int(42));
     }
 
     #[test]
@@ -159,14 +172,14 @@ mod tests {
         scope
             .push_var(
                 "x".to_string(),
-                RuntimeValue::Integer(1),
+                RuntimeValue::Int(1),
                 VarType::Mutable(None),
             )
             .unwrap();
-        assert!(scope.assign_var("x", RuntimeValue::Integer(2)).is_ok());
+        assert!(scope.assign_var("x", RuntimeValue::Int(2)).is_ok());
         let err = scope.assign_var("x", RuntimeValue::Bool(true)).unwrap_err();
         match err {
-            ScopeErr::TypeMismatch(RuntimeValue::Integer(_), RuntimeValue::Bool(_)) => {}
+            ScopeErr::TypeMismatch(RuntimeValue::Int(_), RuntimeValue::Bool(_)) => {}
             _ => panic!("Expected TypeMismatch"),
         }
     }
@@ -175,9 +188,9 @@ mod tests {
     fn test_scope_assign_const_var_error() {
         let mut scope = Scope::new(None);
         scope
-            .push_var("y".to_string(), RuntimeValue::Integer(1), VarType::Constant)
+            .push_var("y".to_string(), RuntimeValue::Int(1), VarType::Constant)
             .unwrap();
-        let err = scope.assign_var("y", RuntimeValue::Integer(2)).unwrap_err();
+        let err = scope.assign_var("y", RuntimeValue::Int(2)).unwrap_err();
         match err {
             ScopeErr::AssignConstant(ref name) if name == "y" => {}
             _ => panic!("Expected AssignConstant"),
@@ -189,20 +202,20 @@ mod tests {
         let parent = Rc::new(RefCell::new(Scope::new(None)));
         parent
             .borrow_mut()
-            .push_var("z".to_string(), RuntimeValue::Integer(1), VarType::Constant)
+            .push_var("z".to_string(), RuntimeValue::Int(1), VarType::Constant)
             .unwrap();
         let child = Rc::new(RefCell::new(Scope::new(Some(parent.clone()))));
         child
             .borrow_mut()
             .push_var(
                 "z".to_string(),
-                RuntimeValue::Integer(2),
+                RuntimeValue::Int(2),
                 VarType::Mutable(None),
             )
             .unwrap();
         assert_eq!(
             child.borrow().variables.get("z").unwrap().0,
-            RuntimeValue::Integer(2)
+            RuntimeValue::Int(2)
         );
     }
 
@@ -213,20 +226,20 @@ mod tests {
             .borrow_mut()
             .push_var(
                 "a".to_string(),
-                RuntimeValue::Integer(10),
+                RuntimeValue::Int(10),
                 VarType::Mutable(None),
             )
             .unwrap();
         let child = Rc::new(RefCell::new(Scope::new(Some(parent.clone()))));
         let (val, vtype) = crate::runtime::scope::variables::get_var(child.clone(), "a").unwrap();
-        assert_eq!(val, RuntimeValue::Integer(10));
+        assert_eq!(val, RuntimeValue::Int(10));
         assert_eq!(vtype, VarType::Mutable(None));
     }
 
     #[test]
     fn test_scope_push_and_get_object() {
         let mut scope = Scope::new(None);
-        let obj = Object::NewType(RuntimeType::Integer);
+        let obj = Object::NewType(RuntimeType::Int);
         scope
             .push_object("MyType".to_string(), obj.clone())
             .unwrap();
@@ -238,17 +251,17 @@ mod tests {
     #[test]
     fn test_scope_push_and_get_function() {
         let mut scope = Scope::new(None);
-        let obj = Object::NewType(RuntimeType::Integer);
+        let obj = Object::NewType(RuntimeType::Int);
         scope.push_object("MyStruct".to_string(), obj).unwrap();
         scope
             .push_function(
                 "MyStruct".to_string(),
-                ("foo".to_string(), RuntimeValue::Integer(1), false),
+                ("foo".to_string(), RuntimeValue::Int(1), false),
             )
             .unwrap();
         let rc_scope = Rc::new(RefCell::new(scope));
         let (val, is_static) = get_function(rc_scope.clone(), "MyStruct", "foo").unwrap();
-        assert_eq!(val, RuntimeValue::Integer(1));
+        assert_eq!(val, RuntimeValue::Int(1));
         assert!(!is_static);
     }
 
@@ -265,7 +278,7 @@ mod tests {
     #[test]
     fn test_scope_get_function_error() {
         let mut scope = Scope::new(None);
-        let obj = Object::Struct(ObjectType::Tuple(vec![RuntimeType::Integer]));
+        let obj = Object::Struct(ObjectType::Tuple(vec![RuntimeType::Int]));
         scope.push_object("MyStruct".to_string(), obj).unwrap();
         let rc_scope = Rc::new(RefCell::new(scope));
         let err = get_function(rc_scope.clone(), "MyStruct", "does_not_exist");

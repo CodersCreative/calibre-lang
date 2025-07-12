@@ -8,8 +8,6 @@ use std::{
 };
 
 use helper::Block;
-use rand::seq::IndexedRandom;
-use rustyline::DefaultEditor;
 use thiserror::Error;
 
 use crate::{
@@ -40,7 +38,11 @@ impl From<ScopeErr> for ValueErr {
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum RuntimeType {
     Float,
-    Integer,
+    Double,
+    Int,
+    Long,
+    UInt,
+    ULong,
     Bool,
     Str,
     Char,
@@ -62,8 +64,12 @@ impl FromStr for RuntimeType {
     type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
-            "int" => RuntimeType::Integer,
+            "int" => RuntimeType::Int,
+            "uint" => RuntimeType::UInt,
+            "long" => RuntimeType::Long,
+            "ulong" => RuntimeType::ULong,
             "float" => RuntimeType::Float,
+            "double" => RuntimeType::Double,
             "struct" => RuntimeType::Struct(None),
             "bool" => RuntimeType::Bool,
             "string" => RuntimeType::Str,
@@ -73,23 +79,97 @@ impl FromStr for RuntimeType {
     }
 }
 
-impl Into<RuntimeType> for RuntimeValue {
+pub trait NumberValue: Sized + Clone + PartialEq + PartialOrd + std::fmt::Debug {
+    fn as_f64(&self) -> f64;
+    fn as_i128(&self) -> i128;
+    fn as_u128(&self) -> u128;
+    fn as_u64(&self) -> u64;
+    fn as_i64(&self) -> i64;
+    fn as_f32(&self) -> f32;
+    fn as_bool(&self) -> bool;
+    fn from_f64(f: f64) -> Self;
+    fn from_i128(i: i128) -> Self;
+    fn from_u128(u: u128) -> Self;
+    fn from_u64(u: u64) -> Self;
+    fn from_i64(i: i64) -> Self;
+    fn from_f32(f: f32) -> Self;
+}
+
+macro_rules! impl_number_value {
+    ($ty:ty) => {
+        impl NumberValue for $ty {
+            fn as_f64(&self) -> f64 {
+                *self as f64
+            }
+            fn as_i128(&self) -> i128 {
+                *self as i128
+            }
+            fn as_u128(&self) -> u128 {
+                *self as u128
+            }
+            fn as_u64(&self) -> u64 {
+                *self as u64
+            }
+            fn as_i64(&self) -> i64 {
+                *self as i64
+            }
+            fn as_f32(&self) -> f32 {
+                *self as f32
+            }
+            fn as_bool(&self) -> bool {
+                0 as $ty != *self
+            }
+            fn from_f64(f: f64) -> Self {
+                f as $ty
+            }
+            fn from_i128(i: i128) -> Self {
+                i as $ty
+            }
+            fn from_u128(u: u128) -> Self {
+                u as $ty
+            }
+            fn from_u64(u: u64) -> Self {
+                u as $ty
+            }
+            fn from_i64(i: i64) -> Self {
+                i as $ty
+            }
+            fn from_f32(f: f32) -> Self {
+                f as $ty
+            }
+        }
+    };
+}
+impl_number_value!(i64);
+impl_number_value!(u64);
+impl_number_value!(i128);
+impl_number_value!(u128);
+impl_number_value!(f64);
+impl_number_value!(f32);
+
+impl Into<RuntimeType> for &RuntimeValue {
     fn into(self) -> RuntimeType {
         match self {
-            Self::Null => panic!("Tried to convert null value to type"),
-            Self::Float(_) => RuntimeType::Float,
-            Self::Integer(_) => RuntimeType::Integer,
-            Self::Enum(x, _, _) => RuntimeType::Enum(x),
-            Self::Struct(_, x) => RuntimeType::Struct(x),
-            Self::Bool(_) => RuntimeType::Bool,
-            Self::Option(_, x) => x,
-            Self::Result(_, x) => x,
-            Self::Str(_) => RuntimeType::Str,
-            Self::Char(_) => RuntimeType::Char,
-            Self::Range(_, _) => RuntimeType::Range,
-            Self::Tuple(data) => RuntimeType::Tuple(data.into_iter().map(|x| x.into()).collect()),
-            Self::List { data, data_type } => RuntimeType::List(data_type),
-            Self::Function {
+            RuntimeValue::Null => panic!("Tried to convert null value to type"),
+            RuntimeValue::Float(_) => RuntimeType::Float,
+            RuntimeValue::Double(_) => RuntimeType::Double,
+            RuntimeValue::Int(_) => RuntimeType::Int,
+            RuntimeValue::Long(_) => RuntimeType::Long,
+            RuntimeValue::UInt(_) => RuntimeType::UInt,
+            RuntimeValue::ULong(_) => RuntimeType::ULong,
+            RuntimeValue::Enum(x, _, _) => RuntimeType::Enum(x.clone()),
+            RuntimeValue::Struct(_, x) => RuntimeType::Struct(x.clone()),
+            RuntimeValue::Bool(_) => RuntimeType::Bool,
+            RuntimeValue::Option(_, x) => x.clone(),
+            RuntimeValue::Result(_, x) => x.clone(),
+            RuntimeValue::Str(_) => RuntimeType::Str,
+            RuntimeValue::Char(_) => RuntimeType::Char,
+            RuntimeValue::Range(_, _) => RuntimeType::Range,
+            RuntimeValue::Tuple(data) => {
+                RuntimeType::Tuple(data.into_iter().map(|x| x.into()).collect())
+            }
+            RuntimeValue::List { data, data_type } => RuntimeType::List(data_type.clone()),
+            RuntimeValue::Function {
                 identifier,
                 parameters,
                 body,
@@ -97,16 +177,16 @@ impl Into<RuntimeType> for RuntimeValue {
                 is_async,
             } => RuntimeType::Function {
                 return_type: match return_type {
-                    Some(x) => Box::new(Some(x)),
+                    Some(x) => Box::new(Some(x.clone())),
                     None => Box::new(None),
                 },
                 parameters: parameters
                     .iter()
                     .map(|x| (x.1.clone(), x.2.clone()))
                     .collect(),
-                is_async,
+                is_async: *is_async,
             },
-            Self::NativeFunction(_) => panic!("Cannot get type of native functions"),
+            RuntimeValue::NativeFunction(_) => panic!("Cannot get type of native functions"),
         }
     }
 }
@@ -114,8 +194,12 @@ impl Into<RuntimeType> for RuntimeValue {
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum RuntimeValue {
     Null,
-    Float(f64),
-    Integer(i64),
+    Float(f32),
+    Double(f64),
+    Int(i64),
+    Long(i128),
+    UInt(u64),
+    ULong(u128),
     Range(i32, i32),
     Struct(ObjectType<RuntimeValue>, Option<String>),
     Bool(bool),
@@ -145,9 +229,14 @@ impl ToString for RuntimeValue {
         match self {
             Self::Null => String::from("null"),
             Self::Float(x) => x.to_string(),
+            Self::UInt(x) => x.to_string(),
+            Self::Int(x) => x.to_string(),
+            Self::Long(x) => x.to_string(),
+            Self::ULong(x) => x.to_string(),
+            Self::Double(x) => x.to_string(),
             Self::Enum(x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
             Self::Range(from, to) => format!("{}..{}", from, to),
-            Self::Integer(x) => x.to_string(),
+
             Self::Bool(x) => x.to_string(),
             Self::Struct(x, _) => format!("{:?}", x),
             Self::NativeFunction(x) => format!("native function : {:?}", x),
@@ -178,11 +267,15 @@ impl ToString for RuntimeValue {
 
 impl RuntimeValue {
     pub fn is_number(&self) -> bool {
-        match self {
-            RuntimeValue::Float(_) => true,
-            RuntimeValue::Integer(_) => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            RuntimeValue::Float(_)
+                | RuntimeValue::Double(_)
+                | RuntimeValue::Int(_)
+                | RuntimeValue::Long(_)
+                | RuntimeValue::UInt(_)
+                | RuntimeValue::ULong(_)
+        )
     }
 
     pub fn is_type(&self, scope: Rc<RefCell<Scope>>, t: RuntimeType) -> bool {
@@ -194,7 +287,15 @@ impl RuntimeValue {
                 Err(_) => false,
             },
             RuntimeValue::Option(d, x) => d.is_none() || x == &t,
-            RuntimeValue::Result(_, x) => x == &t,
+            RuntimeValue::Result(d, x) => {
+                if x == &t {
+                    true
+                } else if let RuntimeType::Result(x, y) = x {
+                    if d.is_ok() { **x == t } else { **y == t }
+                } else {
+                    false
+                }
+            }
             RuntimeValue::Tuple(data) => match t {
                 RuntimeType::Tuple(data_types) => {
                     if data.len() != data_types.len() {
@@ -212,33 +313,9 @@ impl RuntimeValue {
                 }
                 _ => false,
             },
-            RuntimeValue::Str(_) => match t {
-                RuntimeType::Str => true,
-                _ => false,
-            },
             RuntimeValue::Enum(x, _, _) => match t {
                 RuntimeType::Enum(y) => *x == y,
                 RuntimeType::Struct(Some(y)) => *x == y,
-                _ => false,
-            },
-            RuntimeValue::Range(_, _) => match t {
-                RuntimeType::Range => true,
-                _ => false,
-            },
-            RuntimeValue::Bool(_) => match t {
-                RuntimeType::Bool => true,
-                _ => false,
-            },
-            RuntimeValue::Integer(_) => match t {
-                RuntimeType::Integer => true,
-                _ => false,
-            },
-            RuntimeValue::Float(_) => match t {
-                RuntimeType::Float => true,
-                _ => false,
-            },
-            RuntimeValue::Char(_) => match t {
-                RuntimeType::Char => true,
                 _ => false,
             },
             RuntimeValue::Function {
@@ -285,6 +362,7 @@ impl RuntimeValue {
                 }
                 _ => false,
             },
+            _ => t == self.into(),
         }
     }
 
@@ -343,24 +421,32 @@ impl RuntimeValue {
             }
         };
 
+        macro_rules! number_cast {
+            ($val:expr, $target:ident) => {
+                match t {
+                    RuntimeType::Float => Ok(RuntimeValue::Float($val.as_f32())),
+                    RuntimeType::Double => Ok(RuntimeValue::Double($val.as_f64())),
+                    RuntimeType::Int => Ok(RuntimeValue::Int($val.as_i64())),
+                    RuntimeType::Long => Ok(RuntimeValue::Long($val.as_i128())),
+                    RuntimeType::UInt => Ok(RuntimeValue::UInt($val.as_u64())),
+                    RuntimeType::ULong => Ok(RuntimeValue::ULong($val.as_u128())),
+                    RuntimeType::Bool => Ok(RuntimeValue::Bool($val.as_bool())),
+                    RuntimeType::Str => Ok(RuntimeValue::Str($val.to_string())),
+                    RuntimeType::List(_) => list_case(),
+                    RuntimeType::Result(_, _) => result_case(),
+                    RuntimeType::Option(_) => option_case(),
+                    _ => panic_type(),
+                }
+            };
+        }
+
         match self {
-            RuntimeValue::Integer(x) => match t {
-                RuntimeType::Integer => Ok(self.clone()),
-                RuntimeType::Range => Ok(RuntimeValue::Range(0, *x as i32)),
-                RuntimeType::Float => Ok(RuntimeValue::Float(*x as f64)),
-                RuntimeType::Bool => Ok(RuntimeValue::Bool(match x {
-                    0 => false,
-                    1 => true,
-                    _ => {
-                        return panic_type();
-                    }
-                })),
-                RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
-                RuntimeType::List(_) => list_case(),
-                RuntimeType::Result(_, _) => result_case(),
-                RuntimeType::Option(_) => option_case(),
-                _ => panic_type(),
-            },
+            RuntimeValue::Float(x) => number_cast!(x, t),
+            RuntimeValue::Double(x) => number_cast!(x, t),
+            RuntimeValue::Int(x) => number_cast!(x, t),
+            RuntimeValue::Long(x) => number_cast!(x, t),
+            RuntimeValue::UInt(x) => number_cast!(x, t),
+            RuntimeValue::ULong(x) => number_cast!(x, t),
             RuntimeValue::Tuple(data) => match t {
                 RuntimeType::Tuple(data_types) => {
                     if data.len() == data_types.len() {
@@ -375,40 +461,31 @@ impl RuntimeValue {
                 }
                 _ => panic_type(),
             },
-            RuntimeValue::Float(x) => match t {
-                RuntimeType::Integer => Ok(RuntimeValue::Integer(*x as i64)),
-                RuntimeType::Range => Ok(RuntimeValue::Range(0, *x as i32)),
-                RuntimeType::Float => Ok(self.clone()),
-                RuntimeType::Bool => Ok(RuntimeValue::Bool(match x {
-                    0.0 => false,
-                    1.0 => true,
-                    _ => {
-                        return panic_type();
-                    }
-                })),
-                RuntimeType::List(_) => list_case(),
-                RuntimeType::Result(_, _) => result_case(),
-                RuntimeType::Option(_) => option_case(),
-                RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
-                _ => panic_type(),
-            },
             RuntimeValue::Range(from, to) => match t {
                 RuntimeType::Range => Ok(self.clone()),
-                RuntimeType::Integer => Ok(RuntimeValue::Integer(*to as i64)),
-                RuntimeType::Float => Ok(RuntimeValue::Float(*to as f64)),
+                RuntimeType::Int => Ok(RuntimeValue::Int(*to as i64)),
+                RuntimeType::UInt => Ok(RuntimeValue::UInt(*to as u64)),
+                RuntimeType::Long => Ok(RuntimeValue::Long(*to as i128)),
+                RuntimeType::ULong => Ok(RuntimeValue::ULong(*to as u128)),
+                RuntimeType::Float => Ok(RuntimeValue::Float(*to as f32)),
+                RuntimeType::Double => Ok(RuntimeValue::Double(*to as f64)),
                 RuntimeType::List(_) => Ok(RuntimeValue::List {
                     data: (*from..*to)
                         .into_iter()
-                        .map(|x| RuntimeValue::Integer(x as i64))
+                        .map(|x| RuntimeValue::Int(x as i64))
                         .collect(),
-                    data_type: Box::new(Some(RuntimeType::Integer)),
+                    data_type: Box::new(Some(RuntimeType::Int)),
                 }),
                 RuntimeType::Result(_, _) => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 _ => panic_type(),
             },
             RuntimeValue::Str(x) => match t {
-                RuntimeType::Integer => Ok(RuntimeValue::Integer(x.parse().unwrap())),
+                RuntimeType::Int => Ok(RuntimeValue::Int(x.parse().unwrap())),
+                RuntimeType::UInt => Ok(RuntimeValue::Int(x.parse().unwrap())),
+                RuntimeType::Long => Ok(RuntimeValue::Long(x.parse().unwrap())),
+                RuntimeType::ULong => Ok(RuntimeValue::ULong(x.parse().unwrap())),
+                RuntimeType::Double => Ok(RuntimeValue::Double(x.parse().unwrap())),
                 RuntimeType::Float => Ok(RuntimeValue::Float(x.parse().unwrap())),
                 RuntimeType::Str => Ok(self.clone()),
                 RuntimeType::Char => Ok(RuntimeValue::Char(x.chars().nth(0).unwrap())),
