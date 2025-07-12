@@ -66,49 +66,60 @@ impl Parser {
     pub fn parse_potential_key_value(
         &mut self,
     ) -> Result<ObjectType<Option<NodeType>>, ParserError> {
-        let _ = self.expect_eat(
-            &TokenType::Open(Bracket::Curly),
-            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
-        );
-        let mut is_tuple = true;
-        let mut tuple = Vec::new();
-        let mut properties = HashMap::new();
+        match self.first().token_type {
+            TokenType::Open(Bracket::Curly) => {
+                let _ = self.eat();
+                let mut properties = HashMap::new();
+                while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Curly)
+                {
+                    let key = self
+                        .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
+                        .value;
 
-        while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Curly) {
-            let key = self.first().value.clone();
-            tuple.push(Some(self.parse_statement()?));
+                    if [TokenType::Comma, TokenType::Close(Bracket::Curly)]
+                        .contains(&self.first().token_type)
+                    {
+                        if self.first().token_type != TokenType::Close(Bracket::Curly) {
+                            let _ = self.eat();
+                        }
 
-            if [TokenType::Comma, TokenType::Close(Bracket::Curly)]
-                .contains(&self.first().token_type)
-            {
-                if self.first().token_type != TokenType::Close(Bracket::Curly) {
-                    let _ = self.eat();
+                        properties.insert(key, None);
+                        continue;
+                    }
+
+                    let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
+
+                    properties.insert(key, Some(self.parse_statement()?));
+
+                    if self.first().token_type != TokenType::Close(Bracket::Curly) {
+                        let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
+                    }
                 }
-
-                properties.insert(key, None);
-                continue;
+                let _ = self.expect_eat(
+                    &TokenType::Close(Bracket::Curly),
+                    SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
+                )?;
+                Ok(ObjectType::Map(properties))
             }
-
-            is_tuple = false;
-
-            let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
-
-            properties.insert(key, Some(self.parse_statement()?));
-
-            if self.first().token_type != TokenType::Close(Bracket::Curly) {
-                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
+            _ => {
+                let _ = self.expect_eat(
+                    &TokenType::Open(Bracket::Paren),
+                    SyntaxErr::ExpectedOpeningBracket(Bracket::Paren),
+                );
+                let mut tuple = Vec::new();
+                while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Paren)
+                {
+                    tuple.push(Some(self.parse_statement()?));
+                    if self.first().token_type != TokenType::Close(Bracket::Paren) {
+                        let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
+                    }
+                }
+                let _ = self.expect_eat(
+                    &TokenType::Close(Bracket::Paren),
+                    SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
+                )?;
+                Ok(ObjectType::Tuple(tuple))
             }
-        }
-
-        let _ = self.expect_eat(
-            &TokenType::Close(Bracket::Curly),
-            SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
-        )?;
-
-        if is_tuple {
-            Ok(ObjectType::Tuple(tuple))
-        } else {
-            Ok(ObjectType::Map(properties))
         }
     }
 

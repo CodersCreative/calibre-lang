@@ -1,7 +1,6 @@
 pub mod binary;
 pub mod comparison;
 
-
 use std::collections::HashMap;
 
 use binary::BinaryOperator;
@@ -73,8 +72,8 @@ pub enum NodeType {
         body: Vec<NodeType>,
     },
     MatchDeclaration {
-        value : Box<NodeType>,
-        patterns : Vec<(NodeType, Vec<NodeType>, Vec<NodeType>)>
+        value: Box<NodeType>,
+        patterns: Vec<(NodeType, Vec<NodeType>, Vec<NodeType>)>,
     },
     FunctionDeclaration {
         identifier: String,
@@ -107,6 +106,9 @@ pub enum NodeType {
     LoopDeclaration {
         loop_type: Box<LoopType>,
         body: Vec<NodeType>,
+    },
+    Try {
+        value: Box<NodeType>,
     },
     Return {
         value: Box<NodeType>,

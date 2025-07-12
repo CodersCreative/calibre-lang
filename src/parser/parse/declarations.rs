@@ -20,6 +20,7 @@ impl Parser {
             TokenType::Struct => self.parse_struct_declaration(),
             TokenType::Func => self.parse_function_declaration(),
             TokenType::If => self.parse_if_statement(),
+            TokenType::Try => self.parse_try_declaration(),
             TokenType::Match => self.parse_match_declaration(),
             TokenType::Stop(x) => match x {
                 StopValue::Return => self.parse_return_declaration(),
@@ -71,12 +72,15 @@ impl Parser {
         };
 
         Ok(match self.first().token_type {
-            TokenType::Equals => {let _ = self.eat(); NodeType::VariableDeclaration {
-                var_type,
-                identifier,
-                data_type,
-                value: Some(Box::new(self.parse_statement()?)),
-            }},
+            TokenType::Equals => {
+                let _ = self.eat();
+                NodeType::VariableDeclaration {
+                    var_type,
+                    identifier,
+                    data_type,
+                    value: Some(Box::new(self.parse_statement()?)),
+                }
+            }
             _ => {
                 if let VarType::Mutable(_) = var_type {
                     NodeType::VariableDeclaration {
@@ -152,6 +156,16 @@ impl Parser {
         Ok(NodeType::ImplDeclaration {
             identifier,
             functions,
+        })
+    }
+    pub fn parse_try_declaration(&mut self) -> Result<NodeType, ParserError> {
+        let _ = self.expect_eat(
+            &TokenType::Try,
+            SyntaxErr::ExpectedKeyword(String::from("try")),
+        )?;
+
+        Ok(NodeType::Try {
+            value: Box::new(self.parse_statement()?),
         })
     }
     pub fn parse_return_declaration(&mut self) -> Result<NodeType, ParserError> {
@@ -285,10 +299,15 @@ impl Parser {
                     TokenType::Open(Bracket::Curly),
                     TokenType::Close(Bracket::Curly),
                 )?),
-                _ => ObjectType::Tuple(self.parse_type_list(
-                    TokenType::Open(Bracket::Paren),
-                    TokenType::Close(Bracket::Paren),
-                )?.into_iter().map(|x| x.0).collect()),
+                _ => ObjectType::Tuple(
+                    self.parse_type_list(
+                        TokenType::Open(Bracket::Paren),
+                        TokenType::Close(Bracket::Paren),
+                    )?
+                    .into_iter()
+                    .map(|x| x.0)
+                    .collect(),
+                ),
             },
         })
     }
@@ -342,9 +361,7 @@ impl Parser {
         })
     }
 
-    pub fn parse_function_declaration(
-        &mut self,
-    ) -> Result<NodeType, ParserError> {
+    pub fn parse_function_declaration(&mut self) -> Result<NodeType, ParserError> {
         let _ = self.eat();
         let identifier = self
             .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?

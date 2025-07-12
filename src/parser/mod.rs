@@ -43,7 +43,7 @@ pub enum ParserError {
     #[error("{0}")]
     Lexer(LexerError),
     #[error("{0}\nFound : {1:?}\nNext : {2:?}")]
-    Syntax(SyntaxErr, Token, Token),
+    Syntax(SyntaxErr, Token, Token, Token, Token),
 }
 
 #[derive(Error, Debug)]

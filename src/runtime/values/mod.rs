@@ -48,6 +48,8 @@ pub enum RuntimeType {
     Tuple(Vec<RuntimeType>),
     List(Box<Option<RuntimeType>>),
     Range,
+    Option(Box<RuntimeType>),
+    Result(Box<RuntimeType>, Box<RuntimeType>),
     Function {
         return_type: Box<Option<RuntimeType>>,
         parameters: Vec<(RuntimeType, RefMutability)>,
@@ -80,6 +82,8 @@ impl Into<RuntimeType> for RuntimeValue {
             Self::Enum(x, _, _) => RuntimeType::Enum(x),
             Self::Struct(_, x) => RuntimeType::Struct(x),
             Self::Bool(_) => RuntimeType::Bool,
+            Self::Option(_, x) => x,
+            Self::Result(_, x) => x,
             Self::Str(_) => RuntimeType::Str,
             Self::Char(_) => RuntimeType::Char,
             Self::Range(_, _) => RuntimeType::Range,
@@ -123,8 +127,8 @@ pub enum RuntimeValue {
         data: Vec<RuntimeValue>,
         data_type: Box<Option<RuntimeType>>,
     },
-    // Option(Option<Box<RuntimeValue>>),
-    // Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>),
+    Option(Option<Box<RuntimeValue>>, RuntimeType),
+    Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>, RuntimeType),
     Function {
         identifier: String,
         parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)>,
@@ -142,13 +146,15 @@ impl ToString for RuntimeValue {
             Self::Null => String::from("null"),
             Self::Float(x) => x.to_string(),
             Self::Enum(x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
-            Self::Range(from, to) => format!("{} -> {}", from, to),
+            Self::Range(from, to) => format!("{}..{}", from, to),
             Self::Integer(x) => x.to_string(),
             Self::Bool(x) => x.to_string(),
             Self::Struct(x, _) => format!("{:?}", x),
             Self::NativeFunction(x) => format!("native function : {:?}", x),
             Self::List { data, data_type: _ } => format!("{:?}", data),
             Self::Tuple(data) => format!("{:?}", data),
+            Self::Option(x, _) => format!("{:?}", x),
+            Self::Result(x, _) => format!("{:?}", x),
             Self::Str(x) => x.to_string(),
             Self::Char(x) => x.to_string(),
             Self::Function {
@@ -187,6 +193,8 @@ impl RuntimeValue {
                 Ok(_) => true,
                 Err(_) => false,
             },
+            RuntimeValue::Option(d, x) => d.is_none() || x == &t,
+            RuntimeValue::Result(_, x) => x == &t,
             RuntimeValue::Tuple(data) => match t {
                 RuntimeType::Tuple(data_types) => {
                     if data.len() != data_types.len() {
@@ -290,6 +298,36 @@ impl RuntimeValue {
             return Err(ValueErr::Conversion(self.clone(), typ));
         };
 
+        let result_case = || {
+            if let RuntimeType::Result(x, y) = t.clone() {
+                if self.is_type(scope.clone(), *x.clone())
+                    || self.is_type(scope.clone(), *y.clone())
+                {
+                    return Ok(RuntimeValue::Result(Ok(Box::new(self.clone())), t.clone()));
+                }
+
+                if let Ok(data) = self.into_type(scope.clone(), *x.clone()) {
+                    return Ok(RuntimeValue::Result(Ok(Box::new(data)), t.clone()));
+                } else {
+                    return Ok(RuntimeValue::Result(
+                        Ok(Box::new(self.into_type(scope.clone(), *y.clone())?)),
+                        t.clone(),
+                    ));
+                }
+            }
+            return Err(ValueErr::Conversion(self.clone(), t.clone()));
+        };
+
+        let option_case = || {
+            if let RuntimeType::Option(x) = t.clone() {
+                return Ok(RuntimeValue::Option(
+                    Some(Box::new(self.into_type(scope.clone(), *x.clone())?)),
+                    t.clone(),
+                ));
+            }
+            return Err(ValueErr::Conversion(self.clone(), t.clone()));
+        };
+
         let list_case = || {
             if let RuntimeType::List(x) = t.clone() {
                 Ok(RuntimeValue::List {
@@ -317,13 +355,11 @@ impl RuntimeValue {
                         return panic_type();
                     }
                 })),
-                RuntimeType::Struct(_) => panic_type(),
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::List(_) => list_case(),
-                RuntimeType::Tuple(_) => panic_type(),
-                RuntimeType::Char => panic_type(),
-                RuntimeType::Function { .. } => panic_type(),
-                RuntimeType::Enum { .. } => panic_type(),
+                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Option(_) => option_case(),
+                _ => panic_type(),
             },
             RuntimeValue::Tuple(data) => match t {
                 RuntimeType::Tuple(data_types) => {
@@ -350,13 +386,11 @@ impl RuntimeValue {
                         return panic_type();
                     }
                 })),
-                RuntimeType::Struct(_) => panic_type(),
                 RuntimeType::List(_) => list_case(),
+                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Option(_) => option_case(),
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
-                RuntimeType::Char => panic_type(),
-                RuntimeType::Function { .. } => panic_type(),
-                RuntimeType::Enum { .. } => panic_type(),
-                RuntimeType::Tuple(_) => panic_type(),
+                _ => panic_type(),
             },
             RuntimeValue::Range(from, to) => match t {
                 RuntimeType::Range => Ok(self.clone()),
@@ -369,15 +403,15 @@ impl RuntimeValue {
                         .collect(),
                     data_type: Box::new(Some(RuntimeType::Integer)),
                 }),
+                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Option(_) => option_case(),
                 _ => panic_type(),
             },
             RuntimeValue::Str(x) => match t {
                 RuntimeType::Integer => Ok(RuntimeValue::Integer(x.parse().unwrap())),
                 RuntimeType::Float => Ok(RuntimeValue::Float(x.parse().unwrap())),
-                RuntimeType::Bool => panic_type(),
                 RuntimeType::Str => Ok(self.clone()),
                 RuntimeType::Char => Ok(RuntimeValue::Char(x.chars().nth(0).unwrap())),
-                RuntimeType::Struct(_) => panic_type(),
                 RuntimeType::List(typ) if *typ == Some(RuntimeType::Char) => {
                     Ok(RuntimeValue::List {
                         data: x.chars().map(|c| RuntimeValue::Char(c)).collect(),
@@ -385,10 +419,9 @@ impl RuntimeValue {
                     })
                 }
                 RuntimeType::List(_) => list_case(),
-                RuntimeType::Tuple(_) => panic_type(),
-                RuntimeType::Range => panic_type(),
-                RuntimeType::Function { .. } => panic_type(),
-                RuntimeType::Enum { .. } => panic_type(),
+                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Option(_) => option_case(),
+                _ => panic_type(),
             },
 
             RuntimeValue::Null => panic_type(),
@@ -424,6 +457,8 @@ impl RuntimeValue {
                 RuntimeType::Char => panic_type(),
                 RuntimeType::Range => panic_type(),
                 RuntimeType::List(_) => list_case(),
+                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Option(_) => option_case(),
                 _ => panic_type(),
             },
             RuntimeValue::Struct(ObjectType::Tuple(x), _) => match t {
@@ -431,6 +466,8 @@ impl RuntimeValue {
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
+                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Option(_) => option_case(),
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Struct(Some(identifier)) => {
                     let Object::Struct(ObjectType::Tuple(properties)) =
@@ -455,6 +492,8 @@ impl RuntimeValue {
                 }
                 RuntimeType::Function { .. } => match t {
                     RuntimeType::List(_) => list_case(),
+                    RuntimeType::Result(_, _) => result_case(),
+                    RuntimeType::Option(_) => option_case(),
                     _ => panic_type(),
                 },
                 _ => panic_type(),
@@ -464,6 +503,8 @@ impl RuntimeValue {
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
+                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Option(_) => option_case(),
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Struct(Some(identifier)) => {
                     let Object::Struct(ObjectType::Map(properties)) =
@@ -527,9 +568,16 @@ impl RuntimeValue {
 
                     Ok(self.clone())
                 }
+                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Option(_) => option_case(),
                 _ => panic_type(),
             },
             RuntimeValue::List { data, data_type } => {
+                match t {
+                    RuntimeType::Result(_, _) => return result_case(),
+                    RuntimeType::Option(_) => return option_case(),
+                    _ => {}
+                }
                 if let Some(RuntimeType::Struct(Some(x))) = *data_type.clone() {
                     if let RuntimeType::Struct(Some(ref y)) = t {
                         if &x == y {
@@ -567,7 +615,32 @@ impl RuntimeValue {
                     })
                 }
             }
-
+            RuntimeValue::Result(x, typ) => {
+                if &t == typ {
+                    Ok(self.clone())
+                } else {
+                    match x {
+                        Ok(x) => {
+                            return x.into_type(scope, t);
+                        }
+                        Err(x) => {
+                            return x.into_type(scope, t);
+                        }
+                    }
+                }
+            }
+            RuntimeValue::Option(x, typ) => {
+                if x.is_none() || &t == typ {
+                    Ok(RuntimeValue::Option(x.clone(), t))
+                } else {
+                    match x {
+                        Some(x) => {
+                            return x.into_type(scope, t);
+                        }
+                        None => panic_type(),
+                    }
+                }
+            }
             _ => panic_type(),
         }
     }

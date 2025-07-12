@@ -14,6 +14,7 @@ pub enum NativeFunctions {
     Trim,
     Range,
     Wait,
+    Clear,
 }
 
 impl NativeFunctions {}
@@ -38,6 +39,10 @@ impl RuntimeValue {
                     handle.write_all(b"\n").unwrap();
                     handle.flush().unwrap();
 
+                    RuntimeValue::Null
+                }
+                NativeFunctions::Clear => {
+                    print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
                     RuntimeValue::Null
                 }
                 NativeFunctions::Range => {
@@ -99,8 +104,11 @@ impl RuntimeValue {
 
                     let readline = editor.readline(&txt.to_string());
                     match readline {
-                        Ok(line) => RuntimeValue::Str(line),
-                        Err(_) => RuntimeValue::Null,
+                        Ok(line) => RuntimeValue::Option(
+                            Some(Box::new(RuntimeValue::Str(line))),
+                            RuntimeType::Str,
+                        ),
+                        Err(_) => RuntimeValue::Option(None, RuntimeType::Str),
                     }
                 }
             }

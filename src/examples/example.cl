@@ -102,6 +102,22 @@ for i in range2(100, step = 10) {
   print("val: " + i);
 }
 
+fn smth_result(y : int) -> str!int {
+  if y > 10 {
+    return ok(y);
+  }
+
+  err("needs to be larger than 10")
+}
+
+fn smth_optional(y : int) -> int? {
+  if y > 10 {
+    return some(y);
+  }
+
+  none
+}
+
 fn main() -> int {
 	x = 50;
 	x++; // should increment by 1

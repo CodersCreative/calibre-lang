@@ -26,7 +26,13 @@ impl Parser {
     }
 
     fn get_err(&self, err: SyntaxErr) -> ParserError {
-        ParserError::Syntax(err, self.first().clone(), self.nth(1).clone())
+        ParserError::Syntax(
+            err,
+            self.first().clone(),
+            self.nth(1).clone(),
+            self.nth(2).clone(),
+            self.nth(3).clone(),
+        )
     }
 
     fn expect_eat(&mut self, t: &TokenType, err: SyntaxErr) -> Result<Token, ParserError> {
@@ -197,11 +203,16 @@ impl Parser {
     pub fn parse_type(&mut self) -> Result<Option<RuntimeType>, ParserError> {
         let t = self.first().clone();
 
-        if t.token_type == TokenType::Comparison(Comparison::Greater) {
-            Ok(Some(RuntimeType::Tuple(self.parse_type_list(
-                TokenType::Comparison(Comparison::Greater),
-                TokenType::Comparison(Comparison::Lesser),
-            )?.into_iter().map(|x| x.0).collect())))
+        let mut typ = if t.token_type == TokenType::Comparison(Comparison::Greater) {
+            Ok(Some(RuntimeType::Tuple(
+                self.parse_type_list(
+                    TokenType::Comparison(Comparison::Greater),
+                    TokenType::Comparison(Comparison::Lesser),
+                )?
+                .into_iter()
+                .map(|x| x.0)
+                .collect(),
+            )))
         } else if t.token_type == TokenType::Func || t.token_type == TokenType::Async {
             let _ = self.eat();
             let is_async = if t.token_type == TokenType::Async {
@@ -237,8 +248,16 @@ impl Parser {
                 let t = Some(self.parse_type()?.expect("Expected data type"));
                 if self.first().token_type == TokenType::Comparison(Comparison::LesserEqual) {
                     let former = self.eat();
-                    self.tokens.push(Token { value: String::from(">"), token_type: TokenType::Comparison(Comparison::Lesser), ..former });
-                    self.tokens.push(Token { value: String::from("="), token_type: TokenType::Equals, ..former });
+                    self.tokens.push(Token {
+                        value: String::from(">"),
+                        token_type: TokenType::Comparison(Comparison::Lesser),
+                        ..former
+                    });
+                    self.tokens.push(Token {
+                        value: String::from("="),
+                        token_type: TokenType::Equals,
+                        ..former
+                    });
                 }
                 let _ = self.expect_eat(
                     &TokenType::Comparison(Comparison::Lesser),
@@ -255,7 +274,23 @@ impl Parser {
                 Ok(x) => Ok(Some(x)),
                 Err(_) => Ok(None),
             }
+        };
+
+        if self.first().token_type == TokenType::Question {
+            let _ = self.eat();
+
+            typ = Ok(Some(RuntimeType::Option(Box::new(typ?.unwrap()))));
+        } else if self.first().token_type == TokenType::Not {
+            let _ = self.eat();
+            let t = self.parse_type();
+
+            typ = Ok(Some(RuntimeType::Result(
+                Box::new(typ?.unwrap()),
+                Box::new(t?.unwrap()),
+            )));
         }
+
+        typ
     }
 
     pub fn parse_tuple_expression(&mut self) -> Result<NodeType, ParserError> {
@@ -302,7 +337,7 @@ impl Parser {
                 }
 
                 let mut conditionals = Vec::new();
-                
+
                 while self.first().token_type == TokenType::If {
                     let _ = self.eat();
                     conditionals.push(self.parse_statement()?);

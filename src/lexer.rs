@@ -61,11 +61,13 @@ pub enum TokenType {
     List,
     Arrow,
     Object,
+    Question,
     Async,
     Func,
     If,
     In,
     Or,
+    Try,
     This,
     FullStop,
     EOF,
@@ -91,6 +93,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
             String::from("continue"),
             TokenType::Stop(StopValue::Continue),
         ),
+        (String::from("try"), TokenType::Try),
         (String::from("if"), TokenType::If),
         (String::from("func"), TokenType::Func),
         (String::from("struct"), TokenType::Struct),
@@ -132,12 +135,12 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
 pub struct Token {
     pub value: String,
     pub token_type: TokenType,
-    pub line : usize,
-    pub col : usize,
+    pub line: usize,
+    pub col: usize,
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, value: &str, line : usize, col : usize) -> Self {
+    pub fn new(token_type: TokenType, value: &str, line: usize, col: usize) -> Self {
         Self {
             value: value.to_string(),
             token_type,
@@ -147,11 +150,11 @@ impl Token {
     }
 }
 
-fn increment_line_col(line : &mut usize, col : &mut usize, c : &char) {
+fn increment_line_col(line: &mut usize, col: &mut usize, c: &char) {
     if c == &'\n' {
         *line += 1;
         *col = 0;
-    }else if c.is_whitespace(){
+    } else if c.is_whitespace() {
         *col += 1;
     }
 }
@@ -160,8 +163,8 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut buffer: Vec<char> = txt.chars().collect();
     // println!("{buffer:?}");
-    let mut line : usize = 1;
-    let mut col : usize = 0;
+    let mut line: usize = 1;
+    let mut col: usize = 0;
 
     while buffer.len() > 0 {
         let first = buffer.first().unwrap();
@@ -169,7 +172,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
         if buffer[0] == '\n' {
             line += 1;
             col = 0;
-        }else if buffer[0].is_whitespace(){
+        } else if buffer[0].is_whitespace() {
             col += 1;
         }
 
@@ -184,6 +187,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                 ']' => Some(TokenType::Close(Bracket::Square)),
                 ',' => Some(TokenType::Comma),
                 '&' => Some(TokenType::Ref),
+                '?' => Some(TokenType::Question),
                 '<' | '>' => Some(TokenType::Comparison(
                     Comparison::from_operator(&c.to_string()).unwrap(),
                 )),
@@ -199,7 +203,12 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
         };
 
         let token = match get_token(*first) {
-            Some(t) => Some(Token::new(t, buffer.remove(0).to_string().trim(), line, col)),
+            Some(t) => Some(Token::new(
+                t,
+                buffer.remove(0).to_string().trim(),
+                line,
+                col,
+            )),
             _ => {
                 let ignore = IGNORE.contains(first);
 
@@ -288,7 +297,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                 let combined = format!("{}{}", last.value, token.value);
 
                 if let Some(t) = special_keywords().get(&combined) {
-                    if last.col / token.col == 1{
+                    if last.col / token.col == 1 {
                         let token = Token::new(t.clone(), &combined, line, col);
                         tokens.pop();
                         tokens.push(token);
@@ -298,7 +307,8 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
 
                 if let TokenType::BinaryOperator(x) = &last.token_type {
                     if token.token_type == TokenType::Equals {
-                        let token = Token::new(TokenType::BinaryAssign(x.clone()), &last.value, line, col);
+                        let token =
+                            Token::new(TokenType::BinaryAssign(x.clone()), &last.value, line, col);
                         tokens.pop();
                         tokens.push(token);
                         continue;

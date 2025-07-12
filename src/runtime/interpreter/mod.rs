@@ -94,6 +94,18 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::IntegerLiteral(x) => Ok(RuntimeValue::Integer(x)),
         NodeType::StringLiteral(x) => Ok(RuntimeValue::Str(x)),
         NodeType::CharLiteral(x) => Ok(RuntimeValue::Char(x)),
+        NodeType::Try { value } => {
+            let value = evaluate(*value, scope.clone())?;
+
+            match value {
+                RuntimeValue::Result(Err(_), _) | RuntimeValue::Option(None, _) => {
+                    scope.borrow_mut().stop = Some(StopValue::Return);
+                }
+                _ => {}
+            }
+
+            Ok(value)
+        }
         NodeType::Return { value } => {
             scope.borrow_mut().stop = Some(StopValue::Return);
             evaluate(*value, scope)

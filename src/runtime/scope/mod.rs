@@ -60,7 +60,10 @@ fn get_global_variables() -> HashMap<String, (RuntimeValue, VarType)> {
         (String::from("INT_MIN"), RuntimeValue::Integer(i64::MIN)),
         (String::from("true"), RuntimeValue::Bool(true)),
         (String::from("false"), RuntimeValue::Bool(false)),
-        (String::from("null"), RuntimeValue::Null),
+        (
+            String::from("none"),
+            RuntimeValue::Option(None, RuntimeType::Str),
+        ),
         (
             String::from("input"),
             RuntimeValue::NativeFunction(NativeFunctions::Input),
@@ -72,6 +75,10 @@ fn get_global_variables() -> HashMap<String, (RuntimeValue, VarType)> {
         (
             String::from("print"),
             RuntimeValue::NativeFunction(NativeFunctions::Print),
+        ),
+        (
+            String::from("clear"),
+            RuntimeValue::NativeFunction(NativeFunctions::Clear),
         ),
         (
             String::from("wait"),
