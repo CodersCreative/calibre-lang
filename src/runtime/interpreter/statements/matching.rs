@@ -198,6 +198,54 @@ fn match_inner_pattern(
                             None
                         }
                     }
+                    (part, RuntimeValue::Str(value)) if part == "Prefix" || part == "Suffix" => {
+                        if let (Some(pattern), name) = (args.get(0), args.get(1)) {
+                            if let Ok(pattern) = evaluate(pattern.0.clone(), scope.clone()) {
+                                let RuntimeValue::Str(pattern) =
+                                    pattern.into_type(scope.clone(), RuntimeType::Str).unwrap()
+                                else {
+                                    panic!()
+                                };
+
+                                if let Some(value) = if part == "Prefix" {
+                                    value.strip_prefix(&pattern)
+                                } else {
+                                    value.strip_suffix(&pattern)
+                                } {
+                                    let vars = if let Some((NodeType::Identifier(name), _)) = name {
+                                        vec![(
+                                            name.clone(),
+                                            RuntimeValue::Str(value.to_string()),
+                                            RefMutability::MutValue,
+                                        )]
+                                    } else {
+                                        Vec::new()
+                                    };
+
+                                    let new_scope =
+                                        get_new_scope_with_values(scope.clone(), vars).ok()?;
+                                    if handle_conditionals(new_scope.clone(), conditionals.to_vec())
+                                        .ok()?
+                                    {
+                                        Some(evaluate_scope(
+                                            NodeType::ScopeDeclaration {
+                                                body: body.to_vec(),
+                                            },
+                                            new_scope,
+                                        ))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    }
                     ("None", RuntimeValue::Option(None, _)) => Some(evaluate_scope(
                         NodeType::ScopeDeclaration {
                             body: body.to_vec(),
@@ -217,6 +265,27 @@ fn match_inner_pattern(
                                 Some(Err(InterpreterErr::ExpectedFunctions)) => None,
                                 Some(Err(e)) => Some(Err(e)),
                                 None => None,
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    ("Let", data) => {
+                        if let Some((NodeType::Identifier(name), _)) = args.get(0) {
+                            let new_scope = get_new_scope_with_values(
+                                scope.clone(),
+                                vec![(name.clone(), value.clone(), RefMutability::MutValue)],
+                            )
+                            .ok()?;
+                            if handle_conditionals(new_scope.clone(), conditionals.to_vec()).ok()? {
+                                Some(evaluate_scope(
+                                    NodeType::ScopeDeclaration {
+                                        body: body.to_vec(),
+                                    },
+                                    new_scope,
+                                ))
+                            } else {
+                                None
                             }
                         } else {
                             None

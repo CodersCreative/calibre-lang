@@ -145,7 +145,9 @@ match 16 {
   [6 ,7 ,8 ,9 ,10] -> print("6 to 10"),
   // A similar syntax for ranges and lists and tuples can be used without the need for an enum.
   11..=20 -> print("11 to 20"),
-  // if the variable is not in scope it can be used to reference all other options whilst passing off the data
+  // The Let keyword can be used to reference all other options whilst passing off the data
+  Let(data) if data > 200 -> print("value is > 200 "),
+  // if the name is not in scope it can be used without the Let keyword
   data -> print("value is : " + data),
 }
 
@@ -182,7 +184,13 @@ fn main() -> !int {
 
 	print(x);
 	print(y);
-	print("Hello World") // Semicolons have no effect so they can be left out
+  let sentence = "Hello, World!";
+
+  match sentence{
+    // The Prefix and Suffix keywords can be used to pattern match on a string easily.
+    Prefix("Hello,", line) if false -> print(trim(line)),
+    Suffix(", World!", line) -> print(trim(line))
+  }
 
 	return y;
 }
