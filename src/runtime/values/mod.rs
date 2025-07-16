@@ -39,6 +39,7 @@ impl From<ScopeErr> for ValueErr {
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum RuntimeType {
     Float,
+    Dynamic,
     Double,
     Int,
     Long,
@@ -66,6 +67,7 @@ impl FromStr for RuntimeType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "int" => RuntimeType::Int,
+            "dyn" => RuntimeType::Dynamic,
             "uint" => RuntimeType::UInt,
             "long" => RuntimeType::Long,
             "ulong" => RuntimeType::ULong,

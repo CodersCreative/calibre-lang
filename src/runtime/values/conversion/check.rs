@@ -19,6 +19,10 @@ impl RuntimeValue {
     }
 
     pub fn is_type(&self, scope: Rc<RefCell<Scope>>, t: RuntimeType) -> bool {
+        if t == RuntimeType::Dynamic {
+            return true;
+        }
+
         match self {
             RuntimeValue::Null => false,
             RuntimeValue::NativeFunction(_) => false,

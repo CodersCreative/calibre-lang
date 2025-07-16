@@ -18,6 +18,9 @@ impl RuntimeValue {
         scope: Rc<RefCell<Scope>>,
         t: RuntimeType,
     ) -> Result<RuntimeValue, ValueErr> {
+        if t == RuntimeType::Dynamic {
+            return Ok(self.clone());
+        }
         let typ = t.clone();
         let panic_type = || {
             return Err(ValueErr::Conversion(self.clone(), typ));
