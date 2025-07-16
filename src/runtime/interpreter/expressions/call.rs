@@ -10,7 +10,7 @@ use crate::{
         scope::{
             Object, Scope, ScopeErr,
             objects::get_object,
-            variables::{get_global_scope, resolve_var},
+            variables::{assign_var, get_global_scope, resolve_var},
         },
         values::{
             RuntimeValue, ValueErr,
@@ -121,7 +121,7 @@ pub fn evaluate_call_expression(
                                 return Ok(var.clone());
                             } else if arguments.len() == 1 {
                                 let value = evaluate(arguments[0].0.clone(), scope.clone())?;
-                                let _ = scope.borrow_mut().assign_var(&caller, value.clone())?;
+                                let _ = assign_var(scope.clone(), &caller, value.clone())?;
                                 return Ok(value);
                             } else {
                                 return Err(InterpreterErr::SetterArgs(arguments));

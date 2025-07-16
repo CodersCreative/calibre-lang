@@ -1,7 +1,8 @@
 use std::{cell::RefCell, mem::discriminant, rc::Rc};
 
 use crate::runtime::{
-    scope::{ScopeErr, VarType},
+    interpreter::InterpreterErr,
+    scope::{ScopeErr, VarType, links::update_link},
     values::{RuntimeValue, helper::StopValue},
 };
 
@@ -57,37 +58,58 @@ impl Scope {
 
         Ok(())
     }
+}
 
-    pub fn assign_var(&mut self, og_key: &str, value: RuntimeValue) -> Result<(), ScopeErr> {
-        let key = self.resolve_alias(&og_key).to_string();
+pub fn assign_var(
+    this: Rc<RefCell<Scope>>,
+    og_key: &str,
+    value: RuntimeValue,
+) -> Result<(), InterpreterErr> {
+    let key = this.borrow().resolve_alias(&og_key).to_string();
 
-        if og_key == key {
-            if let Some(v) = self.variables.get_mut(&key) {
-                match v.1 {
-                    VarType::Mutable(_) => {}
-                    _ => return Err(ScopeErr::AssignConstant(key)),
-                }
+    if og_key == key {
+        if let Some(v) = this.borrow_mut().variables.get_mut(&key) {
+            match v.1 {
+                VarType::Mutable(_) => {}
+                _ => return Err(ScopeErr::AssignConstant(key).into()),
+            }
+
+            if let RuntimeValue::Link(_, _) = v.0 {
+                return update_link(
+                    this.borrow().parent.clone().unwrap(),
+                    v.0.clone(),
+                    move |x| {
+                        if discriminant(&v.0) == discriminant(&value)
+                            || v.0.is_number() && value.is_number()
+                        {
+                            *x = value.to_owned();
+                            Ok(())
+                        } else {
+                            Err(ScopeErr::TypeMismatch(v.0.clone(), value.clone()).into())
+                        }
+                    },
+                );
+            } else {
                 if discriminant(&v.0) == discriminant(&value)
                     || v.0.is_number() && value.is_number()
                 {
                     *v = (value, VarType::Mutable(None));
                     return Ok(());
                 } else {
-                    return Err(ScopeErr::TypeMismatch(v.0.clone(), value.clone()));
+                    return Err(ScopeErr::TypeMismatch(v.0.clone(), value.clone()).into());
                 }
-            }
+            };
         }
-
-        if let Some(parent) = &self.parent {
-            let _ = parent.borrow_mut().assign_var(&key, value)?;
-        } else {
-            return Err(ScopeErr::Variable(key.to_string()));
-        }
-
-        Ok(())
     }
-}
 
+    if let Some(parent) = &this.borrow().parent {
+        let _ = assign_var(parent.clone(), &key, value)?;
+    } else {
+        return Err(ScopeErr::Variable(key.to_string()).into());
+    }
+
+    Ok(())
+}
 pub fn get_global_scope(this: Rc<RefCell<Scope>>) -> Rc<RefCell<Scope>> {
     if let Some(parent) = &this.borrow().parent {
         get_global_scope(parent.clone())

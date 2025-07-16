@@ -7,7 +7,7 @@ use crate::{
         scope::{
             Object, Scope, ScopeErr,
             objects::{get_function, get_object},
-            variables::get_var,
+            variables::{assign_var, get_var},
         },
         values::{RuntimeType, RuntimeValue, ValueErr, helper::ObjectType},
     },
@@ -26,9 +26,7 @@ fn assign_to_struct_field(
         if let Some(field_val) = map.get_mut(field) {
             *field_val = value;
             if let NodeType::Identifier(obj_name) = object {
-                scope
-                    .borrow_mut()
-                    .assign_var(obj_name, object_val.clone())?;
+                assign_var(scope, obj_name, object_val.clone())?
             }
             Ok(())
         } else {
@@ -52,9 +50,7 @@ fn assign_to_list_index(
         if let Some(elem) = data.get_mut(index) {
             *elem = value;
             if let NodeType::Identifier(obj_name) = object {
-                scope
-                    .borrow_mut()
-                    .assign_var(obj_name, object_val.clone())?;
+                assign_var(scope, obj_name, object_val.clone())?
             }
             Ok(())
         } else {
@@ -76,9 +72,7 @@ fn assign_to_tuple_index(
         if let Some(field) = data.get_mut(index) {
             *field = value;
             if let NodeType::Identifier(obj_name) = object {
-                scope
-                    .borrow_mut()
-                    .assign_var(obj_name, object_val.clone())?;
+                assign_var(scope, obj_name, object_val.clone())?
             }
             Ok(())
         } else {
@@ -210,7 +204,18 @@ pub fn evaluate_member_expression(
                                         {
                                             return evaluate_function(scope, val.0, args);
                                         } else {
-                                            return evaluate_enum_expression(NodeType::EnumExpression { identifier: object_name.to_string(), value: method_name.to_string(), data: Some(ObjectType::Tuple(args.into_iter().map(|x| Some(x.0)).collect())) }, scope);
+                                            return evaluate_enum_expression(
+                                                NodeType::EnumExpression {
+                                                    identifier: object_name.to_string(),
+                                                    value: method_name.to_string(),
+                                                    data: Some(ObjectType::Tuple(
+                                                        args.into_iter()
+                                                            .map(|x| Some(x.0))
+                                                            .collect(),
+                                                    )),
+                                                },
+                                                scope,
+                                            );
                                             // return Err(InterpreterErr::Value(ValueErr::Scope(
                                             //     ScopeErr::Function(method_name.to_string()),
                                             // )));
@@ -331,7 +336,11 @@ pub fn evaluate_member_expression(
                         NodeType::IntLiteral(index as i128),
                     )
                     .or_else(|_| {
-                        get_list_index(&object_val, index as usize, NodeType::IntLiteral(index as i128))
+                        get_list_index(
+                            &object_val,
+                            index as usize,
+                            NodeType::IntLiteral(index as i128),
+                        )
                     }),
                     RuntimeValue::Float(index) => get_tuple_index(
                         &object_val,

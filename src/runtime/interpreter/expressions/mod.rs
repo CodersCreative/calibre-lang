@@ -1,10 +1,15 @@
 use std::{cell::RefCell, rc::Rc};
 
+use rustyline::validate::ValidationResult;
+
 use crate::{
     ast::NodeType,
     runtime::{
         interpreter::{InterpreterErr, evaluate, expressions::member::assign_member_expression},
-        scope::{Scope, variables::get_var},
+        scope::{
+            Scope,
+            variables::{assign_var, get_var},
+        },
         values::{RuntimeType, RuntimeValue},
     },
 };
@@ -161,7 +166,7 @@ pub fn evaluate_assignment_expression(
     if let NodeType::AssignmentExpression { identifier, value } = node {
         if let NodeType::Identifier(identifier) = *identifier {
             let value = evaluate(*value, scope.clone())?;
-            let _ = scope.borrow_mut().assign_var(&identifier, value.clone())?;
+            let _ = assign_var(scope, &identifier, value.clone())?;
             return Ok(value);
         }
         if let NodeType::MemberExpression { .. } = *identifier {

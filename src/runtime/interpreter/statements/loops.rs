@@ -4,7 +4,10 @@ use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
         interpreter::{InterpreterErr, evaluate, expressions::scope::get_new_scope},
-        scope::{Scope, variables::get_var},
+        scope::{
+            Scope,
+            variables::{assign_var, get_var},
+        },
         values::{
             RuntimeType, RuntimeValue,
             helper::{StopValue, VarType},
@@ -131,7 +134,8 @@ pub fn evaluate_loop_declaration(
                     *d = get_var(new_scope, &identifier)?.0;
                 }
 
-                scope.borrow_mut().assign_var(
+                let _ = assign_var(
+                    scope.clone(),
                     &loop_name,
                     RuntimeValue::List {
                         data: data.clone(),
