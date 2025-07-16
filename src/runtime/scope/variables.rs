@@ -118,7 +118,7 @@ pub fn resolve_var(
     let key = this.borrow().resolve_alias(og_key).to_string();
 
     if this.borrow().variables.contains_key(&key) {
-        return Ok((this, key));
+        return Ok((this.clone(), key));
     } else if let Some(parent) = &this.borrow().parent {
         return resolve_var(parent.clone(), &key);
     } else {

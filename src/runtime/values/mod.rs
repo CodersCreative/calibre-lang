@@ -114,6 +114,7 @@ impl Into<RuntimeType> for &RuntimeValue {
             RuntimeValue::Long(_) => RuntimeType::Long,
             RuntimeValue::UInt(_) => RuntimeType::UInt,
             RuntimeValue::ULong(_) => RuntimeType::ULong,
+            RuntimeValue::Link(_, x) => x.clone(),
             RuntimeValue::Enum(x, _, _) => RuntimeType::Enum(x.clone()),
             RuntimeValue::Struct(_, x) => RuntimeType::Struct(x.clone()),
             RuntimeValue::Bool(_) => RuntimeType::Bool,
@@ -164,6 +165,7 @@ pub enum RuntimeValue {
     Char(char),
     Enum(String, usize, Option<ObjectType<RuntimeValue>>),
     Tuple(Vec<RuntimeValue>),
+    Link(Vec<String>, RuntimeType),
     List {
         data: Vec<RuntimeValue>,
         data_type: Box<Option<RuntimeType>>,
@@ -192,7 +194,7 @@ impl ToString for RuntimeValue {
             Self::Double(x) => x.to_string(),
             Self::Enum(x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
             Self::Range(from, to) => format!("{}..{}", from, to),
-
+            Self::Link(path, t) => format!("link -> {:?}", path),
             Self::Bool(x) => x.to_string(),
             Self::Struct(x, _) => format!("{:?}", x),
             Self::NativeFunction(x) => format!("native function : {:?}", x),
