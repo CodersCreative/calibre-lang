@@ -150,9 +150,22 @@ match 16 {
 }
 
 
+// TODO Implement generics with dyn<Add, Sub, Mul...> 
+// TODO Allow traits of generics to be easily specified and add to new type system. Like : "type Output = dyn<...traits...>;"
+// TODO Also allow for <T : dyn<...traits...>> to show common types.
 
-fn main() -> int {
-	x = 50;
+// Using this syntax for results will assume a dynamic value for the error;
+fn main() -> !int {
+  // Values can be manually coercced, but using this method will return a result type.
+  let x : !int = "50" as int;
+
+  // The result type will be unwrapped if an operation forces it to unwrap or if its type is forced.
+  let u = x + 70;
+  print("Unsafe : " + u);
+
+  // The try keyword can be used to automatically defer errors when inside a function
+	let mut x : long = try x + try "58" as uint;
+
 	x++; // should increment by 1
 	x += 4 // same as x = x + 4
 	print(x);
@@ -176,7 +189,7 @@ fn main() -> int {
 
 // the in keyword can be used to see if a certain value is contained by a string or list.
 if 4 in lst {
-  main()
+  print("main result: " + main());
   print("Success")
 }
 

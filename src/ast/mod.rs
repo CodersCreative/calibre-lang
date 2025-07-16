@@ -89,6 +89,10 @@ pub enum NodeType {
     NotExpression {
         value: Box<NodeType>,
     },
+    AsExpression {
+        value: Box<NodeType>,
+        typ: RuntimeType,
+    },
     InDeclaration {
         identifier: Box<NodeType>,
         expression: Box<NodeType>,

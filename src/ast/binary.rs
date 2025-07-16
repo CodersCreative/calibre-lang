@@ -1,8 +1,16 @@
-use std::ops::{Add, Div, Mul, Sub};
+use std::{
+    cell::RefCell,
+    ops::{Add, Div, Mul, Sub},
+    rc::Rc,
+};
 
 use thiserror::Error;
 
-use crate::runtime::values::RuntimeValue;
+use crate::runtime::{
+    interpreter::InterpreterErr,
+    scope::{Scope, ScopeErr},
+    values::{RuntimeType, RuntimeValue},
+};
 
 #[derive(Error, Debug, Clone)]
 pub enum ASTError {
@@ -48,19 +56,40 @@ impl BinaryOperator {
 
     pub fn handle(
         &self,
-        left: RuntimeValue,
-        right: RuntimeValue,
-    ) -> Result<RuntimeValue, ASTError> {
-        match self {
-            Self::Add => match left.clone() + right.clone() {
-                Ok(x) => Ok(x),
-                _ => left.special_add(right),
-            },
-            Self::Sub => left - right,
-            Self::Mul => left * right,
-            Self::Div => left / right,
-            Self::Pow => left.pow(right),
-            Self::Mod => left.modulus(right),
+        mut left: RuntimeValue,
+        mut right: RuntimeValue,
+        scope: Rc<RefCell<Scope>>,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        let mut changed = true;
+
+        match left {
+            RuntimeValue::Option(Some(x), _) => left = *x,
+            RuntimeValue::Result(Ok(x), _) => left = *x,
+            RuntimeValue::Result(Err(e), _) => left = *e,
+            _ => changed = false,
+        }
+
+        match right {
+            RuntimeValue::Option(Some(x), _) => right = *x,
+            RuntimeValue::Result(Ok(x), _) => right = *x,
+            RuntimeValue::Result(Err(e), _) => right = *e,
+            _ => changed = false,
+        }
+
+        if changed {
+            self.handle(left, right, scope)
+        } else {
+            Ok(match self {
+                Self::Add => match left.clone() + right.clone() {
+                    Ok(x) => Ok(x),
+                    _ => left.special_add(right),
+                },
+                Self::Sub => left - right,
+                Self::Mul => left * right,
+                Self::Div => left / right,
+                Self::Pow => left.pow(right),
+                Self::Mod => left.modulus(right),
+            }?)
         }
     }
 }

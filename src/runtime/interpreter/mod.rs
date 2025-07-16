@@ -114,11 +114,17 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::StringLiteral(x) => Ok(RuntimeValue::Str(x)),
         NodeType::CharLiteral(x) => Ok(RuntimeValue::Char(x)),
         NodeType::Try { value } => {
-            let value = evaluate(*value, scope.clone())?;
+            let mut value = evaluate(*value, scope.clone())?;
 
             match value {
                 RuntimeValue::Result(Err(_), _) | RuntimeValue::Option(None, _) => {
                     get_global_scope(scope).borrow_mut().stop = Some(StopValue::Return);
+                }
+                RuntimeValue::Result(Ok(x), _) => {
+                    value = *x;
+                }
+                RuntimeValue::Option(Some(x), _) => {
+                    value = *x;
                 }
                 _ => {}
             }
@@ -158,6 +164,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::IfStatement { .. } => evaluate_if_statement(node, scope),
         NodeType::MatchDeclaration { .. } => evaluate_match_statement(node, scope),
         NodeType::InDeclaration { .. } => evaluate_in_statement(node, scope),
+        NodeType::AsExpression { .. } => evaluate_as_expression(node, scope),
         NodeType::MemberExpression { .. } => evaluate_member_expression(node, scope),
         NodeType::ImplDeclaration { .. } => evaluate_impl_declaration(node, scope),
         NodeType::ScopeDeclaration { .. } => evaluate_scope(node, scope),

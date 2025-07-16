@@ -6,6 +6,23 @@ use crate::{
 };
 
 impl Parser {
+    pub fn parse_as_expression(&mut self) -> Result<NodeType, ParserError> {
+        let mut left = self.parse_boolean_expression()?;
+
+        if let TokenType::As = self.first().token_type.clone() {
+            let _ = self.eat();
+
+            let t = self.parse_type()?.unwrap();
+            left = NodeType::AsExpression {
+                value: Box::new(left),
+                typ: t,
+            };
+            println!("{:?}", left);
+        }
+
+        Ok(left)
+    }
+
     pub fn parse_in_expression(&mut self) -> Result<NodeType, ParserError> {
         let mut left = self.parse_range_expression()?;
 

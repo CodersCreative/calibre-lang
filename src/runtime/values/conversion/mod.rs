@@ -131,14 +131,14 @@ impl RuntimeValue {
                 _ => panic_type(),
             },
             RuntimeValue::Str(x) => match t {
-                RuntimeType::Int => Ok(RuntimeValue::Int(x.parse().unwrap())),
-                RuntimeType::UInt => Ok(RuntimeValue::UInt(x.parse().unwrap())),
-                RuntimeType::Long => Ok(RuntimeValue::Long(x.parse().unwrap())),
-                RuntimeType::ULong => Ok(RuntimeValue::ULong(x.parse().unwrap())),
-                RuntimeType::Double => Ok(RuntimeValue::Double(x.parse().unwrap())),
-                RuntimeType::Float => Ok(RuntimeValue::Float(x.parse().unwrap())),
+                RuntimeType::Int => Ok(RuntimeValue::Int(x.parse()?)),
+                RuntimeType::UInt => Ok(RuntimeValue::UInt(x.parse()?)),
+                RuntimeType::Long => Ok(RuntimeValue::Long(x.parse()?)),
+                RuntimeType::ULong => Ok(RuntimeValue::ULong(x.parse()?)),
+                RuntimeType::Double => Ok(RuntimeValue::Double(x.parse()?)),
+                RuntimeType::Float => Ok(RuntimeValue::Float(x.parse()?)),
                 RuntimeType::Str => Ok(self.clone()),
-                RuntimeType::Char => Ok(RuntimeValue::Char(x.chars().nth(0).unwrap())),
+                RuntimeType::Char => Ok(RuntimeValue::Char(x.chars().nth(0).unwrap_or(' '))),
                 RuntimeType::List(typ) if *typ == Some(RuntimeType::Char) => {
                     Ok(RuntimeValue::List {
                         data: x.chars().map(|c| RuntimeValue::Char(c)).collect(),

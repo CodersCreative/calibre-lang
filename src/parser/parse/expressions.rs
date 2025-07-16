@@ -15,9 +15,7 @@ impl Parser {
         Ok(match &self.first().token_type {
             TokenType::Identifier => NodeType::Identifier(self.eat().value),
             TokenType::Float => NodeType::FloatLiteral(self.eat().value.trim().parse().unwrap()),
-            TokenType::Integer => {
-                NodeType::IntLiteral(self.eat().value.trim().parse().unwrap())
-            }
+            TokenType::Integer => NodeType::IntLiteral(self.eat().value.trim().parse().unwrap()),
             TokenType::Stop(x) => match x {
                 StopValue::Return => self.parse_return_declaration()?,
                 StopValue::Break => {
@@ -58,6 +56,7 @@ impl Parser {
                     value: Box::new(self.parse_statement()?),
                 }
             }
+            TokenType::Try => self.parse_try_expression()?,
             // _ => todo!(),
             _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
         })
@@ -125,7 +124,7 @@ impl Parser {
 
     pub fn parse_object_expression(&mut self) -> Result<NodeType, ParserError> {
         if self.first().token_type != TokenType::Open(Bracket::Curly) {
-            return self.parse_boolean_expression();
+            return self.parse_try_expression();
         }
 
         Ok(NodeType::StructLiteral(self.parse_potential_key_value()?))
@@ -160,13 +159,13 @@ impl Parser {
                 identifier: Box::new(left.clone()),
                 value: Box::new(NodeType::BinaryExpression {
                     left: Box::new(left),
-                    right: Box::new(self.parse_tuple_expression()?),
+                    right: Box::new(self.parse_statement()?),
                     operator: op,
                 }),
             };
         } else if [TokenType::Equals].contains(&self.first().token_type) {
             let _ = self.eat();
-            let right = self.parse_tuple_expression()?;
+            let right = self.parse_statement()?;
             left = NodeType::AssignmentExpression {
                 identifier: Box::new(left),
                 value: Box::new(right),

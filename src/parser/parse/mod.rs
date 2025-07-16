@@ -203,6 +203,16 @@ impl Parser {
     pub fn parse_type(&mut self) -> Result<Option<RuntimeType>, ParserError> {
         let t = self.first().clone();
 
+        if self.first().token_type == TokenType::Not {
+            let _ = self.eat();
+            let t = self.parse_type();
+
+            return Ok(Some(RuntimeType::Result(
+                Box::new(RuntimeType::Dynamic),
+                Box::new(t?.unwrap()),
+            )));
+        }
+
         let mut typ = if t.token_type == TokenType::Comparison(Comparison::Lesser) {
             Ok(Some(RuntimeType::Tuple(
                 self.parse_type_list(

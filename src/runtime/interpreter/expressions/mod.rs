@@ -48,6 +48,27 @@ pub fn evaluate_not<'a>(
     }
 }
 
+pub fn evaluate_as_expression(
+    exp: NodeType,
+    scope: Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
+    if let NodeType::AsExpression { value, typ } = exp {
+        let value = evaluate(*value, scope.clone())?;
+        Ok(match value.into_type(scope, typ) {
+            Ok(x) => RuntimeValue::Result(
+                Ok(Box::new(x.clone())),
+                RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new((&x).into())),
+            ),
+            Err(e) => RuntimeValue::Result(
+                Err(Box::new(RuntimeValue::Str(String::from(e.to_string())))),
+                RuntimeType::Result(Box::new(RuntimeType::Str), Box::new(RuntimeType::Dynamic)),
+            ),
+        })
+    } else {
+        Err(InterpreterErr::NotImplemented(exp))
+    }
+}
+
 pub fn evaluate_binary_expression(
     exp: NodeType,
     scope: Rc<RefCell<Scope>>,
@@ -61,7 +82,7 @@ pub fn evaluate_binary_expression(
         let left = evaluate(*left, scope.clone())?;
         let right = evaluate(*right, scope.clone())?;
 
-        Ok(operator.handle(left, right)?)
+        operator.handle(left, right, scope)
     } else {
         Err(InterpreterErr::NotImplemented(exp))
     }

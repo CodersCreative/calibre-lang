@@ -4,7 +4,13 @@ pub mod native;
 
 use core::panic;
 use std::{
-    cell::RefCell, collections::HashMap, fmt::Debug, mem::discriminant, rc::Rc, str::FromStr,
+    cell::RefCell,
+    collections::HashMap,
+    fmt::Debug,
+    mem::discriminant,
+    num::{ParseFloatError, ParseIntError},
+    rc::Rc,
+    str::FromStr,
     string::ParseError,
 };
 
@@ -28,6 +34,22 @@ pub enum ValueErr {
     Conversion(RuntimeValue, RuntimeType),
     #[error("{0}")]
     Scope(ScopeErr),
+    #[error("{0}")]
+    ParseIntError(ParseIntError),
+    #[error("{0}")]
+    ParseFloatError(ParseFloatError),
+}
+
+impl From<ParseIntError> for ValueErr {
+    fn from(value: ParseIntError) -> Self {
+        Self::ParseIntError(value)
+    }
+}
+
+impl From<ParseFloatError> for ValueErr {
+    fn from(value: ParseFloatError) -> Self {
+        Self::ParseFloatError(value)
+    }
 }
 
 impl From<ScopeErr> for ValueErr {

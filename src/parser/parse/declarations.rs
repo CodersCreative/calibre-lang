@@ -20,7 +20,7 @@ impl Parser {
             TokenType::Struct => self.parse_struct_declaration(),
             TokenType::Func => self.parse_function_declaration(),
             TokenType::If => self.parse_if_statement(),
-            TokenType::Try => self.parse_try_declaration(),
+            TokenType::Try => self.parse_try_expression(),
             TokenType::Match => self.parse_match_declaration(),
             TokenType::Stop(x) => match x {
                 StopValue::Return => self.parse_return_declaration(),
@@ -158,16 +158,24 @@ impl Parser {
             functions,
         })
     }
-    pub fn parse_try_declaration(&mut self) -> Result<NodeType, ParserError> {
-        let _ = self.expect_eat(
-            &TokenType::Try,
-            SyntaxErr::ExpectedKeyword(String::from("try")),
-        )?;
+    pub fn parse_try_expression(&mut self) -> Result<NodeType, ParserError> {
+        if self.first().token_type == TokenType::Try {
+            let _ = self.expect_eat(
+                &TokenType::Try,
+                SyntaxErr::ExpectedKeyword(String::from("try")),
+            )?;
 
-        Ok(NodeType::Try {
-            value: Box::new(self.parse_statement()?),
-        })
+            let res = Ok(NodeType::Try {
+                value: Box::new(self.parse_statement()?),
+            });
+            println!("{:?}", res);
+
+            res
+        } else {
+            self.parse_as_expression()
+        }
     }
+
     pub fn parse_return_declaration(&mut self) -> Result<NodeType, ParserError> {
         let _ = self.expect_eat(
             &TokenType::Stop(StopValue::Return),
