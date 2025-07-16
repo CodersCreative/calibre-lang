@@ -17,7 +17,6 @@ impl Parser {
                 value: Box::new(left),
                 typ: t,
             };
-            println!("{:?}", left);
         }
 
         Ok(left)

@@ -28,12 +28,12 @@ impl CountryBase {
 
 // By default the type of a variable will be infered by what is being assigned to it.
 // The let keyword creates an immutable variable that can be shadowed.
-let language = Language.FRENCH{data : 1, code : 5};
+let language = Language.FRENCH{data : 10, code : 5};
 
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
-/*match language {
+match language {
   Language.FRENCH{data} -> print("Enum: " + data),
-}*/
+}
 // The const keyword creates an immutable variable that cannot be shadowed.
 const language_forced : Language = Language.ENGLISH (6);
 

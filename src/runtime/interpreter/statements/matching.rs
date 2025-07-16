@@ -94,14 +94,15 @@ fn match_inner_pattern(
                                 get_new_scope_with_values(
                                     scope.clone(),
                                     m.into_iter()
+                                        .filter(|(k, _)| map.contains_key(k))
                                         .map(|(k, v)| {
-                                            println!("{:?} - {:?}", k, map);
-                                            let Some(NodeType::Identifier(k)) =
+                                            if let Some(NodeType::Identifier(k)) =
                                                 map.get(&k).unwrap()
-                                            else {
-                                                panic!()
-                                            };
-                                            (k.to_string(), v, RefMutability::MutValue)
+                                            {
+                                                (k.to_string(), v, RefMutability::MutValue)
+                                            } else {
+                                                (k.to_string(), v, RefMutability::MutValue)
+                                            }
                                         })
                                         .collect(),
                                 )

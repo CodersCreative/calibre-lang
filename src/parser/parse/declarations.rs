@@ -168,7 +168,6 @@ impl Parser {
             let res = Ok(NodeType::Try {
                 value: Box::new(self.parse_statement()?),
             });
-            println!("{:?}", res);
 
             res
         } else {
