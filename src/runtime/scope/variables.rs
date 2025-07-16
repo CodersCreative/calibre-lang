@@ -2,7 +2,7 @@ use std::{cell::RefCell, mem::discriminant, rc::Rc};
 
 use crate::runtime::{
     scope::{ScopeErr, VarType},
-    values::RuntimeValue,
+    values::{RuntimeValue, helper::StopValue},
 };
 
 use super::Scope;
@@ -86,6 +86,18 @@ impl Scope {
 
         Ok(())
     }
+}
+
+pub fn get_global_scope(this: Rc<RefCell<Scope>>) -> Rc<RefCell<Scope>> {
+    if let Some(parent) = &this.borrow().parent {
+        get_global_scope(parent.clone())
+    } else {
+        this
+    }
+}
+
+pub fn get_stop(this: Rc<RefCell<Scope>>) -> Option<StopValue> {
+    return get_global_scope(this).borrow().stop.clone();
 }
 
 pub fn get_var(this: Rc<RefCell<Scope>>, key: &str) -> Result<(RuntimeValue, VarType), ScopeErr> {

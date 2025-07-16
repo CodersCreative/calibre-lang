@@ -98,8 +98,7 @@ impl Parser {
     pub fn parse_power_expression(&mut self) -> Result<NodeType, ParserError> {
         let mut left = self.parse_call_member_expression()?;
 
-        while let TokenType::BinaryOperator(BinaryOperator::Pow) = self.first().token_type.clone()
-        {
+        while let TokenType::BinaryOperator(BinaryOperator::Pow) = self.first().token_type.clone() {
             let _ = self.eat();
             let right = self.parse_call_member_expression()?;
 
@@ -150,8 +149,8 @@ impl Parser {
 mod tests {
     use super::*;
     use crate::ast::comparison::{BooleanOperation, Comparison};
-    use crate::lexer::{Token, TokenType, tokenize};
     use crate::ast::{NodeType, binary::BinaryOperator};
+    use crate::lexer::{Token, TokenType, tokenize};
     use crate::parser::Parser;
 
     fn parser_with_tokens(tokens: Vec<Token>) -> Parser {

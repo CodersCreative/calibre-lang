@@ -29,7 +29,10 @@ use crate::{
                 *,
             },
         },
-        scope::{Scope, ScopeErr},
+        scope::{
+            Scope, ScopeErr,
+            variables::{get_global_scope, get_stop},
+        },
         values::{RuntimeType, RuntimeValue, ValueErr, helper::StopValue},
     },
 };
@@ -115,7 +118,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
 
             match value {
                 RuntimeValue::Result(Err(_), _) | RuntimeValue::Option(None, _) => {
-                    scope.borrow_mut().stop = Some(StopValue::Return);
+                    get_global_scope(scope).borrow_mut().stop = Some(StopValue::Return);
                 }
                 _ => {}
             }
@@ -123,18 +126,18 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
             Ok(value)
         }
         NodeType::Return { value } => {
-            scope.borrow_mut().stop = Some(StopValue::Return);
+            get_global_scope(scope.clone()).borrow_mut().stop = Some(StopValue::Return);
             evaluate(*value, scope)
         }
         NodeType::Break => {
-            if scope.borrow().stop != Some(StopValue::Return) {
-                scope.borrow_mut().stop = Some(StopValue::Break);
+            if get_stop(scope.clone()) != Some(StopValue::Return) {
+                get_global_scope(scope).borrow_mut().stop = Some(StopValue::Break);
             }
             Ok(RuntimeValue::Null)
         }
         NodeType::Continue => {
-            if scope.borrow().stop == None {
-                scope.borrow_mut().stop = Some(StopValue::Continue);
+            if get_stop(scope.clone()) == None {
+                get_global_scope(scope).borrow_mut().stop = Some(StopValue::Continue);
             }
             Ok(RuntimeValue::Null)
         }

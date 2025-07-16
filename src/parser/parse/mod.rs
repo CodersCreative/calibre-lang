@@ -203,11 +203,11 @@ impl Parser {
     pub fn parse_type(&mut self) -> Result<Option<RuntimeType>, ParserError> {
         let t = self.first().clone();
 
-        let mut typ = if t.token_type == TokenType::Comparison(Comparison::Greater) {
+        let mut typ = if t.token_type == TokenType::Comparison(Comparison::Lesser) {
             Ok(Some(RuntimeType::Tuple(
                 self.parse_type_list(
-                    TokenType::Comparison(Comparison::Greater),
                     TokenType::Comparison(Comparison::Lesser),
+                    TokenType::Comparison(Comparison::Greater),
                 )?
                 .into_iter()
                 .map(|x| x.0)
@@ -243,14 +243,14 @@ impl Parser {
             }))
         } else if t.token_type == TokenType::List {
             let _ = self.eat();
-            let t = if self.first().token_type == TokenType::Comparison(Comparison::Greater) {
+            let t = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
                 let _ = self.eat();
                 let t = Some(self.parse_type()?.expect("Expected data type"));
-                if self.first().token_type == TokenType::Comparison(Comparison::LesserEqual) {
+                if self.first().token_type == TokenType::Comparison(Comparison::GreaterEqual) {
                     let former = self.eat();
                     self.tokens.push(Token {
                         value: String::from(">"),
-                        token_type: TokenType::Comparison(Comparison::Lesser),
+                        token_type: TokenType::Comparison(Comparison::Greater),
                         ..former
                     });
                     self.tokens.push(Token {
@@ -260,8 +260,8 @@ impl Parser {
                     });
                 }
                 let _ = self.expect_eat(
-                    &TokenType::Comparison(Comparison::Lesser),
-                    SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Lesser)),
+                    &TokenType::Comparison(Comparison::Greater),
+                    SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
                 );
                 t
             } else {

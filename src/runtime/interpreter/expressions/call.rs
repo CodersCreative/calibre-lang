@@ -7,7 +7,11 @@ use crate::{
             InterpreterErr, evaluate,
             expressions::{scope::get_new_scope, structs::evaluate_struct_expression},
         },
-        scope::{Object, Scope, ScopeErr, objects::get_object, variables::resolve_var},
+        scope::{
+            Object, Scope, ScopeErr,
+            objects::get_object,
+            variables::{get_global_scope, resolve_var},
+        },
         values::{
             RuntimeValue, ValueErr,
             helper::{ObjectType, StopValue, VarType},
@@ -31,17 +35,16 @@ pub fn evaluate_function(
         let new_scope = get_new_scope(scope, parameters, arguments)?;
 
         let mut result: RuntimeValue = RuntimeValue::Null;
+        let global = get_global_scope(new_scope.clone());
         for statement in &body.0 {
-            if let Some(StopValue::Return) = new_scope.borrow().stop {
-                break;
-            } else if let NodeType::Return { value } = statement {
-                result = evaluate(*value.clone(), new_scope.clone())?;
+            if let Some(StopValue::Return) = global.borrow().stop {
                 break;
             } else {
                 result = evaluate(statement.clone(), new_scope.clone())?;
             }
         }
 
+        global.borrow_mut().stop = None;
         if let Some(t) = return_type {
             return Ok(result.into_type(new_scope, t.clone())?);
         } else {
@@ -104,7 +107,7 @@ pub fn evaluate_call_expression(
                     });
                 }
 
-                return Ok(func.call_native(evaluated_arguments, scope));
+                return func.call_native(evaluated_arguments, scope);
             }
             _ => {}
         }

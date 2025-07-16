@@ -102,7 +102,7 @@ for i in range2(100, step = 10) {
   print("val: " + i);
 }
 
-fn smth_result(y : int) -> str!int {
+fn smth_result(y : int) -> string!int {
   if y > 10 {
     return ok(y);
   }
@@ -115,18 +115,41 @@ fn smth_optional(y : int) -> int? {
     return some(y);
   }
 
-  none
-}
-
-match smth_result(8) {
-  Ok(x) -> print(x),
-  Err(e) -> print(e),
+  some(9)
 }
 
 match smth_optional(18) {
+  Some(x) if x == 18 -> print("Equated to 18"),
   Some(x) -> print(x),
-  None -> print(none),
+  None -> print("none"),
 }
+
+match smth_result(20) {
+  // This is equivalent to Ok(x) if x == 18
+  Ok(18)-> print("Equated to 18"),
+  // This is equivalent to Ok(x) if x in 0..20
+  Ok(0..20) -> print("Within range"),
+  // This is equivalent to Ok(x) if x in [20, 30, 40, 50, 60, 70]
+  Ok([20, 30, 40, 50, 60, 70]) -> print("Within list"),
+  Ok(x) -> print(x),
+  Err(x) -> print(x),
+}
+
+match 16 {
+  1 -> print("one"),
+  2 -> print("two"),
+  3 -> print("three"),
+  4 -> print("four"),
+  5 -> print("five"),
+  // A similar syntax for ranges and lists and tuples can be used without the need for an enum.
+  [6 ,7 ,8 ,9 ,10] -> print("6 to 10"),
+  // A similar syntax for ranges and lists and tuples can be used without the need for an enum.
+  11..=20 -> print("11 to 20"),
+  // if the variable is not in scope it can be used to reference all other options whilst passing off the data
+  data -> print("value is : " + data),
+}
+
+
 
 fn main() -> int {
 	x = 50;
@@ -156,3 +179,6 @@ if 4 in lst {
   main()
   print("Success")
 }
+
+
+print(18 > 10 && 10 < 18)

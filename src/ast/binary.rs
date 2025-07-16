@@ -52,7 +52,10 @@ impl BinaryOperator {
         right: RuntimeValue,
     ) -> Result<RuntimeValue, ASTError> {
         match self {
-            Self::Add => left + right,
+            Self::Add => match left.clone() + right.clone() {
+                Ok(x) => Ok(x),
+                _ => left.special_add(right),
+            },
             Self::Sub => left - right,
             Self::Mul => left * right,
             Self::Div => left / right,
@@ -101,7 +104,7 @@ macro_rules! handle_binop_numeric {
                 RuntimeValue::Int(y) => Ok(RuntimeValue::Long(x as i128 $op y as i128)),
                 RuntimeValue::UInt(y) => Ok(RuntimeValue::ULong(x $op y as u128)),
                 RuntimeValue::Long(y) => Ok(RuntimeValue::Long(x as i128 $op y as i128)),
-                RuntimeValue::ULong(y) => Ok(RuntimeValue::ULong(x $op y as u128)),
+                RuntimeValue::ULong(y) => Ok(RuntimeValue::ULong(x $op y)),
                 RuntimeValue::Float(y) => Ok(RuntimeValue::Double(x as f64 $op y as f64)),
                 RuntimeValue::Double(y) => Ok(RuntimeValue::Double(x as f64 $op y)),
                 _ => $self.panic_operator(&$rhs, &BinaryOperator::$op_trait),
@@ -109,7 +112,7 @@ macro_rules! handle_binop_numeric {
             RuntimeValue::Long(x) => match $rhs{
                 RuntimeValue::Int(y) => Ok(RuntimeValue::Long(x $op y as i128)),
                 RuntimeValue::UInt(y) => Ok(RuntimeValue::Long(x $op y as i128)),
-                RuntimeValue::Long(y) => Ok(RuntimeValue::Long(x $op y as i128)),
+                RuntimeValue::Long(y) => Ok(RuntimeValue::Long(x $op y)),
                 RuntimeValue::ULong(y) => Ok(RuntimeValue::Long(x $op y as i128)),
                 RuntimeValue::Float(y) => Ok(RuntimeValue::Double(x as f64 $op y as f64)),
                 RuntimeValue::Double(y) => Ok(RuntimeValue::Double(x as f64 $op y)),
@@ -154,95 +157,113 @@ impl_binop_numeric!(Sub, sub, -);
 impl_binop_numeric!(Mul, mul, *);
 impl_binop_numeric!(Div, div, /);
 
-// impl Add for RuntimeValue {
-//     type Output = Result<RuntimeValue, ASTError>;
-//     fn add(self, rhs: Self) -> Self::Output {
-//         let add_str = || -> Self::Output {
-//             let mut x = rhs.to_string();
-//             x.push_str(&self.to_string());
-//             Ok(RuntimeValue::Str(x))
-//         };
-//
-//         match self {
-//             Self::Char(x) => {
-//                 if let RuntimeValue::List { .. } = rhs {
-//                     Err(ASTError::BinaryOperator(
-//                         Self::Char(x),
-//                         rhs.clone(),
-//                         BinaryOperator::Add,
-//                     ))
-//                 } else {
-//                     let mut x = x.to_string();
-//                     x.push_str(&rhs.to_string());
-//                     Ok(Self::Str(x))
-//                 }
-//             }
-//             Self::Str(mut x) => {
-//                 if let RuntimeValue::List { .. } = rhs {
-//                     Err(ASTError::BinaryOperator(
-//                         Self::Str(x),
-//                         rhs.clone(),
-//                         BinaryOperator::Add,
-//                     ))
-//                 } else {
-//                     x.push_str(&rhs.to_string());
-//                     Ok(Self::Str(x))
-//                 }
-//             }
-//             Self::List {
-//                 mut data,
-//                 data_type,
-//             } => {
-//                 data.push(rhs);
-//                 Ok(Self::List { data, data_type })
-//             }
-//             _ => match rhs {
-//                 Self::Str(_) => add_str(),
-//                 Self::Char(_) => add_str(),
-//                 _ => self.panic_operator(&rhs, &BinaryOperator::Add),
-//             },
-//         }
-//     }
-// }
-//
 impl RuntimeValue {
     fn modulus(self, rhs: Self) -> Result<RuntimeValue, ASTError> {
         handle_binop_numeric!(Mul, %, rhs, self)
+    }
+
+    fn special_add(self, rhs: Self) -> Result<RuntimeValue, ASTError> {
+        let add_str = || -> Result<RuntimeValue, ASTError> {
+            let mut x = rhs.to_string();
+            x.push_str(&self.to_string());
+            Ok(RuntimeValue::Str(x))
+        };
+
+        match self {
+            Self::Char(x) => {
+                if let RuntimeValue::List { .. } = rhs {
+                    Err(ASTError::BinaryOperator(
+                        Self::Char(x),
+                        rhs.clone(),
+                        BinaryOperator::Add,
+                    ))
+                } else {
+                    let mut x = x.to_string();
+                    x.push_str(&rhs.to_string());
+                    Ok(Self::Str(x))
+                }
+            }
+            Self::Str(mut x) => {
+                if let RuntimeValue::List { .. } = rhs {
+                    Err(ASTError::BinaryOperator(
+                        Self::Str(x),
+                        rhs.clone(),
+                        BinaryOperator::Add,
+                    ))
+                } else {
+                    x.push_str(&rhs.to_string());
+                    Ok(Self::Str(x))
+                }
+            }
+            Self::List {
+                mut data,
+                data_type,
+            } => {
+                data.push(rhs);
+                Ok(Self::List { data, data_type })
+            }
+            _ => match rhs {
+                Self::Str(_) => add_str(),
+                Self::Char(_) => add_str(),
+                _ => self.panic_operator(&rhs, &BinaryOperator::Add),
+            },
+        }
     }
 
     fn pow(self, rhs: Self) -> Result<RuntimeValue, ASTError> {
         match self {
             RuntimeValue::Int(x) => match rhs {
                 RuntimeValue::Int(y) => Ok(RuntimeValue::Int(x.pow(y as u32))),
+                RuntimeValue::UInt(y) => Ok(RuntimeValue::Int(x.pow(y as u32))),
+                RuntimeValue::Long(y) => Ok(RuntimeValue::Int(x.pow(y as u32))),
+                RuntimeValue::ULong(y) => Ok(RuntimeValue::Int(x.pow(y as u32))),
                 RuntimeValue::Float(y) => Ok(RuntimeValue::Float((x as f32).powf(y))),
                 RuntimeValue::Double(y) => Ok(RuntimeValue::Double((x as f64).powf(y))),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Pow),
             },
             RuntimeValue::Float(x) => match rhs {
                 RuntimeValue::Int(y) => Ok(RuntimeValue::Float(x.powf(y as f32))),
+                RuntimeValue::UInt(y) => Ok(RuntimeValue::Float(x.powf(y as f32))),
+                RuntimeValue::Long(y) => Ok(RuntimeValue::Float(x.powf(y as f32))),
+                RuntimeValue::ULong(y) => Ok(RuntimeValue::Float(x.powf(y as f32))),
                 RuntimeValue::Float(y) => Ok(RuntimeValue::Float(x.powf(y))),
                 RuntimeValue::Double(y) => Ok(RuntimeValue::Double((x as f64).powf(y))),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Pow),
             },
             RuntimeValue::Double(x) => match rhs {
                 RuntimeValue::Int(y) => Ok(RuntimeValue::Double(x.powf(y as f64))),
+                RuntimeValue::UInt(y) => Ok(RuntimeValue::Double(x.powf(y as f64))),
+                RuntimeValue::Long(y) => Ok(RuntimeValue::Double(x.powf(y as f64))),
+                RuntimeValue::ULong(y) => Ok(RuntimeValue::Double(x.powf(y as f64))),
                 RuntimeValue::Float(y) => Ok(RuntimeValue::Double(x.powf(y as f64))),
                 RuntimeValue::Double(y) => Ok(RuntimeValue::Double(x.powf(y))),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Pow),
             },
             RuntimeValue::Long(x) => match rhs {
                 RuntimeValue::Int(y) => Ok(RuntimeValue::Long(x.pow(y as u32))),
+                RuntimeValue::UInt(y) => Ok(RuntimeValue::Long(x.pow(y as u32))),
                 RuntimeValue::Long(y) => Ok(RuntimeValue::Long(x.pow(y as u32))),
+                RuntimeValue::ULong(y) => Ok(RuntimeValue::Long(x.pow(y as u32))),
+                RuntimeValue::Float(y) => Ok(RuntimeValue::Double((x as f64).powf(y as f64))),
+                RuntimeValue::Double(y) => Ok(RuntimeValue::Double((x as f64).powf(y))),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Pow),
             },
             RuntimeValue::UInt(x) => match rhs {
                 RuntimeValue::Int(y) => Ok(RuntimeValue::UInt(x.pow(y as u32))),
                 RuntimeValue::UInt(y) => Ok(RuntimeValue::UInt(x.pow(y as u32))),
+                RuntimeValue::Long(y) => Ok(RuntimeValue::UInt(x.pow(y as u32))),
+                RuntimeValue::ULong(y) => Ok(RuntimeValue::UInt(x.pow(y as u32))),
+                RuntimeValue::Float(y) => Ok(RuntimeValue::Float((x as f32).powf(y))),
+                RuntimeValue::Double(y) => Ok(RuntimeValue::Double((x as f64).powf(y))),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Pow),
             },
             RuntimeValue::ULong(x) => match rhs {
                 RuntimeValue::Int(y) => Ok(RuntimeValue::ULong(x.pow(y as u32))),
+                RuntimeValue::UInt(y) => Ok(RuntimeValue::ULong(x.pow(y as u32))),
+                RuntimeValue::Long(y) => Ok(RuntimeValue::ULong(x.pow(y as u32))),
                 RuntimeValue::ULong(y) => Ok(RuntimeValue::ULong(x.pow(y as u32))),
+                RuntimeValue::Float(y) => Ok(RuntimeValue::Double((x as f64).powf(y as f64))),
+                RuntimeValue::Double(y) => Ok(RuntimeValue::Double((x as f64).powf(y))),
                 _ => self.panic_operator(&rhs, &BinaryOperator::Pow),
             },
             _ => self.panic_operator(&rhs, &BinaryOperator::Pow),

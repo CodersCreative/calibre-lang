@@ -77,11 +77,11 @@ pub fn evaluate_range_expression(
         inclusive,
     } = exp
     {
-        if let RuntimeValue::Int(from) = evaluate(*from.clone(), scope.clone())?
-            .into_type(scope.clone(), RuntimeType::Int)?
+        if let RuntimeValue::Int(from) =
+            evaluate(*from.clone(), scope.clone())?.into_type(scope.clone(), RuntimeType::Int)?
         {
-            if let RuntimeValue::Int(to) = evaluate(*to.clone(), scope.clone())?
-                .into_type(scope.clone(), RuntimeType::Int)?
+            if let RuntimeValue::Int(to) =
+                evaluate(*to.clone(), scope.clone())?.into_type(scope.clone(), RuntimeType::Int)?
             {
                 let to = if inclusive { to + 1 } else { to };
 
@@ -128,8 +128,7 @@ pub fn evaluate_comparison_expression(
     {
         let left = evaluate(*left, scope.clone())?;
         let right = evaluate(*right, scope.clone())?;
-
-        Ok(operator.handle(left, right))
+        operator.handle(left.clone(), right.clone(), scope)
     } else {
         Err(InterpreterErr::NotImplemented(exp))
     }
@@ -159,10 +158,10 @@ pub fn evaluate_assignment_expression(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ast::{NodeType, binary::BinaryOperator};
     use crate::runtime::scope::Scope;
     use crate::runtime::values::helper::VarType;
-    use crate::runtime::values::{RuntimeValue, RuntimeType};
-    use crate::ast::{NodeType, binary::BinaryOperator};
+    use crate::runtime::values::{RuntimeType, RuntimeValue};
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -173,7 +172,14 @@ mod tests {
     #[test]
     fn test_evaluate_identifier() {
         let scope = new_scope();
-        scope.borrow_mut().push_var("x".to_string(), RuntimeValue::Int(5), VarType::Mutable(None)).unwrap();
+        scope
+            .borrow_mut()
+            .push_var(
+                "x".to_string(),
+                RuntimeValue::Int(5),
+                VarType::Mutable(None),
+            )
+            .unwrap();
         let result = evaluate_identifier("x", scope).unwrap();
         assert_eq!(result, RuntimeValue::Int(5));
     }
@@ -181,7 +187,9 @@ mod tests {
     #[test]
     fn test_evaluate_not_bool() {
         let scope = new_scope();
-        let node = NodeType::NotExpression { value: Box::new(NodeType::Identifier(String::from("true"))) };
+        let node = NodeType::NotExpression {
+            value: Box::new(NodeType::Identifier(String::from("true"))),
+        };
         let result = evaluate_not(node, scope).unwrap();
         assert_eq!(result, RuntimeValue::Bool(false));
     }
@@ -189,7 +197,9 @@ mod tests {
     #[test]
     fn test_evaluate_not_Int() {
         let scope = new_scope();
-        let node = NodeType::NotExpression { value: Box::new(NodeType::IntLiteral(7)) };
+        let node = NodeType::NotExpression {
+            value: Box::new(NodeType::IntLiteral(7)),
+        };
         let result = evaluate_not(node, scope).unwrap();
         assert_eq!(result, RuntimeValue::Int(-7));
     }
@@ -197,7 +207,9 @@ mod tests {
     #[test]
     fn test_evaluate_not_float() {
         let scope = new_scope();
-        let node = NodeType::NotExpression { value: Box::new(NodeType::FloatLiteral(3.5)) };
+        let node = NodeType::NotExpression {
+            value: Box::new(NodeType::FloatLiteral(3.5)),
+        };
         let result = evaluate_not(node, scope).unwrap();
         assert_eq!(result, RuntimeValue::Float(-3.5));
     }
@@ -205,11 +217,13 @@ mod tests {
     #[test]
     fn test_evaluate_not_range() {
         let scope = new_scope();
-        let node = NodeType::NotExpression { value: Box::new(NodeType::RangeDeclaration {
-            from: Box::new(NodeType::IntLiteral(1)),
-            to: Box::new(NodeType::IntLiteral(3)),
-            inclusive: false,
-        })};
+        let node = NodeType::NotExpression {
+            value: Box::new(NodeType::RangeDeclaration {
+                from: Box::new(NodeType::IntLiteral(1)),
+                to: Box::new(NodeType::IntLiteral(3)),
+                inclusive: false,
+            }),
+        };
         let result = evaluate_not(node, scope).unwrap();
         assert_eq!(result, RuntimeValue::Range(3, 1));
     }
@@ -217,14 +231,23 @@ mod tests {
     #[test]
     fn test_evaluate_not_list() {
         let scope = new_scope();
-        let node = NodeType::NotExpression { value: Box::new(NodeType::ListLiteral(vec![
-            NodeType::IntLiteral(1),
-            NodeType::IntLiteral(2),
-            NodeType::IntLiteral(3),
-        ])) };
+        let node = NodeType::NotExpression {
+            value: Box::new(NodeType::ListLiteral(vec![
+                NodeType::IntLiteral(1),
+                NodeType::IntLiteral(2),
+                NodeType::IntLiteral(3),
+            ])),
+        };
         let result = evaluate_not(node, scope).unwrap();
         match result {
-            RuntimeValue::List { data, .. } => assert_eq!(data, vec![RuntimeValue::Int(3), RuntimeValue::Int(2), RuntimeValue::Int(1)]),
+            RuntimeValue::List { data, .. } => assert_eq!(
+                data,
+                vec![
+                    RuntimeValue::Int(3),
+                    RuntimeValue::Int(2),
+                    RuntimeValue::Int(1)
+                ]
+            ),
             _ => panic!("Expected List"),
         }
     }
@@ -292,13 +315,23 @@ mod tests {
     #[test]
     fn test_evaluate_assignment_expression_identifier() {
         let scope = new_scope();
-        scope.borrow_mut().push_var("x".to_string(), RuntimeValue::Int(0), VarType::Mutable(None)).unwrap();
+        scope
+            .borrow_mut()
+            .push_var(
+                "x".to_string(),
+                RuntimeValue::Int(0),
+                VarType::Mutable(None),
+            )
+            .unwrap();
         let node = NodeType::AssignmentExpression {
             identifier: Box::new(NodeType::Identifier("x".to_string())),
             value: Box::new(NodeType::IntLiteral(42)),
         };
         let result = evaluate_assignment_expression(node, scope.clone()).unwrap();
         assert_eq!(result, RuntimeValue::Int(42));
-        assert_eq!(scope.borrow().variables.get("x").unwrap().0, RuntimeValue::Int(42));
+        assert_eq!(
+            scope.borrow().variables.get("x").unwrap().0,
+            RuntimeValue::Int(42)
+        );
     }
 }
