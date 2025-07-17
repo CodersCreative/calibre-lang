@@ -3,7 +3,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ast::binary::{ASTError, BinaryOperator},
-    runtime::{interpreter::InterpreterErr, scope::Scope, values::RuntimeValue},
+    runtime::{
+        interpreter::InterpreterErr,
+        scope::{Scope, links::get_link},
+        values::RuntimeValue,
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -115,10 +119,32 @@ impl Comparison {
 
     pub fn handle(
         &self,
-        left: RuntimeValue,
-        right: RuntimeValue,
+        mut left: RuntimeValue,
+        mut right: RuntimeValue,
         scope: Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
+        let mut changed = true;
+
+        match left {
+            RuntimeValue::Option(Some(x), _) => left = *x,
+            RuntimeValue::Result(Ok(x), _) => left = *x,
+            RuntimeValue::Result(Err(e), _) => left = *e,
+            RuntimeValue::Link(_, _) => left = get_link(scope.clone(), left)?,
+            _ => changed = false,
+        }
+
+        match right {
+            RuntimeValue::Option(Some(x), _) => right = *x,
+            RuntimeValue::Result(Ok(x), _) => right = *x,
+            RuntimeValue::Result(Err(e), _) => right = *e,
+            RuntimeValue::Link(_, _) => right = get_link(scope.clone(), right)?,
+            _ => changed = false,
+        }
+
+        if changed {
+            return self.handle(left, right, scope);
+        }
+
         let (left, right) = if left == RuntimeValue::Null || right == RuntimeValue::Null {
             (left, right)
         } else {

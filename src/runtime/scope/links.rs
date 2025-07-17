@@ -9,49 +9,54 @@ use crate::{
 use core::panic;
 use std::{cell::RefCell, rc::Rc};
 
-pub fn get_link<F>(
+pub fn get_link_path(
+    this: Rc<RefCell<Scope>>,
+    path: &[String],
+) -> Result<RuntimeValue, InterpreterErr> {
+    let (env, name) = resolve_var(this, &path[0])
+        .map_err(|e| InterpreterErr::Value(crate::runtime::values::ValueErr::Scope(e)))?;
+    let mut new_env = env.borrow_mut();
+    let mut current = match new_env.variables.get_mut(&name) {
+        Some(x) => &mut x.0,
+        None => panic!(),
+    };
+
+    for key in path.iter().skip(1) {
+        match current {
+            RuntimeValue::Struct(ObjectType::Map(map), _) => current = map.get_mut(key).unwrap(),
+            RuntimeValue::Struct(ObjectType::Tuple(tuple), _) => {
+                let idx = key
+                    .parse::<usize>()
+                    .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.clone())))?;
+                current = tuple.get_mut(idx).unwrap()
+            }
+            RuntimeValue::Tuple(tuple) => {
+                let idx = key
+                    .parse::<usize>()
+                    .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.clone())))?;
+                current = tuple.get_mut(idx).unwrap()
+            }
+            RuntimeValue::List { data, .. } => {
+                let idx = key
+                    .parse::<usize>()
+                    .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.clone())))?;
+                current = data.get_mut(idx).unwrap()
+            }
+            _ => {
+                panic!()
+            }
+        }
+    }
+
+    Ok(current.clone())
+}
+
+pub fn get_link(
     this: Rc<RefCell<Scope>>,
     link: RuntimeValue,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let RuntimeValue::Link(path, _) = link {
-        let (env, name) = resolve_var(this, &path[0])
-            .map_err(|e| InterpreterErr::Value(crate::runtime::values::ValueErr::Scope(e)))?;
-        let mut new_env = env.borrow_mut();
-        let mut current = match new_env.variables.get_mut(&name) {
-            Some(x) => &mut x.0,
-            None => panic!(),
-        };
-
-        for key in path.iter().skip(1) {
-            match current {
-                RuntimeValue::Struct(ObjectType::Map(map), _) => {
-                    current = map.get_mut(key).unwrap()
-                }
-                RuntimeValue::Struct(ObjectType::Tuple(tuple), _) => {
-                    let idx = key.parse::<usize>().map_err(|_| {
-                        InterpreterErr::IndexNonList(NodeType::Identifier(key.clone()))
-                    })?;
-                    current = tuple.get_mut(idx).unwrap()
-                }
-                RuntimeValue::Tuple(tuple) => {
-                    let idx = key.parse::<usize>().map_err(|_| {
-                        InterpreterErr::IndexNonList(NodeType::Identifier(key.clone()))
-                    })?;
-                    current = tuple.get_mut(idx).unwrap()
-                }
-                RuntimeValue::List { data, .. } => {
-                    let idx = key.parse::<usize>().map_err(|_| {
-                        InterpreterErr::IndexNonList(NodeType::Identifier(key.clone()))
-                    })?;
-                    current = data.get_mut(idx).unwrap()
-                }
-                _ => {
-                    panic!()
-                }
-            }
-        }
-
-        Ok(current.clone())
+        get_link_path(this, &path)
     } else {
         panic!()
     }

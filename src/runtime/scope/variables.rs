@@ -3,7 +3,7 @@ use std::{cell::RefCell, mem::discriminant, rc::Rc};
 use crate::runtime::{
     interpreter::InterpreterErr,
     scope::{ScopeErr, VarType, links::update_link},
-    values::{RuntimeValue, helper::StopValue},
+    values::{RuntimeType, RuntimeValue, helper::StopValue},
 };
 
 use super::Scope;
@@ -75,20 +75,6 @@ pub fn assign_var(
             }
 
             if let RuntimeValue::Link(_, _) = v.0 {
-                return update_link(
-                    this.borrow().parent.clone().unwrap(),
-                    v.0.clone(),
-                    move |x| {
-                        if discriminant(&v.0) == discriminant(&value)
-                            || v.0.is_number() && value.is_number()
-                        {
-                            *x = value.to_owned();
-                            Ok(())
-                        } else {
-                            Err(ScopeErr::TypeMismatch(v.0.clone(), value.clone()).into())
-                        }
-                    },
-                );
             } else {
                 if discriminant(&v.0) == discriminant(&value)
                     || v.0.is_number() && value.is_number()
@@ -99,6 +85,24 @@ pub fn assign_var(
                     return Err(ScopeErr::TypeMismatch(v.0.clone(), value.clone()).into());
                 }
             };
+        }
+
+        let val = this
+            .borrow()
+            .variables
+            .get(&key)
+            .unwrap_or(&(RuntimeValue::Null, VarType::Constant))
+            .clone();
+
+        if val.0 != RuntimeValue::Null {
+            return update_link(this, val.0, move |x| {
+                if discriminant(x) == discriminant(&value) || x.is_number() && value.is_number() {
+                    *x = value.to_owned();
+                    Ok(())
+                } else {
+                    Err(ScopeErr::TypeMismatch(x.clone(), value.clone()).into())
+                }
+            });
         }
     }
 

@@ -74,13 +74,15 @@ let mut list_dyn = [0, 10, 30, "Hello"];
 // Typed arrays are created using the following syntax:
 let mut lst : list<int> = [x^2 for x in 0..100 if x % 2 == 0 if x % 8 != 0];
 
+print("lst")
 print(lst);// A static array 
 
 // A foreach loop.
-for l in lst {
-  x += l;
+for l in &mut lst {
+  l *= 2;
 }
-
+print("lst 2")
+print(lst);// A static array 
 // A for loop using the recommended range syntax.
 for i in 0..=100 {
   y += i;

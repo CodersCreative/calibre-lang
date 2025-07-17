@@ -1,5 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
+use rand::seq::IndexedRandom;
+
 use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
@@ -107,11 +109,12 @@ pub fn evaluate_loop_declaration(
                 data_type,
             } = var
             {
-                for d in data.iter_mut() {
+                for (i, d) in data.iter().enumerate() {
                     let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
+
                     let _ = new_scope.borrow_mut().push_var(
                         identifier.clone(),
-                        d.clone(),
+                        RuntimeValue::Link(vec![loop_name.clone(), i.to_string()], d.into()),
                         match mutability {
                             RefMutability::MutRef | RefMutability::MutValue => {
                                 VarType::Mutable(None)
@@ -130,18 +133,7 @@ pub fn evaluate_loop_declaration(
                         }
                         _ => {}
                     };
-
-                    *d = get_var(new_scope, &identifier)?.0;
                 }
-
-                let _ = assign_var(
-                    scope.clone(),
-                    &loop_name,
-                    RuntimeValue::List {
-                        data: data.clone(),
-                        data_type: data_type.clone(),
-                    },
-                )?;
             }
         } else if let LoopType::While(condition) = *loop_type {
             match evaluate(condition.clone(), scope.clone())? {

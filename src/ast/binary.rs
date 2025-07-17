@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::runtime::{
     interpreter::InterpreterErr,
-    scope::{Scope, ScopeErr},
+    scope::{Scope, ScopeErr, links::get_link},
     values::{RuntimeType, RuntimeValue},
 };
 
@@ -66,6 +66,7 @@ impl BinaryOperator {
             RuntimeValue::Option(Some(x), _) => left = *x,
             RuntimeValue::Result(Ok(x), _) => left = *x,
             RuntimeValue::Result(Err(e), _) => left = *e,
+            RuntimeValue::Link(_, _) => left = get_link(scope.clone(), left)?,
             _ => changed = false,
         }
 
@@ -73,6 +74,7 @@ impl BinaryOperator {
             RuntimeValue::Option(Some(x), _) => right = *x,
             RuntimeValue::Result(Ok(x), _) => right = *x,
             RuntimeValue::Result(Err(e), _) => right = *e,
+            RuntimeValue::Link(_, _) => right = get_link(scope.clone(), right)?,
             _ => changed = false,
         }
 
