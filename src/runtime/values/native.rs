@@ -4,7 +4,7 @@ use rustyline::DefaultEditor;
 
 use crate::runtime::{
     interpreter::InterpreterErr,
-    scope::Scope,
+    scope::{Scope, links::get_link_path},
     values::{RuntimeType, RuntimeValue},
 };
 
@@ -26,7 +26,7 @@ impl NativeFunctions {}
 impl RuntimeValue {
     pub fn call_native(
         &self,
-        args: Vec<(RuntimeValue, Option<RuntimeValue>)>,
+        mut args: Vec<(RuntimeValue, Option<RuntimeValue>)>,
         scope: Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Self::NativeFunction(func) = self {
@@ -37,7 +37,12 @@ impl RuntimeValue {
                     let mut handle = stdout.lock();
 
                     for arg in args {
-                        let s = arg.0.to_string();
+                        let mut s = arg.0.to_string();
+
+                        if let RuntimeValue::Link(path, _) = &arg.0 {
+                            s = get_link_path(scope.clone(), &path)?.to_string();
+                        }
+
                         handle.write_all(s.as_bytes()).unwrap();
                     }
                     handle.write_all(b"\n").unwrap();

@@ -72,6 +72,7 @@ pub enum NodeType {
         body: Vec<NodeType>,
     },
     MatchDeclaration {
+        mutability: RefMutability,
         value: Box<NodeType>,
         patterns: Vec<(NodeType, Vec<NodeType>, Vec<NodeType>)>,
     },
@@ -144,8 +145,18 @@ pub enum NodeType {
         operator: BooleanOperation,
     },
     IfStatement {
-        comparisons: Vec<NodeType>,
+        comparisons: Vec<IfComparisonType>,
         bodies: Vec<Vec<NodeType>>,
     },
     StructLiteral(ObjectType<Option<NodeType>>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum IfComparisonType {
+    IfLet {
+        mutability: RefMutability,
+        value: NodeType,
+        pattern: (NodeType, Vec<NodeType>),
+    },
+    If(NodeType),
 }

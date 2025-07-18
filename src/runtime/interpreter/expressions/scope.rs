@@ -21,18 +21,18 @@ pub fn get_new_scope_with_values(
 ) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
     let new_scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
     for (k, v, m) in arguments.into_iter() {
-        if m == RefMutability::MutRef || m == RefMutability::Ref {
-            todo!()
-        } else {
-            let _ = new_scope.borrow_mut().push_var(
-                k.to_string(),
-                v,
-                match m {
-                    RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable(None),
-                    _ => VarType::Immutable(None),
-                },
-            )?;
-        }
+        // if m == RefMutability::MutRef || m == RefMutability::Ref {
+        //     todo!()
+        // } else {
+        let _ = new_scope.borrow_mut().push_var(
+            k.to_string(),
+            v,
+            match m {
+                RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable(None),
+                _ => VarType::Immutable(None),
+            },
+        )?;
+        // }
     }
 
     Ok(new_scope)

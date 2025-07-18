@@ -1,5 +1,7 @@
+use rand::seq::IndexedRandom;
+
 use crate::{
-    ast::{LoopType, RefMutability},
+    ast::{IfComparisonType, LoopType, RefMutability},
     lexer::Bracket,
     parser::{Parser, ParserError, SyntaxErr},
     runtime::{
@@ -236,6 +238,12 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("match")),
         )?;
 
+        let ref_mutability = RefMutability::from(self.first().token_type.clone());
+
+        if ref_mutability != RefMutability::Value {
+            let _ = self.eat();
+        }
+
         let value = Box::new(self.parse_statement()?);
 
         let _ = self.expect_eat(
@@ -286,7 +294,11 @@ impl Parser {
             SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
         );
 
-        Ok(NodeType::MatchDeclaration { value, patterns })
+        Ok(NodeType::MatchDeclaration {
+            value,
+            patterns,
+            mutability: ref_mutability,
+        })
     }
 
     pub fn parse_struct_declaration(&mut self) -> Result<NodeType, ParserError> {
@@ -431,8 +443,52 @@ impl Parser {
 
         while self.first().token_type == TokenType::If {
             let _ = self.eat();
-            comparisons.push(self.parse_statement()?);
-            bodies.push(self.parse_block()?);
+            let mut values_amt = 1;
+            if self.first().token_type == TokenType::Let {
+                let _ = self.eat();
+                let mut values = vec![self.parse_statement()?];
+                let mut conditions = Vec::new();
+
+                while self.first().token_type == TokenType::Or {
+                    let _ = self.eat();
+                    values.push(self.parse_statement()?);
+                }
+
+                while self.first().token_type == TokenType::If {
+                    let _ = self.eat();
+                    conditions.push(self.parse_statement()?);
+                }
+
+                let _ = self.expect_eat(
+                    &TokenType::Arrow,
+                    SyntaxErr::ExpectedKeyword(String::from("->")),
+                )?;
+
+                let ref_mutability = RefMutability::from(self.first().token_type.clone());
+
+                if ref_mutability != RefMutability::Value {
+                    let _ = self.eat();
+                }
+
+                values_amt = values.len();
+
+                let value = self.parse_statement()?;
+                for val in values.into_iter() {
+                    comparisons.push(IfComparisonType::IfLet {
+                        mutability: ref_mutability.clone(),
+                        value: value.clone(),
+                        pattern: (val, conditions.clone()),
+                    });
+                }
+            } else {
+                comparisons.push(IfComparisonType::If(self.parse_statement()?));
+            }
+
+            let block = self.parse_block()?;
+
+            for _ in 0..values_amt.max(1) {
+                bodies.push(block.clone());
+            }
 
             if self.first().token_type == TokenType::Else {
                 let _ = self.eat();

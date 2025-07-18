@@ -198,7 +198,18 @@ impl ToString for RuntimeValue {
             Self::Bool(x) => x.to_string(),
             Self::Struct(x, _) => format!("{:?}", x),
             Self::NativeFunction(x) => format!("native function : {:?}", x),
-            Self::List { data, data_type: _ } => format!("{:?}", data),
+            Self::List { data, data_type: _ } => {
+                let mut txt = String::from("[");
+
+                for val in data.iter() {
+                    txt.push_str(&format!("{}, ", val.to_string()));
+                }
+
+                let _ = (txt.pop(), txt.pop());
+                txt.push_str("]");
+
+                txt
+            }
             Self::Tuple(data) => format!("{:?}", data),
             Self::Option(x, _) => format!("{:?}", x),
             Self::Result(x, _) => format!("{:?}", x),

@@ -7,7 +7,55 @@ use crate::{
     },
 };
 use core::panic;
-use std::{cell::RefCell, rc::Rc};
+use std::{any::Any, cell::RefCell, rc::Rc};
+
+pub fn progress<'a>(
+    mut current: &'a mut RuntimeValue,
+    key: &str,
+) -> Result<&'a mut RuntimeValue, InterpreterErr> {
+    match current {
+        RuntimeValue::Struct(ObjectType::Map(map), _) => current = map.get_mut(key).unwrap(),
+        RuntimeValue::Enum(_, _, Some(ObjectType::Map(map))) => current = map.get_mut(key).unwrap(),
+        RuntimeValue::Result(Err(x), _) if key == "Err" => {
+            current = x;
+        }
+        RuntimeValue::Result(Ok(x), _) if key == "Ok" => {
+            current = x;
+        }
+        RuntimeValue::Option(Some(x), _) if key == "Some" => {
+            current = x;
+        }
+        RuntimeValue::Struct(ObjectType::Tuple(tuple), _) => {
+            let idx = key
+                .parse::<usize>()
+                .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
+            current = tuple.get_mut(idx).unwrap()
+        }
+        RuntimeValue::Enum(_, _, Some(ObjectType::Tuple(tuple))) => {
+            let idx = key
+                .parse::<usize>()
+                .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
+            current = tuple.get_mut(idx).unwrap()
+        }
+        RuntimeValue::Tuple(tuple) => {
+            let idx = key
+                .parse::<usize>()
+                .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
+            current = tuple.get_mut(idx).unwrap()
+        }
+        RuntimeValue::List { data, .. } => {
+            let idx = key
+                .parse::<usize>()
+                .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
+            current = data.get_mut(idx).unwrap()
+        }
+        _ => {
+            panic!()
+        }
+    }
+
+    Ok(current)
+}
 
 pub fn get_link_path(
     this: Rc<RefCell<Scope>>,
@@ -22,30 +70,7 @@ pub fn get_link_path(
     };
 
     for key in path.iter().skip(1) {
-        match current {
-            RuntimeValue::Struct(ObjectType::Map(map), _) => current = map.get_mut(key).unwrap(),
-            RuntimeValue::Struct(ObjectType::Tuple(tuple), _) => {
-                let idx = key
-                    .parse::<usize>()
-                    .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.clone())))?;
-                current = tuple.get_mut(idx).unwrap()
-            }
-            RuntimeValue::Tuple(tuple) => {
-                let idx = key
-                    .parse::<usize>()
-                    .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.clone())))?;
-                current = tuple.get_mut(idx).unwrap()
-            }
-            RuntimeValue::List { data, .. } => {
-                let idx = key
-                    .parse::<usize>()
-                    .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.clone())))?;
-                current = data.get_mut(idx).unwrap()
-            }
-            _ => {
-                panic!()
-            }
-        }
+        current = progress(current, key)?;
     }
 
     Ok(current.clone())
@@ -94,30 +119,7 @@ where
     };
 
     for key in path.iter().skip(1) {
-        match current {
-            RuntimeValue::Struct(ObjectType::Map(map), _) => current = map.get_mut(key).unwrap(),
-            RuntimeValue::Struct(ObjectType::Tuple(tuple), _) => {
-                let idx = key
-                    .parse::<usize>()
-                    .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.clone())))?;
-                current = tuple.get_mut(idx).unwrap()
-            }
-            RuntimeValue::Tuple(tuple) => {
-                let idx = key
-                    .parse::<usize>()
-                    .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.clone())))?;
-                current = tuple.get_mut(idx).unwrap()
-            }
-            RuntimeValue::List { data, .. } => {
-                let idx = key
-                    .parse::<usize>()
-                    .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.clone())))?;
-                current = data.get_mut(idx).unwrap()
-            }
-            _ => {
-                panic!()
-            }
-        }
+        current = progress(current, key)?;
     }
 
     f(current)

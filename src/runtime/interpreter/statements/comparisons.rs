@@ -2,11 +2,14 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ast::{
-        NodeType,
-        comparison::{Comparison, is_equal},
+        IfComparisonType, NodeType,
+        comparison::{self, Comparison, is_equal},
     },
     runtime::{
-        interpreter::{InterpreterErr, evaluate, expressions::scope::evaluate_scope},
+        interpreter::{
+            InterpreterErr, evaluate, expressions::scope::evaluate_scope,
+            statements::matching::match_pattern,
+        },
         scope::Scope,
         values::{RuntimeValue, helper::StopValue},
     },
@@ -76,17 +79,49 @@ pub fn evaluate_if_statement(
     } = declaration
     {
         for (i, comparison) in comparisons.iter().enumerate() {
-            if let RuntimeValue::Bool(x) = evaluate(comparison.clone(), scope.clone())? {
-                if x {
-                    return evaluate_scope(
-                        NodeType::ScopeDeclaration {
-                            body: bodies[i].to_vec(),
-                        },
-                        scope,
-                    );
+            match comparison {
+                IfComparisonType::If(comparison) => {
+                    if let RuntimeValue::Bool(x) = evaluate(comparison.clone(), scope.clone())? {
+                        if x {
+                            return evaluate_scope(
+                                NodeType::ScopeDeclaration {
+                                    body: bodies[i].to_vec(),
+                                },
+                                scope,
+                            );
+                        }
+                    } else {
+                        return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
+                    }
                 }
-            } else {
-                return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
+                IfComparisonType::IfLet {
+                    mutability,
+                    value,
+                    pattern,
+                } => {
+                    let path = match &*value {
+                        NodeType::Identifier(x) => vec![x.clone()],
+                        _ => Vec::new(),
+                    };
+
+                    let value = evaluate(value.clone(), scope.clone())?;
+
+                    if let Some(result) = match_pattern(
+                        &pattern.0,
+                        &value,
+                        mutability.clone(),
+                        path.clone(),
+                        scope.clone(),
+                        &pattern.1,
+                        &bodies[i],
+                    ) {
+                        match result {
+                            Ok(x) => return Ok(x),
+                            Err(InterpreterErr::ExpectedFunctions) => continue,
+                            Err(e) => return Err(e),
+                        }
+                    }
+                }
             }
         }
 

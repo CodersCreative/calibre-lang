@@ -15,6 +15,12 @@ impl RuntimeValue {
                 | RuntimeValue::Long(_)
                 | RuntimeValue::UInt(_)
                 | RuntimeValue::ULong(_)
+                | RuntimeValue::Link(_, RuntimeType::Int)
+                | RuntimeValue::Link(_, RuntimeType::UInt)
+                | RuntimeValue::Link(_, RuntimeType::Long)
+                | RuntimeValue::Link(_, RuntimeType::ULong)
+                | RuntimeValue::Link(_, RuntimeType::Float)
+                | RuntimeValue::Link(_, RuntimeType::Double)
         )
     }
 
@@ -24,6 +30,7 @@ impl RuntimeValue {
         }
 
         match self {
+            RuntimeValue::Link(_, x) => x == &t,
             RuntimeValue::Null => false,
             RuntimeValue::NativeFunction(_) => false,
             RuntimeValue::Struct(_, _) => match self.into_type(scope, t) {
