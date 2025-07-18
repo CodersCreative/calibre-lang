@@ -1,6 +1,9 @@
+use rand::seq::IndexedRandom;
+
 use crate::lexer::Bracket;
 use crate::parser::{Parser, ParserError, SyntaxErr};
 
+use crate::runtime::values::helper::ObjectType;
 use crate::{ast::NodeType, lexer::TokenType};
 
 impl Parser {
@@ -31,14 +34,13 @@ impl Parser {
     }
 
     pub fn parse_member_expression(&mut self) -> Result<NodeType, ParserError> {
-        let mut object = self.parse_primary_expression()?;
+        let mut path = vec![(self.parse_primary_expression()?, false)];
 
         while self.first().token_type == TokenType::FullStop
             || self.first().token_type == TokenType::Open(Bracket::Square)
         {
-            let (property, is_computed) = if self.eat().token_type == TokenType::FullStop {
+            path.push(if self.eat().token_type == TokenType::FullStop {
                 let prop = self.parse_call_member_expression()?;
-                // println!("{:?}", prop);
                 (prop, false)
             } else {
                 let prop = self.parse_statement()?;
@@ -49,12 +51,13 @@ impl Parser {
                 )?;
 
                 (prop, true)
-            };
+            });
+        }
 
-            // let _ = self.eat();
-            if !is_computed {
-                if let NodeType::Identifier(identifier) = &object {
-                    if let NodeType::Identifier(value) = &property {
+        if path.len() == 2 && !path[1].1 {
+            if let NodeType::Identifier(identifier) = &path[0].0 {
+                match &path[1].0 {
+                    NodeType::Identifier(value) => {
                         if self.first().token_type == TokenType::Open(Bracket::Curly) {
                             let data = self.parse_potential_key_value()?;
                             return Ok(NodeType::EnumExpression {
@@ -64,17 +67,16 @@ impl Parser {
                             });
                         }
                     }
+                    _ => {}
                 }
             }
-
-            object = NodeType::MemberExpression {
-                object: Box::new(object),
-                property: Box::new(property),
-                is_computed,
-            };
         }
 
-        Ok(object)
+        if path.len() <= 1 {
+            Ok(path.remove(0).0)
+        } else {
+            Ok(NodeType::MemberExpression { path: path })
+        }
     }
 
     pub fn parse_arguments(

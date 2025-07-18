@@ -125,9 +125,7 @@ pub enum NodeType {
     FloatLiteral(f64),
     IntLiteral(i128),
     MemberExpression {
-        object: Box<NodeType>,
-        property: Box<NodeType>,
-        is_computed: bool,
+        path: Vec<(NodeType, bool)>,
     },
     CallExpression(Box<NodeType>, Vec<(NodeType, Option<NodeType>)>),
     BinaryExpression {
