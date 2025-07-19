@@ -13,6 +13,7 @@ use crate::{
         },
         scope::{
             Object, Scope, ScopeErr,
+            links::progress,
             objects::get_object,
             variables::{get_global_scope, get_stop},
         },
@@ -28,21 +29,15 @@ fn match_inner_pattern(
     value: &RuntimeValue,
     mutability: RefMutability,
     mut path: Vec<String>,
-    scope: Rc<RefCell<Scope>>,
+    mut scope: Rc<RefCell<Scope>>,
     conditionals: &[NodeType],
-    body: &[NodeType],
-) -> Option<Result<RuntimeValue, InterpreterErr>> {
+) -> Option<Result<Rc<RefCell<Scope>>, InterpreterErr>> {
     match pattern {
         NodeType::Identifier(x)
             if x.trim() == "_"
                 && handle_conditionals(scope.clone(), conditionals.to_vec()).unwrap() =>
         {
-            Some(evaluate_scope(
-                NodeType::ScopeDeclaration {
-                    body: body.to_vec(),
-                },
-                scope,
-            ))
+            return Some(Ok(scope));
         }
         NodeType::MemberExpression { path: p } => {
             if let (NodeType::Identifier(main), _) = &p[0] {
@@ -61,7 +56,6 @@ fn match_inner_pattern(
                             path,
                             scope,
                             conditionals,
-                            body,
                         );
                     }
                 }
@@ -90,24 +84,14 @@ fn match_inner_pattern(
                     if !handle_conditionals(scope.clone(), conditionals.to_vec()).unwrap() {
                         return None;
                     }
-                    return Some(evaluate_scope(
-                        NodeType::ScopeDeclaration {
-                            body: body.to_vec(),
-                        },
-                        scope,
-                    ));
+                    return Some(Ok(scope));
                 };
 
                 let Some(dat) = dat else {
                     if !handle_conditionals(scope.clone(), conditionals.to_vec()).unwrap() {
                         return None;
                     }
-                    return Some(evaluate_scope(
-                        NodeType::ScopeDeclaration {
-                            body: body.to_vec(),
-                        },
-                        scope,
-                    ));
+                    return Some(Ok(scope));
                 };
 
                 if identifier != &iden {
@@ -118,68 +102,94 @@ fn match_inner_pattern(
                 match data {
                     ObjectType::Map(map) => {
                         if let ObjectType::Map(m) = dat {
-                            new_scope = Some(
-                                get_new_scope_with_values(
-                                    scope.clone(),
-                                    m.into_iter()
-                                        .filter(|(k, _)| map.contains_key(k))
-                                        .map(|(k, v)| {
-                                            let path = [path.clone(), vec![k.clone()]].concat();
-                                            if let Some(NodeType::Identifier(k)) =
-                                                map.get(&k).unwrap()
-                                            {
-                                                match &mutability {
-                                                    RefMutability::Ref | RefMutability::MutRef => (
-                                                        k.to_string(),
-                                                        RuntimeValue::Link(path, (&v).into()),
-                                                        mutability.clone(),
-                                                    ),
-                                                    _ => (k.to_string(), v, mutability.clone()),
-                                                }
-                                            } else {
-                                                match &mutability {
-                                                    RefMutability::Ref | RefMutability::MutRef => (
-                                                        k.to_string(),
-                                                        RuntimeValue::Link(path, (&v).into()),
-                                                        mutability.clone(),
-                                                    ),
-                                                    _ => (k.to_string(), v, mutability.clone()),
-                                                }
-                                            }
-                                        })
-                                        .collect(),
-                                )
-                                .unwrap(),
-                            );
+                            let values = m
+                                .into_iter()
+                                .filter(|(k, _)| map.contains_key(k))
+                                .filter_map(|(k, v)| {
+                                    let path = [path.clone(), vec![k.clone()]].concat();
+                                    match map.get(&k).unwrap() {
+                                        Some(NodeType::Identifier(k)) => match &mutability {
+                                            RefMutability::Ref | RefMutability::MutRef => Some((
+                                                k.to_string(),
+                                                RuntimeValue::Link(path, (&v).into()),
+                                                mutability.clone(),
+                                            )),
+                                            _ => Some((k.to_string(), v, mutability.clone())),
+                                        },
+                                        Some(node) => {
+                                            let mut value = value.clone();
+
+                                            if let Some(Ok(s)) = match_inner_pattern(
+                                                node,
+                                                progress(&mut value, &k.to_string()).unwrap(),
+                                                mutability.clone(),
+                                                path.clone(),
+                                                scope.clone(),
+                                                conditionals,
+                                            ) {
+                                                scope = s;
+                                            };
+
+                                            None
+                                        }
+                                        None => match &mutability {
+                                            RefMutability::Ref | RefMutability::MutRef => Some((
+                                                k.to_string(),
+                                                RuntimeValue::Link(path, (&v).into()),
+                                                mutability.clone(),
+                                            )),
+                                            _ => Some((k.to_string(), v, mutability.clone())),
+                                        },
+                                    }
+                                })
+                                .collect();
+
+                            new_scope =
+                                Some(get_new_scope_with_values(scope.clone(), values).unwrap());
                         }
                     }
                     ObjectType::Tuple(list) => {
                         if let ObjectType::Tuple(lst) = dat {
-                            let list: Vec<String> = list
+                            let list: Vec<Option<String>> = list
                                 .into_iter()
-                                .map(|x| {
-                                    let NodeType::Identifier(y) = x.clone().unwrap() else {
-                                        panic!()
-                                    };
-                                    y
+                                .enumerate()
+                                .map(|(i, x)| match x {
+                                    Some(NodeType::Identifier(y)) => Some(y.clone()),
+                                    Some(node) => {
+                                        let mut value = value.clone();
+                                        if let Some(Ok(s)) = match_inner_pattern(
+                                            node,
+                                            progress(&mut value, &i.to_string()).unwrap(),
+                                            mutability.clone(),
+                                            [path.clone(), vec![i.to_string()]].concat(),
+                                            scope.clone(),
+                                            conditionals,
+                                        ) {
+                                            scope = s;
+                                        };
+                                        None
+                                    }
+                                    _ => None,
                                 })
                                 .collect();
+
                             new_scope = Some(
                                 get_new_scope_with_values(
                                     scope.clone(),
                                     lst.into_iter()
                                         .enumerate()
+                                        .filter(|(i, _)| i < &list.len() && list[*i].is_some())
                                         .map(|(i, v)| match &mutability {
                                             RefMutability::Ref | RefMutability::MutRef => {
                                                 let path =
                                                     [path.clone(), vec![i.to_string()]].concat();
                                                 (
-                                                    list[i].clone(),
+                                                    list[i].clone().unwrap(),
                                                     RuntimeValue::Link(path, (&v).into()),
                                                     mutability.clone(),
                                                 )
                                             }
-                                            _ => (list[i].clone(), v, mutability.clone()),
+                                            _ => (list[i].clone().unwrap(), v, mutability.clone()),
                                         })
                                         .collect(),
                                 )
@@ -220,21 +230,9 @@ fn match_inner_pattern(
                         }
                     }
                 }
-                if let Some(new_scope) = new_scope {
-                    if !handle_conditionals(new_scope.clone(), conditionals.to_vec()).unwrap() {
-                        return None;
-                    }
-                    let mut result: RuntimeValue = RuntimeValue::Null;
-                    let global = get_global_scope(new_scope.clone());
-                    for statement in body {
-                        if let Some(StopValue::Return) = global.borrow().stop {
-                            break;
-                        } else {
-                            result = evaluate(statement.clone(), new_scope.clone()).unwrap();
-                        }
-                    }
 
-                    Some(Ok(result))
+                if let Some(new_scope) = new_scope {
+                    Some(Ok(new_scope))
                 } else {
                     None
                 }
@@ -255,7 +253,6 @@ fn match_inner_pattern(
                                 path,
                                 scope.clone(),
                                 conditionals,
-                                body,
                             ) {
                                 Some(Ok(x)) => Some(Ok(x)),
                                 Some(Err(InterpreterErr::ExpectedFunctions)) => None,
@@ -300,12 +297,7 @@ fn match_inner_pattern(
                                     if handle_conditionals(new_scope.clone(), conditionals.to_vec())
                                         .ok()?
                                     {
-                                        Some(evaluate_scope(
-                                            NodeType::ScopeDeclaration {
-                                                body: body.to_vec(),
-                                            },
-                                            new_scope,
-                                        ))
+                                        Some(Ok(new_scope))
                                     } else {
                                         None
                                     }
@@ -319,12 +311,7 @@ fn match_inner_pattern(
                             None
                         }
                     }
-                    ("None", RuntimeValue::Option(None, _)) => Some(evaluate_scope(
-                        NodeType::ScopeDeclaration {
-                            body: body.to_vec(),
-                        },
-                        scope,
-                    )),
+                    ("None", RuntimeValue::Option(None, _)) => Some(Ok(scope)),
                     ("Ok", RuntimeValue::Result(Ok(inner), _)) => {
                         path.push("Ok".to_string());
                         if let Some(arg_pat) = args.get(0) {
@@ -335,7 +322,6 @@ fn match_inner_pattern(
                                 path,
                                 scope.clone(),
                                 conditionals,
-                                body,
                             ) {
                                 Some(Ok(x)) => Some(Ok(x)),
                                 Some(Err(InterpreterErr::ExpectedFunctions)) => None,
@@ -354,12 +340,7 @@ fn match_inner_pattern(
                             )
                             .ok()?;
                             if handle_conditionals(new_scope.clone(), conditionals.to_vec()).ok()? {
-                                Some(evaluate_scope(
-                                    NodeType::ScopeDeclaration {
-                                        body: body.to_vec(),
-                                    },
-                                    new_scope,
-                                ))
+                                Some(Ok(scope))
                             } else {
                                 None
                             }
@@ -377,7 +358,6 @@ fn match_inner_pattern(
                                 path,
                                 scope.clone(),
                                 conditionals,
-                                body,
                             ) {
                                 Some(Ok(x)) => Some(Ok(x)),
                                 Some(Err(InterpreterErr::ExpectedFunctions)) => None,
@@ -411,12 +391,7 @@ fn match_inner_pattern(
             )
             .ok()?;
             if handle_conditionals(new_scope.clone(), conditionals.to_vec()).ok()? {
-                Some(evaluate_scope(
-                    NodeType::ScopeDeclaration {
-                        body: body.to_vec(),
-                    },
-                    new_scope,
-                ))
+                Some(Ok(scope))
             } else {
                 None
             }
@@ -427,12 +402,7 @@ fn match_inner_pattern(
                     || is_value_in(value.clone(), x.clone(), scope.clone()))
                     && handle_conditionals(scope.clone(), conditionals.to_vec()).ok()?
                 {
-                    Some(evaluate_scope(
-                        NodeType::ScopeDeclaration {
-                            body: body.to_vec(),
-                        },
-                        scope,
-                    ))
+                    Some(Ok(scope))
                 } else {
                     None
                 }
@@ -453,7 +423,6 @@ pub fn match_pattern(
     body: &[NodeType],
 ) -> Option<Result<RuntimeValue, InterpreterErr>> {
     use crate::ast::NodeType;
-    println!("{:?}", pattern);
     match evaluate(pattern.clone(), scope.clone()) {
         Ok(x)
             if (is_equal(x.clone(), value.clone(), scope.clone())
@@ -468,7 +437,20 @@ pub fn match_pattern(
             ));
         }
         Ok(_) => None,
-        Err(_) => match_inner_pattern(pattern, value, mutability, path, scope, conditionals, body),
+        Err(_) => {
+            if let Some(Ok(scope)) =
+                match_inner_pattern(pattern, value, mutability, path, scope, conditionals)
+            {
+                return Some(evaluate_scope(
+                    NodeType::ScopeDeclaration {
+                        body: body.to_vec(),
+                    },
+                    scope,
+                ));
+            } else {
+                None
+            }
+        }
     }
 }
 
