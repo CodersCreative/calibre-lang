@@ -30,7 +30,7 @@ impl CountryBase {
 // By default the type of a variable will be infered by what is being assigned to it.
 // The let keyword creates an immutable variable that can be shadowed.
 let language = Language.FRENCH{data : 10, code : 5};
-let recursive_language = Language.ARABIC(Language.FRENCH{data : 5, code : 10}, Language.ARABIC(language, Language.SPANISH));
+let mut recursive_language = Language.ARABIC(Language.FRENCH{data : 5, code : 10}, Language.ARABIC(language, Language.SPANISH));
 
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
 // Mutability needs to be specified at the beginning for all branches

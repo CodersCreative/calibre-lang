@@ -64,7 +64,7 @@ impl Board {
     }
   }
 
-}/*  fn is_full(self : &Board) -> bool {
+  fn is_full(self : &Board) -> bool {
     for i in 0..9 {
       if self.0[i] == Player.None {
         return false;
@@ -229,7 +229,7 @@ fn main() {
       Player.None -> print("Tied!"),
     }
   }
-}*/
+}
 
 
 let mut board : Board = Board.default();

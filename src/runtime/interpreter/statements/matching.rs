@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, panic, rc::Rc};
 
 use crate::{
     ast::{NodeType, RefMutability, comparison::is_equal},
@@ -15,11 +15,11 @@ use crate::{
             Object, Scope, ScopeErr,
             links::progress,
             objects::get_object,
-            variables::{get_global_scope, get_stop},
+            variables::{get_global_scope, get_stop, get_var},
         },
         values::{
             RuntimeType, RuntimeValue,
-            helper::{ObjectType, StopValue},
+            helper::{ObjectType, StopValue, VarType},
         },
     },
 };
@@ -469,7 +469,26 @@ pub fn evaluate_match_statement(
             _ => Vec::new(),
         };
 
-        let value = evaluate(*value, scope.clone())?;
+        let value = match (&mutability, *value.clone()) {
+            (RefMutability::MutRef, NodeType::Identifier(identifier)) => {
+                let var = get_var(scope.clone(), &identifier)?;
+
+                match var.1 {
+                    VarType::Mutable(_) => var.0,
+                    _ => return Err(InterpreterErr::MutRefNonMut(var.0)),
+                }
+            }
+            (RefMutability::Ref, NodeType::Identifier(identifier)) => {
+                get_var(scope.clone(), &identifier)?.0
+            }
+            (RefMutability::Ref | RefMutability::MutRef, _) => {
+                return Err(InterpreterErr::MutRefNonMut(evaluate(
+                    *value,
+                    scope.clone(),
+                )?));
+            }
+            _ => evaluate(*value, scope.clone())?,
+        };
 
         for (pattern, conditionals, body) in patterns {
             if let Some(result) = match_pattern(
