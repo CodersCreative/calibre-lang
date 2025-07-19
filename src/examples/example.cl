@@ -7,6 +7,7 @@ enum Language {
   // Enums can have tuple type data structuress.
 	ENGLISH (int),
 	SPANISH,
+	ARABIC (Language),
 }
 
 // Struct declaration
@@ -29,12 +30,12 @@ impl CountryBase {
 // By default the type of a variable will be infered by what is being assigned to it.
 // The let keyword creates an immutable variable that can be shadowed.
 let language = Language.FRENCH{data : 10, code : 5};
-let zimbabwe = Country(Language.FRENCH{data : 5, code : 10});
+let recursive_language = Language.ARABIC(Language.FRENCH{data : 5, code : 10})
 
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
 // Mutability needs to be specified at the beginning for all branches
-match &mut zimbabwe.0 {
-  Language.FRENCH{data} -> {
+match &mut recursive_language {
+  Language.ARABIC(Language.FRENCH{data}) -> {
     print("Enum: " + data)
     data = 5;
     print("Enum Changed: " + data)
@@ -42,7 +43,7 @@ match &mut zimbabwe.0 {
 }
 
 // In order to do an if let statement this syntax is used with extra conditions being added after the let
-if let Language.FRENCH{data} if true if (try 9 as ulong == 9.0 == 9) -> &zimbabwe.0 {
+if let Language.FRENCH{data} if true if (try 9 as ulong == 9.0 == 9) -> &language {
   print("Enum: " + data)
 }
 

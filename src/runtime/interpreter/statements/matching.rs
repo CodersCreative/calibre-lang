@@ -44,6 +44,31 @@ fn match_inner_pattern(
                 scope,
             ))
         }
+        NodeType::MemberExpression { path: p } => {
+            if let (NodeType::Identifier(main), _) = &p[0] {
+                if let (NodeType::CallExpression(val, args), _) = &p[1] {
+                    if let NodeType::Identifier(val) = *val.clone() {
+                        return match_inner_pattern(
+                            &NodeType::EnumExpression {
+                                identifier: main.clone(),
+                                value: val,
+                                data: Some(ObjectType::Tuple(
+                                    args.into_iter().map(|x| Some(x.0.clone())).collect(),
+                                )),
+                            },
+                            value,
+                            mutability,
+                            path,
+                            scope,
+                            conditionals,
+                            body,
+                        );
+                    }
+                }
+            }
+
+            None
+        }
         NodeType::EnumExpression {
             identifier,
             data,
@@ -363,6 +388,7 @@ fn match_inner_pattern(
                             None
                         }
                     }
+
                     _ => None,
                 }
             } else {
@@ -427,6 +453,7 @@ pub fn match_pattern(
     body: &[NodeType],
 ) -> Option<Result<RuntimeValue, InterpreterErr>> {
     use crate::ast::NodeType;
+    println!("{:?}", pattern);
     match evaluate(pattern.clone(), scope.clone()) {
         Ok(x)
             if (is_equal(x.clone(), value.clone(), scope.clone())

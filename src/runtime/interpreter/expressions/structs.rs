@@ -5,9 +5,9 @@ use clap::ValueEnum;
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{evaluate, InterpreterErr},
-        scope::{objects::get_object, variables::get_var, Object, Scope, ScopeErr},
-        values::{helper::ObjectType, RuntimeValue, ValueErr},
+        interpreter::{InterpreterErr, evaluate},
+        scope::{Object, Scope, ScopeErr, objects::get_object, variables::get_var},
+        values::{RuntimeValue, ValueErr, helper::ObjectType},
     },
 };
 
@@ -55,7 +55,9 @@ pub fn evaluate_enum_expression(
     {
         // println!("{:?}.{:?}({:?})", identifier, value, data);
         let Object::Enum(enm_class) = get_object(scope.clone(), &identifier)? else {
-            return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(identifier))))
+            return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(
+                identifier,
+            ))));
         };
 
         if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
@@ -81,7 +83,7 @@ pub fn evaluate_enum_expression(
                             val.into_type(scope.clone(), property.1.clone())?,
                         );
                     } else {
-                        return Err(InterpreterErr::PropertyNotFound(property.0.to_string()))
+                        return Err(InterpreterErr::PropertyNotFound(property.0.to_string()));
                     }
                 }
 
@@ -106,8 +108,11 @@ pub fn evaluate_enum_expression(
                 let mut new_data_vals = Vec::new();
                 for (i, property) in properties.into_iter().enumerate() {
                     if data_vals.len() <= i {
-                        return Err(InterpreterErr::OutOfBounds(String::from("Tuple Object Type"), i as i16));
-                    } 
+                        return Err(InterpreterErr::OutOfBounds(
+                            String::from("Tuple Object Type"),
+                            i as i16,
+                        ));
+                    }
                     new_data_vals.push(data_vals[i].into_type(scope.clone(), property.clone())?);
                 }
 
@@ -173,10 +178,7 @@ mod tests {
         let result = evaluate_struct_expression(node, scope).unwrap();
         match result {
             RuntimeValue::Struct(ObjectType::Tuple(vals), _) => {
-                assert_eq!(
-                    vals,
-                    vec![RuntimeValue::Int(1), RuntimeValue::Int(2)]
-                );
+                assert_eq!(vals, vec![RuntimeValue::Int(1), RuntimeValue::Int(2)]);
             }
             _ => panic!("Expected Struct(Tuple)"),
         }
