@@ -27,7 +27,7 @@ use crate::{
 fn match_inner_pattern(
     pattern: &NodeType,
     value: &RuntimeValue,
-    mutability: RefMutability,
+    mutability: &RefMutability,
     mut path: Vec<String>,
     mut scope: Rc<RefCell<Scope>>,
     conditionals: &[NodeType],
@@ -37,7 +37,7 @@ fn match_inner_pattern(
             if x.trim() == "_"
                 && handle_conditionals(scope.clone(), conditionals.to_vec()).unwrap() =>
         {
-            return Some(Ok(scope));
+            return Some(Ok(scope.clone()));
         }
         NodeType::MemberExpression { path: p } => {
             if let (NodeType::Identifier(main), _) = &p[0] {
@@ -69,7 +69,7 @@ fn match_inner_pattern(
             value: enm_value,
         } => {
             if let RuntimeValue::Enum(iden, val, dat) = value.clone() {
-                let Object::Enum(enm) = get_object(scope.clone(), &iden).unwrap() else {
+                let Object::Enum(enm) = get_object(&scope, &iden).unwrap() else {
                     return None;
                 };
                 let Some(index) = enm.iter().position(|x| &x.0 == enm_value) else {
@@ -84,14 +84,14 @@ fn match_inner_pattern(
                     if !handle_conditionals(scope.clone(), conditionals.to_vec()).unwrap() {
                         return None;
                     }
-                    return Some(Ok(scope));
+                    return Some(Ok(scope.clone()));
                 };
 
                 let Some(dat) = dat else {
                     if !handle_conditionals(scope.clone(), conditionals.to_vec()).unwrap() {
                         return None;
                     }
-                    return Some(Ok(scope));
+                    return Some(Ok(scope.clone()));
                 };
 
                 if identifier != &iden {
@@ -122,7 +122,7 @@ fn match_inner_pattern(
                                             if let Some(Ok(s)) = match_inner_pattern(
                                                 node,
                                                 progress(&mut value, &k.to_string()).unwrap(),
-                                                mutability.clone(),
+                                                mutability,
                                                 path.clone(),
                                                 scope.clone(),
                                                 conditionals,
@@ -144,8 +144,7 @@ fn match_inner_pattern(
                                 })
                                 .collect();
 
-                            new_scope =
-                                Some(get_new_scope_with_values(scope.clone(), values).unwrap());
+                            new_scope = Some(get_new_scope_with_values(&scope, values).unwrap());
                         }
                     }
                     ObjectType::Tuple(list) => {
@@ -160,7 +159,7 @@ fn match_inner_pattern(
                                         if let Some(Ok(s)) = match_inner_pattern(
                                             node,
                                             progress(&mut value, &i.to_string()).unwrap(),
-                                            mutability.clone(),
+                                            mutability,
                                             [path.clone(), vec![i.to_string()]].concat(),
                                             scope.clone(),
                                             conditionals,
@@ -175,7 +174,7 @@ fn match_inner_pattern(
 
                             new_scope = Some(
                                 get_new_scope_with_values(
-                                    scope.clone(),
+                                    &scope,
                                     lst.into_iter()
                                         .enumerate()
                                         .filter(|(i, _)| i < &list.len() && list[*i].is_some())
@@ -208,7 +207,7 @@ fn match_inner_pattern(
 
                             new_scope = Some(
                                 get_new_scope_with_values(
-                                    scope.clone(),
+                                    &scope,
                                     map.into_iter()
                                         .filter(|x| list.contains(&x.0))
                                         .map(|(k, v)| match &mutability {
@@ -251,7 +250,7 @@ fn match_inner_pattern(
                                 inner,
                                 mutability,
                                 path,
-                                scope.clone(),
+                                scope,
                                 conditionals,
                             ) {
                                 Some(Ok(x)) => Some(Ok(x)),
@@ -265,9 +264,9 @@ fn match_inner_pattern(
                     }
                     (part, RuntimeValue::Str(value)) if part == "Prefix" || part == "Suffix" => {
                         if let (Some(pattern), name) = (args.get(0), args.get(1)) {
-                            if let Ok(pattern) = evaluate(pattern.0.clone(), scope.clone()) {
+                            if let Ok(pattern) = evaluate(pattern.0.clone(), &scope) {
                                 let RuntimeValue::Str(pattern) =
-                                    pattern.into_type(scope.clone(), RuntimeType::Str).unwrap()
+                                    pattern.into_type(&scope, &RuntimeType::Str).unwrap()
                                 else {
                                     panic!()
                                 };
@@ -292,8 +291,7 @@ fn match_inner_pattern(
                                         Vec::new()
                                     };
 
-                                    let new_scope =
-                                        get_new_scope_with_values(scope.clone(), vars).ok()?;
+                                    let new_scope = get_new_scope_with_values(&scope, vars).ok()?;
                                     if handle_conditionals(new_scope.clone(), conditionals.to_vec())
                                         .ok()?
                                     {
@@ -311,7 +309,7 @@ fn match_inner_pattern(
                             None
                         }
                     }
-                    ("None", RuntimeValue::Option(None, _)) => Some(Ok(scope)),
+                    ("None", RuntimeValue::Option(None, _)) => Some(Ok(scope.clone())),
                     ("Ok", RuntimeValue::Result(Ok(inner), _)) => {
                         path.push("Ok".to_string());
                         if let Some(arg_pat) = args.get(0) {
@@ -320,7 +318,7 @@ fn match_inner_pattern(
                                 inner,
                                 mutability,
                                 path,
-                                scope.clone(),
+                                scope,
                                 conditionals,
                             ) {
                                 Some(Ok(x)) => Some(Ok(x)),
@@ -335,12 +333,12 @@ fn match_inner_pattern(
                     ("Let", data) => {
                         if let Some((NodeType::Identifier(name), _)) = args.get(0) {
                             let new_scope = get_new_scope_with_values(
-                                scope.clone(),
+                                &scope,
                                 vec![(name.clone(), value.clone(), RefMutability::MutValue)],
                             )
                             .ok()?;
                             if handle_conditionals(new_scope.clone(), conditionals.to_vec()).ok()? {
-                                Some(Ok(scope))
+                                Some(Ok(scope.clone()))
                             } else {
                                 None
                             }
@@ -356,7 +354,7 @@ fn match_inner_pattern(
                                 inner,
                                 mutability,
                                 path,
-                                scope.clone(),
+                                scope,
                                 conditionals,
                             ) {
                                 Some(Ok(x)) => Some(Ok(x)),
@@ -377,32 +375,31 @@ fn match_inner_pattern(
         }
         NodeType::Identifier(var_name) => {
             let new_scope = get_new_scope_with_values(
-                scope.clone(),
+                &scope,
                 match &mutability {
                     RefMutability::MutRef | RefMutability::Ref => {
                         vec![(
                             var_name.clone(),
                             RuntimeValue::Link(path.clone(), value.into()),
-                            mutability,
+                            mutability.clone(),
                         )]
                     }
-                    _ => vec![(var_name.clone(), value.clone(), mutability)],
+                    _ => vec![(var_name.clone(), value.clone(), mutability.clone())],
                 },
             )
             .ok()?;
             if handle_conditionals(new_scope.clone(), conditionals.to_vec()).ok()? {
-                Some(Ok(scope))
+                Some(Ok(scope.clone()))
             } else {
                 None
             }
         }
         _ => {
-            if let Ok(x) = evaluate(pattern.clone(), scope.clone()) {
-                if (is_equal(x.clone(), value.clone(), scope.clone())
-                    || is_value_in(value.clone(), x.clone(), scope.clone()))
+            if let Ok(x) = evaluate(pattern.clone(), &scope) {
+                if (is_equal(&x, value, &scope) || is_value_in(value, &x, &scope))
                     && handle_conditionals(scope.clone(), conditionals.to_vec()).ok()?
                 {
-                    Some(Ok(scope))
+                    Some(Ok(scope.clone()))
                 } else {
                     None
                 }
@@ -416,17 +413,16 @@ fn match_inner_pattern(
 pub fn match_pattern(
     pattern: &NodeType,
     value: &RuntimeValue,
-    mutability: RefMutability,
+    mutability: &RefMutability,
     path: Vec<String>,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
     conditionals: &[NodeType],
     body: &[NodeType],
 ) -> Option<Result<RuntimeValue, InterpreterErr>> {
     use crate::ast::NodeType;
-    match evaluate(pattern.clone(), scope.clone()) {
+    match evaluate(pattern.clone(), scope) {
         Ok(x)
-            if (is_equal(x.clone(), value.clone(), scope.clone())
-                || is_value_in(value.clone(), x.clone(), scope.clone()))
+            if (is_equal(&x, value, scope) || is_value_in(value, &x, scope))
                 && handle_conditionals(scope.clone(), conditionals.to_vec()).unwrap() =>
         {
             return Some(evaluate_scope(
@@ -438,14 +434,19 @@ pub fn match_pattern(
         }
         Ok(_) => None,
         Err(_) => {
-            if let Some(Ok(scope)) =
-                match_inner_pattern(pattern, value, mutability, path, scope, conditionals)
-            {
+            if let Some(Ok(scope)) = match_inner_pattern(
+                pattern,
+                value,
+                mutability,
+                path,
+                scope.clone(),
+                conditionals,
+            ) {
                 return Some(evaluate_scope(
                     NodeType::ScopeDeclaration {
                         body: body.to_vec(),
                     },
-                    scope,
+                    &scope,
                 ));
             } else {
                 None
@@ -456,7 +457,7 @@ pub fn match_pattern(
 
 pub fn evaluate_match_statement(
     declaration: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::MatchDeclaration {
         value,
@@ -471,7 +472,7 @@ pub fn evaluate_match_statement(
 
         let value = match (&mutability, *value.clone()) {
             (RefMutability::MutRef, NodeType::Identifier(identifier)) => {
-                let var = get_var(scope.clone(), &identifier)?;
+                let var = get_var(scope, &identifier)?;
 
                 match var.1 {
                     VarType::Mutable(_) => var.0,
@@ -479,24 +480,21 @@ pub fn evaluate_match_statement(
                 }
             }
             (RefMutability::Ref, NodeType::Identifier(identifier)) => {
-                get_var(scope.clone(), &identifier)?.0
+                get_var(scope, &identifier)?.0
             }
             (RefMutability::Ref | RefMutability::MutRef, _) => {
-                return Err(InterpreterErr::MutRefNonMut(evaluate(
-                    *value,
-                    scope.clone(),
-                )?));
+                return Err(InterpreterErr::MutRefNonMut(evaluate(*value, scope)?));
             }
-            _ => evaluate(*value, scope.clone())?,
+            _ => evaluate(*value, scope)?,
         };
 
         for (pattern, conditionals, body) in patterns {
             if let Some(result) = match_pattern(
                 &pattern,
                 &value,
-                mutability.clone(),
+                &mutability,
                 path.clone(),
-                scope.clone(),
+                scope,
                 &conditionals,
                 &body,
             ) {
@@ -520,7 +518,7 @@ pub fn handle_conditionals(
     let mut result = true;
 
     for condition in conditionals.into_iter() {
-        if let RuntimeValue::Bool(value) = evaluate(condition, scope.clone())? {
+        if let RuntimeValue::Bool(value) = evaluate(condition, &scope)? {
             result = result && value;
         }
     }

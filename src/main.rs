@@ -49,7 +49,7 @@ fn repl() -> Result<(), Box<dyn Error>> {
         match readline {
             Ok(line) => {
                 let program = parser.produce_ast(line)?;
-                let val = evaluate(program, scope.clone())?;
+                let val = evaluate(program, &scope)?;
 
                 if val != RuntimeValue::Null {
                     println!("{}", val.to_string());
@@ -78,7 +78,7 @@ fn file(path: &str) -> Result<(), Box<dyn Error>> {
     let scope = Rc::new(RefCell::new(Scope::new(None)));
 
     let program = parser.produce_ast(fs::read_to_string(path)?)?;
-    let _ = evaluate(program, scope)?;
+    let _ = evaluate(program, &scope)?;
 
     Ok(())
 }

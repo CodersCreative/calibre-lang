@@ -37,7 +37,7 @@ impl Scope {
 }
 
 pub fn get_function(
-    this: Rc<RefCell<Scope>>,
+    this: &Rc<RefCell<Scope>>,
     strct: &str,
     func: &str,
 ) -> Result<(RuntimeValue, bool), ScopeErr> {
@@ -54,19 +54,19 @@ pub fn get_function(
 }
 
 pub fn resolve_function(
-    this: Rc<RefCell<Scope>>,
+    this: &Rc<RefCell<Scope>>,
     og_key: &str,
 ) -> Result<Rc<RefCell<Scope>>, ScopeErr> {
     if this.borrow().objects.contains_key(og_key) {
-        Ok(this)
+        Ok(this.clone())
     } else if let Some(parent) = &this.borrow().parent {
-        resolve_function(parent.clone(), og_key)
+        resolve_function(&parent, og_key)
     } else {
         Err(ScopeErr::Function(og_key.to_string()))
     }
 }
 
-pub fn get_object(this: Rc<RefCell<Scope>>, key: &str) -> Result<Object, ScopeErr> {
+pub fn get_object(this: &Rc<RefCell<Scope>>, key: &str) -> Result<Object, ScopeErr> {
     let scope = resolve_object(this, key)?;
     if let Some(value) = scope.borrow().objects.get(key) {
         Ok(value.clone())
@@ -76,13 +76,13 @@ pub fn get_object(this: Rc<RefCell<Scope>>, key: &str) -> Result<Object, ScopeEr
 }
 
 pub fn resolve_object(
-    this: Rc<RefCell<Scope>>,
+    this: &Rc<RefCell<Scope>>,
     og_key: &str,
 ) -> Result<Rc<RefCell<Scope>>, ScopeErr> {
     if this.borrow().objects.contains_key(og_key) {
-        Ok(this)
+        Ok(this.clone())
     } else if let Some(parent) = &this.borrow().parent {
-        resolve_object(parent.clone(), og_key)
+        resolve_object(&parent, og_key)
     } else {
         Err(ScopeErr::Object(og_key.to_string()))
     }

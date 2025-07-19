@@ -14,18 +14,18 @@ use crate::{
 
 pub mod comparisons;
 pub mod loops;
-pub mod structs;
 pub mod matching;
+pub mod structs;
 
 pub fn evaluate_program(
     exp: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     let mut last = RuntimeValue::Null;
 
     if let NodeType::Program(body) = exp {
         for statement in body.into_iter() {
-            last = evaluate(statement, scope.clone())?;
+            last = evaluate(statement, scope)?;
         }
     } else {
         return Err(InterpreterErr::NotImplemented(exp));
@@ -36,7 +36,7 @@ pub fn evaluate_program(
 
 pub fn evaluate_function_declaration(
     declaration: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::FunctionDeclaration {
         identifier,
@@ -50,7 +50,7 @@ pub fn evaluate_function_declaration(
 
         for p in parameters.into_iter() {
             let default = if let Some(node) = p.3 {
-                Some(evaluate(node, scope.clone())?)
+                Some(evaluate(node, scope)?)
             } else {
                 None
             };
@@ -77,7 +77,7 @@ pub fn evaluate_function_declaration(
 
 pub fn evaluate_variable_declaration(
     declaration: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::VariableDeclaration {
         var_type,
@@ -87,12 +87,12 @@ pub fn evaluate_variable_declaration(
     } = declaration
     {
         let mut value = match value {
-            Some(x) => evaluate(*x, scope.clone())?,
+            Some(x) => evaluate(*x, scope)?,
             None => RuntimeValue::Null,
         };
 
         if let Some(t) = data_type {
-            value = value.into_type(scope.clone(), t)?;
+            value = value.into_type(scope, &t)?;
         }
 
         let _ = scope

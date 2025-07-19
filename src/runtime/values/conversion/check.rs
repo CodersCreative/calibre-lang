@@ -24,25 +24,25 @@ impl RuntimeValue {
         )
     }
 
-    pub fn is_type(&self, scope: Rc<RefCell<Scope>>, t: RuntimeType) -> bool {
-        if t == RuntimeType::Dynamic {
+    pub fn is_type(&self, scope: &Rc<RefCell<Scope>>, t: &RuntimeType) -> bool {
+        if t == &RuntimeType::Dynamic {
             return true;
         }
 
         match self {
-            RuntimeValue::Link(_, x) => x == &t,
+            RuntimeValue::Link(_, x) => x == t,
             RuntimeValue::Null => false,
             RuntimeValue::NativeFunction(_) => false,
-            RuntimeValue::Struct(_, _) => match self.into_type(scope, t) {
+            RuntimeValue::Struct(_, _) => match self.into_type(&scope, t) {
                 Ok(_) => true,
                 Err(_) => false,
             },
-            RuntimeValue::Option(d, x) => d.is_none() || x == &t,
+            RuntimeValue::Option(d, x) => d.is_none() || x == t,
             RuntimeValue::Result(d, x) => {
-                if x == &t {
+                if x == t {
                     true
                 } else if let RuntimeType::Result(x, y) = x {
-                    if d.is_ok() { **x == t } else { **y == t }
+                    if d.is_ok() { &**x == t } else { &**y == t }
                 } else {
                     false
                 }
@@ -54,7 +54,7 @@ impl RuntimeValue {
                     } else {
                         let mut valid = true;
                         for i in 0..data.len() {
-                            if !data[i].is_type(scope.clone(), data_types[i].clone()) {
+                            if !data[i].is_type(scope, &data_types[i]) {
                                 valid = false;
                                 break;
                             }
@@ -65,8 +65,8 @@ impl RuntimeValue {
                 _ => false,
             },
             RuntimeValue::Enum(x, _, _) => match t {
-                RuntimeType::Enum(y) => *x == y,
-                RuntimeType::Struct(Some(y)) => *x == y,
+                RuntimeType::Enum(y) => x == y,
+                RuntimeType::Struct(Some(y)) => x == y,
                 _ => false,
             },
             RuntimeValue::Function {
@@ -81,13 +81,13 @@ impl RuntimeValue {
                     parameters,
                     is_async,
                 } => {
-                    if is_async != *val_is_async {
+                    if is_async != val_is_async {
                         return false;
                     };
 
-                    if let Some(x) = *return_type {
+                    if let Some(x) = &**return_type {
                         if let Some(y) = val_type {
-                            if x != *y {
+                            if x != y {
                                 return false;
                             }
                         } else {
@@ -105,7 +105,7 @@ impl RuntimeValue {
             },
             RuntimeValue::List { data: _, data_type } => match t {
                 RuntimeType::List(z) => {
-                    if *data_type == z {
+                    if data_type == z {
                         true
                     } else {
                         false
@@ -113,7 +113,7 @@ impl RuntimeValue {
                 }
                 _ => false,
             },
-            _ => t == self.into(),
+            _ => *t == self.into(),
         }
     }
 }

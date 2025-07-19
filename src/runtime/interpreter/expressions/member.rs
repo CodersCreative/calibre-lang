@@ -25,7 +25,7 @@ enum MembrExprPathRes {
 
 fn get_member_expression_path(
     og_path: Vec<(NodeType, bool)>,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<MembrExprPathRes, InterpreterErr> {
     let mut path = Vec::new();
 
@@ -48,7 +48,7 @@ fn get_member_expression_path(
             }
         }
 
-        match evaluate(node.clone(), scope.clone()) {
+        match evaluate(node.clone(), &scope) {
             Ok(mut value) => loop {
                 match value {
                     RuntimeValue::Int(x) => path.push(x.to_string()),
@@ -60,7 +60,7 @@ fn get_member_expression_path(
                     RuntimeValue::Str(x) => path.push(x.to_string()),
                     RuntimeValue::Char(x) => path.push(x.to_string()),
                     RuntimeValue::Link(path, _) => {
-                        value = get_link_path(scope.clone(), &path)?;
+                        value = get_link_path(scope, &path)?;
                         continue;
                     }
                     _ => unimplemented!(),
@@ -107,11 +107,11 @@ fn get_member_expression_path(
 pub fn assign_member_expression(
     member: NodeType,
     value: RuntimeValue,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     match member {
         NodeType::MemberExpression { path: og_path } => {
-            let path = match get_member_expression_path(og_path, scope.clone())? {
+            let path = match get_member_expression_path(og_path, scope)? {
                 MembrExprPathRes::Path(x) => x,
                 MembrExprPathRes::Value(x) => return Ok(x),
             };
@@ -129,16 +129,16 @@ pub fn assign_member_expression(
 
 pub fn evaluate_member_expression(
     exp: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     match exp {
         NodeType::MemberExpression { path: og_path } => {
-            let mut path = match get_member_expression_path(og_path, scope.clone())? {
+            let mut path = match get_member_expression_path(og_path, scope)? {
                 MembrExprPathRes::Path(x) => x,
                 MembrExprPathRes::Value(x) => return Ok(x),
             };
 
-            match get_link_path(scope.clone(), &path) {
+            match get_link_path(scope, &path) {
                 Ok(x) => Ok(x),
                 Err(e) if path.len() == 2 => {
                     return evaluate(

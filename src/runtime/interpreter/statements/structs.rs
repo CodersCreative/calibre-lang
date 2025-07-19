@@ -11,7 +11,7 @@ use crate::{
 
 pub fn evaluate_impl_declaration(
     declaration: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::ImplDeclaration {
         identifier,
@@ -20,7 +20,7 @@ pub fn evaluate_impl_declaration(
     {
         for function in functions {
             let scope_2 = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
-            let func = evaluate(function.0, scope_2)?;
+            let func = evaluate(function.0, &scope_2)?;
 
             if let RuntimeValue::Function {
                 identifier: iden, ..
@@ -42,7 +42,7 @@ pub fn evaluate_impl_declaration(
 
 pub fn evaluate_enum_declaration(
     declaration: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::EnumDeclaration {
         identifier,
@@ -60,7 +60,7 @@ pub fn evaluate_enum_declaration(
 
 pub fn evaluate_struct_declaration(
     declaration: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::StructDeclaration {
         identifier,

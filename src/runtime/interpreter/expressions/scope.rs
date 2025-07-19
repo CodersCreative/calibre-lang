@@ -16,7 +16,7 @@ use crate::{
 };
 
 pub fn get_new_scope_with_values(
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
     arguments: Vec<(String, RuntimeValue, RefMutability)>,
 ) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
     let new_scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
@@ -26,7 +26,7 @@ pub fn get_new_scope_with_values(
         // } else {
         let _ = new_scope.borrow_mut().push_var(
             k.to_string(),
-            v,
+            v.clone(),
             match m {
                 RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable(None),
                 _ => VarType::Immutable(None),
@@ -39,7 +39,7 @@ pub fn get_new_scope_with_values(
 }
 
 pub fn get_new_scope(
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
     parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)>,
     arguments: Vec<(NodeType, Option<NodeType>)>,
 ) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
@@ -50,7 +50,7 @@ pub fn get_new_scope(
             if let Some(arg) = &arguments.get(i) {
                 if let None = arg.1 {
                     if let NodeType::Identifier(x) = &arg.0 {
-                        let (env, name) = resolve_var(new_scope.clone(), x)?;
+                        let (env, name) = resolve_var(&new_scope, x)?;
 
                         let (var, var_type) = env.borrow().variables.get(&name).unwrap().clone();
 
@@ -62,7 +62,7 @@ pub fn get_new_scope(
                             _ => {}
                         }
                         let x = name.clone();
-                        if var.is_type(scope.clone(), v.clone()) {
+                        if var.is_type(&scope, &v) {
                             let _ = new_scope.borrow_mut().push_var(
                                 k.to_string(),
                                 RuntimeValue::Null,
@@ -86,8 +86,7 @@ pub fn get_new_scope(
         }
         if let Some(arg) = arguments.get(i) {
             if let None = arg.1 {
-                let arg = evaluate(arg.0.clone(), new_scope.clone())?
-                    .into_type(new_scope.clone(), v.clone())?;
+                let arg = evaluate(arg.0.clone(), &new_scope)?.into_type(&new_scope, &v)?;
                 new_scope.borrow_mut().push_var(
                     k.to_string(),
                     arg,
@@ -108,7 +107,7 @@ pub fn get_new_scope(
         }) {
             let _ = new_scope.borrow_mut().push_var(
                 k.to_string(),
-                evaluate(d.1.clone().unwrap(), scope.clone())?,
+                evaluate(d.1.clone().unwrap(), scope)?,
                 match m {
                     RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable(None),
                     _ => VarType::Immutable(None),
@@ -137,18 +136,18 @@ pub fn get_new_scope(
 
 pub fn evaluate_scope(
     node: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::ScopeDeclaration { body } = node {
-        let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
+        let new_scope = get_new_scope(scope, Vec::new(), Vec::new())?;
 
         let mut result: RuntimeValue = RuntimeValue::Null;
-        let global = get_global_scope(scope.clone());
+        let global = get_global_scope(scope);
         for statement in body.into_iter() {
             if let Some(_) = global.borrow().stop {
                 return Ok(result);
             } else {
-                result = evaluate(statement, new_scope.clone())?;
+                result = evaluate(statement, &new_scope)?;
             }
         }
 

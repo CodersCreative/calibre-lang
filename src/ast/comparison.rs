@@ -44,24 +44,25 @@ impl BooleanOperation {
 
     pub fn handle(
         &self,
-        left: RuntimeValue,
-        right: RuntimeValue,
+        left: &RuntimeValue,
+        right: &RuntimeValue,
     ) -> Result<RuntimeValue, ASTError> {
         if let RuntimeValue::Bool(x) = left {
             if let RuntimeValue::Bool(y) = right {
                 return Ok(RuntimeValue::Bool(match self {
-                    Self::And => x && y,
-                    Self::Or => x || y,
+                    Self::And => *x && *y,
+                    Self::Or => *x || *y,
                 }));
             }
         }
 
-        Err(ASTError::BooleanOperator(left, right))
+        Err(ASTError::BooleanOperator(left.clone(), right.clone()))
     }
 }
 
-pub fn is_equal(value: RuntimeValue, other: RuntimeValue, scope: Rc<RefCell<Scope>>) -> bool {
-    if let Ok(RuntimeValue::Bool(x)) = Comparison::Equal.handle(value, other, scope) {
+pub fn is_equal(value: &RuntimeValue, other: &RuntimeValue, scope: &Rc<RefCell<Scope>>) -> bool {
+    if let Ok(RuntimeValue::Bool(x)) = Comparison::Equal.handle(value.clone(), other.clone(), scope)
+    {
         x
     } else {
         false
@@ -121,7 +122,7 @@ impl Comparison {
         &self,
         mut left: RuntimeValue,
         mut right: RuntimeValue,
-        scope: Rc<RefCell<Scope>>,
+        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut changed = true;
 
@@ -129,7 +130,7 @@ impl Comparison {
             RuntimeValue::Option(Some(x), _) => left = *x,
             RuntimeValue::Result(Ok(x), _) => left = *x,
             RuntimeValue::Result(Err(e), _) => left = *e,
-            RuntimeValue::Link(_, _) => left = get_link(scope.clone(), left)?,
+            RuntimeValue::Link(_, _) => left = get_link(scope, &left)?,
             _ => changed = false,
         }
 
@@ -137,7 +138,7 @@ impl Comparison {
             RuntimeValue::Option(Some(x), _) => right = *x,
             RuntimeValue::Result(Ok(x), _) => right = *x,
             RuntimeValue::Result(Err(e), _) => right = *e,
-            RuntimeValue::Link(_, _) => right = get_link(scope.clone(), right)?,
+            RuntimeValue::Link(_, _) => right = get_link(scope, &right)?,
             _ => changed = false,
         }
 
@@ -148,10 +149,10 @@ impl Comparison {
         let (left, right) = if left == RuntimeValue::Null || right == RuntimeValue::Null {
             (left, right)
         } else {
-            left.make_similar(right, scope)?
+            left.clone().make_similar(right, scope)?
         };
 
-        Ok(RuntimeValue::Bool(match left.clone() {
+        Ok(RuntimeValue::Bool(match left {
             RuntimeValue::Int(x) => match right {
                 RuntimeValue::Int(y) => self.value_handle(x, y),
                 _ => panic!(),

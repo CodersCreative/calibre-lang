@@ -19,7 +19,7 @@ use crate::{
 
 pub fn evaluate_loop_declaration(
     declaration: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::LoopDeclaration { loop_type, body } = declaration {
         let handle_body = |new_scope: Rc<RefCell<Scope>>| -> Result<RuntimeValue, InterpreterErr> {
@@ -36,7 +36,7 @@ pub fn evaluate_loop_declaration(
                 };
                 if let NodeType::Return { value } = statement {
                     new_scope.borrow_mut().stop = Some(StopValue::Return);
-                    result = evaluate(*value.clone(), new_scope.clone())?;
+                    result = evaluate(*value.clone(), &new_scope)?;
                     break;
                 } else if let NodeType::Break = statement {
                     if scope.borrow_mut().stop != Some(StopValue::Return) {
@@ -46,7 +46,7 @@ pub fn evaluate_loop_declaration(
                 } else if let NodeType::Continue = statement {
                     break;
                 } else {
-                    result = evaluate(statement.clone(), new_scope.clone())?;
+                    result = evaluate(statement.clone(), &new_scope)?;
                 }
             }
 
@@ -56,10 +56,10 @@ pub fn evaluate_loop_declaration(
         let mut result = RuntimeValue::Null;
 
         if let LoopType::For(identifier, range) = *loop_type {
-            let range = evaluate(range, scope.clone())?;
+            let range = evaluate(range, scope)?;
             if let RuntimeValue::List { data, data_type: _ } = range {
                 for d in data.into_iter() {
-                    let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
+                    let new_scope = get_new_scope(scope, Vec::new(), Vec::new())?;
                     let _ = new_scope.borrow_mut().push_var(
                         identifier.clone(),
                         d.clone(),
@@ -77,11 +77,11 @@ pub fn evaluate_loop_declaration(
                     };
                 }
             } else if let RuntimeValue::Range(from, to) =
-                range.into_type(scope.clone(), RuntimeType::Range)?
+                range.into_type(scope, &RuntimeType::Range)?
             {
                 for i in from..to {
                     let new_scope = get_new_scope(
-                        scope.clone(),
+                        scope,
                         vec![(
                             identifier.clone(),
                             RuntimeType::Int,
@@ -103,14 +103,14 @@ pub fn evaluate_loop_declaration(
                 }
             }
         } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
-            let (var, _) = get_var(scope.clone(), &loop_name)?;
+            let (var, _) = get_var(scope, &loop_name)?;
             if let RuntimeValue::List {
                 mut data,
                 data_type,
             } = var
             {
                 for (i, d) in data.iter().enumerate() {
-                    let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
+                    let new_scope = get_new_scope(scope, Vec::new(), Vec::new())?;
 
                     let _ = new_scope.borrow_mut().push_var(
                         identifier.clone(),
@@ -136,13 +136,13 @@ pub fn evaluate_loop_declaration(
                 }
             }
         } else if let LoopType::While(condition) = *loop_type {
-            match evaluate(condition.clone(), scope.clone())? {
+            match evaluate(condition.clone(), scope)? {
                 RuntimeValue::Bool(_) => {
-                    while let RuntimeValue::Bool(x) = evaluate(condition.clone(), scope.clone())? {
+                    while let RuntimeValue::Bool(x) = evaluate(condition.clone(), scope)? {
                         if !x {
                             break;
                         }
-                        let new_scope = get_new_scope(scope.clone(), Vec::new(), Vec::new())?;
+                        let new_scope = get_new_scope(scope, Vec::new(), Vec::new())?;
                         result = handle_body(new_scope.clone())?;
 
                         match new_scope.borrow().stop {

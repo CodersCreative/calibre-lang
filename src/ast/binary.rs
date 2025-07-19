@@ -58,7 +58,7 @@ impl BinaryOperator {
         &self,
         mut left: RuntimeValue,
         mut right: RuntimeValue,
-        scope: Rc<RefCell<Scope>>,
+        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut changed = true;
 
@@ -66,7 +66,7 @@ impl BinaryOperator {
             RuntimeValue::Option(Some(x), _) => left = *x,
             RuntimeValue::Result(Ok(x), _) => left = *x,
             RuntimeValue::Result(Err(e), _) => left = *e,
-            RuntimeValue::Link(_, _) => left = get_link(scope.clone(), left)?,
+            RuntimeValue::Link(_, _) => left = get_link(scope, &left)?,
             _ => changed = false,
         }
 
@@ -74,7 +74,7 @@ impl BinaryOperator {
             RuntimeValue::Option(Some(x), _) => right = *x,
             RuntimeValue::Result(Ok(x), _) => right = *x,
             RuntimeValue::Result(Err(e), _) => right = *e,
-            RuntimeValue::Link(_, _) => right = get_link(scope.clone(), right)?,
+            RuntimeValue::Link(_, _) => right = get_link(scope, &right)?,
             _ => changed = false,
         }
 
@@ -204,8 +204,8 @@ impl RuntimeValue {
             Self::Char(x) => {
                 if let RuntimeValue::List { .. } = rhs {
                     Err(ASTError::BinaryOperator(
-                        Self::Char(x),
-                        rhs.clone(),
+                        Self::Char(x.clone()),
+                        rhs,
                         BinaryOperator::Add,
                     ))
                 } else {
@@ -231,7 +231,10 @@ impl RuntimeValue {
                 data_type,
             } => {
                 data.push(rhs);
-                Ok(Self::List { data, data_type })
+                Ok(Self::List {
+                    data,
+                    data_type: data_type.clone(),
+                })
             }
             _ => match rhs {
                 Self::Str(_) => add_str(),

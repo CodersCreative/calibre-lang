@@ -91,7 +91,10 @@ impl From<ScopeErr> for InterpreterErr {
     }
 }
 
-pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValue, InterpreterErr> {
+pub fn evaluate(
+    node: NodeType,
+    scope: &Rc<RefCell<Scope>>,
+) -> Result<RuntimeValue, InterpreterErr> {
     match node {
         NodeType::FloatLiteral(x) => Ok(if x > f32::MAX as f64 {
             RuntimeValue::Double(x as f64)
@@ -114,7 +117,7 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
         NodeType::StringLiteral(x) => Ok(RuntimeValue::Str(x)),
         NodeType::CharLiteral(x) => Ok(RuntimeValue::Char(x)),
         NodeType::Try { value } => {
-            let mut value = evaluate(*value, scope.clone())?;
+            let mut value = evaluate(*value, scope)?;
 
             match value {
                 RuntimeValue::Result(Err(_), _) | RuntimeValue::Option(None, _) => {
@@ -132,17 +135,17 @@ pub fn evaluate(node: NodeType, scope: Rc<RefCell<Scope>>) -> Result<RuntimeValu
             Ok(value)
         }
         NodeType::Return { value } => {
-            get_global_scope(scope.clone()).borrow_mut().stop = Some(StopValue::Return);
+            get_global_scope(scope).borrow_mut().stop = Some(StopValue::Return);
             evaluate(*value, scope)
         }
         NodeType::Break => {
-            if get_stop(scope.clone()) != Some(StopValue::Return) {
+            if get_stop(scope) != Some(StopValue::Return) {
                 get_global_scope(scope).borrow_mut().stop = Some(StopValue::Break);
             }
             Ok(RuntimeValue::Null)
         }
         NodeType::Continue => {
-            if get_stop(scope.clone()) == None {
+            if get_stop(scope) == None {
                 get_global_scope(scope).borrow_mut().stop = Some(StopValue::Continue);
             }
             Ok(RuntimeValue::Null)

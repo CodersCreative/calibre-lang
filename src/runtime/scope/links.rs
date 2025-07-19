@@ -58,7 +58,7 @@ pub fn progress<'a>(
 }
 
 pub fn get_link_path(
-    this: Rc<RefCell<Scope>>,
+    this: &Rc<RefCell<Scope>>,
     path: &[String],
 ) -> Result<RuntimeValue, InterpreterErr> {
     let (env, name) = resolve_var(this, &path[0])
@@ -77,8 +77,8 @@ pub fn get_link_path(
 }
 
 pub fn get_link(
-    this: Rc<RefCell<Scope>>,
-    link: RuntimeValue,
+    this: &Rc<RefCell<Scope>>,
+    link: &RuntimeValue,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let RuntimeValue::Link(path, _) = link {
         get_link_path(this, &path)
@@ -88,8 +88,8 @@ pub fn get_link(
 }
 
 pub fn update_link<F>(
-    this: Rc<RefCell<Scope>>,
-    link: RuntimeValue,
+    this: &Rc<RefCell<Scope>>,
+    link: &RuntimeValue,
     f: F,
 ) -> Result<(), InterpreterErr>
 where
@@ -103,7 +103,7 @@ where
 }
 
 pub fn update_link_path<F>(
-    this: Rc<RefCell<Scope>>,
+    this: &Rc<RefCell<Scope>>,
     path: &[String],
     mut f: F,
 ) -> Result<(), InterpreterErr>
@@ -126,8 +126,8 @@ where
 }
 
 pub fn get_link_parent(
-    this: Rc<RefCell<Scope>>,
-    link: RuntimeValue,
+    this: &Rc<RefCell<Scope>>,
+    link: &RuntimeValue,
 ) -> Result<(RuntimeValue, VarType), ScopeErr> {
     if let RuntimeValue::Link(path, _) = link {
         let scope = resolve_var(this, &path[0])?;

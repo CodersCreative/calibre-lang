@@ -15,10 +15,10 @@ pub mod similar;
 impl RuntimeValue {
     pub fn into_type(
         &self,
-        scope: Rc<RefCell<Scope>>,
-        t: RuntimeType,
+        scope: &Rc<RefCell<Scope>>,
+        t: &RuntimeType,
     ) -> Result<RuntimeValue, ValueErr> {
-        if t == RuntimeType::Dynamic {
+        if t == &RuntimeType::Dynamic {
             return Ok(self.clone());
         }
         let typ = t.clone();
@@ -28,17 +28,15 @@ impl RuntimeValue {
 
         let result_case = || {
             if let RuntimeType::Result(x, y) = t.clone() {
-                if self.is_type(scope.clone(), *x.clone())
-                    || self.is_type(scope.clone(), *y.clone())
-                {
+                if self.is_type(scope, &*x) || self.is_type(scope, &*y) {
                     return Ok(RuntimeValue::Result(Ok(Box::new(self.clone())), t.clone()));
                 }
 
-                if let Ok(data) = self.into_type(scope.clone(), *x.clone()) {
+                if let Ok(data) = self.into_type(scope, &*x) {
                     return Ok(RuntimeValue::Result(Ok(Box::new(data)), t.clone()));
                 } else {
                     return Ok(RuntimeValue::Result(
-                        Ok(Box::new(self.into_type(scope.clone(), *y.clone())?)),
+                        Ok(Box::new(self.into_type(scope, &*y)?)),
                         t.clone(),
                     ));
                 }
@@ -49,7 +47,7 @@ impl RuntimeValue {
         let option_case = || {
             if let RuntimeType::Option(x) = t.clone() {
                 return Ok(RuntimeValue::Option(
-                    Some(Box::new(self.into_type(scope.clone(), *x.clone())?)),
+                    Some(Box::new(self.into_type(scope, &*x)?)),
                     t.clone(),
                 ));
             }
@@ -59,8 +57,8 @@ impl RuntimeValue {
         let list_case = || {
             if let RuntimeType::List(x) = t.clone() {
                 Ok(RuntimeValue::List {
-                    data: vec![if let Some(x) = *x.clone() {
-                        self.into_type(scope.clone(), x)?
+                    data: vec![if let Some(x) = &*x {
+                        self.into_type(scope, &x)?
                     } else {
                         self.clone()
                     }],
@@ -102,7 +100,7 @@ impl RuntimeValue {
                     if data.len() == data_types.len() {
                         let mut valid = Vec::new();
                         for i in 0..data.len() {
-                            valid.push(data[i].into_type(scope.clone(), data_types[i].clone())?);
+                            valid.push(data[i].into_type(scope, &data_types[i])?);
                         }
                         Ok(RuntimeValue::Tuple(valid))
                     } else {
@@ -139,7 +137,7 @@ impl RuntimeValue {
                 RuntimeType::Float => Ok(RuntimeValue::Float(x.parse()?)),
                 RuntimeType::Str => Ok(self.clone()),
                 RuntimeType::Char => Ok(RuntimeValue::Char(x.chars().nth(0).unwrap_or(' '))),
-                RuntimeType::List(typ) if *typ == Some(RuntimeType::Char) => {
+                RuntimeType::List(typ) if **typ == Some(RuntimeType::Char) => {
                     Ok(RuntimeValue::List {
                         data: x.chars().map(|c| RuntimeValue::Char(c)).collect(),
                         data_type: Box::new(Some(RuntimeType::Char)),
@@ -165,12 +163,12 @@ impl RuntimeValue {
                 }
                 RuntimeType::Struct(Some(y)) => {
                     if let Some(z) = z {
-                        match RuntimeValue::Struct(z.clone(), None).into_type(scope.clone(), t) {
+                        match RuntimeValue::Struct(z.clone(), None).into_type(scope, t) {
                             Ok(x) => Ok(x),
-                            Err(_) => self.into_type(scope, RuntimeType::Enum(y)),
+                            Err(_) => self.into_type(scope, &RuntimeType::Enum(y)),
                         }
                     } else {
-                        self.into_type(scope, RuntimeType::Enum(y))
+                        self.into_type(scope, &RuntimeType::Enum(y))
                     }
                 }
                 RuntimeType::Enum(y) => {
@@ -198,7 +196,7 @@ impl RuntimeValue {
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Struct(Some(identifier)) => {
                     let Object::Struct(ObjectType::Tuple(properties)) =
-                        get_object(resolve_object(scope.clone(), &identifier)?, &identifier)?
+                        get_object(&resolve_object(scope, &identifier)?, &identifier)?
                     else {
                         return panic_type();
                     };
@@ -206,7 +204,7 @@ impl RuntimeValue {
 
                     for (i, property) in properties.iter().enumerate() {
                         if let Some(val) = x.get(i as usize) {
-                            new_values.push(val.into_type(scope.clone(), property.clone())?);
+                            new_values.push(val.into_type(scope, &property)?);
                         } else {
                             return panic_type();
                         }
@@ -214,7 +212,7 @@ impl RuntimeValue {
 
                     Ok(RuntimeValue::Struct(
                         ObjectType::Tuple(new_values),
-                        Some(identifier),
+                        Some(identifier.to_string()),
                     ))
                 }
                 RuntimeType::Function { .. } => match t {
@@ -235,7 +233,7 @@ impl RuntimeValue {
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Struct(Some(identifier)) => {
                     let Object::Struct(ObjectType::Map(properties)) =
-                        get_object(resolve_object(scope.clone(), &identifier)?, &identifier)?
+                        get_object(&resolve_object(scope, &identifier)?, &identifier)?
                     else {
                         return panic_type();
                     };
@@ -243,10 +241,8 @@ impl RuntimeValue {
 
                     for property in &properties {
                         if let Some(val) = x.get(property.0) {
-                            new_values.insert(
-                                property.0.clone(),
-                                val.into_type(scope.clone(), property.1.clone())?,
-                            );
+                            new_values
+                                .insert(property.0.clone(), val.into_type(scope, &property.1)?);
                         } else {
                             return panic_type();
                         }
@@ -254,7 +250,7 @@ impl RuntimeValue {
 
                     Ok(RuntimeValue::Struct(
                         ObjectType::Map(new_values),
-                        Some(identifier),
+                        Some(identifier.to_string()),
                     ))
                 }
                 RuntimeType::Function { .. } => match t {
@@ -275,13 +271,13 @@ impl RuntimeValue {
                     parameters,
                     is_async,
                 } => {
-                    if is_async != *val_is_async {
+                    if *is_async != *val_is_async {
                         return panic_type();
                     };
 
-                    if let Some(x) = *return_type {
+                    if let Some(x) = &**return_type {
                         if let Some(y) = val_type {
-                            if x != *y {
+                            if x != y {
                                 return panic_type();
                             }
                         } else {
@@ -306,7 +302,7 @@ impl RuntimeValue {
                     _ => {}
                 }
                 if let Some(RuntimeType::Struct(Some(x))) = *data_type.clone() {
-                    if let RuntimeType::Struct(Some(ref y)) = t {
+                    if let RuntimeType::Struct(Some(y)) = t {
                         if &x == y {
                             return Ok(RuntimeValue::Struct(
                                 ObjectType::Tuple(data.to_vec()),
@@ -323,27 +319,27 @@ impl RuntimeValue {
                     Ok(if data.len() == filtered.len() {
                         RuntimeValue::List {
                             data: data.clone(),
-                            data_type: Box::new(Some(t)),
+                            data_type: Box::new(Some(t.clone())),
                         }
                     } else {
                         let mut dta = Vec::new();
                         for d in data {
-                            dta.push(d.into_type(scope.clone(), t.clone())?);
+                            dta.push(d.into_type(scope, &t)?);
                         }
                         RuntimeValue::List {
                             data: dta,
-                            data_type: Box::new(Some(t)),
+                            data_type: Box::new(Some(t.clone())),
                         }
                     })
                 } else {
                     Ok(RuntimeValue::List {
                         data: Vec::new(),
-                        data_type: Box::new(Some(t)),
+                        data_type: Box::new(Some(t.clone())),
                     })
                 }
             }
             RuntimeValue::Result(x, typ) => {
-                if &t == typ {
+                if t == typ {
                     Ok(self.clone())
                 } else {
                     match x {
@@ -357,8 +353,8 @@ impl RuntimeValue {
                 }
             }
             RuntimeValue::Option(x, typ) => {
-                if x.is_none() || &t == typ {
-                    Ok(RuntimeValue::Option(x.clone(), t))
+                if x.is_none() || t == typ {
+                    Ok(RuntimeValue::Option(x.clone(), t.clone()))
                 } else {
                     match x {
                         Some(x) => {

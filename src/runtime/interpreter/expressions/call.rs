@@ -20,7 +20,7 @@ use crate::{
 };
 
 pub fn evaluate_function(
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
     func: RuntimeValue,
     arguments: Vec<(NodeType, Option<NodeType>)>,
 ) -> Result<RuntimeValue, InterpreterErr> {
@@ -35,18 +35,18 @@ pub fn evaluate_function(
         let new_scope = get_new_scope(scope, parameters, arguments)?;
 
         let mut result: RuntimeValue = RuntimeValue::Null;
-        let global = get_global_scope(new_scope.clone());
+        let global = get_global_scope(&new_scope);
         for statement in &body.0 {
             if let Some(StopValue::Return) = global.borrow().stop {
                 break;
             } else {
-                result = evaluate(statement.clone(), new_scope.clone())?;
+                result = evaluate(statement.clone(), &new_scope)?;
             }
         }
 
         global.borrow_mut().stop = None;
         if let Some(t) = return_type {
-            return Ok(result.into_type(new_scope, t.clone())?);
+            return Ok(result.into_type(&new_scope, &t)?);
         } else {
             return Ok(RuntimeValue::Null);
         }
@@ -57,14 +57,14 @@ pub fn evaluate_function(
 
 pub fn evaluate_call_expression(
     exp: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::CallExpression(caller, arguments) = exp {
         if let NodeType::Identifier(object_name) = *caller.clone() {
-            if let Ok(Object::Struct(obj)) = get_object(scope.clone(), &object_name) {
+            if let Ok(Object::Struct(obj)) = get_object(scope, &object_name) {
                 let mut args = Vec::new();
                 for arg in arguments {
-                    args.push(evaluate(arg.0, scope.clone())?);
+                    args.push(evaluate(arg.0, scope)?);
                 }
                 return Ok(RuntimeValue::Struct(
                     ObjectType::Tuple(args),
@@ -72,7 +72,7 @@ pub fn evaluate_call_expression(
                 ));
             }
         }
-        let func = evaluate(*caller.clone(), scope.clone())?;
+        let func = evaluate(*caller.clone(), scope)?;
 
         match func {
             RuntimeValue::Function { .. } => {
@@ -97,17 +97,17 @@ pub fn evaluate_call_expression(
                         if let NodeType::Identifier(name) = &arg.0 {
                             (
                                 RuntimeValue::Str(name.clone()),
-                                Some(evaluate(d.clone(), scope.clone())?),
+                                Some(evaluate(d.clone(), scope)?),
                             )
                         } else {
                             panic!()
                         }
                     } else {
-                        (evaluate(arg.0.clone(), scope.clone())?, None)
+                        (evaluate(arg.0.clone(), scope)?, None)
                     });
                 }
 
-                return func.call_native(evaluated_arguments, scope);
+                return func.call_native(&evaluated_arguments, scope);
             }
             _ => {}
         }
@@ -120,8 +120,8 @@ pub fn evaluate_call_expression(
                             if arguments.len() <= 0 {
                                 return Ok(var.clone());
                             } else if arguments.len() == 1 {
-                                let value = evaluate(arguments[0].0.clone(), scope.clone())?;
-                                let _ = assign_var(scope.clone(), &caller, value.clone())?;
+                                let value = evaluate(arguments[0].0.clone(), &scope)?;
+                                let _ = assign_var(&scope, &caller, value.clone())?;
                                 return Ok(value);
                             } else {
                                 return Err(InterpreterErr::SetterArgs(arguments));

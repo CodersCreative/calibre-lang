@@ -22,17 +22,17 @@ pub mod structs;
 
 pub fn evaluate_identifier(
     identifier: &str,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     Ok(get_var(scope, identifier)?.0)
 }
 
 pub fn evaluate_not<'a>(
     exp: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::NotExpression { value } = exp {
-        let value = evaluate(*value, scope.clone())?;
+        let value = evaluate(*value, scope)?;
 
         match value {
             RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
@@ -55,11 +55,11 @@ pub fn evaluate_not<'a>(
 
 pub fn evaluate_as_expression(
     exp: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::AsExpression { value, typ } = exp {
-        let value = evaluate(*value, scope.clone())?;
-        Ok(match value.into_type(scope, typ) {
+        let value = evaluate(*value, scope)?;
+        Ok(match value.into_type(scope, &typ) {
             Ok(x) => RuntimeValue::Result(
                 Ok(Box::new(x.clone())),
                 RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new((&x).into())),
@@ -76,7 +76,7 @@ pub fn evaluate_as_expression(
 
 pub fn evaluate_binary_expression(
     exp: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::BinaryExpression {
         left,
@@ -84,8 +84,8 @@ pub fn evaluate_binary_expression(
         operator,
     } = exp
     {
-        let left = evaluate(*left, scope.clone())?;
-        let right = evaluate(*right, scope.clone())?;
+        let left = evaluate(*left, scope)?;
+        let right = evaluate(*right, scope)?;
 
         operator.handle(left, right, scope)
     } else {
@@ -95,7 +95,7 @@ pub fn evaluate_binary_expression(
 
 pub fn evaluate_range_expression(
     exp: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::RangeDeclaration {
         from,
@@ -104,10 +104,10 @@ pub fn evaluate_range_expression(
     } = exp
     {
         if let RuntimeValue::Int(from) =
-            evaluate(*from.clone(), scope.clone())?.into_type(scope.clone(), RuntimeType::Int)?
+            evaluate(*from.clone(), scope)?.into_type(scope, &RuntimeType::Int)?
         {
             if let RuntimeValue::Int(to) =
-                evaluate(*to.clone(), scope.clone())?.into_type(scope.clone(), RuntimeType::Int)?
+                evaluate(*to.clone(), scope)?.into_type(scope, &RuntimeType::Int)?
             {
                 let to = if inclusive { to + 1 } else { to };
 
@@ -125,7 +125,7 @@ pub fn evaluate_range_expression(
 
 pub fn evaluate_boolean_expression(
     exp: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::BooleanExpression {
         left,
@@ -133,10 +133,10 @@ pub fn evaluate_boolean_expression(
         operator,
     } = exp
     {
-        let left = evaluate(*left, scope.clone())?;
-        let right = evaluate(*right, scope.clone())?;
+        let left = evaluate(*left, scope)?;
+        let right = evaluate(*right, scope)?;
 
-        Ok(operator.handle(left, right)?)
+        Ok(operator.handle(&left, &right)?)
     } else {
         Err(InterpreterErr::NotImplemented(exp))
     }
@@ -144,7 +144,7 @@ pub fn evaluate_boolean_expression(
 
 pub fn evaluate_comparison_expression(
     exp: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::ComparisonExpression {
         left,
@@ -152,25 +152,25 @@ pub fn evaluate_comparison_expression(
         operator,
     } = exp
     {
-        let left = evaluate(*left, scope.clone())?;
-        let right = evaluate(*right, scope.clone())?;
-        operator.handle(left.clone(), right.clone(), scope)
+        let left = evaluate(*left, scope)?;
+        let right = evaluate(*right, scope)?;
+        operator.handle(left, right, scope)
     } else {
         Err(InterpreterErr::NotImplemented(exp))
     }
 }
 pub fn evaluate_assignment_expression(
     node: NodeType,
-    scope: Rc<RefCell<Scope>>,
+    scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::AssignmentExpression { identifier, value } = node {
         if let NodeType::Identifier(identifier) = *identifier {
-            let value = evaluate(*value, scope.clone())?;
+            let value = evaluate(*value, scope)?;
             let _ = assign_var(scope, &identifier, value.clone())?;
             return Ok(value);
         }
         if let NodeType::MemberExpression { .. } = *identifier {
-            let value = evaluate(*value, scope.clone())?;
+            let value = evaluate(*value, scope)?;
             let _ = assign_member_expression(*identifier, value.clone(), scope)?;
             return Ok(value);
         } else {

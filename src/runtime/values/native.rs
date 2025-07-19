@@ -26,8 +26,8 @@ impl NativeFunctions {}
 impl RuntimeValue {
     pub fn call_native(
         &self,
-        mut args: Vec<(RuntimeValue, Option<RuntimeValue>)>,
-        scope: Rc<RefCell<Scope>>,
+        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Self::NativeFunction(func) = self {
             match func {
@@ -40,7 +40,7 @@ impl RuntimeValue {
                         let mut s = arg.0.to_string();
 
                         if let RuntimeValue::Link(path, _) = &arg.0 {
-                            s = get_link_path(scope.clone(), &path)?.to_string();
+                            s = get_link_path(scope, &path)?.to_string();
                         }
 
                         handle.write_all(s.as_bytes()).unwrap();
@@ -99,7 +99,7 @@ impl RuntimeValue {
                 NativeFunctions::Range => {
                     if args.len() <= 1 {
                         let RuntimeValue::Int(amt) =
-                            args[0].0.into_type(scope, RuntimeType::Int)?
+                            args[0].0.into_type(&scope, &RuntimeType::Int)?
                         else {
                             panic!()
                         };
@@ -107,13 +107,13 @@ impl RuntimeValue {
                         Ok(RuntimeValue::Range(0, amt as i32))
                     } else if args.len() == 2 {
                         let RuntimeValue::Int(start) =
-                            args[0].0.into_type(scope.clone(), RuntimeType::Int)?
+                            args[0].0.into_type(&scope, &RuntimeType::Int)?
                         else {
                             panic!()
                         };
 
                         let RuntimeValue::Int(stop) =
-                            args[1].0.into_type(scope, RuntimeType::Int)?
+                            args[1].0.into_type(&scope, &RuntimeType::Int)?
                         else {
                             panic!()
                         };
@@ -121,19 +121,19 @@ impl RuntimeValue {
                         Ok(RuntimeValue::Range(start as i32, stop as i32))
                     } else if args.len() == 3 {
                         let RuntimeValue::Int(start) =
-                            args[0].0.into_type(scope.clone(), RuntimeType::Int)?
+                            args[0].0.into_type(&scope, &RuntimeType::Int)?
                         else {
                             panic!()
                         };
 
                         let RuntimeValue::Int(stop) =
-                            args[1].0.into_type(scope.clone(), RuntimeType::Int)?
+                            args[1].0.into_type(&scope, &RuntimeType::Int)?
                         else {
                             panic!()
                         };
 
                         let RuntimeValue::Int(step) =
-                            args[2].0.into_type(scope, RuntimeType::Int)?
+                            args[2].0.into_type(&scope, &RuntimeType::Int)?
                         else {
                             panic!()
                         };

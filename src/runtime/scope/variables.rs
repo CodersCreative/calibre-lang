@@ -61,7 +61,7 @@ impl Scope {
 }
 
 pub fn assign_var(
-    this: Rc<RefCell<Scope>>,
+    this: &Rc<RefCell<Scope>>,
     og_key: &str,
     value: RuntimeValue,
 ) -> Result<(), InterpreterErr> {
@@ -95,7 +95,7 @@ pub fn assign_var(
             .clone();
 
         if val.0 != RuntimeValue::Null {
-            return update_link(this, val.0, move |x| {
+            return update_link(this, &val.0, move |x| {
                 if discriminant(x) == discriminant(&value) || x.is_number() && value.is_number() {
                     *x = value.to_owned();
                     Ok(())
@@ -107,26 +107,26 @@ pub fn assign_var(
     }
 
     if let Some(parent) = &this.borrow().parent {
-        let _ = assign_var(parent.clone(), &key, value)?;
+        let _ = assign_var(&parent, &key, value)?;
     } else {
         return Err(ScopeErr::Variable(key.to_string()).into());
     }
 
     Ok(())
 }
-pub fn get_global_scope(this: Rc<RefCell<Scope>>) -> Rc<RefCell<Scope>> {
+pub fn get_global_scope(this: &Rc<RefCell<Scope>>) -> Rc<RefCell<Scope>> {
     if let Some(parent) = &this.borrow().parent {
-        get_global_scope(parent.clone())
+        get_global_scope(&parent)
     } else {
-        this
+        this.clone()
     }
 }
 
-pub fn get_stop(this: Rc<RefCell<Scope>>) -> Option<StopValue> {
+pub fn get_stop(this: &Rc<RefCell<Scope>>) -> Option<StopValue> {
     return get_global_scope(this).borrow().stop.clone();
 }
 
-pub fn get_var(this: Rc<RefCell<Scope>>, key: &str) -> Result<(RuntimeValue, VarType), ScopeErr> {
+pub fn get_var(this: &Rc<RefCell<Scope>>, key: &str) -> Result<(RuntimeValue, VarType), ScopeErr> {
     let scope = resolve_var(this, key)?;
     Ok(
         if let Some(value) = scope.0.borrow().variables.get(&scope.1) {
@@ -138,7 +138,7 @@ pub fn get_var(this: Rc<RefCell<Scope>>, key: &str) -> Result<(RuntimeValue, Var
 }
 
 pub fn resolve_var(
-    this: Rc<RefCell<Scope>>,
+    this: &Rc<RefCell<Scope>>,
     og_key: &str,
 ) -> Result<(Rc<RefCell<Scope>>, String), ScopeErr> {
     let key = this.borrow().resolve_alias(og_key).to_string();
@@ -146,7 +146,7 @@ pub fn resolve_var(
     if this.borrow().variables.contains_key(&key) {
         return Ok((this.clone(), key));
     } else if let Some(parent) = &this.borrow().parent {
-        return resolve_var(parent.clone(), &key);
+        return resolve_var(&parent, &key);
     } else {
         Err(ScopeErr::Variable(key))
     }

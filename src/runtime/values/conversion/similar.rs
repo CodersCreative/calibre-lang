@@ -10,7 +10,7 @@ impl RuntimeValue {
     pub fn make_similar(
         self,
         rhs: Self,
-        scope: Rc<RefCell<Scope>>,
+        scope: &Rc<RefCell<Scope>>,
     ) -> Result<(Self, Self), ValueErr> {
         if self.is_number() && rhs.is_number() {
             match self {
@@ -137,7 +137,7 @@ impl RuntimeValue {
                 _ => unimplemented!(),
             }
         } else {
-            let rhs = rhs.into_type(scope, (&self).into())?;
+            let rhs = rhs.into_type(&scope, &(&self).into())?;
             Ok((self, rhs))
         }
     }
