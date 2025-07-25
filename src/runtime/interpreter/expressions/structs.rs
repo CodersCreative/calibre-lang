@@ -53,7 +53,6 @@ pub fn evaluate_enum_expression(
         data,
     } = exp
     {
-        // println!("{:?}.{:?}({:?})", identifier, value, data);
         let Object::Enum(enm_class) = get_object(&scope, &identifier)? else {
             return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(
                 identifier,

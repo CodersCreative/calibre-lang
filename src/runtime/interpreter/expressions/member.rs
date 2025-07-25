@@ -63,7 +63,7 @@ fn get_member_expression_path(
                         value = get_link_path(scope, &path)?;
                         continue;
                     }
-                    _ => unimplemented!(),
+                    x => return Ok(MembrExprPathRes::Value(x)), // x => unimplemented!("{:?}", x),
                 }
 
                 break;
@@ -159,132 +159,132 @@ pub fn evaluate_member_expression(
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
-    // use crate::ast::NodeType;
-    // use crate::runtime::scope::Scope;
-    // use crate::runtime::values::helper::VarType;
-    // use crate::runtime::values::{RuntimeValue, helper::ObjectType};
-    // use std::cell::RefCell;
-    // use std::rc::Rc;
-    //
-    // fn new_scope() -> Rc<RefCell<Scope>> {
-    //     Rc::new(RefCell::new(Scope::new(None)))
-    // }
-    //
-    // #[test]
-    // fn test_assign_member_expression_struct_field() {
-    //     let scope = new_scope();
-    //     let mut map = std::collections::HashMap::new();
-    //     map.insert("field".to_string(), RuntimeValue::Int(1));
-    //     let struct_val = RuntimeValue::Struct(ObjectType::Map(map.clone()), None);
-    //     scope
-    //         .borrow_mut()
-    //         .push_var(
-    //             "obj".to_string(),
-    //             struct_val.clone(),
-    //             VarType::Mutable(None),
-    //         )
-    //         .unwrap();
-    //
-    //     let member = NodeType::MemberExpression {
-    //         object: Box::new(NodeType::Identifier("obj".to_string())),
-    //         property: Box::new(NodeType::Identifier("field".to_string())),
-    //         is_computed: false,
-    //     };
-    //     assign_member_expression(member, RuntimeValue::Int(42), scope.clone()).unwrap();
-    //
-    //     let updated = scope.borrow().variables.get("obj").unwrap().0.clone();
-    //     if let RuntimeValue::Struct(ObjectType::Map(m), _) = updated {
-    //         assert_eq!(m.get("field"), Some(&RuntimeValue::Int(42)));
-    //     } else {
-    //         panic!("Expected struct value");
-    //     }
-    // }
-    //
-    // #[test]
-    // fn test_assign_member_expression_list_index() {
-    //     let scope = new_scope();
-    //     let list_val = RuntimeValue::List {
-    //         data: vec![RuntimeValue::Int(1), RuntimeValue::Int(2)],
-    //         data_type: Box::new(Some(crate::runtime::values::RuntimeType::Int)),
-    //     };
-    //     scope
-    //         .borrow_mut()
-    //         .push_var("lst".to_string(), list_val.clone(), VarType::Mutable(None))
-    //         .unwrap();
-    //
-    //     let member = NodeType::MemberExpression {
-    //         object: Box::new(NodeType::Identifier("lst".to_string())),
-    //         property: Box::new(NodeType::IntLiteral(1)),
-    //         is_computed: false,
-    //     };
-    //     assign_member_expression(member, RuntimeValue::Int(99), scope.clone()).unwrap();
-    //
-    //     let updated = scope.borrow().variables.get("lst").unwrap().0.clone();
-    //     if let RuntimeValue::List { data, .. } = updated {
-    //         assert_eq!(data[1], RuntimeValue::Int(99));
-    //     } else {
-    //         panic!("Expected list value");
-    //     }
-    // }
-    //
-    // #[test]
-    // fn test_evaluate_member_expression_struct_field() {
-    //     let scope = new_scope();
-    //     let mut map = std::collections::HashMap::new();
-    //     map.insert("foo".to_string(), RuntimeValue::Int(123));
-    //     let struct_val = RuntimeValue::Struct(ObjectType::Map(map.clone()), None);
-    //     scope
-    //         .borrow_mut()
-    //         .push_var("obj".to_string(), struct_val, VarType::Mutable(None))
-    //         .unwrap();
-    //
-    //     let member = NodeType::MemberExpression {
-    //         object: Box::new(NodeType::Identifier("obj".to_string())),
-    //         property: Box::new(NodeType::Identifier("foo".to_string())),
-    //         is_computed: false,
-    //     };
-    //     let result = evaluate_member_expression(member, scope).unwrap();
-    //     assert_eq!(result, RuntimeValue::Int(123));
-    // }
-    //
-    // #[test]
-    // fn test_evaluate_member_expression_list_index() {
-    //     let scope = new_scope();
-    //     let list_val = RuntimeValue::List {
-    //         data: vec![RuntimeValue::Int(10), RuntimeValue::Int(20)],
-    //         data_type: Box::new(Some(crate::runtime::values::RuntimeType::Int)),
-    //     };
-    //     scope
-    //         .borrow_mut()
-    //         .push_var("lst".to_string(), list_val, VarType::Mutable(None))
-    //         .unwrap();
-    //
-    //     let member = NodeType::MemberExpression {
-    //         object: Box::new(NodeType::Identifier("lst".to_string())),
-    //         property: Box::new(NodeType::IntLiteral(1)),
-    //         is_computed: false,
-    //     };
-    //     let result = evaluate_member_expression(member, scope).unwrap();
-    //     assert_eq!(result, RuntimeValue::Int(20));
-    // }
-    //
-    // #[test]
-    // fn test_evaluate_member_expression_struct_field_not_found() {
-    //     let scope = new_scope();
-    //     let map = std::collections::HashMap::new();
-    //     let struct_val = RuntimeValue::Struct(ObjectType::Map(map), None);
-    //     scope
-    //         .borrow_mut()
-    //         .push_var("obj".to_string(), struct_val, VarType::Mutable(None))
-    //         .unwrap();
-    //
-    //     let member = NodeType::MemberExpression {
-    //         object: Box::new(NodeType::Identifier("obj".to_string())),
-    //         property: Box::new(NodeType::Identifier("missing".to_string())),
-    //         is_computed: false,
-    //     };
-    //     let result = evaluate_member_expression(member, scope);
-    //     assert!(result.is_err());
-    // }
+    use super::*;
+    use crate::ast::NodeType;
+    use crate::runtime::scope::Scope;
+    use crate::runtime::values::helper::VarType;
+    use crate::runtime::values::{RuntimeValue, helper::ObjectType};
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    fn new_scope() -> Rc<RefCell<Scope>> {
+        Rc::new(RefCell::new(Scope::new(None)))
+    }
+
+    #[test]
+    fn test_assign_member_expression_struct_field() {
+        let scope = new_scope();
+        let mut map = std::collections::HashMap::new();
+        map.insert("field".to_string(), RuntimeValue::Int(1));
+        let struct_val = RuntimeValue::Struct(ObjectType::Map(map.clone()), None);
+        scope
+            .borrow_mut()
+            .push_var(
+                "obj".to_string(),
+                struct_val.clone(),
+                VarType::Mutable(None),
+            )
+            .unwrap();
+
+        let member = NodeType::MemberExpression {
+            object: Box::new(NodeType::Identifier("obj".to_string())),
+            property: Box::new(NodeType::Identifier("field".to_string())),
+            is_computed: false,
+        };
+        assign_member_expression(member, RuntimeValue::Int(42), scope.clone()).unwrap();
+
+        let updated = scope.borrow().variables.get("obj").unwrap().0.clone();
+        if let RuntimeValue::Struct(ObjectType::Map(m), _) = updated {
+            assert_eq!(m.get("field"), Some(&RuntimeValue::Int(42)));
+        } else {
+            panic!("Expected struct value");
+        }
+    }
+
+    #[test]
+    fn test_assign_member_expression_list_index() {
+        let scope = new_scope();
+        let list_val = RuntimeValue::List {
+            data: vec![RuntimeValue::Int(1), RuntimeValue::Int(2)],
+            data_type: Box::new(Some(crate::runtime::values::RuntimeType::Int)),
+        };
+        scope
+            .borrow_mut()
+            .push_var("lst".to_string(), list_val.clone(), VarType::Mutable(None))
+            .unwrap();
+
+        let member = NodeType::MemberExpression {
+            object: Box::new(NodeType::Identifier("lst".to_string())),
+            property: Box::new(NodeType::IntLiteral(1)),
+            is_computed: false,
+        };
+        assign_member_expression(member, RuntimeValue::Int(99), scope.clone()).unwrap();
+
+        let updated = scope.borrow().variables.get("lst").unwrap().0.clone();
+        if let RuntimeValue::List { data, .. } = updated {
+            assert_eq!(data[1], RuntimeValue::Int(99));
+        } else {
+            panic!("Expected list value");
+        }
+    }
+
+    #[test]
+    fn test_evaluate_member_expression_struct_field() {
+        let scope = new_scope();
+        let mut map = std::collections::HashMap::new();
+        map.insert("foo".to_string(), RuntimeValue::Int(123));
+        let struct_val = RuntimeValue::Struct(ObjectType::Map(map.clone()), None);
+        scope
+            .borrow_mut()
+            .push_var("obj".to_string(), struct_val, VarType::Mutable(None))
+            .unwrap();
+
+        let member = NodeType::MemberExpression {
+            object: Box::new(NodeType::Identifier("obj".to_string())),
+            property: Box::new(NodeType::Identifier("foo".to_string())),
+            is_computed: false,
+        };
+        let result = evaluate_member_expression(member, scope).unwrap();
+        assert_eq!(result, RuntimeValue::Int(123));
+    }
+
+    #[test]
+    fn test_evaluate_member_expression_list_index() {
+        let scope = new_scope();
+        let list_val = RuntimeValue::List {
+            data: vec![RuntimeValue::Int(10), RuntimeValue::Int(20)],
+            data_type: Box::new(Some(crate::runtime::values::RuntimeType::Int)),
+        };
+        scope
+            .borrow_mut()
+            .push_var("lst".to_string(), list_val, VarType::Mutable(None))
+            .unwrap();
+
+        let member = NodeType::MemberExpression {
+            object: Box::new(NodeType::Identifier("lst".to_string())),
+            property: Box::new(NodeType::IntLiteral(1)),
+            is_computed: false,
+        };
+        let result = evaluate_member_expression(member, scope).unwrap();
+        assert_eq!(result, RuntimeValue::Int(20));
+    }
+
+    #[test]
+    fn test_evaluate_member_expression_struct_field_not_found() {
+        let scope = new_scope();
+        let map = std::collections::HashMap::new();
+        let struct_val = RuntimeValue::Struct(ObjectType::Map(map), None);
+        scope
+            .borrow_mut()
+            .push_var("obj".to_string(), struct_val, VarType::Mutable(None))
+            .unwrap();
+
+        let member = NodeType::MemberExpression {
+            object: Box::new(NodeType::Identifier("obj".to_string())),
+            property: Box::new(NodeType::Identifier("missing".to_string())),
+            is_computed: false,
+        };
+        let result = evaluate_member_expression(member, scope);
+        assert!(result.is_err());
+    }
 }

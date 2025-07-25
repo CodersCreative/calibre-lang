@@ -169,7 +169,6 @@ fn increment_line_col(line: &mut usize, col: &mut usize, c: &char) {
 pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut buffer: Vec<char> = txt.chars().collect();
-    // println!("{buffer:?}");
     let mut line: usize = 1;
     let mut col: usize = 0;
 

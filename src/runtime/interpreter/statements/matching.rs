@@ -13,6 +13,7 @@ use crate::{
         },
         scope::{
             Object, Scope, ScopeErr,
+            children::get_next_scope,
             links::progress,
             objects::get_object,
             variables::{get_global_scope, get_stop, get_var},
@@ -41,6 +42,17 @@ fn match_inner_pattern(
         }
         NodeType::MemberExpression { path: p } => {
             if let (NodeType::Identifier(main), _) = &p[0] {
+                if let Ok(_) = get_next_scope(&scope, main) {
+                    return match_inner_pattern(
+                        &p[1].0,
+                        value,
+                        mutability,
+                        path,
+                        scope,
+                        conditionals,
+                    );
+                }
+
                 if let (NodeType::CallExpression(val, args), _) = &p[1] {
                     if let NodeType::Identifier(val) = *val.clone() {
                         return match_inner_pattern(

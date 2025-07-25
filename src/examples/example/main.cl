@@ -5,11 +5,10 @@ import * from data
 // The let keyword creates an immutable variable that can be shadowed.
 let language = Language.FRENCH{data : 10, code : 5};
 let mut recursive_language = Language.ARABIC(Language.FRENCH{data : 5, code : 10}, Language.ARABIC(language, Language.SPANISH));
-
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
 // Mutability needs to be specified at the beginning for all branches
 match &mut recursive_language {
-  Language.ARABIC(Language.FRENCH{data}, Language.ARABIC(Language.FRENCH{code})) -> {
+  data.Language.ARABIC(Language.FRENCH{data}, Language.ARABIC(Language.FRENCH{code})) -> {
     print("Code: " + code);
     print("Enum: " + data)
     data = 10;
@@ -18,7 +17,7 @@ match &mut recursive_language {
 }
 
 // In order to do an if let statement this syntax is used with extra conditions being added after the let
-if let Language.FRENCH{data} if true if (try 9 as ulong == 9.0 == 9) -> &language {
+if let data.Language.FRENCH{data} if true if (try 9 as ulong == 9.0 == 9) -> &language {
   print("Enum: " + data)
 }
 
