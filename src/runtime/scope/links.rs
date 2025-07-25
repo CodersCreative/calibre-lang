@@ -2,7 +2,7 @@ use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Scope, ScopeErr, VarType, variables::resolve_var},
+        scope::{Scope, ScopeErr, VarType, children::get_next_scope, variables::resolve_var},
         values::{RuntimeValue, helper::ObjectType},
     },
 };
@@ -61,8 +61,15 @@ pub fn get_link_path(
     this: &Rc<RefCell<Scope>>,
     path: &[String],
 ) -> Result<RuntimeValue, InterpreterErr> {
-    let (env, name) = resolve_var(this, &path[0])
-        .map_err(|e| InterpreterErr::Value(crate::runtime::values::ValueErr::Scope(e)))?;
+    let (env, name) = match resolve_var(this, &path[0])
+        .map_err(|e| InterpreterErr::Value(crate::runtime::values::ValueErr::Scope(e)))
+    {
+        Ok(x) => x,
+        Err(e) => {
+            let scope = get_next_scope(this, &path[0]).map_err(|_| e)?;
+            return get_link_path(&scope, &path[1..]);
+        }
+    };
     let mut new_env = env.borrow_mut();
     let mut current = match new_env.variables.get_mut(&name) {
         Some(x) => &mut x.0,

@@ -1,7 +1,7 @@
 use rand::seq::IndexedRandom;
 
 use crate::{
-    ast::{IfComparisonType, LoopType, RefMutability},
+    ast::{IfComparisonType, LoopType, RefMutability, binary::BinaryOperator},
     lexer::Bracket,
     parser::{Parser, ParserError, SyntaxErr},
     runtime::{
@@ -37,6 +37,7 @@ impl Parser {
             },
             TokenType::Trait => self.parse_if_statement(),
             TokenType::Impl => self.parse_impl_declaration(),
+            TokenType::Import => self.parse_import_declaration(),
             TokenType::Enum => self.parse_enum_declaration(),
             TokenType::For => self.parse_loop_declaration(),
             TokenType::Open(Bracket::Curly) => Ok(NodeType::ScopeDeclaration {
@@ -175,6 +176,82 @@ impl Parser {
         } else {
             self.parse_as_expression()
         }
+    }
+
+    pub fn parse_import_declaration(&mut self) -> Result<NodeType, ParserError> {
+        let _ = self.expect_eat(
+            &TokenType::Import,
+            SyntaxErr::ExpectedKeyword(String::from("import")),
+        )?;
+
+        let get_module = |this: &mut Parser| -> Result<Vec<String>, ParserError> {
+            let mut module = vec![
+                this.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
+                    .value,
+            ];
+
+            while this.first().token_type == TokenType::FullStop {
+                module.push(
+                    this.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
+                        .value,
+                );
+            }
+
+            Ok(module)
+        };
+
+        if [
+            TokenType::Open(Bracket::Paren),
+            TokenType::BinaryOperator(BinaryOperator::Mul),
+        ]
+        .contains(&self.first().token_type)
+        {
+            let values = if TokenType::Open(Bracket::Paren) == self.first().token_type {
+                self.parse_arguments(
+                    TokenType::Open(Bracket::Paren),
+                    TokenType::Close(Bracket::Paren),
+                )?
+                .into_iter()
+                .map(|x| match x.0 {
+                    NodeType::Identifier(x) => x,
+                    _ => panic!(),
+                })
+                .collect()
+            } else {
+                let _ = self.eat();
+                vec!["*".to_string()]
+            };
+
+            let _ = self.expect_eat(
+                &TokenType::From,
+                SyntaxErr::ExpectedKeyword(String::from("from")),
+            )?;
+
+            let module = get_module(self)?;
+            return Ok(NodeType::ImportStatement {
+                module,
+                alias: None,
+                values,
+            });
+        }
+
+        let module = get_module(self)?;
+
+        let alias = if self.first().token_type == TokenType::As {
+            let _ = self.eat();
+            Some(
+                self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
+                    .value,
+            )
+        } else {
+            None
+        };
+
+        Ok(NodeType::ImportStatement {
+            module,
+            alias,
+            values: Vec::new(),
+        })
     }
 
     pub fn parse_return_declaration(&mut self) -> Result<NodeType, ParserError> {

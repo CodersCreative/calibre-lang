@@ -149,8 +149,9 @@ pub enum NodeType {
         bodies: Vec<Vec<NodeType>>,
     },
     ImportStatement {
-        module : Vec<String>,
-        values : Vec<Vec<String>>,
+        module: Vec<String>,
+        alias: Option<String>,
+        values: Vec<String>,
     },
     StructLiteral(ObjectType<Option<NodeType>>),
 }

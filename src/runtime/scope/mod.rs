@@ -1,17 +1,34 @@
+pub mod children;
 pub mod links;
 pub mod objects;
 pub mod variables;
-pub mod children;
 
 use std::{
-    cell::RefCell, collections::HashMap, f32::{self, consts::PI}, fs, i64, path::PathBuf, rc::Rc
+    cell::RefCell,
+    collections::HashMap,
+    f32::{self, consts::PI},
+    fs, i64,
+    path::PathBuf,
+    rc::Rc,
 };
 
 use thiserror::Error;
 
-use crate::{parser, runtime::{interpreter::evaluate, scope::children::get_scope, values::{
-    helper::{ObjectType, StopValue, VarType}, native::NativeFunctions, RuntimeValue
-}}, utils::get_path};
+use crate::{
+    parser,
+    runtime::{
+        interpreter::evaluate,
+        scope::children::get_next_scope,
+        values::{
+            RuntimeValue,
+            helper::{ObjectType, StopValue, VarType},
+            native::NativeFunctions,
+        },
+    },
+    utils::get_path,
+};
+
+// static mut scopes: HashMap<&str, Rc<RefCell<Scope>>> = HashMap::new();
 
 use super::values::RuntimeType;
 
@@ -29,6 +46,8 @@ pub enum ScopeErr {
     Object(String),
     #[error("Unable to resolve static function : {0}.")]
     Function(String),
+    #[error("Unable to resolve scope : {0}.")]
+    Scope(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -119,73 +138,102 @@ fn get_global_variables() -> HashMap<String, (RuntimeValue, VarType)> {
 }
 
 impl Scope {
-    pub fn new_with_stdlib(parent: Option<Rc<RefCell<Self>>>, path : PathBuf, namespace : Option<String>) -> (Rc<RefCell<Self>>, parser::Parser) {
+    pub fn new_with_stdlib(
+        parent: Option<Rc<RefCell<Self>>>,
+        path: PathBuf,
+        namespace: Option<String>,
+    ) -> (Rc<RefCell<Self>>, parser::Parser) {
         let mut parser = parser::Parser::default();
         let scope = Self {
             variables: get_global_variables(),
-            children : HashMap::new(),
+            children: HashMap::new(),
             objects: HashMap::new(),
             stop: None,
             functions: HashMap::new(),
             parent: parent.clone(),
-            path
+            path,
         };
 
         let scope = Rc::new(RefCell::new(scope));
-        let program = parser.produce_ast(fs::read_to_string(get_path("stdlib/main.cl".to_string())).unwrap()).unwrap();
-        let _ = evaluate(program, &scope).unwrap();
-        
-        if let Some(name) = namespace && let Some(parent) = parent{
-            if let Ok(scope) = get_scope(&parent, &name) {
+        let program = parser
+            .produce_ast(fs::read_to_string(get_path("stdlib/main.cl".to_string())).unwrap())
+            .unwrap();
+
+        if let (Some(name), Some(parent)) = (namespace, parent) {
+            if let Ok(scope) = get_next_scope(&parent, &name) {
                 panic!()
-            }else{
-                parent.borrow_mut().push_child(name, scope.clone());
+            } else {
+                let _ = parent.borrow_mut().push_child(name, scope.clone());
             }
         }
 
+        let _ = evaluate(program, &scope).unwrap();
+
         (scope, parser)
     }
-    
+
     pub fn new_from_parent_shallow(parent: Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
         let path = parent.borrow().path.clone();
         Self::new(Some(parent), path, None)
     }
-    
-    pub fn new_from_parent(parent: Rc<RefCell<Self>>, namespace : String) -> Rc<RefCell<Self>> {
+
+    pub fn new_from_parent(parent: Rc<RefCell<Self>>, namespace: String) -> Rc<RefCell<Self>> {
+        if let Some(scope) = parent.borrow().children.get(&namespace) {
+            return scope.clone();
+        }
+
         let path = parent.borrow().path.clone();
+        let parent_name = path.file_name().unwrap();
         let folder = path.parent().unwrap().to_path_buf();
 
-        let mut path1 = folder.clone(); 
-        path1 = path1.join(format!("{namespace}.cl"));
-        
-        let mut path2 = folder.clone(); 
-        path2 = path2.join(format!("{namespace}/mod.cl"));
+        let extra = if parent_name == "main.cl" {
+            String::new()
+        } else {
+            format!(
+                "{}/",
+                parent_name.to_str().unwrap().split(".").nth(0).unwrap()
+            )
+        };
 
-        if path1.exists(){
+        let mut path1 = folder.clone();
+        path1 = path1.join(format!("{extra}{namespace}.cl"));
+
+        let mut path2 = folder.clone();
+        path2 = path2.join(format!("{extra}{namespace}/main.cl"));
+
+        if path1.exists() {
             Self::new(Some(parent), path1, Some(namespace))
-        }else{
+        } else if path2.exists() {
             Self::new(Some(parent), path2, Some(namespace))
+        } else {
+            panic!("Tried:\n{path1:?}\n{path2:?}")
         }
     }
 
-    pub fn new(parent: Option<Rc<RefCell<Self>>>, path : PathBuf, namespace : Option<String>) -> Rc<RefCell<Self>> {
-        let scope = if parent.is_some() {Rc::new(RefCell::new(Self {
-            variables: HashMap::new(),
-            objects: HashMap::new(),
-            stop: None,
-            functions: HashMap::new(),
-            parent: parent.clone(),
-            children: HashMap::new(),
-            path,
-        }))} else {
+    pub fn new(
+        parent: Option<Rc<RefCell<Self>>>,
+        path: PathBuf,
+        namespace: Option<String>,
+    ) -> Rc<RefCell<Self>> {
+        let scope = if parent.is_some() {
+            Rc::new(RefCell::new(Self {
+                variables: HashMap::new(),
+                objects: HashMap::new(),
+                stop: None,
+                functions: HashMap::new(),
+                parent: parent.clone(),
+                children: HashMap::new(),
+                path,
+            }))
+        } else {
             Self::new_with_stdlib(None, path, namespace.clone()).0
         };
-        
-        if let Some(name) = namespace && let Some(parent) = parent{
-            if let Ok(scope) = get_scope(&parent, &name) {
+
+        if let (Some(name), Some(parent)) = (namespace, parent) {
+            if get_next_scope(&parent, &name).is_ok() {
                 panic!()
-            }else{
-                parent.borrow_mut().push_child(name, scope.clone());
+            } else {
+                let _ = parent.borrow_mut().push_child(name, scope.clone());
             }
         }
 
@@ -204,7 +252,8 @@ mod tests {
 
     #[test]
     fn test_scope_global_variables() {
-        let (scope_rc, _) = Scope::new_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        let (scope_rc, _) =
+            Scope::new_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
         let scope = scope_rc.borrow();
         assert!(scope.variables.contains_key("PI"));
         assert!(scope.variables.contains_key("true"));

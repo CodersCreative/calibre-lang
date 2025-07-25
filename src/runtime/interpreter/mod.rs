@@ -21,6 +21,7 @@ use crate::{
             },
             statements::{
                 comparisons::evaluate_if_statement,
+                import::evaluate_import_statement,
                 loops::evaluate_loop_declaration,
                 structs::{
                     evaluate_enum_declaration, evaluate_impl_declaration,
@@ -165,6 +166,7 @@ pub fn evaluate(
         NodeType::ComparisonExpression { .. } => evaluate_comparison_expression(node, scope),
         NodeType::BooleanExpression { .. } => evaluate_boolean_expression(node, scope),
         NodeType::IfStatement { .. } => evaluate_if_statement(node, scope),
+        NodeType::ImportStatement { .. } => evaluate_import_statement(node, scope),
         NodeType::MatchDeclaration { .. } => evaluate_match_statement(node, scope),
         NodeType::InDeclaration { .. } => evaluate_in_statement(node, scope),
         NodeType::AsExpression { .. } => evaluate_as_expression(node, scope),

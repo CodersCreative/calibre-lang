@@ -1,3 +1,4 @@
+import data
 import * from data
 
 // By default the type of a variable will be infered by what is being assigned to it.
