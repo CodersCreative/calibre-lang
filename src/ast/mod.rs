@@ -148,6 +148,10 @@ pub enum NodeType {
         comparisons: Vec<IfComparisonType>,
         bodies: Vec<Vec<NodeType>>,
     },
+    ImportStatement {
+        module : Vec<String>,
+        values : Vec<Vec<String>>,
+    },
     StructLiteral(ObjectType<Option<NodeType>>),
 }
 

@@ -19,7 +19,7 @@ pub fn evaluate_impl_declaration(
     } = declaration
     {
         for function in functions {
-            let scope_2 = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
+            let scope_2 = Scope::new_from_parent_shallow(scope.clone());
             let func = evaluate(function.0, &scope_2)?;
 
             if let RuntimeValue::Function {
@@ -92,7 +92,7 @@ mod tests {
     };
 
     fn new_scope() -> Rc<RefCell<Scope>> {
-        Rc::new(RefCell::new(Scope::new(None)))
+        Scope::new(None)
     }
     #[test]
     fn test_evaluate_struct_declaration() {
@@ -101,7 +101,7 @@ mod tests {
             identifier: "Point".to_string(),
             properties: ObjectType::Tuple(vec![]),
         };
-        let result = evaluate_struct_declaration(node, scope.clone()).unwrap();
+        let result = evaluate_struct_declaration(node, &scope).unwrap();
         assert_eq!(result, RuntimeValue::Null);
         assert!(scope.borrow().objects.contains_key("Point"));
     }
@@ -113,7 +113,7 @@ mod tests {
             identifier: "Color".to_string(),
             options: vec![("Red".to_string(), None), ("Blue".to_string(), None)],
         };
-        let result = evaluate_enum_declaration(node, scope.clone()).unwrap();
+        let result = evaluate_enum_declaration(node, &scope).unwrap();
         assert_eq!(result, RuntimeValue::Null);
         assert!(scope.borrow().objects.contains_key("Color"));
     }

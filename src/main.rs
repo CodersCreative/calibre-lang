@@ -1,4 +1,4 @@
-use std::{cell::RefCell, error::Error, fs, rc::Rc};
+use std::{cell::RefCell, error::Error, fs, path::PathBuf, rc::Rc, str::FromStr};
 
 use clap::Parser;
 // use clap::Parser as ClapParser;
@@ -41,8 +41,7 @@ impl From<ParserError> for CalibreError {
 }
 
 fn repl() -> Result<(), Box<dyn Error>> {
-    let mut parser = parser::Parser::default();
-    let scope = Rc::new(RefCell::new(Scope::new(None)));
+    let (scope, mut parser) = Scope::new_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
     let mut editor = DefaultEditor::new()?;
     loop {
         let readline = editor.readline(">> ");
@@ -74,9 +73,7 @@ fn repl() -> Result<(), Box<dyn Error>> {
 }
 
 fn file(path: &str) -> Result<(), Box<dyn Error>> {
-    let mut parser = parser::Parser::default();
-    let scope = Rc::new(RefCell::new(Scope::new(None)));
-
+    let (scope, mut parser) = Scope::new_with_stdlib(None, PathBuf::from_str(path)?, None);
     let program = parser.produce_ast(fs::read_to_string(path)?)?;
     let _ = evaluate(program, &scope)?;
 

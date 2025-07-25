@@ -19,7 +19,7 @@ pub fn get_new_scope_with_values(
     scope: &Rc<RefCell<Scope>>,
     arguments: Vec<(String, RuntimeValue, RefMutability)>,
 ) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
-    let new_scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
+    let new_scope = Scope::new_from_parent_shallow(scope.clone());
     for (k, v, m) in arguments.into_iter() {
         // if m == RefMutability::MutRef || m == RefMutability::Ref {
         //     todo!()
@@ -43,7 +43,7 @@ pub fn get_new_scope(
     parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)>,
     arguments: Vec<(NodeType, Option<NodeType>)>,
 ) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
-    let new_scope = Rc::new(RefCell::new(Scope::new(Some(scope.clone()))));
+    let new_scope = Scope::new_from_parent_shallow(scope.clone());
 
     for (i, (k, v, m, d)) in parameters.iter().enumerate() {
         if m == &RefMutability::MutRef || m == &RefMutability::Ref {
@@ -167,7 +167,7 @@ mod tests {
     use std::rc::Rc;
 
     fn new_scope() -> Rc<RefCell<Scope>> {
-        Rc::new(RefCell::new(Scope::new(None)))
+        Scope::new(None)
     }
 
     #[test]

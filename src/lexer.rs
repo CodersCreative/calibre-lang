@@ -67,6 +67,7 @@ pub enum TokenType {
     If,
     In,
     Or,
+    Main,
     As,
     Try,
     This,
@@ -74,6 +75,8 @@ pub enum TokenType {
     EOF,
     Struct,
     Else,
+    From,
+    Import,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
@@ -104,6 +107,8 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("trait"), TokenType::Trait),
         (String::from("Self"), TokenType::This),
         (String::from("for"), TokenType::For),
+        (String::from("import"), TokenType::Import),
+        (String::from("from"), TokenType::From),
     ])
 }
 

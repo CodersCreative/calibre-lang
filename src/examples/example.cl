@@ -1,31 +1,4 @@
-/*import "env/whatever.cl"  will import the file at this locatioon
-by default when code is imported it will run all the code not in functions in order*/
-// Enums declaration
-enum Language {
-  // Enums can have hasmap type data structuress.
-	FRENCH { data : int, code : int},
-  // Enums can have tuple type data structuress.
-	ENGLISH (int),
-	SPANISH,
-	ARABIC (Language, Language),
-}
-
-// Struct declaration
-struct CountryBase {
-  // Fields in a struct must be explicitly typed.
-	language : Language,
-}
-
-// Structs can also be declaratied using a tuole structures.
-struct Country (Language)
-
-// To add static functions to an object (struct or enum) the impl keyword is used.
-impl CountryBase {
-  // Methods in the impl block can also be invoked by Object.function()
-	fn get_language(self : &CountryBase) -> Language {
-		self.language
-	}
-}
+import * from data
 
 // By default the type of a variable will be infered by what is being assigned to it.
 // The let keyword creates an immutable variable that can be shadowed.

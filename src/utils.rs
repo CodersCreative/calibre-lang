@@ -9,6 +9,12 @@ pub fn read_input() -> Result<String, Box<dyn Error>> {
     Ok(input)
 }
 
+pub fn get_path(path : String) -> String{
+    let mut new_path = env!("CARGO_MANIFEST_DIR").to_string();
+    new_path.push_str(&format!("/src/{}", path));
+    return new_path;
+}
+
 pub fn clear() {
     print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
 }
