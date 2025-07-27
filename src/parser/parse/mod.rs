@@ -6,6 +6,8 @@ pub mod r#type;
 
 use std::{collections::HashMap, str::FromStr};
 
+use rand::seq::IndexedRandom;
+
 use crate::{
     ast::{LoopType, NodeType, RefMutability, comparison::Comparison},
     lexer::{Bracket, Token, TokenType},
@@ -328,6 +330,11 @@ impl Parser {
             &TokenType::Close(Bracket::Paren),
             SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
         );
+
+        if values.len() == 1 {
+            return Ok(values[0].clone());
+        }
+
         Ok(NodeType::TupleLiteral(values))
     }
 

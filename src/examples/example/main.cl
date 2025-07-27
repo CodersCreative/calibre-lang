@@ -188,5 +188,5 @@ const main = fn () -> !int {
 // the in keyword can be used to see if a certain value is contained by a string or list.
 if 4 in [4, 16, 32] {
   print("main result: " + main());
-  print("Success, Random Num = " + (std.random.generate(-10 .. 1000) as uint))
+  print("Success, Random Num = " + (std.random.generate(10..=1000) as uint))
 }
