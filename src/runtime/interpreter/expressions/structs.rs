@@ -6,7 +6,10 @@ use crate::{
     ast::NodeType,
     runtime::{
         interpreter::{InterpreterErr, evaluate},
-        scope::{Object, Scope, ScopeErr, objects::get_object, variables::get_var},
+        scope::{
+            Object, Scope, ScopeErr, children::get_next_scope, objects::get_object,
+            variables::get_var,
+        },
         values::{RuntimeValue, ValueErr, helper::ObjectType},
     },
 };
@@ -59,7 +62,18 @@ pub fn evaluate_enum_expression(
         data,
     } = exp
     {
-        let Object::Enum(enm_class) = get_object(&scope, &identifier)? else {
+        let Ok(Object::Enum(enm_class)) = get_object(&scope, &identifier) else {
+            if let Some(ObjectType::Tuple(args)) = data {
+                if let Ok(s) = get_next_scope(scope, &identifier) {
+                    return evaluate(
+                        NodeType::CallExpression(
+                            Box::new(NodeType::Identifier(value)),
+                            args.into_iter().map(|x| (x.unwrap(), None)).collect(),
+                        ),
+                        &s,
+                    );
+                }
+            }
             return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(
                 identifier,
             ))));

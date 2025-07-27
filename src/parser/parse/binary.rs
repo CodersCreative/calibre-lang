@@ -52,7 +52,7 @@ impl Parser {
                 false
             };
 
-            let right = self.parse_additive_expression()?;
+            let right = self.parse_statement()?;
 
             left = NodeType::RangeDeclaration {
                 from: Box::new(left),

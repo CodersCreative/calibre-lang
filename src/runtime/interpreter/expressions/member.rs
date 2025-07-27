@@ -29,10 +29,12 @@ fn get_member_expression_path(
     scope: &Rc<RefCell<Scope>>,
 ) -> Result<MembrExprPathRes, InterpreterErr> {
     let mut path = Vec::new();
-
     if let (NodeType::Identifier(x), false) = &og_path[0] {
         if path.is_empty() {
             if let Ok(s) = get_next_scope(scope, &x) {
+                if let Ok(x) = evaluate(og_path[1].0.clone(), &s) {
+                    return Ok(MembrExprPathRes::Value(x));
+                }
                 match get_member_expression_path(og_path[1..].to_vec(), &s) {
                     Ok(x) => return Ok(x),
                     _ => {}
@@ -77,7 +79,6 @@ fn get_member_expression_path(
                     }
                     x => return Ok(MembrExprPathRes::Value(x)), // x => unimplemented!("{:?}", x),
                 }
-
                 break;
             },
             Err(e) if path.len() == 1 => match node {

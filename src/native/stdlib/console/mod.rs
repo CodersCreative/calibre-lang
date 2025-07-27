@@ -18,6 +18,7 @@ pub fn setup(parent: Rc<RefCell<Scope>>) {
         (String::from("out"), Rc::new(Out())),
         (String::from("err"), Rc::new(ErrFn())),
         (String::from("input"), Rc::new(Input())),
+        (String::from("clear"), Rc::new(Clear())),
     ];
 
     for func in funcs {

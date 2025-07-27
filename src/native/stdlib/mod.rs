@@ -10,6 +10,7 @@ use crate::{
 };
 
 pub mod console;
+pub mod random;
 pub mod thread;
 
 pub fn setup(scope: Rc<RefCell<Scope>>) {
@@ -23,6 +24,7 @@ pub fn setup(scope: Rc<RefCell<Scope>>) {
     let scopes: Vec<(String, Box<dyn Fn(Rc<RefCell<Scope>>)>)> = vec![
         (String::from("thread"), Box::new(thread::setup)),
         (String::from("console"), Box::new(console::setup)),
+        (String::from("random"), Box::new(random::setup)),
     ];
 
     for (name, func) in scopes {

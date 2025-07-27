@@ -41,7 +41,7 @@ pub fn get_function(
     strct: &str,
     func: &str,
 ) -> Result<(RuntimeValue, bool), ScopeErr> {
-    let scope = resolve_object(this, strct.clone())?;
+    let scope = resolve_object(this, strct)?;
     if let Some(fns) = scope.borrow().functions.get(strct) {
         if let Some(val) = fns.get(func) {
             Ok(val.clone())
@@ -76,7 +76,16 @@ pub fn resolve_object(
     this: &Rc<RefCell<Scope>>,
     og_key: &str,
 ) -> Result<Rc<RefCell<Scope>>, ScopeErr> {
-    if this.borrow().objects.contains_key(og_key) {
+    if let Some(x) = this.borrow().objects.get(og_key) {
+        if let Object::Link(path) = x {
+            let path = if path.last().unwrap() == og_key {
+                path
+            } else {
+                &[path.clone(), vec![og_key.to_string()]].concat()
+            };
+
+            return resolve_object_vec(this, path);
+        }
         Ok(this.clone())
     } else if let Some(parent) = &this.borrow().parent {
         resolve_object(&parent, og_key)

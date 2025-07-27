@@ -32,12 +32,33 @@ pub fn evaluate_not<'a>(
     scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::NotExpression { value } = exp {
+        match *value {
+            NodeType::RangeDeclaration {
+                from,
+                to,
+                inclusive,
+            } => {
+                return evaluate(
+                    NodeType::RangeDeclaration {
+                        from: Box::new(NodeType::NotExpression { value: from }),
+                        to,
+                        inclusive,
+                    },
+                    scope,
+                );
+            }
+            _ => {}
+        }
         let value = evaluate(*value, scope)?;
 
         match value {
             RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
             RuntimeValue::Int(x) => Ok(RuntimeValue::Int(-x)),
+            RuntimeValue::UInt(x) => Ok(RuntimeValue::Int(-(x as i64))),
             RuntimeValue::Float(x) => Ok(RuntimeValue::Float(-x)),
+            RuntimeValue::Double(x) => Ok(RuntimeValue::Double(-x)),
+            RuntimeValue::ULong(x) => Ok(RuntimeValue::Long(-(x as i128))),
+            RuntimeValue::Long(x) => Ok(RuntimeValue::Long(-x)),
             RuntimeValue::Range(f, t) => Ok(RuntimeValue::Range(t, f)),
             RuntimeValue::List {
                 mut data,
