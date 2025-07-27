@@ -1,11 +1,12 @@
 use crate::runtime::{
     scope::{
         Object, Scope,
-        objects::{get_object, resolve_object},
+        objects::{get_object, get_object_vec, resolve_object},
     },
     values::{RuntimeType, RuntimeValue, ValueErr, helper::ObjectType},
 };
 use numbers::NumberValue;
+use rand::seq::IndexedRandom;
 use std::{cell::RefCell, collections::HashMap, mem::discriminant, rc::Rc};
 
 pub mod check;
@@ -154,16 +155,16 @@ impl RuntimeValue {
                 RuntimeValue::into_type(&RuntimeValue::Str(x.clone().to_string()), scope, t)
             }
             RuntimeValue::Enum(x, _, z) => match t.clone() {
-                RuntimeType::Struct(None) => {
+                RuntimeType::Struct(x) if x.is_empty() => {
                     if let Some(z) = z {
-                        Ok(RuntimeValue::Struct(z.clone(), None))
+                        Ok(RuntimeValue::Struct(z.clone(), Vec::new()))
                     } else {
                         panic_type()
                     }
                 }
-                RuntimeType::Struct(Some(y)) => {
+                RuntimeType::Struct(y) => {
                     if let Some(z) = z {
-                        match RuntimeValue::Struct(z.clone(), None).into_type(scope, t) {
+                        match RuntimeValue::Struct(z.clone(), Vec::new()).into_type(scope, t) {
                             Ok(x) => Ok(x),
                             Err(_) => self.into_type(scope, &RuntimeType::Enum(y)),
                         }
@@ -187,16 +188,16 @@ impl RuntimeValue {
                 _ => panic_type(),
             },
             RuntimeValue::Struct(ObjectType::Tuple(x), _) => match t {
-                RuntimeType::Struct(None) => Ok(self.clone()),
+                RuntimeType::Struct(x) if x.is_empty() => Ok(self.clone()),
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Result(_, _) => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 RuntimeType::Range => panic_type(),
-                RuntimeType::Struct(Some(identifier)) => {
+                RuntimeType::Struct(identifier) => {
                     let Object::Struct(ObjectType::Tuple(properties)) =
-                        get_object(&resolve_object(scope, &identifier)?, &identifier)?
+                        get_object_vec(&scope, &identifier)?
                     else {
                         return panic_type();
                     };
@@ -212,7 +213,7 @@ impl RuntimeValue {
 
                     Ok(RuntimeValue::Struct(
                         ObjectType::Tuple(new_values),
-                        Some(identifier.to_string()),
+                        identifier.to_vec(),
                     ))
                 }
                 RuntimeType::Function { .. } => match t {
@@ -224,16 +225,16 @@ impl RuntimeValue {
                 _ => panic_type(),
             },
             RuntimeValue::Struct(ObjectType::Map(x), _) => match t {
-                RuntimeType::Struct(None) => Ok(self.clone()),
+                RuntimeType::Struct(x) if x.is_empty() => Ok(self.clone()),
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Result(_, _) => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 RuntimeType::Range => panic_type(),
-                RuntimeType::Struct(Some(identifier)) => {
+                RuntimeType::Struct(identifier) => {
                     let Object::Struct(ObjectType::Map(properties)) =
-                        get_object(&resolve_object(scope, &identifier)?, &identifier)?
+                        get_object_vec(&scope, &identifier)?
                     else {
                         return panic_type();
                     };
@@ -250,7 +251,7 @@ impl RuntimeValue {
 
                     Ok(RuntimeValue::Struct(
                         ObjectType::Map(new_values),
-                        Some(identifier.to_string()),
+                        identifier.to_vec(),
                     ))
                 }
                 RuntimeType::Function { .. } => match t {
@@ -300,13 +301,10 @@ impl RuntimeValue {
                     RuntimeType::Option(_) => return option_case(),
                     _ => {}
                 }
-                if let Some(RuntimeType::Struct(Some(x))) = *data_type.clone() {
-                    if let RuntimeType::Struct(Some(y)) = t {
+                if let Some(RuntimeType::Struct(x)) = *data_type.clone() {
+                    if let RuntimeType::Struct(y) = t {
                         if &x == y {
-                            return Ok(RuntimeValue::Struct(
-                                ObjectType::Tuple(data.to_vec()),
-                                Some(x),
-                            ));
+                            return Ok(RuntimeValue::Struct(ObjectType::Tuple(data.to_vec()), x));
                         }
                     }
                 }

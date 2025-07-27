@@ -8,6 +8,7 @@ use crate::{
         interpreter::{InterpreterErr, evaluate, expressions::call::evaluate_function},
         scope::{
             Object, Scope, ScopeErr,
+            children::get_next_scope,
             links::{get_link, get_link_path, update_link_path},
             objects::{get_function, get_object},
             variables::{assign_var, get_var},
@@ -28,6 +29,17 @@ fn get_member_expression_path(
     scope: &Rc<RefCell<Scope>>,
 ) -> Result<MembrExprPathRes, InterpreterErr> {
     let mut path = Vec::new();
+
+    if let (NodeType::Identifier(x), false) = &og_path[0] {
+        if path.is_empty() {
+            if let Ok(s) = get_next_scope(scope, &x) {
+                match get_member_expression_path(og_path[1..].to_vec(), &s) {
+                    Ok(x) => return Ok(x),
+                    _ => {}
+                }
+            }
+        }
+    }
 
     for (node, computed) in og_path.into_iter() {
         if !computed {

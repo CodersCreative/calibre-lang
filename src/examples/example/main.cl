@@ -28,7 +28,7 @@ const language_forced : Language = Language.ENGLISH (6);
 // By not putting any data by the match it will only check for the enum member.
 // Ifs can be added for further selection.
 match language_forced {
-  Language.ENGLISH if false -> print("Enum: ENGLISH?"), 
+  Language.ENGLISH if false -> print("Enum: ENGLISH?"),
   Language.ENGLISH -> print("Enum: ENGLISH"),
 }
 
@@ -47,30 +47,30 @@ let mut x = 100;
 let mut b : <int, int> = (10, if x == 100 {100} else {10});
 print("b -> " + b);
 
-/* input function to get an input from the user. 
+/* input function to get an input from the user.
 A value can be inputted to this function and will outputted to the user.*/
-let bg = input("Hello enter 1: ");
+let bg = std.console.input("Hello enter 1: ");
 
 if trim(bg) == "Yes" {
   print("Yes");
 }
 
 // Arrays are dynamic if some values are of a different type when it is created, otherwise a type will be infered.
-let mut list_dyn = [0, 10, 30, "Hello"]; 
+let mut list_dyn = [0, 10, 30, "Hello"];
 
 // The language has support for list comprehension to iter and filter an iterable value.
 // Typed arrays are created using the following syntax:
 let mut lst : list<int> = [x^2 for x in 0..100 if x % 2 == 0 if x % 8 != 0];
 
 print("lst")
-print(lst);// A static array 
+print(lst);// A static array
 
 // A foreach loop.
 for l in &mut lst {
   l *= 2;
 }
 print("lst 2")
-print(lst);// A static array 
+print(lst);// A static array
 // A for loop using the recommended range syntax.
 for i in 0..=100 {
   y += i;
@@ -142,7 +142,7 @@ match 16 {
   data -> print("value is : " + data),
 }
 
-// TODO Implement generics with dyn<Add, Sub, Mul...> 
+// TODO Implement generics with dyn<Add, Sub, Mul...>
 // TODO Allow traits of generics to be easily specified and add to new type system. Like : "type Output = dyn<...traits...>;"
 // TODO Also allow for <T : dyn<...traits...>> to show common types.
 
@@ -168,7 +168,7 @@ const main = fn () -> !int {
   if z == "a" {
     let w = "b";
     let d = z + w ; // Should give "ab"
-    
+
     print(d + " ; " + x + " ; " + y);
   }
 

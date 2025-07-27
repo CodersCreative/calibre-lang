@@ -67,7 +67,7 @@ pub fn evaluate_call_expression(
                 }
                 return Ok(RuntimeValue::Struct(
                     ObjectType::Tuple(args),
-                    Some(object_name),
+                    vec![object_name],
                 ));
             }
         }
@@ -106,7 +106,10 @@ pub fn evaluate_call_expression(
                     });
                 }
 
-                return func.call_native(&evaluated_arguments, scope);
+                match func {
+                    RuntimeValue::NativeFunction(x) => return x.run(&evaluated_arguments, scope),
+                    _ => {}
+                }
             }
             _ => {}
         }

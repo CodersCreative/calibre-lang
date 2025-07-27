@@ -28,7 +28,10 @@ pub fn evaluate_struct_expression(
                 properties.insert(k, value);
             }
 
-            return Ok(RuntimeValue::Struct(ObjectType::Map(properties), None));
+            return Ok(RuntimeValue::Struct(
+                ObjectType::Map(properties),
+                Vec::new(),
+            ));
         } else if let ObjectType::Tuple(props) = props {
             let mut properties = Vec::new();
             for v in props {
@@ -36,7 +39,10 @@ pub fn evaluate_struct_expression(
                     properties.push(evaluate(value, scope)?);
                 }
             }
-            return Ok(RuntimeValue::Struct(ObjectType::Tuple(properties), None));
+            return Ok(RuntimeValue::Struct(
+                ObjectType::Tuple(properties),
+                Vec::new(),
+            ));
         }
     }
 
@@ -90,7 +96,7 @@ pub fn evaluate_enum_expression(
                     Some(ObjectType::Map(new_data_vals))
                 };
 
-                return Ok(RuntimeValue::Enum(identifier, i, data));
+                return Ok(RuntimeValue::Enum(vec![identifier], i, data));
             } else if let Some(ObjectType::Tuple(properties)) = &enm.1 {
                 let mut data_vals = Vec::new();
 
@@ -119,9 +125,9 @@ pub fn evaluate_enum_expression(
                     Some(ObjectType::Tuple(new_data_vals))
                 };
 
-                return Ok(RuntimeValue::Enum(identifier, i, data));
+                return Ok(RuntimeValue::Enum(vec![identifier], i, data));
             }
-            return Ok(RuntimeValue::Enum(identifier, i, None));
+            return Ok(RuntimeValue::Enum(vec![identifier], i, None));
         } else {
             Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
         }

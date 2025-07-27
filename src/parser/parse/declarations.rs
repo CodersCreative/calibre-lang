@@ -134,8 +134,8 @@ impl Parser {
                     {
                         let mut depends = false;
                         if parameters.len() > 0 {
-                            if let RuntimeType::Struct(Some(obj)) = &parameters[0].1 {
-                                if obj == &identifier {
+                            if let RuntimeType::Struct(obj) = &parameters[0].1 {
+                                if obj.last().unwrap() == &identifier {
                                     depends = true;
                                 }
                             }

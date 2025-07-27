@@ -66,7 +66,7 @@ impl RuntimeValue {
             },
             RuntimeValue::Enum(x, _, _) => match t {
                 RuntimeType::Enum(y) => x == y,
-                RuntimeType::Struct(Some(y)) => x == y,
+                RuntimeType::Struct(y) => x == y,
                 _ => false,
             },
             RuntimeValue::Function {

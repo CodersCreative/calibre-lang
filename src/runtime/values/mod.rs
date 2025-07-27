@@ -1,6 +1,5 @@
 pub mod conversion;
 pub mod helper;
-pub mod native;
 
 use core::panic;
 use std::{
@@ -19,12 +18,13 @@ use thiserror::Error;
 
 use crate::{
     ast::RefMutability,
+    native::NativeFunction,
     runtime::{
         scope::{
             Object, Scope, ScopeErr,
             objects::{get_object, resolve_object},
         },
-        values::{helper::ObjectType, native::NativeFunctions},
+        values::helper::ObjectType,
     },
 };
 
@@ -70,7 +70,6 @@ pub enum RuntimeType {
     Bool,
     Str,
     Char,
-    Enum(String),
     Tuple(Vec<RuntimeType>),
     List(Box<Option<RuntimeType>>),
     Range,
@@ -81,7 +80,8 @@ pub enum RuntimeType {
         parameters: Vec<(RuntimeType, RefMutability)>,
         is_async: bool,
     },
-    Struct(Option<String>),
+    Enum(Vec<String>),
+    Struct(Vec<String>),
 }
 
 impl FromStr for RuntimeType {
@@ -95,11 +95,11 @@ impl FromStr for RuntimeType {
             "ulong" => RuntimeType::ULong,
             "float" => RuntimeType::Float,
             "double" => RuntimeType::Double,
-            "struct" => RuntimeType::Struct(None),
+            "struct" => RuntimeType::Struct(Vec::new()),
             "bool" => RuntimeType::Bool,
             "string" => RuntimeType::Str,
             "char" => RuntimeType::Char,
-            _ => RuntimeType::Struct(Some(s.to_string())),
+            _ => RuntimeType::Struct(vec![s.to_string()]),
         })
     }
 }
@@ -158,11 +158,11 @@ pub enum RuntimeValue {
     UInt(u64),
     ULong(u128),
     Range(i32, i32),
-    Struct(ObjectType<RuntimeValue>, Option<String>),
+    Struct(ObjectType<RuntimeValue>, Vec<String>),
     Bool(bool),
     Str(String),
     Char(char),
-    Enum(String, usize, Option<ObjectType<RuntimeValue>>),
+    Enum(Vec<String>, usize, Option<ObjectType<RuntimeValue>>),
     Tuple(Vec<RuntimeValue>),
     Link(Vec<String>, RuntimeType),
     List {
@@ -177,7 +177,7 @@ pub enum RuntimeValue {
         return_type: Option<RuntimeType>,
         is_async: bool,
     },
-    NativeFunction(NativeFunctions),
+    NativeFunction(Rc<dyn NativeFunction>),
 }
 
 impl ToString for RuntimeValue {
@@ -195,7 +195,7 @@ impl ToString for RuntimeValue {
             Self::Link(path, t) => format!("link -> {:?}", path),
             Self::Bool(x) => x.to_string(),
             Self::Struct(x, _) => format!("{:?}", x),
-            Self::NativeFunction(x) => format!("native function : {:?}", x),
+            Self::NativeFunction(_) => format!("native function"),
             Self::List { data, data_type: _ } => {
                 let mut txt = String::from("[");
 

@@ -4,7 +4,7 @@ use crate::{
     ast::NodeType,
     runtime::{
         interpreter::{InterpreterErr, evaluate},
-        scope::{Object, Scope},
+        scope::{Object, Scope, children::get_scope_path},
         values::{RuntimeType, RuntimeValue, helper::ObjectType},
     },
 };

@@ -59,6 +59,20 @@ pub fn import_next_scope(
     })
 }
 
+pub fn get_scope_path(this: &Rc<RefCell<Scope>>, path: &mut Vec<String>) -> Vec<String> {
+    if let Some(parent) = &this.borrow().parent {
+        for (k, v) in parent.borrow().children.iter() {
+            if v.borrow().path == this.borrow().path {
+                path.push(k.clone());
+                break;
+            }
+        }
+        get_scope_path(&parent, path)
+    } else {
+        path.to_vec()
+    }
+}
+
 pub fn get_scope_list(
     this: &Rc<RefCell<Scope>>,
     mut list: Vec<String>,

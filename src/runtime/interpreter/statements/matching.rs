@@ -15,7 +15,7 @@ use crate::{
             Object, Scope, ScopeErr,
             children::get_next_scope,
             links::progress,
-            objects::get_object,
+            objects::{get_object, get_object_vec},
             variables::{get_global_scope, get_stop, get_var},
         },
         values::{
@@ -81,7 +81,7 @@ fn match_inner_pattern(
             value: enm_value,
         } => {
             if let RuntimeValue::Enum(iden, val, dat) = value.clone() {
-                let Object::Enum(enm) = get_object(&scope, &iden).unwrap() else {
+                let Object::Enum(enm) = get_object_vec(&scope, &iden).unwrap() else {
                     return None;
                 };
                 let Some(index) = enm.iter().position(|x| &x.0 == enm_value) else {
@@ -106,7 +106,7 @@ fn match_inner_pattern(
                     return Some(Ok(scope.clone()));
                 };
 
-                if identifier != &iden {
+                if identifier != iden.last().unwrap() {
                     return None;
                 };
                 let mut new_scope = None;

@@ -7,7 +7,7 @@ use crate::{
     runtime::{
         interpreter::{InterpreterErr, evaluate},
         scope::{
-            Scope,
+            Object, Scope,
             children::{get_scope_list, import_scope_list},
             variables::get_var,
         },
@@ -59,17 +59,29 @@ pub fn evaluate_import_statement(
             }
         } else {
             for value in values {
+                let path = [module.clone(), vec![value.clone()]].concat();
                 if let Some(var) = new_scope.borrow().variables.get(&value) {
                     scope.borrow_mut().push_var(
                         value.clone(),
-                        RuntimeValue::Link([module.clone(), vec![value]].concat(), (&var.0).into()),
+                        RuntimeValue::Link(path.clone(), (&var.0).into()),
                         var.1.clone(),
                     )?;
                 } else if let Some(obj) = new_scope.borrow().objects.get(&value) {
-                    scope.borrow_mut().push_object(value.clone(), obj.clone())?;
+                    scope
+                        .borrow_mut()
+                        .push_object(value.clone(), Object::Link(path.clone()))?;
                 } else {
                     panic!()
                 }
+
+                // if let Some(func) = new_scope.borrow().functions.get(&value) {
+                //     for f in func {
+                //         let _ = scope.borrow_mut().push_function(
+                //             path.clone(),
+                //             (f.0.to_string(), f.1.0.clone(), f.1.1.clone()),
+                //         )?;
+                //     }
+                // }
             }
         }
 

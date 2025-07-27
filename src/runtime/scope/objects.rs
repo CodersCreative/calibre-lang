@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::runtime::{
-    scope::{Object, ScopeErr},
+    scope::{Object, ScopeErr, children::get_scope_list},
     values::RuntimeValue,
 };
 
@@ -41,7 +41,7 @@ pub fn get_function(
     strct: &str,
     func: &str,
 ) -> Result<(RuntimeValue, bool), ScopeErr> {
-    let scope = resolve_object(this, strct)?;
+    let scope = resolve_object(this, strct.clone())?;
     if let Some(fns) = scope.borrow().functions.get(strct) {
         if let Some(val) = fns.get(func) {
             Ok(val.clone())
@@ -53,25 +53,22 @@ pub fn get_function(
     }
 }
 
-pub fn resolve_function(
+pub fn get_function_vec(
     this: &Rc<RefCell<Scope>>,
-    og_key: &str,
-) -> Result<Rc<RefCell<Scope>>, ScopeErr> {
-    if this.borrow().objects.contains_key(og_key) {
-        Ok(this.clone())
-    } else if let Some(parent) = &this.borrow().parent {
-        resolve_function(&parent, og_key)
-    } else {
-        Err(ScopeErr::Function(og_key.to_string()))
-    }
-}
+    strct: &Vec<String>,
+    func: &str,
+) -> Result<(RuntimeValue, bool), ScopeErr> {
+    let scope = resolve_object_vec(this, strct)?;
 
-pub fn get_object(this: &Rc<RefCell<Scope>>, key: &str) -> Result<Object, ScopeErr> {
-    let scope = resolve_object(this, key)?;
-    if let Some(value) = scope.borrow().objects.get(key) {
-        Ok(value.clone())
+    let strct = strct.last().unwrap();
+    if let Some(fns) = scope.borrow().functions.get(strct) {
+        if let Some(val) = fns.get(func) {
+            Ok(val.clone())
+        } else {
+            Err(ScopeErr::Function(func.to_string()))
+        }
     } else {
-        Err(ScopeErr::Object(key.to_string()))
+        Err(ScopeErr::Object(strct.to_string()))
     }
 }
 
@@ -84,6 +81,43 @@ pub fn resolve_object(
     } else if let Some(parent) = &this.borrow().parent {
         resolve_object(&parent, og_key)
     } else {
-        Err(ScopeErr::Object(og_key.to_string()))
+        Err(ScopeErr::Function(og_key.to_string()))
+    }
+}
+
+pub fn resolve_object_vec(
+    this: &Rc<RefCell<Scope>>,
+    og_key: &Vec<String>,
+) -> Result<Rc<RefCell<Scope>>, ScopeErr> {
+    let this = if og_key.len() > 1 {
+        let mut path = og_key.clone();
+        path.pop();
+
+        &get_scope_list(this, path)?
+    } else {
+        this
+    };
+
+    resolve_object(&this, og_key.last().unwrap())
+}
+
+pub fn get_object_vec(this: &Rc<RefCell<Scope>>, key: &Vec<String>) -> Result<Object, ScopeErr> {
+    let scope = resolve_object_vec(this, key)?;
+
+    let key = key.last().unwrap();
+
+    if let Some(value) = scope.borrow().objects.get(key) {
+        Ok(value.clone())
+    } else {
+        Err(ScopeErr::Object(key.to_string()))
+    }
+}
+
+pub fn get_object(this: &Rc<RefCell<Scope>>, key: &str) -> Result<Object, ScopeErr> {
+    let scope = resolve_object(this, key.clone())?;
+    if let Some(value) = scope.borrow().objects.get(key) {
+        Ok(value.clone())
+    } else {
+        Err(ScopeErr::Object(key.to_string()))
     }
 }

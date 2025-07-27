@@ -7,11 +7,14 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     f32::{self, consts::PI},
+    fmt::Debug,
     fs, i64,
     path::PathBuf,
     rc::Rc,
     str::FromStr,
 };
+
+use crate::native::NativeFunction;
 
 use thiserror::Error;
 
@@ -23,13 +26,10 @@ use crate::{
         values::{
             RuntimeValue,
             helper::{ObjectType, StopValue, VarType},
-            native::NativeFunctions,
         },
     },
     utils::get_path,
 };
-
-// static mut scopes: HashMap<&str, Rc<RefCell<Scope>>> = HashMap::new();
 
 use super::values::RuntimeType;
 
@@ -43,7 +43,7 @@ pub enum ScopeErr {
     ShadowConstant(String),
     #[error("Variable types dont match : {0:?} and {1:?}.")]
     TypeMismatch(RuntimeValue, RuntimeValue),
-    #[error("Unable to resolve object : {0}.")]
+    #[error("Unable to resolve object : {0:?}.")]
     Object(String),
     #[error("Unable to resolve static function : {0}.")]
     Function(String),
@@ -56,6 +56,7 @@ pub enum Object {
     Enum(Vec<(String, Option<ObjectType<RuntimeType>>)>),
     Struct(ObjectType<RuntimeType>),
     NewType(RuntimeType),
+    Link(Vec<String>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -64,115 +65,12 @@ pub struct Scope {
     pub children: HashMap<String, Rc<RefCell<Self>>>,
     pub variables: HashMap<String, (RuntimeValue, VarType)>,
     pub objects: HashMap<String, Object>,
-    pub path: PathBuf,
     pub functions: HashMap<String, HashMap<String, (RuntimeValue, bool)>>,
     pub stop: Option<StopValue>,
-}
-
-fn get_global_variables() -> HashMap<String, (RuntimeValue, VarType)> {
-    let vars = vec![
-        (String::from("PI"), RuntimeValue::Float(PI)),
-        (String::from("FLOAT_MAX"), RuntimeValue::Float(f32::MAX)),
-        (String::from("DOUBLE_MAX"), RuntimeValue::Double(f64::MAX)),
-        (String::from("INT_MAX"), RuntimeValue::Int(i64::MAX)),
-        (String::from("LONG_MAX"), RuntimeValue::Long(i128::MAX)),
-        (String::from("FLOAT_MIN"), RuntimeValue::Float(f32::MIN)),
-        (String::from("DOUBLE_MIN"), RuntimeValue::Double(f64::MIN)),
-        (String::from("INT_MIN"), RuntimeValue::Int(i64::MIN)),
-        (String::from("LONG_MIN"), RuntimeValue::Long(i128::MIN)),
-        (String::from("true"), RuntimeValue::Bool(true)),
-        (String::from("false"), RuntimeValue::Bool(false)),
-        (
-            String::from("none"),
-            RuntimeValue::Option(None, RuntimeType::Str),
-        ),
-        (
-            String::from("some"),
-            RuntimeValue::NativeFunction(NativeFunctions::Some),
-        ),
-        (
-            String::from("ok"),
-            RuntimeValue::NativeFunction(NativeFunctions::Ok),
-        ),
-        (
-            String::from("err"),
-            RuntimeValue::NativeFunction(NativeFunctions::Err),
-        ),
-        (
-            String::from("input"),
-            RuntimeValue::NativeFunction(NativeFunctions::Input),
-        ),
-        (
-            String::from("trim"),
-            RuntimeValue::NativeFunction(NativeFunctions::Trim),
-        ),
-        (
-            String::from("print"),
-            RuntimeValue::NativeFunction(NativeFunctions::Print),
-        ),
-        (
-            String::from("clear"),
-            RuntimeValue::NativeFunction(NativeFunctions::Clear),
-        ),
-        (
-            String::from("wait"),
-            RuntimeValue::NativeFunction(NativeFunctions::Wait),
-        ),
-        (
-            String::from("range"),
-            RuntimeValue::NativeFunction(NativeFunctions::Range),
-        ),
-        (String::from("INFINITY"), RuntimeValue::Float(f32::INFINITY)),
-        (
-            String::from("NEG_INFINITY"),
-            RuntimeValue::Float(f32::NEG_INFINITY),
-        ),
-    ];
-
-    let mut var_hashmap = HashMap::new();
-
-    for var in vars {
-        var_hashmap.insert(var.0, (var.1, VarType::Constant));
-    }
-
-    var_hashmap
+    pub path: PathBuf,
 }
 
 impl Scope {
-    pub fn new_with_stdlib(
-        parent: Option<Rc<RefCell<Self>>>,
-        path: PathBuf,
-        namespace: Option<String>,
-    ) -> (Rc<RefCell<Self>>, parser::Parser) {
-        let mut parser = parser::Parser::default();
-        let scope = Self {
-            variables: get_global_variables(),
-            children: HashMap::new(),
-            objects: HashMap::new(),
-            stop: None,
-            functions: HashMap::new(),
-            parent: parent.clone(),
-            path: path.clone(),
-        };
-
-        let scope = Rc::new(RefCell::new(scope));
-        let std = Scope::new(
-            Some(scope.clone()),
-            PathBuf::from_str(&get_path("stdlib/main.cl".to_string())).unwrap(),
-            Some("std".to_string()),
-        );
-
-        let root = Scope::new(Some(scope.clone()), path, Some("root".to_string()));
-
-        let program = parser
-            .produce_ast(fs::read_to_string(std.borrow().path.clone()).unwrap())
-            .unwrap();
-
-        let _ = evaluate(program, &std).unwrap();
-
-        (root, parser)
-    }
-
     pub fn new_from_parent_shallow(parent: Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
         let path = parent.borrow().path.clone();
         Self::new(Some(parent), path, None)
