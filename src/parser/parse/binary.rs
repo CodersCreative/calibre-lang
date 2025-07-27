@@ -28,7 +28,7 @@ impl Parser {
         if let TokenType::In = self.first().token_type.clone() {
             let _ = self.eat();
 
-            let right = self.parse_range_expression()?;
+            let right = self.parse_statement()?;
 
             left = NodeType::InDeclaration {
                 identifier: Box::new(left),

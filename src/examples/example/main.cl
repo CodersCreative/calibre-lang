@@ -88,7 +88,7 @@ const range2 = fn (stop : int, start : int = 0, step : int = 10) -> list<int> {
 }
 
 // Loops also allow for function calls including the built-in range() function.
-for i in range2(100, step = 10) {
+for i in range2(100, step = 25) {
   print("val: " + i);
 }
 
@@ -182,14 +182,11 @@ const main = fn () -> !int {
     Suffix(", World!", line) -> print(trim(line))
   }
 
-	return y;
+	y
 }
 
 // the in keyword can be used to see if a certain value is contained by a string or list.
-if 4 in lst {
+if 4 in [4, 16, 32] {
   print("main result: " + main());
   print("Success")
 }
-
-
-print(18 > 10 && 10 < 18)
