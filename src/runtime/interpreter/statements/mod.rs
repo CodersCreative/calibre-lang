@@ -12,8 +12,8 @@ use crate::{
     },
 };
 
-pub mod import;
 pub mod comparisons;
+pub mod import;
 pub mod loops;
 pub mod matching;
 pub mod structs;
@@ -40,7 +40,6 @@ pub fn evaluate_function_declaration(
     scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::FunctionDeclaration {
-        identifier,
         parameters,
         body,
         return_type,
@@ -59,18 +58,12 @@ pub fn evaluate_function_declaration(
             params.push((p.0, p.1, p.2, default));
         }
 
-        let value = RuntimeValue::Function {
-            identifier: identifier.clone(),
+        Ok(RuntimeValue::Function {
             parameters: params,
             body: Block(body),
             return_type,
             is_async,
-        };
-
-        let _ = scope
-            .borrow_mut()
-            .push_var(identifier, value.clone(), VarType::Immutable(None))?;
-        Ok(value)
+        })
     } else {
         Err(InterpreterErr::NotImplemented(declaration))
     }

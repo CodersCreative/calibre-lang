@@ -128,7 +128,6 @@ impl Into<RuntimeType> for &RuntimeValue {
             }
             RuntimeValue::List { data, data_type } => RuntimeType::List(data_type.clone()),
             RuntimeValue::Function {
-                identifier,
                 parameters,
                 body,
                 return_type,
@@ -173,7 +172,6 @@ pub enum RuntimeValue {
     Option(Option<Box<RuntimeValue>>, RuntimeType),
     Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>, RuntimeType),
     Function {
-        identifier: String,
         parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)>,
         body: Block,
         return_type: Option<RuntimeType>,
@@ -216,13 +214,12 @@ impl ToString for RuntimeValue {
             Self::Str(x) => x.to_string(),
             Self::Char(x) => x.to_string(),
             Self::Function {
-                identifier,
                 parameters,
                 body: _,
                 return_type,
                 is_async: _,
             } => {
-                format!("{:?} ({:?}) -> {:?}", identifier, parameters, return_type)
+                format!("({:?}) -> {:?}", parameters, return_type)
             }
         }
     }

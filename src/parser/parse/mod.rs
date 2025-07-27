@@ -2,6 +2,7 @@ pub mod binary;
 pub mod declarations;
 pub mod expressions;
 pub mod functions;
+pub mod r#type;
 
 use std::{collections::HashMap, str::FromStr};
 

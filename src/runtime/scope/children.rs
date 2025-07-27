@@ -37,19 +37,23 @@ pub fn import_next_scope(
     key: &str,
 ) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
     Ok(match key {
-        "root" => get_global_scope(this),
         "super" => this.borrow().parent.clone().unwrap(),
         _ => {
             if let Some(x) = this.borrow().children.get(key) {
-                x.clone().clone()
+                x.clone()
             } else {
-                let scope = Scope::new_from_parent(this.clone(), key.to_string());
-                let mut parser = parser::Parser::default();
-                let program = parser
-                    .produce_ast(fs::read_to_string(scope.borrow().path.clone()).unwrap())
-                    .unwrap();
-                let _ = evaluate(program, &scope)?;
-                scope
+                let global = get_global_scope(this);
+                if let Some(s) = global.borrow_mut().children.get(key) {
+                    s.clone()
+                } else {
+                    let scope = Scope::new_from_parent(this.clone(), key.to_string());
+                    let mut parser = parser::Parser::default();
+                    let program = parser
+                        .produce_ast(fs::read_to_string(scope.borrow().path.clone()).unwrap())
+                        .unwrap();
+                    let _ = evaluate(program, &scope)?;
+                    scope
+                }
             }
         }
     })
@@ -71,11 +75,18 @@ pub fn get_next_scope(
     key: &str,
 ) -> Result<Rc<RefCell<Scope>>, ScopeErr> {
     Ok(match key {
-        "root" => get_global_scope(this),
         "super" => this.borrow().parent.clone().unwrap(),
-        _ => match this.borrow().children.get(key) {
-            Some(x) => x.clone(),
-            _ => return Err(ScopeErr::Scope(key.to_string())), // _ => Scope::new_from_parent(this.clone(), key.to_string()),
-        },
+        _ => {
+            if let Some(x) = this.borrow().children.get(key) {
+                x.clone()
+            } else {
+                let global = get_global_scope(this);
+                if let Some(s) = global.borrow_mut().children.get(key) {
+                    s.clone()
+                } else {
+                    return Err(ScopeErr::Scope(key.to_string())); // _ => Scope::new_from_parent(this.clone(), key.to_string()),
+                }
+            }
+        }
     })
 }

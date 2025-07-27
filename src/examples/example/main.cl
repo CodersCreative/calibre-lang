@@ -5,6 +5,7 @@ import * from data
 // The let keyword creates an immutable variable that can be shadowed.
 let language = Language.FRENCH{data : 10, code : 5};
 let mut recursive_language = Language.ARABIC(Language.FRENCH{data : 5, code : 10}, Language.ARABIC(language, Language.SPANISH));
+
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
 // Mutability needs to be specified at the beginning for all branches
 match &mut recursive_language {
@@ -81,8 +82,8 @@ for x == y {
 }
 
 /* Functions require all variables to have a specified type including those with default values.
-Return types of functions are recommended to specify their return type if they have any*/
-fn range2(stop : int, start : int = 0, step : int = 10) -> list<int> {
+Return types of functions are recommended to specify their return type if they have any but not required*/
+const range2 = fn (stop : int, start : int = 0, step : int = 10) -> list<int> {
   range(start, stop * 2, step * 2)
 }
 
@@ -91,7 +92,7 @@ for i in range2(100, step = 10) {
   print("val: " + i);
 }
 
-fn smth_result(y : int) -> string!int {
+let smth_fn = fn (y : int) -> string!int {
   if y > 10 {
     return ok(y);
   }
@@ -99,21 +100,7 @@ fn smth_result(y : int) -> string!int {
   err("needs to be larger than 10")
 }
 
-fn smth_optional(y : int) -> int? {
-  if y > 10 {
-    return some(y);
-  }
-
-  some(9)
-}
-
-match smth_optional(18) {
-  Some(x) if x == 18 -> print("Equated to 18"),
-  Some(x) -> print(x),
-  None -> print("none"),
-}
-
-match smth_result(20) {
+match smth_fn(20) {
   // This is equivalent to Ok(x) if x == 18
   Ok(18)-> print("Equated to 18"),
   // This is equivalent to Ok(x) if x in 0..20
@@ -122,6 +109,21 @@ match smth_result(20) {
   Ok([20, 30, 40, 50, 60, 70]) -> print("Within list"),
   Ok(x) -> print(x),
   Err(x) -> print(x),
+}
+
+// The previous function was shadowed
+let smth_fn = fn (y : int) -> int? {
+  if y > 10 {
+    return some(y);
+  }
+
+  some(9)
+}
+
+match smth_fn(18) {
+  Some(x) if x == 18 -> print("Equated to 18"),
+  Some(x) -> print(x),
+  None -> print("none"),
 }
 
 match 16 {
@@ -140,13 +142,12 @@ match 16 {
   data -> print("value is : " + data),
 }
 
-
 // TODO Implement generics with dyn<Add, Sub, Mul...> 
 // TODO Allow traits of generics to be easily specified and add to new type system. Like : "type Output = dyn<...traits...>;"
 // TODO Also allow for <T : dyn<...traits...>> to show common types.
 
 // Using this syntax for results will assume a dynamic value for the error;
-fn main() -> !int {
+const main = fn () -> !int {
   // Values can be manually coercced, but using this method will return a result type.
   let x : !int = "50" as int;
 

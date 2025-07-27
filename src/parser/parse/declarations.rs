@@ -6,6 +6,7 @@ use crate::{
     parser::{Parser, ParserError, SyntaxErr},
     runtime::{
         interpreter::statements::matching,
+        scope::Object,
         values::{
             self,
             helper::{ObjectType, StopValue, VarType},
@@ -19,7 +20,7 @@ impl Parser {
     pub fn parse_statement(&mut self) -> Result<NodeType, ParserError> {
         match &self.first().token_type {
             TokenType::Let | TokenType::Const => self.parse_variable_declaration(),
-            TokenType::Struct => self.parse_struct_declaration(),
+            // TokenType::Struct => self.parse_struct_declaration(),
             TokenType::Func => self.parse_function_declaration(),
             TokenType::If => self.parse_if_statement(),
             TokenType::Try => self.parse_try_expression(),
@@ -38,7 +39,7 @@ impl Parser {
             TokenType::Trait => self.parse_if_statement(),
             TokenType::Impl => self.parse_impl_declaration(),
             TokenType::Import => self.parse_import_declaration(),
-            TokenType::Enum => self.parse_enum_declaration(),
+            TokenType::Type => self.parse_type_decaration(),
             TokenType::For => self.parse_loop_declaration(),
             TokenType::Open(Bracket::Curly) => Ok(NodeType::ScopeDeclaration {
                 body: self.parse_block()?,
@@ -116,36 +117,45 @@ impl Parser {
             SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
         )?;
 
-        while self.first().token_type == TokenType::Func {
-            let func = self.parse_function_declaration()?;
-
-            match func {
-                NodeType::FunctionDeclaration {
+        while self.first().token_type == TokenType::Const {
+            match self.parse_variable_declaration()? {
+                NodeType::VariableDeclaration {
+                    var_type: VarType::Constant,
                     identifier: name,
-                    parameters,
-                    body,
-                    return_type,
-                    is_async,
+                    value: Some(func),
+                    data_type,
                 } => {
-                    let mut depends = false;
-                    if parameters.len() > 0 {
-                        if let RuntimeType::Struct(Some(obj)) = &parameters[0].1 {
-                            if obj == &identifier {
-                                depends = true;
+                    if let NodeType::FunctionDeclaration {
+                        parameters,
+                        body,
+                        return_type,
+                        is_async,
+                    } = *func
+                    {
+                        let mut depends = false;
+                        if parameters.len() > 0 {
+                            if let RuntimeType::Struct(Some(obj)) = &parameters[0].1 {
+                                if obj == &identifier {
+                                    depends = true;
+                                }
                             }
                         }
-                    }
 
-                    functions.push((
-                        NodeType::FunctionDeclaration {
-                            identifier: name,
-                            parameters,
-                            body,
-                            return_type,
-                            is_async,
-                        },
-                        depends,
-                    ));
+                        functions.push((
+                            NodeType::VariableDeclaration {
+                                var_type: VarType::Constant,
+                                identifier: name,
+                                value: Some(Box::new(NodeType::FunctionDeclaration {
+                                    parameters,
+                                    body,
+                                    return_type,
+                                    is_async,
+                                })),
+                                data_type,
+                            },
+                            depends,
+                        ));
+                    }
                 }
                 _ => return Err(self.get_err(SyntaxErr::ExpectedFunctions)),
             }
@@ -265,50 +275,6 @@ impl Parser {
         })
     }
 
-    pub fn parse_enum_declaration(&mut self) -> Result<NodeType, ParserError> {
-        let _ = self.expect_eat(
-            &TokenType::Enum,
-            SyntaxErr::ExpectedKeyword(String::from("enum")),
-        )?;
-
-        let identifier = self
-            .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
-            .value;
-
-        let _ = self.expect_eat(
-            &TokenType::Open(Bracket::Curly),
-            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
-        )?;
-
-        let mut options = Vec::new();
-
-        while self.first().token_type == TokenType::Identifier {
-            let option = self.eat().value;
-
-            if self.first().token_type == TokenType::Open(Bracket::Curly)
-                || self.first().token_type == TokenType::Open(Bracket::Paren)
-            {
-                options.push((option, Some(self.parse_key_type_list_object_val()?)));
-            } else {
-                options.push((option, None));
-            }
-
-            if self.first().token_type == TokenType::Comma {
-                let _ = self.eat();
-            }
-        }
-
-        let _ = self.expect_eat(
-            &TokenType::Close(Bracket::Curly),
-            SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
-        );
-
-        Ok(NodeType::EnumDeclaration {
-            identifier,
-            options,
-        })
-    }
-
     pub fn parse_match_declaration(&mut self) -> Result<NodeType, ParserError> {
         let _ = self.expect_eat(
             &TokenType::Match,
@@ -378,36 +344,6 @@ impl Parser {
         })
     }
 
-    pub fn parse_struct_declaration(&mut self) -> Result<NodeType, ParserError> {
-        let _ = self.expect_eat(
-            &TokenType::Struct,
-            SyntaxErr::ExpectedKeyword(String::from("struct")),
-        )?;
-
-        let identifier = self
-            .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
-            .value;
-
-        Ok(NodeType::StructDeclaration {
-            identifier,
-            properties: match self.first().token_type {
-                TokenType::Open(Bracket::Curly) => ObjectType::Map(self.parse_key_type_list(
-                    TokenType::Open(Bracket::Curly),
-                    TokenType::Close(Bracket::Curly),
-                )?),
-                _ => ObjectType::Tuple(
-                    self.parse_type_list(
-                        TokenType::Open(Bracket::Paren),
-                        TokenType::Close(Bracket::Paren),
-                    )?
-                    .into_iter()
-                    .map(|x| x.0)
-                    .collect(),
-                ),
-            },
-        })
-    }
-
     pub fn get_loop_type(&mut self) -> Result<LoopType, ParserError> {
         Ok(
             if self.first().token_type == TokenType::Identifier
@@ -458,10 +394,10 @@ impl Parser {
     }
 
     pub fn parse_function_declaration(&mut self) -> Result<NodeType, ParserError> {
-        let _ = self.eat();
-        let identifier = self
-            .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
-            .value;
+        let _ = self.expect_eat(
+            &TokenType::Func,
+            SyntaxErr::ExpectedKeyword(String::from("fn")),
+        )?;
 
         let parameters = self.parse_key_type_list_ordered_with_ref(
             TokenType::Open(Bracket::Paren),
@@ -485,7 +421,6 @@ impl Parser {
         };
 
         Ok(NodeType::FunctionDeclaration {
-            identifier,
             parameters,
             body: self.parse_block()?,
             return_type,

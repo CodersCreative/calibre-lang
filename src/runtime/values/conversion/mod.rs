@@ -260,7 +260,6 @@ impl RuntimeValue {
                 _ => panic_type(),
             },
             RuntimeValue::Function {
-                identifier: _,
                 parameters: val_parameters,
                 body: _,
                 return_type: val_type,

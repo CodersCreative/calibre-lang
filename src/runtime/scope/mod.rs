@@ -10,6 +10,7 @@ use std::{
     fs, i64,
     path::PathBuf,
     rc::Rc,
+    str::FromStr,
 };
 
 use thiserror::Error;
@@ -151,25 +152,25 @@ impl Scope {
             stop: None,
             functions: HashMap::new(),
             parent: parent.clone(),
-            path,
+            path: path.clone(),
         };
 
         let scope = Rc::new(RefCell::new(scope));
+        let std = Scope::new(
+            Some(scope.clone()),
+            PathBuf::from_str(&get_path("stdlib/main.cl".to_string())).unwrap(),
+            Some("std".to_string()),
+        );
+
+        let root = Scope::new(Some(scope.clone()), path, Some("root".to_string()));
+
         let program = parser
-            .produce_ast(fs::read_to_string(get_path("stdlib/main.cl".to_string())).unwrap())
+            .produce_ast(fs::read_to_string(std.borrow().path.clone()).unwrap())
             .unwrap();
 
-        if let (Some(name), Some(parent)) = (namespace, parent) {
-            if let Ok(scope) = get_next_scope(&parent, &name) {
-                panic!()
-            } else {
-                let _ = parent.borrow_mut().push_child(name, scope.clone());
-            }
-        }
+        let _ = evaluate(program, &std).unwrap();
 
-        let _ = evaluate(program, &scope).unwrap();
-
-        (scope, parser)
+        (root, parser)
     }
 
     pub fn new_from_parent_shallow(parent: Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
@@ -230,7 +231,7 @@ impl Scope {
         };
 
         if let (Some(name), Some(parent)) = (namespace, parent) {
-            if get_next_scope(&parent, &name).is_ok() {
+            if name != "std" && name != "root" && get_next_scope(&parent, &name).is_ok() {
                 panic!()
             } else {
                 let _ = parent.borrow_mut().push_child(name, scope.clone());

@@ -25,7 +25,6 @@ pub fn evaluate_function(
     arguments: Vec<(NodeType, Option<NodeType>)>,
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let RuntimeValue::Function {
-        identifier,
         parameters,
         body,
         return_type,

@@ -70,7 +70,6 @@ impl RuntimeValue {
                 _ => false,
             },
             RuntimeValue::Function {
-                identifier: _,
                 parameters: val_parameters,
                 body: _,
                 return_type: val_type,

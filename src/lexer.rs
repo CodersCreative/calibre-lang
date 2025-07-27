@@ -77,6 +77,7 @@ pub enum TokenType {
     Else,
     From,
     Import,
+    Type,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
@@ -109,6 +110,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("for"), TokenType::For),
         (String::from("import"), TokenType::Import),
         (String::from("from"), TokenType::From),
+        (String::from("type"), TokenType::Type),
     ])
 }
 

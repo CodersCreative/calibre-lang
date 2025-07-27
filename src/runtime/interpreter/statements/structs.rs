@@ -5,7 +5,7 @@ use crate::{
     runtime::{
         interpreter::{InterpreterErr, evaluate},
         scope::{Object, Scope},
-        values::RuntimeValue,
+        values::{RuntimeType, RuntimeValue, helper::ObjectType},
     },
 };
 
@@ -20,18 +20,23 @@ pub fn evaluate_impl_declaration(
     {
         for function in functions {
             let scope_2 = Scope::new_from_parent_shallow(scope.clone());
-            let func = evaluate(function.0, &scope_2)?;
 
-            if let RuntimeValue::Function {
-                identifier: iden, ..
-            } = func.clone()
+            if let NodeType::VariableDeclaration {
+                var_type,
+                identifier: iden,
+                value: Some(value),
+                data_type,
+            } = function.0
             {
+                let func = evaluate(*value, &scope_2)?;
+
                 let _ = scope
                     .borrow_mut()
                     .push_function(identifier.clone(), (iden, func, function.1))?;
-            } else {
-                return Err(InterpreterErr::ExpectedFunctions);
+                continue;
             }
+
+            return Err(InterpreterErr::ExpectedFunctions);
         }
 
         Ok(RuntimeValue::Null)
@@ -40,36 +45,12 @@ pub fn evaluate_impl_declaration(
     }
 }
 
-pub fn evaluate_enum_declaration(
+pub fn evaluate_type_declaration(
     declaration: NodeType,
     scope: &Rc<RefCell<Scope>>,
 ) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::EnumDeclaration {
-        identifier,
-        options,
-    } = declaration
-    {
-        let _ = scope
-            .borrow_mut()
-            .push_object(identifier, Object::Enum(options))?;
-        Ok(RuntimeValue::Null)
-    } else {
-        Err(InterpreterErr::NotImplemented(declaration))
-    }
-}
-
-pub fn evaluate_struct_declaration(
-    declaration: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::StructDeclaration {
-        identifier,
-        properties,
-    } = declaration
-    {
-        let _ = scope
-            .borrow_mut()
-            .push_object(identifier, Object::Struct(properties))?;
+    if let NodeType::TypeDeclaration { identifier, object } = declaration {
+        let _ = scope.borrow_mut().push_object(identifier, object)?;
         Ok(RuntimeValue::Null)
     } else {
         Err(InterpreterErr::NotImplemented(declaration))
