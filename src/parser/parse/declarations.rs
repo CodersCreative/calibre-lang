@@ -417,7 +417,7 @@ impl Parser {
             let _ = self.eat();
         }
 
-        let return_type = if self.first().token_type == TokenType::Open(Bracket::Curly) {
+        let return_type = if self.first().token_type == TokenType::FatArrow {
             None
         } else {
             let _ = self.expect_eat(

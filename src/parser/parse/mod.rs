@@ -312,6 +312,22 @@ impl Parser {
         if self.first().token_type != TokenType::Open(Bracket::Paren) {
             return self.parse_list_expression();
         }
+
+        let mut has_commas = false;
+        let mut index = 0;
+
+        while self.nth(index).token_type != TokenType::Close(Bracket::Paren) {
+            index += 1;
+
+            if self.nth(index).token_type == TokenType::Comma {
+                has_commas = true;
+            }
+        }
+
+        if !has_commas {
+            return self.parse_list_expression();
+        }
+
         let mut values = Vec::new();
         let _ = self.expect_eat(
             &TokenType::Open(Bracket::Paren),

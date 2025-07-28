@@ -101,7 +101,6 @@ pub fn resolve_object_vec(
     let this = if og_key.len() > 1 {
         let mut path = og_key.clone();
         path.pop();
-
         &get_scope_list(this, path)?
     } else {
         this
@@ -123,7 +122,7 @@ pub fn get_object_vec(this: &Rc<RefCell<Scope>>, key: &Vec<String>) -> Result<Ob
 }
 
 pub fn get_object(this: &Rc<RefCell<Scope>>, key: &str) -> Result<Object, ScopeErr> {
-    let scope = resolve_object(this, key.clone())?;
+    let scope = resolve_object(this, key)?;
     if let Some(value) = scope.borrow().objects.get(key) {
         Ok(value.clone())
     } else {

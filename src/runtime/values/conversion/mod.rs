@@ -1,6 +1,7 @@
 use crate::runtime::{
     scope::{
         Object, Scope,
+        links::get_link_path,
         objects::{get_object, get_object_vec, resolve_object},
     },
     values::{RuntimeType, RuntimeValue, ValueErr, helper::ObjectType},
@@ -14,6 +15,15 @@ pub mod numbers;
 pub mod similar;
 
 impl RuntimeValue {
+    pub fn unwrap(&self, scope: &Rc<RefCell<Scope>>) -> Result<RuntimeValue, ValueErr> {
+        match self {
+            RuntimeValue::Result(Ok(x), _) => x.unwrap(scope),
+            RuntimeValue::Result(Err(x), _) => x.unwrap(scope),
+            RuntimeValue::Option(Some(x), _) => x.unwrap(scope),
+            RuntimeValue::Link(path, _) => get_link_path(scope, path).unwrap().unwrap(scope),
+            _ => Ok(self.clone()),
+        }
+    }
     pub fn into_type(
         &self,
         scope: &Rc<RefCell<Scope>>,
@@ -81,6 +91,7 @@ impl RuntimeValue {
                     RuntimeType::ULong => Ok(RuntimeValue::ULong($val.as_u128())),
                     RuntimeType::Bool => Ok(RuntimeValue::Bool($val.as_bool())),
                     RuntimeType::Str => Ok(RuntimeValue::Str($val.to_string())),
+                    RuntimeType::Range => Ok(RuntimeValue::Range(0, $val.as_i32())),
                     RuntimeType::List(_) => list_case(),
                     RuntimeType::Result(_, _) => result_case(),
                     RuntimeType::Option(_) => option_case(),
@@ -336,7 +347,9 @@ impl RuntimeValue {
                 }
             }
             RuntimeValue::Result(x, typ) => {
-                if t == typ {
+                if let Ok(x) = x {
+                    x.into_type(scope, t)
+                } else if t == typ {
                     Ok(self.clone())
                 } else {
                     match x {
@@ -350,7 +363,9 @@ impl RuntimeValue {
                 }
             }
             RuntimeValue::Option(x, typ) => {
-                if x.is_none() || t == typ {
+                if let Some(x) = x {
+                    x.into_type(scope, t)
+                } else if t == typ {
                     Ok(RuntimeValue::Option(x.clone(), t.clone()))
                 } else {
                     match x {
@@ -361,6 +376,13 @@ impl RuntimeValue {
                     }
                 }
             }
+            RuntimeValue::Bool(x) => match t {
+                RuntimeType::Bool => Ok(RuntimeValue::Bool(*x)),
+                RuntimeType::List(_) => list_case(),
+                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Option(_) => option_case(),
+                _ => RuntimeValue::UInt(if *x { 1 } else { 0 }).into_type(scope, t),
+            },
             _ => panic_type(),
         }
     }

@@ -57,7 +57,6 @@ impl Parser {
                 }
             }
             TokenType::Try => self.parse_try_expression()?,
-            // _ => todo!(),
             _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
         })
     }

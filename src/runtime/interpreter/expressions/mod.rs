@@ -154,8 +154,13 @@ pub fn evaluate_boolean_expression(
         operator,
     } = exp
     {
-        let left = evaluate(*left, scope)?;
-        let right = evaluate(*right, scope)?;
+        let left = evaluate(*left, scope)?.into_type(scope, &RuntimeType::Bool)?;
+        let right = match evaluate(*right, scope) {
+            Ok(x) => x
+                .into_type(scope, &RuntimeType::Bool)
+                .unwrap_or(RuntimeValue::Null),
+            _ => RuntimeValue::Null,
+        };
 
         Ok(operator.handle(&left, &right)?)
     } else {

@@ -99,47 +99,45 @@ let smth_fn = fn (y : int) -> string!int => {
 
   err("needs to be larger than 10")
 }
-/*
+
 match smth_fn(20) {
   // This is equivalent to Ok(x) if x == 18
-  Ok(18)-> print("Equated to 18"),
+  Ok(18) => print("Equated to 18"),
   // This is equivalent to Ok(x) if x in 0..20
-  Ok(0..20) -> print("Within range"),
+  Ok(0..20) => print("Within range"),
   // This is equivalent to Ok(x) if x in [20, 30, 40, 50, 60, 70]
-  Ok([20, 30, 40, 50, 60, 70]) -> print("Within list"),
-  Ok(x) -> print(x),
-  Err(x) -> print(x),
+  Ok([20, 30, 40, 50, 60, 70]) => print("Within list"),
+  Ok(x) => print(x),
+  Err(x) => print(x),
 }
 
 // The previous function was shadowed
-let smth_fn = fn (y : int) -> int? {
-  if y > 10 {
-    return some(y);
-  }
+let smth_fn = fn (y : int) -> int? => {
+  if y > 10 => return some(y);
 
   some(9)
 }
 
 match smth_fn(18) {
-  Some(x) if x == 18 -> print("Equated to 18"),
-  Some(x) -> print(x),
-  None -> print("none"),
+  Some(x) if x == 18 => print("Equated to 18"),
+  Some(x) => print(x),
+  None => print("none"),
 }
 
 match 16 {
-  1 -> print("one"),
-  2 -> print("two"),
-  3 -> print("three"),
-  4 -> print("four"),
-  5 -> print("five"),
+  1 => print("one"),
+  2 => print("two"),
+  3 => print("three"),
+  4 => print("four"),
+  5 => print("five"),
   // A similar syntax for ranges and lists and tuples can be used without the need for an enum.
-  [6 ,7 ,8 ,9 ,10] -> print("6 to 10"),
+  [6 ,7 ,8 ,9 ,10] => print("6 to 10"),
   // A similar syntax for ranges and lists and tuples can be used without the need for an enum.
-  11..=20 -> print("11 to 20"),
+  11..=20 => print("11 to 20"),
   // The Let keyword can be used to reference all other options whilst passing off the data
-  Let(data) if data > 200 -> print("value is > 200 "),
+  Let(data) if data > 200 => print("value is > 200 "),
   // if the name is not in scope it can be used without the Let keyword
-  data -> print("value is : " + data),
+  data => print("value is : " + data),
 }
 
 // TODO Implement generics with dyn<Add, Sub, Mul...>
@@ -165,7 +163,7 @@ const main = fn () -> !int => {
 	let mut x = true;
 
 	let z = "a";
-  if z == "a" {
+  if z == "a" => {
     let w = "b";
     let d = z + w ; // Should give "ab"
 
@@ -178,8 +176,8 @@ const main = fn () -> !int => {
 
   match sentence{
     // The Prefix and Suffix keywords can be used to pattern match on a string easily.
-    Prefix("Hello,", line) if false -> print(trim(line)),
-    Suffix(", World!", line) -> print(trim(line))
+    Prefix("Hello,", line) if false => print(trim(line)),
+    Suffix(", World!", line) => print(trim(line))
   }
 
 	y
@@ -189,4 +187,4 @@ const main = fn () -> !int => {
 if 4 in [4, 16, 32] => {
   print("main result: " + main());
   print("Success, Random Num = " + (std.random.generate(10..=1000) as uint))
-}*/
+}

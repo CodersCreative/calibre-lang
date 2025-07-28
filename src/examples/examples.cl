@@ -9,7 +9,7 @@ const heron = fn(a : float, b : float, c : float) -> float => {
   (p * (p - a) * (p - b) * (p - c)) ^ 0.5
 }
 
-const area_of_triangle = fn(a : float, b : float, c : float) -> float? {
+const area_of_triangle = fn(a : float, b : float, c : float) -> float? => {
   if is_a_trinagle(a, b, c) => return heron(a, b, c) else => none
 }
 
@@ -17,3 +17,5 @@ const factorial = fn(x : uint) -> ulong => {
   if x <= 1 => return 1;
   x * factorial(x - 1)
 }
+
+print(factorial(5));

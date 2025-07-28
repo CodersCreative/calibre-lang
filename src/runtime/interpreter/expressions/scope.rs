@@ -3,9 +3,13 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     ast::{NodeType, RefMutability},
     runtime::{
-        interpreter::{InterpreterErr, evaluate},
+        interpreter::{
+            InterpreterErr, evaluate,
+            expressions::member::{MembrExprPathRes, get_member_expression_path},
+        },
         scope::{
             Scope,
+            links::get_link_path,
             variables::{get_global_scope, resolve_var},
         },
         values::{
@@ -71,6 +75,30 @@ pub fn get_new_scope(
                                         VarType::Mutable(Some(x))
                                     }
                                     _ => VarType::Immutable(Some(x)),
+                                },
+                            )?;
+                        } else {
+                            return Err(InterpreterErr::UnexpectedType(var));
+                        }
+
+                        continue;
+                    } else if let NodeType::MemberExpression { path } = &arg.0 {
+                        let path = match get_member_expression_path(path.clone(), scope)? {
+                            MembrExprPathRes::Path(x) => x,
+                            _ => return Err(InterpreterErr::RefNonVar(arguments[0].0.clone())),
+                        };
+
+                        let var = get_link_path(&new_scope, &path)?;
+
+                        if var.is_type(&scope, &v) {
+                            let _ = new_scope.borrow_mut().push_var(
+                                k.to_string(),
+                                RuntimeValue::Link(path, (&var).into()),
+                                match m {
+                                    RefMutability::MutRef | RefMutability::MutValue => {
+                                        VarType::Mutable(None)
+                                    }
+                                    _ => VarType::Immutable(None),
                                 },
                             )?;
                         } else {

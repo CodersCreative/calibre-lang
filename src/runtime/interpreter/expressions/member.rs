@@ -1,4 +1,4 @@
-use std::{ascii::AsciiExt, cell::RefCell, rc::Rc};
+use std::{ascii::AsciiExt, cell::RefCell, path, rc::Rc};
 
 use rand::seq::IndexedRandom;
 
@@ -10,7 +10,7 @@ use crate::{
             Object, Scope, ScopeErr,
             children::get_next_scope,
             links::{get_link, get_link_path, update_link_path},
-            objects::{get_function, get_object},
+            objects::{get_function, get_function_vec, get_object},
             variables::{assign_var, get_var},
         },
         values::{RuntimeType, RuntimeValue, ValueErr, helper::ObjectType},
@@ -19,52 +19,56 @@ use crate::{
 
 use super::structs::evaluate_enum_expression;
 
-enum MembrExprPathRes {
+pub enum MembrExprPathRes {
     Value(RuntimeValue),
     Path(Vec<String>),
 }
 
-fn get_member_expression_path(
+pub fn get_member_expression_path(
     og_path: Vec<(NodeType, bool)>,
     scope: &Rc<RefCell<Scope>>,
 ) -> Result<MembrExprPathRes, InterpreterErr> {
     let mut path = Vec::new();
     if let (NodeType::Identifier(x), false) = &og_path[0] {
-        if path.is_empty() {
-            if let Ok(s) = get_next_scope(scope, &x) {
-                if let Ok(x) = evaluate(og_path[1].0.clone(), &s) {
-                    return Ok(MembrExprPathRes::Value(x));
-                }
-                match get_member_expression_path(og_path[1..].to_vec(), &s) {
-                    Ok(x) => return Ok(x),
-                    _ => {}
-                }
+        if let Ok(s) = get_next_scope(scope, &x) {
+            if let Ok(x) = evaluate(og_path[1].0.clone(), &s) {
+                return Ok(MembrExprPathRes::Value(x));
+            }
+            match get_member_expression_path(og_path[1..].to_vec(), &s) {
+                Ok(x) => return Ok(x),
+                _ => {}
             }
         }
     }
 
     for (node, computed) in og_path.into_iter() {
-        if !computed {
-            match node {
-                NodeType::Identifier(x) => {
-                    path.push(x.to_string());
-                    continue;
+        match &node {
+            NodeType::MemberExpression { path: p } => {
+                match get_member_expression_path(p.to_vec(), scope)? {
+                    MembrExprPathRes::Value(x) => return Ok(MembrExprPathRes::Value(x)),
+                    MembrExprPathRes::Path(mut p) => path.append(&mut p),
                 }
-                NodeType::FloatLiteral(x) => {
-                    path.push(x.to_string());
-                    continue;
-                }
-                NodeType::IntLiteral(x) => {
-                    path.push(x.to_string());
-                    continue;
-                }
-                _ => {}
+                continue;
             }
+            _ if computed => {}
+            NodeType::Identifier(x) => {
+                path.push(x.to_string());
+                continue;
+            }
+            NodeType::FloatLiteral(x) => {
+                path.push(x.to_string());
+                continue;
+            }
+            NodeType::IntLiteral(x) => {
+                path.push(x.to_string());
+                continue;
+            }
+            _ => {}
         }
 
         match evaluate(node.clone(), &scope) {
             Ok(mut value) => loop {
-                match value {
+                match value.unwrap(scope)? {
                     RuntimeValue::Int(x) => path.push(x.to_string()),
                     RuntimeValue::UInt(x) => path.push(x.to_string()),
                     RuntimeValue::Float(x) => path.push(x.to_string()),
@@ -92,22 +96,61 @@ fn get_member_expression_path(
                         scope,
                     )?));
                 }
-                NodeType::CallExpression(value, args) => match *value {
+                NodeType::CallExpression(value, mut args) => match *value {
                     NodeType::Identifier(value) => {
-                        return Ok(MembrExprPathRes::Value(evaluate(
-                            NodeType::EnumExpression {
-                                identifier: path.remove(0),
-                                value: value.to_string(),
-                                data: Some(ObjectType::Tuple(
-                                    args.into_iter().map(|x| Some(x.0.clone())).collect(),
-                                )),
+                        return Ok(MembrExprPathRes::Value(
+                            match evaluate(
+                                NodeType::EnumExpression {
+                                    identifier: path[0].clone(),
+                                    value: value.to_string(),
+                                    data: Some(ObjectType::Tuple(
+                                        args.clone()
+                                            .into_iter()
+                                            .map(|x| Some(x.0.clone()))
+                                            .collect(),
+                                    )),
+                                },
+                                scope,
+                            ) {
+                                Ok(x) => x,
+                                Err(e) => {
+                                    if let Ok(x) = get_function(scope, &path[0], &value) {
+                                        evaluate_function(scope, x.0, args)?
+                                    } else if let Ok(x) = get_var(scope, &path[0]) {
+                                        let obj = match x.0 {
+                                            RuntimeValue::Struct(_, p) => p,
+                                            RuntimeValue::Enum(p, _, _) => p,
+                                            RuntimeValue::Link(p, _) => {
+                                                match get_link_path(scope, &p)? {
+                                                    RuntimeValue::Struct(_, p) => p,
+                                                    RuntimeValue::Enum(p, _, _) => p,
+                                                    _ => return Err(e),
+                                                }
+                                            }
+                                            _ => return Err(e),
+                                        };
+
+                                        if let Ok(x) = get_function_vec(scope, &obj, &value) {
+                                            if x.1 {
+                                                args.insert(
+                                                    0,
+                                                    (NodeType::Identifier(path[0].clone()), None),
+                                                );
+                                            }
+
+                                            evaluate_function(scope, x.0, args)?
+                                        } else {
+                                            return Err(e);
+                                        }
+                                    } else {
+                                        return Err(e);
+                                    }
+                                }
                             },
-                            scope,
-                        )?));
+                        ));
                     }
                     _ => return Err(e),
                 },
-
                 _ => return Err(e),
             },
             Err(e) => return Err(e),

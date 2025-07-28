@@ -23,9 +23,7 @@ pub fn evaluate_loop_declaration(
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::LoopDeclaration { loop_type, body } = declaration {
         let handle_body = |new_scope: Rc<RefCell<Scope>>| -> Result<RuntimeValue, InterpreterErr> {
-            let mut result = evaluate(*body.clone(), scope)?;
-
-            Ok(result)
+            Ok(evaluate(*body.clone(), &new_scope)?)
         };
 
         let mut result = RuntimeValue::Null;

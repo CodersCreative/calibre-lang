@@ -33,7 +33,7 @@ pub fn evaluate_function(
     {
         let new_scope = get_new_scope(scope, parameters, arguments)?;
 
-        let result: RuntimeValue = evaluate(*body.0, scope)?;
+        let result: RuntimeValue = evaluate(*body.0, &new_scope)?;
         let global = get_global_scope(&new_scope);
 
         global.borrow_mut().stop = None;

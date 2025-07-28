@@ -70,6 +70,11 @@ pub fn get_link_path(
             return get_link_path(&scope, &path[1..]);
         }
     };
+
+    if let (RuntimeValue::Link(x, _), _) = env.borrow().variables.get(&name).unwrap() {
+        return get_link_path(&env, x);
+    }
+
     let mut new_env = env.borrow_mut();
     let mut current = match new_env.variables.get_mut(&name) {
         Some(x) => &mut x.0,
@@ -119,6 +124,11 @@ where
 {
     let (env, name) = resolve_var(this, &path[0])
         .map_err(|e| InterpreterErr::Value(crate::runtime::values::ValueErr::Scope(e)))?;
+
+    if let (RuntimeValue::Link(x, _), _) = env.borrow().variables.get(&name).unwrap() {
+        return update_link_path(&env, x, f);
+    }
+
     let mut new_env = env.borrow_mut();
     let mut current = match new_env.variables.get_mut(&name) {
         Some(x) => &mut x.0,

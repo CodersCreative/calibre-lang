@@ -48,6 +48,11 @@ impl BooleanOperation {
         right: &RuntimeValue,
     ) -> Result<RuntimeValue, ASTError> {
         if let RuntimeValue::Bool(x) = left {
+            if *x && self == &Self::Or {
+                return Ok(RuntimeValue::Bool(true));
+            } else if !x && self == &Self::And {
+                return Ok(RuntimeValue::Bool(false));
+            }
             if let RuntimeValue::Bool(y) = right {
                 return Ok(RuntimeValue::Bool(match self {
                     Self::And => *x && *y,

@@ -74,6 +74,7 @@ pub fn evaluate_enum_expression(
                     );
                 }
             }
+
             return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(
                 identifier,
             ))));

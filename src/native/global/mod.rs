@@ -177,7 +177,10 @@ impl NativeFunction for Trim {
         args: &[(RuntimeValue, Option<RuntimeValue>)],
         scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let Some((RuntimeValue::Str(x), _)) = args.get(0) {
+        if let Some((x, _)) = args.get(0) {
+            let RuntimeValue::Str(x) = x.into_type(&scope, &RuntimeType::Str)? else {
+                panic!()
+            };
             Ok(RuntimeValue::Str(x.trim().to_string()))
         } else {
             Ok(RuntimeValue::Null)
