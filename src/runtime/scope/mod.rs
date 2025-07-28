@@ -52,7 +52,7 @@ pub enum ScopeErr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Object {
+pub enum Type {
     Enum(Vec<(String, Option<ObjectType<RuntimeType>>)>),
     Struct(ObjectType<RuntimeType>),
     NewType(RuntimeType),
@@ -60,13 +60,32 @@ pub enum Object {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Scope {
-    pub parent: Option<Rc<RefCell<Self>>>,
-    pub children: HashMap<String, Rc<RefCell<Self>>>,
-    pub variables: HashMap<String, (RuntimeValue, VarType)>,
-    pub objects: HashMap<String, Object>,
-    pub functions: HashMap<String, HashMap<String, (RuntimeValue, bool)>>,
+pub struct Object {
+    object_type: Type,
+    functions: HashMap<String, (RuntimeValue, bool)>,
+    traits: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Variable {
+    value: RuntimeValue,
+    var_type: VarType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Environment {
+    pub scopes: HashMap<u64, Rc<RefCell<Scope>>>,
+    pub variables: HashMap<u64, HashMap<String, Variable>>,
+    pub objects: HashMap<u64, HashMap<String, Object>>,
     pub stop: Option<StopValue>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Scope {
+    pub id: u64,
+    pub parent: Option<u64>,
+    pub children: Vec<u64>,
+    pub namespace: String,
     pub path: PathBuf,
 }
 
