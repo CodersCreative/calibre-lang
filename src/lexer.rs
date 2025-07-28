@@ -60,6 +60,7 @@ pub enum TokenType {
     Enum,
     List,
     Arrow,
+    FatArrow,
     Object,
     Question,
     Async,
@@ -117,6 +118,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
 pub fn special_keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("->"), TokenType::Arrow),
+        (String::from("=>"), TokenType::FatArrow),
         (String::from(".."), TokenType::Range),
         (
             String::from("&&"),

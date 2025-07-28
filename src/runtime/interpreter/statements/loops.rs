@@ -23,32 +23,7 @@ pub fn evaluate_loop_declaration(
 ) -> Result<RuntimeValue, InterpreterErr> {
     if let NodeType::LoopDeclaration { loop_type, body } = declaration {
         let handle_body = |new_scope: Rc<RefCell<Scope>>| -> Result<RuntimeValue, InterpreterErr> {
-            let mut result = RuntimeValue::Null;
-            for statement in body.iter() {
-                match new_scope.borrow().stop {
-                    Some(StopValue::Return) => break,
-                    Some(StopValue::Break) => break,
-                    Some(StopValue::Continue) => {
-                        new_scope.borrow_mut().stop = None;
-                        break;
-                    }
-                    _ => {}
-                };
-                if let NodeType::Return { value } = statement {
-                    new_scope.borrow_mut().stop = Some(StopValue::Return);
-                    result = evaluate(*value.clone(), &new_scope)?;
-                    break;
-                } else if let NodeType::Break = statement {
-                    if scope.borrow_mut().stop != Some(StopValue::Return) {
-                        new_scope.borrow_mut().stop = Some(StopValue::Break);
-                    }
-                    break;
-                } else if let NodeType::Continue = statement {
-                    break;
-                } else {
-                    result = evaluate(statement.clone(), &new_scope)?;
-                }
-            }
+            let mut result = evaluate(*body.clone(), scope)?;
 
             Ok(result)
         };

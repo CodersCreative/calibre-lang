@@ -20,7 +20,7 @@ type Country = struct (Language)
 // To add static functions to an object (struct or enum) the impl keyword is used.
 impl CountryBase {
   // Methods in the impl block can also be invoked by Object.function()
-	const get_language = fn(self : &CountryBase) -> Language {
+	const get_language = fn(self : &CountryBase) -> Language => {
 		self.language
 	}
 }

@@ -9,7 +9,7 @@ let mut recursive_language = Language.ARABIC(Language.FRENCH{data : 5, code : 10
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
 // Mutability needs to be specified at the beginning for all branches
 match &mut recursive_language {
-  data.Language.ARABIC(Language.FRENCH{data}, Language.ARABIC(Language.FRENCH{code})) -> {
+  data.Language.ARABIC(Language.FRENCH{data}, Language.ARABIC(Language.FRENCH{code})) => {
     print("Code: " + code);
     print("Enum: " + data)
     data = 10;
@@ -18,7 +18,7 @@ match &mut recursive_language {
 }
 
 // In order to do an if let statement this syntax is used with extra conditions being added after the let
-if let data.Language.FRENCH{data} if true if (try 9 as ulong == 9.0 == 9) -> &language {
+if let data.Language.FRENCH{data} if true if (try 9 as ulong == 9.0 == 9) -> &language => {
   print("Enum: " + data)
 }
 
@@ -28,8 +28,8 @@ const language_forced : Language = Language.ENGLISH (6);
 // By not putting any data by the match it will only check for the enum member.
 // Ifs can be added for further selection.
 match language_forced {
-  Language.ENGLISH if false -> print("Enum: ENGLISH?"),
-  Language.ENGLISH -> print("Enum: ENGLISH"),
+  Language.ENGLISH if false => print("Enum: ENGLISH?"),
+  Language.ENGLISH => print("Enum: ENGLISH"),
 }
 
 // The mut keyword can be added for mutable variable that can be shadowed.
@@ -44,14 +44,14 @@ print(language_forced);
 let mut x = 100;
 
 // statements will automatically return the last value they use.
-let mut b : <int, int> = (10, if x == 100 {100} else {10});
+let mut b : <int, int> = (10, if x == 100 => {100} else => {10});
 print("b -> " + b);
 
 /* input function to get an input from the user.
 A value can be inputted to this function and will outputted to the user.*/
 let bg = std.console.input("Hello enter 1: ");
 
-if trim(bg) == "Yes" {
+if trim(bg) == "Yes" => {
   print("Yes");
 }
 
@@ -66,40 +66,40 @@ print("lst")
 print(lst);// A static array
 
 // A foreach loop.
-for l in &mut lst {
+for l in &mut lst => {
   l *= 2;
 }
 print("lst 2")
 print(lst);// A static array
 // A for loop using the recommended range syntax.
-for i in 0..=100 {
+for i in 0..=100 => {
   y += i;
 }
 
 // A while loop.
-for x == y {
+for x == y => {
   print(x + y);
 }
 
 /* Functions require all variables to have a specified type including those with default values.
 Return types of functions are recommended to specify their return type if they have any but not required*/
-const range2 = fn (stop : int, start : int = 0, step : int = 10) -> list<int> {
+const range2 = fn (stop : int, start : int = 0, step : int = 10) -> list<int> => {
   range(start, stop * 2, step * 2)
 }
 
 // Loops also allow for function calls including the built-in range() function.
-for i in range2(100, step = 25) {
+for i in range2(100, step = 25) => {
   print("val: " + i);
 }
 
-let smth_fn = fn (y : int) -> string!int {
-  if y > 10 {
+let smth_fn = fn (y : int) -> string!int => {
+  if y > 10 => {
     return ok(y);
   }
 
   err("needs to be larger than 10")
 }
-
+/*
 match smth_fn(20) {
   // This is equivalent to Ok(x) if x == 18
   Ok(18)-> print("Equated to 18"),
@@ -147,7 +147,7 @@ match 16 {
 // TODO Also allow for <T : dyn<...traits...>> to show common types.
 
 // Using this syntax for results will assume a dynamic value for the error;
-const main = fn () -> !int {
+const main = fn () -> !int => {
   // Values can be manually coercced, but using this method will return a result type.
   let x : !int = "50" as int;
 
@@ -186,7 +186,7 @@ const main = fn () -> !int {
 }
 
 // the in keyword can be used to see if a certain value is contained by a string or list.
-if 4 in [4, 16, 32] {
+if 4 in [4, 16, 32] => {
   print("main result: " + main());
   print("Success, Random Num = " + (std.random.generate(10..=1000) as uint))
-}
+}*/

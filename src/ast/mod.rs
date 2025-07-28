@@ -73,11 +73,11 @@ pub enum NodeType {
     MatchDeclaration {
         mutability: RefMutability,
         value: Box<NodeType>,
-        patterns: Vec<(NodeType, Vec<NodeType>, Vec<NodeType>)>,
+        patterns: Vec<(NodeType, Vec<NodeType>, Box<NodeType>)>,
     },
     FunctionDeclaration {
         parameters: Vec<(String, RuntimeType, RefMutability, Option<NodeType>)>,
-        body: Vec<NodeType>,
+        body: Box<NodeType>,
         return_type: Option<RuntimeType>,
         is_async: bool,
     },
@@ -108,7 +108,7 @@ pub enum NodeType {
     },
     LoopDeclaration {
         loop_type: Box<LoopType>,
-        body: Vec<NodeType>,
+        body: Box<NodeType>,
     },
     Try {
         value: Box<NodeType>,
@@ -144,7 +144,7 @@ pub enum NodeType {
     },
     IfStatement {
         comparisons: Vec<IfComparisonType>,
-        bodies: Vec<Vec<NodeType>>,
+        bodies: Vec<NodeType>,
     },
     ImportStatement {
         module: Vec<String>,

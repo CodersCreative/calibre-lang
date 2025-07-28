@@ -41,12 +41,30 @@ impl Parser {
             TokenType::Import => self.parse_import_declaration(),
             TokenType::Type => self.parse_type_decaration(),
             TokenType::For => self.parse_loop_declaration(),
-            TokenType::Open(Bracket::Curly) => Ok(NodeType::ScopeDeclaration {
-                body: self.parse_block()?,
-            }),
+            TokenType::Open(Bracket::Curly) => self.parse_scope_declaration(),
             _ => self.parse_assignment_expression(),
-            // _ => self.parse_expression(),
         }
+    }
+
+    pub fn parse_scope_declaration(&mut self) -> Result<NodeType, ParserError> {
+        let _ = self.expect_eat(
+            &TokenType::Open(Bracket::Curly),
+            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
+        )?;
+
+        let mut body: Vec<NodeType> = Vec::new();
+
+        while ![TokenType::EOF, TokenType::Close(Bracket::Curly)].contains(&self.first().token_type)
+        {
+            body.push(self.parse_statement()?);
+        }
+
+        let _ = self.expect_eat(
+            &TokenType::Close(Bracket::Curly),
+            SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
+        )?;
+
+        Ok(NodeType::ScopeDeclaration { body })
     }
 
     pub fn parse_variable_declaration(&mut self) -> Result<NodeType, ParserError> {
@@ -310,18 +328,7 @@ impl Parser {
                 conditions.push(self.parse_statement()?);
             }
 
-            let _ = self.expect_eat(
-                &TokenType::Arrow,
-                SyntaxErr::ExpectedKeyword(String::from("->")),
-            )?;
-
-            let mut body = Vec::new();
-
-            if self.first().token_type == TokenType::Open(Bracket::Curly) {
-                body = self.parse_block()?;
-            } else {
-                body.push(self.parse_statement()?);
-            }
+            let body = Box::new(self.parse_block()?);
 
             for value in values {
                 patterns.push((value, conditions.clone(), body.clone()));
@@ -389,7 +396,7 @@ impl Parser {
 
         Ok(NodeType::LoopDeclaration {
             loop_type: Box::new(self.get_loop_type()?),
-            body: self.parse_block()?,
+            body: Box::new(self.parse_block()?),
         })
     }
 
@@ -422,31 +429,23 @@ impl Parser {
 
         Ok(NodeType::FunctionDeclaration {
             parameters,
-            body: self.parse_block()?,
+            body: Box::new(self.parse_block()?),
             return_type,
             is_async,
         })
     }
 
-    pub fn parse_block(&mut self) -> Result<Vec<NodeType>, ParserError> {
+    pub fn parse_block(&mut self) -> Result<NodeType, ParserError> {
         let _ = self.expect_eat(
-            &TokenType::Open(Bracket::Curly),
-            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
+            &TokenType::FatArrow,
+            SyntaxErr::ExpectedToken(TokenType::FatArrow),
         )?;
 
-        let mut body: Vec<NodeType> = Vec::new();
-
-        while ![TokenType::EOF, TokenType::Close(Bracket::Curly)].contains(&self.first().token_type)
-        {
-            body.push(self.parse_statement()?);
+        if self.first().token_type != TokenType::Open(Bracket::Curly) {
+            self.parse_statement()
+        } else {
+            self.parse_scope_declaration()
         }
-
-        let _ = self.expect_eat(
-            &TokenType::Close(Bracket::Curly),
-            SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
-        )?;
-
-        Ok(body)
     }
 
     pub fn parse_if_statement(&mut self) -> Result<NodeType, ParserError> {
@@ -504,7 +503,7 @@ impl Parser {
 
             if self.first().token_type == TokenType::Else {
                 let _ = self.eat();
-                if self.first().token_type == TokenType::Open(Bracket::Curly) {
+                if self.first().token_type == TokenType::FatArrow {
                     bodies.push(self.parse_block()?);
                     break;
                 }

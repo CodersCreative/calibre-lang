@@ -33,15 +33,8 @@ pub fn evaluate_function(
     {
         let new_scope = get_new_scope(scope, parameters, arguments)?;
 
-        let mut result: RuntimeValue = RuntimeValue::Null;
+        let result: RuntimeValue = evaluate(*body.0, scope)?;
         let global = get_global_scope(&new_scope);
-        for statement in &body.0 {
-            if let Some(StopValue::Return) = global.borrow().stop {
-                break;
-            } else {
-                result = evaluate(statement.clone(), &new_scope)?;
-            }
-        }
 
         global.borrow_mut().stop = None;
         if let Some(t) = return_type {

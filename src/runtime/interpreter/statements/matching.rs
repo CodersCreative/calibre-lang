@@ -429,7 +429,7 @@ pub fn match_pattern(
     path: Vec<String>,
     scope: &Rc<RefCell<Scope>>,
     conditionals: &[NodeType],
-    body: &[NodeType],
+    body: NodeType,
 ) -> Option<Result<RuntimeValue, InterpreterErr>> {
     use crate::ast::NodeType;
     match evaluate(pattern.clone(), scope) {
@@ -437,10 +437,8 @@ pub fn match_pattern(
             if (is_equal(&x, value, scope) || is_value_in(value, &x, scope))
                 && handle_conditionals(scope.clone(), conditionals.to_vec()).unwrap() =>
         {
-            return Some(evaluate_scope(
-                NodeType::ScopeDeclaration {
-                    body: body.to_vec(),
-                },
+            return Some(evaluate(
+                body,
                 scope,
             ));
         }
@@ -454,10 +452,8 @@ pub fn match_pattern(
                 scope.clone(),
                 conditionals,
             ) {
-                return Some(evaluate_scope(
-                    NodeType::ScopeDeclaration {
-                        body: body.to_vec(),
-                    },
+                return Some(evaluate(
+                    body,
                     &scope,
                 ));
             } else {
@@ -508,7 +504,7 @@ pub fn evaluate_match_statement(
                 path.clone(),
                 scope,
                 &conditionals,
-                &body,
+                *body,
             ) {
                 match result {
                     Ok(x) => return Ok(x),

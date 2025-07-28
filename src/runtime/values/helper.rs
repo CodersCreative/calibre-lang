@@ -5,7 +5,7 @@ use crate::ast::NodeType;
 use super::RuntimeValue;
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Block(pub Vec<NodeType>);
+pub struct Block(pub Box<NodeType>);
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Map<T>(pub HashMap<String, T>);

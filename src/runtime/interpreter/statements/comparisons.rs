@@ -83,10 +83,8 @@ pub fn evaluate_if_statement(
                 IfComparisonType::If(comparison) => {
                     if let RuntimeValue::Bool(x) = evaluate(comparison.clone(), scope)? {
                         if x {
-                            return evaluate_scope(
-                                NodeType::ScopeDeclaration {
-                                    body: bodies[i].to_vec(),
-                                },
+                            return evaluate(
+                                bodies[i].clone(),
                                 scope,
                             );
                         }
@@ -113,7 +111,7 @@ pub fn evaluate_if_statement(
                         path.clone(),
                         scope,
                         &pattern.1,
-                        &bodies[i],
+                        bodies[i].clone(),
                     ) {
                         match result {
                             Ok(x) => return Ok(x),
@@ -127,10 +125,8 @@ pub fn evaluate_if_statement(
 
         if comparisons.len() < bodies.len() {
             if let Some(last) = bodies.last() {
-                return evaluate_scope(
-                    NodeType::ScopeDeclaration {
-                        body: last.to_vec(),
-                    },
+                return evaluate(
+                    last.clone(),
                     scope,
                 );
             }
