@@ -2,43 +2,36 @@ use std::{cell::RefCell, mem::discriminant, rc::Rc};
 
 use crate::runtime::{
     interpreter::InterpreterErr,
-    scope::{ScopeErr, VarType, links::update_link},
-    values::{RuntimeType, RuntimeValue, helper::StopValue},
+    scope::{links::update_link, Environment, ScopeErr, VarType, Variable},
+    values::{helper::StopValue, RuntimeType, RuntimeValue},
 };
 
 use super::Scope;
 
-impl Scope {
-    pub fn push_var(
-        &mut self,
+impl Environment {
+    pub fn push_var<'a>(
+        &'a mut self,
+        scope : &u64,
         key: String,
-        value: RuntimeValue,
-        var_type: VarType,
-    ) -> Result<(), ScopeErr> {
-        if let Some(var) = self.variables.get(&key) {
-            if var.1 == VarType::Constant {
-                return Err(ScopeErr::AssignConstant(key));
+        value: Variable,
+    ) -> Result<RuntimeValue, ScopeErr> {
+        if let Some(vars) = self.variables.get_mut(scope) {
+            if let Some(var) = vars.get(&key) {
+                if var.var_type == VarType::Constant {
+                    return Err(ScopeErr::AssignConstant(key));
+                }
+
+            } else{
+                let typ = (&value.value).into();
+                vars.insert(key.clone(), value);
+                return Ok(RuntimeValue::Link(*scope, vec![key], typ));
             }
+
         }
-
-        self.variables.insert(key, (value.clone(), var_type));
-
-        Ok(())
+        Ok(self.assign_var(scope, &key, value.value).unwrap())
     }
 
-    fn resolve_alias<'a>(&'a self, original: &'a str) -> &'a str {
-        if let Some(x) = self.variables.get(original) {
-            match &x.1 {
-                VarType::Mutable(Some(x)) => x,
-                VarType::Immutable(Some(x)) => x,
-                _ => original,
-            }
-        } else {
-            original
-        }
-    }
-
-    pub fn update_var<F>(&mut self, og_key: &str, mut f: F) -> Result<(), ScopeErr>
+    pub fn update_var<F>(&mut self, key: &str, mut f: F) -> Result<(), ScopeErr>
     where
         F: FnMut(&mut (RuntimeValue, VarType)),
     {
@@ -58,43 +51,44 @@ impl Scope {
 
         Ok(())
     }
-}
 
-pub fn assign_var(
-    this: &Rc<RefCell<Scope>>,
-    og_key: &str,
-    value: RuntimeValue,
-) -> Result<(), InterpreterErr> {
-    let key = this.borrow().resolve_alias(&og_key).to_string();
-
-    if og_key == key {
-        if let Some(v) = this.borrow_mut().variables.get_mut(&key) {
-            match v.1 {
-                VarType::Mutable(_) => {}
-                _ => return Err(ScopeErr::AssignConstant(key).into()),
-            }
-
-            if let RuntimeValue::Link(_, _) = v.0 {
-            } else {
-                if discriminant(&v.0) == discriminant(&value)
-                    || v.0.is_number() && value.is_number()
-                {
-                    *v = (value, VarType::Mutable(None));
-                    return Ok(());
-                } else {
-                    return Err(ScopeErr::TypeMismatch(v.0.clone(), value.clone()).into());
+    pub fn assign_var<'a>(
+        &'a mut self,
+        scope : &u64,
+        key: &str,
+        value: RuntimeValue,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        let typ = (&value).into();
+        if let Some(vars) = self.variables.get_mut(scope) {
+            if let Some(var) = vars.get_mut(key) {
+                match var.var_type {
+                    VarType::Mutable(_) => {}
+                    _ => return Err(ScopeErr::AssignConstant(key.to_string()).into()),
                 }
-            };
+
+                if let RuntimeValue::Link(_, _, _) = &var.value {
+                } else {
+                    if discriminant(&var.value) == discriminant(&value)
+                        || var.value.is_number() && value.is_number()
+                    {
+                        *var = Variable{value, var_type : VarType::Mutable(None)};
+                    } else {
+                        return Err(ScopeErr::TypeMismatch(var.value.clone(), value.clone()).into());
+                    }
+                    return Ok(var.value.clone());
+                };
+            }
         }
 
-        let val = this
-            .borrow()
+        let val = self 
             .variables
-            .get(&key)
-            .unwrap_or(&(RuntimeValue::Null, VarType::Constant))
+            .get(scope)
+            .unwrap()
+            .get(key)
+            .unwrap_or(&Variable{value : RuntimeValue::Null, var_type : VarType::Constant})
             .clone();
 
-        if val.0 != RuntimeValue::Null {
+        if val.value != RuntimeValue::Null {
             return update_link(this, &val.0, move |x| {
                 if discriminant(x) == discriminant(&value) || x.is_number() && value.is_number() {
                     *x = value.to_owned();
@@ -104,27 +98,19 @@ pub fn assign_var(
                 }
             });
         }
-    }
 
-    if let Some(parent) = &this.borrow().parent {
-        let _ = assign_var(&parent, &key, value)?;
-    } else {
-        return Err(ScopeErr::Variable(key.to_string()).into());
+        Ok(RuntimeValue::Link(*scope, vec![key.to_string()], typ))
+        // Ok(&self.variables.get(scope).unwrap().get(key).unwrap().value)
     }
-
-    Ok(())
-}
-pub fn get_global_scope(this: &Rc<RefCell<Scope>>) -> Rc<RefCell<Scope>> {
-    if let Some(parent) = &this.borrow().parent {
-        get_global_scope(&parent)
-    } else {
-        this.clone()
+    
+    pub fn get_global_scope<'a>(&'a self) -> &'a Scope {
+        self.scopes.get(&0).unwrap()
     }
 }
 
-pub fn get_stop(this: &Rc<RefCell<Scope>>) -> Option<StopValue> {
-    return get_global_scope(this).borrow().stop.clone();
-}
+
+
+
 
 pub fn get_var(this: &Rc<RefCell<Scope>>, key: &str) -> Result<(RuntimeValue, VarType), ScopeErr> {
     let scope = resolve_var(this, key)?;
@@ -135,19 +121,4 @@ pub fn get_var(this: &Rc<RefCell<Scope>>, key: &str) -> Result<(RuntimeValue, Va
             return Err(ScopeErr::Variable(key.to_string()));
         },
     )
-}
-
-pub fn resolve_var(
-    this: &Rc<RefCell<Scope>>,
-    og_key: &str,
-) -> Result<(Rc<RefCell<Scope>>, String), ScopeErr> {
-    let key = this.borrow().resolve_alias(og_key).to_string();
-
-    if this.borrow().variables.contains_key(&key) {
-        return Ok((this.clone(), key));
-    } else if let Some(parent) = &this.borrow().parent {
-        return resolve_var(&parent, &key);
-    } else {
-        Err(ScopeErr::Variable(key))
-    }
 }

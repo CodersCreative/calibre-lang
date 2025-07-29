@@ -164,7 +164,7 @@ pub enum RuntimeValue {
     Char(char),
     Enum(Vec<String>, usize, Option<ObjectType<RuntimeValue>>),
     Tuple(Vec<RuntimeValue>),
-    Link(Vec<String>, RuntimeType),
+    Link(u64, Vec<String>, RuntimeType),
     List {
         data: Vec<RuntimeValue>,
         data_type: Box<Option<RuntimeType>>,
