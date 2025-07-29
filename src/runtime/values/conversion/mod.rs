@@ -20,7 +20,7 @@ impl RuntimeValue {
             RuntimeValue::Result(Ok(x), _) => x.unwrap(scope),
             RuntimeValue::Result(Err(x), _) => x.unwrap(scope),
             RuntimeValue::Option(Some(x), _) => x.unwrap(scope),
-            RuntimeValue::Link(path, _) => get_link_path(scope, path).unwrap().unwrap(scope),
+            RuntimeValue::Link(scope, path, _) => get_link_path(scope, path).unwrap().unwrap(scope),
             _ => Ok(self.clone()),
         }
     }

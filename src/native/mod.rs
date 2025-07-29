@@ -11,8 +11,8 @@ use rustyline::DefaultEditor;
 use crate::{
     parser,
     runtime::{
-        interpreter::{evaluate, InterpreterErr},
-        scope::{links::get_link_path, Environment, Scope},
+        interpreter::{InterpreterErr, evaluate},
+        scope::{Environment, Scope},
         values::{RuntimeType, RuntimeValue},
     },
     utils::get_path,
@@ -66,18 +66,20 @@ impl PartialOrd for dyn NativeFunction {
 impl Environment {
     pub fn new_scope_with_stdlib<'a>(
         &'a mut self,
-        parent: Option<&'a Scope>,
+        parent: Option<u64>,
         path: PathBuf,
         namespace: Option<&str>,
-    ) -> &'a Scope {
+    ) -> u64 {
         let mut parser = parser::Parser::default();
-        let scope = Scope {
-                id : self.counter.clone(),
-                namespace : namespace.unwrap_or(&self.counter.to_string()).to_string(),
-                parent: if let Some(parent) = parent {Some(parent.id.clone())} else {None},
-                children: HashMap::new(),
-                path,
-            };
+        let scope = self.counter.clone();
+
+        self.add_scope(Scope {
+            id: 0,
+            namespace: namespace.unwrap_or(&self.counter.to_string()).to_string(),
+            parent,
+            children: HashMap::new(),
+            path,
+        });
 
         // global::setup(&scope);
 
@@ -88,15 +90,15 @@ impl Environment {
         let _ = evaluate(program, &scope).unwrap();
 
         let std = self.new_scope(
-            Some(&scope.clone()),
+            Some(scope),
             PathBuf::from_str(&get_path("native/stdlib/main.cl".to_string())).unwrap(),
             Some("std"),
         );
 
         // stdlib::setup(std.clone());
 
-        let root = self.new_scope(Some(&scope), path, Some("root"));
+        let root = self.new_scope(Some(scope), path, Some("root"));
 
-        self.scopes.get(&(self.counter - 1)).unwrap()
+        self.counter - 1
     }
 }

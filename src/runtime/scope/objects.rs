@@ -1,28 +1,24 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::runtime::{
-    scope::{children::get_scope_list, Environment, Object, ScopeErr, Type},
+    scope::{Environment, Object, ScopeErr, Type},
     values::RuntimeValue,
 };
 
 use super::Scope;
 
 impl Environment {
-    pub fn push_object<'a>(&'a mut self, scope : &u64, key: String, value: Object) -> Result<(), ScopeErr> {
+    pub fn push_object(&mut self, scope: &u64, key: String, value: Object) -> Result<(), ScopeErr> {
         if let Some(objects) = self.objects.get_mut(&scope) {
             if !objects.contains_key(&key) {
                 objects.insert(key, value);
-                return Ok(())
+                return Ok(());
             }
         }
         Err(ScopeErr::Object(key))
     }
-    
-    pub fn get_object<'a> (
-        &'a mut self,
-        scope : &u64,
-        key: &str,
-    ) -> Result<&'a Type, ScopeErr> {
+
+    pub fn get_object<'a>(&'a mut self, scope: &u64, key: &str) -> Result<&'a Type, ScopeErr> {
         if let Some(objects) = self.objects.get(&scope) {
             if let Some(object) = objects.get(key) {
                 return Ok(&object.object_type);
@@ -33,7 +29,7 @@ impl Environment {
 
     pub fn push_function(
         &mut self,
-        scope : &u64,
+        scope: &u64,
         key: &str,
         value: (String, RuntimeValue, bool),
     ) -> Result<(), ScopeErr> {
@@ -41,16 +37,16 @@ impl Environment {
             if let Some(object) = objects.get_mut(key) {
                 if !object.functions.contains_key(&value.0) {
                     object.functions.insert(value.0, (value.1, value.2));
-                    return Ok(())
+                    return Ok(());
                 }
             }
         }
         Err(ScopeErr::Function(key.to_string()))
     }
 
-    pub fn get_function<'a> (
+    pub fn get_function<'a>(
         &'a mut self,
-        scope : &u64,
+        scope: &u64,
         key: &str,
         name: &str,
     ) -> Result<&'a (RuntimeValue, bool), ScopeErr> {

@@ -2,7 +2,7 @@ use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Scope, ScopeErr, VarType, children::get_next_scope, variables::resolve_var},
+        scope::{Environment, Scope, ScopeErr, VarType, Variable},
         values::{RuntimeValue, helper::ObjectType},
     },
 };
@@ -56,106 +56,70 @@ pub fn progress<'a>(
 
     Ok(current)
 }
-
-pub fn get_link_path(
-    this: &Rc<RefCell<Scope>>,
-    path: &[String],
-) -> Result<RuntimeValue, InterpreterErr> {
-    let (env, name) = match resolve_var(this, &path[0])
-        .map_err(|e| InterpreterErr::Value(crate::runtime::values::ValueErr::Scope(e)))
-    {
-        Ok(x) => x,
-        Err(e) => {
-            let scope = get_next_scope(this, &path[0]).map_err(|_| e)?;
-            return get_link_path(&scope, &path[1..]);
+impl Environment {
+    pub fn get_link_path(
+        &mut self,
+        scope: &u64,
+        path: &[String],
+    ) -> Result<&RuntimeValue, InterpreterErr> {
+        if let Some(vars) = self.variables.get_mut(scope) {
+            if let Some(var) = vars.get_mut(&path[0]) {
+                let mut var = &mut var.value;
+                for key in path.iter().skip(1) {
+                    var = progress(var, key)?;
+                }
+                return Ok(var);
+            }
         }
-    };
-
-    if let (RuntimeValue::Link(x, _), _) = env.borrow().variables.get(&name).unwrap() {
-        return get_link_path(&env, x);
+        return Err(ScopeErr::Variable(path[0].to_string()).into());
     }
 
-    let mut new_env = env.borrow_mut();
-    let mut current = match new_env.variables.get_mut(&name) {
-        Some(x) => &mut x.0,
-        None => panic!(),
-    };
-
-    for key in path.iter().skip(1) {
-        current = progress(current, key)?;
+    pub fn get_link(&mut self, link: &RuntimeValue) -> Result<&RuntimeValue, InterpreterErr> {
+        if let RuntimeValue::Link(scope, path, _) = link {
+            self.get_link_path(scope, &path)
+        } else {
+            panic!()
+        }
     }
 
-    Ok(current.clone())
-}
-
-pub fn get_link(
-    this: &Rc<RefCell<Scope>>,
-    link: &RuntimeValue,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let RuntimeValue::Link(path, _) = link {
-        get_link_path(this, &path)
-    } else {
-        panic!()
-    }
-}
-
-pub fn update_link<F>(
-    this: &Rc<RefCell<Scope>>,
-    link: &RuntimeValue,
-    f: F,
-) -> Result<(), InterpreterErr>
-where
-    F: FnMut(&mut RuntimeValue) -> Result<(), InterpreterErr>,
-{
-    if let RuntimeValue::Link(path, _) = link {
-        update_link_path(this, &path, f)
-    } else {
-        panic!()
-    }
-}
-
-pub fn update_link_path<F>(
-    this: &Rc<RefCell<Scope>>,
-    path: &[String],
-    mut f: F,
-) -> Result<(), InterpreterErr>
-where
-    F: FnMut(&mut RuntimeValue) -> Result<(), InterpreterErr>,
-{
-    let (env, name) = resolve_var(this, &path[0])
-        .map_err(|e| InterpreterErr::Value(crate::runtime::values::ValueErr::Scope(e)))?;
-
-    if let (RuntimeValue::Link(x, _), _) = env.borrow().variables.get(&name).unwrap() {
-        return update_link_path(&env, x, f);
+    pub fn update_link<F>(&mut self, link: &RuntimeValue, f: F) -> Result<(), InterpreterErr>
+    where
+        F: FnMut(&mut RuntimeValue) -> Result<(), InterpreterErr>,
+    {
+        if let RuntimeValue::Link(scope, path, _) = link {
+            self.update_link_path(scope, &path, f)
+        } else {
+            panic!()
+        }
     }
 
-    let mut new_env = env.borrow_mut();
-    let mut current = match new_env.variables.get_mut(&name) {
-        Some(x) => &mut x.0,
-        None => panic!(),
-    };
+    pub fn update_link_path<F>(
+        &mut self,
+        scope: &u64,
+        path: &[String],
+        mut f: F,
+    ) -> Result<(), InterpreterErr>
+    where
+        F: FnMut(&mut RuntimeValue) -> Result<(), InterpreterErr>,
+    {
+        if let Some(vars) = self.variables.get_mut(scope) {
+            if let Some(var) = vars.get_mut(&path[0]) {
+                let mut var = &mut var.value;
+                for key in path.iter().skip(1) {
+                    var = progress(var, key)?;
+                }
+                f(var);
+            }
+        }
 
-    for key in path.iter().skip(1) {
-        current = progress(current, key)?;
+        return Err(ScopeErr::Variable(path[0].to_string()).into());
     }
 
-    f(current)
-}
-
-pub fn get_link_parent(
-    this: &Rc<RefCell<Scope>>,
-    link: &RuntimeValue,
-) -> Result<(RuntimeValue, VarType), ScopeErr> {
-    if let RuntimeValue::Link(path, _) = link {
-        let scope = resolve_var(this, &path[0])?;
-        Ok(
-            if let Some(value) = scope.0.borrow().variables.get(&scope.1) {
-                value.clone()
-            } else {
-                return Err(ScopeErr::Variable(path[0].to_string()));
-            },
-        )
-    } else {
-        panic!()
+    pub fn get_link_parent(&mut self, link: &RuntimeValue) -> Result<&RuntimeValue, ScopeErr> {
+        if let RuntimeValue::Link(scope, path, _) = link {
+            Ok(self.get_link_path(scope, &[path[0].clone()]).unwrap())
+        } else {
+            panic!()
+        }
     }
 }

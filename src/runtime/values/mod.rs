@@ -20,10 +20,7 @@ use crate::{
     ast::RefMutability,
     native::NativeFunction,
     runtime::{
-        scope::{
-            Object, Scope, ScopeErr,
-            objects::{get_object, resolve_object},
-        },
+        scope::{Object, Scope, ScopeErr},
         values::helper::ObjectType,
     },
 };
@@ -114,7 +111,7 @@ impl Into<RuntimeType> for &RuntimeValue {
             RuntimeValue::Long(_) => RuntimeType::Long,
             RuntimeValue::UInt(_) => RuntimeType::UInt,
             RuntimeValue::ULong(_) => RuntimeType::ULong,
-            RuntimeValue::Link(_, x) => x.clone(),
+            RuntimeValue::Link(_, _, x) => x.clone(),
             RuntimeValue::Enum(x, _, _) => RuntimeType::Enum(x.clone()),
             RuntimeValue::Struct(_, x) => RuntimeType::Struct(x.clone()),
             RuntimeValue::Bool(_) => RuntimeType::Bool,
@@ -192,7 +189,7 @@ impl ToString for RuntimeValue {
             Self::Double(x) => x.to_string(),
             Self::Enum(x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
             Self::Range(from, to) => format!("{}..{}", from, to),
-            Self::Link(path, t) => format!("link -> {:?}", path),
+            Self::Link(_, path, t) => format!("link -> {:?}", path),
             Self::Bool(x) => x.to_string(),
             Self::Struct(x, _) => format!("{:?}", x),
             Self::NativeFunction(_) => format!("native function"),

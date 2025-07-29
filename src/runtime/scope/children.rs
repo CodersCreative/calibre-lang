@@ -2,7 +2,9 @@ use crate::{
     parser::{self, Parser},
     runtime::{
         interpreter::{InterpreterErr, evaluate},
-        scope::{ScopeErr, VarType, links::update_link, variables::get_global_scope},
+        scope::{
+            Environment, Scope, ScopeErr, VarType, links::update_link, variables::get_global_scope,
+        },
         values::{RuntimeType, RuntimeValue, helper::StopValue},
     },
 };
@@ -10,97 +12,86 @@ use std::{cell::RefCell, fs, mem::discriminant, rc::Rc};
 
 use super::Scope;
 
-impl Scope {
-    pub fn push_child(&mut self, key: String, value: Rc<RefCell<Self>>) -> Result<(), ScopeErr> {
-        if !self.children.contains_key(&key) {
-            self.children.insert(key, value);
+impl Environment {
+    pub fn import_scope_list(
+        &mut self,
+        scope: u64,
+        mut list: Vec<String>,
+    ) -> Result<u64, InterpreterErr> {
+        if list.len() <= 0 {
+            return Ok(scope);
         }
-
-        Ok(())
+        let first = list.remove(0);
+        let scope = self.import_next_scope(scope, first.as_str())?;
+        self.import_scope_list(scope, list)
     }
-}
 
-pub fn import_scope_list(
-    this: &Rc<RefCell<Scope>>,
-    mut list: Vec<String>,
-) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
-    if list.len() <= 0 {
-        return Ok(this.clone());
-    }
-    let first = list.remove(0);
-
-    import_scope_list(&import_next_scope(this, first.as_str())?, list)
-}
-
-pub fn import_next_scope(
-    this: &Rc<RefCell<Scope>>,
-    key: &str,
-) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
-    Ok(match key {
-        "super" => this.borrow().parent.clone().unwrap(),
-        _ => {
-            if let Some(x) = this.borrow().children.get(key) {
-                x.clone()
-            } else {
-                let global = get_global_scope(this);
-                if let Some(s) = global.borrow_mut().children.get(key) {
-                    s.clone()
+    pub fn import_next_scope(&mut self, scope: u64, key: &str) -> Result<u64, InterpreterErr> {
+        Ok(match key {
+            "super" => self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
+            _ => {
+                let current = self.scopes.get(&scope).unwrap();
+                if let Some(x) = current.children.get(key) {
+                    x.clone()
                 } else {
-                    let scope = Scope::new_from_parent(this.clone(), key.to_string());
-                    let mut parser = parser::Parser::default();
-                    let program = parser
-                        .produce_ast(fs::read_to_string(scope.borrow().path.clone()).unwrap())
-                        .unwrap();
-                    let _ = evaluate(program, &scope)?;
-                    scope
+                    if let Some(s) = self.get_global_scope().children.get(key) {
+                        s.clone()
+                    } else {
+                        let scope = self.new_scope_from_parent(current.id, key);
+                        let mut parser = parser::Parser::default();
+                        let program = parser
+                            .produce_ast(
+                                fs::read_to_string(self.scopes.get(&scope).unwrap().path.clone())
+                                    .unwrap(),
+                            )
+                            .unwrap();
+                        // let _ = evaluate(program, &scope)?;
+                        scope
+                    }
                 }
             }
-        }
-    })
-}
-
-pub fn get_scope_path(this: &Rc<RefCell<Scope>>, path: &mut Vec<String>) -> Vec<String> {
-    if let Some(parent) = &this.borrow().parent {
-        for (k, v) in parent.borrow().children.iter() {
-            if v.borrow().path == this.borrow().path {
-                path.push(k.clone());
-                break;
-            }
-        }
-        get_scope_path(&parent, path)
-    } else {
-        path.to_vec()
+        })
     }
-}
 
-pub fn get_scope_list(
-    this: &Rc<RefCell<Scope>>,
-    mut list: Vec<String>,
-) -> Result<Rc<RefCell<Scope>>, ScopeErr> {
-    if list.len() <= 0 {
-        return Ok(this.clone());
+    // pub fn get_scope_path(this: &Rc<RefCell<Scope>>, path: &mut Vec<String>) -> Vec<String> {
+    //
+    //     if let Some(parent) = &this.borrow().parent {
+    //         for (k, v) in parent.borrow().children.iter() {
+    //             if v.borrow().path == this.borrow().path {
+    //                 path.push(k.clone());
+    //                 break;
+    //             }
+    //         }
+    //         get_scope_path(&parent, path)
+    //     } else {
+    //         path.to_vec()
+    //     }
+    // }
+
+    pub fn get_scope_list(&mut self, scope: u64, mut list: Vec<String>) -> Result<u64, ScopeErr> {
+        if list.len() <= 0 {
+            return Ok(scope);
+        }
+        let first = list.remove(0);
+        let scope = self.get_next_scope(scope, first.as_str())?;
+        self.get_scope_list(scope, list)
     }
-    let first = list.remove(0);
-    get_scope_list(&get_next_scope(this, first.as_str())?, list)
-}
 
-pub fn get_next_scope(
-    this: &Rc<RefCell<Scope>>,
-    key: &str,
-) -> Result<Rc<RefCell<Scope>>, ScopeErr> {
-    Ok(match key {
-        "super" => this.borrow().parent.clone().unwrap(),
-        _ => {
-            if let Some(x) = this.borrow().children.get(key) {
-                x.clone()
-            } else {
-                let global = get_global_scope(this);
-                if let Some(s) = global.borrow_mut().children.get(key) {
-                    s.clone()
+    pub fn get_next_scope(&mut self, scope: u64, key: &str) -> Result<u64, ScopeErr> {
+        Ok(match key {
+            "super" => self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
+            _ => {
+                let current = self.scopes.get(&scope).unwrap();
+                if let Some(x) = current.children.get(key) {
+                    x.clone()
                 } else {
-                    return Err(ScopeErr::Scope(key.to_string())); // _ => Scope::new_from_parent(this.clone(), key.to_string()),
+                    if let Some(s) = self.get_global_scope().children.get(key) {
+                        s.clone()
+                    } else {
+                        return Err(ScopeErr::Scope(key.to_string())); // _ => Scope::new_from_parent(this.clone(), key.to_string()),
+                    }
                 }
             }
-        }
-    })
+        })
+    }
 }
