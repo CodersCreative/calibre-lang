@@ -3,17 +3,16 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{expressions::{scope::get_new_scope, structs::evaluate_struct_expression}, InterpreterErr},
-        scope::{
-            Environment, Object, Scope, ScopeErr, Type
-        },
+        interpreter::InterpreterErr,
+        scope::{Environment, Object, Scope, ScopeErr, Type},
         values::{
-            helper::{ObjectType, StopValue, VarType}, RuntimeValue, ValueErr
+            RuntimeValue, ValueErr,
+            helper::{ObjectType, StopValue, VarType},
         },
     },
 };
 
-impl Environment{
+impl Environment {
     pub fn evaluate_function(
         &mut self,
         scope: &u64,
@@ -55,8 +54,9 @@ impl Environment{
                         args.push(self.evaluate(scope, arg.0)?);
                     }
                     return Ok(RuntimeValue::Struct(
+                        scope.clone(),
+                        Some(object_name),
                         ObjectType::Tuple(args),
-                        vec![object_name],
                     ));
                 }
             }
@@ -96,7 +96,9 @@ impl Environment{
                     }
 
                     match func {
-                        RuntimeValue::NativeFunction(x) => return x.run(self, scope, &evaluated_arguments),
+                        RuntimeValue::NativeFunction(x) => {
+                            return x.run(self, scope, &evaluated_arguments);
+                        }
                         _ => {}
                     }
                 }
@@ -105,7 +107,9 @@ impl Environment{
 
             if let NodeType::Identifier(caller) = *caller.clone() {
                 if let Ok(var) = self.get_var_ref(scope, &caller) {
-                    let RuntimeValue::Link(new_scope, _, _) = &var.value else {panic!()};
+                    let RuntimeValue::Link(new_scope, _, _) = &var.value else {
+                        panic!()
+                    };
                     match var.var_type {
                         VarType::Mutable => {
                             if arguments.len() <= 0 {

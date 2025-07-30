@@ -3,8 +3,8 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{InterpreterErr, evaluate},
-        scope::Scope,
+        interpreter::InterpreterErr,
+        scope::{Environment, Scope, Variable},
         values::{
             RuntimeValue,
             helper::{Block, VarType},
@@ -18,84 +18,85 @@ pub mod loops;
 pub mod matching;
 pub mod structs;
 
-pub fn evaluate_program(
-    exp: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    let mut last = RuntimeValue::Null;
+impl Environment {
+    pub fn evaluate_program(
+        &mut self,
+        scope: &u64,
+        exp: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        let mut last = RuntimeValue::Null;
 
-    if let NodeType::Program(body) = exp {
-        for statement in body.into_iter() {
-            last = evaluate(statement, scope)?;
+        if let NodeType::Program(body) = exp {
+            for statement in body.into_iter() {
+                last = self.evaluate(scope, statement)?;
+            }
+        } else {
+            return Err(InterpreterErr::NotImplemented(exp));
         }
-    } else {
-        return Err(InterpreterErr::NotImplemented(exp));
+
+        Ok(last)
     }
 
-    Ok(last)
-}
-
-pub fn evaluate_function_declaration(
-    declaration: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::FunctionDeclaration {
-        parameters,
-        body,
-        return_type,
-        is_async,
-    } = declaration
-    {
-        let mut params = Vec::new();
-
-        for p in parameters.into_iter() {
-            let default = if let Some(node) = p.3 {
-                Some(evaluate(node, scope)?)
-            } else {
-                None
-            };
-
-            params.push((p.0, p.1, p.2, default));
-        }
-
-        Ok(RuntimeValue::Function {
-            parameters: params,
-            body: Block(body),
+    pub fn evaluate_function_declaration(
+        &mut self,
+        scope: &u64,
+        declaration: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::FunctionDeclaration {
+            parameters,
+            body,
             return_type,
             is_async,
-        })
-    } else {
-        Err(InterpreterErr::NotImplemented(declaration))
-    }
-}
+        } = declaration
+        {
+            let mut params = Vec::new();
 
-pub fn evaluate_variable_declaration(
-    declaration: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::VariableDeclaration {
-        var_type,
-        identifier,
-        value,
-        data_type,
-    } = declaration
-    {
-        let mut value = match value {
-            Some(x) => evaluate(*x, scope)?,
-            None => RuntimeValue::Null,
-        };
+            for p in parameters.into_iter() {
+                let default = if let Some(node) = p.3 {
+                    Some(self.evaluate(scope, node)?)
+                } else {
+                    None
+                };
 
-        if let Some(t) = data_type {
-            value = value.into_type(scope, &t)?;
+                params.push((p.0, p.1, p.2, default));
+            }
+
+            Ok(RuntimeValue::Function {
+                parameters: params,
+                body: Block(body),
+                return_type,
+                is_async,
+            })
+        } else {
+            Err(InterpreterErr::NotImplemented(declaration))
         }
+    }
 
-        let _ = scope
-            .borrow_mut()
-            .push_var(identifier, value.clone(), var_type)?;
+    pub fn evaluate_variable_declaration(
+        &mut self,
+        scope: &u64,
+        declaration: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::VariableDeclaration {
+            var_type,
+            identifier,
+            value,
+            data_type,
+        } = declaration
+        {
+            let mut value = match value {
+                Some(x) => self.evaluate(scope, *x)?,
+                None => RuntimeValue::Null,
+            };
 
-        Ok(value)
-    } else {
-        Err(InterpreterErr::NotImplemented(declaration))
+            if let Some(t) = data_type {
+                value = value.into_type(self, scope, &t)?;
+            }
+
+            Ok(self.push_var(scope, identifier, Variable { value, var_type })?)
+        } else {
+            Err(InterpreterErr::NotImplemented(declaration))
+        }
     }
 }
 

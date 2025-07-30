@@ -9,8 +9,8 @@ use thiserror::Error;
 use crate::{
     parser::ParserError,
     runtime::{
-        interpreter::{InterpreterErr, evaluate},
-        scope::Scope,
+        interpreter::InterpreterErr,
+        scope::{Environment, Scope},
     },
 };
 
@@ -42,14 +42,16 @@ impl From<ParserError> for CalibreError {
 }
 
 fn repl() -> Result<(), Box<dyn Error>> {
-    let (scope, mut parser) = Scope::new_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
+    let mut env = Environment::new();
+    let mut parser = parser::Parser::default();
+    let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
     let mut editor = DefaultEditor::new()?;
     loop {
         let readline = editor.readline(">> ");
         match readline {
             Ok(line) => {
                 let program = parser.produce_ast(line)?;
-                let val = evaluate(program, &scope)?;
+                let val = env.evaluate(&scope, program)?;
 
                 if val != RuntimeValue::Null {
                     println!("{}", val.to_string());
@@ -74,9 +76,11 @@ fn repl() -> Result<(), Box<dyn Error>> {
 }
 
 fn file(path: &str) -> Result<(), Box<dyn Error>> {
-    let (scope, mut parser) = Scope::new_with_stdlib(None, PathBuf::from_str(path)?, None);
+    let mut env = Environment::new();
+    let mut parser = parser::Parser::default();
+    let scope = env.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
     let program = parser.produce_ast(fs::read_to_string(path)?)?;
-    let _ = evaluate(program, &scope)?;
+    let _ = env.evaluate(&scope, program)?;
 
     Ok(())
 }

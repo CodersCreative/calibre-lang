@@ -18,7 +18,7 @@ impl Environment {
         Err(ScopeErr::Object(key))
     }
 
-    pub fn get_object<'a>(&'a mut self, scope: &u64, key: &str) -> Result<&'a Type, ScopeErr> {
+    pub fn get_object<'a>(&'a self, scope: &u64, key: &str) -> Result<&'a Type, ScopeErr> {
         if let Some(objects) = self.objects.get(&scope) {
             if let Some(object) = objects.get(key) {
                 return Ok(&object.object_type);
@@ -45,7 +45,7 @@ impl Environment {
     }
 
     pub fn get_function<'a>(
-        &'a mut self,
+        &'a self,
         scope: &u64,
         key: &str,
         name: &str,

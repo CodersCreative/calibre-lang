@@ -6,13 +6,13 @@ use crate::{
     native::NativeFunction,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Scope, links::get_link_path},
+        scope::{Environment, Scope, Variable},
         values::{RuntimeType, RuntimeValue},
     },
 };
 
-pub fn setup(parent: Rc<RefCell<Scope>>) {
-    let scope = Scope::new_from_parent(parent, String::from("console"));
+pub fn setup(env: &mut Environment, parent: &u64) {
+    let scope = env.new_scope_from_parent(*parent, "thread");
 
     let funcs: Vec<(String, Rc<dyn NativeFunction>)> = vec![
         (String::from("out"), Rc::new(Out())),
@@ -21,15 +21,16 @@ pub fn setup(parent: Rc<RefCell<Scope>>) {
         (String::from("clear"), Rc::new(Clear())),
     ];
 
-    for func in funcs {
-        let _ = scope
-            .borrow_mut()
-            .push_var(
+    if let Some(map) = env.variables.get_mut(&scope) {
+        for func in funcs {
+            map.insert(
                 func.0,
-                RuntimeValue::NativeFunction(func.1),
-                crate::runtime::values::helper::VarType::Constant,
-            )
-            .unwrap();
+                Variable {
+                    value: RuntimeValue::NativeFunction(func.1),
+                    var_type: crate::runtime::values::helper::VarType::Constant,
+                },
+            );
+        }
     }
 }
 
@@ -38,8 +39,9 @@ pub struct Out();
 impl NativeFunction for Out {
     fn run(
         &self,
+        env: &mut Environment,
+        scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         use std::io::{self, Write};
         let stdout = io::stdout();
@@ -48,8 +50,8 @@ impl NativeFunction for Out {
         for arg in args {
             let mut s = arg.0.to_string();
 
-            if let RuntimeValue::Link(path, _) = &arg.0 {
-                s = get_link_path(scope, &path)?.to_string();
+            if let RuntimeValue::Link(scope, path, _) = &arg.0 {
+                s = env.get_link_path(scope, &path)?.to_string();
             }
 
             handle.write_all(s.as_bytes()).unwrap();
@@ -66,8 +68,9 @@ pub struct ErrFn();
 impl NativeFunction for ErrFn {
     fn run(
         &self,
+        env: &mut Environment,
+        scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         use std::io::{self, Write};
         let stderr = io::stderr();
@@ -76,8 +79,8 @@ impl NativeFunction for ErrFn {
         for arg in args {
             let mut s = arg.0.to_string();
 
-            if let RuntimeValue::Link(path, _) = &arg.0 {
-                s = get_link_path(scope, &path)?.to_string();
+            if let RuntimeValue::Link(scope, path, _) = &arg.0 {
+                s = env.get_link_path(scope, &path)?.to_string();
             }
 
             handle.write_all(s.as_bytes()).unwrap();
@@ -94,8 +97,9 @@ pub struct Input();
 impl NativeFunction for Input {
     fn run(
         &self,
+        env: &mut Environment,
+        scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut editor = DefaultEditor::new().unwrap();
         let txt = match args.get(0) {
@@ -119,8 +123,9 @@ pub struct Clear();
 impl NativeFunction for Clear {
     fn run(
         &self,
+        env: &mut Environment,
+        scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
         Ok(RuntimeValue::Null)

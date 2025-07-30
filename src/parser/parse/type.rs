@@ -2,7 +2,7 @@ use crate::{
     ast::NodeType,
     lexer::{Bracket, TokenType},
     parser::{Parser, ParserError, SyntaxErr},
-    runtime::{scope::Object, values::helper::ObjectType},
+    runtime::{scope::Type, values::helper::ObjectType},
 };
 
 impl Parser {
@@ -23,7 +23,7 @@ impl Parser {
             TokenType::Struct => self.parse_struct_declaration()?,
             _ => {
                 if let Some(t) = self.parse_type()? {
-                    Object::NewType(t)
+                    Type::NewType(t)
                 } else {
                     return Err(self.get_err(SyntaxErr::ExpectedType));
                 }
@@ -33,7 +33,7 @@ impl Parser {
         Ok(NodeType::TypeDeclaration { identifier, object })
     }
 
-    pub fn parse_enum_declaration(&mut self) -> Result<Object, ParserError> {
+    pub fn parse_enum_declaration(&mut self) -> Result<Type, ParserError> {
         let _ = self.expect_eat(
             &TokenType::Enum,
             SyntaxErr::ExpectedKeyword(String::from("enum")),
@@ -67,16 +67,16 @@ impl Parser {
             SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
         );
 
-        Ok(Object::Enum(options))
+        Ok(Type::Enum(options))
     }
 
-    pub fn parse_struct_declaration(&mut self) -> Result<Object, ParserError> {
+    pub fn parse_struct_declaration(&mut self) -> Result<Type, ParserError> {
         let _ = self.expect_eat(
             &TokenType::Struct,
             SyntaxErr::ExpectedKeyword(String::from("struct")),
         )?;
 
-        Ok(Object::Struct(match self.first().token_type {
+        Ok(Type::Struct(match self.first().token_type {
             TokenType::Open(Bracket::Curly) => ObjectType::Map(self.parse_key_type_list(
                 TokenType::Open(Bracket::Curly),
                 TokenType::Close(Bracket::Curly),

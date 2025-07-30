@@ -3,13 +3,13 @@ use std::{cell::RefCell, mem::discriminant, rc::Rc};
 use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
-        interpreter::{InterpreterErr},
+        interpreter::InterpreterErr,
         scope::{Environment, Scope, Variable},
-        values::{helper::VarType, RuntimeType, RuntimeValue},
+        values::{RuntimeType, RuntimeValue, helper::VarType},
     },
 };
 
-impl Environment{
+impl Environment {
     pub fn evaluate_tuple_expression(
         &mut self,
         scope: &u64,
@@ -79,10 +79,10 @@ impl Environment{
                         let _ = self.push_var(
                             &new_scope,
                             identifier.clone(),
-                            Variable{
-                                value : d.clone(),
-                                var_type : VarType::Immutable,
-                            }
+                            Variable {
+                                value: d.clone(),
+                                var_type: VarType::Immutable,
+                            },
                         );
 
                         if self.handle_conditionals(&new_scope, conditionals.clone())? {
@@ -116,15 +116,15 @@ impl Environment{
                         let _ = self.push_var(
                             &new_scope,
                             identifier.clone(),
-                            Variable { 
-                                value: d.clone(), 
+                            Variable {
+                                value: d.clone(),
                                 var_type: match mutability {
-                                RefMutability::MutRef | RefMutability::MutValue => {
-                                    VarType::Mutable
-                                }
-                                _ => VarType::Immutable,
-                            }, 
-                            }
+                                    RefMutability::MutRef | RefMutability::MutValue => {
+                                        VarType::Mutable
+                                    }
+                                    _ => VarType::Immutable,
+                                },
+                            },
                         );
 
                         if self.handle_conditionals(&new_scope, conditionals.clone())? {

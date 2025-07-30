@@ -1,59 +1,69 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{InterpreterErr, evaluate},
-        scope::{Object, Scope, children::get_scope_path},
+        interpreter::InterpreterErr,
+        scope::{Environment, Object, Scope},
         values::{RuntimeType, RuntimeValue, helper::ObjectType},
     },
 };
 
-pub fn evaluate_impl_declaration(
-    declaration: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::ImplDeclaration {
-        identifier,
-        functions,
-    } = declaration
-    {
-        for function in functions {
-            let scope_2 = Scope::new_from_parent_shallow(scope.clone());
+impl Environment {
+    pub fn evaluate_impl_declaration(
+        &mut self,
+        scope: &u64,
+        declaration: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::ImplDeclaration {
+            identifier,
+            functions,
+        } = declaration
+        {
+            for function in functions {
+                let scope_2 = self.new_scope_from_parent_shallow(scope.clone());
 
-            if let NodeType::VariableDeclaration {
-                var_type,
-                identifier: iden,
-                value: Some(value),
-                data_type,
-            } = function.0
-            {
-                let func = evaluate(*value, &scope_2)?;
+                if let NodeType::VariableDeclaration {
+                    var_type,
+                    identifier: iden,
+                    value: Some(value),
+                    data_type,
+                } = function.0
+                {
+                    let func = self.evaluate(&scope_2, *value)?;
 
-                let _ = scope
-                    .borrow_mut()
-                    .push_function(identifier.clone(), (iden, func, function.1))?;
-                continue;
+                    let _ = self.push_function(scope, &identifier, (iden, func, function.1))?;
+                    continue;
+                }
+
+                return Err(InterpreterErr::ExpectedFunctions);
             }
 
-            return Err(InterpreterErr::ExpectedFunctions);
+            Ok(RuntimeValue::Null)
+        } else {
+            Err(InterpreterErr::NotImplemented(declaration))
         }
-
-        Ok(RuntimeValue::Null)
-    } else {
-        Err(InterpreterErr::NotImplemented(declaration))
     }
-}
 
-pub fn evaluate_type_declaration(
-    declaration: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::TypeDeclaration { identifier, object } = declaration {
-        let _ = scope.borrow_mut().push_object(identifier, object)?;
-        Ok(RuntimeValue::Null)
-    } else {
-        Err(InterpreterErr::NotImplemented(declaration))
+    pub fn evaluate_type_declaration(
+        &mut self,
+        scope: &u64,
+        declaration: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::TypeDeclaration { identifier, object } = declaration {
+            let _ = self.push_object(
+                scope,
+                identifier,
+                Object {
+                    object_type: object,
+                    functions: HashMap::new(),
+                    traits: Vec::new(),
+                },
+            )?;
+            Ok(RuntimeValue::Null)
+        } else {
+            Err(InterpreterErr::NotImplemented(declaration))
+        }
     }
 }
 

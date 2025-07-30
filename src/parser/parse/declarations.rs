@@ -73,9 +73,9 @@ impl Parser {
             TokenType::Let => {
                 if let TokenType::Mut = self.first().token_type {
                     let _ = self.eat();
-                    VarType::Mutable(None)
+                    VarType::Mutable
                 } else {
-                    VarType::Immutable(None)
+                    VarType::Immutable
                 }
             }
             _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
@@ -104,7 +104,7 @@ impl Parser {
                 }
             }
             _ => {
-                if let VarType::Mutable(_) = var_type {
+                if let VarType::Mutable = var_type {
                     NodeType::VariableDeclaration {
                         var_type,
                         identifier,
@@ -152,8 +152,8 @@ impl Parser {
                     {
                         let mut depends = false;
                         if parameters.len() > 0 {
-                            if let RuntimeType::Struct(obj) = &parameters[0].1 {
-                                if obj.last().unwrap() == &identifier {
+                            if let RuntimeType::Struct(_, Some(obj)) = &parameters[0].1 {
+                                if obj == &identifier {
                                     depends = true;
                                 }
                             }

@@ -5,10 +5,8 @@ use rustyline::validate::ValidationResult;
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{evaluate, expressions::member::assign_member_expression, InterpreterErr},
-        scope::{
-            variables::{assign_var, get_var}, Environment, Scope
-        },
+        interpreter::InterpreterErr,
+        scope::{Environment, Scope},
         values::{RuntimeType, RuntimeValue},
     },
 };
@@ -19,7 +17,7 @@ pub mod member;
 pub mod scope;
 pub mod structs;
 
-impl Environment{
+impl Environment {
     pub fn evaluate_identifier(
         &mut self,
         scope: &u64,
@@ -40,18 +38,18 @@ impl Environment{
                     to,
                     inclusive,
                 } => {
-                    return evaluate(
+                    return self.evaluate(
+                        scope,
                         NodeType::RangeDeclaration {
                             from: Box::new(NodeType::NotExpression { value: from }),
                             to,
                             inclusive,
                         },
-                        scope,
                     );
                 }
                 _ => {}
             }
-            let value = evaluate(*value, scope)?;
+            let value = self.evaluate(scope, *value)?;
 
             match value {
                 RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
@@ -82,8 +80,8 @@ impl Environment{
         exp: NodeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let NodeType::AsExpression { value, typ } = exp {
-            let value = evaluate(*value, scope)?;
-            Ok(match value.into_type(scope, &typ) {
+            let value = self.evaluate(scope, *value)?;
+            Ok(match value.into_type(self, scope, &typ) {
                 Ok(x) => RuntimeValue::Result(
                     Ok(Box::new(x.clone())),
                     RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new((&x).into())),
@@ -109,10 +107,10 @@ impl Environment{
             operator,
         } = exp
         {
-            let left = evaluate(*left, scope)?;
-            let right = evaluate(*right, scope)?;
+            let left = self.evaluate(scope, *left)?;
+            let right = self.evaluate(scope, *right)?;
 
-            operator.handle(left, right, scope)
+            operator.handle(self, scope, left, right)
         } else {
             Err(InterpreterErr::NotImplemented(exp))
         }
@@ -130,10 +128,12 @@ impl Environment{
         } = exp
         {
             if let RuntimeValue::Int(from) =
-                evaluate(*from.clone(), scope)?.into_type(scope, &RuntimeType::Int)?
+                self.evaluate(scope, *from.clone())?
+                    .into_type(self, scope, &RuntimeType::Int)?
             {
                 if let RuntimeValue::Int(to) =
-                    evaluate(*to.clone(), scope)?.into_type(scope, &RuntimeType::Int)?
+                    self.evaluate(scope, *to.clone())?
+                        .into_type(self, scope, &RuntimeType::Int)?
                 {
                     let to = if inclusive { to + 1 } else { to };
 
@@ -160,10 +160,12 @@ impl Environment{
             operator,
         } = exp
         {
-            let left = evaluate(*left, scope)?.into_type(scope, &RuntimeType::Bool)?;
-            let right = match evaluate(*right, scope) {
+            let left = self
+                .evaluate(scope, *left)?
+                .into_type(self, scope, &RuntimeType::Bool)?;
+            let right = match self.evaluate(scope, *right) {
                 Ok(x) => x
-                    .into_type(scope, &RuntimeType::Bool)
+                    .into_type(self, scope, &RuntimeType::Bool)
                     .unwrap_or(RuntimeValue::Null),
                 _ => RuntimeValue::Null,
             };
@@ -185,9 +187,9 @@ impl Environment{
             operator,
         } = exp
         {
-            let left = evaluate(*left, scope)?;
-            let right = evaluate(*right, scope)?;
-            operator.handle(left, right, scope)
+            let left = self.evaluate(scope, *left)?;
+            let right = self.evaluate(scope, *right)?;
+            operator.handle(self, scope, left, right)
         } else {
             Err(InterpreterErr::NotImplemented(exp))
         }
@@ -198,14 +200,13 @@ impl Environment{
         node: NodeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let NodeType::AssignmentExpression { identifier, value } = node {
+            let value = self.evaluate(scope, *value)?;
             if let NodeType::Identifier(identifier) = *identifier {
-                let value = evaluate(*value, scope)?;
-                let _ = assign_var(scope, &identifier, value.clone())?;
+                let _ = self.assign_var(scope, &identifier, value.clone())?;
                 return Ok(value);
             }
             if let NodeType::MemberExpression { .. } = *identifier {
-                let value = evaluate(*value, scope)?;
-                let _ = assign_member_expression(*identifier, value.clone(), scope)?;
+                let _ = self.assign_member_expression(scope, *identifier, value.clone())?;
                 return Ok(value);
             } else {
                 Err(InterpreterErr::AssignNonVariable(*identifier))

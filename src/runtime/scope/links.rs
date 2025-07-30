@@ -14,8 +14,8 @@ pub fn progress<'a>(
     key: &str,
 ) -> Result<&'a RuntimeValue, InterpreterErr> {
     match current {
-        RuntimeValue::Struct(ObjectType::Map(map), _) => current = map.get(key).unwrap(),
-        RuntimeValue::Enum(_, _, Some(ObjectType::Map(map))) => current = map.get(key).unwrap(),
+        RuntimeValue::Struct(_, _, ObjectType::Map(map)) => current = map.get(key).unwrap(),
+        RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))) => current = map.get(key).unwrap(),
         RuntimeValue::Result(Err(x), _) if key == "Err" => {
             current = x;
         }
@@ -25,13 +25,13 @@ pub fn progress<'a>(
         RuntimeValue::Option(Some(x), _) if key == "Some" => {
             current = x;
         }
-        RuntimeValue::Struct(ObjectType::Tuple(tuple), _) => {
+        RuntimeValue::Struct(_, _, ObjectType::Tuple(tuple)) => {
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
             current = tuple.get(idx).unwrap()
         }
-        RuntimeValue::Enum(_, _, Some(ObjectType::Tuple(tuple))) => {
+        RuntimeValue::Enum(_, _, _, Some(ObjectType::Tuple(tuple))) => {
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
@@ -61,8 +61,10 @@ pub fn progress_mut<'a>(
     key: &str,
 ) -> Result<&'a mut RuntimeValue, InterpreterErr> {
     match current {
-        RuntimeValue::Struct(ObjectType::Map(map), _) => current = map.get_mut(key).unwrap(),
-        RuntimeValue::Enum(_, _, Some(ObjectType::Map(map))) => current = map.get_mut(key).unwrap(),
+        RuntimeValue::Struct(_, _, ObjectType::Map(map)) => current = map.get_mut(key).unwrap(),
+        RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))) => {
+            current = map.get_mut(key).unwrap()
+        }
         RuntimeValue::Result(Err(x), _) if key == "Err" => {
             current = x;
         }
@@ -72,13 +74,13 @@ pub fn progress_mut<'a>(
         RuntimeValue::Option(Some(x), _) if key == "Some" => {
             current = x;
         }
-        RuntimeValue::Struct(ObjectType::Tuple(tuple), _) => {
+        RuntimeValue::Struct(_, _, ObjectType::Tuple(tuple)) => {
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
             current = tuple.get_mut(idx).unwrap()
         }
-        RuntimeValue::Enum(_, _, Some(ObjectType::Tuple(tuple))) => {
+        RuntimeValue::Enum(_, _, _, Some(ObjectType::Tuple(tuple))) => {
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;

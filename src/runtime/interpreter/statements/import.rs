@@ -5,88 +5,113 @@ use rand::seq::IndexedRandom;
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{InterpreterErr, evaluate},
-        scope::{
-            Object, Scope,
-            children::{get_scope_list, import_scope_list},
-            variables::get_var,
-        },
+        interpreter::InterpreterErr,
+        scope::{Environment, Object, Scope, Variable},
         values::RuntimeValue,
     },
 };
 
-pub fn evaluate_import_statement(
-    declaration: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::ImportStatement {
-        module,
-        alias,
-        values,
-    } = declaration
-    {
-        let new_scope = if let Some(alias) = alias {
-            if ["super", "root"].contains(&alias.as_str()) {
-                return Ok(RuntimeValue::Null);
-            }
-
-            let _ = scope
-                .borrow_mut()
-                .push_child(alias, get_scope_list(scope, module)?);
-
-            return Ok(RuntimeValue::Null);
-        } else if !values.is_empty() {
-            get_scope_list(scope, module.clone())?
-        } else {
-            let _ = import_scope_list(scope, module.clone());
-            return Ok(RuntimeValue::Null);
-        };
-
-        if &values[0] == "*" {
-            for (value, var) in new_scope.borrow().variables.iter() {
-                scope.borrow_mut().push_var(
-                    value.clone(),
-                    RuntimeValue::Link(
-                        [module.clone(), vec![value.to_string()]].concat(),
-                        (&var.0).into(),
-                    ),
-                    var.1.clone(),
-                )?;
-            }
-
-            for (value, obj) in new_scope.borrow().objects.iter() {
-                scope.borrow_mut().push_object(value.clone(), obj.clone())?;
-            }
-        } else {
-            for value in values {
-                let path = [module.clone(), vec![value.clone()]].concat();
-                if let Some(var) = new_scope.borrow().variables.get(&value) {
-                    scope.borrow_mut().push_var(
-                        value.clone(),
-                        RuntimeValue::Link(path.clone(), (&var.0).into()),
-                        var.1.clone(),
-                    )?;
-                } else if let Some(obj) = new_scope.borrow().objects.get(&value) {
-                    scope
-                        .borrow_mut()
-                        .push_object(value.clone(), Object::Link(path.clone()))?;
-                } else {
-                    panic!()
+impl Environment {
+    pub fn evaluate_import_statement(
+        &mut self,
+        scope: &u64,
+        declaration: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::ImportStatement {
+            module,
+            alias,
+            values,
+        } = declaration
+        {
+            let new_scope = if let Some(alias) = alias {
+                if ["super", "root"].contains(&alias.as_str()) {
+                    return Ok(RuntimeValue::Null);
                 }
 
-                // if let Some(func) = new_scope.borrow().functions.get(&value) {
-                //     for f in func {
-                //         let _ = scope.borrow_mut().push_function(
-                //             path.clone(),
-                //             (f.0.to_string(), f.1.0.clone(), f.1.1.clone()),
-                //         )?;
-                //     }
-                // }
-            }
-        }
+                // TODO Replace
+                // let _ = scope
+                //     .borrow_mut()
+                //     .push_child(alias, get_scope_list(scope, module)?);
 
-        Ok(RuntimeValue::Null)
-    } else {
-        Err(InterpreterErr::NotImplemented(declaration))
+                return Ok(RuntimeValue::Null);
+            } else if !values.is_empty() {
+                self.get_scope_list(*scope, module.clone())?
+            } else {
+                let _ = self.import_scope_list(*scope, module.clone());
+                return Ok(RuntimeValue::Null);
+            };
+
+            if &values[0] == "*" {
+                let vars: Vec<(String, Variable)> = self
+                    .variables
+                    .get(&new_scope)
+                    .unwrap()
+                    .iter()
+                    .map(|x| {
+                        (
+                            x.0.clone(),
+                            Variable {
+                                value: RuntimeValue::Link(
+                                    new_scope,
+                                    vec![x.0.to_string()],
+                                    (&x.1.value).into(),
+                                ),
+                                var_type: x.1.var_type.clone(),
+                            },
+                        )
+                    })
+                    .collect();
+
+                for (key, value) in vars {
+                    self.push_var(scope, key, value.clone())?;
+                }
+
+                let obj: Vec<(String, Object)> = self
+                    .objects
+                    .get(&new_scope)
+                    .unwrap()
+                    .iter()
+                    .map(|x| (x.0.clone(), x.1.clone()))
+                    .collect();
+
+                for (value, obj) in obj {
+                    self.push_object(scope, value.clone(), obj.clone())?;
+                }
+            } else {
+                for value in values {
+                    if let Some(var) = self.variables.get(&new_scope).unwrap().get(&value) {
+                        self.push_var(
+                            scope,
+                            value.clone(),
+                            Variable {
+                                value: RuntimeValue::Link(
+                                    new_scope,
+                                    vec![value.clone()],
+                                    (&var.value).into(),
+                                ),
+                                var_type: var.var_type.clone(),
+                            },
+                        )?;
+                    } else if let Some(obj) = self.objects.get(&new_scope).unwrap().get(&value) {
+                        self.push_object(scope, value.clone(), obj.clone())?; //Object::Link(path.clone()))?;
+                    } else {
+                        panic!()
+                    }
+
+                    // if let Some(func) = new_scope.borrow().functions.get(&value) {
+                    //     for f in func {
+                    //         let _ = scope.borrow_mut().push_function(
+                    //             path.clone(),
+                    //             (f.0.to_string(), f.1.0.clone(), f.1.1.clone()),
+                    //         )?;
+                    //     }
+                    // }
+                }
+            }
+
+            Ok(RuntimeValue::Null)
+        } else {
+            Err(InterpreterErr::NotImplemented(declaration))
+        }
     }
 }

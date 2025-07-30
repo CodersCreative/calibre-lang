@@ -6,14 +6,10 @@ use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{
-            Environment, Object, Scope, ScopeErr
-        },
-        values::{helper::ObjectType, RuntimeType, RuntimeValue, ValueErr},
+        scope::{Environment, Object, Scope, ScopeErr},
+        values::{RuntimeType, RuntimeValue, ValueErr, helper::ObjectType},
     },
 };
-
-use super::structs::evaluate_enum_expression;
 
 pub enum MembrExprPathRes {
     Value(RuntimeValue),
@@ -113,9 +109,14 @@ impl Environment {
                                     Ok(x) => x,
                                     Err(e) => {
                                         if let Ok(x) = self.get_function(scope, &path[0], &value) {
-                                            self.evaluate_function(scope, x.0, args)?
-                                        } else if let Ok(x) = self.get_var(scope, &path[0]) {
-                                            let obj = match x.value.unwrap(self, scope)? {
+                                            self.evaluate_function(scope, x.0.clone(), args)?
+                                        } else {
+                                            let obj = match self
+                                                .get_var(scope, &path[0])
+                                                .unwrap()
+                                                .value
+                                                .unwrap(self, scope)?
+                                            {
                                                 RuntimeValue::Struct(_, p, _) => p.unwrap().clone(),
                                                 RuntimeValue::Enum(_, p, _, _) => p.clone(),
                                                 _ => return Err(e),
@@ -125,16 +126,17 @@ impl Environment {
                                                 if x.1 {
                                                     args.insert(
                                                         0,
-                                                        (NodeType::Identifier(path[0].clone()), None),
+                                                        (
+                                                            NodeType::Identifier(path[0].clone()),
+                                                            None,
+                                                        ),
                                                     );
                                                 }
 
-                                                evaluate_function(scope, x.0, args)?
+                                                self.evaluate_function(scope, x.0.clone(), args)?
                                             } else {
                                                 return Err(e);
                                             }
-                                        } else {
-                                            return Err(e);
                                         }
                                     }
                                 },
@@ -152,18 +154,19 @@ impl Environment {
     }
 
     pub fn assign_member_expression(
+        &mut self,
+        scope: &u64,
         member: NodeType,
         value: RuntimeValue,
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         match member {
             NodeType::MemberExpression { path: og_path } => {
-                let path = match get_member_expression_path(og_path, scope)? {
+                let path = match self.get_member_expression_path(scope, og_path)? {
                     MembrExprPathRes::Path(x) => x,
                     MembrExprPathRes::Value(x) => return Ok(x),
                 };
 
-                let _ = update_link_path(scope, &path, |x| {
+                let _ = self.update_link_path(scope, &path, |x| {
                     *x = value.clone();
                     Ok(())
                 })?;
@@ -175,26 +178,27 @@ impl Environment {
     }
 
     pub fn evaluate_member_expression(
+        &mut self,
+        scope: &u64,
         exp: NodeType,
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         match exp {
             NodeType::MemberExpression { path: og_path } => {
-                let mut path = match get_member_expression_path(og_path, scope)? {
+                let mut path = match self.get_member_expression_path(scope, og_path)? {
                     MembrExprPathRes::Path(x) => x,
                     MembrExprPathRes::Value(x) => return Ok(x),
                 };
 
-                match get_link_path(scope, &path) {
-                    Ok(x) => Ok(x),
+                match self.get_link_path(scope, &path) {
+                    Ok(x) => Ok(x.clone()),
                     Err(e) if path.len() == 2 => {
-                        return evaluate(
+                        return self.evaluate(
+                            scope,
                             NodeType::EnumExpression {
                                 identifier: path.remove(0),
                                 value: path.remove(0),
                                 data: None,
                             },
-                            scope,
                         );
                     }
                     Err(e) => Err(e),

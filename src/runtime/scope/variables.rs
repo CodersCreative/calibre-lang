@@ -32,10 +32,17 @@ impl Environment {
     pub fn get_var_ref<'a>(&'a self, scope: &u64, key: &str) -> Result<Variable, ScopeErr> {
         Ok(if let Some(vars) = self.variables.get(scope) {
             if let Some(var) = vars.get(key) {
-                Variable{value : RuntimeValue::Link(scope.clone(), vec![key.to_string()], (&var.value).into()), var_type : var.var_type.clone()}
+                Variable {
+                    value: RuntimeValue::Link(
+                        scope.clone(),
+                        vec![key.to_string()],
+                        (&var.value).into(),
+                    ),
+                    var_type: var.var_type.clone(),
+                }
             } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
                 self.get_var_ref(&scope, key)?
-            }else {
+            } else {
                 return Err(ScopeErr::Variable(key.to_string()));
             }
         } else {
@@ -49,7 +56,7 @@ impl Environment {
                 var
             } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
                 self.get_var(&scope, key)?
-            }else {
+            } else {
                 return Err(ScopeErr::Variable(key.to_string()));
             }
         } else {
@@ -82,7 +89,7 @@ impl Environment {
         if let Some(vars) = self.variables.get_mut(scope) {
             if let Some(var) = vars.get_mut(key) {
                 match var.var_type {
-                    VarType::Mutable(_) => {}
+                    VarType::Mutable => {}
                     _ => return Err(ScopeErr::AssignConstant(key.to_string()).into()),
                 }
 
@@ -93,7 +100,7 @@ impl Environment {
                     {
                         *var = Variable {
                             value,
-                            var_type: VarType::Mutable(None),
+                            var_type: VarType::Mutable,
                         };
                     } else {
                         return Err(ScopeErr::TypeMismatch(var.value.clone(), value.clone()).into());

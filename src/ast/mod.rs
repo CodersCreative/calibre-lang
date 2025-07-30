@@ -10,7 +10,7 @@ use crate::{
     ast::comparison::BooleanOperation,
     lexer::TokenType,
     runtime::{
-        scope::Object,
+        scope::{Object, Type},
         values::{
             RuntimeType,
             helper::{ObjectType, VarType},
@@ -60,7 +60,7 @@ pub enum NodeType {
     },
     TypeDeclaration {
         identifier: String,
-        object: Object,
+        object: Type,
     },
     EnumExpression {
         identifier: String,

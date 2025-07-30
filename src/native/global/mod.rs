@@ -4,12 +4,12 @@ use crate::{
     native::{NativeFunction, stdlib::console::Out},
     runtime::{
         interpreter::InterpreterErr,
-        scope::Scope,
+        scope::{Environment, Scope, Variable},
         values::{RuntimeType, RuntimeValue},
     },
 };
 
-pub fn setup(scope: Rc<RefCell<Scope>>) {
+pub fn setup(env: &mut Environment, scope: &u64) {
     let funcs: Vec<(String, Rc<dyn NativeFunction>)> = vec![
         (String::from("ok"), Rc::new(OkFn())),
         (String::from("err"), Rc::new(ErrFn())),
@@ -19,16 +19,18 @@ pub fn setup(scope: Rc<RefCell<Scope>>) {
         (String::from("print"), Rc::new(Out())),
     ];
 
-    let mut borrowed_scope = scope.borrow_mut();
-
-    for func in funcs {
-        let _ = borrowed_scope
-            .push_var(
-                func.0,
-                RuntimeValue::NativeFunction(func.1),
-                crate::runtime::values::helper::VarType::Constant,
-            )
-            .unwrap();
+    if let Some(map) = env.variables.get_mut(scope) {
+        for func in funcs {
+            let _ = map
+                .insert(
+                    func.0,
+                    Variable {
+                        value: RuntimeValue::NativeFunction(func.1),
+                        var_type: crate::runtime::values::helper::VarType::Constant,
+                    },
+                )
+                .unwrap();
+        }
     }
 
     let vars = vec![
@@ -45,14 +47,18 @@ pub fn setup(scope: Rc<RefCell<Scope>>) {
         (String::from("false"), RuntimeValue::Bool(false)),
     ];
 
-    for var in vars {
-        let _ = borrowed_scope
-            .push_var(
-                var.0,
-                var.1,
-                crate::runtime::values::helper::VarType::Constant,
-            )
-            .unwrap();
+    if let Some(map) = env.variables.get_mut(scope) {
+        for var in vars {
+            let _ = map
+                .insert(
+                    var.0,
+                    Variable {
+                        value: var.1,
+                        var_type: crate::runtime::values::helper::VarType::Constant,
+                    },
+                )
+                .unwrap();
+        }
     }
 }
 
@@ -61,8 +67,9 @@ pub struct ErrFn();
 impl NativeFunction for ErrFn {
     fn run(
         &self,
+        env: &mut Environment,
+        scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(if let Some(x) = args.get(0) {
             RuntimeValue::Result(
@@ -83,8 +90,9 @@ pub struct OkFn();
 impl NativeFunction for OkFn {
     fn run(
         &self,
+        env: &mut Environment,
+        scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(if let Some(x) = args.get(0) {
             RuntimeValue::Result(
@@ -105,8 +113,9 @@ pub struct SomeFn();
 impl NativeFunction for SomeFn {
     fn run(
         &self,
+        env: &mut Environment,
+        scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(if let Some(x) = args.get(0) {
             RuntimeValue::Option(
@@ -124,35 +133,41 @@ pub struct Range();
 impl NativeFunction for Range {
     fn run(
         &self,
+        env: &mut Environment,
+        scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if args.len() <= 1 {
-            let RuntimeValue::Int(amt) = args[0].0.into_type(&scope, &RuntimeType::Int)? else {
+            let RuntimeValue::Int(amt) = args[0].0.into_type(env, scope, &RuntimeType::Int)? else {
                 panic!()
             };
 
             Ok(RuntimeValue::Range(0, amt as i32))
         } else if args.len() == 2 {
-            let RuntimeValue::Int(start) = args[0].0.into_type(&scope, &RuntimeType::Int)? else {
+            let RuntimeValue::Int(start) = args[0].0.into_type(env, scope, &RuntimeType::Int)?
+            else {
                 panic!()
             };
 
-            let RuntimeValue::Int(stop) = args[1].0.into_type(&scope, &RuntimeType::Int)? else {
+            let RuntimeValue::Int(stop) = args[1].0.into_type(env, scope, &RuntimeType::Int)?
+            else {
                 panic!()
             };
 
             Ok(RuntimeValue::Range(start as i32, stop as i32))
         } else if args.len() == 3 {
-            let RuntimeValue::Int(start) = args[0].0.into_type(&scope, &RuntimeType::Int)? else {
+            let RuntimeValue::Int(start) = args[0].0.into_type(env, scope, &RuntimeType::Int)?
+            else {
                 panic!()
             };
 
-            let RuntimeValue::Int(stop) = args[1].0.into_type(&scope, &RuntimeType::Int)? else {
+            let RuntimeValue::Int(stop) = args[1].0.into_type(env, scope, &RuntimeType::Int)?
+            else {
                 panic!()
             };
 
-            let RuntimeValue::Int(step) = args[2].0.into_type(&scope, &RuntimeType::Int)? else {
+            let RuntimeValue::Int(step) = args[2].0.into_type(env, scope, &RuntimeType::Int)?
+            else {
                 panic!()
             };
 
@@ -174,11 +189,12 @@ pub struct Trim();
 impl NativeFunction for Trim {
     fn run(
         &self,
+        env: &mut Environment,
+        scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Some((x, _)) = args.get(0) {
-            let RuntimeValue::Str(x) = x.into_type(&scope, &RuntimeType::Str)? else {
+            let RuntimeValue::Str(x) = x.into_type(env, scope, &RuntimeType::Str)? else {
                 panic!()
             };
             Ok(RuntimeValue::Str(x.trim().to_string()))

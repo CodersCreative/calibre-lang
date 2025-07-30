@@ -8,23 +8,27 @@ use std::{
 
 use crate::{
     native::NativeFunction,
-    runtime::{scope::Scope, values::RuntimeValue},
+    runtime::{
+        scope::{Environment, Scope, Variable},
+        values::RuntimeValue,
+    },
 };
-pub fn setup(parent: Rc<RefCell<Scope>>) {
-    let scope = Scope::new_from_parent(parent, String::from("thread"));
+pub fn setup(env: &mut Environment, parent: &u64) {
+    let scope = env.new_scope_from_parent(*parent, "thread");
 
     let funcs: Vec<(String, Rc<dyn NativeFunction>)> =
         vec![(String::from("wait"), Rc::new(Wait()))];
 
-    for func in funcs {
-        let _ = scope
-            .borrow_mut()
-            .push_var(
+    if let Some(map) = env.variables.get_mut(&scope) {
+        for func in funcs {
+            map.insert(
                 func.0,
-                RuntimeValue::NativeFunction(func.1),
-                crate::runtime::values::helper::VarType::Constant,
-            )
-            .unwrap();
+                Variable {
+                    value: RuntimeValue::NativeFunction(func.1),
+                    var_type: crate::runtime::values::helper::VarType::Constant,
+                },
+            );
+        }
     }
 }
 pub struct Wait();
@@ -32,11 +36,12 @@ pub struct Wait();
 impl NativeFunction for Wait {
     fn run(
         &self,
+        env: &mut Environment,
+        scope: &u64,
         args: &[(
             crate::runtime::values::RuntimeValue,
             Option<crate::runtime::values::RuntimeValue>,
         )],
-        scope: &std::rc::Rc<std::cell::RefCell<crate::runtime::scope::Scope>>,
     ) -> Result<crate::runtime::values::RuntimeValue, crate::runtime::interpreter::InterpreterErr>
     {
         if let Some((RuntimeValue::Int(x), _)) = args.get(0) {

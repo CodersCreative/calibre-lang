@@ -1,153 +1,161 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, clone, collections::HashMap, rc::Rc};
 
 use clap::ValueEnum;
 
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{InterpreterErr, evaluate},
-        scope::{
-            Object, Scope, ScopeErr, children::get_next_scope, objects::get_object,
-            variables::get_var,
-        },
+        interpreter::InterpreterErr,
+        scope::{Environment, Object, Scope, ScopeErr, Type},
         values::{RuntimeValue, ValueErr, helper::ObjectType},
     },
 };
 
-pub fn evaluate_struct_expression(
-    obj: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::StructLiteral(props) = obj {
-        if let ObjectType::Map(props) = props {
-            let mut properties = HashMap::new();
-            for (k, v) in props {
-                let value = if let Some(value) = v {
-                    evaluate(value, scope)?
-                } else {
-                    get_var(scope, &k)?.0
-                };
+impl Environment {
+    pub fn evaluate_struct_expression(
+        &mut self,
+        scope: &u64,
+        obj: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::StructLiteral(props) = obj {
+            if let ObjectType::Map(props) = props {
+                let mut properties = HashMap::new();
+                for (k, v) in props {
+                    let value = if let Some(value) = v {
+                        self.evaluate(scope, value)?
+                    } else {
+                        self.get_var(scope, &k)?.value.clone()
+                    };
 
-                properties.insert(k, value);
-            }
-
-            return Ok(RuntimeValue::Struct(
-                ObjectType::Map(properties),
-                Vec::new(),
-            ));
-        } else if let ObjectType::Tuple(props) = props {
-            let mut properties = Vec::new();
-            for v in props {
-                if let Some(value) = v {
-                    properties.push(evaluate(value, scope)?);
+                    properties.insert(k, value);
                 }
+
+                return Ok(RuntimeValue::Struct(
+                    *scope,
+                    None,
+                    ObjectType::Map(properties),
+                ));
+            } else if let ObjectType::Tuple(props) = props {
+                let mut properties = Vec::new();
+                for v in props {
+                    if let Some(value) = v {
+                        properties.push(self.evaluate(scope, value)?);
+                    }
+                }
+                return Ok(RuntimeValue::Struct(
+                    *scope,
+                    None,
+                    ObjectType::Tuple(properties),
+                ));
             }
-            return Ok(RuntimeValue::Struct(
-                ObjectType::Tuple(properties),
-                Vec::new(),
-            ));
         }
+
+        Ok(RuntimeValue::Null)
     }
 
-    Ok(RuntimeValue::Null)
-}
+    pub fn evaluate_enum_expression(
+        &mut self,
+        scope: &u64,
+        exp: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::EnumExpression {
+            identifier,
+            value,
+            data,
+        } = exp
+        {
+            let enm_class = match self.get_object(&scope, &identifier) {
+                Ok(Type::Enum(x)) => x.clone(),
+                _ => {
+                    if let Some(ObjectType::Tuple(args)) = data {
+                        if let Ok(s) = self.get_next_scope(*scope, &identifier) {
+                            return self.evaluate(
+                                &s,
+                                NodeType::CallExpression(
+                                    Box::new(NodeType::Identifier(value)),
+                                    args.into_iter().map(|x| (x.unwrap(), None)).collect(),
+                                ),
+                            );
+                        }
+                    }
 
-pub fn evaluate_enum_expression(
-    exp: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::EnumExpression {
-        identifier,
-        value,
-        data,
-    } = exp
-    {
-        let Ok(Object::Enum(enm_class)) = get_object(&scope, &identifier) else {
-            if let Some(ObjectType::Tuple(args)) = data {
-                if let Ok(s) = get_next_scope(scope, &identifier) {
-                    return evaluate(
-                        NodeType::CallExpression(
-                            Box::new(NodeType::Identifier(value)),
-                            args.into_iter().map(|x| (x.unwrap(), None)).collect(),
-                        ),
-                        &s,
-                    );
+                    return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(
+                        identifier,
+                    ))));
                 }
-            }
+            };
 
-            return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(
-                identifier,
-            ))));
-        };
+            if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
+                if let Some(ObjectType::Map(properties)) = &enm.1 {
+                    let mut data_vals = HashMap::new();
+                    if let Some(ObjectType::Map(data)) = data {
+                        for (k, v) in data {
+                            let value = if let Some(value) = v {
+                                self.evaluate(scope, value)?
+                            } else {
+                                self.get_var(scope, &k)?.value.clone()
+                            };
 
-        if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
-            if let Some(ObjectType::Map(properties)) = &enm.1 {
-                let mut data_vals = HashMap::new();
-                if let Some(ObjectType::Map(data)) = data {
-                    for (k, v) in data {
-                        let value = if let Some(value) = v {
-                            evaluate(value, scope)?
+                            data_vals.insert(k, value);
+                        }
+                    }
+
+                    let mut new_data_vals = HashMap::new();
+                    for property in properties {
+                        if let Some(val) = data_vals.get(property.0) {
+                            new_data_vals.insert(
+                                property.0.clone(),
+                                val.into_type(self, scope, &property.1)?,
+                            );
                         } else {
-                            get_var(scope, &k)?.0
-                        };
-
-                        data_vals.insert(k, value);
+                            return Err(InterpreterErr::PropertyNotFound(property.0.to_string()));
+                        }
                     }
-                }
 
-                let mut new_data_vals = HashMap::new();
-                for property in properties {
-                    if let Some(val) = data_vals.get(property.0) {
-                        new_data_vals
-                            .insert(property.0.clone(), val.into_type(scope, &property.1)?);
+                    let data = if new_data_vals.is_empty() {
+                        None
                     } else {
-                        return Err(InterpreterErr::PropertyNotFound(property.0.to_string()));
+                        Some(ObjectType::Map(new_data_vals))
+                    };
+
+                    return Ok(RuntimeValue::Enum(*scope, identifier, i, data));
+                } else if let Some(ObjectType::Tuple(properties)) = &enm.1 {
+                    let mut data_vals = Vec::new();
+
+                    if let Some(ObjectType::Tuple(data)) = data {
+                        for v in data {
+                            if let Some(value) = v {
+                                data_vals.push(self.evaluate(scope, value)?);
+                            };
+                        }
                     }
-                }
 
-                let data = if new_data_vals.is_empty() {
-                    None
-                } else {
-                    Some(ObjectType::Map(new_data_vals))
-                };
-
-                return Ok(RuntimeValue::Enum(vec![identifier], i, data));
-            } else if let Some(ObjectType::Tuple(properties)) = &enm.1 {
-                let mut data_vals = Vec::new();
-
-                if let Some(ObjectType::Tuple(data)) = data {
-                    for v in data {
-                        if let Some(value) = v {
-                            data_vals.push(evaluate(value, scope)?);
-                        };
+                    let mut new_data_vals = Vec::new();
+                    for (i, property) in properties.into_iter().enumerate() {
+                        if data_vals.len() <= i {
+                            return Err(InterpreterErr::OutOfBounds(
+                                String::from("Tuple Object Type"),
+                                i as i16,
+                            ));
+                        }
+                        new_data_vals.push(data_vals[i].into_type(self, scope, property)?);
                     }
+
+                    let data = if new_data_vals.is_empty() {
+                        None
+                    } else {
+                        Some(ObjectType::Tuple(new_data_vals))
+                    };
+
+                    return Ok(RuntimeValue::Enum(*scope, identifier, i, data));
                 }
-
-                let mut new_data_vals = Vec::new();
-                for (i, property) in properties.into_iter().enumerate() {
-                    if data_vals.len() <= i {
-                        return Err(InterpreterErr::OutOfBounds(
-                            String::from("Tuple Object Type"),
-                            i as i16,
-                        ));
-                    }
-                    new_data_vals.push(data_vals[i].into_type(scope, property)?);
-                }
-
-                let data = if new_data_vals.is_empty() {
-                    None
-                } else {
-                    Some(ObjectType::Tuple(new_data_vals))
-                };
-
-                return Ok(RuntimeValue::Enum(vec![identifier], i, data));
+                return Ok(RuntimeValue::Enum(*scope, identifier, i, None));
+            } else {
+                Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
             }
-            return Ok(RuntimeValue::Enum(vec![identifier], i, None));
         } else {
-            Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
+            Err(InterpreterErr::NotImplemented(exp))
         }
-    } else {
-        Err(InterpreterErr::NotImplemented(exp))
     }
 }
 

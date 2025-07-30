@@ -1,16 +1,12 @@
 use crate::{
     parser::{self, Parser},
     runtime::{
-        interpreter::{InterpreterErr, evaluate},
-        scope::{
-            Environment, Scope, ScopeErr, VarType, links::update_link, variables::get_global_scope,
-        },
+        interpreter::InterpreterErr,
+        scope::{Environment, Scope, ScopeErr, VarType},
         values::{RuntimeType, RuntimeValue, helper::StopValue},
     },
 };
 use std::{cell::RefCell, fs, mem::discriminant, rc::Rc};
-
-use super::Scope;
 
 impl Environment {
     pub fn import_scope_list(

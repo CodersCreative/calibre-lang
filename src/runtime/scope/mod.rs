@@ -23,11 +23,9 @@ use thiserror::Error;
 
 use crate::{
     parser,
-    runtime::{
-        values::{
-            RuntimeValue,
-            helper::{ObjectType, StopValue, VarType},
-        },
+    runtime::values::{
+        RuntimeValue,
+        helper::{ObjectType, StopValue, VarType},
     },
     utils::get_path,
 };
@@ -92,6 +90,15 @@ pub struct Scope {
 }
 
 impl Environment {
+    pub fn new() -> Environment {
+        Environment {
+            counter: 0,
+            scopes: HashMap::new(),
+            variables: HashMap::new(),
+            objects: HashMap::new(),
+            stop: None,
+        }
+    }
     pub fn add_scope(&mut self, mut scope: Scope) {
         if let Some(parent) = &scope.parent {
             self.scopes

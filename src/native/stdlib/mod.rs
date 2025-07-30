@@ -1,11 +1,8 @@
-use std::{cell::RefCell, fs, path::PathBuf, rc::Rc, str::FromStr};
+use std::{cell::RefCell, fs, path::PathBuf, rc::Rc, str::FromStr, u64};
 
 use crate::{
     parser::Parser,
-    runtime::{
-        interpreter::evaluate,
-        scope::{Scope, ScopeErr},
-    },
+    runtime::scope::{Environment, Scope, ScopeErr},
     utils::get_path,
 };
 
@@ -13,21 +10,21 @@ pub mod console;
 pub mod random;
 pub mod thread;
 
-pub fn setup(scope: Rc<RefCell<Scope>>) {
+pub fn setup(env: &mut Environment, scope: &u64) {
     let mut parser = Parser::default();
     let program = parser
-        .produce_ast(fs::read_to_string(scope.borrow().path.clone()).unwrap())
+        .produce_ast(fs::read_to_string(env.scopes.get(scope).unwrap().path.clone()).unwrap())
         .unwrap();
 
-    let _ = evaluate(program, &scope).unwrap();
+    let _ = env.evaluate(scope, program).unwrap();
 
-    let scopes: Vec<(String, Box<dyn Fn(Rc<RefCell<Scope>>)>)> = vec![
+    let scopes: Vec<(String, Box<dyn Fn(&mut Environment, &u64)>)> = vec![
         (String::from("thread"), Box::new(thread::setup)),
         (String::from("console"), Box::new(console::setup)),
         (String::from("random"), Box::new(random::setup)),
     ];
 
     for (name, func) in scopes {
-        func(scope.clone());
+        func(env, scope);
     }
 }

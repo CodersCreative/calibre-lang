@@ -1,32 +1,11 @@
 pub mod expressions;
 pub mod statements;
 
-use std::{cell::RefCell, rc::Rc};
-
-use expressions::lists::evaluate_iter_expression;
-use statements::{comparisons::evaluate_in_statement, matching::evaluate_match_statement};
 use thiserror::Error;
 
 use crate::{
     ast::{NodeType, binary::ASTError},
     runtime::{
-        interpreter::{
-            expressions::{
-                call::evaluate_call_expression,
-                lists::{evaluate_list_expression, evaluate_tuple_expression},
-                member::evaluate_member_expression,
-                scope::evaluate_scope,
-                structs::{evaluate_enum_expression, evaluate_struct_expression},
-                *,
-            },
-            statements::{
-                comparisons::evaluate_if_statement,
-                import::evaluate_import_statement,
-                loops::evaluate_loop_declaration,
-                structs::{evaluate_impl_declaration, evaluate_type_declaration},
-                *,
-            },
-        },
         scope::{Environment, Scope, ScopeErr},
         values::{RuntimeType, RuntimeValue, ValueErr, helper::StopValue},
     },
@@ -87,7 +66,11 @@ impl From<ScopeErr> for InterpreterErr {
 }
 
 impl Environment {
-    pub fn evaluate(&mut self, scope : &u64, node: NodeType) -> Result<RuntimeValue, InterpreterErr> {
+    pub fn evaluate(
+        &mut self,
+        scope: &u64,
+        node: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
         match node {
             NodeType::FloatLiteral(x) => Ok(if x > f32::MAX as f64 {
                 RuntimeValue::Double(x as f64)
@@ -110,7 +93,7 @@ impl Environment {
             NodeType::StringLiteral(x) => Ok(RuntimeValue::Str(x)),
             NodeType::CharLiteral(x) => Ok(RuntimeValue::Char(x)),
             NodeType::Try { value } => {
-                let mut value = self.evaluate(*value, scope)?;
+                let mut value = self.evaluate(scope, *value)?;
 
                 match value {
                     RuntimeValue::Result(Err(_), _) | RuntimeValue::Option(None, _) => {
@@ -129,7 +112,7 @@ impl Environment {
             }
             NodeType::Return { value } => {
                 self.stop = Some(StopValue::Return);
-                self.evaluate(*value, scope)
+                self.evaluate(scope, *value)
             }
             NodeType::Break => {
                 if self.stop != Some(StopValue::Return) {
@@ -143,32 +126,36 @@ impl Environment {
                 }
                 Ok(RuntimeValue::Null)
             }
-            NodeType::BinaryExpression { .. } => evaluate_binary_expression(node, scope),
-            NodeType::Program(_) => evaluate_program(node, scope),
-            NodeType::Identifier(x) => evaluate_identifier(&x, scope),
-            NodeType::StructLiteral(_) => evaluate_struct_expression(node, scope),
-            NodeType::ListLiteral(_) => evaluate_list_expression(node, scope),
-            NodeType::TupleLiteral(_) => evaluate_tuple_expression(node, scope),
-            NodeType::CallExpression(_, _) => evaluate_call_expression(node, scope),
-            NodeType::VariableDeclaration { .. } => evaluate_variable_declaration(node, scope),
-            NodeType::RangeDeclaration { .. } => evaluate_range_expression(node, scope),
-            NodeType::AssignmentExpression { .. } => evaluate_assignment_expression(node, scope),
-            NodeType::FunctionDeclaration { .. } => evaluate_function_declaration(node, scope),
-            NodeType::ComparisonExpression { .. } => evaluate_comparison_expression(node, scope),
-            NodeType::BooleanExpression { .. } => evaluate_boolean_expression(node, scope),
-            NodeType::IfStatement { .. } => evaluate_if_statement(node, scope),
-            NodeType::ImportStatement { .. } => evaluate_import_statement(node, scope),
-            NodeType::MatchDeclaration { .. } => evaluate_match_statement(node, scope),
-            NodeType::InDeclaration { .. } => evaluate_in_statement(node, scope),
-            NodeType::AsExpression { .. } => evaluate_as_expression(node, scope),
-            NodeType::MemberExpression { .. } => evaluate_member_expression(node, scope),
-            NodeType::ImplDeclaration { .. } => evaluate_impl_declaration(node, scope),
-            NodeType::ScopeDeclaration { .. } => evaluate_scope(node, scope),
-            NodeType::NotExpression { .. } => evaluate_not(node, scope),
-            NodeType::TypeDeclaration { .. } => evaluate_type_declaration(node, scope),
-            NodeType::EnumExpression { .. } => evaluate_enum_expression(node, scope),
-            NodeType::LoopDeclaration { .. } => evaluate_loop_declaration(node, scope),
-            NodeType::IterExpression { .. } => evaluate_iter_expression(node, scope),
+            NodeType::BinaryExpression { .. } => self.evaluate_binary_expression(scope, node),
+            NodeType::Program(_) => self.evaluate_program(scope, node),
+            NodeType::Identifier(x) => self.evaluate_identifier(scope, &x),
+            NodeType::StructLiteral(_) => self.evaluate_struct_expression(scope, node),
+            NodeType::ListLiteral(_) => self.evaluate_list_expression(scope, node),
+            NodeType::TupleLiteral(_) => self.evaluate_tuple_expression(scope, node),
+            NodeType::CallExpression(_, _) => self.evaluate_call_expression(scope, node),
+            NodeType::VariableDeclaration { .. } => self.evaluate_variable_declaration(scope, node),
+            NodeType::RangeDeclaration { .. } => self.evaluate_range_expression(scope, node),
+            NodeType::AssignmentExpression { .. } => {
+                self.evaluate_assignment_expression(scope, node)
+            }
+            NodeType::FunctionDeclaration { .. } => self.evaluate_function_declaration(scope, node),
+            NodeType::ComparisonExpression { .. } => {
+                self.evaluate_comparison_expression(scope, node)
+            }
+            NodeType::BooleanExpression { .. } => self.evaluate_boolean_expression(scope, node),
+            NodeType::IfStatement { .. } => self.evaluate_if_statement(scope, node),
+            NodeType::ImportStatement { .. } => self.evaluate_import_statement(scope, node),
+            NodeType::MatchDeclaration { .. } => self.evaluate_match_statement(scope, node),
+            NodeType::InDeclaration { .. } => self.evaluate_in_statement(scope, node),
+            NodeType::AsExpression { .. } => self.evaluate_as_expression(scope, node),
+            NodeType::MemberExpression { .. } => self.evaluate_member_expression(scope, node),
+            NodeType::ImplDeclaration { .. } => self.evaluate_impl_declaration(scope, node),
+            NodeType::ScopeDeclaration { .. } => self.evaluate_scope(scope, node),
+            NodeType::NotExpression { .. } => self.evaluate_not(scope, node),
+            NodeType::TypeDeclaration { .. } => self.evaluate_type_declaration(scope, node),
+            NodeType::EnumExpression { .. } => self.evaluate_enum_expression(scope, node),
+            NodeType::LoopDeclaration { .. } => self.evaluate_loop_declaration(scope, node),
+            NodeType::IterExpression { .. } => self.evaluate_iter_expression(scope, node),
             _ => Err(InterpreterErr::NotImplemented(node)),
         }
     }
