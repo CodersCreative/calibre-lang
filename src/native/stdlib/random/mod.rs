@@ -1,12 +1,11 @@
-use rand::{self, random, random_bool, random_range, random_ratio, seq::IndexedRandom};
-use rustyline::DefaultEditor;
-use std::{cell::RefCell, rc::Rc};
+use rand::{self, random_bool, random_range, random_ratio, seq::IndexedRandom};
+use std::rc::Rc;
 
 use crate::{
     native::NativeFunction,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Scope, Variable},
+        scope::{Environment, Variable},
         values::{RuntimeType, RuntimeValue},
     },
 };

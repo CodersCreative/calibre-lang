@@ -1,7 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
 
 use crate::runtime::{
-    scope::{Environment, Scope},
+    scope::Environment,
     values::{RuntimeType, RuntimeValue},
 };
 

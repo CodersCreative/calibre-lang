@@ -2,18 +2,16 @@ pub mod global;
 pub mod stdlib;
 
 use std::{
-    cell::RefCell, cmp::Ordering, collections::HashMap, fmt::Debug, fs, io::stderr,
-    marker::PhantomData, path::PathBuf, rc::Rc, str::FromStr, thread, time::Duration,
+    cmp::Ordering, collections::HashMap, fmt::Debug, fs, path::PathBuf, str::FromStr,
 };
 
-use rustyline::DefaultEditor;
 
 use crate::{
     parser,
     runtime::{
         interpreter::InterpreterErr,
         scope::{Environment, Scope},
-        values::{RuntimeType, RuntimeValue},
+        values::RuntimeValue,
     },
     utils::get_path,
 };

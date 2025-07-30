@@ -1,4 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
 
 use rand::seq::IndexedRandom;
 
@@ -6,7 +5,7 @@ use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Object, Scope, Variable},
+        scope::{Environment, Object, Variable},
         values::RuntimeValue,
     },
 };

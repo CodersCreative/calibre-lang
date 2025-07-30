@@ -2,12 +2,11 @@ use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Scope, ScopeErr, VarType, Variable},
+        scope::{Environment, ScopeErr},
         values::{RuntimeValue, helper::ObjectType},
     },
 };
 use core::panic;
-use std::{any::Any, cell::RefCell, rc::Rc};
 
 pub fn progress<'a>(
     mut current: &'a RuntimeValue,

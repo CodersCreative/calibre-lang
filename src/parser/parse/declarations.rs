@@ -4,14 +4,9 @@ use crate::{
     ast::{IfComparisonType, LoopType, RefMutability, binary::BinaryOperator},
     lexer::Bracket,
     parser::{Parser, ParserError, SyntaxErr},
-    runtime::{
-        interpreter::statements::matching,
-        scope::Object,
-        values::{
-            self,
-            helper::{ObjectType, StopValue, VarType},
+    runtime::values::{
+            helper::{StopValue, VarType},
         },
-    },
 };
 
 use crate::{ast::NodeType, lexer::TokenType, runtime::values::RuntimeType};

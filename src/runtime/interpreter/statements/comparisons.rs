@@ -1,15 +1,14 @@
-use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ast::{
-        comparison::{self, Comparison}, IfComparisonType, NodeType
+        IfComparisonType, NodeType
     },
     runtime::{
         interpreter::{
              InterpreterErr
         },
-        scope::{Environment, Scope},
-        values::{helper::StopValue, RuntimeValue},
+        scope::Environment,
+        values::RuntimeValue,
     },
 };
 

@@ -1,12 +1,11 @@
-use std::{cell::RefCell, clone, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
-use clap::ValueEnum;
 
 use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Object, Scope, ScopeErr, Type},
+        scope::{Environment, ScopeErr, Type},
         values::{RuntimeValue, ValueErr, helper::ObjectType},
     },
 };

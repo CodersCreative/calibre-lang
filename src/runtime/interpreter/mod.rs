@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::{
     ast::{NodeType, binary::ASTError},
     runtime::{
-        scope::{Environment, Scope, ScopeErr},
+        scope::{Environment, ScopeErr},
         values::{RuntimeType, RuntimeValue, ValueErr, helper::StopValue},
     },
 };

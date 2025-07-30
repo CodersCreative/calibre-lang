@@ -1,13 +1,12 @@
-use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Object, Scope, ScopeErr, Type},
+        scope::{Environment, ScopeErr, Type},
         values::{
             RuntimeValue, ValueErr,
-            helper::{ObjectType, StopValue, VarType},
+            helper::{ObjectType, VarType},
         },
     },
 };

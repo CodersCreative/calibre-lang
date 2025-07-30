@@ -1,9 +1,8 @@
-use std::{cell::RefCell, fs, path::PathBuf, rc::Rc, str::FromStr, u64};
+use std::{fs, u64};
 
 use crate::{
     parser::Parser,
-    runtime::scope::{Environment, Scope, ScopeErr},
-    utils::get_path,
+    runtime::scope::Environment,
 };
 
 pub mod console;

@@ -6,8 +6,8 @@ use thiserror::Error;
 
 use crate::runtime::{
     interpreter::InterpreterErr,
-    scope::{Environment, Scope, ScopeErr},
-    values::{RuntimeType, RuntimeValue},
+    scope::Environment,
+    values::RuntimeValue,
 };
 
 #[derive(Error, Debug, Clone)]

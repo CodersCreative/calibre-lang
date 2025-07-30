@@ -1,14 +1,14 @@
-use std::{cell::RefCell, panic, rc::Rc};
+use std::panic;
 
 use crate::{
     ast::{NodeType, RefMutability},
     runtime::{
         interpreter::InterpreterErr,
         scope::{
-             links::progress,  Environment, Object, Scope, ScopeErr, Type
+             links::progress,  Environment, Type
         },
         values::{
-            helper::{ObjectType, StopValue, VarType}, RuntimeType, RuntimeValue
+            helper::{ObjectType, VarType}, RuntimeType, RuntimeValue
         },
     },
 };
@@ -423,7 +423,7 @@ impl Environment {
         conditionals: &[NodeType],
         body: NodeType,
     ) -> Option<Result<RuntimeValue, InterpreterErr>> {
-        use crate::ast::NodeType;
+        
         match self.evaluate(scope, pattern.clone()) {
             Ok(x)
                 if (self.is_equal(scope, &x, value) || self.is_value_in(scope, value, &x))

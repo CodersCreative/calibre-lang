@@ -1,10 +1,10 @@
-use std::{cell::RefCell, f32::consts::PI, rc::Rc};
+use std::{f32::consts::PI, rc::Rc};
 
 use crate::{
     native::{NativeFunction, stdlib::console::Out},
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Scope, Variable},
+        scope::{Environment, Variable},
         values::{RuntimeType, RuntimeValue},
     },
 };

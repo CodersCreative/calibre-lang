@@ -1,11 +1,10 @@
 use core::panic;
-use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ast::binary::{ASTError, BinaryOperator},
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Scope},
+        scope::Environment,
         values::RuntimeValue,
     },
 };

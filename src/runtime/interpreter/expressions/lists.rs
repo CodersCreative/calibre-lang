@@ -1,10 +1,10 @@
-use std::{cell::RefCell, mem::discriminant, rc::Rc};
+use std::mem::discriminant;
 
 use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Scope, Variable},
+        scope::{Environment, Variable},
         values::{RuntimeType, RuntimeValue, helper::VarType},
     },
 };

@@ -1,4 +1,3 @@
-use std::{ascii::AsciiExt, cell::RefCell, path, rc::Rc};
 
 use rand::seq::IndexedRandom;
 
@@ -6,8 +5,8 @@ use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Object, Scope, ScopeErr},
-        values::{RuntimeType, RuntimeValue, ValueErr, helper::ObjectType},
+        scope::Environment,
+        values::{RuntimeValue, helper::ObjectType},
     },
 };
 

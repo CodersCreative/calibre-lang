@@ -1,6 +1,4 @@
 use std::{
-    cell::RefCell,
-    path::PathBuf,
     rc::Rc,
     thread::{self},
     time::Duration,
@@ -9,7 +7,7 @@ use std::{
 use crate::{
     native::NativeFunction,
     runtime::{
-        scope::{Environment, Scope, Variable},
+        scope::{Environment, Variable},
         values::RuntimeValue,
     },
 };

@@ -1,11 +1,9 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::runtime::{
     scope::{Environment, Object, ScopeErr, Type},
     values::RuntimeValue,
 };
 
-use super::Scope;
 
 impl Environment {
     pub fn push_object(&mut self, scope: &u64, key: String, value: Object) -> Result<(), ScopeErr> {

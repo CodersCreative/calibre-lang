@@ -3,10 +3,7 @@ pub mod helper;
 
 use core::panic;
 use std::{
-    cell::RefCell,
-    collections::HashMap,
     fmt::Debug,
-    mem::discriminant,
     num::{ParseFloatError, ParseIntError},
     rc::Rc,
     str::FromStr,
@@ -20,7 +17,7 @@ use crate::{
     ast::RefMutability,
     native::NativeFunction,
     runtime::{
-        scope::{Object, Scope, ScopeErr},
+        scope::ScopeErr,
         values::helper::ObjectType,
     },
 };

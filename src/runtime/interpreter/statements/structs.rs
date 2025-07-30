@@ -1,11 +1,11 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Object, Scope},
-        values::{RuntimeType, RuntimeValue, helper::ObjectType},
+        scope::{Environment, Object},
+        values::RuntimeValue,
     },
 };
 

@@ -1,12 +1,10 @@
-use std::{cell::RefCell, rc::Rc};
 
-use rand::seq::IndexedRandom;
 
 use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Scope, Variable},
+        scope::{Environment, Variable},
         values::{
             RuntimeType, RuntimeValue,
             helper::{StopValue, VarType},

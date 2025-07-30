@@ -1,4 +1,4 @@
-use std::{cell::RefCell, error::Error, fs, path::PathBuf, rc::Rc, str::FromStr};
+use std::{error::Error, fs, path::PathBuf, str::FromStr};
 
 use clap::Parser;
 // use clap::Parser as ClapParser;
@@ -10,7 +10,7 @@ use crate::{
     parser::ParserError,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Scope},
+        scope::Environment,
     },
 };
 

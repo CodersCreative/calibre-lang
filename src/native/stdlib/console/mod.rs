@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 use rustyline::DefaultEditor;
 
@@ -6,7 +6,7 @@ use crate::{
     native::NativeFunction,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Scope, Variable},
+        scope::{Environment, Variable},
         values::{RuntimeType, RuntimeValue},
     },
 };

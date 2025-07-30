@@ -1,10 +1,10 @@
 use crate::runtime::{
-    scope::{Environment, Object, Scope, Type},
+    scope::{Environment, Type},
     values::{RuntimeType, RuntimeValue, ValueErr, helper::ObjectType},
 };
 use numbers::NumberValue;
 use rand::seq::IndexedRandom;
-use std::{cell::RefCell, collections::HashMap, mem::discriminant, rc::Rc};
+use std::{collections::HashMap, mem::discriminant};
 
 pub mod check;
 pub mod numbers;

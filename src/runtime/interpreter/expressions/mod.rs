@@ -1,12 +1,10 @@
-use std::{cell::RefCell, rc::Rc};
 
-use rustyline::validate::ValidationResult;
 
 use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Scope},
+        scope::Environment,
         values::{RuntimeType, RuntimeValue},
     },
 };
