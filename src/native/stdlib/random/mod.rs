@@ -11,7 +11,7 @@ use crate::{
 };
 
 pub fn setup(env: &mut Environment, parent: &u64) {
-    let scope = env.new_scope_from_parent(*parent, "thread");
+    let scope = env.new_scope_from_parent(*parent, "random");
 
     let funcs: Vec<(String, Rc<dyn NativeFunction>)> = vec![
         (String::from("generate"), Rc::new(Generate())),

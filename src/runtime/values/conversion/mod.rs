@@ -207,7 +207,7 @@ impl RuntimeValue {
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Struct(w, Some(identifier)) => {
                     let Type::Struct(ObjectType::Tuple(properties)) =
-                        env.get_object(w, &identifier)?
+                        env.get_object_type(w, &identifier)?
                     else {
                         return panic_type();
                     };
@@ -245,7 +245,7 @@ impl RuntimeValue {
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Struct(w, Some(identifier)) => {
                     let Type::Struct(ObjectType::Map(properties)) =
-                        env.get_object(w, &identifier)?
+                        env.get_object_type(w, &identifier)?
                     else {
                         return panic_type();
                     };

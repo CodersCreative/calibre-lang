@@ -40,7 +40,7 @@ impl Environment {
                                     .unwrap(),
                             )
                             .unwrap();
-                        // let _ = evaluate(program, &scope)?;
+                        let _ = self.evaluate(&scope, program)?;
                         scope
                     }
                 }

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-
 use crate::{
     ast::NodeType,
     runtime::{
@@ -63,7 +62,7 @@ impl Environment {
             data,
         } = exp
         {
-            let enm_class = match self.get_object(&scope, &identifier) {
+            let enm_class = match self.get_object_type(&scope, &identifier) {
                 Ok(Type::Enum(x)) => x.clone(),
                 _ => {
                     if let Some(ObjectType::Tuple(args)) = data {
@@ -137,7 +136,12 @@ impl Environment {
                                 i as i16,
                             ));
                         }
-                        new_data_vals.push(data_vals[i].into_type(self, scope, property)?);
+                        new_data_vals.push(
+                            data_vals[i]
+                                .unwrap(self, scope)?
+                                .into_type(self, scope, property)
+                                .unwrap(),
+                        );
                     }
 
                     let data = if new_data_vals.is_empty() {

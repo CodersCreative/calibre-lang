@@ -1,4 +1,3 @@
-
 use rand::seq::IndexedRandom;
 
 use crate::{
@@ -107,15 +106,15 @@ impl Environment {
                                 ) {
                                     Ok(x) => x,
                                     Err(e) => {
+                                        // println!("{path:?}.{value:?}{args:?}");
                                         if let Ok(x) = self.get_function(scope, &path[0], &value) {
                                             self.evaluate_function(scope, x.0.clone(), args)?
                                         } else {
-                                            let obj = match self
-                                                .get_var(scope, &path[0])
-                                                .unwrap()
-                                                .value
-                                                .unwrap(self, scope)?
-                                            {
+                                            println!("{e:?}");
+                                            let obj = match match self.get_var(scope, &path[0]) {
+                                                Ok(x) => x.value.unwrap(self, scope)?,
+                                                _ => return Err(e),
+                                            } {
                                                 RuntimeValue::Struct(_, p, _) => p.unwrap().clone(),
                                                 RuntimeValue::Enum(_, p, _, _) => p.clone(),
                                                 _ => return Err(e),

@@ -21,15 +21,13 @@ pub fn setup(env: &mut Environment, scope: &u64) {
 
     if let Some(map) = env.variables.get_mut(scope) {
         for func in funcs {
-            let _ = map
-                .insert(
-                    func.0,
-                    Variable {
-                        value: RuntimeValue::NativeFunction(func.1),
-                        var_type: crate::runtime::values::helper::VarType::Constant,
-                    },
-                )
-                .unwrap();
+            let _ = map.insert(
+                func.0,
+                Variable {
+                    value: RuntimeValue::NativeFunction(func.1),
+                    var_type: crate::runtime::values::helper::VarType::Constant,
+                },
+            );
         }
     }
 
@@ -49,15 +47,13 @@ pub fn setup(env: &mut Environment, scope: &u64) {
 
     if let Some(map) = env.variables.get_mut(scope) {
         for var in vars {
-            let _ = map
-                .insert(
-                    var.0,
-                    Variable {
-                        value: var.1,
-                        var_type: crate::runtime::values::helper::VarType::Constant,
-                    },
-                )
-                .unwrap();
+            let _ = map.insert(
+                var.0,
+                Variable {
+                    value: var.1,
+                    var_type: crate::runtime::values::helper::VarType::Constant,
+                },
+            );
         }
     }
 }

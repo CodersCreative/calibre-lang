@@ -12,10 +12,9 @@ impl Parser {
         if let TokenType::As = self.first().token_type.clone() {
             let _ = self.eat();
 
-            let t = self.parse_type()?.unwrap();
             left = NodeType::AsExpression {
                 value: Box::new(left),
-                typ: t,
+                typ: self.parse_type()?.unwrap(),
             };
         }
 
@@ -28,11 +27,9 @@ impl Parser {
         if let TokenType::In = self.first().token_type.clone() {
             let _ = self.eat();
 
-            let right = self.parse_statement()?;
-
             left = NodeType::InDeclaration {
                 identifier: Box::new(left),
-                expression: Box::new(right),
+                expression: Box::new(self.parse_statement()?),
             }
         }
 
@@ -52,11 +49,9 @@ impl Parser {
                 false
             };
 
-            let right = self.parse_statement()?;
-
             left = NodeType::RangeDeclaration {
                 from: Box::new(left),
-                to: Box::new(right),
+                to: Box::new(self.parse_statement()?),
                 inclusive,
             }
         }
@@ -70,11 +65,10 @@ impl Parser {
         while let TokenType::BinaryOperator(op) = self.first().token_type.clone() {
             if [BinaryOperator::Add, BinaryOperator::Sub].contains(&op) {
                 let _ = self.eat();
-                let right = self.parse_multiplicative_expression()?;
 
                 left = NodeType::BinaryExpression {
                     left: Box::new(left),
-                    right: Box::new(right),
+                    right: Box::new(self.parse_multiplicative_expression()?),
                     operator: op,
                 };
             } else {
@@ -96,11 +90,10 @@ impl Parser {
             .contains(&op)
             {
                 let _ = self.eat();
-                let right = self.parse_power_expression()?;
 
                 left = NodeType::BinaryExpression {
                     left: Box::new(left),
-                    right: Box::new(right),
+                    right: Box::new(self.parse_power_expression()?),
                     operator: op,
                 };
             } else {
@@ -116,11 +109,10 @@ impl Parser {
 
         while let TokenType::BinaryOperator(BinaryOperator::Pow) = self.first().token_type.clone() {
             let _ = self.eat();
-            let right = self.parse_call_member_expression()?;
 
             left = NodeType::BinaryExpression {
                 left: Box::new(left),
-                right: Box::new(right),
+                right: Box::new(self.parse_call_member_expression()?),
                 operator: BinaryOperator::Pow,
             };
         }
@@ -132,11 +124,10 @@ impl Parser {
         let mut left = self.parse_in_expression()?;
         while let TokenType::Comparison(comparison) = self.first().token_type.clone() {
             let _ = self.eat();
-            let right = self.parse_in_expression()?;
 
             left = NodeType::ComparisonExpression {
                 left: Box::new(left),
-                right: Box::new(right),
+                right: Box::new(self.parse_in_expression()?),
                 operator: comparison,
             };
         }
@@ -148,11 +139,10 @@ impl Parser {
         let mut left = self.parse_comparison_expression()?;
         while let TokenType::Boolean(comparison) = self.first().token_type.clone() {
             let _ = self.eat();
-            let right = self.parse_comparison_expression()?;
 
             left = NodeType::BooleanExpression {
                 left: Box::new(left),
-                right: Box::new(right),
+                right: Box::new(self.parse_comparison_expression()?),
                 operator: comparison,
             };
         }

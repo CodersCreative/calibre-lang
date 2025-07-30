@@ -4,11 +4,10 @@ use crate::{
     ast::{NodeType, RefMutability},
     runtime::{
         interpreter::InterpreterErr,
-        scope::{
-             links::progress,  Environment, Type
-        },
+        scope::{Environment, Type, links::progress},
         values::{
-            helper::{ObjectType, VarType}, RuntimeType, RuntimeValue
+            RuntimeType, RuntimeValue,
+            helper::{ObjectType, VarType},
         },
     },
 };
@@ -26,7 +25,9 @@ impl Environment {
         match pattern {
             NodeType::Identifier(x)
                 if x.trim() == "_"
-                    && self.handle_conditionals(&scope, conditionals.to_vec()).unwrap() =>
+                    && self
+                        .handle_conditionals(&scope, conditionals.to_vec())
+                        .unwrap() =>
             {
                 return Some(Ok(scope.clone()));
             }
@@ -71,9 +72,10 @@ impl Environment {
                 value: enm_value,
             } => {
                 if let RuntimeValue::Enum(obj_scope, iden, val, dat) = value.clone() {
-                    let Type::Enum(enm) = self.get_object(&obj_scope, &iden).unwrap() else {
+                    let Type::Enum(enm) = self.get_object_type(&obj_scope, &iden).unwrap() else {
                         return None;
                     };
+
                     let Some(index) = enm.iter().position(|x| &x.0 == enm_value) else {
                         return None;
                     };
@@ -83,14 +85,20 @@ impl Environment {
                     }
 
                     let Some(data) = data else {
-                        if !self.handle_conditionals(&scope, conditionals.to_vec()).unwrap() {
+                        if !self
+                            .handle_conditionals(&scope, conditionals.to_vec())
+                            .unwrap()
+                        {
                             return None;
                         }
                         return Some(Ok(scope.clone()));
                     };
 
                     let Some(dat) = dat else {
-                        if !self.handle_conditionals(&scope, conditionals.to_vec()).unwrap() {
+                        if !self
+                            .handle_conditionals(&scope, conditionals.to_vec())
+                            .unwrap()
+                        {
                             return None;
                         }
                         return Some(Ok(scope.clone()));
@@ -112,11 +120,17 @@ impl Environment {
                                         let path = [path.clone(), vec![k.clone()]].concat();
                                         match map.get(&k).unwrap() {
                                             Some(NodeType::Identifier(k)) => match &mutability {
-                                                RefMutability::Ref | RefMutability::MutRef => Some((
-                                                    k.to_string(),
-                                                    RuntimeValue::Link(obj_scope, path, (&v).into()),
-                                                    mutability.clone(),
-                                                )),
+                                                RefMutability::Ref | RefMutability::MutRef => {
+                                                    Some((
+                                                        k.to_string(),
+                                                        RuntimeValue::Link(
+                                                            obj_scope,
+                                                            path,
+                                                            (&v).into(),
+                                                        ),
+                                                        mutability.clone(),
+                                                    ))
+                                                }
                                                 _ => Some((k.to_string(), v, mutability.clone())),
                                             },
                                             Some(node) => {
@@ -136,18 +150,25 @@ impl Environment {
                                                 None
                                             }
                                             None => match &mutability {
-                                                RefMutability::Ref | RefMutability::MutRef => Some((
-                                                    k.to_string(),
-                                                    RuntimeValue::Link(obj_scope, path, (&v).into()),
-                                                    mutability.clone(),
-                                                )),
+                                                RefMutability::Ref | RefMutability::MutRef => {
+                                                    Some((
+                                                        k.to_string(),
+                                                        RuntimeValue::Link(
+                                                            obj_scope,
+                                                            path,
+                                                            (&v).into(),
+                                                        ),
+                                                        mutability.clone(),
+                                                    ))
+                                                }
                                                 _ => Some((k.to_string(), v, mutability.clone())),
                                             },
                                         }
                                     })
                                     .collect();
 
-                                new_scope = Some(self.get_new_scope_with_values(&scope, values).unwrap());
+                                new_scope =
+                                    Some(self.get_new_scope_with_values(&scope, values).unwrap());
                             }
                         }
                         ObjectType::Tuple(list) => {
@@ -183,15 +204,23 @@ impl Environment {
                                             .filter(|(i, _)| i < &list.len() && list[*i].is_some())
                                             .map(|(i, v)| match &mutability {
                                                 RefMutability::Ref | RefMutability::MutRef => {
-                                                    let path =
-                                                        [path.clone(), vec![i.to_string()]].concat();
+                                                    let path = [path.clone(), vec![i.to_string()]]
+                                                        .concat();
                                                     (
                                                         list[i].clone().unwrap(),
-                                                        RuntimeValue::Link(obj_scope, path, (&v).into()),
+                                                        RuntimeValue::Link(
+                                                            obj_scope,
+                                                            path,
+                                                            (&v).into(),
+                                                        ),
                                                         mutability.clone(),
                                                     )
                                                 }
-                                                _ => (list[i].clone().unwrap(), v, mutability.clone()),
+                                                _ => (
+                                                    list[i].clone().unwrap(),
+                                                    v,
+                                                    mutability.clone(),
+                                                ),
                                             })
                                             .collect(),
                                     )
@@ -215,11 +244,15 @@ impl Environment {
                                             .filter(|x| list.contains(&x.0))
                                             .map(|(k, v)| match &mutability {
                                                 RefMutability::MutRef | RefMutability::Ref => {
-                                                    let path =
-                                                        [path.clone(), vec![k.to_string()]].concat();
+                                                    let path = [path.clone(), vec![k.to_string()]]
+                                                        .concat();
                                                     (
                                                         k.to_string(),
-                                                        RuntimeValue::Link(obj_scope, path, (&v).into()),
+                                                        RuntimeValue::Link(
+                                                            obj_scope,
+                                                            path,
+                                                            (&v).into(),
+                                                        ),
                                                         mutability.clone(),
                                                     )
                                                 }
@@ -265,7 +298,9 @@ impl Environment {
                                 None
                             }
                         }
-                        (part, RuntimeValue::Str(value)) if part == "Prefix" || part == "Suffix" => {
+                        (part, RuntimeValue::Str(value))
+                            if part == "Prefix" || part == "Suffix" =>
+                        {
                             if let (Some(pattern), name) = (args.get(0), args.get(1)) {
                                 if let Ok(pattern) = self.evaluate(&scope, pattern.0.clone()) {
                                     let RuntimeValue::Str(pattern) =
@@ -279,23 +314,27 @@ impl Environment {
                                     } else {
                                         value.strip_suffix(&pattern)
                                     } {
-                                        let vars = if let Some((NodeType::Identifier(name), _)) = name {
-                                            vec![(
-                                                name.clone(),
-                                                RuntimeValue::Str(value.to_string()),
-                                                match mutability {
-                                                    RefMutability::MutRef | RefMutability::MutValue => {
-                                                        RefMutability::MutValue
-                                                    }
-                                                    _ => RefMutability::Value,
-                                                },
-                                            )]
-                                        } else {
-                                            Vec::new()
-                                        };
+                                        let vars =
+                                            if let Some((NodeType::Identifier(name), _)) = name {
+                                                vec![(
+                                                    name.clone(),
+                                                    RuntimeValue::Str(value.to_string()),
+                                                    match mutability {
+                                                        RefMutability::MutRef
+                                                        | RefMutability::MutValue => {
+                                                            RefMutability::MutValue
+                                                        }
+                                                        _ => RefMutability::Value,
+                                                    },
+                                                )]
+                                            } else {
+                                                Vec::new()
+                                            };
 
-                                        let new_scope = self.get_new_scope_with_values(&scope, vars).ok()?;
-                                        if self.handle_conditionals(&new_scope, conditionals.to_vec())
+                                        let new_scope =
+                                            self.get_new_scope_with_values(&scope, vars).ok()?;
+                                        if self
+                                            .handle_conditionals(&new_scope, conditionals.to_vec())
                                             .ok()?
                                         {
                                             Some(Ok(new_scope))
@@ -335,13 +374,21 @@ impl Environment {
                         }
                         ("Let", data) => {
                             if let Some((NodeType::Identifier(name), _)) = args.get(0) {
-                                let new_scope = self.get_new_scope_with_values(
-                                    &scope,
-                                    vec![(name.clone(), value.clone(), RefMutability::MutValue)],
-                                )
-                                .ok()?;
-                                if self.handle_conditionals(&new_scope, conditionals.to_vec()).ok()? {
-                                    Some(Ok(scope.clone()))
+                                let new_scope = self
+                                    .get_new_scope_with_values(
+                                        &scope,
+                                        vec![(
+                                            name.clone(),
+                                            value.clone(),
+                                            RefMutability::MutValue,
+                                        )],
+                                    )
+                                    .ok()?;
+                                if self
+                                    .handle_conditionals(&new_scope, conditionals.to_vec())
+                                    .ok()?
+                                {
+                                    Some(Ok(new_scope.clone()))
                                 } else {
                                     None
                                 }
@@ -377,22 +424,26 @@ impl Environment {
                 }
             }
             NodeType::Identifier(var_name) => {
-                let new_scope = self.get_new_scope_with_values(
-                    &scope,
-                    match &mutability {
-                        RefMutability::MutRef | RefMutability::Ref => {
-                            vec![(
-                                var_name.clone(),
-                                RuntimeValue::Link(scope, path.clone(), value.into()),
-                                mutability.clone(),
-                            )]
-                        }
-                        _ => vec![(var_name.clone(), value.clone(), mutability.clone())],
-                    },
-                )
-                .ok()?;
-                if self.handle_conditionals(&new_scope, conditionals.to_vec()).ok()? {
-                    Some(Ok(scope.clone()))
+                let new_scope = self
+                    .get_new_scope_with_values(
+                        &scope,
+                        match &mutability {
+                            RefMutability::MutRef | RefMutability::Ref => {
+                                vec![(
+                                    var_name.clone(),
+                                    RuntimeValue::Link(scope, path.clone(), value.into()),
+                                    mutability.clone(),
+                                )]
+                            }
+                            _ => vec![(var_name.clone(), value.clone(), mutability.clone())],
+                        },
+                    )
+                    .ok()?;
+                if self
+                    .handle_conditionals(&new_scope, conditionals.to_vec())
+                    .ok()?
+                {
+                    Some(Ok(new_scope.clone()))
                 } else {
                     None
                 }
@@ -400,7 +451,9 @@ impl Environment {
             _ => {
                 if let Ok(x) = self.evaluate(&scope, pattern.clone()) {
                     if (self.is_equal(&scope, &x, value) || self.is_value_in(&scope, value, &x))
-                        && self.handle_conditionals(&scope, conditionals.to_vec()).ok()?
+                        && self
+                            .handle_conditionals(&scope, conditionals.to_vec())
+                            .ok()?
                     {
                         Some(Ok(scope.clone()))
                     } else {
@@ -423,31 +476,21 @@ impl Environment {
         conditionals: &[NodeType],
         body: NodeType,
     ) -> Option<Result<RuntimeValue, InterpreterErr>> {
-        
         match self.evaluate(scope, pattern.clone()) {
             Ok(x)
                 if (self.is_equal(scope, &x, value) || self.is_value_in(scope, value, &x))
-                    && self.handle_conditionals(scope, conditionals.to_vec()).unwrap() =>
+                    && self
+                        .handle_conditionals(scope, conditionals.to_vec())
+                        .unwrap() =>
             {
-                return Some(self.evaluate(
-                    scope,
-                    body,
-                ));
+                return Some(self.evaluate(scope, body));
             }
             Ok(_) => None,
             Err(_) => {
-                if let Some(Ok(scope)) = self.match_inner_pattern(
-                    *scope,
-                    pattern,
-                    value,
-                    mutability,
-                    path,
-                    conditionals,
-                ) {
-                    return Some(self.evaluate(
-                        &scope,
-                        body,
-                    ));
+                if let Some(Ok(scope)) =
+                    self.match_inner_pattern(*scope, pattern, value, mutability, path, conditionals)
+                {
+                    return Some(self.evaluate(&scope, body));
                 } else {
                     None
                 }
@@ -484,10 +527,14 @@ impl Environment {
                     self.get_var(scope, &identifier)?.value.clone()
                 }
                 (RefMutability::Ref | RefMutability::MutRef, _) => {
-                    return Err(InterpreterErr::MutRefNonMut(self.evaluate(scope, *value)?.clone()));
+                    return Err(InterpreterErr::MutRefNonMut(
+                        self.evaluate(scope, *value)?.clone(),
+                    ));
                 }
                 _ => self.evaluate(scope, *value)?,
             };
+
+            println!("uioo");
 
             for (pattern, conditionals, body) in patterns {
                 if let Some(result) = self.match_pattern(
@@ -528,4 +575,3 @@ impl Environment {
         Ok(result)
     }
 }
-

@@ -1,10 +1,7 @@
 pub mod global;
 pub mod stdlib;
 
-use std::{
-    cmp::Ordering, collections::HashMap, fmt::Debug, fs, path::PathBuf, str::FromStr,
-};
-
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, fs, path::PathBuf, str::FromStr};
 
 use crate::{
     parser,
@@ -70,7 +67,7 @@ impl Environment {
         namespace: Option<&str>,
     ) -> u64 {
         let mut parser = parser::Parser::default();
-        let scope = self.counter.clone();
+        let scope = 0;
 
         self.add_scope(Scope {
             id: 0,
@@ -98,6 +95,6 @@ impl Environment {
 
         let root = self.new_scope(Some(scope), path, Some("root"));
 
-        self.counter - 1
+        root
     }
 }

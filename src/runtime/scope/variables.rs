@@ -33,11 +33,14 @@ impl Environment {
         Ok(if let Some(vars) = self.variables.get(scope) {
             if let Some(var) = vars.get(key) {
                 Variable {
-                    value: RuntimeValue::Link(
-                        scope.clone(),
-                        vec![key.to_string()],
-                        (&var.value).into(),
-                    ),
+                    value: match var.value {
+                        RuntimeValue::Null | RuntimeValue::NativeFunction(_) => var.value.clone(),
+                        _ => RuntimeValue::Link(
+                            scope.clone(),
+                            vec![key.to_string()],
+                            (&var.value).into(),
+                        ),
+                    },
                     var_type: var.var_type.clone(),
                 }
             } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {

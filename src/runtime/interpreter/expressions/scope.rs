@@ -1,13 +1,9 @@
-
 use crate::{
     ast::{NodeType, RefMutability},
     runtime::{
         interpreter::{InterpreterErr, expressions::member::MembrExprPathRes},
         scope::{Environment, Variable},
-        values::{
-            RuntimeType, RuntimeValue,
-            helper::VarType,
-        },
+        values::{RuntimeType, RuntimeValue, helper::VarType},
     },
 };
 
@@ -99,13 +95,13 @@ impl Environment {
                             };
 
                             let typ = {
-                                let var = self.get_link_path(scope, &path)?;
+                                let var = self.get_link_path(scope, &path)?.unwrap(self, scope)?;
 
                                 if !var.is_type(self, &scope, &v) {
                                     return Err(InterpreterErr::UnexpectedType(var.clone()));
                                 }
 
-                                var.into()
+                                (&var).into()
                             };
 
                             let _ = self.push_var(

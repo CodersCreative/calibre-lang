@@ -1,4 +1,3 @@
-
 use crate::{
     ast::NodeType,
     runtime::{
@@ -47,11 +46,12 @@ impl Environment {
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let NodeType::CallExpression(caller, arguments) = exp {
             if let NodeType::Identifier(object_name) = *caller.clone() {
-                if let Ok(Type::Struct(obj)) = self.get_object(scope, &object_name) {
+                if let Ok(Type::Struct(obj)) = self.get_object_type(scope, &object_name) {
                     let mut args = Vec::new();
                     for arg in arguments {
                         args.push(self.evaluate(scope, arg.0)?);
                     }
+                    println!("{:?}", args);
                     return Ok(RuntimeValue::Struct(
                         scope.clone(),
                         Some(object_name),
@@ -59,7 +59,8 @@ impl Environment {
                     ));
                 }
             }
-            let func = self.evaluate(scope, *caller.clone())?;
+
+            let func = self.evaluate(scope, *caller.clone())?.unwrap(self, scope)?;
 
             match func {
                 RuntimeValue::Function { .. } => {

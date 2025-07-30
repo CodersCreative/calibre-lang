@@ -1,9 +1,7 @@
-
 use crate::runtime::{
     scope::{Environment, Object, ScopeErr, Type},
-    values::RuntimeValue,
+    values::{RuntimeValue, ValueErr},
 };
-
 
 impl Environment {
     pub fn push_object(&mut self, scope: &u64, key: String, value: Object) -> Result<(), ScopeErr> {
@@ -16,10 +14,23 @@ impl Environment {
         Err(ScopeErr::Object(key))
     }
 
-    pub fn get_object<'a>(&'a self, scope: &u64, key: &str) -> Result<&'a Type, ScopeErr> {
+    pub fn get_object_type<'a>(&'a self, scope: &u64, key: &str) -> Result<&'a Type, ScopeErr> {
         if let Some(objects) = self.objects.get(&scope) {
             if let Some(object) = objects.get(key) {
-                return Ok(&object.object_type);
+                return Ok(&object.unwrap(self, scope).unwrap().object_type);
+            } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+                return self.get_object_type(&scope, key);
+            }
+        }
+        Err(ScopeErr::Function(key.to_string()))
+    }
+
+    pub fn get_object(&self, scope: &u64, key: &str) -> Result<&Object, ScopeErr> {
+        if let Some(objects) = self.objects.get(&scope) {
+            if let Some(object) = objects.get(key) {
+                return Ok(object.unwrap(self, scope).unwrap());
+            } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+                return self.get_object(&scope, key);
             }
         }
         Err(ScopeErr::Function(key.to_string()))
@@ -52,9 +63,20 @@ impl Environment {
             if let Some(object) = objects.get(key) {
                 if let Some(func) = object.functions.get(name) {
                     return Ok(func);
+                } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+                    return self.get_function(&scope, key, name);
                 }
             }
         }
         Err(ScopeErr::Function(key.to_string()))
+    }
+}
+
+impl Object {
+    pub fn unwrap<'a>(&'a self, env: &'a Environment, scope: &u64) -> Result<&'a Object, ValueErr> {
+        match &self.object_type {
+            Type::Link(scope, name) => Ok(env.objects.get(&scope).unwrap().get(name).unwrap()),
+            _ => Ok(self),
+        }
     }
 }

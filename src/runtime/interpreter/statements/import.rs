@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 
 use rand::seq::IndexedRandom;
 
@@ -26,11 +27,13 @@ impl Environment {
                 if ["super", "root"].contains(&alias.as_str()) {
                     return Ok(RuntimeValue::Null);
                 }
-
-                // TODO Replace
-                // let _ = scope
-                //     .borrow_mut()
-                //     .push_child(alias, get_scope_list(scope, module)?);
+                let new_scope_id = self.get_scope_list(*scope, module)?;
+                println!("NEw {:?}", new_scope_id);
+                self.scopes
+                    .get_mut(scope)
+                    .unwrap()
+                    .children
+                    .insert(alias, new_scope_id);
 
                 return Ok(RuntimeValue::Null);
             } else if !values.is_empty() {
@@ -70,12 +73,26 @@ impl Environment {
                     .get(&new_scope)
                     .unwrap()
                     .iter()
-                    .map(|x| (x.0.clone(), x.1.clone()))
+                    .map(|x| {
+                        (
+                            x.0.clone(),
+                            Object {
+                                object_type: crate::runtime::scope::Type::Link(
+                                    new_scope,
+                                    x.0.clone(),
+                                ),
+                                functions: HashMap::new(),
+                                traits: Vec::new(),
+                            },
+                        )
+                    })
                     .collect();
 
                 for (value, obj) in obj {
                     self.push_object(scope, value.clone(), obj.clone())?;
                 }
+
+                // println!("{:?}", self.scopes);
             } else {
                 for value in values {
                     if let Some(var) = self.variables.get(&new_scope).unwrap().get(&value) {

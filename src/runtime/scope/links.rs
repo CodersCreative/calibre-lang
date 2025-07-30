@@ -59,6 +59,7 @@ pub fn progress_mut<'a>(
     mut current: &'a mut RuntimeValue,
     key: &str,
 ) -> Result<&'a mut RuntimeValue, InterpreterErr> {
+    println!("{:?}", current);
     match current {
         RuntimeValue::Struct(_, _, ObjectType::Map(map)) => current = map.get_mut(key).unwrap(),
         RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))) => {
@@ -98,7 +99,9 @@ pub fn progress_mut<'a>(
             current = data.get_mut(idx).unwrap()
         }
         _ => {
-            panic!()
+            return Err(InterpreterErr::Value(
+                crate::runtime::values::ValueErr::Scope(ScopeErr::Variable(key.to_string())),
+            ));
         }
     }
 
@@ -152,12 +155,24 @@ impl Environment {
     {
         if let Some(vars) = self.variables.get_mut(scope) {
             if let Some(var) = vars.get_mut(&path[0]) {
-                let mut var = &mut var.value;
+                let mut var = Ok(&mut var.value);
+
                 for key in path.iter().skip(1) {
-                    var = progress_mut(var, key)?;
+                    if let Ok(x) = var {
+                        var = progress_mut(x, key)
+                    } else {
+                        break;
+                    }
                 }
-                f(var);
+
+                if let Ok(x) = var {
+                    return f(x);
+                }
             }
+        }
+
+        if let RuntimeValue::Link(scope, path, _) = &self.get_var(scope, &path[0])?.value.clone() {
+            return self.update_link_path(&scope, &path, f);
         }
 
         return Err(ScopeErr::Variable(path[0].to_string()).into());

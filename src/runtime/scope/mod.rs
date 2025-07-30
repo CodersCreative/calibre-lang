@@ -3,20 +3,16 @@ pub mod links;
 pub mod objects;
 pub mod variables;
 
-use std::{
-    collections::HashMap,
-    fmt::Debug,
-    path::PathBuf,
-};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf};
 
 use crate::runtime::{interpreter::InterpreterErr, values::ValueErr};
 
 use thiserror::Error;
 
 use crate::runtime::values::{
-        RuntimeValue,
-        helper::{ObjectType, StopValue, VarType},
-    };
+    RuntimeValue,
+    helper::{ObjectType, StopValue, VarType},
+};
 
 use super::values::RuntimeType;
 
@@ -43,7 +39,7 @@ pub enum Type {
     Enum(Vec<(String, Option<ObjectType<RuntimeType>>)>),
     Struct(ObjectType<RuntimeType>),
     NewType(RuntimeType),
-    Link(Vec<String>),
+    Link(u64, String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -97,7 +93,8 @@ impl Environment {
         }
 
         scope.id = self.counter;
-
+        self.variables.insert(self.counter, HashMap::new());
+        self.objects.insert(self.counter, HashMap::new());
         self.scopes.insert(self.counter, scope);
         self.counter += 1;
     }
