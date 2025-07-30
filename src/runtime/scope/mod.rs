@@ -24,7 +24,6 @@ use thiserror::Error;
 use crate::{
     parser,
     runtime::{
-        interpreter::evaluate,
         values::{
             RuntimeValue,
             helper::{ObjectType, StopValue, VarType},
@@ -63,15 +62,15 @@ pub enum Type {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Object {
-    object_type: Type,
-    functions: HashMap<String, (RuntimeValue, bool)>,
-    traits: Vec<String>,
+    pub object_type: Type,
+    pub functions: HashMap<String, (RuntimeValue, bool)>,
+    pub traits: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Variable {
-    value: RuntimeValue,
-    var_type: VarType,
+    pub value: RuntimeValue,
+    pub var_type: VarType,
 }
 
 #[derive(Debug, Clone, PartialEq)]

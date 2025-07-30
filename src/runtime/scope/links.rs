@@ -10,6 +10,53 @@ use core::panic;
 use std::{any::Any, cell::RefCell, rc::Rc};
 
 pub fn progress<'a>(
+    mut current: &'a RuntimeValue,
+    key: &str,
+) -> Result<&'a RuntimeValue, InterpreterErr> {
+    match current {
+        RuntimeValue::Struct(ObjectType::Map(map), _) => current = map.get(key).unwrap(),
+        RuntimeValue::Enum(_, _, Some(ObjectType::Map(map))) => current = map.get(key).unwrap(),
+        RuntimeValue::Result(Err(x), _) if key == "Err" => {
+            current = x;
+        }
+        RuntimeValue::Result(Ok(x), _) if key == "Ok" => {
+            current = x;
+        }
+        RuntimeValue::Option(Some(x), _) if key == "Some" => {
+            current = x;
+        }
+        RuntimeValue::Struct(ObjectType::Tuple(tuple), _) => {
+            let idx = key
+                .parse::<usize>()
+                .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
+            current = tuple.get(idx).unwrap()
+        }
+        RuntimeValue::Enum(_, _, Some(ObjectType::Tuple(tuple))) => {
+            let idx = key
+                .parse::<usize>()
+                .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
+            current = tuple.get(idx).unwrap()
+        }
+        RuntimeValue::Tuple(tuple) => {
+            let idx = key
+                .parse::<usize>()
+                .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
+            current = tuple.get(idx).unwrap()
+        }
+        RuntimeValue::List { data, .. } => {
+            let idx = key
+                .parse::<usize>()
+                .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
+            current = data.get(idx).unwrap()
+        }
+        _ => {
+            panic!()
+        }
+    }
+
+    Ok(current)
+}
+pub fn progress_mut<'a>(
     mut current: &'a mut RuntimeValue,
     key: &str,
 ) -> Result<&'a mut RuntimeValue, InterpreterErr> {
@@ -58,13 +105,13 @@ pub fn progress<'a>(
 }
 impl Environment {
     pub fn get_link_path(
-        &mut self,
+        &self,
         scope: &u64,
         path: &[String],
     ) -> Result<&RuntimeValue, InterpreterErr> {
-        if let Some(vars) = self.variables.get_mut(scope) {
-            if let Some(var) = vars.get_mut(&path[0]) {
-                let mut var = &mut var.value;
+        if let Some(vars) = self.variables.get(scope) {
+            if let Some(var) = vars.get(&path[0]) {
+                let mut var = &var.value;
                 for key in path.iter().skip(1) {
                     var = progress(var, key)?;
                 }
@@ -74,7 +121,7 @@ impl Environment {
         return Err(ScopeErr::Variable(path[0].to_string()).into());
     }
 
-    pub fn get_link(&mut self, link: &RuntimeValue) -> Result<&RuntimeValue, InterpreterErr> {
+    pub fn get_link(&self, link: &RuntimeValue) -> Result<&RuntimeValue, InterpreterErr> {
         if let RuntimeValue::Link(scope, path, _) = link {
             self.get_link_path(scope, &path)
         } else {
@@ -106,7 +153,7 @@ impl Environment {
             if let Some(var) = vars.get_mut(&path[0]) {
                 let mut var = &mut var.value;
                 for key in path.iter().skip(1) {
-                    var = progress(var, key)?;
+                    var = progress_mut(var, key)?;
                 }
                 f(var);
             }
@@ -115,7 +162,7 @@ impl Environment {
         return Err(ScopeErr::Variable(path[0].to_string()).into());
     }
 
-    pub fn get_link_parent(&mut self, link: &RuntimeValue) -> Result<&RuntimeValue, ScopeErr> {
+    pub fn get_link_parent(&self, link: &RuntimeValue) -> Result<&RuntimeValue, ScopeErr> {
         if let RuntimeValue::Link(scope, path, _) = link {
             Ok(self.get_link_path(scope, &[path[0].clone()]).unwrap())
         } else {

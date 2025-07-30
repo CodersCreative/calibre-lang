@@ -5,15 +5,11 @@ use rand::seq::IndexedRandom;
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{InterpreterErr, evaluate, expressions::call::evaluate_function},
+        interpreter::InterpreterErr,
         scope::{
-            Object, Scope, ScopeErr,
-            children::get_next_scope,
-            links::{get_link, get_link_path, update_link_path},
-            objects::{get_function, get_function_vec, get_object},
-            variables::{assign_var, get_var},
+            Environment, Object, Scope, ScopeErr
         },
-        values::{RuntimeType, RuntimeValue, ValueErr, helper::ObjectType},
+        values::{helper::ObjectType, RuntimeType, RuntimeValue, ValueErr},
     },
 };
 
@@ -24,192 +20,188 @@ pub enum MembrExprPathRes {
     Path(Vec<String>),
 }
 
-pub fn get_member_expression_path(
-    og_path: Vec<(NodeType, bool)>,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<MembrExprPathRes, InterpreterErr> {
-    let mut path = Vec::new();
-    if let (NodeType::Identifier(x), false) = &og_path[0] {
-        if let Ok(s) = get_next_scope(scope, &x) {
-            if let Ok(x) = evaluate(og_path[1].0.clone(), &s) {
-                return Ok(MembrExprPathRes::Value(x));
+impl Environment {
+    pub fn get_member_expression_path(
+        &mut self,
+        scope: &u64,
+        og_path: Vec<(NodeType, bool)>,
+    ) -> Result<MembrExprPathRes, InterpreterErr> {
+        let mut path = Vec::new();
+        if let (NodeType::Identifier(x), false) = &og_path[0] {
+            if let Ok(s) = self.get_next_scope(*scope, &x) {
+                if let Ok(x) = self.evaluate(&s, og_path[1].0.clone()) {
+                    return Ok(MembrExprPathRes::Value(x));
+                }
+                match self.get_member_expression_path(&s, og_path[1..].to_vec()) {
+                    Ok(x) => return Ok(x),
+                    _ => {}
+                }
             }
-            match get_member_expression_path(og_path[1..].to_vec(), &s) {
-                Ok(x) => return Ok(x),
+        }
+
+        for (node, computed) in og_path.into_iter() {
+            match &node {
+                NodeType::MemberExpression { path: p } => {
+                    match self.get_member_expression_path(scope, p.to_vec())? {
+                        MembrExprPathRes::Value(x) => return Ok(MembrExprPathRes::Value(x)),
+                        MembrExprPathRes::Path(mut p) => path.append(&mut p),
+                    }
+                    continue;
+                }
+                _ if computed => {}
+                NodeType::Identifier(x) => {
+                    path.push(x.to_string());
+                    continue;
+                }
+                NodeType::FloatLiteral(x) => {
+                    path.push(x.to_string());
+                    continue;
+                }
+                NodeType::IntLiteral(x) => {
+                    path.push(x.to_string());
+                    continue;
+                }
                 _ => {}
             }
-        }
-    }
 
-    for (node, computed) in og_path.into_iter() {
-        match &node {
-            NodeType::MemberExpression { path: p } => {
-                match get_member_expression_path(p.to_vec(), scope)? {
-                    MembrExprPathRes::Value(x) => return Ok(MembrExprPathRes::Value(x)),
-                    MembrExprPathRes::Path(mut p) => path.append(&mut p),
-                }
-                continue;
-            }
-            _ if computed => {}
-            NodeType::Identifier(x) => {
-                path.push(x.to_string());
-                continue;
-            }
-            NodeType::FloatLiteral(x) => {
-                path.push(x.to_string());
-                continue;
-            }
-            NodeType::IntLiteral(x) => {
-                path.push(x.to_string());
-                continue;
-            }
-            _ => {}
-        }
-
-        match evaluate(node.clone(), &scope) {
-            Ok(mut value) => loop {
-                match value.unwrap(scope)? {
-                    RuntimeValue::Int(x) => path.push(x.to_string()),
-                    RuntimeValue::UInt(x) => path.push(x.to_string()),
-                    RuntimeValue::Float(x) => path.push(x.to_string()),
-                    RuntimeValue::Double(x) => path.push(x.to_string()),
-                    RuntimeValue::Long(x) => path.push(x.to_string()),
-                    RuntimeValue::ULong(x) => path.push(x.to_string()),
-                    RuntimeValue::Str(x) => path.push(x.to_string()),
-                    RuntimeValue::Char(x) => path.push(x.to_string()),
-                    RuntimeValue::Link(path, _) => {
-                        value = get_link_path(scope, &path)?;
-                        continue;
+            match self.evaluate(&scope, node.clone()) {
+                Ok(mut value) => loop {
+                    match value.unwrap(self, scope)? {
+                        RuntimeValue::Int(x) => path.push(x.to_string()),
+                        RuntimeValue::UInt(x) => path.push(x.to_string()),
+                        RuntimeValue::Float(x) => path.push(x.to_string()),
+                        RuntimeValue::Double(x) => path.push(x.to_string()),
+                        RuntimeValue::Long(x) => path.push(x.to_string()),
+                        RuntimeValue::ULong(x) => path.push(x.to_string()),
+                        RuntimeValue::Str(x) => path.push(x.to_string()),
+                        RuntimeValue::Char(x) => path.push(x.to_string()),
+                        RuntimeValue::Link(s, path, _) => {
+                            value = self.get_link_path(&s, &path)?.clone();
+                            continue;
+                        }
+                        x => return Ok(MembrExprPathRes::Value(x)), // x => unimplemented!("{:?}", x),
                     }
-                    x => return Ok(MembrExprPathRes::Value(x)), // x => unimplemented!("{:?}", x),
-                }
-                break;
-            },
-            Err(e) if path.len() == 1 => match node {
-                NodeType::Identifier(value) => {
-                    return Ok(MembrExprPathRes::Value(evaluate(
-                        NodeType::EnumExpression {
-                            identifier: path.remove(0),
-                            value,
-                            data: None,
-                        },
-                        scope,
-                    )?));
-                }
-                NodeType::CallExpression(value, mut args) => match *value {
+                    break;
+                },
+                Err(e) if path.len() == 1 => match node {
                     NodeType::Identifier(value) => {
-                        return Ok(MembrExprPathRes::Value(
-                            match evaluate(
-                                NodeType::EnumExpression {
-                                    identifier: path[0].clone(),
-                                    value: value.to_string(),
-                                    data: Some(ObjectType::Tuple(
-                                        args.clone()
-                                            .into_iter()
-                                            .map(|x| Some(x.0.clone()))
-                                            .collect(),
-                                    )),
-                                },
-                                scope,
-                            ) {
-                                Ok(x) => x,
-                                Err(e) => {
-                                    if let Ok(x) = get_function(scope, &path[0], &value) {
-                                        evaluate_function(scope, x.0, args)?
-                                    } else if let Ok(x) = get_var(scope, &path[0]) {
-                                        let obj = match x.0 {
-                                            RuntimeValue::Struct(_, p) => p,
-                                            RuntimeValue::Enum(p, _, _) => p,
-                                            RuntimeValue::Link(p, _) => {
-                                                match get_link_path(scope, &p)? {
-                                                    RuntimeValue::Struct(_, p) => p,
-                                                    RuntimeValue::Enum(p, _, _) => p,
-                                                    _ => return Err(e),
+                        return Ok(MembrExprPathRes::Value(self.evaluate(
+                            scope,
+                            NodeType::EnumExpression {
+                                identifier: path.remove(0),
+                                value,
+                                data: None,
+                            },
+                        )?));
+                    }
+                    NodeType::CallExpression(value, mut args) => match *value {
+                        NodeType::Identifier(value) => {
+                            return Ok(MembrExprPathRes::Value(
+                                match self.evaluate(
+                                    scope,
+                                    NodeType::EnumExpression {
+                                        identifier: path[0].clone(),
+                                        value: value.to_string(),
+                                        data: Some(ObjectType::Tuple(
+                                            args.clone()
+                                                .into_iter()
+                                                .map(|x| Some(x.0.clone()))
+                                                .collect(),
+                                        )),
+                                    },
+                                ) {
+                                    Ok(x) => x,
+                                    Err(e) => {
+                                        if let Ok(x) = self.get_function(scope, &path[0], &value) {
+                                            self.evaluate_function(scope, x.0, args)?
+                                        } else if let Ok(x) = self.get_var(scope, &path[0]) {
+                                            let obj = match x.value.unwrap(self, scope)? {
+                                                RuntimeValue::Struct(_, p, _) => p.unwrap().clone(),
+                                                RuntimeValue::Enum(_, p, _, _) => p.clone(),
+                                                _ => return Err(e),
+                                            };
+
+                                            if let Ok(x) = self.get_function(scope, &obj, &value) {
+                                                if x.1 {
+                                                    args.insert(
+                                                        0,
+                                                        (NodeType::Identifier(path[0].clone()), None),
+                                                    );
                                                 }
-                                            }
-                                            _ => return Err(e),
-                                        };
 
-                                        if let Ok(x) = get_function_vec(scope, &obj, &value) {
-                                            if x.1 {
-                                                args.insert(
-                                                    0,
-                                                    (NodeType::Identifier(path[0].clone()), None),
-                                                );
+                                                evaluate_function(scope, x.0, args)?
+                                            } else {
+                                                return Err(e);
                                             }
-
-                                            evaluate_function(scope, x.0, args)?
                                         } else {
                                             return Err(e);
                                         }
-                                    } else {
-                                        return Err(e);
                                     }
-                                }
-                            },
-                        ));
-                    }
+                                },
+                            ));
+                        }
+                        _ => return Err(e),
+                    },
                     _ => return Err(e),
                 },
-                _ => return Err(e),
-            },
-            Err(e) => return Err(e),
-        }
-    }
-
-    Ok(MembrExprPathRes::Path(path))
-}
-
-pub fn assign_member_expression(
-    member: NodeType,
-    value: RuntimeValue,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    match member {
-        NodeType::MemberExpression { path: og_path } => {
-            let path = match get_member_expression_path(og_path, scope)? {
-                MembrExprPathRes::Path(x) => x,
-                MembrExprPathRes::Value(x) => return Ok(x),
-            };
-
-            let _ = update_link_path(scope, &path, |x| {
-                *x = value.clone();
-                Ok(())
-            })?;
-
-            Ok(value)
-        }
-        _ => Err(InterpreterErr::NotImplemented(member)),
-    }
-}
-
-pub fn evaluate_member_expression(
-    exp: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    match exp {
-        NodeType::MemberExpression { path: og_path } => {
-            let mut path = match get_member_expression_path(og_path, scope)? {
-                MembrExprPathRes::Path(x) => x,
-                MembrExprPathRes::Value(x) => return Ok(x),
-            };
-
-            match get_link_path(scope, &path) {
-                Ok(x) => Ok(x),
-                Err(e) if path.len() == 2 => {
-                    return evaluate(
-                        NodeType::EnumExpression {
-                            identifier: path.remove(0),
-                            value: path.remove(0),
-                            data: None,
-                        },
-                        scope,
-                    );
-                }
-                Err(e) => Err(e),
+                Err(e) => return Err(e),
             }
         }
-        _ => Err(InterpreterErr::NotImplemented(exp)),
+
+        Ok(MembrExprPathRes::Path(path))
+    }
+
+    pub fn assign_member_expression(
+        member: NodeType,
+        value: RuntimeValue,
+        scope: &Rc<RefCell<Scope>>,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        match member {
+            NodeType::MemberExpression { path: og_path } => {
+                let path = match get_member_expression_path(og_path, scope)? {
+                    MembrExprPathRes::Path(x) => x,
+                    MembrExprPathRes::Value(x) => return Ok(x),
+                };
+
+                let _ = update_link_path(scope, &path, |x| {
+                    *x = value.clone();
+                    Ok(())
+                })?;
+
+                Ok(value)
+            }
+            _ => Err(InterpreterErr::NotImplemented(member)),
+        }
+    }
+
+    pub fn evaluate_member_expression(
+        exp: NodeType,
+        scope: &Rc<RefCell<Scope>>,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        match exp {
+            NodeType::MemberExpression { path: og_path } => {
+                let mut path = match get_member_expression_path(og_path, scope)? {
+                    MembrExprPathRes::Path(x) => x,
+                    MembrExprPathRes::Value(x) => return Ok(x),
+                };
+
+                match get_link_path(scope, &path) {
+                    Ok(x) => Ok(x),
+                    Err(e) if path.len() == 2 => {
+                        return evaluate(
+                            NodeType::EnumExpression {
+                                identifier: path.remove(0),
+                                value: path.remove(0),
+                                data: None,
+                            },
+                            scope,
+                        );
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+            _ => Err(InterpreterErr::NotImplemented(exp)),
+        }
     }
 }
 

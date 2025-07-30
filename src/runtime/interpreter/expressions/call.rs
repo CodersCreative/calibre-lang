@@ -3,120 +3,116 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{
-            InterpreterErr, evaluate,
-            expressions::{scope::get_new_scope, structs::evaluate_struct_expression},
-        },
+        interpreter::{expressions::{scope::get_new_scope, structs::evaluate_struct_expression}, InterpreterErr},
         scope::{
-            Object, Scope, ScopeErr,
-            objects::get_object,
-            variables::{assign_var, get_global_scope, resolve_var},
+            Environment, Object, Scope, ScopeErr, Type
         },
         values::{
-            RuntimeValue, ValueErr,
-            helper::{ObjectType, StopValue, VarType},
+            helper::{ObjectType, StopValue, VarType}, RuntimeValue, ValueErr
         },
     },
 };
 
-pub fn evaluate_function(
-    scope: &Rc<RefCell<Scope>>,
-    func: RuntimeValue,
-    arguments: Vec<(NodeType, Option<NodeType>)>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let RuntimeValue::Function {
-        parameters,
-        body,
-        return_type,
-        is_async,
-    } = func
-    {
-        let new_scope = get_new_scope(scope, parameters, arguments)?;
+impl Environment{
+    pub fn evaluate_function(
+        &mut self,
+        scope: &u64,
+        func: RuntimeValue,
+        arguments: Vec<(NodeType, Option<NodeType>)>,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let RuntimeValue::Function {
+            parameters,
+            body,
+            return_type,
+            is_async,
+        } = func
+        {
+            let new_scope = self.get_new_scope(scope, parameters, arguments)?;
 
-        let result: RuntimeValue = evaluate(*body.0, &new_scope)?;
-        let global = get_global_scope(&new_scope);
+            let result: RuntimeValue = self.evaluate(&new_scope, *body.0)?;
 
-        global.borrow_mut().stop = None;
-        if let Some(t) = return_type {
-            return Ok(result.into_type(&new_scope, &t)?);
+            self.stop = None;
+            if let Some(t) = return_type {
+                return Ok(result.into_type(self, &new_scope, &t)?);
+            } else {
+                return Ok(RuntimeValue::Null);
+            }
         } else {
-            return Ok(RuntimeValue::Null);
+            panic!()
         }
-    } else {
-        panic!()
     }
-}
 
-pub fn evaluate_call_expression(
-    exp: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::CallExpression(caller, arguments) = exp {
-        if let NodeType::Identifier(object_name) = *caller.clone() {
-            if let Ok(Object::Struct(obj)) = get_object(scope, &object_name) {
-                let mut args = Vec::new();
-                for arg in arguments {
-                    args.push(evaluate(arg.0, scope)?);
-                }
-                return Ok(RuntimeValue::Struct(
-                    ObjectType::Tuple(args),
-                    vec![object_name],
-                ));
-            }
-        }
-        let func = evaluate(*caller.clone(), scope)?;
-
-        match func {
-            RuntimeValue::Function { .. } => {
-                return evaluate_function(scope, func, arguments);
-            }
-            RuntimeValue::List { data, data_type } if arguments.len() == 1 => {
-                match evaluate(arguments[0].0.clone(), scope)? {
-                    RuntimeValue::Int(i) if arguments.len() == 1 => {
-                        return Ok(data
-                            .get(i as usize)
-                            .expect("Tried to get index that is larger than list size")
-                            .clone());
+    pub fn evaluate_call_expression(
+        &mut self,
+        scope: &u64,
+        exp: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::CallExpression(caller, arguments) = exp {
+            if let NodeType::Identifier(object_name) = *caller.clone() {
+                if let Ok(Type::Struct(obj)) = self.get_object(scope, &object_name) {
+                    let mut args = Vec::new();
+                    for arg in arguments {
+                        args.push(self.evaluate(scope, arg.0)?);
                     }
-                    _ => return Err(InterpreterErr::IndexNonList(arguments[0].0.clone())),
+                    return Ok(RuntimeValue::Struct(
+                        ObjectType::Tuple(args),
+                        vec![object_name],
+                    ));
                 }
             }
-            RuntimeValue::NativeFunction(_) => {
-                let mut evaluated_arguments = Vec::new();
+            let func = self.evaluate(scope, *caller.clone())?;
 
-                for arg in arguments.iter() {
-                    evaluated_arguments.push(if let Some(d) = &arg.1 {
-                        if let NodeType::Identifier(name) = &arg.0 {
-                            (
-                                RuntimeValue::Str(name.clone()),
-                                Some(evaluate(d.clone(), scope)?),
-                            )
-                        } else {
-                            panic!()
+            match func {
+                RuntimeValue::Function { .. } => {
+                    return self.evaluate_function(scope, func, arguments);
+                }
+                RuntimeValue::List { data, data_type } if arguments.len() == 1 => {
+                    match self.evaluate(scope, arguments[0].0.clone())? {
+                        RuntimeValue::Int(i) if arguments.len() == 1 => {
+                            return Ok(data
+                                .get(i as usize)
+                                .expect("Tried to get index that is larger than list size")
+                                .clone());
                         }
-                    } else {
-                        (evaluate(arg.0.clone(), scope)?, None)
-                    });
+                        _ => return Err(InterpreterErr::IndexNonList(arguments[0].0.clone())),
+                    }
                 }
+                RuntimeValue::NativeFunction(_) => {
+                    let mut evaluated_arguments = Vec::new();
 
-                match func {
-                    RuntimeValue::NativeFunction(x) => return x.run(&evaluated_arguments, scope),
-                    _ => {}
+                    for arg in arguments.iter() {
+                        evaluated_arguments.push(if let Some(d) = &arg.1 {
+                            if let NodeType::Identifier(name) = &arg.0 {
+                                (
+                                    RuntimeValue::Str(name.clone()),
+                                    Some(self.evaluate(scope, d.clone())?),
+                                )
+                            } else {
+                                panic!()
+                            }
+                        } else {
+                            (self.evaluate(scope, arg.0.clone())?, None)
+                        });
+                    }
+
+                    match func {
+                        RuntimeValue::NativeFunction(x) => return x.run(self, scope, &evaluated_arguments),
+                        _ => {}
+                    }
                 }
+                _ => {}
             }
-            _ => {}
-        }
 
-        if let NodeType::Identifier(caller) = *caller.clone() {
-            if let Ok((scope, name)) = resolve_var(scope, &caller) {
-                if let Some((var, var_type)) = scope.borrow().variables.get(&name).clone() {
-                    match var_type {
-                        VarType::Mutable(_) => {
+            if let NodeType::Identifier(caller) = *caller.clone() {
+                if let Ok(var) = self.get_var_ref(scope, &caller) {
+                    let RuntimeValue::Link(new_scope, _, _) = &var.value else {panic!()};
+                    match var.var_type {
+                        VarType::Mutable => {
                             if arguments.len() <= 0 {
-                                return Ok(var.clone());
+                                return Ok(var.value);
                             } else if arguments.len() == 1 {
-                                let value = evaluate(arguments[0].0.clone(), &scope)?;
-                                let _ = assign_var(&scope, &caller, value.clone())?;
+                                let value = self.evaluate(&scope, arguments[0].0.clone())?;
+                                let _ = self.assign_var(&new_scope, &caller, value.clone())?;
                                 return Ok(value);
                             } else {
                                 return Err(InterpreterErr::SetterArgs(arguments));
@@ -126,10 +122,10 @@ pub fn evaluate_call_expression(
                             NativeFunctions => {}
                             _ => {
                                 if arguments.len() <= 0 {
-                                    return Ok(var.clone());
+                                    return Ok(var.value.clone());
                                 } else {
                                     return Err(InterpreterErr::Value(ValueErr::Scope(
-                                        ScopeErr::AssignConstant(name),
+                                        ScopeErr::AssignConstant(caller.clone()),
                                     )));
                                 }
                             }
@@ -137,10 +133,10 @@ pub fn evaluate_call_expression(
                     }
                 }
             }
+            panic!("Cannot call non-variable or function value, {:?}", func);
+        } else {
+            Err(InterpreterErr::NotImplemented(exp))
         }
-        panic!("Cannot call non-variable or function value, {:?}", func);
-    } else {
-        Err(InterpreterErr::NotImplemented(exp))
     }
 }
 

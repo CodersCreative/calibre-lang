@@ -4,184 +4,200 @@ use crate::{
     ast::{NodeType, RefMutability},
     runtime::{
         interpreter::{
-            InterpreterErr, evaluate,
-            expressions::member::{MembrExprPathRes, get_member_expression_path},
+            evaluate, expressions::member::{get_member_expression_path, MembrExprPathRes}, InterpreterErr
         },
         scope::{
-            Scope,
-            links::get_link_path,
-            variables::{get_global_scope, resolve_var},
+            links::get_link_path, variables::{get_global_scope, resolve_var}, Environment, Scope, Variable
         },
         values::{
-            RuntimeType, RuntimeValue,
-            helper::{StopValue, VarType},
+            helper::{StopValue, VarType}, RuntimeType, RuntimeValue
         },
     },
 };
 
-pub fn get_new_scope_with_values(
-    scope: &Rc<RefCell<Scope>>,
-    arguments: Vec<(String, RuntimeValue, RefMutability)>,
-) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
-    let new_scope = Scope::new_from_parent_shallow(scope.clone());
-    for (k, v, m) in arguments.into_iter() {
-        // if m == RefMutability::MutRef || m == RefMutability::Ref {
-        //     todo!()
-        // } else {
-        let _ = new_scope.borrow_mut().push_var(
-            k.to_string(),
-            v.clone(),
-            match m {
-                RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable(None),
-                _ => VarType::Immutable(None),
-            },
-        )?;
-        // }
+impl Environment{
+    pub fn get_new_scope_with_values(
+        &mut self,
+        scope: &u64,
+        arguments: Vec<(String, RuntimeValue, RefMutability)>,
+    ) -> Result<u64, InterpreterErr> {
+        let new_scope = self.new_scope_from_parent_shallow(scope.clone());
+        for (k, v, m) in arguments.into_iter() {
+            // if m == RefMutability::MutRef || m == RefMutability::Ref {
+            //     todo!()
+            // } else {
+            let _ = self.push_var(
+                &new_scope,
+                k.to_string(),
+                Variable{
+                    value: v.clone(),
+                    var_type : match m {
+                        RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
+                        _ => VarType::Immutable,
+                    },
+                }
+            )?;
+            // }
+        }
+
+        Ok(new_scope)
     }
 
-    Ok(new_scope)
-}
+    pub fn get_new_scope(
+        &mut self,
+        scope: &u64,
+        parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)>,
+        arguments: Vec<(NodeType, Option<NodeType>)>,
+    ) -> Result<u64, InterpreterErr> {
+        let new_scope = self.new_scope_from_parent_shallow(scope.clone());
 
-pub fn get_new_scope(
-    scope: &Rc<RefCell<Scope>>,
-    parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)>,
-    arguments: Vec<(NodeType, Option<NodeType>)>,
-) -> Result<Rc<RefCell<Scope>>, InterpreterErr> {
-    let new_scope = Scope::new_from_parent_shallow(scope.clone());
+        for (i, (k, v, m, d)) in parameters.iter().enumerate() {
+            if m == &RefMutability::MutRef || m == &RefMutability::Ref {
+                if let Some(arg) = &arguments.get(i) {
+                    if let None = arg.1 {
+                        if let NodeType::Identifier(x) = &arg.0 {
+                            let (typ, var_type) = {
+                                let var = self.get_var(scope, x)?;
 
-    for (i, (k, v, m, d)) in parameters.iter().enumerate() {
-        if m == &RefMutability::MutRef || m == &RefMutability::Ref {
-            if let Some(arg) = &arguments.get(i) {
-                if let None = arg.1 {
-                    if let NodeType::Identifier(x) = &arg.0 {
-                        let (env, name) = resolve_var(&new_scope, x)?;
-
-                        let (var, var_type) = env.borrow().variables.get(&name).unwrap().clone();
-
-                        match var_type {
-                            VarType::Mutable(_) => {}
-                            _ if m == &RefMutability::MutRef => {
-                                return Err(InterpreterErr::MutRefNonMut(var));
-                            }
-                            _ => {}
-                        }
-                        let x = name.clone();
-                        if var.is_type(&scope, &v) {
-                            let _ = new_scope.borrow_mut().push_var(
-                                k.to_string(),
-                                RuntimeValue::Null,
-                                match m {
-                                    RefMutability::MutRef | RefMutability::MutValue => {
-                                        VarType::Mutable(Some(x))
+                                match var.var_type{
+                                    VarType::Mutable => {}
+                                    _ if m == &RefMutability::MutRef => {
+                                        return Err(InterpreterErr::MutRefNonMut(var.value));
                                     }
-                                    _ => VarType::Immutable(Some(x)),
-                                },
-                            )?;
-                        } else {
-                            return Err(InterpreterErr::UnexpectedType(var));
-                        }
+                                    _ => {}
+                                }
 
-                        continue;
-                    } else if let NodeType::MemberExpression { path } = &arg.0 {
-                        let path = match get_member_expression_path(path.clone(), scope)? {
-                            MembrExprPathRes::Path(x) => x,
-                            _ => return Err(InterpreterErr::RefNonVar(arguments[0].0.clone())),
-                        };
+                                if !var.value.is_type(self, &scope, &v) {
+                                    return Err(InterpreterErr::UnexpectedType(var.value));
+                                } 
 
-                        let var = get_link_path(&new_scope, &path)?;
+                                ((&var.value).into(), var.var_type.clone())
+                            };
 
-                        if var.is_type(&scope, &v) {
-                            let _ = new_scope.borrow_mut().push_var(
+
+                            let _ = self.push_var(
+                                &new_scope,
                                 k.to_string(),
-                                RuntimeValue::Link(path, (&var).into()),
-                                match m {
+                                Variable { value: RuntimeValue::Link(scope.clone(), vec![x.to_string()], typ), var_type: match m {
                                     RefMutability::MutRef | RefMutability::MutValue => {
-                                        VarType::Mutable(None)
+                                        VarType::Mutable
                                     }
-                                    _ => VarType::Immutable(None),
-                                },
+                                    _ => VarType::Immutable,
+                                } }
                             )?;
-                        } else {
-                            return Err(InterpreterErr::UnexpectedType(var));
-                        }
+                            continue;
+                        } else if let NodeType::MemberExpression { path } = &arg.0 {
+                            let path = match get_member_expression_path(self, scope, path.clone())? {
+                                MembrExprPathRes::Path(x) => x,
+                                _ => return Err(InterpreterErr::RefNonVar(arguments[0].0.clone())),
+                            };
 
-                        continue;
-                    } else {
-                        return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
+                            let typ = {
+                                let var = self.get_link_path(scope, &path)?;
+
+                                if !var.is_type(self, &scope, &v) {
+                                    return Err(InterpreterErr::UnexpectedType(var.clone()));
+                                } 
+
+                                var.into()
+                            };
+
+                            let _ = self.push_var(
+                                &new_scope,
+                                k.to_string(),
+                                Variable { value: RuntimeValue::Link(scope.clone(), path, typ), var_type: match m {
+                                    RefMutability::MutRef | RefMutability::MutValue => {
+                                        VarType::Mutable
+                                    }
+                                    _ => VarType::Immutable,
+                                } }
+                            )?;
+                            continue;
+                        } else {
+                            return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
+                        }
                     }
                 }
             }
-        }
-        if let Some(arg) = arguments.get(i) {
-            if let None = arg.1 {
-                let arg = evaluate(arg.0.clone(), &new_scope)?.into_type(&new_scope, &v)?;
-                new_scope.borrow_mut().push_var(
+            if let Some(arg) = arguments.get(i) {
+                if let None = arg.1 {
+                    let arg = evaluate(arg.0.clone(), &new_scope)?.into_type(&new_scope, &v)?;
+                    self.push_var(
+                        &new_scope,
+                        k.to_string(),
+                        Variable { value: arg, var_type: match m {
+                            RefMutability::MutRef | RefMutability::MutValue => {
+                                VarType::Mutable
+                            }
+                            _ => VarType::Immutable,
+                        } }
+                    )?;
+                    continue;
+                }
+            }
+            if let Some(d) = arguments.iter().find(|x| {
+                if let NodeType::Identifier(key) = &x.0 {
+                    key == k && x.1.is_some()
+                } else {
+                    false
+                }
+            }) {
+                self.push_var(
+                    &new_scope,
                     k.to_string(),
-                    arg,
-                    match m {
-                        RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable(None),
-                        _ => VarType::Immutable(None),
-                    },
+                    Variable { value: evaluate(d.1.clone().unwrap(), scope)?, var_type: match m {
+                        RefMutability::MutRef | RefMutability::MutValue => {
+                            VarType::Mutable
+                        }
+                        _ => VarType::Immutable,
+                    } }
                 )?;
+                
                 continue;
             }
-        }
-        if let Some(d) = arguments.iter().find(|x| {
-            if let NodeType::Identifier(key) = &x.0 {
-                key == k && x.1.is_some()
-            } else {
-                false
+
+            if let Some(d) = d {
+                self.push_var(
+                    &new_scope,
+                    k.to_string(),
+                    Variable { value: evaluate(d.clone(), scope)?, var_type: match m {
+                        RefMutability::MutRef | RefMutability::MutValue => {
+                            VarType::Mutable
+                        }
+                        _ => VarType::Immutable,
+                    } }
+                )?;
+                
+                continue;
             }
-        }) {
-            let _ = new_scope.borrow_mut().push_var(
-                k.to_string(),
-                evaluate(d.1.clone().unwrap(), scope)?,
-                match m {
-                    RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable(None),
-                    _ => VarType::Immutable(None),
-                },
-            )?;
-            continue;
+
+            return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
         }
 
-        if let Some(d) = d {
-            let _ = new_scope.borrow_mut().push_var(
-                k.to_string(),
-                d.clone(),
-                match m {
-                    RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable(None),
-                    _ => VarType::Immutable(None),
-                },
-            )?;
-            continue;
-        }
-
-        return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
+        Ok(new_scope)
     }
 
-    Ok(new_scope)
-}
+    pub fn evaluate_scope(
+        &mut self,
+        scope: &u64,
+        node: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::ScopeDeclaration { body } = node {
+            let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
 
-pub fn evaluate_scope(
-    node: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::ScopeDeclaration { body } = node {
-        let new_scope = get_new_scope(scope, Vec::new(), Vec::new())?;
-
-        let mut result: RuntimeValue = RuntimeValue::Null;
-        let global = get_global_scope(scope);
-        for statement in body.into_iter() {
-            if let Some(_) = global.borrow().stop {
-                return Ok(result);
-            } else {
-                result = evaluate(statement, &new_scope)?;
+            let mut result: RuntimeValue = RuntimeValue::Null;
+            for statement in body.into_iter() {
+                if let Some(_) = self.stop {
+                    return Ok(result);
+                } else {
+                    result = evaluate(statement, &new_scope)?;
+                }
             }
-        }
 
-        Ok(result)
-    } else {
-        panic!()
+            Ok(result)
+        } else {
+            panic!()
+        }
     }
 }
 

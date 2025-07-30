@@ -3,137 +3,146 @@ use std::{cell::RefCell, mem::discriminant, rc::Rc};
 use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
-        interpreter::{InterpreterErr, evaluate, statements::matching::handle_conditionals},
-        scope::{Scope, variables::get_var},
-        values::{RuntimeType, RuntimeValue, helper::VarType},
+        interpreter::{InterpreterErr},
+        scope::{Environment, Scope, Variable},
+        values::{helper::VarType, RuntimeType, RuntimeValue},
     },
 };
 
-use super::scope::get_new_scope;
+impl Environment{
+    pub fn evaluate_tuple_expression(
+        &mut self,
+        scope: &u64,
+        obj: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        let mut values = Vec::new();
 
-pub fn evaluate_tuple_expression(
-    obj: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    let mut values = Vec::new();
-
-    if let NodeType::TupleLiteral(vals) = obj {
-        for val in vals.iter() {
-            values.push(evaluate(val.clone(), scope)?);
+        if let NodeType::TupleLiteral(vals) = obj {
+            for val in vals.iter() {
+                values.push(self.evaluate(scope, val.clone())?);
+            }
         }
+
+        Ok(RuntimeValue::Tuple(values))
     }
 
-    Ok(RuntimeValue::Tuple(values))
-}
+    pub fn evaluate_list_expression(
+        &mut self,
+        scope: &u64,
+        obj: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        let mut values = Vec::new();
 
-pub fn evaluate_list_expression(
-    obj: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    let mut values = Vec::new();
-
-    if let NodeType::ListLiteral(vals) = obj {
-        for val in vals.iter() {
-            values.push(evaluate(val.clone(), scope)?);
+        if let NodeType::ListLiteral(vals) = obj {
+            for val in vals.iter() {
+                values.push(self.evaluate(scope, val.clone())?);
+            }
         }
-    }
 
-    let t = if values.len() > 0 {
-        let t = discriminant(&values[0]);
-        let filtered: Vec<&RuntimeValue> =
-            values.iter().filter(|x| discriminant(*x) == t).collect();
-        if values.len() == filtered.len() {
-            Some((&values[0]).into())
+        let t = if values.len() > 0 {
+            let t = discriminant(&values[0]);
+            let filtered: Vec<&RuntimeValue> =
+                values.iter().filter(|x| discriminant(*x) == t).collect();
+            if values.len() == filtered.len() {
+                Some((&values[0]).into())
+            } else {
+                None
+            }
         } else {
             None
-        }
-    } else {
-        None
-    };
-
-    Ok(RuntimeValue::List {
-        data: values,
-        data_type: Box::new(t),
-    })
-}
-
-pub fn evaluate_iter_expression(
-    declaration: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::IterExpression {
-        map,
-        loop_type,
-        conditionals,
-    } = declaration
-    {
-        let mut result = Vec::new();
-
-        if let LoopType::For(identifier, range) = *loop_type {
-            let range = evaluate(range, scope)?;
-            if let RuntimeValue::List { data, data_type: _ } = range {
-                for d in data.into_iter() {
-                    let new_scope = get_new_scope(scope, Vec::new(), Vec::new())?;
-                    let _ = new_scope.borrow_mut().push_var(
-                        identifier.clone(),
-                        d.clone(),
-                        VarType::Immutable(None),
-                    );
-
-                    if handle_conditionals(new_scope.clone(), conditionals.clone())? {
-                        result.push(evaluate(*map.clone(), &new_scope)?);
-                    }
-                }
-            } else if let RuntimeValue::Range(from, to) =
-                range.into_type(scope, &RuntimeType::Range)?
-            {
-                for i in from..to {
-                    let new_scope = get_new_scope(
-                        scope,
-                        vec![(
-                            identifier.clone(),
-                            RuntimeType::Int,
-                            RefMutability::Value,
-                            None,
-                        )],
-                        vec![(NodeType::IntLiteral(i as i128), None)],
-                    )?;
-                    if handle_conditionals(new_scope.clone(), conditionals.clone())? {
-                        result.push(evaluate(*map.clone(), &new_scope)?);
-                    }
-                }
-            }
-        } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
-            let (var, _) = get_var(scope, &loop_name)?;
-            if let RuntimeValue::List { data, data_type } = var {
-                for d in data.into_iter() {
-                    let new_scope = get_new_scope(scope, Vec::new(), Vec::new())?;
-                    let _ = new_scope.borrow_mut().push_var(
-                        identifier.clone(),
-                        d.clone(),
-                        match mutability {
-                            RefMutability::MutRef | RefMutability::MutValue => {
-                                VarType::Mutable(None)
-                            }
-                            _ => VarType::Immutable(None),
-                        },
-                    );
-
-                    if handle_conditionals(new_scope.clone(), conditionals.clone())? {
-                        result.push(evaluate(*map.clone(), &new_scope)?);
-                    }
-                }
-            }
-        } else if let LoopType::While(condition) = *loop_type {
-            panic!()
-        }
+        };
 
         Ok(RuntimeValue::List {
-            data: result,
-            data_type: Box::new(None),
+            data: values,
+            data_type: Box::new(t),
         })
-    } else {
-        Err(InterpreterErr::NotImplemented(declaration))
+    }
+
+    pub fn evaluate_iter_expression(
+        &mut self,
+        scope: &u64,
+        declaration: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::IterExpression {
+            map,
+            loop_type,
+            conditionals,
+        } = declaration
+        {
+            let mut result = Vec::new();
+
+            if let LoopType::For(identifier, range) = *loop_type {
+                let range = self.evaluate(scope, range)?;
+                if let RuntimeValue::List { data, data_type: _ } = range {
+                    for d in data.into_iter() {
+                        let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+                        let _ = self.push_var(
+                            &new_scope,
+                            identifier.clone(),
+                            Variable{
+                                value : d.clone(),
+                                var_type : VarType::Immutable,
+                            }
+                        );
+
+                        if self.handle_conditionals(&new_scope, conditionals.clone())? {
+                            result.push(self.evaluate(&new_scope, *map.clone())?);
+                        }
+                    }
+                } else if let RuntimeValue::Range(from, to) =
+                    range.into_type(self, scope, &RuntimeType::Range)?
+                {
+                    for i in from..to {
+                        let new_scope = self.get_new_scope(
+                            scope,
+                            vec![(
+                                identifier.clone(),
+                                RuntimeType::Int,
+                                RefMutability::Value,
+                                None,
+                            )],
+                            vec![(NodeType::IntLiteral(i as i128), None)],
+                        )?;
+                        if self.handle_conditionals(&new_scope, conditionals.clone())? {
+                            result.push(self.evaluate(&new_scope, *map.clone())?);
+                        }
+                    }
+                }
+            } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
+                let var = self.get_var(scope, &loop_name)?.clone();
+                if let RuntimeValue::List { data, data_type } = &var.value {
+                    for d in data.into_iter() {
+                        let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+                        let _ = self.push_var(
+                            &new_scope,
+                            identifier.clone(),
+                            Variable { 
+                                value: d.clone(), 
+                                var_type: match mutability {
+                                RefMutability::MutRef | RefMutability::MutValue => {
+                                    VarType::Mutable
+                                }
+                                _ => VarType::Immutable,
+                            }, 
+                            }
+                        );
+
+                        if self.handle_conditionals(&new_scope, conditionals.clone())? {
+                            result.push(self.evaluate(&new_scope, *map.clone())?);
+                        }
+                    }
+                }
+            } else if let LoopType::While(condition) = *loop_type {
+                panic!()
+            }
+
+            Ok(RuntimeValue::List {
+                data: result,
+                data_type: Box::new(None),
+            })
+        } else {
+            Err(InterpreterErr::NotImplemented(declaration))
+        }
     }
 }
 #[cfg(test)]

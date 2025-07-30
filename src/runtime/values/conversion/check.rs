@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::runtime::{
-    scope::Scope,
+    scope::{Environment, Scope},
     values::{RuntimeType, RuntimeValue},
 };
 
@@ -15,25 +15,25 @@ impl RuntimeValue {
                 | RuntimeValue::Long(_)
                 | RuntimeValue::UInt(_)
                 | RuntimeValue::ULong(_)
-                | RuntimeValue::Link(_, RuntimeType::Int)
-                | RuntimeValue::Link(_, RuntimeType::UInt)
-                | RuntimeValue::Link(_, RuntimeType::Long)
-                | RuntimeValue::Link(_, RuntimeType::ULong)
-                | RuntimeValue::Link(_, RuntimeType::Float)
-                | RuntimeValue::Link(_, RuntimeType::Double)
+                | RuntimeValue::Link(_, _, RuntimeType::Int)
+                | RuntimeValue::Link(_, _, RuntimeType::UInt)
+                | RuntimeValue::Link(_, _, RuntimeType::Long)
+                | RuntimeValue::Link(_, _, RuntimeType::ULong)
+                | RuntimeValue::Link(_, _, RuntimeType::Float)
+                | RuntimeValue::Link(_, _, RuntimeType::Double)
         )
     }
 
-    pub fn is_type(&self, scope: &Rc<RefCell<Scope>>, t: &RuntimeType) -> bool {
+    pub fn is_type(&self, env : &Environment, scope: &u64, t: &RuntimeType) -> bool {
         if t == &RuntimeType::Dynamic {
             return true;
         }
 
         match self {
-            RuntimeValue::Link(_, x) => x == t,
+            RuntimeValue::Link(_, _, x) => x == t,
             RuntimeValue::Null => false,
             RuntimeValue::NativeFunction(_) => false,
-            RuntimeValue::Struct(_, _) => match self.into_type(&scope, t) {
+            RuntimeValue::Struct(_, _, _) => match self.into_type(env, scope, t) {
                 Ok(_) => true,
                 Err(_) => false,
             },
@@ -54,7 +54,7 @@ impl RuntimeValue {
                     } else {
                         let mut valid = true;
                         for i in 0..data.len() {
-                            if !data[i].is_type(scope, &data_types[i]) {
+                            if !data[i].is_type(env, scope, &data_types[i]) {
                                 valid = false;
                                 break;
                             }
@@ -64,9 +64,9 @@ impl RuntimeValue {
                 }
                 _ => false,
             },
-            RuntimeValue::Enum(x, _, _) => match t {
-                RuntimeType::Enum(y) => x == y,
-                RuntimeType::Struct(y) => x == y,
+            RuntimeValue::Enum(w, x, _, _) => match t {
+                RuntimeType::Enum(z, y) => x == y && w == z,
+                RuntimeType::Struct(z, y) => Some(x) == y.as_ref() && w == z,
                 _ => false,
             },
             RuntimeValue::Function {

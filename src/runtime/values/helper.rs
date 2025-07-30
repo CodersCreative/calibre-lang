@@ -19,8 +19,8 @@ pub enum StopValue {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VarType {
-    Mutable(Option<String>),
-    Immutable(Option<String>),
+    Mutable,
+    Immutable,
     Constant,
 }
 

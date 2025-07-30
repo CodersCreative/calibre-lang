@@ -2,15 +2,16 @@ use core::panic;
 use std::{cell::RefCell, rc::Rc};
 
 use crate::runtime::{
-    scope::Scope,
+    scope::{Environment, Scope},
     values::{RuntimeValue, ValueErr},
 };
 
 impl RuntimeValue {
     pub fn make_similar(
         self,
+        env : &Environment, 
+        scope: &u64,
         rhs: Self,
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<(Self, Self), ValueErr> {
         if self.is_number() && rhs.is_number() {
             match self {
@@ -137,7 +138,7 @@ impl RuntimeValue {
                 _ => unimplemented!(),
             }
         } else {
-            let rhs = rhs.into_type(&scope, &(&self).into())?;
+            let rhs = rhs.into_type(env, scope, &(&self).into())?;
             Ok((self, rhs))
         }
     }

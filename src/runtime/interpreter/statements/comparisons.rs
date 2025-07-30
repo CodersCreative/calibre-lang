@@ -2,141 +2,146 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ast::{
-        IfComparisonType, NodeType,
-        comparison::{self, Comparison, is_equal},
+        comparison::{self, Comparison}, IfComparisonType, NodeType
     },
     runtime::{
         interpreter::{
-            InterpreterErr, evaluate, expressions::scope::evaluate_scope,
-            statements::matching::match_pattern,
+             InterpreterErr
         },
-        scope::Scope,
-        values::{RuntimeValue, helper::StopValue},
+        scope::{Environment, Scope},
+        values::{helper::StopValue, RuntimeValue},
     },
 };
 
-fn value_in_list(value: &RuntimeValue, list: &[RuntimeValue], scope: &Rc<RefCell<Scope>>) -> bool {
-    for val in list {
-        if is_equal(value, val, scope) {
-            return true;
+impl Environment {
+    fn value_in_list(&self, scope: &u64, value: &RuntimeValue, list: &[RuntimeValue]) -> bool {
+        for val in list {
+            if self.is_equal(scope, value, val) {
+                return true;
+            }
         }
+
+        false
     }
 
-    false
-}
-
-pub fn is_value_in(value: &RuntimeValue, other: &RuntimeValue, scope: &Rc<RefCell<Scope>>) -> bool {
-    match other {
-        RuntimeValue::Str(x) => match value {
-            RuntimeValue::Char(y) => return x.contains(*y),
-            RuntimeValue::Str(y) => return x.contains(y),
+    pub fn is_value_in(&self, scope: &u64, value: &RuntimeValue, other: &RuntimeValue) -> bool {
+        match other {
+            RuntimeValue::Str(x) => match value {
+                RuntimeValue::Char(y) => return x.contains(*y),
+                RuntimeValue::Str(y) => return x.contains(y),
+                _ => false,
+            },
+            RuntimeValue::List { data, data_type } => self.value_in_list(scope, value, data),
+            RuntimeValue::Tuple(data) => self.value_in_list(scope, value, data),
+            RuntimeValue::Range(from, to) => {
+                let num: f64 = match value {
+                    RuntimeValue::Range(x, y) => (*x as f64 + *y as f64) / 2.0,
+                    RuntimeValue::Int(x) => *x as f64,
+                    RuntimeValue::UInt(x) => *x as f64,
+                    RuntimeValue::Long(x) => *x as f64,
+                    RuntimeValue::ULong(x) => *x as f64,
+                    RuntimeValue::Float(x) => *x as f64,
+                    RuntimeValue::Double(x) => *x,
+                    _ => return false,
+                };
+                num >= *from as f64 && num < *to as f64
+            }
             _ => false,
-        },
-        RuntimeValue::List { data, data_type } => value_in_list(value, data, scope),
-        RuntimeValue::Tuple(data) => value_in_list(value, data, scope),
-        RuntimeValue::Range(from, to) => {
-            let num: f64 = match value {
-                RuntimeValue::Range(x, y) => (*x as f64 + *y as f64) / 2.0,
-                RuntimeValue::Int(x) => *x as f64,
-                RuntimeValue::UInt(x) => *x as f64,
-                RuntimeValue::Long(x) => *x as f64,
-                RuntimeValue::ULong(x) => *x as f64,
-                RuntimeValue::Float(x) => *x as f64,
-                RuntimeValue::Double(x) => *x,
-                _ => return false,
-            };
-            num >= *from as f64 && num < *to as f64
         }
-        _ => false,
     }
-}
 
-pub fn evaluate_in_statement(
-    declaration: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::InDeclaration {
-        identifier,
-        expression,
-    } = declaration
-    {
-        let value = evaluate(*expression, scope)?;
-        let ident = evaluate(*identifier, scope)?;
+    pub fn evaluate_in_statement(
+        &mut self,
+        scope: &u64,
+        declaration: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::InDeclaration {
+            identifier,
+            expression,
+        } = declaration
+        {
+            let value = self.evaluate(scope, *expression)?;
+            let ident = self.evaluate(scope, *identifier)?;
 
-        Ok(RuntimeValue::Bool(is_value_in(&ident, &value, scope)))
-    } else {
-        Err(InterpreterErr::NotImplemented(declaration))
+            Ok(RuntimeValue::Bool(self.is_value_in(scope, &ident, &value)))
+        } else {
+            Err(InterpreterErr::NotImplemented(declaration))
+        }
     }
-}
 
-pub fn evaluate_if_statement(
-    declaration: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::IfStatement {
-        comparisons,
-        bodies,
-    } = declaration
-    {
-        for (i, comparison) in comparisons.iter().enumerate() {
-            match comparison {
-                IfComparisonType::If(comparison) => {
-                    if let RuntimeValue::Bool(x) = evaluate(comparison.clone(), scope)? {
-                        if x {
-                            return evaluate(
-                                bodies[i].clone(),
-                                scope,
-                            );
+    pub fn evaluate_if_statement(
+        &mut self,
+        scope: &u64,
+        declaration: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::IfStatement {
+            comparisons,
+            bodies,
+        } = declaration
+        {
+            for (i, comparison) in comparisons.iter().enumerate() {
+                match comparison {
+                    IfComparisonType::If(comparison) => {
+                        if let RuntimeValue::Bool(x) = self.evaluate(scope, comparison.clone())? {
+                            if x {
+                                return self.evaluate(
+                                    scope,
+                                    bodies[i].clone(),
+                                );
+                            }
+                        } else {
+                            return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
                         }
-                    } else {
-                        return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
+                    }
+                    IfComparisonType::IfLet {
+                        mutability,
+                        value,
+                        pattern,
+                    } => {
+                        let path = match &*value {
+                            NodeType::Identifier(x) => vec![x.clone()],
+                            _ => Vec::new(),
+                        };
+
+                        let value = self.evaluate(scope, value.clone(), )?;
+
+                        if let Some(result) = self.match_pattern(
+                            scope,
+                            &pattern.0,
+                            &value,
+                            &mutability,
+                            path.clone(),
+                            &pattern.1,
+                            bodies[i].clone(),
+                        ) {
+                            match result {
+                                Ok(x) => return Ok(x),
+                                Err(InterpreterErr::ExpectedFunctions) => continue,
+                                Err(e) => return Err(e),
+                            }
+                        }
                     }
                 }
-                IfComparisonType::IfLet {
-                    mutability,
-                    value,
-                    pattern,
-                } => {
-                    let path = match &*value {
-                        NodeType::Identifier(x) => vec![x.clone()],
-                        _ => Vec::new(),
-                    };
+            }
 
-                    let value = evaluate(value.clone(), scope)?;
-
-                    if let Some(result) = match_pattern(
-                        &pattern.0,
-                        &value,
-                        &mutability,
-                        path.clone(),
+            if comparisons.len() < bodies.len() {
+                if let Some(last) = bodies.last() {
+                    return self.evaluate(
                         scope,
-                        &pattern.1,
-                        bodies[i].clone(),
-                    ) {
-                        match result {
-                            Ok(x) => return Ok(x),
-                            Err(InterpreterErr::ExpectedFunctions) => continue,
-                            Err(e) => return Err(e),
-                        }
-                    }
+                        last.clone(),
+                    );
                 }
             }
-        }
 
-        if comparisons.len() < bodies.len() {
-            if let Some(last) = bodies.last() {
-                return evaluate(
-                    last.clone(),
-                    scope,
-                );
-            }
+            Ok(RuntimeValue::Null)
+        } else {
+            Err(InterpreterErr::NotImplemented(declaration))
         }
-
-        Ok(RuntimeValue::Null)
-    } else {
-        Err(InterpreterErr::NotImplemented(declaration))
     }
 }
+
+
+
 
 #[cfg(test)]
 mod tests {

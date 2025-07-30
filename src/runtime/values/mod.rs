@@ -77,8 +77,8 @@ pub enum RuntimeType {
         parameters: Vec<(RuntimeType, RefMutability)>,
         is_async: bool,
     },
-    Enum(Vec<String>),
-    Struct(Vec<String>),
+    Enum(u64, String),
+    Struct(u64, Option<String>),
 }
 
 impl FromStr for RuntimeType {
@@ -92,11 +92,11 @@ impl FromStr for RuntimeType {
             "ulong" => RuntimeType::ULong,
             "float" => RuntimeType::Float,
             "double" => RuntimeType::Double,
-            "struct" => RuntimeType::Struct(Vec::new()),
+            "struct" => RuntimeType::Struct(0, None),
             "bool" => RuntimeType::Bool,
             "string" => RuntimeType::Str,
             "char" => RuntimeType::Char,
-            _ => RuntimeType::Struct(vec![s.to_string()]),
+            _ => RuntimeType::Struct(0, Some(s.to_string())),
         })
     }
 }
@@ -112,8 +112,8 @@ impl Into<RuntimeType> for &RuntimeValue {
             RuntimeValue::UInt(_) => RuntimeType::UInt,
             RuntimeValue::ULong(_) => RuntimeType::ULong,
             RuntimeValue::Link(_, _, x) => x.clone(),
-            RuntimeValue::Enum(x, _, _) => RuntimeType::Enum(x.clone()),
-            RuntimeValue::Struct(_, x) => RuntimeType::Struct(x.clone()),
+            RuntimeValue::Enum(y, x, _, _) => RuntimeType::Enum(*y, x.clone()),
+            RuntimeValue::Struct(y, x, _) => RuntimeType::Struct(*y, x.clone()),
             RuntimeValue::Bool(_) => RuntimeType::Bool,
             RuntimeValue::Option(_, x) => x.clone(),
             RuntimeValue::Result(_, x) => x.clone(),
@@ -155,11 +155,11 @@ pub enum RuntimeValue {
     UInt(u64),
     ULong(u128),
     Range(i32, i32),
-    Struct(ObjectType<RuntimeValue>, Vec<String>),
     Bool(bool),
     Str(String),
     Char(char),
-    Enum(Vec<String>, usize, Option<ObjectType<RuntimeValue>>),
+    Struct(u64, Option<String>, ObjectType<RuntimeValue>),
+    Enum(u64, String, usize, Option<ObjectType<RuntimeValue>>),
     Tuple(Vec<RuntimeValue>),
     Link(u64, Vec<String>, RuntimeType),
     List {
@@ -187,11 +187,11 @@ impl ToString for RuntimeValue {
             Self::Long(x) => x.to_string(),
             Self::ULong(x) => x.to_string(),
             Self::Double(x) => x.to_string(),
-            Self::Enum(x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
+            Self::Enum(_, x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
             Self::Range(from, to) => format!("{}..{}", from, to),
-            Self::Link(_, path, t) => format!("link -> {:?}", path),
+            Self::Link(_, path, _) => format!("link -> {:?}", path),
             Self::Bool(x) => x.to_string(),
-            Self::Struct(x, _) => format!("{:?}", x),
+            Self::Struct(_, _, x) => format!("{:?}", x),
             Self::NativeFunction(_) => format!("native function"),
             Self::List { data, data_type: _ } => {
                 let mut txt = String::from("[");

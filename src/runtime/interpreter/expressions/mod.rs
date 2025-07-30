@@ -5,10 +5,9 @@ use rustyline::validate::ValidationResult;
 use crate::{
     ast::NodeType,
     runtime::{
-        interpreter::{InterpreterErr, evaluate, expressions::member::assign_member_expression},
+        interpreter::{evaluate, expressions::member::assign_member_expression, InterpreterErr},
         scope::{
-            Scope,
-            variables::{assign_var, get_var},
+            variables::{assign_var, get_var}, Environment, Scope
         },
         values::{RuntimeType, RuntimeValue},
     },
@@ -20,193 +19,202 @@ pub mod member;
 pub mod scope;
 pub mod structs;
 
-pub fn evaluate_identifier(
-    identifier: &str,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    Ok(get_var(scope, identifier)?.0)
-}
+impl Environment{
+    pub fn evaluate_identifier(
+        &mut self,
+        scope: &u64,
+        identifier: &str,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        Ok(self.get_var_ref(scope, identifier)?.value.clone())
+    }
 
-pub fn evaluate_not<'a>(
-    exp: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::NotExpression { value } = exp {
-        match *value {
-            NodeType::RangeDeclaration {
-                from,
-                to,
-                inclusive,
-            } => {
-                return evaluate(
-                    NodeType::RangeDeclaration {
-                        from: Box::new(NodeType::NotExpression { value: from }),
-                        to,
-                        inclusive,
-                    },
-                    scope,
-                );
+    pub fn evaluate_not<'a>(
+        &mut self,
+        scope: &u64,
+        exp: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::NotExpression { value } = exp {
+            match *value {
+                NodeType::RangeDeclaration {
+                    from,
+                    to,
+                    inclusive,
+                } => {
+                    return evaluate(
+                        NodeType::RangeDeclaration {
+                            from: Box::new(NodeType::NotExpression { value: from }),
+                            to,
+                            inclusive,
+                        },
+                        scope,
+                    );
+                }
+                _ => {}
             }
-            _ => {}
-        }
-        let value = evaluate(*value, scope)?;
+            let value = evaluate(*value, scope)?;
 
-        match value {
-            RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
-            RuntimeValue::Int(x) => Ok(RuntimeValue::Int(-x)),
-            RuntimeValue::UInt(x) => Ok(RuntimeValue::Int(-(x as i64))),
-            RuntimeValue::Float(x) => Ok(RuntimeValue::Float(-x)),
-            RuntimeValue::Double(x) => Ok(RuntimeValue::Double(-x)),
-            RuntimeValue::ULong(x) => Ok(RuntimeValue::Long(-(x as i128))),
-            RuntimeValue::Long(x) => Ok(RuntimeValue::Long(-x)),
-            RuntimeValue::Range(f, t) => Ok(RuntimeValue::Range(t, f)),
-            RuntimeValue::List {
-                mut data,
-                data_type,
-            } => {
-                data.reverse();
-                Ok(RuntimeValue::List { data, data_type })
+            match value {
+                RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
+                RuntimeValue::Int(x) => Ok(RuntimeValue::Int(-x)),
+                RuntimeValue::UInt(x) => Ok(RuntimeValue::Int(-(x as i64))),
+                RuntimeValue::Float(x) => Ok(RuntimeValue::Float(-x)),
+                RuntimeValue::Double(x) => Ok(RuntimeValue::Double(-x)),
+                RuntimeValue::ULong(x) => Ok(RuntimeValue::Long(-(x as i128))),
+                RuntimeValue::Long(x) => Ok(RuntimeValue::Long(-x)),
+                RuntimeValue::Range(f, t) => Ok(RuntimeValue::Range(t, f)),
+                RuntimeValue::List {
+                    mut data,
+                    data_type,
+                } => {
+                    data.reverse();
+                    Ok(RuntimeValue::List { data, data_type })
+                }
+                _ => Err(InterpreterErr::UnexpectedType(value)),
             }
-            _ => Err(InterpreterErr::UnexpectedType(value)),
+        } else {
+            Err(InterpreterErr::NotImplemented(exp))
         }
-    } else {
-        Err(InterpreterErr::NotImplemented(exp))
     }
-}
 
-pub fn evaluate_as_expression(
-    exp: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::AsExpression { value, typ } = exp {
-        let value = evaluate(*value, scope)?;
-        Ok(match value.into_type(scope, &typ) {
-            Ok(x) => RuntimeValue::Result(
-                Ok(Box::new(x.clone())),
-                RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new((&x).into())),
-            ),
-            Err(e) => RuntimeValue::Result(
-                Err(Box::new(RuntimeValue::Str(String::from(e.to_string())))),
-                RuntimeType::Result(Box::new(RuntimeType::Str), Box::new(RuntimeType::Dynamic)),
-            ),
-        })
-    } else {
-        Err(InterpreterErr::NotImplemented(exp))
+    pub fn evaluate_as_expression(
+        &mut self,
+        scope: &u64,
+        exp: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::AsExpression { value, typ } = exp {
+            let value = evaluate(*value, scope)?;
+            Ok(match value.into_type(scope, &typ) {
+                Ok(x) => RuntimeValue::Result(
+                    Ok(Box::new(x.clone())),
+                    RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new((&x).into())),
+                ),
+                Err(e) => RuntimeValue::Result(
+                    Err(Box::new(RuntimeValue::Str(String::from(e.to_string())))),
+                    RuntimeType::Result(Box::new(RuntimeType::Str), Box::new(RuntimeType::Dynamic)),
+                ),
+            })
+        } else {
+            Err(InterpreterErr::NotImplemented(exp))
+        }
     }
-}
 
-pub fn evaluate_binary_expression(
-    exp: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::BinaryExpression {
-        left,
-        right,
-        operator,
-    } = exp
-    {
-        let left = evaluate(*left, scope)?;
-        let right = evaluate(*right, scope)?;
-
-        operator.handle(left, right, scope)
-    } else {
-        Err(InterpreterErr::NotImplemented(exp))
-    }
-}
-
-pub fn evaluate_range_expression(
-    exp: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::RangeDeclaration {
-        from,
-        to,
-        inclusive,
-    } = exp
-    {
-        if let RuntimeValue::Int(from) =
-            evaluate(*from.clone(), scope)?.into_type(scope, &RuntimeType::Int)?
+    pub fn evaluate_binary_expression(
+        &mut self,
+        scope: &u64,
+        exp: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::BinaryExpression {
+            left,
+            right,
+            operator,
+        } = exp
         {
-            if let RuntimeValue::Int(to) =
-                evaluate(*to.clone(), scope)?.into_type(scope, &RuntimeType::Int)?
-            {
-                let to = if inclusive { to + 1 } else { to };
+            let left = evaluate(*left, scope)?;
+            let right = evaluate(*right, scope)?;
 
-                Ok(RuntimeValue::Range(from as i32, to as i32))
+            operator.handle(left, right, scope)
+        } else {
+            Err(InterpreterErr::NotImplemented(exp))
+        }
+    }
+
+    pub fn evaluate_range_expression(
+        &mut self,
+        scope: &u64,
+        exp: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::RangeDeclaration {
+            from,
+            to,
+            inclusive,
+        } = exp
+        {
+            if let RuntimeValue::Int(from) =
+                evaluate(*from.clone(), scope)?.into_type(scope, &RuntimeType::Int)?
+            {
+                if let RuntimeValue::Int(to) =
+                    evaluate(*to.clone(), scope)?.into_type(scope, &RuntimeType::Int)?
+                {
+                    let to = if inclusive { to + 1 } else { to };
+
+                    Ok(RuntimeValue::Range(from as i32, to as i32))
+                } else {
+                    Err(InterpreterErr::NotImplemented(*to))
+                }
             } else {
-                Err(InterpreterErr::NotImplemented(*to))
+                Err(InterpreterErr::NotImplemented(*from))
             }
         } else {
-            Err(InterpreterErr::NotImplemented(*from))
+            Err(InterpreterErr::NotImplemented(exp))
         }
-    } else {
-        Err(InterpreterErr::NotImplemented(exp))
     }
-}
 
-pub fn evaluate_boolean_expression(
-    exp: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::BooleanExpression {
-        left,
-        right,
-        operator,
-    } = exp
-    {
-        let left = evaluate(*left, scope)?.into_type(scope, &RuntimeType::Bool)?;
-        let right = match evaluate(*right, scope) {
-            Ok(x) => x
-                .into_type(scope, &RuntimeType::Bool)
-                .unwrap_or(RuntimeValue::Null),
-            _ => RuntimeValue::Null,
-        };
+    pub fn evaluate_boolean_expression(
+        &mut self,
+        scope: &u64,
+        exp: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::BooleanExpression {
+            left,
+            right,
+            operator,
+        } = exp
+        {
+            let left = evaluate(*left, scope)?.into_type(scope, &RuntimeType::Bool)?;
+            let right = match evaluate(*right, scope) {
+                Ok(x) => x
+                    .into_type(scope, &RuntimeType::Bool)
+                    .unwrap_or(RuntimeValue::Null),
+                _ => RuntimeValue::Null,
+            };
 
-        Ok(operator.handle(&left, &right)?)
-    } else {
-        Err(InterpreterErr::NotImplemented(exp))
-    }
-}
-
-pub fn evaluate_comparison_expression(
-    exp: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::ComparisonExpression {
-        left,
-        right,
-        operator,
-    } = exp
-    {
-        let left = evaluate(*left, scope)?;
-        let right = evaluate(*right, scope)?;
-        operator.handle(left, right, scope)
-    } else {
-        Err(InterpreterErr::NotImplemented(exp))
-    }
-}
-pub fn evaluate_assignment_expression(
-    node: NodeType,
-    scope: &Rc<RefCell<Scope>>,
-) -> Result<RuntimeValue, InterpreterErr> {
-    if let NodeType::AssignmentExpression { identifier, value } = node {
-        if let NodeType::Identifier(identifier) = *identifier {
-            let value = evaluate(*value, scope)?;
-            let _ = assign_var(scope, &identifier, value.clone())?;
-            return Ok(value);
-        }
-        if let NodeType::MemberExpression { .. } = *identifier {
-            let value = evaluate(*value, scope)?;
-            let _ = assign_member_expression(*identifier, value.clone(), scope)?;
-            return Ok(value);
+            Ok(operator.handle(&left, &right)?)
         } else {
-            Err(InterpreterErr::AssignNonVariable(*identifier))
+            Err(InterpreterErr::NotImplemented(exp))
         }
-    } else {
-        Err(InterpreterErr::NotImplemented(node))
+    }
+
+    pub fn evaluate_comparison_expression(
+        &mut self,
+        scope: &u64,
+        exp: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::ComparisonExpression {
+            left,
+            right,
+            operator,
+        } = exp
+        {
+            let left = evaluate(*left, scope)?;
+            let right = evaluate(*right, scope)?;
+            operator.handle(left, right, scope)
+        } else {
+            Err(InterpreterErr::NotImplemented(exp))
+        }
+    }
+    pub fn evaluate_assignment_expression(
+        &mut self,
+        scope: &u64,
+        node: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::AssignmentExpression { identifier, value } = node {
+            if let NodeType::Identifier(identifier) = *identifier {
+                let value = evaluate(*value, scope)?;
+                let _ = assign_var(scope, &identifier, value.clone())?;
+                return Ok(value);
+            }
+            if let NodeType::MemberExpression { .. } = *identifier {
+                let value = evaluate(*value, scope)?;
+                let _ = assign_member_expression(*identifier, value.clone(), scope)?;
+                return Ok(value);
+            } else {
+                Err(InterpreterErr::AssignNonVariable(*identifier))
+            }
+        } else {
+            Err(InterpreterErr::NotImplemented(node))
+        }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

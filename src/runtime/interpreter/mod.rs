@@ -87,7 +87,7 @@ impl From<ScopeErr> for InterpreterErr {
 }
 
 impl Environment {
-    pub fn evaluate(&mut self, node: NodeType, scope: u64) -> Result<RuntimeValue, InterpreterErr> {
+    pub fn evaluate(&mut self, scope : &u64, node: NodeType) -> Result<RuntimeValue, InterpreterErr> {
         match node {
             NodeType::FloatLiteral(x) => Ok(if x > f32::MAX as f64 {
                 RuntimeValue::Double(x as f64)

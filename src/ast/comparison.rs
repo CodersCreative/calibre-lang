@@ -5,7 +5,7 @@ use crate::{
     ast::binary::{ASTError, BinaryOperator},
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Scope, links::get_link},
+        scope::{Environment, Scope},
         values::RuntimeValue,
     },
 };
@@ -65,14 +65,17 @@ impl BooleanOperation {
     }
 }
 
-pub fn is_equal(value: &RuntimeValue, other: &RuntimeValue, scope: &Rc<RefCell<Scope>>) -> bool {
-    if let Ok(RuntimeValue::Bool(x)) = Comparison::Equal.handle(value.clone(), other.clone(), scope)
-    {
-        x
-    } else {
-        false
+impl Environment{
+    pub fn is_equal(&self, scope: &u64, value: &RuntimeValue, other: &RuntimeValue) -> bool {
+        if let Ok(RuntimeValue::Bool(x)) = Comparison::Equal.handle(self, scope, value.clone(), other.clone())
+        {
+            x
+        } else {
+            false
+        }
     }
 }
+
 
 impl RuntimeValue {
     fn panic_comparison(
@@ -125,9 +128,10 @@ impl Comparison {
 
     pub fn handle(
         &self,
+        env : &Environment,
+        scope: &u64,
         mut left: RuntimeValue,
         mut right: RuntimeValue,
-        scope: &Rc<RefCell<Scope>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut changed = true;
 
@@ -135,7 +139,7 @@ impl Comparison {
             RuntimeValue::Option(Some(x), _) => left = *x,
             RuntimeValue::Result(Ok(x), _) => left = *x,
             RuntimeValue::Result(Err(e), _) => left = *e,
-            RuntimeValue::Link(_, _) => left = get_link(scope, &left)?,
+            RuntimeValue::Link(_, _, _) => left = env.get_link(&left)?.clone(),
             _ => changed = false,
         }
 
@@ -143,18 +147,18 @@ impl Comparison {
             RuntimeValue::Option(Some(x), _) => right = *x,
             RuntimeValue::Result(Ok(x), _) => right = *x,
             RuntimeValue::Result(Err(e), _) => right = *e,
-            RuntimeValue::Link(_, _) => right = get_link(scope, &right)?,
+            RuntimeValue::Link(_, _, _) => right = env.get_link(&right)?.clone(),
             _ => changed = false,
         }
 
         if changed {
-            return self.handle(left, right, scope);
+            return self.handle(env, scope, left, right);
         }
 
         let (left, right) = if left == RuntimeValue::Null || right == RuntimeValue::Null {
             (left, right)
         } else {
-            left.clone().make_similar(right, scope)?
+            left.clone().make_similar(env, scope, right)?
         };
 
         Ok(RuntimeValue::Bool(match left {
