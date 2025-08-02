@@ -136,6 +136,10 @@ pub enum NodeType {
         right: Box<NodeType>,
         operator: Comparison,
     },
+    PipeExpression {
+        left: Box<NodeType>,
+        right: Box<NodeType>,
+    },
     BooleanExpression {
         left: Box<NodeType>,
         right: Box<NodeType>,

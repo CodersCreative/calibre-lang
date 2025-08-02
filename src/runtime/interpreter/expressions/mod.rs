@@ -2,8 +2,8 @@ use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::Environment,
-        values::{RuntimeType, RuntimeValue},
+        scope::{Environment, Variable},
+        values::{RuntimeType, RuntimeValue, helper::VarType},
     },
 };
 
@@ -140,6 +140,38 @@ impl Environment {
             } else {
                 Err(InterpreterErr::NotImplemented(*from))
             }
+        } else {
+            Err(InterpreterErr::NotImplemented(exp))
+        }
+    }
+
+    pub fn evaluate_pipe_expression(
+        &mut self,
+        scope: &u64,
+        exp: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::PipeExpression { left, right } = exp {
+            let left = self.evaluate(scope, *left.clone())?;
+
+            let _ = self.force_var(
+                scope,
+                "$".to_string(),
+                Variable {
+                    value: left,
+                    var_type: VarType::Mutable,
+                },
+            )?;
+
+            let mut right = self.evaluate(scope, *right)?;
+            if let RuntimeValue::Function { .. } = right {
+                right = self.evaluate_function(
+                    scope,
+                    right,
+                    vec![(NodeType::Identifier("$".to_string()), None)],
+                )?;
+            }
+
+            Ok(right)
         } else {
             Err(InterpreterErr::NotImplemented(exp))
         }

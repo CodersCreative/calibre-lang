@@ -8,18 +8,19 @@ let mut recursive_language = Language.ARABIC(language, Language.SPANISH);
 
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
 // Mutability needs to be specified at the beginning for all branches
-match &mut {
+// match statements need to be called, either using a pipe or brackets as they're considered functions
+recursive_language |> match &mut {
   data.Language.ARABIC(Language.FRENCH{_}, Language.ARABIC(Language.FRENCH{code})) => print("Code: " + code),
   data.Language.ARABIC(Language.FRENCH{data}, Language.SPANISH) => {
     print("Enum: " + data)
     data = 5;
     print("Enum Changed: " + data)
   },
-} (recursive_language)
+}
 
 // In order to do an if let statement this syntax is used with extra conditions being added after the let
 if let data.Language.FRENCH{data} if true if ((try 9 as ulong) == 9.0 == 9) <- &language => {
-  print("Enum: " + data)
+  print("Enum 2: " + data)
 }
 
 // The const keyword creates an immutable variable that cannot be shadowed.
@@ -33,7 +34,8 @@ match {
 }(language_forced)
 
 // The mut keyword can be added for mutable variable that can be shadowed.
-let mut y : int = 0;
+let mut number : int = 0;
+
 // If a type is specified the data will automatically be converted to the type.
 let country : Country = Country(Language.SPANISH)
 
@@ -68,14 +70,14 @@ for l in &mut lst => {
 }
 print("lst 2")
 print(lst);// A static array
+print("IO " + number);
 // A for loop using the recommended range syntax.
-for i in 0..=100 => {
-  y += i;
-}
+for index in 1..=100 => number += index;
+print("IO");
 
 // A while loop.
-for x == y => {
-  print(x + y);
+for x == number => {
+  print(x + number);
 }
 
 /* Functions require all variables to have a specified type including those with default values.
@@ -97,7 +99,7 @@ let smth_fn = fn (y : int) -> string!int => {
   err("needs to be larger than 10")
 }
 
-match {
+18 |> smth_fn |> match {
   // This is equivalent to Ok(x) if x == 18
   Ok(18) => print("Equated to 18"),
   // This is equivalent to Ok(x) if x in 0..20
@@ -106,7 +108,7 @@ match {
   Ok([20, 30, 40, 50, 60, 70]) => print("Within list"),
   Ok(x) => print(x),
   Err(x) => print(x),
-} (smth_fn(18))
+}
 
 // The previous function was shadowed
 let smth_fn = fn (y : int) -> int? => {
@@ -121,7 +123,7 @@ match {
   None => print("none"),
 } (smth_fn(18))
 
-match int {
+16 |> match int {
   1 => print("one"),
   2 => print("two"),
   3 => print("three"),
@@ -135,7 +137,7 @@ match int {
   Let(data) if data > 200 => print("value is > 200 "),
   // if the name is not in scope it can be used without the Let keyword
   data => print("value is : " + data),
-}(16)
+}
 
 // TODO Implement generics with dyn<Add, Sub, Mul...>
 // TODO Allow traits of generics to be easily specified and add to new type system. Like : "type Output = dyn<...traits...>;"
@@ -164,11 +166,11 @@ const main = fn () -> !int => {
     let w = "b";
     let d = z + w ; // Should give "ab"
 
-    print(d + " ; " + x + " ; " + y);
+    print(d + " ; " + x + " ; " + number);
   }
 
 	print(x);
-	print(y);
+	print(number);
   let sentence = "Hello, World!";
 
   match sentence{
@@ -177,7 +179,7 @@ const main = fn () -> !int => {
     Suffix(", World!", line) => print(trim(line))
   }
 
-	y
+	number
 }
 
 // the in keyword can be used to see if a certain value is contained by a string or list.

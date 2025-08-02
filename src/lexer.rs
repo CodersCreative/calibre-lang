@@ -77,6 +77,7 @@ pub enum TokenType {
     EOF,
     Struct,
     Else,
+    Pipe,
     From,
     Import,
     Type,
@@ -119,6 +120,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
 pub fn special_keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("->"), TokenType::Arrow),
+        (String::from("|>"), TokenType::Pipe),
         (String::from("<-"), TokenType::LeftArrow),
         (String::from("=>"), TokenType::FatArrow),
         (String::from(".."), TokenType::Range),

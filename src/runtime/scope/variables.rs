@@ -9,6 +9,19 @@ use crate::runtime::{
 use super::Scope;
 
 impl Environment {
+    pub fn force_var(
+        &mut self,
+        scope: &u64,
+        key: String,
+        value: Variable,
+    ) -> Result<RuntimeValue, ScopeErr> {
+        let typ = (&value.value).into();
+        if let Some(vars) = self.variables.get_mut(scope) {
+            vars.insert(key.clone(), value);
+        }
+
+        Ok(RuntimeValue::Link(*scope, vec![key], typ))
+    }
     pub fn push_var(
         &mut self,
         scope: &u64,
@@ -110,6 +123,10 @@ impl Environment {
                     }
                     return Ok(var.value.clone());
                 };
+            } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+                return self.assign_var(&scope, key, value);
+            } else {
+                return Err(ScopeErr::Variable(key.to_string()).into());
             }
         }
 

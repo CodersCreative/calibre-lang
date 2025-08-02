@@ -521,6 +521,12 @@ impl Environment {
             _ => self.evaluate(scope, value)?,
         };
 
+        let value = if let RuntimeValue::Link(_, _, _) = value {
+            value.unwrap_val(self, scope)?
+        } else {
+            value
+        };
+
         for (pattern, conditionals, body) in patterns {
             if let Some(result) = self.match_pattern(
                 scope,

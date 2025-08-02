@@ -130,7 +130,7 @@ impl Parser {
     }
 
     pub fn parse_assignment_expression(&mut self) -> Result<NodeType, ParserError> {
-        let mut left = self.parse_tuple_expression()?;
+        let mut left = self.parse_pipe_expression()?;
 
         if let TokenType::UnaryAssign(op) = self.first().token_type.clone() {
             let _ = self.eat();

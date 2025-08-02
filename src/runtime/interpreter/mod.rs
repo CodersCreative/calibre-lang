@@ -153,6 +153,7 @@ impl Environment {
             NodeType::ScopeDeclaration { .. } => self.evaluate_scope(scope, node),
             NodeType::NotExpression { .. } => self.evaluate_not(scope, node),
             NodeType::TypeDeclaration { .. } => self.evaluate_type_declaration(scope, node),
+            NodeType::PipeExpression { .. } => self.evaluate_pipe_expression(scope, node),
             NodeType::EnumExpression { .. } => self.evaluate_enum_expression(scope, node),
             NodeType::LoopDeclaration { .. } => self.evaluate_loop_declaration(scope, node),
             NodeType::IterExpression { .. } => self.evaluate_iter_expression(scope, node),
