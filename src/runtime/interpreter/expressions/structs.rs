@@ -20,7 +20,7 @@ impl Environment {
                 let mut properties = HashMap::new();
                 for (k, v) in props {
                     let value = if let Some(value) = v {
-                        self.evaluate(scope, value)?.unwrap(self, scope)?
+                        self.evaluate(scope, value)?.unwrap(self, scope)?.clone()
                     } else {
                         self.get_var(scope, &k)?.value.clone()
                     };
@@ -37,7 +37,7 @@ impl Environment {
                 let mut properties = Vec::new();
                 for v in props {
                     if let Some(value) = v {
-                        properties.push(self.evaluate(scope, value)?.unwrap(self, scope)?);
+                        properties.push(self.evaluate(scope, value)?.unwrap(self, scope)?.clone());
                     }
                 }
                 return Ok(RuntimeValue::Struct(
@@ -89,7 +89,7 @@ impl Environment {
                     if let Some(ObjectType::Map(data)) = data {
                         for (k, v) in data {
                             let value = if let Some(value) = v {
-                                self.evaluate(scope, value)?.unwrap(self, scope)?
+                                self.evaluate(scope, value)?.unwrap(self, scope)?.clone()
                             } else {
                                 self.get_var(scope, &k)?.value.clone()
                             };
@@ -123,7 +123,9 @@ impl Environment {
                     if let Some(ObjectType::Tuple(data)) = data {
                         for v in data {
                             if let Some(value) = v {
-                                data_vals.push(self.evaluate(scope, value)?.unwrap(self, scope)?);
+                                data_vals.push(
+                                    self.evaluate(scope, value)?.unwrap(self, scope)?.clone(),
+                                );
                             };
                         }
                     }

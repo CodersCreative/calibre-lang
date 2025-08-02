@@ -73,7 +73,7 @@ impl Environment {
                             value = self.get_link_path(&s, &path)?.clone();
                             continue;
                         }
-                        x => return Ok(MembrExprPathRes::Value(x)), // x => unimplemented!("{:?}", x),
+                        x => return Ok(MembrExprPathRes::Value(x.clone())), // x => unimplemented!("{:?}", x),
                     }
                     break;
                 },
@@ -110,7 +110,7 @@ impl Environment {
                                             self.evaluate_function(scope, x.0.clone(), args)?
                                         } else {
                                             let obj = match match self.get_var(scope, &path[0]) {
-                                                Ok(x) => x.value.unwrap(self, scope)?,
+                                                Ok(x) => x.value.unwrap(self, scope)?.clone(),
                                                 _ => return Err(e),
                                             } {
                                                 RuntimeValue::Struct(_, p, _) => p.unwrap().clone(),

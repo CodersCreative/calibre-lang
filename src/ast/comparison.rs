@@ -2,11 +2,7 @@ use core::panic;
 
 use crate::{
     ast::binary::{ASTError, BinaryOperator},
-    runtime::{
-        interpreter::InterpreterErr,
-        scope::Environment,
-        values::RuntimeValue,
-    },
+    runtime::{interpreter::InterpreterErr, scope::Environment, values::RuntimeValue},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -64,9 +60,10 @@ impl BooleanOperation {
     }
 }
 
-impl Environment{
+impl Environment {
     pub fn is_equal(&self, scope: &u64, value: &RuntimeValue, other: &RuntimeValue) -> bool {
-        if let Ok(RuntimeValue::Bool(x)) = Comparison::Equal.handle(self, scope, value.clone(), other.clone())
+        if let Ok(RuntimeValue::Bool(x)) =
+            Comparison::Equal.handle(self, scope, value.clone(), other.clone())
         {
             x
         } else {
@@ -74,7 +71,6 @@ impl Environment{
         }
     }
 }
-
 
 impl RuntimeValue {
     fn panic_comparison(
@@ -127,32 +123,13 @@ impl Comparison {
 
     pub fn handle(
         &self,
-        env : &Environment,
+        env: &Environment,
         scope: &u64,
-        mut left: RuntimeValue,
-        mut right: RuntimeValue,
+        left: RuntimeValue,
+        right: RuntimeValue,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let mut changed = true;
-
-        match left {
-            RuntimeValue::Option(Some(x), _) => left = *x,
-            RuntimeValue::Result(Ok(x), _) => left = *x,
-            RuntimeValue::Result(Err(e), _) => left = *e,
-            RuntimeValue::Link(_, _, _) => left = env.get_link(&left)?.clone(),
-            _ => changed = false,
-        }
-
-        match right {
-            RuntimeValue::Option(Some(x), _) => right = *x,
-            RuntimeValue::Result(Ok(x), _) => right = *x,
-            RuntimeValue::Result(Err(e), _) => right = *e,
-            RuntimeValue::Link(_, _, _) => right = env.get_link(&right)?.clone(),
-            _ => changed = false,
-        }
-
-        if changed {
-            return self.handle(env, scope, left, right);
-        }
+        let left = left.unwrap_val(env, scope)?;
+        let right = right.unwrap_val(env, scope)?;
 
         let (left, right) = if left == RuntimeValue::Null || right == RuntimeValue::Null {
             (left, right)

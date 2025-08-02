@@ -101,7 +101,7 @@ impl Environment {
                                     return Err(InterpreterErr::UnexpectedType(var.clone()));
                                 }
 
-                                (&var).into()
+                                (var).into()
                             };
 
                             let _ = self.push_var(

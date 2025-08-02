@@ -1,3 +1,5 @@
+use rand::seq::IndexedRandom;
+
 use crate::{
     ast::NodeType,
     runtime::{
@@ -57,20 +59,35 @@ impl Environment {
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let NodeType::CallExpression(caller, arguments) = exp {
             if let NodeType::Identifier(object_name) = *caller.clone() {
-                if let Ok(Type::Struct(obj)) = self.get_object_type(scope, &object_name) {
-                    let mut args = Vec::new();
-                    for arg in arguments {
-                        args.push(self.evaluate(scope, arg.0)?.unwrap(self, scope)?);
+                if let Ok(Type::Struct(ObjectType::Tuple(params))) =
+                    self.get_object_type(scope, &object_name)
+                {
+                    if arguments.len() == params.len() {
+                        let mut args = Vec::new();
+
+                        let params = params.clone();
+                        for (i, arg) in arguments.into_iter().enumerate() {
+                            args.push(
+                                self.evaluate(scope, arg.0)?
+                                    .unwrap(self, scope)?
+                                    .into_type(self, scope, &params[i])?,
+                            );
+                        }
+
+                        return Ok(RuntimeValue::Struct(
+                            scope.clone(),
+                            Some(object_name),
+                            ObjectType::Tuple(args),
+                        ));
                     }
-                    return Ok(RuntimeValue::Struct(
-                        scope.clone(),
-                        Some(object_name),
-                        ObjectType::Tuple(args),
-                    ));
+                    println!("wow");
                 }
             }
 
-            let func = self.evaluate(scope, *caller.clone())?.unwrap(self, scope)?;
+            let func = self
+                .evaluate(scope, *caller.clone())?
+                .unwrap(self, scope)?
+                .clone();
 
             match func {
                 RuntimeValue::Function { .. } => {

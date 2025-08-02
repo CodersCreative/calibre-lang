@@ -190,7 +190,10 @@ impl NativeFunction for Trim {
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Some((x, _)) = args.get(0) {
-            let RuntimeValue::Str(x) = x.into_type(env, scope, &RuntimeType::Str)? else {
+            let RuntimeValue::Str(x) =
+                x.unwrap(env, scope)?
+                    .into_type(env, scope, &RuntimeType::Str)?
+            else {
                 panic!()
             };
             Ok(RuntimeValue::Str(x.trim().to_string()))

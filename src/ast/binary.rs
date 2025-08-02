@@ -1,14 +1,8 @@
-use std::{
-    ops::{Add, Div, Mul, Sub},
-};
+use std::ops::{Add, Div, Mul, Sub};
 
 use thiserror::Error;
 
-use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::Environment,
-    values::RuntimeValue,
-};
+use crate::runtime::{interpreter::InterpreterErr, scope::Environment, values::RuntimeValue};
 
 #[derive(Error, Debug, Clone)]
 pub enum ASTError {
@@ -54,44 +48,25 @@ impl BinaryOperator {
 
     pub fn handle(
         &self,
-        env : &Environment,
+        env: &Environment,
         scope: &u64,
-        mut left: RuntimeValue,
-        mut right: RuntimeValue,
+        left: RuntimeValue,
+        right: RuntimeValue,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let mut changed = true;
+        let left = left.unwrap_val(env, scope)?;
+        let right = right.unwrap_val(env, scope)?;
 
-        match left {
-            RuntimeValue::Option(Some(x), _) => left = *x,
-            RuntimeValue::Result(Ok(x), _) => left = *x,
-            RuntimeValue::Result(Err(e), _) => left = *e,
-            RuntimeValue::Link(_, _, _) => left = env.get_link(&left)?.clone(),
-            _ => changed = false,
-        }
-
-        match right {
-            RuntimeValue::Option(Some(x), _) => right = *x,
-            RuntimeValue::Result(Ok(x), _) => right = *x,
-            RuntimeValue::Result(Err(e), _) => right = *e,
-            RuntimeValue::Link(_, _, _) => right = env.get_link(&right)?.clone(),
-            _ => changed = false,
-        }
-
-        if changed {
-            self.handle(env, scope, left, right)
-        } else {
-            Ok(match self {
-                Self::Add => match left.clone() + right.clone() {
-                    Ok(x) => Ok(x),
-                    _ => left.special_add(right),
-                },
-                Self::Sub => left - right,
-                Self::Mul => left * right,
-                Self::Div => left / right,
-                Self::Pow => left.pow(right),
-                Self::Mod => left.modulus(right),
-            }?)
-        }
+        Ok(match self {
+            Self::Add => match left.clone() + right.clone() {
+                Ok(x) => Ok(x),
+                _ => left.special_add(right),
+            },
+            Self::Sub => left - right,
+            Self::Mul => left * right,
+            Self::Div => left / right,
+            Self::Pow => left.pow(right),
+            Self::Mod => left.modulus(right),
+        }?)
     }
 }
 

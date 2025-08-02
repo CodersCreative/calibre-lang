@@ -11,7 +11,24 @@ pub mod numbers;
 pub mod similar;
 
 impl RuntimeValue {
-    pub fn unwrap(&self, env: &Environment, scope: &u64) -> Result<RuntimeValue, ValueErr> {
+    pub fn unwrap_val(self, env: &Environment, scope: &u64) -> Result<RuntimeValue, ValueErr> {
+        match self {
+            RuntimeValue::Result(Ok(x), _) => x.unwrap_val(env, scope),
+            RuntimeValue::Result(Err(x), _) => x.unwrap_val(env, scope),
+            RuntimeValue::Option(Some(x), _) => x.unwrap_val(env, scope),
+            RuntimeValue::Link(scope, path, _) => env
+                .get_link_path(&scope, &path)
+                .unwrap()
+                .clone()
+                .unwrap_val(env, &scope),
+            _ => Ok(self),
+        }
+    }
+    pub fn unwrap<'a>(
+        &'a self,
+        env: &'a Environment,
+        scope: &u64,
+    ) -> Result<&'a RuntimeValue, ValueErr> {
         match self {
             RuntimeValue::Result(Ok(x), _) => x.unwrap(env, scope),
             RuntimeValue::Result(Err(x), _) => x.unwrap(env, scope),
@@ -19,7 +36,7 @@ impl RuntimeValue {
             RuntimeValue::Link(scope, path, _) => {
                 env.get_link_path(scope, path).unwrap().unwrap(env, scope)
             }
-            _ => Ok(self.clone()),
+            _ => Ok(self),
         }
     }
     pub fn into_type(
@@ -99,7 +116,7 @@ impl RuntimeValue {
             };
         }
 
-        match self {
+        match self.unwrap(env, scope)? {
             RuntimeValue::Float(x) => number_cast!(x, t),
             RuntimeValue::Double(x) => number_cast!(x, t),
             RuntimeValue::Int(x) => number_cast!(x, t),
@@ -205,9 +222,9 @@ impl RuntimeValue {
                 RuntimeType::Result(_, _) => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 RuntimeType::Range => panic_type(),
-                RuntimeType::Struct(w, Some(identifier)) => {
-                    let Type::Struct(ObjectType::Tuple(properties)) =
-                        env.get_object_type(w, &identifier)?
+                RuntimeType::Struct(_, Some(identifier)) => {
+                    let Ok(Type::Struct(ObjectType::Tuple(properties))) =
+                        env.get_object_type(o, &identifier)
                     else {
                         return panic_type();
                     };
@@ -222,7 +239,7 @@ impl RuntimeValue {
                     }
 
                     Ok(RuntimeValue::Struct(
-                        *w,
+                        *o,
                         Some(identifier.to_string()),
                         ObjectType::Tuple(new_values),
                     ))

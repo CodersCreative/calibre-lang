@@ -121,7 +121,8 @@ impl Environment {
             };
 
             if let Some(t) = data_type {
-                value = value.into_type(self, scope, &t)?;
+                println!("{t:?}");
+                value = value.unwrap(self, scope)?.into_type(self, scope, &t)?;
             }
 
             Ok(self.push_var(scope, identifier, Variable { value, var_type })?)

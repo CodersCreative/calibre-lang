@@ -35,9 +35,10 @@ match {
 
 // The mut keyword can be added for mutable variable that can be shadowed.
 let mut y : int = 0;
-
+print("Noo");
 // If a type is specified the data will automatically be converted to the type.
 let country : Country = Country(Language.SPANISH)
+print("No");
 
 // print function to output to stdout.
 print(language_forced);

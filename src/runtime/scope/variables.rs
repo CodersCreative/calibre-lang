@@ -15,18 +15,18 @@ impl Environment {
         key: String,
         value: Variable,
     ) -> Result<RuntimeValue, ScopeErr> {
+        let typ = (&value.value).into();
         if let Some(vars) = self.variables.get_mut(scope) {
             if let Some(var) = vars.get(&key) {
                 if var.var_type == VarType::Constant {
                     return Err(ScopeErr::AssignConstant(key));
                 }
-            } else {
-                let typ = (&value.value).into();
-                vars.insert(key.clone(), value);
-                return Ok(RuntimeValue::Link(*scope, vec![key], typ));
             }
+
+            vars.insert(key.clone(), value);
         }
-        Ok(self.assign_var(scope, &key, value.value).unwrap())
+
+        Ok(RuntimeValue::Link(*scope, vec![key], typ))
     }
 
     pub fn get_var_ref<'a>(&'a self, scope: &u64, key: &str) -> Result<Variable, ScopeErr> {
