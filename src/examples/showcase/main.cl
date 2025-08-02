@@ -18,7 +18,7 @@ match &mut {
 } (recursive_language)
 
 // In order to do an if let statement this syntax is used with extra conditions being added after the let
-if let data.Language.FRENCH{data} if true if ((try 9 as ulong) == 9.0 == 9) -> &language => {
+if let data.Language.FRENCH{data} if true if ((try 9 as ulong) == 9.0 == 9) <- &language => {
   print("Enum: " + data)
 }
 

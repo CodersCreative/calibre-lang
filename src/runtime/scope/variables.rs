@@ -114,10 +114,7 @@ impl Environment {
         }
 
         let val = self
-            .variables
-            .get(scope)
-            .unwrap()
-            .get(key)
+            .get_var(scope, key)
             .unwrap_or(&Variable {
                 value: RuntimeValue::Null,
                 var_type: VarType::Constant,

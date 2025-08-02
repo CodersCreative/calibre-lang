@@ -200,8 +200,7 @@ impl Environment {
             if let NodeType::Identifier(identifier) = *identifier {
                 let _ = self.assign_var(scope, &identifier, value.clone())?;
                 return Ok(value);
-            }
-            if let NodeType::MemberExpression { .. } = *identifier {
+            } else if let NodeType::MemberExpression { .. } = *identifier {
                 let _ = self.assign_member_expression(scope, *identifier, value.clone())?;
                 return Ok(value);
             } else {

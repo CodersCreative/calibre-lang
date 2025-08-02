@@ -537,8 +537,8 @@ impl Parser {
                 }
 
                 let _ = self.expect_eat(
-                    &TokenType::Arrow,
-                    SyntaxErr::ExpectedKeyword(String::from("->")),
+                    &TokenType::LeftArrow,
+                    SyntaxErr::ExpectedKeyword(String::from("<-")),
                 )?;
 
                 let ref_mutability = RefMutability::from(self.first().token_type.clone());
