@@ -10,14 +10,14 @@ print("Firsy");
 
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
 // Mutability needs to be specified at the beginning for all branches
-/*match &mut recursive_language {
+match &mut recursive_language {
   data.Language.ARABIC(Language.FRENCH{data}, Language.ARABIC(Language.FRENCH{code : cod})) => {
     print("Code: " + cod);
     print("Enum: " + data)
     data = 10;
     print("Enum Changed: " + data)
   },
-}*/
+}
 
 // In order to do an if let statement this syntax is used with extra conditions being added after the let
 if let data.Language.FRENCH{data} if true if ((try 9 as ulong) == 9.0 == 9) -> &language => {

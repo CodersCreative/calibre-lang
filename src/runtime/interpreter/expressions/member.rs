@@ -106,11 +106,9 @@ impl Environment {
                                 ) {
                                     Ok(x) => x,
                                     Err(e) => {
-                                        // println!("{path:?}.{value:?}{args:?}");
                                         if let Ok(x) = self.get_function(scope, &path[0], &value) {
                                             self.evaluate_function(scope, x.0.clone(), args)?
                                         } else {
-                                            println!("{e:?}");
                                             let obj = match match self.get_var(scope, &path[0]) {
                                                 Ok(x) => x.value.unwrap(self, scope)?,
                                                 _ => return Err(e),
@@ -164,10 +162,12 @@ impl Environment {
                     MembrExprPathRes::Value(x) => return Ok(x),
                 };
 
-                let _ = self.update_link_path(scope, &path, |x| {
-                    *x = value.clone();
-                    Ok(())
-                })?;
+                let _ = self
+                    .update_link_path(scope, &path, |x| {
+                        *x = value.clone();
+                        Ok(())
+                    })
+                    .unwrap();
 
                 Ok(value)
             }

@@ -16,10 +16,7 @@ use thiserror::Error;
 use crate::{
     ast::RefMutability,
     native::NativeFunction,
-    runtime::{
-        scope::ScopeErr,
-        values::helper::ObjectType,
-    },
+    runtime::{scope::ScopeErr, values::helper::ObjectType},
 };
 
 #[derive(Error, Debug, Clone)]
@@ -174,6 +171,38 @@ pub enum RuntimeValue {
     NativeFunction(Rc<dyn NativeFunction>),
 }
 
+impl ToString for ObjectType<RuntimeValue> {
+    fn to_string(&self) -> String {
+        match self {
+            ObjectType::Map(x) => {
+                let mut txt = String::from("{");
+                for (k, v) in x {
+                    txt.push_str(&format!("{k} : {}, ", v.to_string()));
+                }
+
+                let _ = (txt.pop(), txt.pop());
+                txt.push_str("}");
+
+                txt
+            }
+            ObjectType::Tuple(data) => print_list(data, '(', ')'),
+        }
+    }
+}
+
+fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {
+    let mut txt = String::from(open);
+
+    for val in data.iter() {
+        txt.push_str(&format!("{}, ", val.to_string()));
+    }
+
+    let _ = (txt.pop(), txt.pop());
+    txt.push(close);
+
+    txt
+}
+
 impl ToString for RuntimeValue {
     fn to_string(&self) -> String {
         match self {
@@ -188,21 +217,10 @@ impl ToString for RuntimeValue {
             Self::Range(from, to) => format!("{}..{}", from, to),
             Self::Link(_, path, _) => format!("link -> {:?}", path),
             Self::Bool(x) => x.to_string(),
-            Self::Struct(_, _, x) => format!("{:?}", x),
+            Self::Struct(_, y, x) => format!("{y:?} = {}", x.to_string()),
             Self::NativeFunction(_) => format!("native function"),
-            Self::List { data, data_type: _ } => {
-                let mut txt = String::from("[");
-
-                for val in data.iter() {
-                    txt.push_str(&format!("{}, ", val.to_string()));
-                }
-
-                let _ = (txt.pop(), txt.pop());
-                txt.push_str("]");
-
-                txt
-            }
-            Self::Tuple(data) => format!("{:?}", data),
+            Self::List { data, data_type: _ } => print_list(data, '[', ']'),
+            Self::Tuple(data) => print_list(data, '(', ')'),
             Self::Option(x, _) => format!("{:?}", x),
             Self::Result(x, _) => format!("{:?}", x),
             Self::Str(x) => x.to_string(),

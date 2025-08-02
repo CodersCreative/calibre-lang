@@ -49,9 +49,8 @@ impl Environment {
                 if let Ok(Type::Struct(obj)) = self.get_object_type(scope, &object_name) {
                     let mut args = Vec::new();
                     for arg in arguments {
-                        args.push(self.evaluate(scope, arg.0)?);
+                        args.push(self.evaluate(scope, arg.0)?.unwrap(self, scope)?);
                     }
-                    println!("{:?}", args);
                     return Ok(RuntimeValue::Struct(
                         scope.clone(),
                         Some(object_name),

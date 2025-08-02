@@ -33,7 +33,7 @@ impl Environment {
             }
             NodeType::MemberExpression { path: p } => {
                 if let (NodeType::Identifier(main), _) = &p[0] {
-                    if let Ok(_) = self.get_next_scope(scope, main) {
+                    if let Ok(scope) = self.get_next_scope(scope, main) {
                         return self.match_inner_pattern(
                             scope,
                             &p[1].0,
@@ -72,7 +72,7 @@ impl Environment {
                 value: enm_value,
             } => {
                 if let RuntimeValue::Enum(obj_scope, iden, val, dat) = value.clone() {
-                    let Type::Enum(enm) = self.get_object_type(&obj_scope, &iden).unwrap() else {
+                    let Type::Enum(enm) = self.get_object_type(&scope, &iden).unwrap() else {
                         return None;
                     };
 
@@ -134,12 +134,10 @@ impl Environment {
                                                 _ => Some((k.to_string(), v, mutability.clone())),
                                             },
                                             Some(node) => {
-                                                let mut value = value.clone();
-
                                                 if let Some(Ok(s)) = self.match_inner_pattern(
                                                     scope,
                                                     node,
-                                                    progress(&mut value, &k.to_string()).unwrap(),
+                                                    progress(&value, &k.to_string()).unwrap(),
                                                     mutability,
                                                     path.clone(),
                                                     conditionals,
@@ -179,11 +177,11 @@ impl Environment {
                                     .map(|(i, x)| match x {
                                         Some(NodeType::Identifier(y)) => Some(y.clone()),
                                         Some(node) => {
-                                            let mut value = value.clone();
+                                            let value = value.clone();
                                             if let Some(Ok(s)) = self.match_inner_pattern(
                                                 scope,
                                                 node,
-                                                progress(&mut value, &i.to_string()).unwrap(),
+                                                progress(&value, &i.to_string()).unwrap(),
                                                 mutability,
                                                 [path.clone(), vec![i.to_string()]].concat(),
                                                 conditionals,
@@ -533,8 +531,6 @@ impl Environment {
                 }
                 _ => self.evaluate(scope, *value)?,
             };
-
-            println!("uioo");
 
             for (pattern, conditionals, body) in patterns {
                 if let Some(result) = self.match_pattern(

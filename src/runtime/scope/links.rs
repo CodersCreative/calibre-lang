@@ -59,7 +59,6 @@ pub fn progress_mut<'a>(
     mut current: &'a mut RuntimeValue,
     key: &str,
 ) -> Result<&'a mut RuntimeValue, InterpreterErr> {
-    println!("{:?}", current);
     match current {
         RuntimeValue::Struct(_, _, ObjectType::Map(map)) => current = map.get_mut(key).unwrap(),
         RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))) => {
@@ -115,6 +114,9 @@ impl Environment {
     ) -> Result<&RuntimeValue, InterpreterErr> {
         if let Some(vars) = self.variables.get(scope) {
             if let Some(var) = vars.get(&path[0]) {
+                if let RuntimeValue::Link(scope, p, _) = var.value.clone() {
+                    return self.get_link_path(&scope, &[p.as_slice(), &path[1..]].concat());
+                }
                 let mut var = &var.value;
                 for key in path.iter().skip(1) {
                     var = progress(var, key)?;
@@ -155,6 +157,10 @@ impl Environment {
     {
         if let Some(vars) = self.variables.get_mut(scope) {
             if let Some(var) = vars.get_mut(&path[0]) {
+                if let RuntimeValue::Link(scope, p, _) = var.value.clone() {
+                    return self.update_link_path(&scope, &[p.as_slice(), &path[1..]].concat(), f);
+                }
+
                 let mut var = Ok(&mut var.value);
 
                 for key in path.iter().skip(1) {

@@ -28,7 +28,6 @@ impl Environment {
                     return Ok(RuntimeValue::Null);
                 }
                 let new_scope_id = self.get_scope_list(*scope, module)?;
-                println!("NEw {:?}", new_scope_id);
                 self.scopes
                     .get_mut(scope)
                     .unwrap()
