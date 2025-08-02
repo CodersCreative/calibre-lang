@@ -471,17 +471,23 @@ impl Environment {
             }
             Ok(_) => None,
             Err(_) => {
-                if let Some(Ok(scope)) =
+                if let Some(Ok(s)) =
                     self.match_inner_pattern(*scope, pattern, value, mutability, path)
                 {
-                    if self
-                        .handle_conditionals(&scope, conditionals.to_vec())
-                        .unwrap()
-                    {
-                        Some(self.evaluate(&scope, body))
+                    let mut res = if self.handle_conditionals(&s, conditionals.to_vec()).unwrap() {
+                        Some(self.evaluate(&s, body))
                     } else {
                         None
+                    };
+
+                    if scope != &s {
+                        self.remove_scope(&s);
+                        if let Some(Ok(r)) = res {
+                            res = Some(r.unwrap_links_val(self, &s, Some(s)).map_err(|e| e.into()))
+                        }
                     }
+
+                    res
                 } else {
                     None
                 }

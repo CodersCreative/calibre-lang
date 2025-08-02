@@ -44,7 +44,7 @@ impl Parser {
 
             left = NodeType::InDeclaration {
                 identifier: Box::new(left),
-                expression: Box::new(self.parse_additive_expression()?),
+                expression: Box::new(self.parse_statement()?),
             }
         }
 

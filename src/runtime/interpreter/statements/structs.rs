@@ -30,11 +30,13 @@ impl Environment {
                     data_type,
                 } = function.0
                 {
-                    let func = self.evaluate(&scope_2, *value)?;
+                    let func = self.evaluate(&scope_2, *value)?.unwrap_val(self, scope)?;
 
                     let _ = self.push_function(scope, &identifier, (iden, func, function.1))?;
                     continue;
                 }
+
+                self.remove_scope(&scope_2);
 
                 return Err(InterpreterErr::ExpectedFunctions);
             }

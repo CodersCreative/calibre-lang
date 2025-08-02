@@ -86,8 +86,16 @@ impl Environment {
                         );
 
                         if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                            result.push(self.evaluate(&new_scope, *map.clone())?);
+                            result.push(
+                                self.evaluate(&new_scope, *map.clone())?.unwrap_links_val(
+                                    self,
+                                    &new_scope,
+                                    Some(new_scope),
+                                )?,
+                            );
                         }
+
+                        self.remove_scope(&new_scope);
                     }
                 } else if let RuntimeValue::Range(from, to) =
                     range.into_type(self, scope, &RuntimeType::Range)?
@@ -104,8 +112,15 @@ impl Environment {
                             vec![(NodeType::IntLiteral(i as i128), None)],
                         )?;
                         if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                            result.push(self.evaluate(&new_scope, *map.clone())?);
+                            result.push(
+                                self.evaluate(&new_scope, *map.clone())?.unwrap_links_val(
+                                    self,
+                                    &new_scope,
+                                    Some(new_scope),
+                                )?,
+                            );
                         }
+                        self.remove_scope(&new_scope);
                     }
                 }
             } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
@@ -128,8 +143,15 @@ impl Environment {
                         );
 
                         if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                            result.push(self.evaluate(&new_scope, *map.clone())?);
+                            result.push(
+                                self.evaluate(&new_scope, *map.clone())?.unwrap_links_val(
+                                    self,
+                                    &new_scope,
+                                    Some(new_scope),
+                                )?,
+                            );
                         }
+                        self.remove_scope(&new_scope);
                     }
                 }
             } else if let LoopType::While(condition) = *loop_type {

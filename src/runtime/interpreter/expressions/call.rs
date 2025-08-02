@@ -32,11 +32,17 @@ impl Environment {
                     let result = self.evaluate(&new_scope, *body.0)?;
                     self.stop = None;
 
-                    if let Some(t) = return_type {
-                        return Ok(result.into_type(self, &new_scope, &t)?);
+                    let result = if let Some(t) = return_type {
+                        result.into_type(self, &new_scope, &t)?
                     } else {
-                        return Ok(result);
-                    }
+                        result
+                    };
+
+                    let result = result.unwrap_links_val(self, &new_scope, Some(new_scope))?;
+
+                    self.remove_scope(&new_scope);
+
+                    Ok(result)
                 }
                 FunctionType::Match(body) => {
                     return self.evaluate_match_function(
@@ -46,7 +52,7 @@ impl Environment {
                         body.0,
                     );
                 }
-            };
+            }
         } else {
             panic!()
         }
@@ -80,7 +86,6 @@ impl Environment {
                             ObjectType::Tuple(args),
                         ));
                     }
-                    println!("wow");
                 }
             }
 

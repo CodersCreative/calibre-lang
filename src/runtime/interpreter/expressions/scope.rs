@@ -205,6 +205,10 @@ impl Environment {
                 }
             }
 
+            result = result.unwrap_links_val(self, &new_scope, Some(new_scope))?;
+
+            self.remove_scope(&new_scope);
+
             Ok(result)
         } else {
             panic!()

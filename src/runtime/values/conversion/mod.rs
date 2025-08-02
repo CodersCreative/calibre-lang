@@ -24,6 +24,7 @@ impl RuntimeValue {
             _ => Ok(self),
         }
     }
+
     pub fn unwrap<'a>(
         &'a self,
         env: &'a Environment,
@@ -39,6 +40,38 @@ impl RuntimeValue {
             _ => Ok(self),
         }
     }
+
+    pub fn unwrap_links<'a>(
+        &'a self,
+        env: &'a Environment,
+        scope: &u64,
+        condition: Option<&u64>,
+    ) -> Result<&'a RuntimeValue, ValueErr> {
+        match self {
+            RuntimeValue::Link(scope, path, _) if Some(scope) == condition => env
+                .get_link_path(scope, path)
+                .unwrap()
+                .unwrap_links(env, scope, condition),
+            _ => Ok(self),
+        }
+    }
+
+    pub fn unwrap_links_val(
+        self,
+        env: &Environment,
+        scope: &u64,
+        condition: Option<u64>,
+    ) -> Result<RuntimeValue, ValueErr> {
+        match self {
+            RuntimeValue::Link(scope, path, _) if Some(scope) == condition => env
+                .get_link_path(&scope, &path)
+                .unwrap()
+                .clone()
+                .unwrap_links_val(env, &scope, condition),
+            _ => Ok(self),
+        }
+    }
+
     pub fn into_type(
         &self,
         env: &Environment,

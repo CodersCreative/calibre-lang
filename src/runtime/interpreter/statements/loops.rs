@@ -1,5 +1,3 @@
-
-
 use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
@@ -34,7 +32,12 @@ impl Environment {
                                 var_type: VarType::Immutable,
                             },
                         );
-                        result = self.evaluate(&new_scope, *body.clone())?;
+                        result = self.evaluate(&new_scope, *body.clone())?.unwrap_links_val(
+                            self,
+                            &new_scope,
+                            Some(new_scope),
+                        )?;
+                        self.remove_scope(&new_scope);
 
                         match self.stop {
                             Some(StopValue::Break) => break,
@@ -59,7 +62,12 @@ impl Environment {
                             )],
                             vec![(NodeType::IntLiteral(i as i128), None)],
                         )?;
-                        result = self.evaluate(&new_scope, *body.clone())?;
+                        result = self.evaluate(&new_scope, *body.clone())?.unwrap_links_val(
+                            self,
+                            &new_scope,
+                            Some(new_scope),
+                        )?;
+                        self.remove_scope(&new_scope);
 
                         match self.stop {
                             Some(StopValue::Break) => break,
@@ -95,7 +103,12 @@ impl Environment {
                             },
                         );
 
-                        result = self.evaluate(&new_scope, *body.clone())?;
+                        result = self.evaluate(&new_scope, *body.clone())?.unwrap_links_val(
+                            self,
+                            &new_scope,
+                            Some(new_scope),
+                        )?;
+                        self.remove_scope(&new_scope);
 
                         match self.stop {
                             Some(StopValue::Break) => break,
@@ -115,7 +128,12 @@ impl Environment {
                                 break;
                             }
                             let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-                            result = self.evaluate(&new_scope, *body.clone())?;
+                            result = self.evaluate(&new_scope, *body.clone())?.unwrap_links_val(
+                                self,
+                                &new_scope,
+                                Some(new_scope),
+                            )?;
+                            self.remove_scope(&new_scope);
 
                             match self.stop {
                                 Some(StopValue::Break) => break,

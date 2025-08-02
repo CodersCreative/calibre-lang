@@ -37,7 +37,7 @@ match {
 let mut number : int = 0;
 
 // If a type is specified the data will automatically be converted to the type.
-let country : Country = Country(Language.SPANISH)
+let country = Country(Language.SPANISH)
 
 // print function to output to stdout.
 print(language_forced);

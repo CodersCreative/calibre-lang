@@ -121,7 +121,6 @@ impl Environment {
             };
 
             if let Some(t) = data_type {
-                println!("{t:?}");
                 value = value.unwrap(self, scope)?.into_type(self, scope, &t)?;
             }
 

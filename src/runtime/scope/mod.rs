@@ -83,6 +83,45 @@ impl Environment {
             stop: None,
         }
     }
+
+    pub fn remove_scope(&mut self, scope: &u64) {
+        let parent = if let Some(parent) = self.scopes.get(scope).unwrap().parent {
+            if let Some(name) = self
+                .scopes
+                .get(&parent)
+                .unwrap()
+                .children
+                .iter()
+                .find(|x| x.1 == scope)
+            {
+                Some((parent, name.0.clone()))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(parent) = parent {
+            let _ = self
+                .scopes
+                .get_mut(&parent.0)
+                .unwrap()
+                .children
+                .remove(&parent.1);
+        }
+
+        if &(self.counter - 1) == scope {
+            while !self.scopes.contains_key(&(self.counter - 1)) {
+                self.counter -= 1;
+            }
+        }
+
+        self.variables.remove(scope);
+        self.objects.remove(scope);
+        self.scopes.remove(scope);
+    }
+
     pub fn add_scope(&mut self, mut scope: Scope) {
         if let Some(parent) = &scope.parent {
             self.scopes
