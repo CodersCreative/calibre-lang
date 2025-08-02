@@ -8,10 +8,7 @@ use thiserror::Error;
 
 use crate::{
     parser::ParserError,
-    runtime::{
-        interpreter::InterpreterErr,
-        scope::Environment,
-    },
+    runtime::{interpreter::InterpreterErr, scope::Environment},
 };
 
 pub mod ast;

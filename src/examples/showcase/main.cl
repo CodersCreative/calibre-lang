@@ -5,15 +5,14 @@ import * from data
 // The let keyword creates an immutable variable that can be shadowed.
 let language = Language.FRENCH{data : 10, code : 5};
 let mut recursive_language = Language.ARABIC(language, Language.SPANISH);
-print("Firsy");
 
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
 // Mutability needs to be specified at the beginning for all branches
 match &mut {
-  data.Language.ARABIC(Language.FRENCH{data}, Language.ARABIC(Language.FRENCH{code : cod})) => {
-    print("Code: " + cod);
+  data.Language.ARABIC(Language.FRENCH{_}, Language.ARABIC(Language.FRENCH{code})) => print("Code: " + code),
+  data.Language.ARABIC(Language.FRENCH{data}, Language.SPANISH) => {
     print("Enum: " + data)
-    data = 10;
+    data = 5;
     print("Enum Changed: " + data)
   },
 } (recursive_language)
@@ -35,10 +34,8 @@ match {
 
 // The mut keyword can be added for mutable variable that can be shadowed.
 let mut y : int = 0;
-print("Noo");
 // If a type is specified the data will automatically be converted to the type.
 let country : Country = Country(Language.SPANISH)
-print("No");
 
 // print function to output to stdout.
 print(language_forced);
@@ -51,9 +48,7 @@ print("b -> " + b);
 
 /* input function to get an input from the user.
 A value can be inputted to this function and will outputted to the user.*/
-let bg = std.console.input("Hello enter 1: ");
-
-if trim(bg) == "Yes" => {
+if trim(std.console.input("Hello enter 1: ")) == "Yes" => {
   print("Yes");
 }
 
@@ -111,7 +106,7 @@ match {
   Ok([20, 30, 40, 50, 60, 70]) => print("Within list"),
   Ok(x) => print(x),
   Err(x) => print(x),
-} (smth_fn(20))
+} (smth_fn(18))
 
 // The previous function was shadowed
 let smth_fn = fn (y : int) -> int? => {

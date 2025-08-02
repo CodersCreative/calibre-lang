@@ -392,7 +392,7 @@ impl Parser {
             SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
         );
 
-        Ok(NodeType::MatchDeclaration {
+        let func = NodeType::MatchDeclaration {
             parameters: (
                 String::from("input_value"),
                 typ.unwrap_or(RuntimeType::Dynamic),
@@ -402,7 +402,13 @@ impl Parser {
             body: patterns,
             return_type,
             is_async,
-        })
+        };
+
+        if self.first().token_type == TokenType::Open(Bracket::Paren) {
+            self.parse_call_expression(func)
+        } else {
+            Ok(func)
+        }
     }
 
     pub fn get_loop_type(&mut self) -> Result<LoopType, ParserError> {
@@ -481,12 +487,18 @@ impl Parser {
             self.parse_type()?
         };
 
-        Ok(NodeType::FunctionDeclaration {
+        let func = NodeType::FunctionDeclaration {
             parameters,
             body: Box::new(self.parse_block()?),
             return_type,
             is_async,
-        })
+        };
+
+        if self.first().token_type == TokenType::Open(Bracket::Paren) {
+            self.parse_call_expression(func)
+        } else {
+            Ok(func)
+        }
     }
 
     pub fn parse_block(&mut self) -> Result<NodeType, ParserError> {

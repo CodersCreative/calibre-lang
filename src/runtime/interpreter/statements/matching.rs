@@ -59,6 +59,20 @@ impl Environment {
                             {
                                 return Some(Ok(scope));
                             }
+                        } else if let Ok(Type::Enum(_)) = self.get_object_type(&scope, &main) {
+                            if let NodeType::Identifier(val) = &p[1].0 {
+                                return self.match_inner_pattern(
+                                    scope,
+                                    &NodeType::EnumExpression {
+                                        identifier: main.clone(),
+                                        value: val.to_string(),
+                                        data: None,
+                                    },
+                                    value,
+                                    mutability,
+                                    path,
+                                );
+                            }
                         }
                     }
                 }
@@ -70,7 +84,9 @@ impl Environment {
                 data,
                 value: enm_value,
             } => {
-                if let RuntimeValue::Enum(obj_scope, iden, val, dat) = value.clone() {
+                if let Ok(RuntimeValue::Enum(obj_scope, iden, val, dat)) =
+                    value.clone().unwrap_val(self, &scope)
+                {
                     let Type::Enum(enm) = self.get_object_type(&scope, &iden).unwrap() else {
                         return None;
                     };
@@ -114,7 +130,11 @@ impl Environment {
                                                         mutability.clone(),
                                                     ))
                                                 }
-                                                _ => Some((k.to_string(), v, mutability.clone())),
+                                                _ => Some((
+                                                    k.to_string(),
+                                                    v.clone(),
+                                                    mutability.clone(),
+                                                )),
                                             },
                                             Some(node) => {
                                                 if let Some(Ok(s)) = self.match_inner_pattern(
@@ -146,7 +166,11 @@ impl Environment {
                                                         mutability.clone(),
                                                     ))
                                                 }
-                                                _ => Some((k.to_string(), v, mutability.clone())),
+                                                _ => Some((
+                                                    k.to_string(),
+                                                    v.clone(),
+                                                    mutability.clone(),
+                                                )),
                                             },
                                         }
                                     })
@@ -213,7 +237,7 @@ impl Environment {
                                                 }
                                                 _ => (
                                                     list[i].clone().unwrap(),
-                                                    v,
+                                                    v.clone(),
                                                     mutability.clone(),
                                                 ),
                                             })
@@ -251,7 +275,7 @@ impl Environment {
                                                         mutability.clone(),
                                                     )
                                                 }
-                                                _ => (k.to_string(), v, mutability.clone()),
+                                                _ => (k.to_string(), v.clone(), mutability.clone()),
                                             })
                                             .collect(),
                                     )
