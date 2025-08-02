@@ -14,9 +14,12 @@ use helper::Block;
 use thiserror::Error;
 
 use crate::{
-    ast::RefMutability,
+    ast::{NodeType, RefMutability},
     native::NativeFunction,
-    runtime::{scope::ScopeErr, values::helper::ObjectType},
+    runtime::{
+        scope::ScopeErr,
+        values::helper::{MatchBlock, ObjectType},
+    },
 };
 
 #[derive(Error, Debug, Clone)]
@@ -164,11 +167,17 @@ pub enum RuntimeValue {
     Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>, RuntimeType),
     Function {
         parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)>,
-        body: Block,
+        body: FunctionType,
         return_type: Option<RuntimeType>,
         is_async: bool,
     },
     NativeFunction(Rc<dyn NativeFunction>),
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Debug)]
+pub enum FunctionType {
+    Regular(Block),
+    Match(MatchBlock),
 }
 
 impl ToString for ObjectType<RuntimeValue> {

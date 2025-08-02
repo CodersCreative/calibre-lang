@@ -4,20 +4,19 @@ import * from data
 // By default the type of a variable will be infered by what is being assigned to it.
 // The let keyword creates an immutable variable that can be shadowed.
 let language = Language.FRENCH{data : 10, code : 5};
-print("Firsy");
 let mut recursive_language = Language.ARABIC(language, Language.SPANISH);
 print("Firsy");
 
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
 // Mutability needs to be specified at the beginning for all branches
-match &mut recursive_language {
+match &mut {
   data.Language.ARABIC(Language.FRENCH{data}, Language.ARABIC(Language.FRENCH{code : cod})) => {
     print("Code: " + cod);
     print("Enum: " + data)
     data = 10;
     print("Enum Changed: " + data)
   },
-}
+} (recursive_language)
 
 // In order to do an if let statement this syntax is used with extra conditions being added after the let
 if let data.Language.FRENCH{data} if true if ((try 9 as ulong) == 9.0 == 9) -> &language => {
@@ -29,10 +28,10 @@ const language_forced : Language = Language.ENGLISH (6);
 
 // By not putting any data by the match it will only check for the enum member.
 // Ifs can be added for further selection.
-match language_forced {
+match {
   Language.ENGLISH if false => print("Enum: ENGLISH?"),
   Language.ENGLISH => print("Enum: ENGLISH"),
-}
+}(language_forced)
 
 // The mut keyword can be added for mutable variable that can be shadowed.
 let mut y : int = 0;
@@ -102,7 +101,7 @@ let smth_fn = fn (y : int) -> string!int => {
   err("needs to be larger than 10")
 }
 
-match smth_fn(20) {
+match {
   // This is equivalent to Ok(x) if x == 18
   Ok(18) => print("Equated to 18"),
   // This is equivalent to Ok(x) if x in 0..20
@@ -111,7 +110,7 @@ match smth_fn(20) {
   Ok([20, 30, 40, 50, 60, 70]) => print("Within list"),
   Ok(x) => print(x),
   Err(x) => print(x),
-}
+} (smth_fn(20))
 
 // The previous function was shadowed
 let smth_fn = fn (y : int) -> int? => {
@@ -120,13 +119,13 @@ let smth_fn = fn (y : int) -> int? => {
   some(9)
 }
 
-match smth_fn(18) {
+match {
   Some(x) if x == 18 => print("Equated to 18"),
   Some(x) => print(x),
   None => print("none"),
-}
+} (smth_fn(18))
 
-match 16 {
+match int {
   1 => print("one"),
   2 => print("two"),
   3 => print("three"),
@@ -140,7 +139,7 @@ match 16 {
   Let(data) if data > 200 => print("value is > 200 "),
   // if the name is not in scope it can be used without the Let keyword
   data => print("value is : " + data),
-}
+}(16)
 
 // TODO Implement generics with dyn<Add, Sub, Mul...>
 // TODO Allow traits of generics to be easily specified and add to new type system. Like : "type Output = dyn<...traits...>;"

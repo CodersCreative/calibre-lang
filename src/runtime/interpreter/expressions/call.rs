@@ -4,7 +4,7 @@ use crate::{
         interpreter::InterpreterErr,
         scope::{Environment, ScopeErr, Type},
         values::{
-            RuntimeValue, ValueErr,
+            FunctionType, RuntimeValue, ValueErr,
             helper::{ObjectType, VarType},
         },
     },
@@ -24,16 +24,27 @@ impl Environment {
             is_async,
         } = func
         {
-            let new_scope = self.get_new_scope(scope, parameters, arguments)?;
+            match body {
+                FunctionType::Regular(body) => {
+                    let new_scope = self.get_new_scope(scope, parameters, arguments)?;
+                    let result = self.evaluate(&new_scope, *body.0)?;
+                    self.stop = None;
 
-            let result: RuntimeValue = self.evaluate(&new_scope, *body.0)?;
-
-            self.stop = None;
-            if let Some(t) = return_type {
-                return Ok(result.into_type(self, &new_scope, &t)?);
-            } else {
-                return Ok(RuntimeValue::Null);
-            }
+                    if let Some(t) = return_type {
+                        return Ok(result.into_type(self, &new_scope, &t)?);
+                    } else {
+                        return Ok(result);
+                    }
+                }
+                FunctionType::Match(body) => {
+                    return self.evaluate_match_function(
+                        scope,
+                        &parameters[0].2,
+                        arguments[0].0.clone(),
+                        body.0,
+                    );
+                }
+            };
         } else {
             panic!()
         }

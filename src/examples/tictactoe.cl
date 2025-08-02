@@ -7,22 +7,18 @@ type Player = enum {
 impl Player {
   const default = fn() -> Player => return Player.None;
 
-  const get_opposite = fn(self : &Player) -> Player => {
-    match self {
-      Player.X => Player.O,
-      Player.O => Player.X,
-      _ => Player.None,
-    }
+  const get_opposite = match &Player -> Player {
+    Player.X => Player.O,
+    Player.O => Player.X,
+    _ => Player.None,
   }
 
   const switch = fn(self : &mut Player) => self = self.get_opposite(self);
 
-  const to_char = fn(self : &Player) -> char => {
-    match self {
-      Player.X => "X",
-      Player.O => "O",
-      _ => " ",
-    }
+  const to_char = match &Player -> char {
+    Player.X => "X",
+    Player.O => "O",
+    _ => " ",
   }
 }
 
@@ -122,11 +118,11 @@ impl Board {
   }
 
   const minimax = fn(self : &mut Board, player : Player, depth : int = 0) -> int => {
-    match board.get_winner() {
+    match {
       Player.X => return 100 - depth,
       Player.Y => return -100 + depth,
       Player.None if board.is_full() => return 0,
-    }
+    }(board.get_winner())
 
     let maximising = player == Player.X 
 
@@ -182,11 +178,11 @@ const main = fn() => {
 
     board.print_board();
 
-    match board.get_winner() {
+    match {
       Player.X => print("Player X Won!"),
       Player.O => print("Player O Won!"),
       Player.None => print("Tied!"),
-    }
+    }(board.get_winner())
   }
 }
 

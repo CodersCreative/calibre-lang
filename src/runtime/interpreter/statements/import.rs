@@ -90,8 +90,6 @@ impl Environment {
                 for (value, obj) in obj {
                     self.push_object(scope, value.clone(), obj.clone())?;
                 }
-
-                // println!("{:?}", self.scopes);
             } else {
                 for value in values {
                     if let Some(var) = self.variables.get(&new_scope).unwrap().get(&value) {

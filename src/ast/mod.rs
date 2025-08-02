@@ -1,7 +1,6 @@
 pub mod binary;
 pub mod comparison;
 
-
 use binary::BinaryOperator;
 use comparison::Comparison;
 
@@ -70,9 +69,10 @@ pub enum NodeType {
         body: Vec<NodeType>,
     },
     MatchDeclaration {
-        mutability: RefMutability,
-        value: Box<NodeType>,
-        patterns: Vec<(NodeType, Vec<NodeType>, Box<NodeType>)>,
+        parameters: (String, RuntimeType, RefMutability, Option<Box<NodeType>>),
+        body: Vec<(NodeType, Vec<NodeType>, Box<NodeType>)>,
+        return_type: Option<RuntimeType>,
+        is_async: bool,
     },
     FunctionDeclaration {
         parameters: Vec<(String, RuntimeType, RefMutability, Option<NodeType>)>,

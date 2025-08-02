@@ -4,9 +4,7 @@ use crate::{
     ast::{IfComparisonType, LoopType, RefMutability, binary::BinaryOperator},
     lexer::Bracket,
     parser::{Parser, ParserError, SyntaxErr},
-    runtime::values::{
-            helper::{StopValue, VarType},
-        },
+    runtime::values::helper::{StopValue, VarType},
 };
 
 use crate::{ast::NodeType, lexer::TokenType, runtime::values::RuntimeType};
@@ -168,6 +166,34 @@ impl Parser {
                             },
                             depends,
                         ));
+                    } else if let NodeType::MatchDeclaration {
+                        parameters,
+                        body,
+                        return_type,
+                        is_async,
+                    } = *func
+                    {
+                        let mut depends = false;
+                        if let RuntimeType::Struct(_, Some(obj)) = &parameters.1 {
+                            if obj == &identifier {
+                                depends = true;
+                            }
+                        }
+
+                        functions.push((
+                            NodeType::VariableDeclaration {
+                                var_type: VarType::Constant,
+                                identifier: name,
+                                value: Some(Box::new(NodeType::MatchDeclaration {
+                                    parameters,
+                                    body,
+                                    return_type,
+                                    is_async,
+                                })),
+                                data_type,
+                            },
+                            depends,
+                        ));
                     }
                 }
                 _ => return Err(self.get_err(SyntaxErr::ExpectedFunctions)),
@@ -294,13 +320,40 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("match")),
         )?;
 
+        let is_async = self.first().token_type == TokenType::Async;
+
+        if is_async {
+            let _ = self.eat();
+        };
+
         let ref_mutability = RefMutability::from(self.first().token_type.clone());
 
         if ref_mutability != RefMutability::Value {
             let _ = self.eat();
         }
 
-        let value = Box::new(self.parse_statement()?);
+        let typ = if self.first().token_type != TokenType::Open(Bracket::Curly) {
+            self.parse_type()?
+        } else {
+            None
+        };
+
+        let default = if self.first().token_type == TokenType::Equals {
+            let _ = self.eat();
+            Some(Box::new(self.parse_statement()?))
+        } else {
+            None
+        };
+
+        let return_type = if self.first().token_type == TokenType::Open(Bracket::Curly) {
+            None
+        } else {
+            let _ = self.expect_eat(
+                &TokenType::Arrow,
+                SyntaxErr::ExpectedKeyword(String::from("->")),
+            )?;
+            self.parse_type()?
+        };
 
         let _ = self.expect_eat(
             &TokenType::Open(Bracket::Curly),
@@ -340,9 +393,15 @@ impl Parser {
         );
 
         Ok(NodeType::MatchDeclaration {
-            value,
-            patterns,
-            mutability: ref_mutability,
+            parameters: (
+                String::from("input_value"),
+                typ.unwrap_or(RuntimeType::Dynamic),
+                ref_mutability,
+                default,
+            ),
+            body: patterns,
+            return_type,
+            is_async,
         })
     }
 

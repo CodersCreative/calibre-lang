@@ -182,8 +182,8 @@ impl RuntimeValue {
                         self.into_type(env, scope, &RuntimeType::Enum(*o, y))
                     }
                 }
-                RuntimeType::Enum(w, y) => {
-                    if x == &y && &w == o {
+                RuntimeType::Enum(_, y) => {
+                    if x == &y {
                         Ok(self.clone())
                     } else {
                         panic_type()

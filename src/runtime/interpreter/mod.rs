@@ -145,7 +145,7 @@ impl Environment {
             NodeType::BooleanExpression { .. } => self.evaluate_boolean_expression(scope, node),
             NodeType::IfStatement { .. } => self.evaluate_if_statement(scope, node),
             NodeType::ImportStatement { .. } => self.evaluate_import_statement(scope, node),
-            NodeType::MatchDeclaration { .. } => self.evaluate_match_statement(scope, node),
+            NodeType::MatchDeclaration { .. } => self.evaluate_match_declaration(scope, node),
             NodeType::InDeclaration { .. } => self.evaluate_in_statement(scope, node),
             NodeType::AsExpression { .. } => self.evaluate_as_expression(scope, node),
             NodeType::MemberExpression { .. } => self.evaluate_member_expression(scope, node),

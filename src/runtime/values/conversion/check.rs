@@ -1,4 +1,3 @@
-
 use crate::runtime::{
     scope::Environment,
     values::{RuntimeType, RuntimeValue},
@@ -23,7 +22,7 @@ impl RuntimeValue {
         )
     }
 
-    pub fn is_type(&self, env : &Environment, scope: &u64, t: &RuntimeType) -> bool {
+    pub fn is_type(&self, env: &Environment, scope: &u64, t: &RuntimeType) -> bool {
         if t == &RuntimeType::Dynamic {
             return true;
         }
@@ -63,9 +62,9 @@ impl RuntimeValue {
                 }
                 _ => false,
             },
-            RuntimeValue::Enum(w, x, _, _) => match t {
-                RuntimeType::Enum(z, y) => x == y && w == z,
-                RuntimeType::Struct(z, y) => Some(x) == y.as_ref() && w == z,
+            RuntimeValue::Enum(_, x, _, _) => match t {
+                RuntimeType::Enum(_, y) => x == y,
+                RuntimeType::Struct(_, y) => Some(x) == y.as_ref(),
                 _ => false,
             },
             RuntimeValue::Function {

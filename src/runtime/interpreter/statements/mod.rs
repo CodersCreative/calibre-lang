@@ -1,12 +1,11 @@
-
 use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
         scope::{Environment, Variable},
         values::{
-            RuntimeValue,
-            helper::Block,
+            FunctionType, RuntimeValue,
+            helper::{Block, MatchBlock},
         },
     },
 };
@@ -36,6 +35,39 @@ impl Environment {
         Ok(last)
     }
 
+    pub fn evaluate_match_declaration(
+        &mut self,
+        scope: &u64,
+        declaration: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::MatchDeclaration {
+            parameters,
+            body,
+            return_type,
+            is_async,
+        } = declaration
+        {
+            let mut params = Vec::new();
+
+            let default = if let Some(node) = parameters.3 {
+                Some(self.evaluate(scope, *node)?)
+            } else {
+                None
+            };
+
+            params.push((parameters.0, parameters.1, parameters.2, default));
+
+            Ok(RuntimeValue::Function {
+                parameters: params,
+                body: FunctionType::Match(MatchBlock(body)),
+                return_type,
+                is_async,
+            })
+        } else {
+            Err(InterpreterErr::NotImplemented(declaration))
+        }
+    }
+
     pub fn evaluate_function_declaration(
         &mut self,
         scope: &u64,
@@ -62,7 +94,7 @@ impl Environment {
 
             Ok(RuntimeValue::Function {
                 parameters: params,
-                body: Block(body),
+                body: FunctionType::Regular(Block(body)),
                 return_type,
                 is_async,
             })
