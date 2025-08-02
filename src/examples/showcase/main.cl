@@ -70,10 +70,9 @@ for l in &mut lst => {
 }
 print("lst 2")
 print(lst);// A static array
-print("IO " + number);
+
 // A for loop using the recommended range syntax.
 for index in 1..=100 => number += index;
-print("IO");
 
 // A while loop.
 for x == number => {
@@ -117,11 +116,14 @@ let smth_fn = fn (y : int) -> int? => {
   some(9)
 }
 
-match {
+// The $ operator can be used to represent the previous result from a pipe.
+200 |> smth_fn |> print($)
+
+18 |> smth_fn |> match {
   Some(x) if x == 18 => print("Equated to 18"),
   Some(x) => print(x),
   None => print("none"),
-} (smth_fn(18))
+}
 
 16 |> match int {
   1 => print("one"),

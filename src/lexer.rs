@@ -201,6 +201,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                 ']' => Some(TokenType::Close(Bracket::Square)),
                 ',' => Some(TokenType::Comma),
                 '&' => Some(TokenType::Ref),
+                '$' => Some(TokenType::Identifier),
                 '?' => Some(TokenType::Question),
                 '<' | '>' => Some(TokenType::Comparison(
                     Comparison::from_operator(&c.to_string()).unwrap(),
@@ -311,7 +312,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                 let combined = format!("{}{}", last.value, token.value);
 
                 if let Some(t) = special_keywords().get(&combined) {
-                    if last.col / token.col == 1 {
+                    if token.col > 0 && last.col / token.col == 1 {
                         let token = Token::new(t.clone(), &combined, line, col);
                         tokens.pop();
                         tokens.push(token);
