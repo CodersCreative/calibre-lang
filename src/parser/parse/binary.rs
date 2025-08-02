@@ -22,7 +22,7 @@ impl Parser {
     }
 
     pub fn parse_as_expression(&mut self) -> Result<NodeType, ParserError> {
-        let mut left = self.parse_boolean_expression()?;
+        let mut left = self.parse_call_member_expression()?;
 
         while let TokenType::As = self.first().token_type.clone() {
             let _ = self.eat();
@@ -37,7 +37,7 @@ impl Parser {
     }
 
     pub fn parse_in_expression(&mut self) -> Result<NodeType, ParserError> {
-        let mut left = self.parse_range_expression()?;
+        let mut left = self.parse_additive_expression()?;
 
         while let TokenType::In = self.first().token_type.clone() {
             let _ = self.eat();
@@ -52,7 +52,7 @@ impl Parser {
     }
 
     pub fn parse_range_expression(&mut self) -> Result<NodeType, ParserError> {
-        let mut left = self.parse_additive_expression()?;
+        let mut left = self.parse_boolean_expression()?;
 
         if let TokenType::Range = self.first().token_type.clone() {
             let _ = self.eat();
@@ -120,14 +120,14 @@ impl Parser {
     }
 
     pub fn parse_power_expression(&mut self) -> Result<NodeType, ParserError> {
-        let mut left = self.parse_call_member_expression()?;
+        let mut left = self.parse_as_expression()?;
 
         while let TokenType::BinaryOperator(BinaryOperator::Pow) = self.first().token_type.clone() {
             let _ = self.eat();
 
             left = NodeType::BinaryExpression {
                 left: Box::new(left),
-                right: Box::new(self.parse_call_member_expression()?),
+                right: Box::new(self.parse_as_expression()?),
                 operator: BinaryOperator::Pow,
             };
         }

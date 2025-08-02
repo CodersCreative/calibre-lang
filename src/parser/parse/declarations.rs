@@ -223,7 +223,7 @@ impl Parser {
 
             res
         } else {
-            self.parse_as_expression()
+            self.parse_range_expression()
         }
     }
 
