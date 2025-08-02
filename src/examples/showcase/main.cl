@@ -117,7 +117,7 @@ let smth_fn = fn (y : int) -> int? => {
 }
 
 // The $ operator can be used to represent the previous result from a pipe.
-200 |> smth_fn |> print($)
+200 |> smth_fn |> print("This + That = " + $)
 
 18 |> smth_fn |> match {
   Some(x) if x == 18 => print("Equated to 18"),

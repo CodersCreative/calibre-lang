@@ -118,11 +118,11 @@ impl Board {
   }
 
   const minimax = fn(self : &mut Board, player : Player, depth : int = 0) -> int => {
-    match {
+    board.get_winner() |> match {
       Player.X => return 100 - depth,
       Player.Y => return -100 + depth,
       Player.None if board.is_full() => return 0,
-    }(board.get_winner())
+    }
 
     let maximising = player == Player.X 
 
@@ -154,7 +154,6 @@ const get_ais = fn() -> <bool, bool> => {
 const main = fn() => {
   for true => {
     let ais = get_ais();
-    print(ais);
     let both_ais = ais.0 && ais.1;
     let mut board : Board = Board.default();
     let mut player : Player = Player.X;
@@ -171,7 +170,7 @@ const main = fn() => {
         continue;
       }
 
-      board.set_user_input(player);
+      player |> board.set_user_input;
       player.switch();
     }
     // std.console.clear();
