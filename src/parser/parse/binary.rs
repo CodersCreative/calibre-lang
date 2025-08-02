@@ -44,7 +44,7 @@ impl Parser {
 
             left = NodeType::InDeclaration {
                 identifier: Box::new(left),
-                expression: Box::new(self.parse_statement()?),
+                expression: Box::new(self.parse_additive_expression()?),
             }
         }
 
@@ -66,7 +66,7 @@ impl Parser {
 
             left = NodeType::RangeDeclaration {
                 from: Box::new(left),
-                to: Box::new(self.parse_statement()?),
+                to: Box::new(self.parse_boolean_expression()?),
                 inclusive,
             }
         }
