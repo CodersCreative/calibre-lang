@@ -97,7 +97,7 @@ let smth_fn = fn (y : int) -> string!int => {
 
   err("needs to be larger than 10")
 }
-print("nooo");
+
 18 |> smth_fn |> match {
   // This is equivalent to Ok(x) if x == 18
   Ok(18) => print("Equated to 18"),
@@ -183,6 +183,20 @@ const main = fn () -> !int => {
 
 	number
 }
+
+// Currying works by first seeing if all the arguments have been met and if not creating a new function that only requires the remaining arguments.
+// In short it is implied currying.
+let currying = fn (a : int, b : int, c : int) -> int => a * b * c;
+
+// This is an example of currying using pipes although only one argument at a time is accepted
+currying |> 18 |> 20 |> 15 |> print ("Curryed " + $)
+
+// This is also valid: 
+18 |> currying |> 20 |> 15 |> print ("Curryed " + $)
+
+// Currying also works using the normal call syntax
+// This syntax can also be done for multiple arguments at once:
+print("Curryed " + currying(18)(20, 15));
 
 // the in keyword can be used to see if a certain value is contained by a string or list.
 if 4 in [4, 16, 32] => {
