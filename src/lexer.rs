@@ -184,13 +184,8 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
 
     while buffer.len() > 0 {
         let first = buffer.first().unwrap();
+
         increment_line_col(&mut line, &mut col, first);
-        if buffer[0] == '\n' {
-            line += 1;
-            col = 0;
-        } else if buffer[0].is_whitespace() {
-            col += 1;
-        }
 
         let get_token = |c: char| -> Option<TokenType> {
             match c {
