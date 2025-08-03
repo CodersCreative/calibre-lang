@@ -48,10 +48,13 @@ impl RuntimeValue {
         condition: Option<&u64>,
     ) -> Result<&'a RuntimeValue, ValueErr> {
         match self {
-            RuntimeValue::Link(scope, path, _) if Some(scope) == condition => env
-                .get_link_path(scope, path)
-                .unwrap()
-                .unwrap_links(env, scope, condition),
+            RuntimeValue::Link(scope, path, _)
+                if Some(scope) == condition || condition.is_none() =>
+            {
+                env.get_link_path(scope, path)
+                    .unwrap()
+                    .unwrap_links(env, scope, condition)
+            }
             _ => Ok(self),
         }
     }
@@ -63,11 +66,14 @@ impl RuntimeValue {
         condition: Option<u64>,
     ) -> Result<RuntimeValue, ValueErr> {
         match self {
-            RuntimeValue::Link(scope, path, _) if Some(scope) == condition => env
-                .get_link_path(&scope, &path)
-                .unwrap()
-                .clone()
-                .unwrap_links_val(env, &scope, condition),
+            RuntimeValue::Link(scope, path, _)
+                if Some(scope) == condition || condition.is_none() =>
+            {
+                env.get_link_path(&scope, &path)
+                    .unwrap()
+                    .clone()
+                    .unwrap_links_val(env, &scope, condition)
+            }
             _ => Ok(self),
         }
     }

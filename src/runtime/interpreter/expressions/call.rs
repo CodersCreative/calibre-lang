@@ -29,7 +29,6 @@ impl Environment {
         } = &func
         {
             if parameters.len() > arguments.len() {
-                println!("Ohh nooo");
                 let params: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)> =
                     parameters
                         .iter()

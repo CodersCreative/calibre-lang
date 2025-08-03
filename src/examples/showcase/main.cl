@@ -28,10 +28,10 @@ const language_forced : Language = Language.ENGLISH (6);
 
 // By not putting any data by the match it will only check for the enum member.
 // Ifs can be added for further selection.
-match {
+language_forced |> match {
   Language.ENGLISH if false => print("Enum: ENGLISH?"),
   Language.ENGLISH => print("Enum: ENGLISH"),
-}(language_forced)
+}
 
 // The mut keyword can be added for mutable variable that can be shadowed.
 let mut number : int = 0;

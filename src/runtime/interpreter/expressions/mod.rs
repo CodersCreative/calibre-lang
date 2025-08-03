@@ -155,9 +155,9 @@ impl Environment {
             let new_scope = self.new_scope_from_parent_shallow(*scope);
 
             for (i, node) in nodes.iter().enumerate() {
-                let mut value = self
-                    .evaluate(&new_scope, node.clone())?
-                    .unwrap_val(self, &new_scope)?;
+                let mut value = self.evaluate(&new_scope, node.clone())?;
+
+                value = value.unwrap_val(self, &new_scope)?;
 
                 if let Ok(RuntimeValue::Function { .. }) = current.unwrap(self, &new_scope) {
                     let temp = current.unwrap_val(self, &new_scope)?;
@@ -165,70 +165,44 @@ impl Environment {
                     value = temp;
                 }
 
-                println!("\n\ncur: {current:?} \n\nnode: {value:?} ");
-                let set_vars = || -> Result<(), InterpreterErr> {
-                    current = self.force_var(
-                        &new_scope,
-                        format!("$-{}", i),
-                        Variable {
-                            value: current,
-                            var_type: VarType::Mutable,
-                        },
-                    )?;
+                self.force_var(
+                    &new_scope,
+                    format!("$-{}", i),
+                    Variable {
+                        value: current.clone(),
+                        var_type: VarType::Mutable,
+                    },
+                )?;
+                self.force_var(
+                    &new_scope,
+                    "$".to_string(),
+                    Variable {
+                        value: current.clone(),
+                        var_type: VarType::Mutable,
+                    },
+                )?;
 
-                    let _ = self.force_var(
+                if let RuntimeValue::Function { .. } = value {
+                    current = self.evaluate_function(
                         &new_scope,
-                        format!("$"),
+                        value,
+                        vec![(NodeType::Identifier(format!("$-{}", i)), None)],
+                    )?;
+                    self.force_var(
+                        &new_scope,
+                        "$".to_string(),
                         Variable {
                             value: current.clone(),
                             var_type: VarType::Mutable,
                         },
                     )?;
-
-                    Ok(())
-                };
-
-                if let RuntimeValue::Function { body, .. } = &mut value {
-                    if let FunctionType::Regular(body) = body {
-                        if let NodeType::CallExpression(_, x) = &mut *body.0 {
-                            for x in x.iter_mut() {
-                                if let (NodeType::Identifier(x), _) = x {
-                                    if x == "$" {
-                                        *x = format!("$-{}", i - 1)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    let _ = set_vars()?;
-
-                    current = self.evaluate_function(
-                        &new_scope,
-                        value,
-                        vec![((NodeType::Identifier(format!("$-{}", i))), None)],
-                    )?;
-
-                    println!("2. {current:?}");
-
-                    current = self.force_var(
-                        &new_scope,
-                        format!("$"),
-                        Variable {
-                            value: current,
-                            var_type: VarType::Mutable,
-                        },
-                    )?;
                 } else {
                     current = value;
-                    let _ = set_vars()?;
                 }
             }
 
             let res = Ok(current.unwrap_links_val(self, &new_scope, Some(new_scope))?);
-
             self.remove_scope(&new_scope);
-
             res
         } else {
             Err(InterpreterErr::NotImplemented(exp))

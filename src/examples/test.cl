@@ -1,5 +1,5 @@
-/*let currying = fn (a : int, b : int, c : int) -> int => a * b * c ;
-let val = 18 |> currying |> 20 |> 15 |> print ("S " + $)*/
+let currying = fn (a : int, b : int, c : int) -> int => a * b * c ;
+let val = 18 |> currying |> 20 |> 15 |> print ("S " + $)
 
 let smth_fn = fn (y : int) -> string!int => {
   if y > 10 => {
@@ -18,4 +18,5 @@ let smth_fn = fn (y : int) -> string!int => {
   Ok([20, 30, 40, 50, 60, 70]) => print("Within list"),
   Ok(x) => print(x),
   Err(x) => print(x),
+  Let(x) => print(x),
 }

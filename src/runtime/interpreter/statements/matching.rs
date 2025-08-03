@@ -528,7 +528,7 @@ impl Environment {
         };
 
         let value = if let RuntimeValue::Link(_, _, _) = value {
-            value.unwrap_val(self, scope)?
+            value.unwrap_links_val(self, scope, None)?
         } else {
             value
         };
