@@ -43,8 +43,23 @@ impl Parser {
         Ok(left)
     }
 
-    pub fn parse_in_expression(&mut self) -> Result<NodeType, ParserError> {
+    pub fn parse_is_expression(&mut self) -> Result<NodeType, ParserError> {
         let mut left = self.parse_additive_expression()?;
+
+        while let TokenType::Is = self.first().token_type.clone() {
+            let _ = self.eat();
+
+            left = NodeType::IsDeclaration {
+                value: Box::new(left),
+                data_type: self.parse_type()?.unwrap(),
+            }
+        }
+
+        Ok(left)
+    }
+
+    pub fn parse_in_expression(&mut self) -> Result<NodeType, ParserError> {
+        let mut left = self.parse_is_expression()?;
 
         while let TokenType::In = self.first().token_type.clone() {
             let _ = self.eat();

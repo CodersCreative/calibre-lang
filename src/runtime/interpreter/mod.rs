@@ -135,6 +135,7 @@ impl Environment {
             NodeType::CallExpression(_, _) => self.evaluate_call_expression(scope, node),
             NodeType::VariableDeclaration { .. } => self.evaluate_variable_declaration(scope, node),
             NodeType::RangeDeclaration { .. } => self.evaluate_range_expression(scope, node),
+            NodeType::IsDeclaration { .. } => self.evaluate_is_expression(scope, node),
             NodeType::AssignmentExpression { .. } => {
                 self.evaluate_assignment_expression(scope, node)
             }

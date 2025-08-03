@@ -96,6 +96,10 @@ pub enum NodeType {
         identifier: Box<NodeType>,
         expression: Box<NodeType>,
     },
+    IsDeclaration {
+        value: Box<NodeType>,
+        data_type: RuntimeType,
+    },
     RangeDeclaration {
         from: Box<NodeType>,
         to: Box<NodeType>,

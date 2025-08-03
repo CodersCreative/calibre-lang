@@ -12,7 +12,7 @@ use crate::{
     ast::{LoopType, NodeType, RefMutability, comparison::Comparison},
     lexer::{Bracket, Token, TokenType},
     parser::{Parser, ParserError, SyntaxErr},
-    runtime::values::{RuntimeType, helper::ObjectType},
+    runtime::values::{RuntimeType, RuntimeValue, helper::ObjectType},
 };
 
 impl Parser {
@@ -62,15 +62,21 @@ impl Parser {
                 .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)?
                 .value;
 
-            let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
+            let mut ref_mutability = RefMutability::Value;
 
-            let ref_mutability = RefMutability::from(self.first().token_type.clone());
+            let typ = if self.first().token_type == TokenType::Colon {
+                let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
 
-            if ref_mutability != RefMutability::Value {
-                let _ = self.eat();
-            }
+                ref_mutability = RefMutability::from(self.first().token_type.clone());
 
-            let typ = self.parse_type()?.expect("Expected data type.");
+                if ref_mutability != RefMutability::Value {
+                    let _ = self.eat();
+                }
+
+                self.parse_type()?.expect("Expected data type.")
+            } else {
+                RuntimeType::Dynamic
+            };
 
             let default = if defaulted || self.first().token_type == TokenType::Equals {
                 let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;

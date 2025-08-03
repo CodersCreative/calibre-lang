@@ -79,8 +79,7 @@ for x == number => {
   print(x + number);
 }
 
-/* Functions require all variables to have a specified type including those with default values.
-Return types of functions are recommended to specify their return type if they have any but not required*/
+// Return types and parameters of functions are recommended to have a specified type but it's not required
 const range2 = fn (stop : int, start : int = 0, step : int = 10) -> list<int> => {
   range(start, stop * 2, step * 2)
 }
@@ -90,7 +89,7 @@ for i in range2(100, step = 25) => {
   print("val: " + i);
 }
 
-let smth_fn = fn (y : int) -> string!int => {
+let smth_fn = fn (y) -> string!int => {
   if y > 10 => {
     return ok(y);
   }
@@ -196,6 +195,11 @@ currying |> 18 |> 20 |> 15 |> print ("Curryed " + $)
 
 // Currying also works using the normal call syntax
 print("Curryed " + currying(18)(20, 15));
+
+// The is keyword can be used to check types.
+// The is expression also reserves the identifiers "number", "decimal" and "integer" to allow for loose checking between different number types
+if 4 is number => print("Yay!! 4 is a number");
+if !(4 is list<str>) => print("Yay!! 4 is not a list of strings");
 
 // the in keyword can be used to see if a certain value is contained by a string or list.
 if 4 in [4, 16, 32] => {

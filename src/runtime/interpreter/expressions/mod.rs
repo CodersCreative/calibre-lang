@@ -238,6 +238,40 @@ impl Environment {
         }
     }
 
+    pub fn evaluate_is_expression(
+        &mut self,
+        scope: &u64,
+        exp: NodeType,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let NodeType::IsDeclaration { value, data_type } = exp {
+            let value = self
+                .evaluate(scope, *value)?
+                .unwrap_links_val(self, scope, None)?;
+
+            match data_type {
+                RuntimeType::Struct(_, Some(x)) if &x == "number" => {
+                    return Ok(RuntimeValue::Bool(value.is_number()));
+                }
+                RuntimeType::Struct(_, Some(x)) if &x == "decimal" => {
+                    return Ok(RuntimeValue::Bool(
+                        [RuntimeType::Float, RuntimeType::Double].contains(&(&value).into()),
+                    ));
+                }
+                RuntimeType::Struct(_, Some(x)) if &x == "integer" => {
+                    return Ok(RuntimeValue::Bool(
+                        value.is_number()
+                            && ![RuntimeType::Float, RuntimeType::Double]
+                                .contains(&(&value).into()),
+                    ));
+                }
+                _ => {}
+            }
+            Ok(RuntimeValue::Bool(value.is_type(self, scope, &data_type)))
+        } else {
+            Err(InterpreterErr::NotImplemented(exp))
+        }
+    }
+
     pub fn evaluate_comparison_expression(
         &mut self,
         scope: &u64,
