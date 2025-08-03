@@ -101,7 +101,7 @@ impl FromStr for RuntimeType {
 impl Into<RuntimeType> for &RuntimeValue {
     fn into(self) -> RuntimeType {
         match self {
-            RuntimeValue::Null => panic!("Tried to convert null value to type"),
+            RuntimeValue::Null => RuntimeType::Dynamic,
             RuntimeValue::Float(_) => RuntimeType::Float,
             RuntimeValue::Double(_) => RuntimeType::Double,
             RuntimeValue::Int(_) => RuntimeType::Int,
@@ -137,7 +137,7 @@ impl Into<RuntimeType> for &RuntimeValue {
                     .collect(),
                 is_async: *is_async,
             },
-            RuntimeValue::NativeFunction(_) => panic!("Cannot get type of native functions"),
+            RuntimeValue::NativeFunction(_) => RuntimeType::Dynamic,
         }
     }
 }

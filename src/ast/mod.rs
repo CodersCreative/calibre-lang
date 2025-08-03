@@ -10,7 +10,7 @@ use crate::{
     runtime::{
         scope::Type,
         values::{
-            RuntimeType,
+            RuntimeType, RuntimeValue,
             helper::{ObjectType, VarType},
         },
     },
@@ -74,6 +74,7 @@ pub enum NodeType {
         return_type: Option<RuntimeType>,
         is_async: bool,
     },
+    RuntimeValue(RuntimeValue),
     FunctionDeclaration {
         parameters: Vec<(String, RuntimeType, RefMutability, Option<NodeType>)>,
         body: Box<NodeType>,
@@ -137,8 +138,7 @@ pub enum NodeType {
         operator: Comparison,
     },
     PipeExpression {
-        left: Box<NodeType>,
-        right: Box<NodeType>,
+        nodes: Vec<NodeType>,
     },
     BooleanExpression {
         left: Box<NodeType>,

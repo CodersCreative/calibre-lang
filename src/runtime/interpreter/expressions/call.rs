@@ -1,13 +1,15 @@
+use std::fmt::Arguments;
+
 use rand::seq::IndexedRandom;
 
 use crate::{
-    ast::NodeType,
+    ast::{NodeType, RefMutability},
     runtime::{
         interpreter::InterpreterErr,
         scope::{Environment, ScopeErr, Type},
         values::{
-            FunctionType, RuntimeValue, ValueErr,
-            helper::{ObjectType, VarType},
+            FunctionType, RuntimeType, RuntimeValue, ValueErr,
+            helper::{Block, ObjectType, VarType},
         },
     },
 };
@@ -24,12 +26,56 @@ impl Environment {
             body,
             return_type,
             is_async,
-        } = func
+        } = &func
         {
+            if parameters.len() > arguments.len() {
+                println!("Ohh nooo");
+                let params: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)> =
+                    parameters
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, x)| {
+                            for arg in arguments.iter() {
+                                if let (NodeType::Identifier(y), Some(z)) = arg {
+                                    if &x.0 == y {
+                                        return false;
+                                    }
+                                }
+                            }
+
+                            i > &(arguments.len() - 1)
+                        })
+                        .map(|x| x.1.clone())
+                        .collect();
+
+                if params.iter().filter(|x| x.3.is_none()).count() > 0 {
+                    let arguments: Vec<(NodeType, Option<NodeType>)> = [
+                        arguments,
+                        params
+                            .iter()
+                            .map(|x| (NodeType::Identifier(x.0.clone()), None))
+                            .collect(),
+                    ]
+                    .concat();
+
+                    let body = FunctionType::Regular(Block(Box::new(NodeType::CallExpression(
+                        Box::new(NodeType::RuntimeValue(func.clone())),
+                        arguments,
+                    ))));
+
+                    return Ok(RuntimeValue::Function {
+                        parameters: params,
+                        body,
+                        return_type: return_type.clone(),
+                        is_async: *is_async,
+                    });
+                }
+            }
+
             match body {
                 FunctionType::Regular(body) => {
-                    let new_scope = self.get_new_scope(scope, parameters, arguments)?;
-                    let result = self.evaluate(&new_scope, *body.0)?;
+                    let new_scope = self.get_new_scope(scope, parameters.to_vec(), arguments)?;
+                    let result = self.evaluate(&new_scope, *body.0.clone())?;
                     self.stop = None;
 
                     let result = if let Some(t) = return_type {
@@ -49,7 +95,7 @@ impl Environment {
                         scope,
                         &parameters[0].2,
                         arguments[0].0.clone(),
-                        body.0,
+                        body.0.clone(),
                     );
                 }
             }

@@ -142,6 +142,7 @@ impl Environment {
             NodeType::ComparisonExpression { .. } => {
                 self.evaluate_comparison_expression(scope, node)
             }
+            NodeType::RuntimeValue(x) => Ok(x),
             NodeType::BooleanExpression { .. } => self.evaluate_boolean_expression(scope, node),
             NodeType::IfStatement { .. } => self.evaluate_if_statement(scope, node),
             NodeType::ImportStatement { .. } => self.evaluate_import_statement(scope, node),

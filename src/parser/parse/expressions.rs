@@ -35,15 +35,8 @@ impl Parser {
                     NodeType::StringLiteral(val.to_string())
                 }
             }
-            TokenType::Open(Bracket::Paren) => {
-                self.eat();
-                let value = self.parse_statement()?;
-                let _ = self.expect_eat(
-                    &TokenType::Close(Bracket::Paren),
-                    SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
-                )?;
-                value
-            }
+            TokenType::Open(Bracket::Paren) => self.parse_tuple_expression()?,
+            TokenType::Open(Bracket::Square) => self.parse_list_expression()?,
             TokenType::BinaryOperator(x) if x == &BinaryOperator::Sub => {
                 self.eat();
                 NodeType::NotExpression {

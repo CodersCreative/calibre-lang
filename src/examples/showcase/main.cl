@@ -97,7 +97,7 @@ let smth_fn = fn (y : int) -> string!int => {
 
   err("needs to be larger than 10")
 }
-
+print("nooo");
 18 |> smth_fn |> match {
   // This is equivalent to Ok(x) if x == 18
   Ok(18) => print("Equated to 18"),
@@ -175,7 +175,7 @@ const main = fn () -> !int => {
 	print(number);
   let sentence = "Hello, World!";
 
-  match sentence{
+  sentence |> match {
     // The Prefix and Suffix keywords can be used to pattern match on a string easily.
     Prefix("Hello,", line) if false => print(trim(line)),
     Suffix(", World!", line) => print(trim(line))

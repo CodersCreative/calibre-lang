@@ -309,10 +309,6 @@ impl Parser {
     }
 
     pub fn parse_tuple_expression(&mut self) -> Result<NodeType, ParserError> {
-        if self.first().token_type != TokenType::Open(Bracket::Paren) {
-            return self.parse_list_expression();
-        }
-
         let mut has_commas = false;
         let mut index = 0;
 
@@ -325,7 +321,13 @@ impl Parser {
         }
 
         if !has_commas {
-            return self.parse_list_expression();
+            self.eat();
+            let value = self.parse_statement();
+            let _ = self.expect_eat(
+                &TokenType::Close(Bracket::Paren),
+                SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
+            )?;
+            return value;
         }
 
         let mut values = Vec::new();
@@ -355,10 +357,6 @@ impl Parser {
     }
 
     pub fn parse_list_expression(&mut self) -> Result<NodeType, ParserError> {
-        if self.first().token_type != TokenType::Open(Bracket::Square) {
-            return self.parse_object_expression();
-        }
-
         let mut values = Vec::new();
         let _ = self.eat();
 

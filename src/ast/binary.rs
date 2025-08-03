@@ -200,6 +200,14 @@ impl RuntimeValue {
                     Ok(Self::Str(x))
                 }
             }
+            Self::Tuple(mut data) => {
+                if let Self::Tuple(rhs_data) = rhs {
+                    return Ok(Self::Tuple([data, rhs_data].concat()));
+                };
+
+                data.push(rhs);
+                Ok(Self::Tuple(data))
+            }
             Self::List {
                 mut data,
                 data_type,
