@@ -22,7 +22,7 @@ impl Environment {
                 return self.get_object_type(&scope, key);
             }
         }
-        Err(ScopeErr::Function(key.to_string()))
+        Err(ScopeErr::Object(key.to_string()))
     }
 
     pub fn get_object(&self, scope: &u64, key: &str) -> Result<&Object, ScopeErr> {

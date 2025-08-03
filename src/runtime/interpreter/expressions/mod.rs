@@ -188,7 +188,6 @@ impl Environment {
                             value,
                             vec![(NodeType::Identifier(format!("$-{}", i)), None)],
                         )?;
-                        // println!("{current:?}");
                         self.force_var(
                             &new_scope,
                             "$".to_string(),

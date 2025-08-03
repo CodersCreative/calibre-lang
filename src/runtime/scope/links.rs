@@ -124,6 +124,11 @@ impl Environment {
                 return Ok(var);
             }
         }
+
+        if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+            return self.get_link_path(&scope, path);
+        }
+
         return Err(ScopeErr::Variable(path[0].to_string()).into());
     }
 
@@ -175,6 +180,10 @@ impl Environment {
                     return f(x);
                 }
             }
+        }
+
+        if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+            return self.update_link_path(&scope, path, f);
         }
 
         if let RuntimeValue::Link(scope, path, _) = &self.get_var(scope, &path[0])?.value.clone() {

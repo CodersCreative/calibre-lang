@@ -1,5 +1,7 @@
 use std::{f32::consts::PI, rc::Rc};
 
+use rand::seq::IndexedRandom;
+
 use crate::{
     native::{NativeFunction, stdlib::console::Out},
     runtime::{
@@ -17,6 +19,7 @@ pub fn setup(env: &mut Environment, scope: &u64) {
         (String::from("range"), Rc::new(Range())),
         (String::from("trim"), Rc::new(Trim())),
         (String::from("print"), Rc::new(Out())),
+        (String::from("len"), Rc::new(Len())),
     ];
 
     if let Some(map) = env.variables.get_mut(scope) {
@@ -180,6 +183,27 @@ impl NativeFunction for Range {
     }
 }
 
+pub struct Len();
+
+impl NativeFunction for Len {
+    fn run(
+        &self,
+        env: &mut Environment,
+        scope: &u64,
+        args: &[(RuntimeValue, Option<RuntimeValue>)],
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let Some((x, _)) = args.get(0) {
+            Ok(RuntimeValue::UInt(match x.unwrap(env, scope)? {
+                RuntimeValue::List { data, data_type: _ } => data.len() as u64,
+                RuntimeValue::Tuple(data) => data.len() as u64,
+                RuntimeValue::Str(x) => x.len() as u64,
+                _ => return Err(InterpreterErr::UnexpectedType(x.clone())),
+            }))
+        } else {
+            Ok(RuntimeValue::Null)
+        }
+    }
+}
 pub struct Trim();
 
 impl NativeFunction for Trim {
