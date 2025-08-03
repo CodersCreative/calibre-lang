@@ -181,24 +181,25 @@ impl Environment {
                         var_type: VarType::Mutable,
                     },
                 )?;
-
-                if let RuntimeValue::Function { .. } = value {
-                    current = self.evaluate_function(
-                        &new_scope,
-                        value,
-                        vec![(NodeType::Identifier(format!("$-{}", i)), None)],
-                    )?;
-                    self.force_var(
-                        &new_scope,
-                        "$".to_string(),
-                        Variable {
-                            value: current.clone(),
-                            var_type: VarType::Mutable,
-                        },
-                    )?;
-                } else {
-                    current = value;
+                if current != RuntimeValue::Null {
+                    if let RuntimeValue::Function { .. } = value {
+                        current = self.evaluate_function(
+                            &new_scope,
+                            value,
+                            vec![(NodeType::Identifier(format!("$-{}", i)), None)],
+                        )?;
+                        self.force_var(
+                            &new_scope,
+                            "$".to_string(),
+                            Variable {
+                                value: current.clone(),
+                                var_type: VarType::Mutable,
+                            },
+                        )?;
+                        continue;
+                    }
                 }
+                current = value;
             }
 
             let res = Ok(current.unwrap_links_val(self, &new_scope, Some(new_scope))?);
