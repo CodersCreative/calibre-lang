@@ -19,7 +19,7 @@ impl Environment {
         &mut self,
         scope: &u64,
         func: RuntimeValue,
-        arguments: Vec<(NodeType, Option<NodeType>)>,
+        mut arguments: Vec<(NodeType, Option<NodeType>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let RuntimeValue::Function {
             parameters,
@@ -28,6 +28,17 @@ impl Environment {
             is_async,
         } = &func
         {
+            if arguments.len() == 1 && parameters.len() > 1 {
+                if let Ok(x) = self.evaluate(scope, arguments[0].0.clone()) {
+                    if let Ok(RuntimeValue::Tuple(x)) = x.unwrap_val(self, scope) {
+                        arguments = x
+                            .into_iter()
+                            .map(|x| (NodeType::RuntimeValue(x), None))
+                            .collect();
+                    }
+                }
+            };
+
             if parameters.len() > arguments.len() {
                 let params: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)> =
                     parameters

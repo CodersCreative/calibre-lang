@@ -188,14 +188,13 @@ const main = fn () -> !int => {
 // In short it is implied currying.
 let currying = fn (a : int, b : int, c : int) -> int => a * b * c;
 
-// This is an example of currying using pipes although only one argument at a time is accepted
+// This is an example of currying using pipes
 currying |> 18 |> 20 |> 15 |> print ("Curryed " + $)
 
 // This is also valid: 
-18 |> currying |> 20 |> 15 |> print ("Curryed " + $)
+18 |> currying |> (20, 15) |> print ("Curryed " + $)
 
 // Currying also works using the normal call syntax
-// This syntax can also be done for multiple arguments at once:
 print("Curryed " + currying(18)(20, 15));
 
 // the in keyword can be used to see if a certain value is contained by a string or list.
