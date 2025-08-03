@@ -202,7 +202,9 @@ if 4 is number => print("Yay!! 4 is a number");
 if !(4 is list<str>) => print("Yay!! 4 is not a list of strings");
 
 // the in keyword can be used to see if a certain value is contained by a string or list.
-if 4 in [4, 16, 32] => {
+// the __name__ special variable can also be used to check if the current scipt is the root file.
+print("__name__ = " + __name__);
+if (4 in [4, 16, 32]) && __name__ == "__main__" => {
   print("main result: " + main());
   print("Success, Random Num = " + (std.random.generate(10..=1000) as uint))
 }

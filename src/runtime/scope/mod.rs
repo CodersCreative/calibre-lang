@@ -123,16 +123,43 @@ impl Environment {
     }
 
     pub fn add_scope(&mut self, mut scope: Scope) {
-        if let Some(parent) = &scope.parent {
+        let has_parent = if let Some(parent) = &scope.parent {
             self.scopes
                 .get_mut(&parent)
                 .unwrap()
                 .children
                 .insert(scope.namespace.clone(), self.counter);
-        }
+            true
+        } else {
+            false
+        };
 
         scope.id = self.counter;
-        self.variables.insert(self.counter, HashMap::new());
+        self.variables.insert(
+            self.counter,
+            HashMap::from([
+                (
+                    String::from("__name__"),
+                    Variable {
+                        value: RuntimeValue::Str(String::from(
+                            if !has_parent || scope.namespace == "root" {
+                                "__main__"
+                            } else {
+                                &scope.namespace
+                            },
+                        )),
+                        var_type: VarType::Constant,
+                    },
+                ),
+                (
+                    String::from("__file__"),
+                    Variable {
+                        value: RuntimeValue::Str(String::from(scope.path.to_str().unwrap())),
+                        var_type: VarType::Constant,
+                    },
+                ),
+            ]),
+        );
         self.objects.insert(self.counter, HashMap::new());
         self.scopes.insert(self.counter, scope);
         self.counter += 1;

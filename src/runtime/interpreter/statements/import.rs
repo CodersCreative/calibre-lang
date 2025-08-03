@@ -64,7 +64,9 @@ impl Environment {
                     .collect();
 
                 for (key, value) in vars {
-                    self.push_var(scope, key, value.clone())?;
+                    if !key.starts_with("__") {
+                        let _ = self.push_var(scope, key, value.clone());
+                    }
                 }
 
                 let obj: Vec<(String, Object)> = self
@@ -88,7 +90,9 @@ impl Environment {
                     .collect();
 
                 for (value, obj) in obj {
-                    self.push_object(scope, value.clone(), obj.clone())?;
+                    if !value.starts_with("__") {
+                        let _ = self.push_object(scope, value.clone(), obj.clone());
+                    }
                 }
             } else {
                 for value in values {
