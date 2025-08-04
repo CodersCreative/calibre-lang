@@ -81,7 +81,7 @@ impl Environment {
                 }
             } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
                 let var = self.get_var(scope, &loop_name)?.clone();
-                if let RuntimeValue::List { data, data_type } = &var.value {
+                if let RuntimeValue::List { data, .. } = &var.value {
                     for (i, d) in data.iter().enumerate() {
                         let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
 
@@ -198,24 +198,26 @@ impl Environment {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, rc::Rc};
+    use std::{path::PathBuf, str::FromStr};
 
     use crate::{
-        ast::{LoopType, NodeType, RefMutability},
+        ast::{LoopType, NodeType},
         runtime::{
-            interpreter::statements::loops::evaluate_loop_declaration,
-            scope::Scope,
-            values::{RuntimeType, RuntimeValue, helper::VarType},
+            scope::Environment,
+            values::{RuntimeValue, helper::VarType},
         },
     };
 
-    fn new_scope() -> Rc<RefCell<Scope>> {
-        Rc::new(RefCell::new(Scope::new(None)))
+    fn get_new_env() -> (Environment, u64) {
+        let mut env = Environment::new();
+        let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        (env, scope)
     }
 
     #[test]
     fn test_evaluate_loop_declaration_for_range() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
+
         let loop_type = Box::new(LoopType::For(
             "i".to_string(),
             NodeType::RangeDeclaration {
@@ -224,14 +226,21 @@ mod tests {
                 inclusive: false,
             },
         ));
-        let body = vec![NodeType::VariableDeclaration {
-            var_type: VarType::Mutable(None),
+
+        let body = Box::new(NodeType::VariableDeclaration {
+            var_type: VarType::Mutable,
             identifier: "x".to_string(),
-            value: Some(Box::new(NodeType::Identifier("i".to_string()))),
+            value: Box::new(NodeType::Identifier("i".to_string())),
             data_type: None,
-        }];
+        });
+
         let node = NodeType::LoopDeclaration { loop_type, body };
-        let result = evaluate_loop_declaration(node, scope.clone()).unwrap();
+        let result = env
+            .evaluate_loop_declaration(&scope, node)
+            .unwrap()
+            .unwrap_val(&env, &scope)
+            .unwrap();
+
         assert_eq!(result, RuntimeValue::Int(2));
     }
 }

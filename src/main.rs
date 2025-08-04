@@ -1,15 +1,12 @@
-use std::{error::Error, fs, path::PathBuf, str::FromStr};
-
-use clap::Parser;
-// use clap::Parser as ClapParser;
-use runtime::values::RuntimeValue;
-use rustyline::{DefaultEditor, error::ReadlineError};
-use thiserror::Error;
-
 use crate::{
     parser::ParserError,
     runtime::{interpreter::InterpreterErr, scope::Environment},
 };
+use clap::Parser;
+use runtime::values::RuntimeValue;
+use rustyline::{DefaultEditor, error::ReadlineError};
+use std::{error::Error, fs, path::PathBuf, str::FromStr};
+use thiserror::Error;
 
 pub mod ast;
 pub mod lexer;

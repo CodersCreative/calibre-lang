@@ -1,9 +1,5 @@
+use crate::{parser::Parser, runtime::scope::Environment};
 use std::{fs, u64};
-
-use crate::{
-    parser::Parser,
-    runtime::scope::Environment,
-};
 
 pub mod console;
 pub mod random;
@@ -17,13 +13,13 @@ pub fn setup(env: &mut Environment, scope: &u64) {
 
     let _ = env.evaluate(scope, program).unwrap();
 
-    let scopes: Vec<(String, Box<dyn Fn(&mut Environment, &u64)>)> = vec![
-        (String::from("thread"), Box::new(thread::setup)),
-        (String::from("console"), Box::new(console::setup)),
-        (String::from("random"), Box::new(random::setup)),
+    let scopes: Vec<Box<dyn Fn(&mut Environment, &u64)>> = vec![
+        Box::new(thread::setup),
+        Box::new(console::setup),
+        Box::new(random::setup),
     ];
 
-    for (name, func) in scopes {
+    for func in scopes {
         func(env, scope);
     }
 }

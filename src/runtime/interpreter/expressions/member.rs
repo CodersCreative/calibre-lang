@@ -1,5 +1,3 @@
-use rand::seq::IndexedRandom;
-
 use crate::{
     ast::NodeType,
     runtime::{
@@ -73,7 +71,7 @@ impl Environment {
                             value = self.get_link_path(&s, &path)?.clone();
                             continue;
                         }
-                        x => return Ok(MembrExprPathRes::Value(x.clone())), // x => unimplemented!("{:?}", x),
+                        x => return Ok(MembrExprPathRes::Value(x.clone())),
                     }
                     break;
                 },
@@ -189,7 +187,7 @@ impl Environment {
 
                 match self.get_link_path(scope, &path) {
                     Ok(x) => Ok(x.clone()),
-                    Err(e) if path.len() == 2 => {
+                    Err(_) if path.len() == 2 => {
                         return self.evaluate(
                             scope,
                             NodeType::EnumExpression {
@@ -211,40 +209,45 @@ impl Environment {
 mod tests {
     use super::*;
     use crate::ast::NodeType;
-    use crate::runtime::scope::Scope;
+    use crate::runtime::scope::Variable;
     use crate::runtime::values::helper::VarType;
     use crate::runtime::values::{RuntimeValue, helper::ObjectType};
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    use std::path::PathBuf;
+    use std::str::FromStr;
 
-    fn new_scope() -> Rc<RefCell<Scope>> {
-        Rc::new(RefCell::new(Scope::new(None)))
+    fn get_new_env() -> (Environment, u64) {
+        let mut env = Environment::new();
+        let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        (env, scope)
     }
 
     #[test]
     fn test_assign_member_expression_struct_field() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let mut map = std::collections::HashMap::new();
         map.insert("field".to_string(), RuntimeValue::Int(1));
-        let struct_val = RuntimeValue::Struct(ObjectType::Map(map.clone()), None);
-        scope
-            .borrow_mut()
-            .push_var(
-                "obj".to_string(),
-                struct_val.clone(),
-                VarType::Mutable(None),
-            )
-            .unwrap();
+        let struct_val = RuntimeValue::Struct(scope, None, ObjectType::Map(map.clone()));
+        env.push_var(
+            &scope,
+            "obj".to_string(),
+            Variable {
+                value: struct_val.clone(),
+                var_type: VarType::Mutable,
+            },
+        )
+        .unwrap();
 
         let member = NodeType::MemberExpression {
-            object: Box::new(NodeType::Identifier("obj".to_string())),
-            property: Box::new(NodeType::Identifier("field".to_string())),
-            is_computed: false,
+            path: vec![
+                (NodeType::Identifier("obj".to_string()), false),
+                (NodeType::Identifier("field".to_string()), false),
+            ],
         };
-        assign_member_expression(member, RuntimeValue::Int(42), scope.clone()).unwrap();
+        env.assign_member_expression(&scope, member, RuntimeValue::Int(42))
+            .unwrap();
 
-        let updated = scope.borrow().variables.get("obj").unwrap().0.clone();
-        if let RuntimeValue::Struct(ObjectType::Map(m), _) = updated {
+        let updated = env.get_var(&scope, "obj").unwrap().value.clone();
+        if let RuntimeValue::Struct(_, _, ObjectType::Map(m)) = updated {
             assert_eq!(m.get("field"), Some(&RuntimeValue::Int(42)));
         } else {
             panic!("Expected struct value");
@@ -253,24 +256,32 @@ mod tests {
 
     #[test]
     fn test_assign_member_expression_list_index() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let list_val = RuntimeValue::List {
             data: vec![RuntimeValue::Int(1), RuntimeValue::Int(2)],
             data_type: Box::new(Some(crate::runtime::values::RuntimeType::Int)),
         };
-        scope
-            .borrow_mut()
-            .push_var("lst".to_string(), list_val.clone(), VarType::Mutable(None))
-            .unwrap();
+        env.push_var(
+            &scope,
+            "lst".to_string(),
+            Variable {
+                value: list_val.clone(),
+                var_type: VarType::Mutable,
+            },
+        )
+        .unwrap();
 
         let member = NodeType::MemberExpression {
-            object: Box::new(NodeType::Identifier("lst".to_string())),
-            property: Box::new(NodeType::IntLiteral(1)),
-            is_computed: false,
+            path: vec![
+                (NodeType::Identifier("lst".to_string()), false),
+                (NodeType::IntLiteral(1), false),
+            ],
         };
-        assign_member_expression(member, RuntimeValue::Int(99), scope.clone()).unwrap();
 
-        let updated = scope.borrow().variables.get("lst").unwrap().0.clone();
+        env.assign_member_expression(&scope, member, RuntimeValue::Int(99))
+            .unwrap();
+
+        let updated = env.get_var(&scope, "lst").unwrap().value.clone();
         if let RuntimeValue::List { data, .. } = updated {
             assert_eq!(data[1], RuntimeValue::Int(99));
         } else {
@@ -280,61 +291,95 @@ mod tests {
 
     #[test]
     fn test_evaluate_member_expression_struct_field() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let mut map = std::collections::HashMap::new();
         map.insert("foo".to_string(), RuntimeValue::Int(123));
-        let struct_val = RuntimeValue::Struct(ObjectType::Map(map.clone()), None);
-        scope
-            .borrow_mut()
-            .push_var("obj".to_string(), struct_val, VarType::Mutable(None))
-            .unwrap();
+        let struct_val = RuntimeValue::Struct(scope, None, ObjectType::Map(map.clone()));
+
+        env.push_var(
+            &scope,
+            "obj".to_string(),
+            Variable {
+                value: struct_val.clone(),
+                var_type: VarType::Mutable,
+            },
+        )
+        .unwrap();
 
         let member = NodeType::MemberExpression {
-            object: Box::new(NodeType::Identifier("obj".to_string())),
-            property: Box::new(NodeType::Identifier("foo".to_string())),
-            is_computed: false,
+            path: vec![
+                (NodeType::Identifier("obj".to_string()), false),
+                (NodeType::Identifier("foo".to_string()), false),
+            ],
         };
-        let result = evaluate_member_expression(member, scope).unwrap();
+
+        let result = env
+            .evaluate_member_expression(&scope, member)
+            .unwrap()
+            .unwrap_val(&env, &scope)
+            .unwrap();
         assert_eq!(result, RuntimeValue::Int(123));
     }
 
     #[test]
     fn test_evaluate_member_expression_list_index() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let list_val = RuntimeValue::List {
             data: vec![RuntimeValue::Int(10), RuntimeValue::Int(20)],
             data_type: Box::new(Some(crate::runtime::values::RuntimeType::Int)),
         };
-        scope
-            .borrow_mut()
-            .push_var("lst".to_string(), list_val, VarType::Mutable(None))
-            .unwrap();
+
+        env.push_var(
+            &scope,
+            "lst".to_string(),
+            Variable {
+                value: list_val.clone(),
+                var_type: VarType::Mutable,
+            },
+        )
+        .unwrap();
 
         let member = NodeType::MemberExpression {
-            object: Box::new(NodeType::Identifier("lst".to_string())),
-            property: Box::new(NodeType::IntLiteral(1)),
-            is_computed: false,
+            path: vec![
+                (NodeType::Identifier("lst".to_string()), false),
+                (NodeType::IntLiteral(1), false),
+            ],
         };
-        let result = evaluate_member_expression(member, scope).unwrap();
+        let result = env
+            .evaluate_member_expression(&scope, member)
+            .unwrap()
+            .unwrap_val(&env, &scope)
+            .unwrap();
         assert_eq!(result, RuntimeValue::Int(20));
     }
 
     #[test]
     fn test_evaluate_member_expression_struct_field_not_found() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let map = std::collections::HashMap::new();
-        let struct_val = RuntimeValue::Struct(ObjectType::Map(map), None);
-        scope
-            .borrow_mut()
-            .push_var("obj".to_string(), struct_val, VarType::Mutable(None))
-            .unwrap();
+        let struct_val = RuntimeValue::Struct(scope, None, ObjectType::Map(map));
+
+        env.push_var(
+            &scope,
+            "obj".to_string(),
+            Variable {
+                value: struct_val.clone(),
+                var_type: VarType::Mutable,
+            },
+        )
+        .unwrap();
 
         let member = NodeType::MemberExpression {
-            object: Box::new(NodeType::Identifier("obj".to_string())),
-            property: Box::new(NodeType::Identifier("missing".to_string())),
-            is_computed: false,
+            path: vec![
+                (NodeType::Identifier("obj".to_string()), false),
+                (NodeType::Identifier("missing".to_string()), false),
+            ],
         };
-        let result = evaluate_member_expression(member, scope);
+
+        let result = env
+            .evaluate_member_expression(&scope, member)
+            .unwrap()
+            .unwrap_val(&env, &scope);
         assert!(result.is_err());
     }
 }

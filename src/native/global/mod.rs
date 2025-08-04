@@ -1,7 +1,3 @@
-use std::{f32::consts::PI, rc::Rc};
-
-use rand::seq::IndexedRandom;
-
 use crate::{
     native::{NativeFunction, stdlib::console::Out},
     runtime::{
@@ -10,6 +6,7 @@ use crate::{
         values::{RuntimeType, RuntimeValue},
     },
 };
+use std::{f32::consts::PI, rc::Rc};
 
 pub fn setup(env: &mut Environment, scope: &u64) {
     let funcs: Vec<(String, Rc<dyn NativeFunction>)> = vec![
@@ -66,8 +63,8 @@ pub struct ErrFn();
 impl NativeFunction for ErrFn {
     fn run(
         &self,
-        env: &mut Environment,
-        scope: &u64,
+        _env: &mut Environment,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(if let Some(x) = args.get(0) {
@@ -89,8 +86,8 @@ pub struct OkFn();
 impl NativeFunction for OkFn {
     fn run(
         &self,
-        env: &mut Environment,
-        scope: &u64,
+        _env: &mut Environment,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(if let Some(x) = args.get(0) {
@@ -112,8 +109,8 @@ pub struct SomeFn();
 impl NativeFunction for SomeFn {
     fn run(
         &self,
-        env: &mut Environment,
-        scope: &u64,
+        _env: &mut Environment,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(if let Some(x) = args.get(0) {

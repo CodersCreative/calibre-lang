@@ -48,7 +48,7 @@ impl Environment {
                 if let Some(arg) = &arguments.get(i) {
                     if let None = arg.1 {
                         if let NodeType::Identifier(x) = &arg.0 {
-                            let (typ, var_type) = {
+                            let (typ, _) = {
                                 let var = self.get_var(scope, x)?;
 
                                 match var.var_type {
@@ -220,96 +220,105 @@ impl Environment {
 mod tests {
     use super::*;
     use crate::ast::{NodeType, RefMutability};
-    use crate::runtime::scope::Scope;
-    use crate::runtime::values::{RuntimeType, RuntimeValue, helper::VarType};
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    use crate::runtime::values::{RuntimeType, RuntimeValue};
+    use std::path::PathBuf;
+    use std::str::FromStr;
 
-    fn new_scope() -> Rc<RefCell<Scope>> {
-        Scope::new(None)
+    fn get_new_env() -> (Environment, u64) {
+        let mut env = Environment::new();
+        let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        (env, scope)
     }
 
     #[test]
     fn test_get_new_scope_basic_value() {
-        let parent_scope = new_scope();
+        let (mut env, scope) = get_new_env();
+
         let params = vec![(
             "x".to_string(),
             RuntimeType::Int,
             RefMutability::Value,
             None,
         )];
+
         let args = vec![(NodeType::IntLiteral(5), None)];
-        let scope = get_new_scope(parent_scope.clone(), params, args).unwrap();
-        let val = scope.borrow().variables.get("x").unwrap().0.clone();
+        let scope = env.get_new_scope(&scope, params, args).unwrap();
+        let val = env.get_var(&scope, "x").unwrap().value.clone();
         assert_eq!(val, RuntimeValue::Int(5));
     }
 
     #[test]
     fn test_get_new_scope_default_value() {
-        let parent_scope = new_scope();
+        let (mut env, scope) = get_new_env();
+
         let params = vec![(
-            "y".to_string(),
+            "x".to_string(),
             RuntimeType::Int,
             RefMutability::Value,
             Some(RuntimeValue::Int(10)),
         )];
+
         let args = vec![];
-        let scope = get_new_scope(parent_scope.clone(), params, args).unwrap();
-        let val = scope.borrow().variables.get("y").unwrap().0.clone();
+        let scope = env.get_new_scope(&scope, params, args).unwrap();
+        let val = env.get_var(&scope, "x").unwrap().value.clone();
         assert_eq!(val, RuntimeValue::Int(10));
     }
 
     #[test]
     fn test_get_new_scope_named_argument() {
-        let parent_scope = new_scope();
+        let (mut env, scope) = get_new_env();
+
         let params = vec![(
-            "z".to_string(),
+            "x".to_string(),
             RuntimeType::Int,
             RefMutability::Value,
             Some(RuntimeValue::Int(1)),
         )];
         let args = vec![(
-            NodeType::Identifier("z".to_string()),
+            NodeType::Identifier("x".to_string()),
             Some(NodeType::IntLiteral(99)),
         )];
-        let scope = get_new_scope(parent_scope.clone(), params, args).unwrap();
-        let val = scope.borrow().variables.get("z").unwrap().0.clone();
+
+        let scope = env.get_new_scope(&scope, params, args).unwrap();
+        let val = env.get_var(&scope, "x").unwrap().value.clone();
         assert_eq!(val, RuntimeValue::Int(99));
     }
 
     #[test]
     fn test_get_new_scope_mut_ref_error() {
-        let parent_scope = new_scope();
+        let (mut env, scope) = get_new_env();
+
         let params = vec![(
             "a".to_string(),
             RuntimeType::Int,
             RefMutability::MutRef,
             None,
         )];
+
         let args = vec![(NodeType::IntLiteral(5), None)];
-        let result = get_new_scope(parent_scope.clone(), params, args);
+        let result = env.get_new_scope(&scope, params, args);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_evaluate_scope_return() {
-        let parent_scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::ScopeDeclaration {
             body: vec![NodeType::Return {
                 value: Box::new(NodeType::IntLiteral(42)),
             }],
         };
-        let result = evaluate_scope(node, parent_scope).unwrap();
+        let result = env.evaluate_scope(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Int(42));
     }
 
     #[test]
     fn test_evaluate_scope_no_return() {
-        let parent_scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::ScopeDeclaration {
             body: vec![NodeType::IntLiteral(7)],
         };
-        let result = evaluate_scope(node, parent_scope).unwrap();
+        let result = env.evaluate_scope(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Int(7));
     }
 }

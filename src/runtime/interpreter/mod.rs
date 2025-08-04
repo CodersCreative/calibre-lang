@@ -1,8 +1,3 @@
-pub mod expressions;
-pub mod statements;
-
-use thiserror::Error;
-
 use crate::{
     ast::{NodeType, binary::ASTError},
     runtime::{
@@ -10,6 +5,10 @@ use crate::{
         values::{RuntimeType, RuntimeValue, ValueErr, helper::StopValue},
     },
 };
+use thiserror::Error;
+
+pub mod expressions;
+pub mod statements;
 
 #[derive(Error, Debug, Clone)]
 pub enum InterpreterErr {
@@ -159,7 +158,6 @@ impl Environment {
             NodeType::EnumExpression { .. } => self.evaluate_enum_expression(scope, node),
             NodeType::LoopDeclaration { .. } => self.evaluate_loop_declaration(scope, node),
             NodeType::IterExpression { .. } => self.evaluate_iter_expression(scope, node),
-            _ => Err(InterpreterErr::NotImplemented(node)),
         }
     }
 }

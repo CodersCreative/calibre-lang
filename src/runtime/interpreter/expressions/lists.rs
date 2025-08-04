@@ -1,5 +1,3 @@
-use std::mem::discriminant;
-
 use crate::{
     ast::{LoopType, NodeType, RefMutability},
     runtime::{
@@ -8,6 +6,7 @@ use crate::{
         values::{RuntimeType, RuntimeValue, helper::VarType},
     },
 };
+use std::mem::discriminant;
 
 impl Environment {
     pub fn evaluate_tuple_expression(
@@ -125,7 +124,7 @@ impl Environment {
                 }
             } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
                 let var = self.get_var(scope, &loop_name)?.clone();
-                if let RuntimeValue::List { data, data_type } = &var.value {
+                if let RuntimeValue::List { data, .. } = &var.value {
                     for d in data.into_iter() {
                         let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
                         let _ = self.push_var(
@@ -154,7 +153,7 @@ impl Environment {
                         self.remove_scope(&new_scope);
                     }
                 }
-            } else if let LoopType::While(condition) = *loop_type {
+            } else if let LoopType::While(_) = *loop_type {
                 panic!()
             }
 
@@ -171,21 +170,21 @@ impl Environment {
 mod tests {
     use super::*;
     use crate::ast::NodeType;
-    use crate::runtime::scope::Scope;
     use crate::runtime::values::RuntimeValue;
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    use std::{path::PathBuf, str::FromStr};
 
-    fn new_scope() -> Rc<RefCell<Scope>> {
-        Rc::new(RefCell::new(Scope::new(None)))
+    fn get_new_env() -> (Environment, u64) {
+        let mut env = Environment::new();
+        let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        (env, scope)
     }
 
     #[test]
     fn test_evaluate_tuple_expression_basic() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node =
             NodeType::TupleLiteral(vec![NodeType::IntLiteral(1), NodeType::FloatLiteral(2.0)]);
-        let result = evaluate_tuple_expression(node, scope).unwrap();
+        let result = env.evaluate_tuple_expression(&scope, node).unwrap();
         assert_eq!(
             result,
             RuntimeValue::Tuple(vec![RuntimeValue::Int(1), RuntimeValue::Float(2.0)])
@@ -194,13 +193,13 @@ mod tests {
 
     #[test]
     fn test_evaluate_list_expression_homogeneous() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::ListLiteral(vec![
             NodeType::IntLiteral(1),
             NodeType::IntLiteral(2),
             NodeType::IntLiteral(3),
         ]);
-        let result = evaluate_list_expression(node, scope).unwrap();
+        let result = env.evaluate_list_expression(&scope, node).unwrap();
         match result {
             RuntimeValue::List { data, data_type } => {
                 assert_eq!(
@@ -219,10 +218,10 @@ mod tests {
 
     #[test]
     fn test_evaluate_list_expression_heterogeneous() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node =
             NodeType::ListLiteral(vec![NodeType::IntLiteral(1), NodeType::FloatLiteral(2.0)]);
-        let result = evaluate_list_expression(node, scope).unwrap();
+        let result = env.evaluate_list_expression(&scope, node).unwrap();
         match result {
             RuntimeValue::List { data, data_type } => {
                 assert_eq!(data, vec![RuntimeValue::Int(1), RuntimeValue::Float(2.0)]);
@@ -234,9 +233,9 @@ mod tests {
 
     #[test]
     fn test_evaluate_list_expression_empty() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::ListLiteral(Vec::new());
-        let result = evaluate_list_expression(node, scope).unwrap();
+        let result = env.evaluate_list_expression(&scope, node).unwrap();
         match result {
             RuntimeValue::List { data, data_type } => {
                 assert!(data.is_empty());

@@ -1,7 +1,7 @@
 use core::panic;
 
 use crate::{
-    ast::binary::{ASTError, BinaryOperator},
+    ast::binary::ASTError,
     runtime::{interpreter::InterpreterErr, scope::Environment, values::RuntimeValue},
 };
 
@@ -69,20 +69,6 @@ impl Environment {
         } else {
             false
         }
-    }
-}
-
-impl RuntimeValue {
-    fn panic_comparison(
-        &self,
-        rhs: &Self,
-        operator: &Comparison,
-    ) -> Result<RuntimeValue, ASTError> {
-        Err(ASTError::BinaryOperator(
-            self.clone(),
-            rhs.clone(),
-            BinaryOperator::Add,
-        ))
     }
 }
 

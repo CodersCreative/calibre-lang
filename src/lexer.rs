@@ -1,8 +1,3 @@
-use std::collections::HashMap;
-
-use rand::seq::IndexedRandom;
-use thiserror::Error;
-
 use crate::{
     ast::{
         binary::BinaryOperator,
@@ -10,6 +5,8 @@ use crate::{
     },
     runtime::values::helper::StopValue,
 };
+use std::collections::HashMap;
+use thiserror::Error;
 
 const IGNORE: [char; 1] = [';'];
 
@@ -26,7 +23,6 @@ pub enum LexerError {
 pub enum Bracket {
     Curly,
     Paren,
-    // Angle,
     Square,
 }
 

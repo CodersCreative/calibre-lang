@@ -314,64 +314,67 @@ impl Environment {
 mod tests {
     use super::*;
     use crate::ast::{NodeType, binary::BinaryOperator};
-    use crate::runtime::scope::Scope;
+    use crate::runtime::values::RuntimeValue;
     use crate::runtime::values::helper::VarType;
-    use crate::runtime::values::{RuntimeType, RuntimeValue};
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    use std::path::PathBuf;
+    use std::str::FromStr;
 
-    fn new_scope() -> Rc<RefCell<Scope>> {
-        Rc::new(RefCell::new(Scope::new(None)))
+    fn get_new_env() -> (Environment, u64) {
+        let mut env = Environment::new();
+        let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        (env, scope)
     }
 
     #[test]
     fn test_evaluate_identifier() {
-        let scope = new_scope();
-        scope
-            .borrow_mut()
-            .push_var(
-                "x".to_string(),
-                RuntimeValue::Int(5),
-                VarType::Mutable(None),
-            )
-            .unwrap();
-        let result = evaluate_identifier("x", scope).unwrap();
+        let (mut env, scope) = get_new_env();
+        env.push_var(
+            &scope,
+            "x".to_string(),
+            Variable {
+                value: RuntimeValue::Int(5),
+                var_type: VarType::Mutable,
+            },
+        )
+        .unwrap();
+        let result = env.evaluate_identifier(&scope, "x").unwrap();
         assert_eq!(result, RuntimeValue::Int(5));
     }
 
     #[test]
     fn test_evaluate_not_bool() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::NotExpression {
             value: Box::new(NodeType::Identifier(String::from("true"))),
         };
-        let result = evaluate_not(node, scope).unwrap();
+        let result = env.evaluate_not(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Bool(false));
     }
 
     #[test]
-    fn test_evaluate_not_Int() {
-        let scope = new_scope();
+    fn test_evaluate_not_int() {
+        let (mut env, scope) = get_new_env();
         let node = NodeType::NotExpression {
             value: Box::new(NodeType::IntLiteral(7)),
         };
-        let result = evaluate_not(node, scope).unwrap();
+        let result = env.evaluate_not(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Int(-7));
     }
 
     #[test]
     fn test_evaluate_not_float() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::NotExpression {
             value: Box::new(NodeType::FloatLiteral(3.5)),
         };
-        let result = evaluate_not(node, scope).unwrap();
+        let result = env.evaluate_not(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Float(-3.5));
     }
 
     #[test]
     fn test_evaluate_not_range() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
+
         let node = NodeType::NotExpression {
             value: Box::new(NodeType::RangeDeclaration {
                 from: Box::new(NodeType::IntLiteral(1)),
@@ -379,13 +382,14 @@ mod tests {
                 inclusive: false,
             }),
         };
-        let result = evaluate_not(node, scope).unwrap();
+
+        let result = env.evaluate_not(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Range(3, 1));
     }
 
     #[test]
     fn test_evaluate_not_list() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::NotExpression {
             value: Box::new(NodeType::ListLiteral(vec![
                 NodeType::IntLiteral(1),
@@ -393,7 +397,7 @@ mod tests {
                 NodeType::IntLiteral(3),
             ])),
         };
-        let result = evaluate_not(node, scope).unwrap();
+        let result = env.evaluate_not(&scope, node).unwrap();
         match result {
             RuntimeValue::List { data, .. } => assert_eq!(
                 data,
@@ -409,83 +413,87 @@ mod tests {
 
     #[test]
     fn test_evaluate_binary_expression_add() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::BinaryExpression {
             left: Box::new(NodeType::IntLiteral(2)),
             right: Box::new(NodeType::IntLiteral(3)),
             operator: BinaryOperator::Add,
         };
-        let result = evaluate_binary_expression(node, scope).unwrap();
+        let result = env.evaluate_binary_expression(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Int(5));
     }
 
     #[test]
     fn test_evaluate_range_expression_inclusive() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::RangeDeclaration {
             from: Box::new(NodeType::IntLiteral(1)),
             to: Box::new(NodeType::IntLiteral(3)),
             inclusive: true,
         };
-        let result = evaluate_range_expression(node, scope).unwrap();
+        let result = env.evaluate_range_expression(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Range(1, 4));
     }
 
     #[test]
     fn test_evaluate_range_expression_exclusive() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
+
         let node = NodeType::RangeDeclaration {
             from: Box::new(NodeType::IntLiteral(1)),
             to: Box::new(NodeType::IntLiteral(3)),
             inclusive: false,
         };
-        let result = evaluate_range_expression(node, scope).unwrap();
+        let result = env.evaluate_range_expression(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Range(1, 3));
     }
 
     #[test]
     fn test_evaluate_boolean_expression_and() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::BooleanExpression {
             left: Box::new(NodeType::Identifier(String::from("true"))),
             right: Box::new(NodeType::Identifier(String::from("false"))),
             operator: crate::ast::comparison::BooleanOperation::And,
         };
-        let result = evaluate_boolean_expression(node, scope).unwrap();
+        let result = env.evaluate_boolean_expression(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Bool(false));
     }
 
     #[test]
     fn test_evaluate_comparison_expression_lesser() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::ComparisonExpression {
             left: Box::new(NodeType::IntLiteral(3)),
             right: Box::new(NodeType::IntLiteral(2)),
             operator: crate::ast::comparison::Comparison::Lesser,
         };
-        let result = evaluate_comparison_expression(node, scope).unwrap();
+        let result = env.evaluate_comparison_expression(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Bool(true));
     }
 
     #[test]
     fn test_evaluate_assignment_expression_identifier() {
-        let scope = new_scope();
-        scope
-            .borrow_mut()
-            .push_var(
-                "x".to_string(),
-                RuntimeValue::Int(0),
-                VarType::Mutable(None),
-            )
-            .unwrap();
+        let (mut env, scope) = get_new_env();
+        env.push_var(
+            &scope,
+            "x".to_string(),
+            Variable {
+                value: RuntimeValue::Int(0),
+                var_type: VarType::Mutable,
+            },
+        )
+        .unwrap();
+
         let node = NodeType::AssignmentExpression {
             identifier: Box::new(NodeType::Identifier("x".to_string())),
             value: Box::new(NodeType::IntLiteral(42)),
         };
-        let result = evaluate_assignment_expression(node, scope.clone()).unwrap();
+
+        let result = env.evaluate_assignment_expression(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Int(42));
         assert_eq!(
-            scope.borrow().variables.get("x").unwrap().0,
+            env.get_var(&scope, "x").unwrap().value,
             RuntimeValue::Int(42)
         );
     }

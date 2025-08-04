@@ -1,12 +1,10 @@
-use std::mem::discriminant;
-
+use super::Scope;
 use crate::runtime::{
     interpreter::InterpreterErr,
     scope::{Environment, ScopeErr, VarType, Variable},
     values::RuntimeValue,
 };
-
-use super::Scope;
+use std::mem::discriminant;
 
 impl Environment {
     pub fn force_var(

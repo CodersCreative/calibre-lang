@@ -1,7 +1,3 @@
-use std::rc::Rc;
-
-use rustyline::DefaultEditor;
-
 use crate::{
     native::NativeFunction,
     runtime::{
@@ -10,6 +6,8 @@ use crate::{
         values::{RuntimeType, RuntimeValue},
     },
 };
+use rustyline::DefaultEditor;
+use std::rc::Rc;
 
 pub fn setup(env: &mut Environment, parent: &u64) {
     let scope = env.new_scope_from_parent(*parent, "console");
@@ -40,7 +38,7 @@ impl NativeFunction for Out {
     fn run(
         &self,
         env: &mut Environment,
-        scope: &u64,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         use std::io::{self, Write};
@@ -69,7 +67,7 @@ impl NativeFunction for ErrFn {
     fn run(
         &self,
         env: &mut Environment,
-        scope: &u64,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         use std::io::{self, Write};
@@ -97,8 +95,8 @@ pub struct Input();
 impl NativeFunction for Input {
     fn run(
         &self,
-        env: &mut Environment,
-        scope: &u64,
+        _env: &mut Environment,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut editor = DefaultEditor::new().unwrap();
@@ -123,9 +121,9 @@ pub struct Clear();
 impl NativeFunction for Clear {
     fn run(
         &self,
-        env: &mut Environment,
-        scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        _env: &mut Environment,
+        _scope: &u64,
+        _args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
         Ok(RuntimeValue::Null)

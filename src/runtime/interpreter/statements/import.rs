@@ -1,7 +1,3 @@
-use std::collections::HashMap;
-
-use rand::seq::IndexedRandom;
-
 use crate::{
     ast::NodeType,
     runtime::{
@@ -10,6 +6,7 @@ use crate::{
         values::RuntimeValue,
     },
 };
+use std::collections::HashMap;
 
 impl Environment {
     pub fn evaluate_import_statement(
@@ -114,15 +111,6 @@ impl Environment {
                     } else {
                         panic!()
                     }
-
-                    // if let Some(func) = new_scope.borrow().functions.get(&value) {
-                    //     for f in func {
-                    //         let _ = scope.borrow_mut().push_function(
-                    //             path.clone(),
-                    //             (f.0.to_string(), f.1.0.clone(), f.1.1.clone()),
-                    //         )?;
-                    //     }
-                    // }
                 }
             }
 

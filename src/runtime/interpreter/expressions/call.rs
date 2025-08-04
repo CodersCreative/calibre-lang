@@ -1,6 +1,3 @@
-
-use rand::seq::IndexedRandom;
-
 use crate::{
     ast::{NodeType, RefMutability},
     runtime::{
@@ -45,7 +42,7 @@ impl Environment {
                         .enumerate()
                         .filter(|(i, x)| {
                             for arg in arguments.iter() {
-                                if let (NodeType::Identifier(y), Some(z)) = arg {
+                                if let (NodeType::Identifier(y), Some(_)) = arg {
                                     if &x.0 == y {
                                         return false;
                                     }
@@ -153,7 +150,7 @@ impl Environment {
                 RuntimeValue::Function { .. } => {
                     return self.evaluate_function(scope, func, arguments);
                 }
-                RuntimeValue::List { data, data_type } if arguments.len() == 1 => {
+                RuntimeValue::List { data, .. } if arguments.len() == 1 => {
                     match self.evaluate(scope, arguments[0].0.clone())? {
                         RuntimeValue::Int(i) if arguments.len() == 1 => {
                             return Ok(data
@@ -209,8 +206,8 @@ impl Environment {
                                 return Err(InterpreterErr::SetterArgs(arguments));
                             }
                         }
-                        _ => match var {
-                            NativeFunctions => {}
+                        _ => match var.value {
+                            RuntimeValue::NativeFunction(_) => {}
                             _ => {
                                 if arguments.len() <= 0 {
                                     return Ok(var.value.clone());
@@ -233,98 +230,118 @@ impl Environment {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::ast::NodeType;
-    use crate::runtime::scope::Scope;
-    use crate::runtime::values::RuntimeType;
-    use crate::runtime::values::helper::Block;
-    use crate::runtime::values::{
-        RuntimeValue,
-        helper::{StopValue, VarType},
-    };
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    use std::path::PathBuf;
+    use std::str::FromStr;
 
-    fn new_scope() -> Rc<RefCell<Scope>> {
-        Rc::new(RefCell::new(Scope::new(None)))
+    use crate::ast::NodeType;
+    use crate::runtime::scope::{Environment, Variable};
+    use crate::runtime::values::helper::Block;
+    use crate::runtime::values::{FunctionType, RuntimeType};
+    use crate::runtime::values::{RuntimeValue, helper::VarType};
+
+    fn get_new_env() -> (Environment, u64) {
+        let mut env = Environment::new();
+        let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        (env, scope)
     }
 
     #[test]
     fn test_evaluate_function_simple_return() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let func = RuntimeValue::Function {
-            identifier: "foo".to_string(),
             parameters: vec![],
-            body: Block(vec![NodeType::Return {
+            body: FunctionType::Regular(Block(Box::new(NodeType::Return {
                 value: Box::new(NodeType::IntLiteral(42)),
-            }]),
+            }))),
             return_type: Some(RuntimeType::Int),
             is_async: false,
         };
-        let result = evaluate_function(scope, func, Vec::new()).unwrap();
+        let result = env.evaluate_function(&scope, func, Vec::new()).unwrap();
         assert_eq!(result, RuntimeValue::Int(42));
     }
 
     #[test]
     fn test_evaluate_call_expression_function() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let func = RuntimeValue::Function {
-            identifier: "foo".to_string(),
             parameters: Vec::new(),
-            body: Block(vec![NodeType::Return {
+            body: FunctionType::Regular(Block(Box::new(NodeType::Return {
                 value: Box::new(NodeType::IntLiteral(7)),
-            }]),
+            }))),
             return_type: Some(RuntimeType::Int),
             is_async: false,
         };
-        scope
-            .borrow_mut()
-            .push_var("foo".to_string(), func.clone(), VarType::Constant)
-            .unwrap();
+
+        env.push_var(
+            &scope,
+            "foo".to_string(),
+            Variable {
+                value: func.clone(),
+                var_type: VarType::Constant,
+            },
+        )
+        .unwrap();
 
         let call_node = NodeType::CallExpression(
             Box::new(NodeType::Identifier("foo".to_string())),
             Vec::new(),
         );
-        let result = evaluate_call_expression(call_node, scope).unwrap();
+        let result = env.evaluate_call_expression(&scope, call_node).unwrap();
         assert_eq!(result, RuntimeValue::Int(7));
     }
 
     #[test]
     fn test_evaluate_call_expression_variable_get() {
-        let scope = new_scope();
-        scope
-            .borrow_mut()
-            .push_var(
-                "x".to_string(),
-                RuntimeValue::Int(99),
-                VarType::Mutable(None),
-            )
-            .unwrap();
+        let (mut env, scope) = get_new_env();
+        env.push_var(
+            &scope,
+            "x".to_string(),
+            Variable {
+                value: RuntimeValue::Int(99),
+                var_type: VarType::Mutable,
+            },
+        )
+        .unwrap();
 
         let call_node =
             NodeType::CallExpression(Box::new(NodeType::Identifier("x".to_string())), Vec::new());
-        let result = evaluate_call_expression(call_node, scope).unwrap();
+        let result = env
+            .evaluate_call_expression(&scope, call_node)
+            .unwrap()
+            .unwrap_val(&env, &scope)
+            .unwrap();
         assert_eq!(result, RuntimeValue::Int(99));
     }
 
     #[test]
     fn test_evaluate_call_expression_list_index() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let list = RuntimeValue::List {
             data: vec![RuntimeValue::Int(10), RuntimeValue::Int(20)],
             data_type: Box::new(None),
         };
-        scope
-            .borrow_mut()
-            .push_var("lst".to_string(), list, VarType::Constant)
-            .unwrap();
+        env.push_var(
+            &scope,
+            "lst".to_string(),
+            Variable {
+                value: list,
+                var_type: VarType::Constant,
+            },
+        )
+        .unwrap();
 
-        let call_node = NodeType::CallExpression(
-            Box::new(NodeType::Identifier("lst".to_string())),
-            vec![(NodeType::IntLiteral(1), None)],
-        );
-        let result = evaluate_call_expression(call_node, scope).unwrap();
+        let call_node = NodeType::MemberExpression {
+            path: vec![
+                (NodeType::Identifier("lst".to_string()), false),
+                (NodeType::IntLiteral(1), true),
+            ],
+        };
+
+        let result = env
+            .evaluate_call_expression(&scope, call_node)
+            .unwrap()
+            .unwrap_val(&env, &scope)
+            .unwrap();
         assert_eq!(result, RuntimeValue::Int(20));
     }
 }

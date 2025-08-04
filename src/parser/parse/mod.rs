@@ -4,16 +4,13 @@ pub mod expressions;
 pub mod functions;
 pub mod r#type;
 
-use std::{collections::HashMap, str::FromStr};
-
-use rand::seq::IndexedRandom;
-
 use crate::{
     ast::{LoopType, NodeType, RefMutability, comparison::Comparison},
     lexer::{Bracket, Token, TokenType},
     parser::{Parser, ParserError, SyntaxErr},
     runtime::values::{RuntimeType, helper::ObjectType},
 };
+use std::{collections::HashMap, str::FromStr};
 
 impl Parser {
     fn first(&self) -> &Token {
@@ -102,7 +99,7 @@ impl Parser {
         let mut tuple = Vec::new();
         let mut properties = HashMap::new();
 
-        let (is_tuple, open_token, close_token) = match self.first().token_type {
+        let (is_tuple, _, close_token) = match self.first().token_type {
             TokenType::Open(Bracket::Curly) => {
                 let _ = self.eat();
                 (

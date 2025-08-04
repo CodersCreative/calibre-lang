@@ -1,8 +1,6 @@
-use std::ops::{Add, Div, Mul, Sub};
-
-use thiserror::Error;
-
 use crate::runtime::{interpreter::InterpreterErr, scope::Environment, values::RuntimeValue};
+use std::ops::{Add, Div, Mul, Sub};
+use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
 pub enum ASTError {
@@ -86,7 +84,6 @@ impl BinaryOperator {
             Self::BitAnd => left & right,
             Self::Shl => left << right,
             Self::Shr => left >> right,
-            _ => panic!(),
         }?)
     }
 }

@@ -1,14 +1,13 @@
 use crate::{
+    ast::{NodeType, binary::BinaryOperator},
+    lexer::TokenType,
+};
+use crate::{
     lexer::{Bracket, LexerError},
     parser::{Parser, ParserError, SyntaxErr},
     runtime::values::helper::{ObjectType, StopValue},
 };
 use std::collections::HashMap;
-
-use crate::{
-    ast::{NodeType, binary::BinaryOperator},
-    lexer::TokenType,
-};
 
 impl Parser {
     pub fn parse_primary_expression(&mut self) -> Result<NodeType, ParserError> {
@@ -170,11 +169,10 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::ast::NodeType;
-    use crate::lexer::{Token, TokenType, tokenize};
+    use crate::lexer::{Token, tokenize};
     use crate::parser::Parser;
-    use crate::runtime::values::helper::{ObjectType, StopValue};
+    use crate::runtime::values::helper::ObjectType;
 
     fn parser_with_tokens(tokens: Vec<Token>) -> Parser {
         Parser { tokens }
@@ -192,7 +190,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_primary_expression_Int() {
+    fn test_parse_primary_expression_int() {
         let tokens = tokenize(String::from("42")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let node = parser.parse_primary_expression().unwrap();

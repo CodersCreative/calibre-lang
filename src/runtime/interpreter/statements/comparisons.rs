@@ -1,14 +1,9 @@
-
 use crate::{
-    ast::{
-        IfComparisonType, NodeType
-    },
+    ast::{IfComparisonType, NodeType},
     runtime::{
-        interpreter::{
-             InterpreterErr
-        },
+        interpreter::InterpreterErr,
         scope::Environment,
-        values::RuntimeValue,
+        values::{RuntimeType, RuntimeValue},
     },
 };
 
@@ -30,7 +25,7 @@ impl Environment {
                 RuntimeValue::Str(y) => return x.contains(y),
                 _ => false,
             },
-            RuntimeValue::List { data, data_type } => self.value_in_list(scope, value, data),
+            RuntimeValue::List { data, .. } => self.value_in_list(scope, value, data),
             RuntimeValue::Tuple(data) => self.value_in_list(scope, value, data),
             RuntimeValue::Range(from, to) => {
                 let num: f64 = match value {
@@ -81,12 +76,13 @@ impl Environment {
             for (i, comparison) in comparisons.iter().enumerate() {
                 match comparison {
                     IfComparisonType::If(comparison) => {
-                        if let RuntimeValue::Bool(x) = self.evaluate(scope, comparison.clone())? {
+                        if let Ok(RuntimeValue::Bool(x)) = self
+                            .evaluate(scope, comparison.clone())?
+                            .unwrap_val(self, scope)?
+                            .into_type(self, scope, &RuntimeType::Bool)
+                        {
                             if x {
-                                return self.evaluate(
-                                    scope,
-                                    bodies[i].clone(),
-                                );
+                                return self.evaluate(scope, bodies[i].clone());
                             }
                         } else {
                             return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
@@ -102,7 +98,7 @@ impl Environment {
                             _ => Vec::new(),
                         };
 
-                        let value = self.evaluate(scope, value.clone(), )?;
+                        let value = self.evaluate(scope, value.clone())?;
 
                         if let Some(result) = self.match_pattern(
                             scope,
@@ -125,10 +121,7 @@ impl Environment {
 
             if comparisons.len() < bodies.len() {
                 if let Some(last) = bodies.last() {
-                    return self.evaluate(
-                        scope,
-                        last.clone(),
-                    );
+                    return self.evaluate(scope, last.clone());
                 }
             }
 
@@ -139,44 +132,45 @@ impl Environment {
     }
 }
 
-
-
-
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, rc::Rc};
-
     use crate::{
-        ast::NodeType,
-        runtime::{
-            interpreter::statements::comparisons::evaluate_if_statement, scope::Scope,
-            values::RuntimeValue,
-        },
+        ast::{IfComparisonType, NodeType},
+        runtime::{scope::Environment, values::RuntimeValue},
     };
+    use std::{path::PathBuf, str::FromStr};
 
-    fn new_scope() -> Rc<RefCell<Scope>> {
-        Rc::new(RefCell::new(Scope::new(None)))
+    fn get_new_env() -> (Environment, u64) {
+        let mut env = Environment::new();
+        let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        (env, scope)
     }
 
     #[test]
     fn test_evaluate_if_statement_true_branch() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::IfStatement {
-            comparisons: vec![NodeType::Identifier(String::from("true"))],
-            bodies: vec![vec![NodeType::IntLiteral(123)]],
+            comparisons: vec![IfComparisonType::If(NodeType::Identifier(String::from(
+                "true",
+            )))],
+            bodies: vec![NodeType::IntLiteral(123)],
         };
-        let result = evaluate_if_statement(node, &scope).unwrap();
-        assert_eq!(result, RuntimeValue::Int(123));
+        let result = env.evaluate_if_statement(&scope, node).unwrap();
+
+        assert!(env.is_equal(&scope, &result, &RuntimeValue::Int(123)));
     }
 
     #[test]
     fn test_evaluate_if_statement_false_else() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::IfStatement {
-            comparisons: vec![NodeType::Identifier(String::from("false"))],
-            bodies: vec![vec![NodeType::IntLiteral(1)], vec![NodeType::IntLiteral(2)]],
+            comparisons: vec![IfComparisonType::If(NodeType::Identifier(String::from(
+                "false",
+            )))],
+            bodies: vec![NodeType::IntLiteral(123), NodeType::IntLiteral(2)],
         };
-        let result = evaluate_if_statement(node, &scope).unwrap();
-        assert_eq!(result, RuntimeValue::Int(2));
+        let result = env.evaluate_if_statement(&scope, node).unwrap();
+
+        assert!(env.is_equal(&scope, &result, &RuntimeValue::Int(2)));
     }
 }

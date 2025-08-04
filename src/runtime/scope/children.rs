@@ -1,5 +1,5 @@
 use crate::{
-    parser::{self},
+    parser,
     runtime::{
         interpreter::InterpreterErr,
         scope::{Environment, ScopeErr},
@@ -48,21 +48,6 @@ impl Environment {
         })
     }
 
-    // pub fn get_scope_path(this: &Rc<RefCell<Scope>>, path: &mut Vec<String>) -> Vec<String> {
-    //
-    //     if let Some(parent) = &this.borrow().parent {
-    //         for (k, v) in parent.borrow().children.iter() {
-    //             if v.borrow().path == this.borrow().path {
-    //                 path.push(k.clone());
-    //                 break;
-    //             }
-    //         }
-    //         get_scope_path(&parent, path)
-    //     } else {
-    //         path.to_vec()
-    //     }
-    // }
-
     pub fn get_scope_list(&mut self, scope: u64, mut list: Vec<String>) -> Result<u64, ScopeErr> {
         if list.len() <= 0 {
             return Ok(scope);
@@ -83,7 +68,7 @@ impl Environment {
                     if let Some(s) = self.get_global_scope().children.get(key) {
                         s.clone()
                     } else {
-                        return Err(ScopeErr::Scope(key.to_string())); // _ => Scope::new_from_parent(this.clone(), key.to_string()),
+                        return Err(ScopeErr::Scope(key.to_string()));
                     }
                 }
             }

@@ -24,10 +24,9 @@ impl Environment {
                 let scope_2 = self.new_scope_from_parent_shallow(scope.clone());
 
                 if let NodeType::VariableDeclaration {
-                    var_type,
                     identifier: iden,
                     value,
-                    data_type,
+                    ..
                 } = function.0
                 {
                     let func = self.evaluate(&scope_2, *value)?.unwrap_val(self, scope)?;
@@ -71,43 +70,44 @@ impl Environment {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, rc::Rc};
-
     use crate::{
         ast::NodeType,
         runtime::{
-            interpreter::statements::structs::{
-                evaluate_enum_declaration, evaluate_struct_declaration,
-            },
-            scope::Scope,
+            scope::{Environment, Type},
             values::{RuntimeValue, helper::ObjectType},
         },
     };
+    use std::{path::PathBuf, str::FromStr};
 
-    fn new_scope() -> Rc<RefCell<Scope>> {
-        Scope::new(None)
+    fn get_new_env() -> (Environment, u64) {
+        let mut env = Environment::new();
+        let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        (env, scope)
     }
+
     #[test]
     fn test_evaluate_struct_declaration() {
-        let scope = new_scope();
-        let node = NodeType::StructDeclaration {
+        let (mut env, scope) = get_new_env();
+        let node = NodeType::TypeDeclaration {
             identifier: "Point".to_string(),
-            properties: ObjectType::Tuple(vec![]),
+            object: Type::Struct(ObjectType::Tuple(vec![])),
         };
-        let result = evaluate_struct_declaration(node, &scope).unwrap();
+        let result = env.evaluate_type_declaration(&scope, node).unwrap();
+
         assert_eq!(result, RuntimeValue::Null);
-        assert!(scope.borrow().objects.contains_key("Point"));
+        assert!(env.get_object(&scope, "Point").is_ok());
     }
 
     #[test]
     fn test_evaluate_enum_declaration() {
-        let scope = new_scope();
-        let node = NodeType::EnumDeclaration {
+        let (mut env, scope) = get_new_env();
+        let node = NodeType::TypeDeclaration {
             identifier: "Color".to_string(),
-            options: vec![("Red".to_string(), None), ("Blue".to_string(), None)],
+            object: Type::Enum(vec![("Red".to_string(), None), ("Blue".to_string(), None)]),
         };
-        let result = evaluate_enum_declaration(node, &scope).unwrap();
+        let result = env.evaluate_type_declaration(&scope, node).unwrap();
+
         assert_eq!(result, RuntimeValue::Null);
-        assert!(scope.borrow().objects.contains_key("Color"));
+        assert!(env.get_object(&scope, "Color").is_ok());
     }
 }

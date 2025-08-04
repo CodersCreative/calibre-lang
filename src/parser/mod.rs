@@ -1,9 +1,8 @@
-use thiserror::Error;
-
 use crate::{
     ast::NodeType,
     lexer::{Bracket, LexerError, Token, TokenType, tokenize},
 };
+use thiserror::Error;
 
 pub mod parse;
 

@@ -131,53 +131,57 @@ impl Environment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{LoopType, NodeType, RefMutability};
-    use crate::runtime::scope::Scope;
-    use crate::runtime::values::{
-        RuntimeValue,
-        helper::{ObjectType, VarType},
-    };
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    use crate::ast::NodeType;
+    use crate::runtime::values::{RuntimeValue, helper::VarType};
+    use std::path::PathBuf;
+    use std::str::FromStr;
 
-    fn new_scope() -> Rc<RefCell<Scope>> {
-        Rc::new(RefCell::new(Scope::new(None)))
+    fn get_new_env() -> (Environment, u64) {
+        let mut env = Environment::new();
+        let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        (env, scope)
     }
 
     #[test]
     fn test_evaluate_variable_declaration() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::VariableDeclaration {
-            var_type: VarType::Mutable(None),
+            var_type: VarType::Mutable,
             identifier: "x".to_string(),
-            value: Some(Box::new(NodeType::IntLiteral(42))),
+            value: Box::new(NodeType::IntLiteral(42)),
             data_type: None,
         };
-        let result = evaluate_variable_declaration(node, scope.clone()).unwrap();
-        assert_eq!(result, RuntimeValue::Int(42));
-        assert_eq!(
-            scope.borrow().variables.get("x").unwrap().0,
-            RuntimeValue::Int(42)
-        );
+
+        let result = env
+            .evaluate_variable_declaration(&scope, node)
+            .unwrap()
+            .unwrap_val(&env, &scope)
+            .unwrap();
+
+        assert!(env.is_equal(&scope, &result, &RuntimeValue::Int(42)));
+        assert!(env.is_equal(
+            &scope,
+            &env.get_var(&scope, "x").unwrap().value,
+            &RuntimeValue::Int(42)
+        ));
     }
 
     #[test]
     fn test_evaluate_function_declaration() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::FunctionDeclaration {
-            identifier: "foo".to_string(),
             parameters: vec![],
-            body: vec![NodeType::Return {
+            body: Box::new(NodeType::Return {
                 value: Box::new(NodeType::IntLiteral(1)),
-            }],
+            }),
             return_type: None,
             is_async: false,
         };
-        let result = evaluate_function_declaration(node, scope.clone()).unwrap();
+        let result = env.evaluate_function_declaration(&scope, node).unwrap();
+
         match result {
-            RuntimeValue::Function { identifier, .. } => assert_eq!(identifier, "foo"),
+            RuntimeValue::Function { .. } => {}
             _ => panic!("Expected RuntimeValue::Function"),
         }
-        assert!(scope.borrow().variables.contains_key("foo"));
     }
 }

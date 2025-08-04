@@ -1,7 +1,3 @@
-use std::panic;
-
-use rand::seq::IndexedRandom;
-
 use crate::{
     ast::{NodeType, RefMutability},
     runtime::{
@@ -13,6 +9,7 @@ use crate::{
         },
     },
 };
+use std::panic;
 
 impl Environment {
     fn match_inner_pattern(
@@ -374,7 +371,7 @@ impl Environment {
                                 None
                             }
                         }
-                        ("Let", data) => {
+                        ("Let", _) => {
                             if let Some((NodeType::Identifier(name), _)) = args.get(0) {
                                 let new_scope = self
                                     .get_new_scope_with_values(

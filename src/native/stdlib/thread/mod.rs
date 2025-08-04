@@ -1,9 +1,3 @@
-use std::{
-    rc::Rc,
-    thread::{self},
-    time::Duration,
-};
-
 use crate::{
     native::NativeFunction,
     runtime::{
@@ -11,6 +5,12 @@ use crate::{
         values::RuntimeValue,
     },
 };
+use std::{
+    rc::Rc,
+    thread::{self},
+    time::Duration,
+};
+
 pub fn setup(env: &mut Environment, parent: &u64) {
     let scope = env.new_scope_from_parent(*parent, "thread");
 
@@ -34,8 +34,8 @@ pub struct Wait();
 impl NativeFunction for Wait {
     fn run(
         &self,
-        env: &mut Environment,
-        scope: &u64,
+        _env: &mut Environment,
+        _scope: &u64,
         args: &[(
             crate::runtime::values::RuntimeValue,
             Option<crate::runtime::values::RuntimeValue>,

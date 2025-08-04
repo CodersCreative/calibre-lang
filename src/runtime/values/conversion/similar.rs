@@ -1,4 +1,3 @@
-
 use crate::runtime::{
     scope::Environment,
     values::{RuntimeValue, ValueErr},
@@ -7,7 +6,7 @@ use crate::runtime::{
 impl RuntimeValue {
     pub fn make_similar(
         self,
-        env : &Environment, 
+        env: &Environment,
         scope: &u64,
         rhs: Self,
     ) -> Result<(Self, Self), ValueErr> {

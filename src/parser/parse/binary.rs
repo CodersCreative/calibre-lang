@@ -1,7 +1,4 @@
-use rand::seq::IndexedRandom;
-
 use crate::parser::{Parser, ParserError, SyntaxErr};
-
 use crate::{
     ast::{NodeType, binary::BinaryOperator},
     lexer::TokenType,
@@ -234,10 +231,9 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::ast::comparison::{BooleanOperation, Comparison};
     use crate::ast::{NodeType, binary::BinaryOperator};
-    use crate::lexer::{Token, TokenType, tokenize};
+    use crate::lexer::{Token, tokenize};
     use crate::parser::Parser;
 
     fn parser_with_tokens(tokens: Vec<Token>) -> Parser {

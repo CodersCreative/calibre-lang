@@ -69,9 +69,9 @@ impl RuntimeValue {
             },
             RuntimeValue::Function {
                 parameters: val_parameters,
-                body: _,
                 return_type: val_type,
                 is_async: val_is_async,
+                ..
             } => match t {
                 RuntimeType::Function {
                     return_type,
@@ -100,7 +100,7 @@ impl RuntimeValue {
                 }
                 _ => false,
             },
-            RuntimeValue::List { data: _, data_type } => match t {
+            RuntimeValue::List { data_type, .. } => match t {
                 RuntimeType::List(z) => {
                     if data_type == z {
                         true

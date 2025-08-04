@@ -73,7 +73,11 @@ impl Environment {
 }
 
 impl Object {
-    pub fn unwrap<'a>(&'a self, env: &'a Environment, scope: &u64) -> Result<&'a Object, ValueErr> {
+    pub fn unwrap<'a>(
+        &'a self,
+        env: &'a Environment,
+        _scope: &u64,
+    ) -> Result<&'a Object, ValueErr> {
         match &self.object_type {
             Type::Link(scope, name) => Ok(env.objects.get(&scope).unwrap().get(name).unwrap()),
             _ => Ok(self),

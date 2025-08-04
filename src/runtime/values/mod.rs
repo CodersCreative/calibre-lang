@@ -1,17 +1,3 @@
-pub mod conversion;
-pub mod helper;
-
-use std::{
-    fmt::Debug,
-    num::{ParseFloatError, ParseIntError},
-    rc::Rc,
-    str::FromStr,
-    string::ParseError,
-};
-
-use helper::Block;
-use thiserror::Error;
-
 use crate::{
     ast::RefMutability,
     native::NativeFunction,
@@ -20,6 +6,18 @@ use crate::{
         values::helper::{MatchBlock, ObjectType},
     },
 };
+use helper::Block;
+use std::{
+    fmt::Debug,
+    num::{ParseFloatError, ParseIntError},
+    rc::Rc,
+    str::FromStr,
+    string::ParseError,
+};
+use thiserror::Error;
+
+pub mod conversion;
+pub mod helper;
 
 #[derive(Error, Debug, Clone)]
 pub enum ValueErr {
@@ -119,12 +117,12 @@ impl Into<RuntimeType> for &RuntimeValue {
             RuntimeValue::Tuple(data) => {
                 RuntimeType::Tuple(data.into_iter().map(|x| x.into()).collect())
             }
-            RuntimeValue::List { data, data_type } => RuntimeType::List(data_type.clone()),
+            RuntimeValue::List { data_type, .. } => RuntimeType::List(data_type.clone()),
             RuntimeValue::Function {
                 parameters,
-                body,
                 return_type,
                 is_async,
+                ..
             } => RuntimeType::Function {
                 return_type: match return_type {
                     Some(x) => Box::new(Some(x.clone())),

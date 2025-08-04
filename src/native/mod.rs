@@ -1,8 +1,3 @@
-pub mod global;
-pub mod stdlib;
-
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug, fs, path::PathBuf, str::FromStr};
-
 use crate::{
     parser,
     runtime::{
@@ -12,6 +7,10 @@ use crate::{
     },
     utils::get_path,
 };
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, fs, path::PathBuf, str::FromStr};
+
+pub mod global;
+pub mod stdlib;
 
 pub trait NativeFunction {
     fn run(
@@ -29,32 +28,32 @@ impl Debug for dyn NativeFunction {
 }
 
 impl PartialEq for dyn NativeFunction {
-    fn ne(&self, other: &Self) -> bool {
+    fn ne(&self, _other: &Self) -> bool {
         false
     }
 
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         true
     }
 }
 impl PartialOrd for dyn NativeFunction {
-    fn gt(&self, other: &Self) -> bool {
+    fn gt(&self, _other: &Self) -> bool {
         false
     }
 
-    fn lt(&self, other: &Self) -> bool {
+    fn lt(&self, _other: &Self) -> bool {
         false
     }
 
-    fn ge(&self, other: &Self) -> bool {
+    fn ge(&self, _other: &Self) -> bool {
         true
     }
 
-    fn le(&self, other: &Self) -> bool {
+    fn le(&self, _other: &Self) -> bool {
         true
     }
 
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, _other: &Self) -> Option<std::cmp::Ordering> {
         Some(Ordering::Equal)
     }
 }

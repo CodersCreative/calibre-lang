@@ -3,7 +3,6 @@ use crate::runtime::{
     values::{RuntimeType, RuntimeValue, ValueErr, helper::ObjectType},
 };
 use numbers::NumberValue;
-use rand::seq::IndexedRandom;
 use std::{collections::HashMap, mem::discriminant};
 
 pub mod check;
@@ -44,7 +43,7 @@ impl RuntimeValue {
     pub fn unwrap_links<'a>(
         &'a self,
         env: &'a Environment,
-        scope: &u64,
+        _scope: &u64,
         condition: Option<&u64>,
     ) -> Result<&'a RuntimeValue, ValueErr> {
         match self {
@@ -62,7 +61,7 @@ impl RuntimeValue {
     pub fn unwrap_links_val(
         self,
         env: &Environment,
-        scope: &u64,
+        _scope: &u64,
         condition: Option<u64>,
     ) -> Result<RuntimeValue, ValueErr> {
         match self {
@@ -291,7 +290,7 @@ impl RuntimeValue {
                 },
                 _ => panic_type(),
             },
-            RuntimeValue::Struct(o, _, ObjectType::Map(x)) => match t {
+            RuntimeValue::Struct(_, _, ObjectType::Map(x)) => match t {
                 RuntimeType::Struct(_, None) => Ok(self.clone()),
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::Char => panic_type(),

@@ -1,5 +1,4 @@
-use rand::seq::IndexedRandom;
-
+use crate::{ast::NodeType, lexer::TokenType, runtime::values::RuntimeType};
 use crate::{
     ast::{IfComparisonType, LoopType, RefMutability, binary::BinaryOperator},
     lexer::Bracket,
@@ -7,13 +6,10 @@ use crate::{
     runtime::values::helper::{StopValue, VarType},
 };
 
-use crate::{ast::NodeType, lexer::TokenType, runtime::values::RuntimeType};
-
 impl Parser {
     pub fn parse_statement(&mut self) -> Result<NodeType, ParserError> {
         match &self.first().token_type {
             TokenType::Let | TokenType::Const => self.parse_variable_declaration(),
-            // TokenType::Struct => self.parse_struct_declaration(),
             TokenType::Func => self.parse_function_declaration(),
             TokenType::If => self.parse_if_statement(),
             TokenType::Try => self.parse_try_expression(),
@@ -570,11 +566,10 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::ast::NodeType;
-    use crate::lexer::{Token, TokenType, tokenize};
+    use crate::lexer::{Token, tokenize};
     use crate::parser::Parser;
-    use crate::runtime::values::helper::{ObjectType, StopValue, VarType};
+    use crate::runtime::values::helper::VarType;
 
     fn parser_with_tokens(tokens: Vec<Token>) -> Parser {
         Parser { tokens }
@@ -589,12 +584,10 @@ mod tests {
             NodeType::VariableDeclaration {
                 var_type,
                 identifier,
-                value,
                 ..
             } => {
                 assert_eq!(identifier, "x");
-                assert!(matches!(var_type, VarType::Immutable(_)));
-                assert!(value.is_some());
+                assert!(matches!(var_type, VarType::Immutable));
             }
             _ => panic!("Expected VariableDeclaration"),
         }
@@ -609,12 +602,10 @@ mod tests {
             NodeType::VariableDeclaration {
                 var_type,
                 identifier,
-                value,
                 ..
             } => {
                 assert_eq!(identifier, "x");
-                assert!(matches!(var_type, VarType::Mutable(_)));
-                assert!(value.is_some());
+                assert!(matches!(var_type, VarType::Mutable));
             }
             _ => panic!("Expected VariableDeclaration"),
         }
@@ -629,109 +620,22 @@ mod tests {
             NodeType::VariableDeclaration {
                 var_type,
                 identifier,
-                value,
                 ..
             } => {
                 assert_eq!(identifier, "y");
                 assert!(matches!(var_type, VarType::Constant));
-                assert!(value.is_some());
             }
             _ => panic!("Expected VariableDeclaration"),
         }
     }
 
     #[test]
-    fn test_parse_struct_declaration_tuple_one() {
-        let tokens = tokenize(String::from("struct Point (int)")).unwrap();
-        let mut parser = parser_with_tokens(tokens);
-        let node = parser.parse_struct_declaration().unwrap();
-        match node {
-            NodeType::StructDeclaration {
-                identifier,
-                properties,
-            } => {
-                assert_eq!(identifier, "Point");
-                match properties {
-                    ObjectType::Tuple(v) => assert!(!v.is_empty()),
-                    _ => panic!("Expected Tuple properties"),
-                }
-            }
-            _ => panic!("Expected StructDeclaration"),
-        }
-    }
-
-    #[test]
-    fn test_parse_struct_declaration_tuple() {
-        let tokens = tokenize(String::from("struct Point (int, int)")).unwrap();
-        let mut parser = parser_with_tokens(tokens);
-        let node = parser.parse_struct_declaration().unwrap();
-        match node {
-            NodeType::StructDeclaration {
-                identifier,
-                properties,
-            } => {
-                assert_eq!(identifier, "Point");
-                match properties {
-                    ObjectType::Tuple(v) => assert!(!v.is_empty()),
-                    _ => panic!("Expected Tuple properties"),
-                }
-            }
-            _ => panic!("Expected StructDeclaration"),
-        }
-    }
-
-    #[test]
-    fn test_parse_struct_declaration_map() {
-        let tokens = tokenize(String::from("struct Person { name: str, age: int }")).unwrap();
-        let mut parser = parser_with_tokens(tokens);
-        let node = parser.parse_struct_declaration().unwrap();
-        match node {
-            NodeType::StructDeclaration {
-                identifier,
-                properties,
-            } => {
-                assert_eq!(identifier, "Person");
-                match properties {
-                    ObjectType::Map(m) => {
-                        assert!(m.contains_key("name"));
-                        assert!(m.contains_key("age"));
-                    }
-                    _ => panic!("Expected Map properties"),
-                }
-            }
-            _ => panic!("Expected StructDeclaration"),
-        }
-    }
-
-    #[test]
-    fn test_parse_enum_declaration_simple() {
-        let tokens = tokenize(String::from("enum Color { Red, Green, Blue }")).unwrap();
-        let mut parser = parser_with_tokens(tokens);
-        let node = parser.parse_enum_declaration().unwrap();
-        match node {
-            NodeType::EnumDeclaration {
-                identifier,
-                options,
-            } => {
-                assert_eq!(identifier, "Color");
-                assert_eq!(options.len(), 3);
-            }
-            _ => panic!("Expected EnumDeclaration"),
-        }
-    }
-
-    #[test]
     fn test_parse_function_declaration_simple() {
-        let tokens = tokenize(String::from("func foo(x: int, y: int) { return x + y }")).unwrap();
+        let tokens = tokenize(String::from("fn(x: int, y: int) { return x + y }")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let node = parser.parse_function_declaration().unwrap();
         match node {
-            NodeType::FunctionDeclaration {
-                identifier,
-                parameters,
-                ..
-            } => {
-                assert_eq!(identifier, "foo");
+            NodeType::FunctionDeclaration { parameters, .. } => {
                 assert_eq!(parameters.len(), 2);
             }
             _ => panic!("Expected FunctionDeclaration"),

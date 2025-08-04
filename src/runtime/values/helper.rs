@@ -1,13 +1,13 @@
-use std::{cmp::Ordering, collections::HashMap};
-
-use crate::ast::NodeType;
-
 use super::RuntimeValue;
+use crate::ast::NodeType;
+use std::{cmp::Ordering, collections::HashMap};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Block(pub Box<NodeType>);
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct MatchBlock(pub Vec<(NodeType, Vec<NodeType>, Box<NodeType>)>);
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct Map<T>(pub HashMap<String, T>);
 
@@ -30,89 +30,34 @@ pub enum ObjectType<T> {
     Map(HashMap<String, T>),
     Tuple(Vec<T>),
 }
-impl PartialOrd for ObjectType<RuntimeValue> {
-    fn gt(&self, other: &Self) -> bool {
-        false
-    }
 
-    fn lt(&self, other: &Self) -> bool {
-        false
-    }
+macro_rules! impl_fake_partial_ord {
+    ($iden:ty) => {
+        impl PartialOrd for $iden {
+            fn gt(&self, _other: &Self) -> bool {
+                false
+            }
 
-    fn ge(&self, other: &Self) -> bool {
-        true
-    }
+            fn lt(&self, _other: &Self) -> bool {
+                false
+            }
 
-    fn le(&self, other: &Self) -> bool {
-        true
-    }
+            fn ge(&self, _other: &Self) -> bool {
+                true
+            }
 
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(Ordering::Equal)
-    }
+            fn le(&self, _other: &Self) -> bool {
+                true
+            }
+
+            fn partial_cmp(&self, _other: &Self) -> Option<std::cmp::Ordering> {
+                Some(Ordering::Equal)
+            }
+        }
+    };
 }
 
-impl PartialOrd for Map<RuntimeValue> {
-    fn gt(&self, other: &Self) -> bool {
-        false
-    }
-
-    fn lt(&self, other: &Self) -> bool {
-        false
-    }
-
-    fn ge(&self, other: &Self) -> bool {
-        true
-    }
-
-    fn le(&self, other: &Self) -> bool {
-        true
-    }
-
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(Ordering::Equal)
-    }
-}
-
-impl PartialOrd for MatchBlock {
-    fn gt(&self, other: &Self) -> bool {
-        false
-    }
-
-    fn lt(&self, other: &Self) -> bool {
-        false
-    }
-
-    fn ge(&self, other: &Self) -> bool {
-        true
-    }
-
-    fn le(&self, other: &Self) -> bool {
-        true
-    }
-
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(Ordering::Equal)
-    }
-}
-impl PartialOrd for Block {
-    fn gt(&self, other: &Self) -> bool {
-        false
-    }
-
-    fn lt(&self, other: &Self) -> bool {
-        false
-    }
-
-    fn ge(&self, other: &Self) -> bool {
-        true
-    }
-
-    fn le(&self, other: &Self) -> bool {
-        true
-    }
-
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(Ordering::Equal)
-    }
-}
+impl_fake_partial_ord!(ObjectType<RuntimeValue>);
+impl_fake_partial_ord!(Map<RuntimeValue>);
+impl_fake_partial_ord!(MatchBlock);
+impl_fake_partial_ord!(Block);

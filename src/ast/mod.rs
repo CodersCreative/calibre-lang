@@ -2,9 +2,6 @@ pub mod binary;
 pub mod bitwise;
 pub mod comparison;
 
-use binary::BinaryOperator;
-use comparison::Comparison;
-
 use crate::{
     ast::comparison::BooleanOperation,
     lexer::TokenType,
@@ -16,6 +13,8 @@ use crate::{
         },
     },
 };
+use binary::BinaryOperator;
+use comparison::Comparison;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RefMutability {

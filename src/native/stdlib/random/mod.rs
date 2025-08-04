@@ -1,6 +1,3 @@
-use rand::{self, random_bool, random_range, random_ratio, seq::IndexedRandom};
-use std::rc::Rc;
-
 use crate::{
     native::NativeFunction,
     runtime::{
@@ -9,6 +6,8 @@ use crate::{
         values::{RuntimeType, RuntimeValue},
     },
 };
+use rand::{self, random_bool, random_range, random_ratio};
+use std::rc::Rc;
 
 pub fn setup(env: &mut Environment, parent: &u64) {
     let scope = env.new_scope_from_parent(*parent, "random");

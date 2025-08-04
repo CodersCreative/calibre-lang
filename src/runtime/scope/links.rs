@@ -6,7 +6,6 @@ use crate::{
         values::{RuntimeValue, helper::ObjectType},
     },
 };
-use core::panic;
 
 pub fn progress<'a>(
     mut current: &'a RuntimeValue,

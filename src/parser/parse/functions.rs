@@ -1,8 +1,5 @@
-use rand::seq::IndexedRandom;
-
 use crate::lexer::Bracket;
 use crate::parser::{Parser, ParserError, SyntaxErr};
-
 use crate::{ast::NodeType, lexer::TokenType};
 
 impl Parser {
@@ -169,12 +166,17 @@ mod tests {
         let tokens = tokenize(String::from("foo.bar()")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let first_call = parser.parse_call_member_expression().unwrap();
+
         match first_call {
-            NodeType::MemberExpression { property, .. } => match *property {
-                NodeType::CallExpression(_, _) | NodeType::Identifier(_) => {}
-                _ => panic!("Expected nested CallExpression or Identifier"),
-            },
-            _ => panic!("Expected CallExpression"),
+            NodeType::MemberExpression { path } => {
+                for (node, _) in path {
+                    match node {
+                        NodeType::CallExpression(_, _) | NodeType::Identifier(_) => {}
+                        _ => panic!("Expected nested CallExpression or Identifier"),
+                    }
+                }
+            }
+            _ => panic!("Expected MemberExpression"),
         }
     }
 
@@ -211,9 +213,9 @@ mod tests {
         let result = parser.parse_member_expression();
         assert!(result.is_ok());
         match result.unwrap() {
-            NodeType::MemberExpression {
-                is_computed: true, ..
-            } => {}
+            NodeType::MemberExpression { path } => {
+                assert!(path[0].1)
+            }
             _ => panic!("Expected computed MemberExpression"),
         }
     }

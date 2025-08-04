@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     ast::NodeType,
     runtime::{
@@ -8,6 +6,7 @@ use crate::{
         values::{RuntimeValue, ValueErr, helper::ObjectType},
     },
 };
+use std::collections::HashMap;
 
 impl Environment {
     pub fn evaluate_struct_expression(
@@ -163,30 +162,29 @@ impl Environment {
 mod tests {
     use super::*;
     use crate::ast::NodeType;
-    use crate::runtime::interpreter::statements::structs::{
-        evaluate_enum_declaration, evaluate_struct_declaration,
-    };
-    use crate::runtime::scope::{Object, Scope};
     use crate::runtime::values::RuntimeType;
     use crate::runtime::values::{RuntimeValue, helper::ObjectType};
-    use std::cell::RefCell;
     use std::collections::HashMap;
-    use std::rc::Rc;
+    use std::path::PathBuf;
+    use std::str::FromStr;
 
-    fn new_scope() -> Rc<RefCell<Scope>> {
-        Rc::new(RefCell::new(Scope::new(None)))
+    fn get_new_env() -> (Environment, u64) {
+        let mut env = Environment::new();
+        let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        (env, scope)
     }
 
     #[test]
     fn test_evaluate_struct_expression_map() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let mut props = HashMap::new();
         props.insert("a".to_string(), Some(NodeType::IntLiteral(1)));
         props.insert("b".to_string(), Some(NodeType::IntLiteral(2)));
         let node = NodeType::StructLiteral(ObjectType::Map(props));
-        let result = evaluate_struct_expression(node, scope).unwrap();
+        let result = env.evaluate_struct_expression(&scope, node).unwrap();
+
         match result {
-            RuntimeValue::Struct(ObjectType::Map(map), _) => {
+            RuntimeValue::Struct(_, _, ObjectType::Map(map)) => {
                 assert_eq!(map.get("a"), Some(&RuntimeValue::Int(1)));
                 assert_eq!(map.get("b"), Some(&RuntimeValue::Int(2)));
             }
@@ -196,14 +194,14 @@ mod tests {
 
     #[test]
     fn test_evaluate_struct_expression_tuple() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::StructLiteral(ObjectType::Tuple(vec![
             Some(NodeType::IntLiteral(1)),
             Some(NodeType::IntLiteral(2)),
         ]));
-        let result = evaluate_struct_expression(node, scope).unwrap();
+        let result = env.evaluate_struct_expression(&scope, node).unwrap();
         match result {
-            RuntimeValue::Struct(ObjectType::Tuple(vals), _) => {
+            RuntimeValue::Struct(_, _, ObjectType::Tuple(vals)) => {
                 assert_eq!(vals, vec![RuntimeValue::Int(1), RuntimeValue::Int(2)]);
             }
             _ => panic!("Expected Struct(Tuple)"),
@@ -212,22 +210,23 @@ mod tests {
 
     #[test]
     fn test_evaluate_struct_expression_null() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let node = NodeType::IntLiteral(42);
-        let result = evaluate_struct_expression(node, scope).unwrap();
+        let result = env.evaluate_struct_expression(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Null);
     }
 
     #[test]
     fn test_evaluate_enum_expression_map() {
-        let scope = new_scope();
+        let (mut env, scope) = get_new_env();
         let mut enum_props = HashMap::new();
         enum_props.insert("y".to_string(), RuntimeType::Int);
-        let enum_node = NodeType::EnumDeclaration {
+        let enum_node = NodeType::TypeDeclaration {
             identifier: "MyEnum".to_string(),
-            options: vec![(String::from("x"), Some(ObjectType::Map(enum_props)))],
+            object: Type::Enum(vec![(String::from("x"), Some(ObjectType::Map(enum_props)))]),
         };
-        evaluate_enum_declaration(enum_node, scope.clone()).unwrap();
+
+        env.evaluate(&scope, enum_node).unwrap();
 
         let exp = NodeType::EnumExpression {
             identifier: "MyEnum".to_string(),
@@ -237,9 +236,9 @@ mod tests {
                 Some(NodeType::IntLiteral(10)),
             )]))),
         };
-        let result = evaluate_enum_expression(exp, scope).unwrap();
+        let result = env.evaluate_enum_expression(&scope, exp).unwrap();
         match result {
-            RuntimeValue::Enum(ident, variant_index, data) => {
+            RuntimeValue::Enum(_, ident, variant_index, data) => {
                 assert_eq!(ident, "MyEnum");
                 assert_eq!(variant_index, 0);
                 assert!(data.is_some());
@@ -250,24 +249,25 @@ mod tests {
 
     #[test]
     fn test_evaluate_enum_expression_tuple() {
-        let scope = new_scope();
-        let enum_node = NodeType::EnumDeclaration {
+        let (mut env, scope) = get_new_env();
+        let enum_node = NodeType::TypeDeclaration {
             identifier: "MyEnum".to_string(),
-            options: vec![(
+            object: Type::Enum(vec![(
                 String::from("Foo"),
                 Some(ObjectType::Tuple(vec![RuntimeType::Int])),
-            )],
+            )]),
         };
-        evaluate_enum_declaration(enum_node, scope.clone()).unwrap();
+
+        env.evaluate(&scope, enum_node).unwrap();
 
         let exp = NodeType::EnumExpression {
             identifier: "MyEnum".to_string(),
             value: "Foo".to_string(),
             data: Some(ObjectType::Tuple(vec![Some(NodeType::IntLiteral(10))])),
         };
-        let result = evaluate_enum_expression(exp, scope).unwrap();
+        let result = env.evaluate_enum_expression(&scope, exp).unwrap();
         match result {
-            RuntimeValue::Enum(ident, variant_index, data) => {
+            RuntimeValue::Enum(_, ident, variant_index, data) => {
                 assert_eq!(ident, "MyEnum");
                 assert_eq!(variant_index, 0);
                 assert!(data.is_some());

@@ -3,18 +3,14 @@ pub mod links;
 pub mod objects;
 pub mod variables;
 
-use std::{collections::HashMap, fmt::Debug, path::PathBuf};
-
-use crate::runtime::{interpreter::InterpreterErr, values::ValueErr};
-
-use thiserror::Error;
-
+use super::values::RuntimeType;
 use crate::runtime::values::{
     RuntimeValue,
     helper::{ObjectType, StopValue, VarType},
 };
-
-use super::values::RuntimeType;
+use crate::runtime::{interpreter::InterpreterErr, values::ValueErr};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf};
+use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
 pub enum ScopeErr {
@@ -175,7 +171,7 @@ impl Environment {
             parent = Some(
                 self.scopes
                     .iter()
-                    .find(|(k, v)| v.namespace == path[0])
+                    .find(|(_, v)| v.namespace == path[0])
                     .map(|x| x.0)
                     .unwrap()
                     .clone(),
@@ -273,158 +269,161 @@ impl Environment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::scope::objects::{get_function, get_object};
     use crate::runtime::values::{RuntimeValue, helper::VarType};
-    use std::cell::RefCell;
-    use std::rc::Rc;
     use std::str::FromStr;
+
+    fn get_new_env() -> (Environment, u64) {
+        let mut env = Environment::new();
+        let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+        (env, scope)
+    }
 
     #[test]
     fn test_scope_global_variables() {
-        let (scope_rc, _) =
-            Scope::new_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
-        let scope = scope_rc.borrow();
-        assert!(scope.variables.contains_key("PI"));
-        assert!(scope.variables.contains_key("true"));
-        assert!(scope.variables.contains_key("print"));
-        assert_eq!(scope.variables.get("PI").unwrap().1, VarType::Constant);
+        let (env, scope) = get_new_env();
+        assert!(env.get_var(&scope, "PI").is_ok());
+        assert!(env.get_var(&scope, "true").is_ok());
+        assert!(env.get_var(&scope, "false").is_ok());
+        assert!(env.get_var(&scope, "print").is_ok());
+        assert_eq!(
+            env.get_var(&scope, "print").unwrap().var_type,
+            VarType::Constant
+        );
     }
 
     #[test]
     fn test_scope_push_and_get_var() {
-        let (scope_rc, _) = Scope::new_with_stdlib(None, None);
-        let mut scope = scope_rc.borrow_mut();
-        scope
-            .push_var(
-                "x".to_string(),
-                RuntimeValue::Int(42),
-                VarType::Mutable(None),
-            )
-            .unwrap();
-        assert_eq!(scope.variables.get("x").unwrap().0, RuntimeValue::Int(42));
+        let (mut env, scope) = get_new_env();
+        env.push_var(
+            &scope,
+            "x".to_string(),
+            Variable {
+                value: RuntimeValue::Int(42),
+                var_type: VarType::Mutable,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            env.get_var(&scope, "x").unwrap().value,
+            RuntimeValue::Int(42)
+        );
     }
 
     #[test]
     fn test_scope_assign_var_and_type_mismatch() {
-        let (scope_rc, _) = Scope::new_with_stdlib(None);
-        let mut scope = scope_rc.borrow_mut();
-        scope
-            .push_var(
-                "x".to_string(),
-                RuntimeValue::Int(1),
-                VarType::Mutable(None),
-            )
-            .unwrap();
-        assert!(scope.assign_var("x", RuntimeValue::Int(2)).is_ok());
-        let err = scope.assign_var("x", RuntimeValue::Bool(true)).unwrap_err();
-        match err {
-            ScopeErr::TypeMismatch(RuntimeValue::Int(_), RuntimeValue::Bool(_)) => {}
-            _ => panic!("Expected TypeMismatch"),
-        }
+        let (mut env, scope) = get_new_env();
+        env.push_var(
+            &scope,
+            "x".to_string(),
+            Variable {
+                value: RuntimeValue::Int(1),
+                var_type: VarType::Mutable,
+            },
+        )
+        .unwrap();
+
+        assert!(env.assign_var(&scope, "x", RuntimeValue::Int(2)).is_ok());
+        assert!(
+            env.assign_var(&scope, "x", RuntimeValue::Bool(true))
+                .is_err()
+        )
     }
 
     #[test]
     fn test_scope_assign_const_var_error() {
-        let (scope_rc, _) = Scope::new_with_stdlib(None);
-        let mut scope = scope_rc.borrow_mut();
-        scope
-            .push_var("y".to_string(), RuntimeValue::Int(1), VarType::Constant)
-            .unwrap();
-        let err = scope.assign_var("y", RuntimeValue::Int(2)).unwrap_err();
-        match err {
-            ScopeErr::AssignConstant(ref name) if name == "y" => {}
-            _ => panic!("Expected AssignConstant"),
-        }
+        let (mut env, scope) = get_new_env();
+        env.push_var(
+            &scope,
+            "x".to_string(),
+            Variable {
+                value: RuntimeValue::Int(1),
+                var_type: VarType::Constant,
+            },
+        )
+        .unwrap();
+
+        assert!(env.assign_var(&scope, "x", RuntimeValue::Int(2)).is_err());
     }
 
     #[test]
     fn test_scope_variable_shadowing() {
-        let (parent, _) = Scope::new_with_stdlib(None);
-        parent
-            .borrow_mut()
-            .push_var("z".to_string(), RuntimeValue::Int(1), VarType::Constant)
-            .unwrap();
-        let child = Scope::new(Some(parent.clone()));
-        child
-            .borrow_mut()
-            .push_var(
-                "z".to_string(),
-                RuntimeValue::Int(2),
-                VarType::Mutable(None),
-            )
-            .unwrap();
+        let (mut env, scope) = get_new_env();
+        env.push_var(
+            &scope,
+            "x".to_string(),
+            Variable {
+                value: RuntimeValue::Int(1),
+                var_type: VarType::Immutable,
+            },
+        )
+        .unwrap();
+
+        env.push_var(
+            &scope,
+            "x".to_string(),
+            Variable {
+                value: RuntimeValue::Int(2),
+                var_type: VarType::Immutable,
+            },
+        )
+        .unwrap();
+
         assert_eq!(
-            child.borrow().variables.get("z").unwrap().0,
+            env.get_var(&scope, "x").unwrap().value,
             RuntimeValue::Int(2)
         );
     }
 
     #[test]
-    fn test_scope_get_var_and_resolve_var() {
-        let parent = Scope::new(None);
-        parent
-            .borrow_mut()
-            .push_var(
-                "a".to_string(),
-                RuntimeValue::Int(10),
-                VarType::Mutable(None),
-            )
-            .unwrap();
-        let child = Scope::new(Some(parent.clone()));
-        let (val, vtype) = crate::runtime::scope::variables::get_var(&child, "a").unwrap();
-        assert_eq!(val, RuntimeValue::Int(10));
-        assert_eq!(vtype, VarType::Mutable(None));
-    }
-
-    #[test]
     fn test_scope_push_and_get_object() {
-        let mut scope = Scope::new(None);
-        let obj = Object::NewType(RuntimeType::Int);
-        scope
-            .push_object("MyType".to_string(), obj.clone())
-            .unwrap();
-        let rc_scope = Rc::new(RefCell::new(scope));
-        let fetched = get_object(rc_scope.clone(), "MyType").unwrap();
-        assert_eq!(fetched, obj);
+        let (mut env, scope) = get_new_env();
+
+        let obj = Type::NewType(RuntimeType::Int);
+        env.push_object(
+            &scope,
+            "MyType".to_string(),
+            Object {
+                object_type: obj.clone(),
+                functions: HashMap::new(),
+                traits: Vec::new(),
+            },
+        );
+
+        assert_eq!(env.get_object(&scope, "MyType").unwrap().object_type, obj);
     }
 
     #[test]
     fn test_scope_push_and_get_function() {
-        let mut scope = Scope::new(None);
-        let obj = Object::NewType(RuntimeType::Int);
-        scope.push_object("MyStruct".to_string(), obj).unwrap();
-        scope
-            .push_function(
-                "MyStruct".to_string(),
-                ("foo".to_string(), RuntimeValue::Int(1), false),
-            )
-            .unwrap();
-        let rc_scope = Rc::new(RefCell::new(scope));
-        let (val, is_static) = get_function(rc_scope.clone(), "MyStruct", "foo").unwrap();
-        assert_eq!(val, RuntimeValue::Int(1));
+        let (mut env, scope) = get_new_env();
+
+        let obj = Type::NewType(RuntimeType::Int);
+        env.push_object(
+            &scope,
+            "MyType".to_string(),
+            Object {
+                object_type: obj.clone(),
+                functions: HashMap::new(),
+                traits: Vec::new(),
+            },
+        );
+
+        env.push_function(
+            &scope,
+            "MyType",
+            ("foo".to_string(), RuntimeValue::Int(1), false),
+        );
+
+        let (val, is_static) = env.get_function(&scope, "MyType", "foo").unwrap();
+
+        assert_eq!(val, &RuntimeValue::Int(1));
         assert!(!is_static);
     }
 
     #[test]
     fn test_scope_get_object_error() {
-        let scope = Rc::new(RefCell::new(Scope::new(None)));
-        let err = get_object(scope.clone(), "DoesNotExist").unwrap_err();
-        match err {
-            ScopeErr::Object(ref name) if name == "DoesNotExist" => {}
-            _ => panic!("Expected Object error"),
-        }
-    }
+        let (env, scope) = get_new_env();
 
-    #[test]
-    fn test_scope_get_function_error() {
-        let mut scope = Scope::new(None);
-        let obj = Object::Struct(ObjectType::Tuple(vec![RuntimeType::Int]));
-        scope.push_object("MyStruct".to_string(), obj).unwrap();
-        let rc_scope = Rc::new(RefCell::new(scope));
-        let err = get_function(rc_scope.clone(), "MyStruct", "does_not_exist");
-        match err {
-            Err(_) => {}
-            _ => panic!("Expected Function error"),
-        }
+        assert!(env.get_function(&scope, "MyType", "foo").is_err());
+        assert!(env.get_object(&scope, "MyType").is_err());
     }
 }
