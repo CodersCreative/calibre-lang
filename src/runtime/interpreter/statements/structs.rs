@@ -4,7 +4,7 @@ use crate::{
     ast::NodeType,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Object, Type},
+        scope::{Environment, Object},
         values::RuntimeValue,
     },
 };
@@ -26,7 +26,7 @@ impl Environment {
                 if let NodeType::VariableDeclaration {
                     var_type,
                     identifier: iden,
-                    value: Some(value),
+                    value,
                     data_type,
                 } = function.0
                 {

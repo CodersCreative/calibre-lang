@@ -1,7 +1,6 @@
 pub mod conversion;
 pub mod helper;
 
-use core::panic;
 use std::{
     fmt::Debug,
     num::{ParseFloatError, ParseIntError},
@@ -14,7 +13,7 @@ use helper::Block;
 use thiserror::Error;
 
 use crate::{
-    ast::{NodeType, RefMutability},
+    ast::RefMutability,
     native::NativeFunction,
     runtime::{
         scope::ScopeErr,

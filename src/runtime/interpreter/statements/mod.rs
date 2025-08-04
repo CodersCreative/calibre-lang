@@ -115,10 +115,7 @@ impl Environment {
             data_type,
         } = declaration
         {
-            let mut value = match value {
-                Some(x) => self.evaluate(scope, *x)?,
-                None => RuntimeValue::Null,
-            };
+            let mut value = self.evaluate(scope, *value)?;
 
             if let Some(t) = data_type {
                 value = value.unwrap(self, scope)?.into_type(self, scope, &t)?;

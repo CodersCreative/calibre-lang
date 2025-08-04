@@ -86,28 +86,12 @@ impl Parser {
             _ => None,
         };
 
-        Ok(match self.first().token_type {
-            TokenType::Equals => {
-                let _ = self.eat();
-                NodeType::VariableDeclaration {
-                    var_type,
-                    identifier,
-                    data_type,
-                    value: Some(Box::new(self.parse_statement()?)),
-                }
-            }
-            _ => {
-                if let VarType::Mutable = var_type {
-                    NodeType::VariableDeclaration {
-                        var_type,
-                        identifier,
-                        value: None,
-                        data_type,
-                    }
-                } else {
-                    return Err(self.get_err(SyntaxErr::NullConstant));
-                }
-            }
+        let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
+        Ok(NodeType::VariableDeclaration {
+            var_type,
+            identifier,
+            data_type,
+            value: Box::new(self.parse_statement()?),
         })
     }
 
@@ -133,7 +117,7 @@ impl Parser {
                 NodeType::VariableDeclaration {
                     var_type: VarType::Constant,
                     identifier: name,
-                    value: Some(func),
+                    value: func,
                     data_type,
                 } => {
                     if let NodeType::FunctionDeclaration {
@@ -156,12 +140,12 @@ impl Parser {
                             NodeType::VariableDeclaration {
                                 var_type: VarType::Constant,
                                 identifier: name,
-                                value: Some(Box::new(NodeType::FunctionDeclaration {
+                                value: Box::new(NodeType::FunctionDeclaration {
                                     parameters,
                                     body,
                                     return_type,
                                     is_async,
-                                })),
+                                }),
                                 data_type,
                             },
                             depends,
@@ -184,12 +168,12 @@ impl Parser {
                             NodeType::VariableDeclaration {
                                 var_type: VarType::Constant,
                                 identifier: name,
-                                value: Some(Box::new(NodeType::MatchDeclaration {
+                                value: Box::new(NodeType::MatchDeclaration {
                                     parameters,
                                     body,
                                     return_type,
                                     is_async,
-                                })),
+                                }),
                                 data_type,
                             },
                             depends,

@@ -12,7 +12,7 @@ use crate::{
     ast::{LoopType, NodeType, RefMutability, comparison::Comparison},
     lexer::{Bracket, Token, TokenType},
     parser::{Parser, ParserError, SyntaxErr},
-    runtime::values::{RuntimeType, RuntimeValue, helper::ObjectType},
+    runtime::values::{RuntimeType, helper::ObjectType},
 };
 
 impl Parser {

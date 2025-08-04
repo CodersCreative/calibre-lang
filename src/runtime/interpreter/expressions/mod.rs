@@ -3,7 +3,7 @@ use crate::{
     runtime::{
         interpreter::InterpreterErr,
         scope::{Environment, Variable},
-        values::{self, FunctionType, RuntimeType, RuntimeValue, helper::VarType},
+        values::{RuntimeType, RuntimeValue, helper::VarType},
     },
 };
 

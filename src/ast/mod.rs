@@ -50,7 +50,7 @@ pub enum NodeType {
     VariableDeclaration {
         var_type: VarType,
         identifier: String,
-        value: Option<Box<NodeType>>,
+        value: Box<NodeType>,
         data_type: Option<RuntimeType>,
     },
     ImplDeclaration {
