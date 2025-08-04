@@ -1,6 +1,6 @@
 use rand::seq::IndexedRandom;
 
-use crate::parser::{Parser, ParserError};
+use crate::parser::{Parser, ParserError, SyntaxErr};
 
 use crate::{
     ast::{NodeType, binary::BinaryOperator},
@@ -44,7 +44,7 @@ impl Parser {
     }
 
     pub fn parse_is_expression(&mut self) -> Result<NodeType, ParserError> {
-        let mut left = self.parse_additive_expression()?;
+        let mut left = self.parse_bitwise_expression()?;
 
         while let TokenType::Is = self.first().token_type.clone() {
             let _ = self.eat();
@@ -131,6 +131,50 @@ impl Parser {
                 left = NodeType::BinaryExpression {
                     left: Box::new(left),
                     right: Box::new(self.parse_power_expression()?),
+                    operator: op,
+                };
+            } else {
+                break;
+            }
+        }
+
+        Ok(left)
+    }
+
+    pub fn parse_bitwise_expression(&mut self) -> Result<NodeType, ParserError> {
+        let mut left = self.parse_shift_expression()?;
+        while [
+            TokenType::Ref,
+            TokenType::Or,
+            TokenType::BinaryOperator(BinaryOperator::BitXor),
+        ]
+        .contains(&self.first().token_type)
+        {
+            let op = self.eat();
+
+            left = NodeType::BinaryExpression {
+                left: Box::new(left),
+                right: Box::new(self.parse_shift_expression()?),
+                operator: match op.token_type {
+                    TokenType::Ref => BinaryOperator::BitAnd,
+                    TokenType::Or => BinaryOperator::BitOr,
+                    TokenType::BinaryOperator(x) => x,
+                    _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
+                },
+            };
+        }
+
+        Ok(left)
+    }
+    pub fn parse_shift_expression(&mut self) -> Result<NodeType, ParserError> {
+        let mut left = self.parse_additive_expression()?;
+        while let TokenType::BinaryOperator(op) = self.first().token_type.clone() {
+            if [BinaryOperator::Shl, BinaryOperator::Shr].contains(&op) {
+                let _ = self.eat();
+
+                left = NodeType::BinaryExpression {
+                    left: Box::new(left),
+                    right: Box::new(self.parse_additive_expression()?),
                     operator: op,
                 };
             } else {

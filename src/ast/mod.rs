@@ -1,4 +1,5 @@
 pub mod binary;
+pub mod bitwise;
 pub mod comparison;
 
 use binary::BinaryOperator;

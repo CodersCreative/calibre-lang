@@ -59,7 +59,7 @@ let mut list_dyn = [0, 10, 30, "Hello"];
 
 // The language has support for list comprehension to iter and filter an iterable value.
 // Typed arrays are created using the following syntax:
-let mut lst : list<int> = [x^2 for x in (0..100) if x % 2 == 0 if x % 8 != 0];
+let mut lst : list<int> = [x**2 for x in (0..100) if x % 2 == 0 if x % 8 != 0];
 
 print("lst")
 print(lst);// A static array

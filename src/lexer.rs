@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use rand::seq::IndexedRandom;
 use thiserror::Error;
 
 use crate::{
@@ -127,6 +128,30 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
         (String::from("=>"), TokenType::FatArrow),
         (String::from(".."), TokenType::Range),
         (
+            String::from("**="),
+            TokenType::BinaryAssign(BinaryOperator::Pow),
+        ),
+        (
+            String::from("&="),
+            TokenType::BinaryOperator(BinaryOperator::BitAnd),
+        ),
+        (
+            String::from("|="),
+            TokenType::BinaryOperator(BinaryOperator::BitOr),
+        ),
+        (
+            String::from("**"),
+            TokenType::BinaryOperator(BinaryOperator::Pow),
+        ),
+        (
+            String::from("<<"),
+            TokenType::BinaryOperator(BinaryOperator::Shl),
+        ),
+        (
+            String::from(">>"),
+            TokenType::BinaryOperator(BinaryOperator::Shr),
+        ),
+        (
             String::from("&&"),
             TokenType::Boolean(BooleanOperation::And),
         ),
@@ -205,11 +230,11 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                 )),
                 '.' => Some(TokenType::FullStop),
                 ':' => Some(TokenType::Colon),
-                '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(
-                    BinaryOperator::from_symbol(c).unwrap(),
-                )),
                 '=' => Some(TokenType::Equals),
                 '!' => Some(TokenType::Not),
+                '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(
+                    BinaryOperator::from_symbol(&c.to_string()).unwrap(),
+                )),
                 _ => None,
             }
         };
@@ -314,6 +339,25 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                         tokens.pop();
                         tokens.push(token);
                         continue;
+                    }
+                }
+
+                if tokens.len() > 2 {
+                    let combined = format!(
+                        "{}{}{}",
+                        tokens[tokens.len() - 2].value,
+                        last.value,
+                        token.value
+                    );
+
+                    if let Some(t) = special_keywords().get(&combined) {
+                        if token.col > 0 && last.col / token.col == 1 {
+                            let token = Token::new(t.clone(), &combined, line, col);
+                            tokens.pop();
+                            tokens.pop();
+                            tokens.push(token);
+                            continue;
+                        }
                     }
                 }
 
