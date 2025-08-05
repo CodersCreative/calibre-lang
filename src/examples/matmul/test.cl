@@ -8,9 +8,9 @@ let matmul = fn(n : uint, a : list<list<float>>, b : list<list<float>>) -> list<
     for k in 0..p => {
       let aik : float = a[i][k];
       let bk : list<float> = b[k];
-      for j in 0..m => ci[j] += aik * bk[j]
+      for j in 0..m => ci[j] <<= aik * bk[j]
     }
-    c += ci
+    c <<= ci
   }
   c
 } 

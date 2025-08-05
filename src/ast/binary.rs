@@ -70,10 +70,7 @@ impl BinaryOperator {
         let right = right.unwrap_val(env, scope)?;
 
         Ok(match self {
-            Self::Add => match left.clone() + right.clone() {
-                Ok(x) => Ok(x),
-                _ => left.special_add(right),
-            },
+            Self::Add => left + right,
             Self::Sub => left - right,
             Self::Mul => left * right,
             Self::Div => left / right,
@@ -81,9 +78,18 @@ impl BinaryOperator {
             Self::Mod => left.modulus(right),
             Self::BitXor => left ^ right,
             Self::BitOr => left | right,
-            Self::BitAnd => left & right,
-            Self::Shl => left << right,
-            Self::Shr => left >> right,
+            Self::BitAnd => Ok(match left.clone() & right.clone() {
+                Ok(x) => x,
+                _ => left.special_and(right, env, scope)?,
+            }),
+            Self::Shl => Ok(match left.clone() << right.clone() {
+                Ok(x) => x,
+                _ => left.special_shl(right, env, scope)?,
+            }),
+            Self::Shr => Ok(match left.clone() >> right.clone() {
+                Ok(x) => x,
+                _ => left.special_shr(right, env, scope)?,
+            }),
         }?)
     }
 }
@@ -185,7 +191,12 @@ impl RuntimeValue {
         handle_binop_numeric!(Mul, %, rhs, self)
     }
 
-    fn special_add(self, rhs: Self) -> Result<RuntimeValue, ASTError> {
+    fn special_and(
+        self,
+        rhs: Self,
+        _env: &Environment,
+        _scope: &u64,
+    ) -> Result<RuntimeValue, ASTError> {
         let add_str = || -> Result<RuntimeValue, ASTError> {
             let mut x = rhs.to_string();
             x.push_str(&self.to_string());
@@ -194,35 +205,57 @@ impl RuntimeValue {
 
         match self {
             Self::Char(x) => {
-                if let RuntimeValue::List { .. } = rhs {
-                    Err(ASTError::BinaryOperator(
-                        Self::Char(x.clone()),
-                        rhs,
-                        BinaryOperator::Add,
-                    ))
-                } else {
-                    let mut x = x.to_string();
-                    x.push_str(&rhs.to_string());
-                    Ok(Self::Str(x))
-                }
+                let mut x = x.to_string();
+                x.push_str(&rhs.to_string());
+                Ok(Self::Str(x))
             }
             Self::Str(mut x) => {
-                if let RuntimeValue::List { .. } = rhs {
-                    Err(ASTError::BinaryOperator(
-                        Self::Str(x),
-                        rhs.clone(),
-                        BinaryOperator::Add,
-                    ))
-                } else {
-                    x.push_str(&rhs.to_string());
-                    Ok(Self::Str(x))
-                }
+                x.push_str(&rhs.to_string());
+                Ok(Self::Str(x))
             }
-            Self::Tuple(mut data) => {
-                if let Self::Tuple(rhs_data) = rhs {
-                    return Ok(Self::Tuple([data, rhs_data].concat()));
-                };
+            _ => match rhs {
+                Self::Str(_) => add_str(),
+                Self::Char(_) => add_str(),
+                _ => self.panic_operator(&rhs, &BinaryOperator::BitAnd),
+            },
+        }
+    }
 
+    fn special_shr(
+        self,
+        rhs: Self,
+        _env: &Environment,
+        _scope: &u64,
+    ) -> Result<RuntimeValue, ASTError> {
+        match rhs {
+            Self::Tuple(mut data) => {
+                data.push(self);
+                Ok(Self::Tuple(data))
+            }
+            Self::List {
+                mut data,
+                data_type,
+            } => {
+                data.push(self);
+                Ok(Self::List {
+                    data,
+                    data_type: data_type.clone(),
+                })
+            }
+            _ => match rhs {
+                _ => self.panic_operator(&rhs, &BinaryOperator::Shl),
+            },
+        }
+    }
+
+    fn special_shl(
+        self,
+        rhs: Self,
+        _env: &Environment,
+        _scope: &u64,
+    ) -> Result<RuntimeValue, ASTError> {
+        match self {
+            Self::Tuple(mut data) => {
                 data.push(rhs);
                 Ok(Self::Tuple(data))
             }
@@ -237,9 +270,7 @@ impl RuntimeValue {
                 })
             }
             _ => match rhs {
-                Self::Str(_) => add_str(),
-                Self::Char(_) => add_str(),
-                _ => self.panic_operator(&rhs, &BinaryOperator::Add),
+                _ => self.panic_operator(&rhs, &BinaryOperator::Shl),
             },
         }
     }

@@ -315,7 +315,9 @@ impl Parser {
         let mut has_commas = false;
         let mut index = 0;
 
-        while ![TokenType::Close(Bracket::Paren), TokenType::EOF].contains(&self.nth(index).token_type) {
+        while ![TokenType::Close(Bracket::Paren), TokenType::EOF]
+            .contains(&self.nth(index).token_type)
+        {
             index += 1;
 
             if self.nth(index).token_type == TokenType::Comma {

@@ -44,8 +44,8 @@ impl Board {
       let mut out : string = "| ";
       for x in 0..3 => {
         let point : Player = self.0[y * 3 + x];
-        out += point.to_char();
-        out += " | "; 
+        out &= point.to_char();
+        out &= " | "; 
       }
       print(out);
       print("|---|---|---|");

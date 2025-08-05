@@ -10,17 +10,17 @@ let mut recursive_language = Language.ARABIC(language, Language.SPANISH);
 // Mutability needs to be specified at the beginning for all branches
 // match statements need to be called, either using a pipe or brackets as they're considered functions
 recursive_language |> match &mut {
-  data.Language.ARABIC(Language.FRENCH{_}, Language.ARABIC(Language.FRENCH{code})) => print("Code: " + code),
+  data.Language.ARABIC(Language.FRENCH{_}, Language.ARABIC(Language.FRENCH{code})) => print("Code: " & code),
   data.Language.ARABIC(Language.FRENCH{data}, Language.SPANISH) => {
-    print("Enum: " + data)
+    print("Enum: " & data)
     data = 5;
-    print("Enum Changed: " + data)
+    print("Enum Changed: " & data)
   },
 }
 
 // In order to do an if let statement this syntax is used with extra conditions being added after the let
 if let data.Language.FRENCH{data} if true if ((try 9 as ulong) == 9.0 == 9) <- &language => {
-  print("Enum 2: " + data)
+  print("Enum 2: " & data)
 }
 
 // The const keyword creates an immutable variable that cannot be shadowed.
@@ -46,7 +46,7 @@ let mut x = 100;
 
 // statements will automatically return the last value they use.
 let mut b : <int, int> = (10, if x == 100 => {100} else => {10});
-print("b -> " + b);
+print("b -> " & b);
 
 /* input function to get an input from the user.
 A value can be inputted to this function and will outputted to the user.*/
@@ -86,7 +86,7 @@ const range2 = fn (stop : int, start : int = 0, step : int = 10) -> list<int> =>
 
 // Loops also allow for function calls including the built-in range() function.
 for i in range2(100, step = 25) => {
-  print("val: " + i);
+  print("val: " & i);
 }
 
 let smth_fn = fn (y) -> string!int => {
@@ -116,7 +116,7 @@ let smth_fn = fn (y : int) -> int? => {
 }
 
 // The $ operator can be used to represent the previous result from a pipe.
-200 |> smth_fn |> print("This + That = " + $)
+200 |> smth_fn |> print("This + That = " & $)
 
 18 |> smth_fn |> match {
   Some(x) if x == 18 => print("Equated to 18"),
@@ -137,7 +137,7 @@ let smth_fn = fn (y : int) -> int? => {
   // The Let keyword can be used to reference all other options whilst passing off the data
   Let(data) if data > 200 => print("value is > 200 "),
   // if the name is not in scope it can be used without the Let keyword
-  data => print("value is : " + data),
+  data => print("value is : " & data),
 }
 
 // TODO Implement generics with dyn<Add, Sub, Mul...>
@@ -151,7 +151,7 @@ const main = fn () -> !int => {
 
   // The result type will be unwrapped if an operation forces it to unwrap or if its type is forced.
   let u = x + 70;
-  print("Unsafe : " + u);
+  print("Unsafe : " & u);
 
   // The try keyword can be used to automatically defer errors when inside a function
 	let mut x : long = try x + try "58" as uint;
@@ -165,9 +165,9 @@ const main = fn () -> !int => {
 	let z = "a";
   if z == "a" => {
     let w = "b";
-    let d = z + w ; // Should give "ab"
+    let d = z & w ; // Should give "ab"
 
-    print(d + " ; " + x + " ; " + number);
+    print(d & " ; " & x & " ; " & number);
   }
 
 	print(x);
@@ -188,13 +188,13 @@ const main = fn () -> !int => {
 let currying = fn (a : int, b : int, c : int) -> int => a * b * c;
 
 // This is an example of currying using pipes
-currying |> 18 |> 20 |> 15 |> print ("Curryed " + $)
+currying |> 18 |> 20 |> 15 |> print ("Curryed " & $)
 
 // This is also valid: 
-18 |> currying |> (20, 15) |> print ("Curryed " + $)
+18 |> currying |> (20, 15) |> print ("Curryed " & $)
 
 // Currying also works using the normal call syntax
-print("Curryed " + currying(18)(20, 15));
+print("Curryed " & currying(18)(20, 15));
 
 // The is keyword can be used to check types.
 // The is expression also reserves the identifiers "number", "decimal" and "integer" to allow for loose checking between different number types
@@ -203,8 +203,8 @@ if !(4 is list<str>) => print("Yay!! 4 is not a list of strings");
 
 // the in keyword can be used to see if a certain value is contained by a string or list.
 // the __name__ special variable can also be used to check if the current scipt is the root file.
-print("__name__ = " + __name__);
+print("__name__ = " & __name__);
 if (4 in [4, 16, 32]) && __name__ == "__main__" => {
-  print("main result: " + main());
-  print("Success, Random Num = " + (std.random.generate(10..=1000) as uint))
+  print("main result: " & main());
+  print("Success, Random Num = " & (std.random.generate(10..=1000) as uint))
 }
