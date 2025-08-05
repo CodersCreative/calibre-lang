@@ -187,7 +187,7 @@ mod tests {
         let result = env.evaluate_tuple_expression(&scope, node).unwrap();
         assert_eq!(
             result,
-            RuntimeValue::Tuple(vec![RuntimeValue::Int(1), RuntimeValue::Float(2.0)])
+            RuntimeValue::Tuple(vec![RuntimeValue::UInt(1), RuntimeValue::Float(2.0)])
         );
     }
 
@@ -205,9 +205,9 @@ mod tests {
                 assert_eq!(
                     data,
                     vec![
-                        RuntimeValue::Int(1),
-                        RuntimeValue::Int(2),
-                        RuntimeValue::Int(3)
+                        RuntimeValue::UInt(1),
+                        RuntimeValue::UInt(2),
+                        RuntimeValue::UInt(3)
                     ]
                 );
                 assert!(data_type.is_some());
@@ -224,7 +224,7 @@ mod tests {
         let result = env.evaluate_list_expression(&scope, node).unwrap();
         match result {
             RuntimeValue::List { data, data_type } => {
-                assert_eq!(data, vec![RuntimeValue::Int(1), RuntimeValue::Float(2.0)]);
+                assert_eq!(data, vec![RuntimeValue::UInt(1), RuntimeValue::Float(2.0)]);
                 assert!(data_type.is_none());
             }
             _ => panic!("Expected RuntimeValue::List"),

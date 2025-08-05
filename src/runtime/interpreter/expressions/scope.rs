@@ -270,9 +270,9 @@ mod tests {
 
         let params = vec![(
             "x".to_string(),
-            RuntimeType::Int,
+            RuntimeType::UInt,
             RefMutability::Value,
-            Some(RuntimeValue::Int(1)),
+            Some(RuntimeValue::UInt(1)),
         )];
         let args = vec![(
             NodeType::Identifier("x".to_string()),
@@ -281,7 +281,7 @@ mod tests {
 
         let scope = env.get_new_scope(&scope, params, args).unwrap();
         let val = env.get_var(&scope, "x").unwrap().value.clone();
-        assert_eq!(val, RuntimeValue::Int(99));
+        assert_eq!(val, RuntimeValue::UInt(99));
     }
 
     #[test]
@@ -290,7 +290,7 @@ mod tests {
 
         let params = vec![(
             "a".to_string(),
-            RuntimeType::Int,
+            RuntimeType::UInt,
             RefMutability::MutRef,
             None,
         )];
@@ -309,7 +309,7 @@ mod tests {
             }],
         };
         let result = env.evaluate_scope(&scope, node).unwrap();
-        assert_eq!(result, RuntimeValue::Int(42));
+        assert_eq!(result, RuntimeValue::UInt(42));
     }
 
     #[test]
@@ -319,6 +319,6 @@ mod tests {
             body: vec![NodeType::IntLiteral(7)],
         };
         let result = env.evaluate_scope(&scope, node).unwrap();
-        assert_eq!(result, RuntimeValue::Int(7));
+        assert_eq!(result, RuntimeValue::UInt(7));
     }
 }

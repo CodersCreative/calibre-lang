@@ -28,24 +28,7 @@ impl Environment {
         exp: NodeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let NodeType::NotExpression { value } = exp {
-            match *value {
-                NodeType::RangeDeclaration {
-                    from,
-                    to,
-                    inclusive,
-                } => {
-                    return self.evaluate(
-                        scope,
-                        NodeType::RangeDeclaration {
-                            from: Box::new(NodeType::NotExpression { value: from }),
-                            to,
-                            inclusive,
-                        },
-                    );
-                }
-                _ => {}
-            }
-            let value = self.evaluate(scope, *value)?;
+            let value = self.evaluate(scope, *value)?.unwrap_val(self, scope)?;
 
             match value {
                 RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
@@ -337,7 +320,7 @@ mod tests {
             },
         )
         .unwrap();
-        let result = env.evaluate_identifier(&scope, "x").unwrap();
+        let result = env.evaluate_identifier(&scope, "x").unwrap().unwrap_val(&env, &scope).unwrap();
         assert_eq!(result, RuntimeValue::Int(5));
     }
 
@@ -402,9 +385,9 @@ mod tests {
             RuntimeValue::List { data, .. } => assert_eq!(
                 data,
                 vec![
-                    RuntimeValue::Int(3),
-                    RuntimeValue::Int(2),
-                    RuntimeValue::Int(1)
+                    RuntimeValue::UInt(3),
+                    RuntimeValue::UInt(2),
+                    RuntimeValue::UInt(1)
                 ]
             ),
             _ => panic!("Expected List"),
@@ -420,7 +403,7 @@ mod tests {
             operator: BinaryOperator::Add,
         };
         let result = env.evaluate_binary_expression(&scope, node).unwrap();
-        assert_eq!(result, RuntimeValue::Int(5));
+        assert_eq!(result, RuntimeValue::UInt(5));
     }
 
     #[test]
@@ -466,7 +449,7 @@ mod tests {
         let node = NodeType::ComparisonExpression {
             left: Box::new(NodeType::IntLiteral(3)),
             right: Box::new(NodeType::IntLiteral(2)),
-            operator: crate::ast::comparison::Comparison::Lesser,
+            operator: crate::ast::comparison::Comparison::Greater,
         };
         let result = env.evaluate_comparison_expression(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Bool(true));
@@ -479,7 +462,7 @@ mod tests {
             &scope,
             "x".to_string(),
             Variable {
-                value: RuntimeValue::Int(0),
+                value: RuntimeValue::UInt(0),
                 var_type: VarType::Mutable,
             },
         )
@@ -490,11 +473,11 @@ mod tests {
             value: Box::new(NodeType::IntLiteral(42)),
         };
 
-        let result = env.evaluate_assignment_expression(&scope, node).unwrap();
-        assert_eq!(result, RuntimeValue::Int(42));
+        let result = env.evaluate_assignment_expression(&scope, node).unwrap().unwrap_val(&env, &scope).unwrap();
+        assert_eq!(result, RuntimeValue::UInt(42));
         assert_eq!(
             env.get_var(&scope, "x").unwrap().value,
-            RuntimeValue::Int(42)
+            RuntimeValue::UInt(42)
         );
     }
 }

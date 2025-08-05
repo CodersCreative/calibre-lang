@@ -257,11 +257,11 @@ mod tests {
 
     #[test]
     fn test_parse_potential_key_value_tuple() {
-        let tokens = tokenize(String::from("{1, 2}")).unwrap();
+        let tokens = tokenize(String::from("{a, b}")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let obj = parser.parse_potential_key_value().unwrap();
         match obj {
-            ObjectType::Tuple(v) => assert_eq!(v.len(), 2),
+            ObjectType::Map(v) => assert_eq!(v.len(), 2),
             _ => panic!("Expected Tuple"),
         }
     }

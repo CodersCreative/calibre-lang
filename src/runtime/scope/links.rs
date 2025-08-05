@@ -3,7 +3,7 @@ use crate::{
     runtime::{
         interpreter::InterpreterErr,
         scope::{Environment, ScopeErr},
-        values::{RuntimeValue, helper::ObjectType},
+        values::{helper::ObjectType, RuntimeValue, ValueErr},
     },
 };
 
@@ -12,8 +12,14 @@ pub fn progress<'a>(
     key: &str,
 ) -> Result<&'a RuntimeValue, InterpreterErr> {
     match current {
-        RuntimeValue::Struct(_, _, ObjectType::Map(map)) => current = map.get(key).unwrap(),
-        RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))) => current = map.get(key).unwrap(),
+        RuntimeValue::Struct(_, _, ObjectType::Map(map)) => current = match map.get(key) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+        },
+        RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))) => current = match map.get(key) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+        },
         RuntimeValue::Result(Err(x), _) if key == "Err" => {
             current = x;
         }
@@ -27,29 +33,39 @@ pub fn progress<'a>(
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
-            current = tuple.get(idx).unwrap()
+            current = match tuple.get(idx) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+            }
         }
         RuntimeValue::Enum(_, _, _, Some(ObjectType::Tuple(tuple))) => {
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
-            current = tuple.get(idx).unwrap()
+            current = match tuple.get(idx) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+            }
         }
         RuntimeValue::Tuple(tuple) => {
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
-            current = tuple.get(idx).unwrap()
+            current = match tuple.get(idx) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+            }
         }
         RuntimeValue::List { data, .. } => {
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
-            current = data.get(idx).unwrap()
+            current = match data.get(idx) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+            }
         }
-        _ => {
-            panic!()
-        }
+        _ => return Err(InterpreterErr::Value(ValueErr::ProgressErr))
     }
 
     Ok(current)
@@ -59,9 +75,15 @@ pub fn progress_mut<'a>(
     key: &str,
 ) -> Result<&'a mut RuntimeValue, InterpreterErr> {
     match current {
-        RuntimeValue::Struct(_, _, ObjectType::Map(map)) => current = map.get_mut(key).unwrap(),
+        RuntimeValue::Struct(_, _, ObjectType::Map(map)) => current = match map.get_mut(key) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+        },
         RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))) => {
-            current = map.get_mut(key).unwrap()
+            current = match map.get_mut(key) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+            }
         }
         RuntimeValue::Result(Err(x), _) if key == "Err" => {
             current = x;
@@ -76,31 +98,40 @@ pub fn progress_mut<'a>(
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
-            current = tuple.get_mut(idx).unwrap()
+            current = match tuple.get_mut(idx) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+            }
         }
         RuntimeValue::Enum(_, _, _, Some(ObjectType::Tuple(tuple))) => {
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
-            current = tuple.get_mut(idx).unwrap()
+            current = match tuple.get_mut(idx) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+            }
         }
         RuntimeValue::Tuple(tuple) => {
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
-            current = tuple.get_mut(idx).unwrap()
+            current = match tuple.get_mut(idx) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+            }
         }
         RuntimeValue::List { data, .. } => {
             let idx = key
                 .parse::<usize>()
                 .map_err(|_| InterpreterErr::IndexNonList(NodeType::Identifier(key.to_string())))?;
-            current = data.get_mut(idx).unwrap()
+            current = match data.get_mut(idx) {
+                Some(x) => x,
+                None => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
+            }
         }
-        _ => {
-            return Err(InterpreterErr::Value(
-                crate::runtime::values::ValueErr::Scope(ScopeErr::Variable(key.to_string())),
-            ));
-        }
+        _ => return Err(InterpreterErr::Value(ValueErr::ProgressErr))
+
     }
 
     Ok(current)

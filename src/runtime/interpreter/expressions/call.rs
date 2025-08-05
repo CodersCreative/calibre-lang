@@ -338,7 +338,7 @@ mod tests {
         };
 
         let result = env
-            .evaluate_call_expression(&scope, call_node)
+            .evaluate(&scope, call_node)
             .unwrap()
             .unwrap_val(&env, &scope)
             .unwrap();

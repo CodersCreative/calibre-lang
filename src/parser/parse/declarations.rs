@@ -631,7 +631,7 @@ mod tests {
 
     #[test]
     fn test_parse_function_declaration_simple() {
-        let tokens = tokenize(String::from("fn(x: int, y: int) { return x + y }")).unwrap();
+        let tokens = tokenize(String::from("fn(x: int, y: int) => return x + y ")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let node = parser.parse_function_declaration().unwrap();
         match node {
@@ -644,7 +644,7 @@ mod tests {
 
     #[test]
     fn test_parse_loop_declaration_for() {
-        let tokens = tokenize(String::from("for i in xs { x = x + 1 }")).unwrap();
+        let tokens = tokenize(String::from("for i in xs => x = x + 1")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let node = parser.parse_loop_declaration().unwrap();
         match node {

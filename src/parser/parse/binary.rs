@@ -242,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_parse_range_expression_exclusive() {
-        let tokens = tokenize(String::from("1..10")).unwrap();
+        let tokens = tokenize(String::from("1 .. 10")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let node = parser.parse_range_expression().unwrap();
         match node {
@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn test_parse_range_expression_inclusive() {
-        let tokens = tokenize(String::from("1..=10")).unwrap();
+        let tokens = tokenize(String::from("1 ..= 10")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let node = parser.parse_range_expression().unwrap();
         match node {
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_parse_power_expression() {
-        let tokens = tokenize(String::from("2 ^ 3")).unwrap();
+        let tokens = tokenize(String::from("2 ** 3")).unwrap();
         let mut parser = parser_with_tokens(tokens);
         let node = parser.parse_power_expression().unwrap();
         match node {
@@ -308,7 +308,7 @@ mod tests {
         let node = parser.parse_comparison_expression().unwrap();
         match node {
             NodeType::ComparisonExpression { operator, .. } => {
-                assert_eq!(operator, Comparison::Lesser);
+                assert_eq!(operator, Comparison::Greater);
             }
             _ => panic!("Expected ComparisonExpression"),
         }

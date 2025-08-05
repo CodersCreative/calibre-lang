@@ -377,9 +377,7 @@ mod tests {
         };
 
         let result = env
-            .evaluate_member_expression(&scope, member)
-            .unwrap()
-            .unwrap_val(&env, &scope);
+            .evaluate_member_expression(&scope, member);
         assert!(result.is_err());
     }
 }

@@ -23,6 +23,8 @@ pub mod helper;
 pub enum ValueErr {
     #[error("Unable to convert: {0:?} -> {1:?}.")]
     Conversion(RuntimeValue, RuntimeType),
+    #[error("Unable to progress value.")]
+    ProgressErr,
     #[error("{0}")]
     Scope(ScopeErr),
     #[error("{0}")]

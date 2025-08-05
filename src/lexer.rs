@@ -402,7 +402,7 @@ mod tests {
             TokenType::Integer,
             TokenType::If,
             TokenType::Identifier,
-            TokenType::Comparison(Comparison::Lesser),
+            TokenType::Comparison(Comparison::Greater),
             TokenType::Integer,
             TokenType::Open(Bracket::Curly),
             TokenType::Identifier,

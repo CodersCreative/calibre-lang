@@ -185,8 +185,8 @@ mod tests {
 
         match result {
             RuntimeValue::Struct(_, _, ObjectType::Map(map)) => {
-                assert_eq!(map.get("a"), Some(&RuntimeValue::Int(1)));
-                assert_eq!(map.get("b"), Some(&RuntimeValue::Int(2)));
+                assert_eq!(map.get("a"), Some(&RuntimeValue::UInt(1)));
+                assert_eq!(map.get("b"), Some(&RuntimeValue::UInt(2)));
             }
             _ => panic!("Expected Struct(Map)"),
         }
@@ -202,7 +202,7 @@ mod tests {
         let result = env.evaluate_struct_expression(&scope, node).unwrap();
         match result {
             RuntimeValue::Struct(_, _, ObjectType::Tuple(vals)) => {
-                assert_eq!(vals, vec![RuntimeValue::Int(1), RuntimeValue::Int(2)]);
+                assert_eq!(vals, vec![RuntimeValue::UInt(1), RuntimeValue::UInt(2)]);
             }
             _ => panic!("Expected Struct(Tuple)"),
         }

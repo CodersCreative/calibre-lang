@@ -214,7 +214,7 @@ mod tests {
         assert!(result.is_ok());
         match result.unwrap() {
             NodeType::MemberExpression { path } => {
-                assert!(path[0].1)
+                assert!(path[1].1)
             }
             _ => panic!("Expected computed MemberExpression"),
         }
