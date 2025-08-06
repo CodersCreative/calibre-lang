@@ -1,13 +1,21 @@
 [package]
-name = "cal"
+name = "calibre-language"
 version = "0.1.0"
 edition = "2024"
+authors = ["Creative Coders <officialccoders@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/CodersCreative/calibre-lang"
+publish = false
 
-[dependencies]
-clap = { version = "4.5.40", features = ["derive"] }
-rand = "0.9.1"
-rustyline = "16.0.0"
-thiserror = "2.0.12"
+[workspace]
+members = [
+    "cal",
+    "runtime",
+    "parser",
+]
 
-[profile.release]
-debug = true
+[workspace.dependencies]
+cal = { path = "./cal", version = "0.1.0" }
+runtime = { path = "./runtime", version = "0.1.0" }
+parser = { path = "./parser", version = "0.1.0" }
+
