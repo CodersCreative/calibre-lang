@@ -16,6 +16,13 @@ members = [
 
 [workspace.dependencies]
 cal = { path = "./cal", version = "0.1.0" }
-runtime = { path = "./runtime", version = "0.1.0" }
-parser = { path = "./parser", version = "0.1.0" }
+calibre-runtime = { path = "./runtime", version = "0.1.0" }
+calibre-parser = { path = "./parser", version = "0.1.0" }
+
+
+[[bin]]
+name = "cal"           # The name of the target.
+path = "cal/src/main.rs"    # The source file of the target.
+doc = true             # Is documented by default.
+
 

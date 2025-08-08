@@ -22,12 +22,19 @@ pub mod grammar {
             CommaSeperatedExpr,
             #[rust_sitter::leaf(text = ")")] (),
         ),
+        // Pipe(
+        //     #[rust_sitter::repeat(non_empty = true)]
+        //     #[rust_sitter::delimited(
+        //         #[rust_sitter::leaf(text = "|>")] ()
+        //     )]
+        //     Vec<Expr>,
+        // ),
         // Member(
         //     #[rust_sitter::repeat(non_empty = true)]
         //     #[rust_sitter::delimited(
         //         #[rust_sitter::leaf(text = ".")] ()
         //     )]
-        //     Vec<Expr>,
+        //     Vec<Member>,
         // ),
         Float(
             #[rust_sitter::leaf(pattern = r"[-+]?([0-9]*\.[0-9]+|[0-9]+\.[0-9]*)([eE][-+]?[0-9]+)?", transform = |v| v.parse().unwrap())]
@@ -47,19 +54,29 @@ pub mod grammar {
             #[rust_sitter::leaf(pattern = r"[a-zA-Z]+", transform = |v| v.to_string())] String,
             #[rust_sitter::leaf(text = "\"")] (),
         ),
-        Identifier(
-            #[rust_sitter::leaf(pattern = r"[a-zA-Z_]+", transform = |v| v.to_string())] String,
-        ),
+        Identifier(Identifier),
         #[rust_sitter::prec_left(4)]
         Bitwise(
             Box<Expr>,
-            #[rust_sitter::leaf(pattern = r"\^|\||\&", transform = |v| v.to_string())] String,
+            #[rust_sitter::leaf(pattern = r"\^|\||&", transform = |v| v.to_string())] String,
+            Box<Expr>,
+        ),
+        #[rust_sitter::prec_left(3)]
+        Comparison(
+            Box<Expr>,
+            #[rust_sitter::leaf(pattern = r"(<|>|<=|>=|==|!=)", transform = |v| v.to_string())] String,
+            Box<Expr>,
+        ),
+        #[rust_sitter::prec_left(6)]
+        Binary(
+            Box<Expr>,
+            #[rust_sitter::leaf(pattern = r"(&&|\|\|)", transform = |v| v.to_string())] String,
             Box<Expr>,
         ),
         #[rust_sitter::prec_left(6)]
         Add(
             Box<Expr>,
-            #[rust_sitter::leaf(pattern = r"\+|\-", transform = |v| v.to_string())] String,
+            #[rust_sitter::leaf(pattern = r"\+|-", transform = |v| v.to_string())] String,
             Box<Expr>,
         ),
         #[rust_sitter::prec_left(7)]
@@ -78,6 +95,12 @@ pub mod grammar {
         Shift(
             Box<Expr>,
             #[rust_sitter::leaf(pattern = r"(<<|>>)", transform = |v| v.to_string())] String,
+            Box<Expr>,
+        ),
+        #[rust_sitter::prec_left(9)]
+        UnaryAssign(
+            Box<Expr>,
+            #[rust_sitter::leaf(pattern = r"(<<|>>|\*\*|\*|%|\+|-|\^|&|\|)=", transform = |v| v.to_string())] String,
             Box<Expr>,
         ),
         #[rust_sitter::prec_left(1)]
@@ -106,6 +129,30 @@ pub mod grammar {
     }
 
     #[derive(Debug, Clone, PartialEq)]
+    pub enum Member {
+        Computed(ComputedMember),
+        Indentifier(Identifier)
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct ComputedMember (
+        #[rust_sitter::leaf(text = "[")] (),
+        Expr,
+        #[rust_sitter::leaf(text = "]")] (),
+    );
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct Identifier (#[rust_sitter::leaf(pattern = r"[a-zA-Z_]+", transform = |v| v.to_string())] String,);
+    
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct KeyValExpr {
+        key : Expr,
+        #[rust_sitter::leaf(text = ":")] 
+        _colon : (),
+        value : Expr,
+    }
+    
+    #[derive(Debug, Clone, PartialEq)]
     pub struct CommaSeperatedExpr {
         #[rust_sitter::repeat(non_empty = true)]
         #[rust_sitter::delimited(
@@ -113,6 +160,55 @@ pub mod grammar {
         )]
         elements: Vec<Expr>,
     }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct CommaSeperatedTypeExpr {
+        #[rust_sitter::repeat(non_empty = true)]
+        #[rust_sitter::delimited(
+            #[rust_sitter::leaf(text = ",")] ()
+        )]
+        elements: Vec<TypeExpr>,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum TypeExpr {
+        #[rust_sitter::leaf(text = "int")]
+        Int,
+        #[rust_sitter::leaf(text = "uint")]
+        UInt,
+        #[rust_sitter::leaf(text = "long")]
+        Long,
+        #[rust_sitter::leaf(text = "ulong")]
+        ULong,
+        #[rust_sitter::leaf(text = "float")]
+        Float,
+        #[rust_sitter::leaf(text = "double")]
+        Double,
+        #[rust_sitter::leaf(text = "str")]
+        Str,
+        #[rust_sitter::leaf(text = "char")]
+        Char,
+        #[rust_sitter::leaf(text = "bool")]
+        Bool,
+        #[rust_sitter::leaf(text = "dyn")]
+        Dynamic,
+        #[rust_sitter::leaf(text = "struct")]
+        Struct,
+        Result {
+            ok : Box<TypeExpr>,
+            #[rust_sitter::leaf(text = "|")]
+            _sym : (),
+            err: Box<TypeExpr>,
+        },
+        Option (Box<TypeExpr>, #[rust_sitter::leaf(text = "?")] ()),
+        Tuple {
+            #[rust_sitter::leaf(text = "<")]
+            _op: (),
+            types : CommaSeperatedTypeExpr,
+            #[rust_sitter::leaf(text = ">")]
+            _close:  (),
+        },
+    } 
 }
 
 #[cfg(test)]
@@ -126,7 +222,7 @@ mod tests {
 
         assert_eq!(grammar::parse(" 1").unwrap(), Expr::Integer(1));
         assert_eq!(
-            grammar::parse("-1 - 2.89 ** 3").unwrap(),
+            grammar::parse("-1 -= 2.89 ** 3").unwrap(),
             Expr::Add(
                 Box::new(Expr::Integer(-1)),
                 "-".to_string(),

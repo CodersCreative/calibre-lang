@@ -60,7 +60,7 @@ fn repl() -> Result<(), Box<dyn Error>> {
                 break;
             }
             Err(err) => {
-                println!("Error: {:?}", err);
+                println!("Error: {}", err);
                 break;
             }
         }
