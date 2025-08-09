@@ -20,9 +20,15 @@ calibre_runtime = { path = "./runtime", version = "0.1.0" }
 calibre_parser = { path = "./parser", version = "0.1.0" }
 
 
+# For Cal
+[dependencies]
+clap = { version = "4.5.40", features = ["derive"] }
+rand = "0.9.1"
+rustyline = "16.0.0"
+calibre_parser = {workspace = true}
+calibre_runtime = {workspace = true}
+
 [[bin]]
 name = "cal"           # The name of the target.
 path = "cal/src/main.rs"    # The source file of the target.
 doc = true             # Is documented by default.
-
-

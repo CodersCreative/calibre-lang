@@ -109,12 +109,14 @@ pub mod grammar {
             Box<Expr>,
         ),
         #[rust_sitter::prec_left(9)]
-        UnaryAssign(
-            Box<Expr>,
-            #[rust_sitter::leaf(pattern = r"(<<|>>|\*\*|\*|%|\+|-|\^|&|\|)=", transform = |v| v.to_string())]
-             String,
-            Box<Expr>,
-        ),
+        UnaryAssign {
+            left: Box<Expr>,
+            #[rust_sitter::leaf(pattern = r"(<<|>>|\*\*|\*|%|\+|-|\^|&|\|)", transform = |v| v.to_string())]
+            symbol: String,
+            #[rust_sitter::leaf(text = "=")]
+            _equals: (),
+            right: Box<Expr>,
+        },
         #[rust_sitter::prec_left(1)]
         Range {
             from: Option<Box<Expr>>,
@@ -198,7 +200,7 @@ pub mod grammar {
             types: FunctionParams,
             #[rust_sitter::leaf(text = ")")]
             _close: (),
-            // ret_type: Option<ReturnType>,
+            ret_type: Option<ReturnType>,
             block: Block,
         },
         #[rust_sitter::prec_left(20)]
@@ -365,7 +367,7 @@ pub mod grammar {
     pub struct ReturnType {
         #[rust_sitter::leaf(text = "->")]
         _ret_symbol: (),
-        // ret_type: TypeExpr,
+        ret_type: TypeExpr,
     }
 
     #[derive(Debug, Clone, PartialEq)]

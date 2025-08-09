@@ -107,6 +107,13 @@ dependencies = [
 [[package]]
 name = "calibre-language"
 version = "0.1.0"
+dependencies = [
+ "calibre_parser",
+ "calibre_runtime",
+ "clap",
+ "rand",
+ "rustyline",
+]
 
 [[package]]
 name = "calibre_parser"
