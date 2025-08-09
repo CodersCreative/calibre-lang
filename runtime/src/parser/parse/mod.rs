@@ -233,8 +233,8 @@ impl Parser {
             let _ = self.eat();
             let is_async = if t.token_type == TokenType::Async {
                 let _ = self.expect_eat(
-                    &TokenType::Func,
-                    SyntaxErr::ExpectedKeyword(String::from("function")),
+                    &TokenType::Async,
+                    SyntaxErr::ExpectedKeyword(String::from("async")),
                 )?;
                 true
             } else {
