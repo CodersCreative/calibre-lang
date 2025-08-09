@@ -97,10 +97,11 @@ dependencies = [
 name = "cal"
 version = "0.1.0"
 dependencies = [
+ "calibre_parser",
+ "calibre_runtime",
  "clap",
  "rand",
  "rustyline",
- "thiserror",
 ]
 
 [[package]]
@@ -108,23 +109,18 @@ name = "calibre-language"
 version = "0.1.0"
 
 [[package]]
-name = "calibre-parser"
+name = "calibre_parser"
 version = "0.1.0"
 dependencies = [
- "clap",
- "rand",
  "rust-sitter",
  "rust-sitter-tool",
- "rustyline",
- "thiserror",
 ]
 
 [[package]]
-name = "calibre-runtime"
+name = "calibre_runtime"
 version = "0.1.0"
 dependencies = [
- "calibre-parser",
- "clap",
+ "calibre_parser",
  "rand",
  "rustyline",
  "thiserror",

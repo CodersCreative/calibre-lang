@@ -16,8 +16,8 @@ members = [
 
 [workspace.dependencies]
 cal = { path = "./cal", version = "0.1.0" }
-calibre-runtime = { path = "./runtime", version = "0.1.0" }
-calibre-parser = { path = "./parser", version = "0.1.0" }
+calibre_runtime = { path = "./runtime", version = "0.1.0" }
+calibre_parser = { path = "./parser", version = "0.1.0" }
 
 
 [[bin]]

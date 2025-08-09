@@ -1,11 +1,10 @@
 [package]
-name = "calibre-runtime"
+name = "calibre_runtime"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "4.5.40", features = ["derive"] }
 rand = "0.9.1"
 rustyline = "16.0.0"
 thiserror = "2.0.12"
-calibre-parser = {workspace = true}
+calibre_parser = {workspace = true}
