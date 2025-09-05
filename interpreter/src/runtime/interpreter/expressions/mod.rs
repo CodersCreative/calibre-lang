@@ -1,3 +1,5 @@
+use std::ops::AddAssign;
+
 use crate::{
     operators,
     runtime::{
@@ -137,7 +139,7 @@ impl Environment {
             let mut current = RuntimeValue::Null;
             let new_scope = self.new_scope_from_parent_shallow(*scope);
 
-            for (i, node) in nodes.iter().enumerate() {
+            for node in nodes.iter() {
                 let mut value = self.evaluate(&new_scope, node.clone())?;
 
                 value = value.unwrap_val(self, &new_scope)?;
@@ -148,9 +150,12 @@ impl Environment {
                     value = temp;
                 }
 
+                let counter = self.scopes.get(scope).unwrap().counter;
+                self.scopes.get_mut(scope).unwrap().counter += 1;
+
                 self.force_var(
                     &new_scope,
-                    format!("$-{}", i),
+                    format!("$-{}", counter),
                     Variable {
                         value: current.clone(),
                         var_type: VarType::Mutable,
@@ -169,7 +174,7 @@ impl Environment {
                         current = self.evaluate_function(
                             &new_scope,
                             value,
-                            vec![(NodeType::Identifier(format!("$-{}", i)), None)],
+                            vec![(NodeType::Identifier(format!("$-{}", counter)), None)],
                         )?;
                         self.force_var(
                             &new_scope,

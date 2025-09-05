@@ -104,6 +104,7 @@ pub struct Environment {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scope {
     pub id: u64,
+    pub counter: u64,
     pub parent: Option<u64>,
     pub children: HashMap<String, u64>,
     pub namespace: String,
@@ -296,6 +297,7 @@ impl Environment {
                 namespace: namespace.unwrap_or(&self.counter.to_string()).to_string(),
                 parent: Some(parent),
                 children: HashMap::new(),
+                counter: 0,
                 path,
             };
             let _ = self.add_scope(scope);

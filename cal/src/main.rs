@@ -1,5 +1,5 @@
 use calibre_interpreter::runtime::{
-    interpreter::InterpreterErr, scope::Environment, values::RuntimeValue,
+    scope::Environment, values::RuntimeValue,
 };
 use clap::Parser;
 use rustyline::{DefaultEditor, error::ReadlineError};

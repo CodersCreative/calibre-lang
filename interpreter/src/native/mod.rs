@@ -73,6 +73,7 @@ impl Environment {
             namespace: namespace.unwrap_or(&self.counter.to_string()).to_string(),
             parent,
             children: HashMap::new(),
+            counter: 0,
             path: path.clone(),
         });
 

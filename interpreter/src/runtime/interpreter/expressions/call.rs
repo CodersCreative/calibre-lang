@@ -2,7 +2,7 @@ use calibre_parser::ast::{NodeType, ObjectType, RefMutability, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr,
-    scope::{Environment, ScopeErr, Type},
+    scope::{Environment, ScopeErr, Type, Variable},
     values::{FunctionType, RuntimeType, RuntimeValue, ValueErr, helper::Block},
 };
 
@@ -20,59 +20,89 @@ impl Environment {
             is_async,
         } = &func
         {
-            // if arguments.len() == 1 && parameters.len() > 1 {
-            //     if let Ok(x) = self.evaluate(scope, arguments[0].0.clone()) {
-            //         if let Ok(RuntimeValue::Tuple(x)) = x.unwrap_val(self, scope) {
-            //             arguments = x
-            //                 .into_iter()
-            //                 .map(|x| (Node::RuntimeValue(x), None))
-            //                 .collect();
-            //         }
-            //     }
-            // };
-            //
-            // if parameters.len() > arguments.len() {
-            //     let params: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)> =
-            //         parameters
-            //             .iter()
-            //             .enumerate()
-            //             .filter(|(i, x)| {
-            //                 for arg in arguments.iter() {
-            //                     if let (Node::NodeType(NodeType::Identifier(y)), Some(_)) = arg {
-            //                         if &x.0 == y {
-            //                             return false;
-            //                         }
-            //                     }
-            //                 }
-            //
-            //                 i > &(arguments.len() - 1)
-            //             })
-            //             .map(|x| x.1.clone())
-            //             .collect();
-            //
-            //     if params.iter().filter(|x| x.3.is_none()).count() > 0 {
-            //         let arguments: Vec<(Node, Option<Node>)> = [
-            //             arguments,
-            //             params
-            //                 .iter()
-            //                 .map(|x| (Node::NodeType(NodeType::Identifier(x.0.clone())), None))
-            //                 .collect(),
-            //         ]
-            //         .concat();
-            //
-            //         let body = FunctionType::Regular(Block(Box::new(NodeType::CallExpression(
-            //             Box::new(NodeType::RuntimeValue(func.clone())),
-            //             arguments,
-            //         ))));
-            //
-            //         return Ok(RuntimeValue::Function {
-            //             parameters: params,
-            //             body,
-            //             return_type: return_type.clone(),
-            //             is_async: *is_async,
-            //         });
-            //     }
-            // }
+            if arguments.len() == 1 && parameters.len() > 1 {
+                if let Ok(x) = self.evaluate(scope, arguments[0].0.clone()) {
+                    if let Ok(RuntimeValue::Tuple(x)) = x.unwrap_val(self, scope) {
+                        arguments = x
+                            .into_iter()
+                            .map(|x| {
+                                let counter = self.scopes.get(scope).unwrap().counter;
+                                self.scopes.get_mut(scope).unwrap().counter += 1;
+
+                                let _ = self
+                                    .force_var(
+                                        &scope,
+                                        format!("$-{}", counter),
+                                        Variable {
+                                            value: x,
+                                            var_type: VarType::Mutable,
+                                        },
+                                    )
+                                    .unwrap();
+
+                                (NodeType::Identifier(format!("$-{}", counter)), None)
+                            })
+                            .collect();
+                    }
+                }
+            };
+
+            if parameters.len() > arguments.len() {
+                let params: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)> =
+                    parameters
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, x)| {
+                            for arg in arguments.iter() {
+                                if let (NodeType::Identifier(y), Some(_)) = arg {
+                                    if &x.0 == y {
+                                        return false;
+                                    }
+                                }
+                            }
+
+                            i > &(arguments.len() - 1)
+                        })
+                        .map(|x| x.1.clone())
+                        .collect();
+
+                if params.iter().filter(|x| x.3.is_none()).count() > 0 {
+                    let arguments: Vec<(NodeType, Option<NodeType>)> = [
+                        arguments,
+                        params
+                            .iter()
+                            .map(|x| (NodeType::Identifier(x.0.clone()), None))
+                            .collect(),
+                    ]
+                    .concat();
+
+                    let counter = self.scopes.get(scope).unwrap().counter;
+                    self.scopes.get_mut(scope).unwrap().counter += 1;
+
+                    let _ = self
+                        .force_var(
+                            &scope,
+                            format!("$-{}", counter),
+                            Variable {
+                                value: func.clone(),
+                                var_type: VarType::Mutable,
+                            },
+                        )
+                        .unwrap();
+
+                    let body = FunctionType::Regular(Block(Box::new(NodeType::CallExpression(
+                        Box::new(NodeType::Identifier(format!("$-{}", counter))),
+                        arguments,
+                    ))));
+
+                    return Ok(RuntimeValue::Function {
+                        parameters: params,
+                        body,
+                        return_type: return_type.clone(),
+                        is_async: *is_async,
+                    });
+                }
+            }
 
             match body {
                 FunctionType::Regular(body) => {
