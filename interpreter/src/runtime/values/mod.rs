@@ -1,0 +1,253 @@
+use crate::{
+    native::NativeFunction,
+    runtime::{scope::ScopeErr, values::helper::MatchBlock},
+};
+use calibre_parser::ast::{ObjectType, ParserDataType};
+use helper::Block;
+use std::{
+    fmt::Debug,
+    num::{ParseFloatError, ParseIntError},
+    rc::Rc,
+};
+use thiserror::Error;
+
+pub mod conversion;
+pub mod helper;
+
+#[derive(Error, Debug, Clone)]
+pub enum ValueErr {
+    #[error("Unable to convert: {0:?} -> {1:?}.")]
+    Conversion(RuntimeValue, RuntimeType),
+    #[error("Unable to progress value.")]
+    ProgressErr,
+    #[error("{0}")]
+    Scope(ScopeErr),
+    #[error("{0}")]
+    ParseIntError(ParseIntError),
+    #[error("{0}")]
+    ParseFloatError(ParseFloatError),
+}
+
+impl From<ParseIntError> for ValueErr {
+    fn from(value: ParseIntError) -> Self {
+        Self::ParseIntError(value)
+    }
+}
+
+impl From<ParseFloatError> for ValueErr {
+    fn from(value: ParseFloatError) -> Self {
+        Self::ParseFloatError(value)
+    }
+}
+
+impl From<ScopeErr> for ValueErr {
+    fn from(value: ScopeErr) -> Self {
+        Self::Scope(value)
+    }
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Debug)]
+pub enum RuntimeType {
+    Float,
+    Dynamic,
+    Double,
+    Int,
+    Long,
+    UInt,
+    ULong,
+    Bool,
+    Str,
+    Char,
+    Tuple(Vec<RuntimeType>),
+    List(Box<Option<RuntimeType>>),
+    Range,
+    Option(Box<RuntimeType>),
+    Result(Box<RuntimeType>, Box<RuntimeType>),
+    Function {
+        return_type: Box<Option<RuntimeType>>,
+        parameters: Vec<(RuntimeType, calibre_parser::ast::RefMutability)>,
+        is_async: bool,
+    },
+    Enum(u64, String),
+    Struct(u64, Option<String>),
+}
+
+impl From<ParserDataType> for RuntimeType {
+    fn from(value: ParserDataType) -> Self {
+        match value {
+            ParserDataType::Float => Self::Float,
+            ParserDataType::Dynamic => Self::Dynamic,
+            ParserDataType::Double => Self::Double,
+            ParserDataType::Int => Self::Int,
+            ParserDataType::Long => Self::Long,
+            ParserDataType::UInt => Self::UInt,
+            ParserDataType::ULong => Self::ULong,
+            ParserDataType::Bool => Self::Bool,
+            ParserDataType::Str => Self::Str,
+            ParserDataType::Char => Self::Char,
+            ParserDataType::Tuple(x) => {
+                Self::Tuple(x.into_iter().map(|x| RuntimeType::from(x)).collect())
+            }
+            ParserDataType::List(x) => Self::List(Box::new(match *x {
+                Some(x) => Some(RuntimeType::from(x)),
+                None => None,
+            })),
+            ParserDataType::Range => Self::Range,
+            ParserDataType::Struct(x) => Self::Struct(0, x),
+            ParserDataType::Function {
+                return_type,
+                parameters,
+                is_async,
+            } => Self::Function {
+                return_type: Box::new(match *return_type {
+                    Some(x) => Some(RuntimeType::from(x)),
+                    None => None,
+                }),
+                parameters: parameters
+                    .into_iter()
+                    .map(|x| (RuntimeType::from(x.0), x.1))
+                    .collect(),
+                is_async,
+            },
+            ParserDataType::Option(x) => Self::Option(Box::new(RuntimeType::from(*x))),
+            ParserDataType::Result(x, y) => Self::Result(
+                Box::new(RuntimeType::from(*x)),
+                Box::new(RuntimeType::from(*y)),
+            ),
+        }
+    }
+}
+
+impl Into<RuntimeType> for &RuntimeValue {
+    fn into(self) -> RuntimeType {
+        match self {
+            RuntimeValue::Null => RuntimeType::Dynamic,
+            RuntimeValue::Float(_) => RuntimeType::Float,
+            RuntimeValue::Double(_) => RuntimeType::Double,
+            RuntimeValue::Int(_) => RuntimeType::Int,
+            RuntimeValue::Long(_) => RuntimeType::Long,
+            RuntimeValue::UInt(_) => RuntimeType::UInt,
+            RuntimeValue::ULong(_) => RuntimeType::ULong,
+            RuntimeValue::Link(_, _, x) => x.clone(),
+            RuntimeValue::Enum(y, x, _, _) => RuntimeType::Enum(*y, x.clone()),
+            RuntimeValue::Struct(y, x, _) => RuntimeType::Struct(*y, x.clone()),
+            RuntimeValue::Bool(_) => RuntimeType::Bool,
+            RuntimeValue::Option(_, x) => x.clone(),
+            RuntimeValue::Result(_, x) => x.clone(),
+            RuntimeValue::Str(_) => RuntimeType::Str,
+            RuntimeValue::Char(_) => RuntimeType::Char,
+            RuntimeValue::Range(_, _) => RuntimeType::Range,
+            RuntimeValue::Tuple(data) => {
+                RuntimeType::Tuple(data.into_iter().map(|x| x.into()).collect())
+            }
+            RuntimeValue::List { data_type, .. } => RuntimeType::List(data_type.clone()),
+            RuntimeValue::Function {
+                parameters,
+                return_type,
+                is_async,
+                ..
+            } => RuntimeType::Function {
+                return_type: match return_type {
+                    Some(x) => Box::new(Some(x.clone())),
+                    None => Box::new(None),
+                },
+                parameters: parameters
+                    .iter()
+                    .map(|x| (x.1.clone(), x.2.clone()))
+                    .collect(),
+                is_async: *is_async,
+            },
+            RuntimeValue::NativeFunction(_) => RuntimeType::Dynamic,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Debug)]
+pub enum RuntimeValue {
+    Null,
+    Float(f32),
+    Double(f64),
+    Int(i64),
+    Long(i128),
+    UInt(u64),
+    ULong(u128),
+    Range(i32, i32),
+    Bool(bool),
+    Str(String),
+    Char(char),
+    Struct(u64, Option<String>, ObjectType<RuntimeValue>),
+    Enum(u64, String, usize, Option<ObjectType<RuntimeValue>>),
+    Tuple(Vec<RuntimeValue>),
+    Link(u64, Vec<String>, RuntimeType),
+    List {
+        data: Vec<RuntimeValue>,
+        data_type: Box<Option<RuntimeType>>,
+    },
+    Option(Option<Box<RuntimeValue>>, RuntimeType),
+    Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>, RuntimeType),
+    Function {
+        parameters: Vec<(
+            String,
+            RuntimeType,
+            calibre_parser::ast::RefMutability,
+            Option<RuntimeValue>,
+        )>,
+        body: FunctionType,
+        return_type: Option<RuntimeType>,
+        is_async: bool,
+    },
+    NativeFunction(Rc<dyn NativeFunction>),
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Debug)]
+pub enum FunctionType {
+    Regular(Block),
+    Match(MatchBlock),
+}
+
+fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {
+    let mut txt = String::from(open);
+
+    for val in data.iter() {
+        txt.push_str(&format!("{}, ", val.to_string()));
+    }
+
+    let _ = (txt.pop(), txt.pop());
+    txt.push(close);
+
+    txt
+}
+
+impl ToString for RuntimeValue {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Null => String::from("null"),
+            Self::Float(x) => x.to_string(),
+            Self::UInt(x) => x.to_string(),
+            Self::Int(x) => x.to_string(),
+            Self::Long(x) => x.to_string(),
+            Self::ULong(x) => x.to_string(),
+            Self::Double(x) => x.to_string(),
+            Self::Enum(_, x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
+            Self::Range(from, to) => format!("{}..{}", from, to),
+            Self::Link(_, path, _) => format!("link -> {:?}", path),
+            Self::Bool(x) => x.to_string(),
+            Self::Struct(_, y, x) => format!("{y:?} = {}", x.to_string()),
+            Self::NativeFunction(_) => format!("native function"),
+            Self::List { data, data_type: _ } => print_list(data, '[', ']'),
+            Self::Tuple(data) => print_list(data, '(', ')'),
+            Self::Option(x, _) => format!("{:?}", x),
+            Self::Result(x, _) => format!("{:?}", x),
+            Self::Str(x) => x.to_string(),
+            Self::Char(x) => x.to_string(),
+            Self::Function {
+                parameters,
+                body: _,
+                return_type,
+                is_async: _,
+            } => {
+                format!("({:?}) -> {:?}", parameters, return_type)
+            }
+        }
+    }
+}
