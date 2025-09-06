@@ -7,5 +7,5 @@ edition = "2024"
 clap = { version = "4.5.40", features = ["derive"] }
 rand = "0.9.1"
 rustyline = "16.0.0"
-calibre_parser = {workspace = true}
-calibre_interpreter = {workspace = true}
+calibre-parser = {workspace = true}
+calibre-interpreter = {workspace = true}

@@ -12,12 +12,14 @@ members = [
     "cal",
     "interpreter",
     "parser",
+    "cranelift-jit",
 ]
 
 [workspace.dependencies]
 cal = { path = "./cal", version = "0.1.0" }
-calibre_interpreter = { path = "./interpreter", version = "0.1.0" }
-calibre_parser = { path = "./parser", version = "0.1.0" }
+calibre-interpreter = { path = "./interpreter", version = "0.1.0" }
+calibre-parser = { path = "./parser", version = "0.1.0" }
+calibre-cranelift-jit = { path = "./cranelift-jit", version = "0.1.0" }
 
 
 # For Cal
@@ -25,8 +27,9 @@ calibre_parser = { path = "./parser", version = "0.1.0" }
 clap = { version = "4.5.40", features = ["derive"] }
 rand = "0.9.1"
 rustyline = "16.0.0"
-calibre_parser = {workspace = true}
-calibre_interpreter = {workspace = true}
+calibre-parser = {workspace = true}
+calibre-interpreter = {workspace = true}
+calibre-cranelift-jit = {workspace = true}
 
 [[bin]]
 name = "cal"           # The name of the target.
