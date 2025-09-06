@@ -126,7 +126,6 @@ impl Environment {
                 Ok(RuntimeValue::Null)
             }
             NodeType::BinaryExpression { .. } => self.evaluate_binary_expression(scope, node),
-            NodeType::Program(_) => self.evaluate_program(scope, node),
             NodeType::Identifier(x) => self.evaluate_identifier(scope, &x),
             NodeType::StructLiteral(_) => self.evaluate_struct_expression(scope, node),
             NodeType::ListLiteral(_) => self.evaluate_list_expression(scope, node),

@@ -23,13 +23,13 @@ impl Parser {
     }
     pub fn produce_ast(&mut self, source: String) -> Result<NodeType, ParserError> {
         self.tokens = tokenize(source)?;
-        let mut program_body = Vec::new();
+        let mut body = Vec::new();
 
         while !self.is_eof() {
-            program_body.push(self.parse_statement()?)
+            body.push(self.parse_statement()?)
         }
 
-        Ok(NodeType::Program(Box::new(program_body)))
+        Ok(NodeType::ScopeDeclaration { body })
     }
 }
 

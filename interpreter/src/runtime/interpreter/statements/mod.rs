@@ -16,24 +16,6 @@ pub mod matching;
 pub mod structs;
 
 impl Environment {
-    pub fn evaluate_program(
-        &mut self,
-        scope: &u64,
-        exp: NodeType,
-    ) -> Result<RuntimeValue, InterpreterErr> {
-        let mut last = RuntimeValue::Null;
-
-        if let NodeType::Program(body) = exp {
-            for statement in body.into_iter() {
-                last = self.evaluate(scope, statement)?;
-            }
-        } else {
-            return Err(InterpreterErr::NotImplemented(exp));
-        }
-
-        Ok(last)
-    }
-
     pub fn evaluate_match_declaration(
         &mut self,
         scope: &u64,

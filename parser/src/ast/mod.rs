@@ -100,7 +100,6 @@ pub enum TypeDefType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
-    Program(Box<Vec<NodeType>>),
     Break,
     Continue,
     VariableDeclaration {
@@ -206,8 +205,9 @@ pub enum NodeType {
         operator: BooleanOperation,
     },
     IfStatement {
-        comparisons: Vec<IfComparisonType>,
-        bodies: Vec<NodeType>,
+        comparison: Box<IfComparisonType>,
+        then: Box<NodeType>,
+        otherwise: Option<Box<NodeType>>,
     },
     ImportStatement {
         module: Vec<String>,

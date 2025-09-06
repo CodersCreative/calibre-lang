@@ -496,71 +496,64 @@ impl Parser {
     }
 
     pub fn parse_if_statement(&mut self) -> Result<NodeType, ParserError> {
-        let mut comparisons = Vec::new();
-        let mut bodies = Vec::new();
+        let _ = self.expect_eat(
+            &TokenType::If,
+            SyntaxErr::ExpectedKeyword(String::from("if")),
+        )?;
 
-        while self.first().token_type == TokenType::If {
+        let comparison = if self.first().token_type == TokenType::Let {
             let _ = self.eat();
-            let mut values_amt = 1;
-            if self.first().token_type == TokenType::Let {
+            let mut values = vec![self.parse_statement()?];
+            let mut conditions = Vec::new();
+
+            while self.first().token_type == TokenType::Or {
                 let _ = self.eat();
-                let mut values = vec![self.parse_statement()?];
-                let mut conditions = Vec::new();
-
-                while self.first().token_type == TokenType::Or {
-                    let _ = self.eat();
-                    values.push(self.parse_statement()?);
-                }
-
-                while self.first().token_type == TokenType::If {
-                    let _ = self.eat();
-                    conditions.push(self.parse_statement()?);
-                }
-
-                let _ = self.expect_eat(
-                    &TokenType::LeftArrow,
-                    SyntaxErr::ExpectedKeyword(String::from("<-")),
-                )?;
-
-                let ref_mutability = RefMutability::from(self.first().token_type.clone());
-
-                if ref_mutability != RefMutability::Value {
-                    let _ = self.eat();
-                }
-
-                values_amt = values.len();
-
-                let value = self.parse_statement()?;
-                for val in values.into_iter() {
-                    comparisons.push(IfComparisonType::IfLet {
-                        mutability: ref_mutability.clone(),
-                        value: value.clone(),
-                        pattern: (val, conditions.clone()),
-                    });
-                }
-            } else {
-                comparisons.push(IfComparisonType::If(self.parse_statement()?));
+                values.push(self.parse_statement()?);
             }
 
-            let block = self.parse_block()?;
-
-            for _ in 0..values_amt.max(1) {
-                bodies.push(block.clone());
-            }
-
-            if self.first().token_type == TokenType::Else {
+            while self.first().token_type == TokenType::If {
                 let _ = self.eat();
-                if self.first().token_type == TokenType::FatArrow {
-                    bodies.push(self.parse_block()?);
-                    break;
-                }
-            } else {
-                break;
+                conditions.push(self.parse_statement()?);
             }
-        }
+
+            let _ = self.expect_eat(
+                &TokenType::LeftArrow,
+                SyntaxErr::ExpectedKeyword(String::from("<-")),
+            )?;
+
+            let ref_mutability = RefMutability::from(self.first().token_type.clone());
+
+            if ref_mutability != RefMutability::Value {
+                let _ = self.eat();
+            }
+
+            let value = self.parse_statement()?;
+            IfComparisonType::IfLet {
+                mutability: ref_mutability.clone(),
+                value: value.clone(),
+                pattern: (value, conditions.clone()),
+            }
+        } else {
+            IfComparisonType::If(self.parse_statement()?)
+        };
+
+        let then = Box::new(self.parse_block()?);
+
+        let otherwise = if self.first().token_type == TokenType::Else {
+            let _ = self.eat();
+            if self.first().token_type == TokenType::If {
+                Some(Box::new(self.parse_if_statement()?))
+            } else {
+                Some(Box::new(self.parse_block()?))
+            }
+        } else {
+            None
+        };
+
         Ok(NodeType::IfStatement {
-            comparisons,
-            bodies,
+            comparison: Box::new(comparison),
+            then,
+            otherwise,
         })
     }
 }

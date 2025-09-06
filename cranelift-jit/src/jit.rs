@@ -2,6 +2,7 @@ use calibre_parser::ast::NodeType;
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{DataDescription, Module};
+use std::{collections::HashMap, error::Error};
 
 pub struct JIT {
     /// The function builder context, which is reused across multiple
@@ -41,5 +42,36 @@ impl Default for JIT {
             data_description: DataDescription::new(),
             module,
         }
+    }
+}
+
+impl JIT {
+    pub fn compile(&mut self, node: NodeType) -> Result<*const u8, Box<dyn Error>> {
+        todo!()
+    }
+
+    fn translate(
+        &mut self,
+        params: Vec<String>,
+        the_return: String,
+        node: NodeType,
+    ) -> Result<(), Box<dyn Error>> {
+        let int = Type::int(64).unwrap();
+        let uint = Type::int(64).unwrap();
+        let long = Type::int(128).unwrap();
+        let ulong = Type::int(128).unwrap();
+
+        for _p in &params {
+            self.ctx.func.signature.params.push(AbiParam::new(int));
+        }
+
+        self.ctx.func.signature.returns.push(AbiParam::new(int));
+
+        // Create the builder to build a function.
+        let mut builder = FunctionBuilder::new(&mut self.ctx.func, &mut self.builder_context);
+
+        // Create the entry block, to start emitting code in.
+        let entry_block = builder.create_block();
+        todo!()
     }
 }

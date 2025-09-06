@@ -67,60 +67,57 @@ impl Environment {
         declaration: NodeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let NodeType::IfStatement {
-            comparisons,
-            bodies,
+            comparison,
+            then,
+            otherwise,
         } = declaration
         {
-            for (i, comparison) in comparisons.iter().enumerate() {
-                match comparison {
-                    IfComparisonType::If(comparison) => {
-                        if let Ok(RuntimeValue::Bool(x)) = self
-                            .evaluate(scope, comparison.clone())?
-                            .unwrap_val(self, scope)?
-                            .into_type(self, scope, &RuntimeType::Bool)
-                        {
-                            if x {
-                                return self.evaluate(scope, bodies[i].clone());
-                            }
-                        } else {
-                            return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
+            match *comparison {
+                IfComparisonType::If(comparison) => {
+                    if let Ok(RuntimeValue::Bool(x)) = self
+                        .evaluate(scope, comparison.clone())?
+                        .unwrap_val(self, scope)?
+                        .into_type(self, scope, &RuntimeType::Bool)
+                    {
+                        if x {
+                            return self.evaluate(scope, *then.clone());
                         }
+                    } else {
+                        return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
                     }
-                    IfComparisonType::IfLet {
-                        mutability,
-                        value,
-                        pattern,
-                    } => {
-                        let path = match &*value {
-                            NodeType::Identifier(x) => vec![x.clone()],
-                            _ => Vec::new(),
-                        };
+                }
+                IfComparisonType::IfLet {
+                    mutability,
+                    value,
+                    pattern,
+                } => {
+                    let path = match &value {
+                        NodeType::Identifier(x) => vec![x.clone()],
+                        _ => Vec::new(),
+                    };
 
-                        let value = self.evaluate(scope, value.clone())?;
+                    let value = self.evaluate(scope, value.clone())?;
 
-                        if let Some(result) = self.match_pattern(
-                            scope,
-                            &pattern.0,
-                            &value,
-                            &mutability,
-                            path.clone(),
-                            &pattern.1,
-                            bodies[i].clone(),
-                        ) {
-                            match result {
-                                Ok(x) => return Ok(x),
-                                Err(InterpreterErr::ExpectedFunctions) => continue,
-                                Err(e) => return Err(e),
-                            }
+                    if let Some(result) = self.match_pattern(
+                        scope,
+                        &pattern.0,
+                        &value,
+                        &mutability,
+                        path.clone(),
+                        &pattern.1,
+                        *then.clone(),
+                    ) {
+                        match result {
+                            Ok(x) => return Ok(x),
+                            Err(InterpreterErr::ExpectedFunctions) => {}
+                            Err(e) => return Err(e),
                         }
                     }
                 }
             }
 
-            if comparisons.len() < bodies.len() {
-                if let Some(last) = bodies.last() {
-                    return self.evaluate(scope, last.clone());
-                }
+            if let Some(last) = otherwise {
+                return self.evaluate(scope, *last.clone());
             }
 
             Ok(RuntimeValue::Null)
