@@ -25,7 +25,7 @@ impl<'a> FunctionTranslator<'a> {
                 BinaryOperator::Pow => {
                     let amt = right.as_u32();
                     if amt == 0 {
-                        self.builder.ins().iconst(self.types.int, 1)
+                        self.builder.ins().iconst(self.types.int(), 1)
                     } else if amt == 1 {
                         left
                     } else {
@@ -82,6 +82,6 @@ impl<'a> FunctionTranslator<'a> {
             .variables
             .get(identifier)
             .expect("variable not defined");
-        self.builder.use_var(*variable)
+        self.builder.use_var(variable.1)
     }
 }

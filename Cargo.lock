@@ -111,6 +111,7 @@ dependencies = [
  "cranelift-jit",
  "cranelift-module",
  "cranelift-native",
+ "rand",
 ]
 
 [[package]]
@@ -131,7 +132,6 @@ dependencies = [
  "calibre-interpreter",
  "calibre-parser",
  "clap",
- "rand",
  "rustyline",
 ]
 

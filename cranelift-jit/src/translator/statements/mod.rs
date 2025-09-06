@@ -23,7 +23,8 @@ impl<'a> FunctionTranslator<'a> {
             let else_block = self.builder.create_block();
             let merge_block = self.builder.create_block();
 
-            self.builder.append_block_param(merge_block, self.types.int);
+            self.builder
+                .append_block_param(merge_block, self.types.int());
 
             // Test the if condition and conditionally branch.
             self.builder
@@ -42,7 +43,7 @@ impl<'a> FunctionTranslator<'a> {
             self.builder.switch_to_block(else_block);
             self.builder.seal_block(else_block);
 
-            let mut else_return = self.builder.ins().iconst(self.types.int, 0);
+            let mut else_return = self.builder.ins().iconst(self.types.int(), 0);
             if let Some(otherwise) = otherwise {
                 else_return = self.translate(*otherwise);
             }
