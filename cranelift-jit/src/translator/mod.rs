@@ -7,6 +7,7 @@ use cranelift::codegen::ir::{GlobalValue, types};
 use cranelift::prelude::*;
 use cranelift_jit::JITModule;
 use cranelift_module::{DataDescription, DataId, Linkage, Module, ModuleRelocTarget};
+use rand::seq::IndexedRandom;
 
 use crate::values::{RuntimeType, RuntimeValue};
 
@@ -205,6 +206,12 @@ impl<'a> FunctionTranslator<'a> {
                 self.builder.ins().iconst(types::I32, i64::from(c as u32)),
                 RuntimeType::Char,
             ),
+            NodeType::ListLiteral(items) => {
+                let items: Vec<RuntimeValue> =
+                    items.into_iter().map(|x| self.translate(x)).collect();
+                let mut list = Vec::<RuntimeValue>::with_capacity(items.len());
+                todo!()
+            }
             NodeType::StringLiteral(txt) => {
                 println!("{txt}");
                 let name = format!("string_literal_{}", rand::random_range(0..100000));
