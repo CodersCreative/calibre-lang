@@ -1,10 +1,14 @@
 use std::{collections::HashMap, error::Error};
 
+use calibre_parser::ast::binary::BinaryOperator;
 use calibre_parser::ast::{NodeType, ParserDataType, VarType};
+use calibre_parser::lexer::StopValue;
 use cranelift::codegen::ir::{GlobalValue, types};
 use cranelift::prelude::*;
 use cranelift_jit::JITModule;
 use cranelift_module::{DataDescription, DataId, Linkage, Module, ModuleRelocTarget};
+
+use crate::values::{RuntimeType, RuntimeValue};
 
 pub mod expressions;
 pub mod statements;
@@ -13,8 +17,9 @@ pub struct FunctionTranslator<'a> {
     pub types: Types,
     pub description: &'a mut DataDescription,
     pub builder: FunctionBuilder<'a>,
-    pub variables: HashMap<String, (VarType, Variable)>,
+    pub variables: HashMap<String, (VarType, RuntimeType, Variable)>,
     pub module: &'a mut JITModule,
+    pub stop: Option<StopValue>,
 }
 
 pub struct Types {
@@ -28,13 +33,14 @@ impl Types {
 }
 
 impl Types {
+    fn ptr(&self) -> Type {
+        self.ptr.clone()
+    }
+
     fn int(&self) -> Type {
         types::I64
     }
 
-    fn ptr(&self) -> Type {
-        self.ptr.clone()
-    }
     fn uint(&self) -> Type {
         types::I64
     }
@@ -67,6 +73,20 @@ impl Types {
         self.ptr.clone()
     }
 
+    pub fn get_type_from_runtime_type(&self, t: &RuntimeType) -> Type {
+        match t {
+            RuntimeType::Int(x) if *x < 128 => types::I64,
+            RuntimeType::UInt(x) if *x < 128 => types::I64,
+            RuntimeType::Int(_) => types::I128,
+            RuntimeType::UInt(_) => types::I128,
+            RuntimeType::Float(x) if *x < 64 => types::F32,
+            RuntimeType::Float(_) => types::F64,
+            RuntimeType::Bool => types::I8.as_truthy(),
+            RuntimeType::Char => types::I32,
+            RuntimeType::Str => self.str().clone(),
+            _ => self.ptr(),
+        }
+    }
     pub fn get_type_from_parser_type(&self, t: &ParserDataType) -> Type {
         match t {
             ParserDataType::Int => types::I64,
@@ -108,45 +128,102 @@ impl<'a> FunctionTranslator<'a> {
         Ok(self.module.declare_data_in_func(id, self.builder.func))
     }
 
-    pub fn translate(&mut self, node: NodeType) -> Value {
+    fn translate_null(&mut self) -> RuntimeValue {
+        RuntimeValue::new(
+            self.builder.ins().iconst(self.types.int(), 0),
+            RuntimeType::Int(64),
+        )
+    }
+
+    pub fn translate(&mut self, node: NodeType) -> RuntimeValue {
         match node {
             NodeType::Identifier(x) => self.translate_identifier(&x),
             NodeType::FloatLiteral(x) => {
                 if x > f32::MAX as f64 {
-                    self.builder.ins().f64const(x)
+                    RuntimeValue::new(self.builder.ins().f64const(x), RuntimeType::Float(64))
                 } else {
-                    self.builder.ins().f32const(x as f32)
+                    RuntimeValue::new(
+                        self.builder.ins().f32const(x as f32),
+                        RuntimeType::Float(32),
+                    )
                 }
             }
             NodeType::IntLiteral(x) => {
                 // TODO Make long types and unsigned types work.
                 if x > i64::MAX as i128 {
                     if x.is_negative() {
-                        self.builder.ins().iconst(self.types.long(), x as i64)
+                        RuntimeValue::new(
+                            self.builder.ins().iconst(self.types.long(), x as i64),
+                            RuntimeType::Int(128),
+                        )
                     } else {
-                        self.builder.ins().iconst(self.types.ulong(), x as i64)
+                        RuntimeValue::new(
+                            self.builder.ins().iconst(self.types.ulong(), x as i64),
+                            RuntimeType::UInt(128),
+                        )
                     }
                 } else {
                     if x.is_negative() {
-                        self.builder.ins().iconst(self.types.int(), x as i64)
+                        RuntimeValue::new(
+                            self.builder.ins().iconst(self.types.int(), x as i64),
+                            RuntimeType::Int(64),
+                        )
                     } else {
-                        self.builder.ins().iconst(self.types.uint(), x as i64)
+                        RuntimeValue::new(
+                            self.builder.ins().iconst(self.types.uint(), x as i64),
+                            RuntimeType::UInt(64),
+                        )
                     }
                 }
             }
-            NodeType::CharLiteral(c) => self.builder.ins().iconst(types::I32, i64::from(c as u32)),
+            NodeType::AsExpression { value, typ } => {
+                let value = self.translate(*value);
+                value.into_type(self, typ.into())
+            }
+            NodeType::NotExpression { value } => {
+                let mut value = self.translate(*value);
+                match value.data_type.clone() {
+                    RuntimeType::Int(_)
+                    | RuntimeType::UInt(_)
+                    | RuntimeType::Float(_)
+                    | RuntimeType::Bool => {
+                        value = self.translate_binary_expression(
+                            RuntimeValue::new(
+                                Value::with_number(0).unwrap(),
+                                value.data_type.clone(),
+                            ),
+                            value,
+                            BinaryOperator::Sub,
+                        )
+                    }
+                    _ => todo!(),
+                }
+
+                value
+            }
+            NodeType::CharLiteral(c) => RuntimeValue::new(
+                self.builder.ins().iconst(types::I32, i64::from(c as u32)),
+                RuntimeType::Char,
+            ),
             NodeType::StringLiteral(txt) => {
                 println!("{txt}");
-                let name = format!("literal_string_{}", rand::random_range(0..100000));
+                let name = format!("string_literal_{}", rand::random_range(0..100000));
                 let id = self
                     .create_data(&name, format!("{}\0", txt).as_bytes().to_vec())
                     .unwrap();
-                self.builder.ins().global_value(self.types.str(), id)
+                RuntimeValue::new(
+                    self.builder.ins().global_value(self.types.str(), id),
+                    RuntimeType::Str,
+                )
             }
             NodeType::ScopeDeclaration { body } => {
-                let mut value = self.builder.ins().iconst(self.types.int(), 0);
+                let mut value = self.translate_null();
                 for node in body {
-                    value = self.translate(node);
+                    if let Some(_) = self.stop {
+                        return value;
+                    } else {
+                        value = self.translate(node);
+                    }
                 }
                 value
             }
@@ -156,17 +233,27 @@ impl<'a> FunctionTranslator<'a> {
                 value,
                 data_type,
             } => {
-                if let Some((VarType::Constant, _)) = self.variables.get(&identifier) {
+                if let Some((VarType::Constant, _, _)) = self.variables.get(&identifier) {
                     panic!();
                 }
 
-                let var = self.builder.declare_var(match data_type {
+                let var = self.builder.declare_var(match data_type.clone() {
                     Some(x) => self.types.get_type_from_parser_type(&x),
                     None => self.types.int(),
                 });
-                self.variables.insert(identifier, (var_type, var.clone()));
-                let value = self.translate(*value);
-                self.builder.def_var(var, value);
+
+                let mut value = self.translate(*value);
+
+                if let Some(data_type) = data_type {
+                    let data_type = data_type.into();
+                    if value.data_type != data_type {
+                        value = value.into_type(self, data_type);
+                    }
+                }
+
+                self.variables
+                    .insert(identifier, (var_type, value.data_type.clone(), var.clone()));
+                self.builder.def_var(var, value.value);
 
                 value
             }
@@ -176,20 +263,51 @@ impl<'a> FunctionTranslator<'a> {
                     todo!()
                 };
 
-                let value = self.translate(*value);
-                let (var_type, var) = self.variables.get(&identifier).unwrap();
+                let (var_type, data_type, var) = self.variables.get(&identifier).unwrap().clone();
 
-                if var_type != &VarType::Mutable {
+                let mut value = self.translate(*value);
+
+                if value.data_type != data_type {
+                    value = value.into_type(self, data_type.clone());
+                }
+
+                if var_type != VarType::Mutable {
                     panic!();
                 }
 
-                self.builder.def_var(*var, value);
+                self.builder.def_var(var, value.value);
 
                 value
             }
-            NodeType::BinaryExpression { .. } => self.translate_binary_expression(node),
+            NodeType::Return { value } => {
+                let value = self.translate(*value);
+                self.builder.ins().return_(&[value.value.clone()]);
+                value
+            }
+            NodeType::Break => {
+                if self.stop != Some(StopValue::Return) {
+                    self.stop = Some(StopValue::Break);
+                }
+                self.translate_null()
+            }
+            NodeType::Continue => {
+                if self.stop == None {
+                    self.stop = Some(StopValue::Continue);
+                }
+                self.translate_null()
+            }
+            NodeType::BinaryExpression {
+                left,
+                right,
+                operator,
+            } => {
+                let left = self.translate(*left);
+                let right = self.translate(*right);
+                self.translate_binary_expression(left, right, operator)
+            }
             NodeType::ComparisonExpression { .. } => self.translate_comparisson_expression(node),
             NodeType::IfStatement { .. } => self.translate_if_statement(node),
+            NodeType::LoopDeclaration { .. } => self.translate_loop_statement(node),
             _ => unimplemented!(),
         }
     }

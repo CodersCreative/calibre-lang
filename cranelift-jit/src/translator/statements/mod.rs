@@ -1,13 +1,16 @@
-use crate::translator::FunctionTranslator;
-use calibre_parser::ast::{
-    IfComparisonType, NodeType,
-    binary::BinaryOperator,
-    comparison::{self, Comparison},
+use crate::{translator::FunctionTranslator, values::RuntimeValue};
+use calibre_parser::{
+    ast::{
+        IfComparisonType, LoopType, NodeType,
+        binary::BinaryOperator,
+        comparison::{self, Comparison},
+    },
+    lexer::StopValue,
 };
 use cranelift::{codegen::ir::BlockArg, prelude::*};
 
 impl<'a> FunctionTranslator<'a> {
-    pub fn translate_if_statement(&mut self, node: NodeType) -> Value {
+    pub fn translate_if_statement(&mut self, node: NodeType) -> RuntimeValue {
         if let NodeType::IfStatement {
             comparison,
             then,
@@ -29,7 +32,7 @@ impl<'a> FunctionTranslator<'a> {
             // Test the if condition and conditionally branch.
             self.builder
                 .ins()
-                .brif(condition_value, then_block, &[], else_block, &[]);
+                .brif(condition_value.value, then_block, &[], else_block, &[]);
 
             self.builder.switch_to_block(then_block);
             self.builder.seal_block(then_block);
@@ -38,20 +41,22 @@ impl<'a> FunctionTranslator<'a> {
             // Jump to the merge block, passing it the block return value.
             self.builder
                 .ins()
-                .jump(merge_block, &[BlockArg::Value(then_return)]);
+                .jump(merge_block, &[BlockArg::Value(then_return.value)]);
 
             self.builder.switch_to_block(else_block);
             self.builder.seal_block(else_block);
 
-            let mut else_return = self.builder.ins().iconst(self.types.int(), 0);
+            let mut else_return = self.translate_null();
+            let mut use_else = false;
             if let Some(otherwise) = otherwise {
                 else_return = self.translate(*otherwise);
+                use_else = true;
             }
 
             // Jump to the merge block, passing it the block return value.
             self.builder
                 .ins()
-                .jump(merge_block, &[BlockArg::Value(else_return)]);
+                .jump(merge_block, &[BlockArg::Value(else_return.value)]);
 
             // Switch to the merge block for subsequent statements.
             self.builder.switch_to_block(merge_block);
@@ -63,7 +68,61 @@ impl<'a> FunctionTranslator<'a> {
             // parameter.
             let phi = self.builder.block_params(merge_block)[0];
 
-            phi
+            RuntimeValue::new(
+                phi,
+                if use_else {
+                    else_return.data_type
+                } else {
+                    then_return.data_type
+                },
+            )
+        } else {
+            todo!()
+        }
+    }
+    pub fn translate_loop_statement(&mut self, node: NodeType) -> RuntimeValue {
+        if let NodeType::LoopDeclaration { loop_type, body } = node {
+            let header_block = self.builder.create_block();
+            let body_block = self.builder.create_block();
+            let exit_block = self.builder.create_block();
+
+            self.builder.ins().jump(header_block, &[]);
+            self.builder.switch_to_block(header_block);
+
+            let condition_value = match *loop_type {
+                LoopType::While(x) => self.translate(x),
+                _ => unimplemented!(),
+            };
+
+            self.builder
+                .ins()
+                .brif(condition_value.value, body_block, &[], exit_block, &[]);
+
+            self.builder.switch_to_block(body_block);
+            self.builder.seal_block(body_block);
+
+            let value = self.translate(*body);
+
+            if let Some(x) = self.stop.clone() {
+                if x == StopValue::Break || x == StopValue::Return {
+                    self.stop = None;
+                    self.builder.ins().jump(exit_block, &[]);
+                    self.builder.switch_to_block(exit_block);
+                    self.builder.seal_block(header_block);
+                    self.builder.seal_block(exit_block);
+                    return value;
+                } else {
+                    self.stop = None;
+                }
+            }
+            self.builder.ins().jump(header_block, &[]);
+
+            self.builder.switch_to_block(exit_block);
+            self.builder.seal_block(header_block);
+            self.builder.seal_block(exit_block);
+
+            // Just return 0 for now.
+            value
         } else {
             todo!()
         }

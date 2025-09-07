@@ -176,11 +176,12 @@ impl JIT {
             builder,
             module: &mut self.module,
             description: &mut self.data_description,
+            stop: None,
         };
         let value = trans.translate(node);
 
         // Emit the return instruction.
-        trans.builder.ins().return_(&[value]);
+        trans.builder.ins().return_(&[value.value]);
 
         // Tell the builder we're done with this function.
         trans.builder.finalize();

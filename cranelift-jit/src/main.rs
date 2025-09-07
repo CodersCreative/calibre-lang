@@ -1,8 +1,17 @@
 const BASIC_CODE: &str = r#"
    const thirty = fn () -> int => 30;
    // const main = fn () -> int => if 1 => 10 + 4 else => 30;
+   const main = fn () -> float =>  {
+    let mut index : float = 1.0;
+    let mut counter : float = 1.5;
+    for counter < 98.0 => {
+        counter+=1.2 + 1;
+        index *= counter
+    }
+    counter
+   }
    // const main = fn () -> float => 100.8;
-   const main = fn () -> str => "abcd";
+   // const main = fn () -> str => "abcd";
    const forty = fn () -> int => 40;
 "#;
 
@@ -26,5 +35,5 @@ fn run<I, T: Debug>(input: I) {
 }
 
 fn main() {
-    run::<(), String>(());
+    run::<(), f32>(());
 }
