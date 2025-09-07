@@ -5,7 +5,7 @@ use crate::ast::{
 use std::collections::HashMap;
 use thiserror::Error;
 
-const IGNORE: [char; 1] = [';'];
+const IGNORE: [char; 2] = [';', '\\'];
 
 #[derive(Error, Debug)]
 pub enum LexerError {

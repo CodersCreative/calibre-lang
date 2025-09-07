@@ -89,7 +89,10 @@ impl JIT {
             } = *value
             {
                 self.translate(
-                    parameters.into_iter().map(|x| x.0.clone()).collect(),
+                    parameters
+                        .into_iter()
+                        .map(|x| (x.0.clone(), x.1.clone()))
+                        .collect(),
                     return_type,
                     *body,
                 )?;
@@ -129,17 +132,26 @@ impl JIT {
 
     fn translate(
         &mut self,
-        params: Vec<String>,
+        params: Vec<(String, ParserDataType)>,
         return_type: Option<ParserDataType>,
         node: NodeType,
     ) -> Result<(), Box<dyn Error>> {
         let ptr = self.module.target_config().pointer_type();
-        for _p in &params {
-            self.ctx.func.signature.params.push(AbiParam::new(ptr));
+        let types = crate::translator::Types::new(ptr);
+        for p in &params {
+            self.ctx
+                .func
+                .signature
+                .params
+                .push(AbiParam::new(types.get_type_from_parser_type(&p.1)));
         }
 
-        if return_type.is_some() {
-            self.ctx.func.signature.returns.push(AbiParam::new(ptr));
+        if let Some(t) = return_type {
+            self.ctx
+                .func
+                .signature
+                .returns
+                .push(AbiParam::new(types.get_type_from_parser_type(&t)));
         }
 
         // Create the builder to build a function.
@@ -159,9 +171,9 @@ impl JIT {
 
         // Now translate the statements of the function body.
         let mut trans = FunctionTranslator {
-            types: crate::translator::Types::new(ptr),
-            builder,
             variables: HashMap::new(),
+            types,
+            builder,
             module: &mut self.module,
             description: &mut self.data_description,
         };

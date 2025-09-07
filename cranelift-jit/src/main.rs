@@ -1,6 +1,8 @@
 const BASIC_CODE: &str = r#"
    const thirty = fn () -> int => 30;
-   const main = fn () -> int => 10 + 10;
+   // const main = fn () -> int => if 1 => 10 + 4 else => 30;
+   // const main = fn () -> float => 100.8;
+   const main = fn () -> str => "abcd";
    const forty = fn () -> int => 40;
 "#;
 
@@ -14,15 +16,15 @@ fn parse(text: String) -> NodeType {
     parser.produce_ast(text).unwrap()
 }
 
-fn run<T: Debug>() {
+fn run<I, T: Debug>(input: I) {
     let program = parse(BASIC_CODE.to_string());
     let mut jit = JIT::default();
     let code_ptr = jit.compile(program).unwrap();
-    let code_fn = unsafe { mem::transmute::<_, fn() -> T>(code_ptr) };
+    let code_fn = unsafe { mem::transmute::<_, fn(I) -> T>(code_ptr) };
 
-    println!("{:?}", code_fn())
+    println!("{:?}", code_fn(input))
 }
 
 fn main() {
-    run::<i64>();
+    run::<(), String>(());
 }

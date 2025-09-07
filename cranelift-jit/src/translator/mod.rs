@@ -67,7 +67,7 @@ impl Types {
         self.ptr.clone()
     }
 
-    fn get_type_from_parser_type(&self, t: &ParserDataType) -> Type {
+    pub fn get_type_from_parser_type(&self, t: &ParserDataType) -> Type {
         match t {
             ParserDataType::Int => types::I64,
             ParserDataType::UInt => types::I64,
@@ -77,8 +77,8 @@ impl Types {
             ParserDataType::Double => types::F64,
             ParserDataType::Bool => types::I8.as_truthy(),
             ParserDataType::Char => types::I32,
-            ParserDataType::Str => self.ptr.clone(),
-            _ => unimplemented!(),
+            ParserDataType::Str => self.str().clone(),
+            _ => self.ptr(),
         }
     }
 }
@@ -136,11 +136,12 @@ impl<'a> FunctionTranslator<'a> {
             }
             NodeType::CharLiteral(c) => self.builder.ins().iconst(types::I32, i64::from(c as u32)),
             NodeType::StringLiteral(txt) => {
+                println!("{txt}");
                 let name = format!("literal_string_{}", rand::random_range(0..100000));
                 let id = self
                     .create_data(&name, format!("{}\0", txt).as_bytes().to_vec())
                     .unwrap();
-                self.builder.ins().global_value(self.types.ptr(), id)
+                self.builder.ins().global_value(self.types.str(), id)
             }
             NodeType::ScopeDeclaration { body } => {
                 let mut value = self.builder.ins().iconst(self.types.int(), 0);
