@@ -101,6 +101,14 @@ impl RuntimeValue {
 
                 todo!()
             }
+            RuntimeType::Str => {
+                println!("{:?}", t);
+                if t == RuntimeType::Str {
+                    return self.clone();
+                }
+
+                todo!()
+            }
             _ => todo!("{:?}", self),
         }
     }

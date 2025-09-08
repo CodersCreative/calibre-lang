@@ -326,10 +326,16 @@ impl<'a> FunctionTranslator<'a> {
                 };
 
                 if indexing {
-                    let index = self.translate(path.pop().unwrap().0);
-                    let value = self.translate(NodeType::MemberExpression { path });
+                    let value = self.translate(NodeType::MemberExpression {
+                        path: path[0..(path.len() - 1)].to_vec(),
+                    });
                     if let RuntimeType::List(_) = value.data_type {
+                        let index = self.translate(path.pop().unwrap().0);
                         return self.get_array_member(value, index.value);
+                    } else if let RuntimeType::Tuple(_) = value.data_type {
+                        if let Some((NodeType::IntLiteral(index), _)) = path.last() {
+                            return self.get_tuple_member(value, *index as usize);
+                        }
                     }
                 }
 

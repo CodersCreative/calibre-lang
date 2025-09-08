@@ -170,12 +170,43 @@ impl<'a> FunctionTranslator<'a> {
         let left_ty = self.types.get_type_from_runtime_type(&left_r_type);
         let lhs_offset = self.builder.ins().imul_imm(index, left_ty.bytes() as i64);
         let lhs_addr = self.builder.ins().iadd(lhs, lhs_offset);
-        RuntimeValue::new(
-            self.builder
-                .ins()
-                .load(left_ty, MemFlags::new().with_aligned(), lhs_addr, 0),
-            left_r_type,
+        let lhs = self
+            .builder
+            .ins()
+            .load(left_ty, MemFlags::trusted(), lhs_addr, 0);
+        RuntimeValue::new(lhs, left_r_type)
+    }
+
+    pub fn get_tuple_member(&mut self, left: RuntimeValue, index: usize) -> RuntimeValue {
+        let RuntimeType::Tuple(types) = left.data_type else {
+            panic!()
+        };
+        let lhs = self.builder.ins().load(
+            self.types.ptr(),
+            MemFlags::trusted(),
+            left.value,
+            self.types.ptr().bytes() as i32,
+        );
+        // let index_int = self.get_int_value(index);
+        let index_int = index;
+        println!("idx {:?}", index_int);
+
+        let lhs_offset = Value::with_number(
+            (0..(index_int as usize))
+                .map(|x| self.types.get_type_from_runtime_type(&types[x]).bytes() as i64)
+                .sum::<i64>() as u32,
         )
+        .unwrap();
+
+        let lhs_addr = self.builder.ins().iadd(lhs, lhs_offset);
+        let lhs = self.builder.ins().load(
+            self.types
+                .get_type_from_runtime_type(&types[index_int as usize]),
+            MemFlags::trusted(),
+            lhs_addr,
+            0,
+        );
+        RuntimeValue::new(lhs, types[index_int as usize].clone())
     }
 
     pub fn translate_tuple_expression(&mut self, items: Vec<NodeType>) -> RuntimeValue {
