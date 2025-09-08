@@ -3,12 +3,18 @@ const BASIC_CODE: &str = r#"
    // const main = fn () -> int => if 1 => 10 + 4 else => 30;
    const main = fn () -> float =>  {
     let mut index : float = 1.0;
-    let arr : list<float> = [10.5, 40.8, 50.2]; 
+    let arr : list<float> = [10.5, 40.8, 50.2];
+    let tuple = (10, 90.8, "hello", "fire!");
     let mut counter : float = 1.5;
     for counter < 98.0 => {
-        counter+=1.2 + 1 ;
+        counter += 1.2 + 1 ;
         index *= counter
     }
+
+    for i in 100 => counter += i;
+
+    for 100 => counter += 2;
+
     counter
    }
    // const main = fn () -> float => 100.8;

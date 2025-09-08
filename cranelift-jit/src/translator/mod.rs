@@ -206,54 +206,7 @@ impl<'a> FunctionTranslator<'a> {
                 self.builder.ins().iconst(types::I32, i64::from(c as u32)),
                 RuntimeType::Char,
             ),
-            NodeType::ListLiteral(items) => {
-                let items: Vec<RuntimeValue> =
-                    items.into_iter().map(|x| self.translate(x)).collect();
-                let len = items.len() as i64;
-
-                let element_type = items
-                    .get(0)
-                    .map(|v| v.data_type.clone())
-                    .unwrap_or(RuntimeType::Int(64));
-                let element_ty = self.types.get_type_from_runtime_type(&element_type);
-
-                let elem_size = element_ty.bytes() as i64;
-                let total_size = elem_size * len * 6;
-
-                let malloc_func = self
-                    .module
-                    .declare_function(
-                        "malloc",
-                        Linkage::Import,
-                        &Signature {
-                            params: vec![AbiParam::new(self.types.int())],
-                            returns: vec![AbiParam::new(self.types.ptr())],
-                            call_conv: self.builder.func.signature.call_conv,
-                        },
-                    )
-                    .unwrap();
-
-                let malloc_local = self
-                    .module
-                    .declare_func_in_func(malloc_func, self.builder.func);
-                let size_val = self.builder.ins().iconst(self.types.int(), total_size);
-                let call = self.builder.ins().call(malloc_local, &[size_val]);
-                let base_ptr = self.builder.inst_results(call)[0];
-
-                for (i, item) in items.iter().enumerate() {
-                    let offset = (i as i64) * elem_size;
-                    let addr = if offset == 0 {
-                        base_ptr
-                    } else {
-                        self.builder.ins().iadd_imm(base_ptr, offset)
-                    };
-                    self.builder
-                        .ins()
-                        .store(MemFlags::new(), item.value, addr, 0);
-                }
-
-                RuntimeValue::new(base_ptr, RuntimeType::List(Box::new(Some(element_type))))
-            }
+            NodeType::ListLiteral(items) => self.translate_array_expression(items),
             NodeType::StringLiteral(txt) => {
                 println!("{txt}");
                 let name = format!("string_literal_{}", rand::random_range(0..100000));
@@ -382,6 +335,7 @@ impl<'a> FunctionTranslator<'a> {
 
                 todo!()
             }
+            NodeType::TupleLiteral(items) => self.translate_tuple_expression(items),
             NodeType::IfStatement { .. } => self.translate_if_statement(node),
             NodeType::LoopDeclaration { .. } => self.translate_loop_statement(node),
             _ => unimplemented!(),

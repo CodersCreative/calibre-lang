@@ -151,7 +151,7 @@ impl RuntimeValue {
                 RuntimeType::Float(y) => {
                     (self.into_type(ctx, RuntimeType::Float(y)), other.clone())
                 }
-                _ => todo!(),
+                _ => todo!("{other:?}"),
             },
             RuntimeType::Float(x) => match other.data_type.clone() {
                 RuntimeType::Int(_)
