@@ -28,6 +28,10 @@ impl From<ParserDataType> for RuntimeType {
             ParserDataType::Str => RuntimeType::Str,
             ParserDataType::Char => RuntimeType::Char,
             ParserDataType::Range => RuntimeType::Range,
+            ParserDataType::List(x) => RuntimeType::List(Box::new(match *x {
+                Some(x) => Some(x.into()),
+                None => None,
+            })),
             ParserDataType::Struct(x) => RuntimeType::Struct(x),
             _ => unimplemented!(),
         }

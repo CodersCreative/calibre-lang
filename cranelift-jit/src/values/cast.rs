@@ -7,7 +7,7 @@ use crate::{
 
 impl RuntimeValue {
     pub fn into_type<'a>(&self, ctx: &mut FunctionTranslator<'a>, t: RuntimeType) -> Self {
-        match self.data_type {
+        match self.data_type.clone() {
             RuntimeType::Int(_) => match t.clone() {
                 RuntimeType::Float(_) => RuntimeValue::new(
                     ctx.builder
@@ -90,6 +90,17 @@ impl RuntimeValue {
                 ),
                 _ => todo!(),
             },
+            RuntimeType::List(x) => {
+                if let Some(_x) = *x {
+                    if let RuntimeType::List(y) = t {
+                        if let Some(y) = *y {
+                            return self.clone();
+                        }
+                    }
+                }
+
+                todo!()
+            }
             _ => todo!("{:?}", self),
         }
     }
@@ -153,6 +164,7 @@ impl RuntimeValue {
                 ),
                 _ => todo!(),
             },
+            RuntimeType::List(_) => (self.clone(), other.clone()),
             _ => todo!(),
         }
     }

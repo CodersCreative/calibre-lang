@@ -3,9 +3,10 @@ const BASIC_CODE: &str = r#"
    // const main = fn () -> int => if 1 => 10 + 4 else => 30;
    const main = fn () -> float =>  {
     let mut index : float = 1.0;
+    let arr : list<float> = [10.5, 40.8, 50.2]; 
     let mut counter : float = 1.5;
     for counter < 98.0 => {
-        counter+=1.2 + 1;
+        counter+=1.2 + 1 ;
         index *= counter
     }
     counter
