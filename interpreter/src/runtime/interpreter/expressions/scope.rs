@@ -192,21 +192,25 @@ impl Environment {
         scope: &u64,
         node: NodeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::ScopeDeclaration { body } = node {
-            let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+        if let NodeType::ScopeDeclaration { body, is_temp } = node {
+            let new_scope = if is_temp {
+                self.get_new_scope(scope, Vec::new(), Vec::new())?
+            } else {
+                scope.clone()
+            };
 
             let mut result: RuntimeValue = RuntimeValue::Null;
             for statement in body.into_iter() {
-                if let Some(_) = self.stop {
-                    return Ok(result);
-                } else {
-                    result = self.evaluate(&new_scope, statement)?;
+                match self.stop {
+                    Some(_) if is_temp => return Ok(result),
+                    _ => result = self.evaluate(&new_scope, statement)?,
                 }
             }
 
-            result = result.unwrap_links_val(self, &new_scope, Some(new_scope))?;
-
-            self.remove_scope(&new_scope);
+            if is_temp {
+                result = result.unwrap_links_val(self, &new_scope, Some(new_scope))?;
+                self.remove_scope(&new_scope);
+            }
 
             Ok(result)
         } else {

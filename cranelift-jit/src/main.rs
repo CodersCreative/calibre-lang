@@ -10,7 +10,7 @@ const BASIC_CODE: &str = r#"
         counter += 1.2 + 1 ;
         index *= counter
     }
-    let itm : float= tuple[1];
+    // let itm : float= tuple[1];
 
     for i in 100 => counter += i;
 
@@ -23,10 +23,9 @@ const BASIC_CODE: &str = r#"
    const forty = fn () -> int => 40;
 "#;
 
-use std::{fmt::Debug, mem};
-
 use calibre_cranelift_jit::jit::JIT;
 use calibre_parser::{Parser, ast::NodeType, lexer::tokenize};
+use std::{fmt::Debug, mem};
 
 fn parse(text: String) -> NodeType {
     let mut parser = Parser::default();

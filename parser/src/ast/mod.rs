@@ -123,6 +123,7 @@ pub enum NodeType {
     },
     ScopeDeclaration {
         body: Vec<NodeType>,
+        is_temp: bool,
     },
     MatchDeclaration {
         parameters: (String, ParserDataType, RefMutability, Option<Box<NodeType>>),

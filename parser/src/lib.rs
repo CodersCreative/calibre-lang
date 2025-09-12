@@ -29,7 +29,10 @@ impl Parser {
             body.push(self.parse_statement()?)
         }
 
-        Ok(NodeType::ScopeDeclaration { body })
+        Ok(NodeType::ScopeDeclaration {
+            body,
+            is_temp: false,
+        })
     }
 }
 

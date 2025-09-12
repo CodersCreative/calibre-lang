@@ -218,7 +218,7 @@ impl<'a> FunctionTranslator<'a> {
                     RuntimeType::Str,
                 )
             }
-            NodeType::ScopeDeclaration { body } => {
+            NodeType::ScopeDeclaration { body, is_temp } => {
                 let mut value = self.translate_null();
                 for node in body {
                     if let Some(_) = self.stop {

@@ -124,15 +124,12 @@ impl Environment {
 
     pub fn remove_scope(&mut self, scope: &u64) {
         let parent = if let Some(parent) = self.scopes.get(scope).unwrap().parent {
-            if let Some(name) = self
-                .scopes
-                .get(&parent)
-                .unwrap()
-                .children
-                .iter()
-                .find(|x| x.1 == scope)
-            {
-                Some((parent, name.0.clone()))
+            if let Some(parent_obj) = self.scopes.get(&parent) {
+                if let Some(name) = parent_obj.children.iter().find(|x| x.1 == scope) {
+                    Some((parent, name.0.clone()))
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -162,11 +159,12 @@ impl Environment {
 
     pub fn add_scope(&mut self, mut scope: Scope) {
         let has_parent = if let Some(parent) = &scope.parent {
-            self.scopes
-                .get_mut(&parent)
-                .unwrap()
-                .children
-                .insert(scope.namespace.clone(), self.counter);
+            if let Some(parent) = self.scopes.get_mut(&parent) {
+                parent
+                    .children
+                    .insert(scope.namespace.clone(), self.counter);
+            }
+
             true
         } else {
             false

@@ -54,7 +54,10 @@ impl Parser {
             SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
         )?;
 
-        Ok(NodeType::ScopeDeclaration { body })
+        Ok(NodeType::ScopeDeclaration {
+            body,
+            is_temp: true,
+        })
     }
 
     pub fn parse_variable_declaration(&mut self) -> Result<NodeType, ParserError> {

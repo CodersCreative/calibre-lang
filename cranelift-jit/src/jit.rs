@@ -51,7 +51,7 @@ impl JIT {
     pub fn compile(&mut self, program: NodeType) -> Result<*const u8, Box<dyn Error>> {
         let mut main = None;
 
-        if let NodeType::ScopeDeclaration { body } = program {
+        if let NodeType::ScopeDeclaration { body, is_temp } = program {
             for func in body {
                 let val = self.compile_const_fns(func.clone())?;
                 if let NodeType::VariableDeclaration { identifier, .. } = func {
