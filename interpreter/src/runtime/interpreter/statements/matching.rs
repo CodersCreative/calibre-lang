@@ -451,7 +451,13 @@ impl Environment {
         conditionals: &[NodeType],
         body: NodeType,
     ) -> Option<Result<RuntimeValue, InterpreterErr>> {
-        match self.evaluate(scope, pattern.clone()) {
+        match match self.evaluate(scope, pattern.clone()) {
+            Ok(x) => match x.unwrap_val(self, scope){
+                Ok(x) => Ok(x),
+                Err(e) => Err(e.into())
+            },
+            Err(e) => Err(e)
+        } {
             Ok(x)
                 if (self.is_equal(scope, &x, value)
                     || self.is_value_in(scope, value, &x)
@@ -520,11 +526,7 @@ impl Environment {
             _ => self.evaluate(scope, value)?,
         };
 
-        let value = if let RuntimeValue::Link(_, _, _) = value {
-            value.unwrap_links_val(self, scope, None)?
-        } else {
-            value
-        };
+        let value = value.unwrap_links_val(self, scope, None)?;
 
         for (pattern, conditionals, body) in patterns {
             if let Some(result) = self.match_pattern(
