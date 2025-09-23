@@ -8,7 +8,7 @@ use crate::{
         values::{RuntimeType, RuntimeValue},
     },
 };
-use calibre_parser::ast::{NodeType, ParserDataType, VarType};
+use calibre_parser::ast::{binary::BinaryOperator, comparison::{BooleanOperation, Comparison}, NodeType, ParserDataType, VarType};
 pub mod call;
 pub mod lists;
 pub mod member;
@@ -27,107 +27,84 @@ impl Environment {
     pub fn evaluate_not<'a>(
         &mut self,
         scope: &u64,
-        exp: NodeType,
+        value : RuntimeValue,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::NotExpression { value } = exp {
-            let value = self.evaluate(scope, *value)?.unwrap_val(self, scope)?;
+        let value = value.unwrap_val(self, scope)?;
 
-            match value {
-                RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
-                RuntimeValue::Int(x) => Ok(RuntimeValue::Int(-x)),
-                RuntimeValue::UInt(x) => Ok(RuntimeValue::Int(-(x as i64))),
-                RuntimeValue::Float(x) => Ok(RuntimeValue::Float(-x)),
-                RuntimeValue::Double(x) => Ok(RuntimeValue::Double(-x)),
-                RuntimeValue::ULong(x) => Ok(RuntimeValue::Long(-(x as i128))),
-                RuntimeValue::Long(x) => Ok(RuntimeValue::Long(-x)),
-                RuntimeValue::Range(f, t) => Ok(RuntimeValue::Range(t, f)),
-                RuntimeValue::List {
-                    mut data,
-                    data_type,
-                } => {
-                    data.reverse();
-                    Ok(RuntimeValue::List { data, data_type })
-                }
-                _ => Err(InterpreterErr::UnexpectedType(value)),
+        match value {
+            RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
+            RuntimeValue::Int(x) => Ok(RuntimeValue::Int(-x)),
+            RuntimeValue::UInt(x) => Ok(RuntimeValue::Int(-(x as i64))),
+            RuntimeValue::Float(x) => Ok(RuntimeValue::Float(-x)),
+            RuntimeValue::Double(x) => Ok(RuntimeValue::Double(-x)),
+            RuntimeValue::ULong(x) => Ok(RuntimeValue::Long(-(x as i128))),
+            RuntimeValue::Long(x) => Ok(RuntimeValue::Long(-x)),
+            RuntimeValue::Range(f, t) => Ok(RuntimeValue::Range(t, f)),
+            RuntimeValue::List {
+                mut data,
+                data_type,
+            } => {
+                data.reverse();
+                Ok(RuntimeValue::List { data, data_type })
             }
-        } else {
-            Err(InterpreterErr::NotImplemented(exp))
+            _ => Err(InterpreterErr::UnexpectedType(value)),
         }
     }
 
     pub fn evaluate_as_expression(
         &mut self,
         scope: &u64,
-        exp: NodeType,
+        value : RuntimeValue,
+        data_type: RuntimeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::AsExpression { value, typ } = exp {
-            let value = self.evaluate(scope, *value)?;
-            Ok(match value.into_type(self, scope, &typ.into()) {
-                Ok(x) => RuntimeValue::Result(
-                    Ok(Box::new(x.clone())),
-                    RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new((&x).into())),
-                ),
-                Err(e) => RuntimeValue::Result(
-                    Err(Box::new(RuntimeValue::Str(String::from(e.to_string())))),
-                    RuntimeType::Result(Box::new(RuntimeType::Str), Box::new(RuntimeType::Dynamic)),
-                ),
-            })
-        } else {
-            Err(InterpreterErr::NotImplemented(exp))
-        }
+        Ok(match value.into_type(self, scope, &data_type) {
+            Ok(x) => RuntimeValue::Result(
+                Ok(Box::new(x.clone())),
+                RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new((&x).into())),
+            ),
+            Err(e) => RuntimeValue::Result(
+                Err(Box::new(RuntimeValue::Str(String::from(e.to_string())))),
+                RuntimeType::Result(Box::new(RuntimeType::Str), Box::new(RuntimeType::Dynamic)),
+            ),
+        })
     }
 
     pub fn evaluate_binary_expression(
         &mut self,
         scope: &u64,
-        exp: NodeType,
+        left : RuntimeValue,
+        right : RuntimeValue,
+        operator : BinaryOperator,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::BinaryExpression {
-            left,
-            right,
-            operator,
-        } = exp
-        {
-            let left = self.evaluate(scope, *left)?;
-            let right = self.evaluate(scope, *right)?;
-
-            operators::binary::handle(&operator, self, scope, left, right)
-        } else {
-            Err(InterpreterErr::NotImplemented(exp))
-        }
+        operators::binary::handle(&operator, self, scope, left, right)
     }
 
     pub fn evaluate_range_expression(
         &mut self,
         scope: &u64,
-        exp: NodeType,
+        from : RuntimeValue,
+        to : RuntimeValue,
+        inclusive : bool,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::RangeDeclaration {
-            from,
-            to,
-            inclusive,
-        } = exp
-        {
             if let RuntimeValue::Int(from) =
-                self.evaluate(scope, *from.clone())?
+                from
                     .into_type(self, scope, &RuntimeType::Int)?
             {
                 if let RuntimeValue::Int(to) =
-                    self.evaluate(scope, *to.clone())?
+                    to
                         .into_type(self, scope, &RuntimeType::Int)?
                 {
                     let to = if inclusive { to + 1 } else { to };
 
                     Ok(RuntimeValue::Range(from as i32, to as i32))
                 } else {
-                    Err(InterpreterErr::NotImplemented(*to))
+                    unimplemented!();
+                    // Err(InterpreterErr::NotImplemented(to))
                 }
             } else {
-                Err(InterpreterErr::NotImplemented(*from))
+                    unimplemented!();
+                // Err(InterpreterErr::NotImplemented(from))
             }
-        } else {
-            Err(InterpreterErr::NotImplemented(exp))
-        }
     }
 
     pub fn evaluate_pipe_expression(
@@ -135,64 +112,10 @@ impl Environment {
         scope: &u64,
         exp: NodeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::PipeExpression { nodes } = exp {
-            let mut current = RuntimeValue::Null;
-            let new_scope = self.new_scope_from_parent_shallow(*scope);
-
-            for node in nodes.iter() {
-                let mut value = self.evaluate(&new_scope, node.clone())?;
-
-                value = value.unwrap_val(self, &new_scope)?;
-
-                if let Ok(RuntimeValue::Function { .. }) = current.unwrap(self, &new_scope) {
-                    let temp = current.unwrap_val(self, &new_scope)?;
-                    current = value;
-                    value = temp;
-                }
-
-                let counter = self.scopes.get(scope).unwrap().counter;
-                self.scopes.get_mut(scope).unwrap().counter += 1;
-
-                self.force_var(
-                    &new_scope,
-                    format!("$-{}", counter),
-                    Variable {
-                        value: current.clone(),
-                        var_type: VarType::Mutable,
-                    },
-                )?;
-                self.force_var(
-                    &new_scope,
-                    "$".to_string(),
-                    Variable {
-                        value: current.clone(),
-                        var_type: VarType::Mutable,
-                    },
-                )?;
-                if current != RuntimeValue::Null {
-                    if let RuntimeValue::Function { .. } = value {
-                        current = self.evaluate_function(
-                            &new_scope,
-                            value,
-                            vec![(NodeType::Identifier(format!("$-{}", counter)), None)],
-                        )?;
-                        self.force_var(
-                            &new_scope,
-                            "$".to_string(),
-                            Variable {
-                                value: current.clone(),
-                                var_type: VarType::Mutable,
-                            },
-                        )?;
-                        continue;
-                    }
-                }
-                current = value;
-            }
-
-            let res = Ok(current.unwrap_links_val(self, &new_scope, Some(new_scope))?);
-            self.remove_scope(&new_scope);
-            res
+        if let NodeType::PipeExpression { left, right } = exp {
+            let left_value = self.evaluate(scope, *left);
+            let right_value = self.evaluate(scope, *right);
+            todo!()
         } else {
             Err(InterpreterErr::NotImplemented(exp))
         }
@@ -201,50 +124,35 @@ impl Environment {
     pub fn evaluate_boolean_expression(
         &mut self,
         scope: &u64,
-        exp: NodeType,
+        left : RuntimeValue,
+        right : RuntimeValue,
+        operator : BooleanOperation,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::BooleanExpression {
-            left,
-            right,
-            operator,
-        } = exp
-        {
-            let left = self
-                .evaluate(scope, *left)?
-                .into_type(self, scope, &RuntimeType::Bool)?;
-            let right = match self.evaluate(scope, *right) {
-                Ok(x) => x
-                    .into_type(self, scope, &RuntimeType::Bool)
-                    .unwrap_or(RuntimeValue::Null),
-                _ => RuntimeValue::Null,
-            };
+        let left = left.into_type(self, scope, &RuntimeType::Bool)?;
+        let right = right.into_type(self, scope, &RuntimeType::Bool)?;
 
-            Ok(operators::boolean::handle(&operator, &left, &right)?)
-        } else {
-            Err(InterpreterErr::NotImplemented(exp))
-        }
+        Ok(operators::boolean::handle(&operator, &left, &right)?)
     }
 
     pub fn evaluate_is_expression(
         &mut self,
         scope: &u64,
-        exp: NodeType,
+        value : RuntimeValue,
+        data_type: RuntimeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::IsDeclaration { value, data_type } = exp {
-            let value = self
-                .evaluate(scope, *value)?
+            let value = value
                 .unwrap_links_val(self, scope, None)?;
 
             match data_type {
-                ParserDataType::Struct(Some(x)) if &x == "number" => {
+                RuntimeType::Struct(_, Some(x)) if &x == "number" => {
                     return Ok(RuntimeValue::Bool(value.is_number()));
                 }
-                ParserDataType::Struct(Some(x)) if &x == "decimal" => {
+                RuntimeType::Struct(_, Some(x)) if &x == "decimal" => {
                     return Ok(RuntimeValue::Bool(
                         [RuntimeType::Float, RuntimeType::Double].contains(&(&value).into()),
                     ));
                 }
-                ParserDataType::Struct(Some(x)) if &x == "integer" => {
+                RuntimeType::Struct(_, Some(x)) if &x == "integer" => {
                     return Ok(RuntimeValue::Bool(
                         value.is_number()
                             && ![RuntimeType::Float, RuntimeType::Double]
@@ -258,48 +166,33 @@ impl Environment {
                 scope,
                 &data_type.into(),
             )))
-        } else {
-            Err(InterpreterErr::NotImplemented(exp))
-        }
     }
 
     pub fn evaluate_comparison_expression(
         &mut self,
         scope: &u64,
-        exp: NodeType,
+        left : RuntimeValue,
+        right : RuntimeValue,
+        operator : Comparison,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::ComparisonExpression {
-            left,
-            right,
-            operator,
-        } = exp
-        {
-            let left = self.evaluate(scope, *left)?;
-            let right = self.evaluate(scope, *right)?;
-            operators::comparison::handle(&operator, self, scope, left, right)
-        } else {
-            Err(InterpreterErr::NotImplemented(exp))
-        }
+        operators::comparison::handle(&operator, self, scope, left, right)
     }
+
     pub fn evaluate_assignment_expression(
         &mut self,
         scope: &u64,
-        node: NodeType,
+        identifier: NodeType,
+        value : RuntimeValue,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::AssignmentExpression { identifier, value } = node {
-            let value = self.evaluate(scope, *value)?;
-            if let NodeType::Identifier(identifier) = *identifier {
+            if let NodeType::Identifier(identifier) = identifier {
                 let _ = self.assign_var(scope, &identifier, value.clone())?;
                 return Ok(value);
-            } else if let NodeType::MemberExpression { .. } = *identifier {
-                let _ = self.assign_member_expression(scope, *identifier, value.clone())?;
+            } else if let NodeType::MemberExpression { .. } = identifier {
+                let _ = self.assign_member_expression(scope, identifier, value.clone())?;
                 return Ok(value);
             } else {
-                Err(InterpreterErr::AssignNonVariable(*identifier))
+                Err(InterpreterErr::AssignNonVariable(identifier))
             }
-        } else {
-            Err(InterpreterErr::NotImplemented(node))
-        }
     }
 }
 #[cfg(test)]

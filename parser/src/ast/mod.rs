@@ -198,7 +198,8 @@ pub enum NodeType {
         operator: Comparison,
     },
     PipeExpression {
-        nodes: Vec<NodeType>,
+        left : Box<NodeType>,
+        right : Box<NodeType>,
     },
     BooleanExpression {
         left: Box<NodeType>,

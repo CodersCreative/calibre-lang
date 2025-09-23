@@ -11,14 +11,10 @@ impl Environment {
     pub fn evaluate_import_statement(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        module : Vec<String>,
+        alias : Option<String>,
+        values : Vec<String>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::ImportStatement {
-            module,
-            alias,
-            values,
-        } = declaration
-        {
             let new_scope = if let Some(alias) = alias {
                 if ["super", "root"].contains(&alias.as_str()) {
                     return Ok(RuntimeValue::Null);
@@ -114,8 +110,5 @@ impl Environment {
             }
 
             Ok(RuntimeValue::Null)
-        } else {
-            Err(InterpreterErr::NotImplemented(declaration))
-        }
     }
 }

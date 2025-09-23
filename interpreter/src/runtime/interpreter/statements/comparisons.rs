@@ -3,7 +3,7 @@ use crate::runtime::{
     scope::Environment,
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_parser::ast::{IfComparisonType, NodeType};
+use calibre_parser::ast::{comparison, IfComparisonType, NodeType};
 
 impl Environment {
     fn value_in_list(&self, scope: &u64, value: &RuntimeValue, list: &[RuntimeValue]) -> bool {
@@ -45,34 +45,20 @@ impl Environment {
     pub fn evaluate_in_statement(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        left: RuntimeValue,
+        right: RuntimeValue,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::InDeclaration {
-            identifier,
-            expression,
-        } = declaration
-        {
-            let value = self.evaluate(scope, *expression)?;
-            let ident = self.evaluate(scope, *identifier)?;
-
-            Ok(RuntimeValue::Bool(self.is_value_in(scope, &ident, &value)))
-        } else {
-            Err(InterpreterErr::NotImplemented(declaration))
-        }
+            Ok(RuntimeValue::Bool(self.is_value_in(scope, &left, &right)))
     }
 
     pub fn evaluate_if_statement(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        comparison : IfComparisonType,
+        then : NodeType,
+        otherwise: Option<NodeType>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::IfStatement {
-            comparison,
-            then,
-            otherwise,
-        } = declaration
-        {
-            match *comparison {
+            match comparison {
                 IfComparisonType::If(comparison) => {
                     if let Ok(RuntimeValue::Bool(x)) = self
                         .evaluate(scope, comparison.clone())?
@@ -80,7 +66,7 @@ impl Environment {
                         .into_type(self, scope, &RuntimeType::Bool)
                     {
                         if x {
-                            return self.evaluate(scope, *then.clone());
+                            return self.evaluate(scope, then);
                         }
                     } else {
                         return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
@@ -105,7 +91,7 @@ impl Environment {
                         &mutability,
                         path.clone(),
                         &pattern.1,
-                        *then.clone(),
+                        then,
                     ) {
                         match result {
                             Ok(x) => return Ok(x),
@@ -117,13 +103,10 @@ impl Environment {
             }
 
             if let Some(last) = otherwise {
-                return self.evaluate(scope, *last.clone());
+                return self.evaluate(scope, last);
             }
 
             Ok(RuntimeValue::Null)
-        } else {
-            Err(InterpreterErr::NotImplemented(declaration))
-        }
     }
 }
 

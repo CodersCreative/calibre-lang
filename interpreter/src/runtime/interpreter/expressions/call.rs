@@ -139,10 +139,10 @@ impl Environment {
     pub fn evaluate_call_expression(
         &mut self,
         scope: &u64,
-        exp: NodeType,
+        caller : NodeType,
+        arguments : Vec<(NodeType, Option<NodeType>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::CallExpression(caller, arguments) = exp {
-            if let NodeType::Identifier(object_name) = *caller.clone() {
+            if let NodeType::Identifier(object_name) = caller.clone() {
                 if let Ok(Type::Struct(ObjectType::Tuple(params))) =
                     self.get_object_type(scope, &object_name)
                 {
@@ -168,7 +168,7 @@ impl Environment {
             }
 
             let func = self
-                .evaluate(scope, *caller.clone())?
+                .evaluate(scope, caller.clone())?
                 .unwrap(self, scope)?
                 .clone();
 
@@ -215,7 +215,7 @@ impl Environment {
                 _ => {}
             }
 
-            if let NodeType::Identifier(caller) = *caller.clone() {
+            if let NodeType::Identifier(caller) = caller.clone() {
                 if let Ok(var) = self.get_var_ref(scope, &caller) {
                     let RuntimeValue::Link(new_scope, _, _) = &var.value else {
                         panic!()
@@ -248,9 +248,6 @@ impl Environment {
                 }
             }
             panic!("Cannot call non-variable or function value, {:?}", func);
-        } else {
-            Err(InterpreterErr::NotImplemented(exp))
-        }
     }
 }
 

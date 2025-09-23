@@ -190,9 +190,9 @@ impl Environment {
     pub fn evaluate_scope(
         &mut self,
         scope: &u64,
-        node: NodeType,
+        body : Vec<NodeType>,
+        is_temp : bool,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::ScopeDeclaration { body, is_temp } = node {
             let new_scope = if is_temp {
                 self.get_new_scope(scope, Vec::new(), Vec::new())?
             } else {
@@ -213,9 +213,6 @@ impl Environment {
             }
 
             Ok(result)
-        } else {
-            panic!()
-        }
     }
 }
 

@@ -6,23 +6,13 @@ use crate::{
 
 impl Parser {
     pub fn parse_pipe_expression(&mut self) -> Result<NodeType, ParserError> {
-        let mut left = vec![self.parse_object_expression()?];
+        let mut left = self.parse_object_expression()?;
 
         while let TokenType::Pipe = self.first().token_type.clone() {
             let _ = self.eat();
-            let node = self.parse_statement()?;
-
-            if let NodeType::PipeExpression { mut nodes } = node {
-                left.append(&mut nodes);
-            } else {
-                left.push(node);
-            }
+            left = NodeType::PipeExpression { left : Box::new(left), right : Box::new(self.parse_statement()?) };
         }
-        if left.len() > 1 {
-            Ok(NodeType::PipeExpression { nodes: left })
-        } else {
-            Ok(left[0].clone())
-        }
+        Ok(left)
     }
 
     pub fn parse_as_expression(&mut self) -> Result<NodeType, ParserError> {

@@ -10,12 +10,12 @@ impl Environment {
     pub fn evaluate_loop_declaration(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        loop_type : LoopType,
+        body : NodeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::LoopDeclaration { loop_type, body } = declaration {
             let mut result = RuntimeValue::Null;
 
-            if let LoopType::For(identifier, range) = *loop_type {
+            if let LoopType::For(identifier, range) = loop_type {
                 let range = self.evaluate(scope, range)?;
                 if let RuntimeValue::List { data, data_type: _ } = range {
                     for d in data.into_iter() {
@@ -28,7 +28,7 @@ impl Environment {
                                 var_type: VarType::Immutable,
                             },
                         );
-                        result = self.evaluate(&new_scope, *body.clone())?.unwrap_links_val(
+                        result = self.evaluate(&new_scope, body.clone())?.unwrap_links_val(
                             self,
                             &new_scope,
                             Some(new_scope),
@@ -58,7 +58,7 @@ impl Environment {
                             )],
                             vec![(NodeType::IntLiteral(i as i128), None)],
                         )?;
-                        result = self.evaluate(&new_scope, *body.clone())?.unwrap_links_val(
+                        result = self.evaluate(&new_scope, body.clone())?.unwrap_links_val(
                             self,
                             &new_scope,
                             Some(new_scope),
@@ -75,7 +75,7 @@ impl Environment {
                         };
                     }
                 }
-            } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
+            } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = loop_type {
                 let var = self.get_var(scope, &loop_name)?.clone();
                 if let RuntimeValue::List { data, .. } = &var.value {
                     for (i, d) in data.iter().enumerate() {
@@ -99,7 +99,7 @@ impl Environment {
                             },
                         );
 
-                        result = self.evaluate(&new_scope, *body.clone())?.unwrap_links_val(
+                        result = self.evaluate(&new_scope, body.clone())?.unwrap_links_val(
                             self,
                             &new_scope,
                             Some(new_scope),
@@ -116,7 +116,7 @@ impl Environment {
                         };
                     }
                 }
-            } else if let LoopType::While(condition) = *loop_type {
+            } else if let LoopType::While(condition) = loop_type {
                 match self.evaluate(scope, condition.clone())? {
                     RuntimeValue::Bool(_) => {
                         while let RuntimeValue::Bool(x) = self.evaluate(scope, condition.clone())? {
@@ -124,7 +124,7 @@ impl Environment {
                                 break;
                             }
                             let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-                            result = self.evaluate(&new_scope, *body.clone())?.unwrap_links_val(
+                            result = self.evaluate(&new_scope, body.clone())?.unwrap_links_val(
                                 self,
                                 &new_scope,
                                 Some(new_scope),
@@ -144,41 +144,36 @@ impl Environment {
                     RuntimeValue::Range(from, to) => {
                         return self.evaluate_loop_declaration(
                             scope,
-                            NodeType::LoopDeclaration {
-                                loop_type: Box::new(LoopType::For(
+                                LoopType::For(
                                     String::from("hidden_index"),
                                     NodeType::RangeDeclaration {
                                         from: Box::new(NodeType::IntLiteral(from as i128)),
                                         to: Box::new(NodeType::IntLiteral(to as i128)),
                                         inclusive: false,
                                     },
-                                )),
+                                ),
                                 body,
-                            },
                         );
                     }
                     RuntimeValue::Int(x) => {
                         return self.evaluate_loop_declaration(
                             scope,
-                            NodeType::LoopDeclaration {
-                                loop_type: Box::new(LoopType::For(
+                                LoopType::For(
                                     String::from("hidden_index"),
                                     NodeType::IntLiteral(x as i128),
-                                )),
+                                ),
                                 body,
-                            },
                         );
                     }
                     RuntimeValue::Float(x) => {
                         return self.evaluate_loop_declaration(
                             scope,
-                            NodeType::LoopDeclaration {
-                                loop_type: Box::new(LoopType::For(
+                            LoopType::For(
                                     String::from("hidden_index"),
                                     NodeType::FloatLiteral(x as f64),
-                                )),
+                                ),
                                 body,
-                            },
+                            
                         );
                     }
                     _ => {}
@@ -186,9 +181,6 @@ impl Environment {
             }
 
             Ok(result)
-        } else {
-            Err(InterpreterErr::NotImplemented(declaration))
-        }
     }
 }
 

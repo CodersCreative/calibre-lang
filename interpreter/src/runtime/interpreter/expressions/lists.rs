@@ -10,14 +10,12 @@ impl Environment {
     pub fn evaluate_tuple_expression(
         &mut self,
         scope: &u64,
-        obj: NodeType,
+        vals : Vec<NodeType>
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut values = Vec::new();
 
-        if let NodeType::TupleLiteral(vals) = obj {
-            for val in vals.iter() {
-                values.push(self.evaluate(scope, val.clone())?);
-            }
+        for val in vals.iter() {
+            values.push(self.evaluate(scope, val.clone())?);
         }
 
         Ok(RuntimeValue::Tuple(values))
@@ -26,15 +24,13 @@ impl Environment {
     pub fn evaluate_list_expression(
         &mut self,
         scope: &u64,
-        obj: NodeType,
+        vals : Vec<NodeType>
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut values = Vec::new();
 
-        if let NodeType::ListLiteral(vals) = obj {
             for val in vals.iter() {
                 values.push(self.evaluate(scope, val.clone())?);
             }
-        }
 
         let t = if values.len() > 0 {
             let t = discriminant(&values[0]);
@@ -58,17 +54,13 @@ impl Environment {
     pub fn evaluate_iter_expression(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        map : NodeType,
+        loop_type : LoopType,
+        conditionals : Vec<NodeType>
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::IterExpression {
-            map,
-            loop_type,
-            conditionals,
-        } = declaration
-        {
             let mut result = Vec::new();
 
-            if let LoopType::For(identifier, range) = *loop_type {
+            if let LoopType::For(identifier, range) = loop_type {
                 let range = self.evaluate(scope, range)?;
                 if let RuntimeValue::List { data, data_type: _ } = range {
                     for d in data.into_iter() {
@@ -84,7 +76,7 @@ impl Environment {
 
                         if self.handle_conditionals(&new_scope, conditionals.clone())? {
                             result.push(
-                                self.evaluate(&new_scope, *map.clone())?.unwrap_links_val(
+                                self.evaluate(&new_scope, map.clone())?.unwrap_links_val(
                                     self,
                                     &new_scope,
                                     Some(new_scope),
@@ -110,7 +102,7 @@ impl Environment {
                         )?;
                         if self.handle_conditionals(&new_scope, conditionals.clone())? {
                             result.push(
-                                self.evaluate(&new_scope, *map.clone())?.unwrap_links_val(
+                                self.evaluate(&new_scope, map.clone())?.unwrap_links_val(
                                     self,
                                     &new_scope,
                                     Some(new_scope),
@@ -120,7 +112,7 @@ impl Environment {
                         self.remove_scope(&new_scope);
                     }
                 }
-            } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = *loop_type {
+            } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = loop_type {
                 let var = self.get_var(scope, &loop_name)?.clone();
                 if let RuntimeValue::List { data, .. } = &var.value {
                     for d in data.into_iter() {
@@ -141,7 +133,7 @@ impl Environment {
 
                         if self.handle_conditionals(&new_scope, conditionals.clone())? {
                             result.push(
-                                self.evaluate(&new_scope, *map.clone())?.unwrap_links_val(
+                                self.evaluate(&new_scope, map.clone())?.unwrap_links_val(
                                     self,
                                     &new_scope,
                                     Some(new_scope),
@@ -151,7 +143,7 @@ impl Environment {
                         self.remove_scope(&new_scope);
                     }
                 }
-            } else if let LoopType::While(_) = *loop_type {
+            } else if let LoopType::While(_) = loop_type {
                 panic!()
             }
 
@@ -159,9 +151,6 @@ impl Environment {
                 data: result,
                 data_type: Box::new(None),
             })
-        } else {
-            Err(InterpreterErr::NotImplemented(declaration))
-        }
     }
 }
 #[cfg(test)]

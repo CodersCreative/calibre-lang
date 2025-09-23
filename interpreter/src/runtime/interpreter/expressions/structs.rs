@@ -11,9 +11,8 @@ impl Environment {
     pub fn evaluate_struct_expression(
         &mut self,
         scope: &u64,
-        obj: NodeType,
+        props : ObjectType<Option<NodeType>>
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::StructLiteral(props) = obj {
             if let ObjectType::Map(props) = props {
                 let mut properties = HashMap::new();
                 for (k, v) in props {
@@ -44,22 +43,16 @@ impl Environment {
                     ObjectType::Tuple(properties),
                 ));
             }
-        }
-
         Ok(RuntimeValue::Null)
     }
 
     pub fn evaluate_enum_expression(
         &mut self,
         scope: &u64,
-        exp: NodeType,
+        identifier: String,
+        value : String,
+        data : Option<ObjectType<Option<NodeType>>>
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::EnumExpression {
-            identifier,
-            value,
-            data,
-        } = exp
-        {
             let enm_class = match self.get_object_type(&scope, &identifier) {
                 Ok(Type::Enum(x)) => x.clone(),
                 _ => {
@@ -151,9 +144,6 @@ impl Environment {
             } else {
                 Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
             }
-        } else {
-            Err(InterpreterErr::NotImplemented(exp))
-        }
     }
 }
 

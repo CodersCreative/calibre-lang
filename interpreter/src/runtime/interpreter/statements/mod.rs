@@ -1,4 +1,4 @@
-use calibre_parser::ast::NodeType;
+use calibre_parser::ast::{NodeType, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr,
@@ -21,13 +21,13 @@ impl Environment {
         scope: &u64,
         declaration: NodeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::MatchDeclaration {
+        let NodeType::MatchDeclaration {
             parameters,
             body,
             return_type,
             is_async,
-        } = declaration
-        {
+        } = declaration else {panic!()};
+        
             let mut params = Vec::new();
 
             let default = if let Some(node) = parameters.3 {
@@ -52,9 +52,6 @@ impl Environment {
                 },
                 is_async,
             })
-        } else {
-            Err(InterpreterErr::NotImplemented(declaration))
-        }
     }
 
     pub fn evaluate_function_declaration(
@@ -62,13 +59,13 @@ impl Environment {
         scope: &u64,
         declaration: NodeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::FunctionDeclaration {
+        let NodeType::FunctionDeclaration {
             parameters,
             body,
             return_type,
             is_async,
         } = declaration
-        {
+        else { panic!() };
             let mut params = Vec::new();
 
             for p in parameters.into_iter() {
@@ -90,25 +87,16 @@ impl Environment {
                 },
                 is_async,
             })
-        } else {
-            Err(InterpreterErr::NotImplemented(declaration))
-        }
     }
 
     pub fn evaluate_variable_declaration(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        var_type : VarType,
+        identifier : String,
+        mut value : RuntimeValue,
+        data_type : Option<RuntimeType>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::VariableDeclaration {
-            var_type,
-            identifier,
-            value,
-            data_type,
-        } = declaration
-        {
-            let mut value = self.evaluate(scope, *value)?;
-
             if let Some(t) = data_type {
                 value = value
                     .unwrap(self, scope)?
@@ -116,9 +104,6 @@ impl Environment {
             }
 
             Ok(self.push_var(scope, identifier, Variable { value, var_type })?)
-        } else {
-            Err(InterpreterErr::NotImplemented(declaration))
-        }
     }
 }
 

@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use calibre_parser::ast::NodeType;
+use calibre_parser::{ast::{NodeType, ObjectType}, parse::functions};
 
 use crate::runtime::{
     interpreter::InterpreterErr,
-    scope::{Environment, Object},
+    scope::{Environment, Object, Type},
     values::RuntimeValue,
 };
 
@@ -12,13 +12,9 @@ impl Environment {
     pub fn evaluate_impl_declaration(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        identifier : String,
+        functions : Vec<(NodeType, bool)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::ImplDeclaration {
-            identifier,
-            functions,
-        } = declaration
-        {
             for function in functions {
                 let scope_2 = self.new_scope_from_parent_shallow(scope.clone());
 
@@ -40,30 +36,24 @@ impl Environment {
             }
 
             Ok(RuntimeValue::Null)
-        } else {
-            Err(InterpreterErr::NotImplemented(declaration))
-        }
     }
 
     pub fn evaluate_type_declaration(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        identifier : String,
+        object : Type,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::TypeDeclaration { identifier, object } = declaration {
             let _ = self.push_object(
                 scope,
                 identifier,
                 Object {
-                    object_type: object.into(),
+                    object_type: object,
                     functions: HashMap::new(),
                     traits: Vec::new(),
                 },
             )?;
             Ok(RuntimeValue::Null)
-        } else {
-            Err(InterpreterErr::NotImplemented(declaration))
-        }
     }
 }
 
