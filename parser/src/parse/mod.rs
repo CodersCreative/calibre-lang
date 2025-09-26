@@ -184,6 +184,7 @@ impl Parser {
         close_token: TokenType,
     ) -> Result<Vec<(ParserDataType, RefMutability)>, ParserError> {
         let mut properties = Vec::new();
+        let _ = self.split_comparison_lesser();
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         while !self.is_eof() && self.first().token_type != close_token {
@@ -199,6 +200,7 @@ impl Parser {
                 ref_mutability,
             ));
 
+            let _ = self.split_comparison_greater()?;
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
             }

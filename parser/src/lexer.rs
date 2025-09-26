@@ -5,8 +5,6 @@ use crate::ast::{
 use std::collections::HashMap;
 use thiserror::Error;
 
-const IGNORE: [char; 2] = [';', '\\'];
-
 #[derive(Error, Debug)]
 pub enum LexerError {
     #[error("Unrecognized character '{0}'")]
@@ -235,7 +233,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                 '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(
                     BinaryOperator::from_symbol(&c.to_string()).unwrap(),
                 )),
-                ' ' |';' => Some(TokenType::WhiteSpace),
+                ';' => Some(TokenType::WhiteSpace),
                 _ if c.is_whitespace() => Some(TokenType::WhiteSpace),
                 _ => None,
             }
@@ -302,78 +300,80 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
         };
 
         if let Some(token) = token {
-            if let Some(last) = tokens.last() {
-                if last.value == "/" && (token.value == "*" || token.value == "/") {
-                    let _ = tokens.pop();
-                    let mut first = '/';
-                    let mut second = '*';
+            if let Some(last) = tokens.last(){
+                if last.token_type != TokenType::WhiteSpace && token.token_type != TokenType::WhiteSpace{
+                    if last.value == "/" && (token.value == "*" || token.value == "/") {
+                        let _ = tokens.pop();
+                        let mut first = '/';
+                        let mut second = '*';
 
-                    let can_continue = |f: char, s: char, short: bool| -> bool {
-                        if short {
-                            s != '\n'
-                        } else {
-                            f != '*' || s != '/'
+                        let can_continue = |f: char, s: char, short: bool| -> bool {
+                            if short {
+                                s != '\n'
+                            } else {
+                                f != '*' || s != '/'
+                            }
+                        };
+
+                        while buffer.len() > 0 && can_continue(first, second, token.value == "/") {
+                            first = second;
+                            second = buffer.remove(0);
+                            increment_line_col(&mut line, &mut col, &second);
                         }
-                    };
 
-                    while buffer.len() > 0 && can_continue(first, second, token.value == "/") {
-                        first = second;
-                        second = buffer.remove(0);
-                        increment_line_col(&mut line, &mut col, &second);
-                    }
-
-                    continue;
-                }
-
-                let combined = format!("{}{}", last.value, token.value);
-
-                if let Some(t) = special_keywords().get(&combined) {
-                    if token.col > 0 && last.col / token.col == 1 {
-                        let token = Token::new(t.clone(), &combined, line, col);
-                        tokens.pop();
-                        tokens.push(token);
                         continue;
                     }
-                }
 
-                if tokens.len() > 2 {
-                    let combined = format!(
-                        "{}{}{}",
-                        tokens[tokens.len() - 2].value,
-                        last.value,
-                        token.value
-                    );
+                    let combined = format!("{}{}", last.value, token.value);
 
                     if let Some(t) = special_keywords().get(&combined) {
                         if token.col > 0 && last.col / token.col == 1 {
                             let token = Token::new(t.clone(), &combined, line, col);
                             tokens.pop();
+                            tokens.push(token);
+                            continue;
+                        }
+                    }
+
+                    if tokens.len() > 2 {
+                        let combined = format!(
+                            "{}{}{}",
+                            tokens[tokens.len() - 2].value,
+                            last.value,
+                            token.value
+                        );
+
+                        if let Some(t) = special_keywords().get(&combined) {
+                            if token.col > 0 && last.col / token.col == 1 {
+                                let token = Token::new(t.clone(), &combined, line, col);
+                                tokens.pop();
+                                tokens.pop();
+                                tokens.push(token);
+                                continue;
+                            }
+                        }
+                    }
+
+                    if let TokenType::BinaryOperator(x) = &last.token_type {
+                        if token.token_type == TokenType::Equals {
+                            let token =
+                                Token::new(TokenType::BinaryAssign(x.clone()), &last.value, line, col);
                             tokens.pop();
                             tokens.push(token);
                             continue;
                         }
                     }
-                }
 
-                if let TokenType::BinaryOperator(x) = &last.token_type {
-                    if token.token_type == TokenType::Equals {
-                        let token =
-                            Token::new(TokenType::BinaryAssign(x.clone()), &last.value, line, col);
-                        tokens.pop();
-                        tokens.push(token);
-                        continue;
-                    }
-                }
-
-                if let TokenType::BinaryOperator(x) = &last.token_type {
-                    if let TokenType::BinaryOperator(y) = token.token_type {
-                        if x != &y {
-                            return Err(LexerError::BinaryOperatorShortHand);
+                    if let TokenType::BinaryOperator(x) = &last.token_type {
+                        if let TokenType::BinaryOperator(y) = token.token_type {
+                            if x != &y {
+                                return Err(LexerError::BinaryOperatorShortHand);
+                            }
+                            let token = Token::new(TokenType::UnaryAssign(y), &last.value, line, col);
+                            tokens.pop();
+                            tokens.push(token);
+                            continue;
                         }
-                        let token = Token::new(TokenType::UnaryAssign(y), &last.value, line, col);
-                        tokens.pop();
-                        tokens.push(token);
-                        continue;
                     }
                 }
             }
