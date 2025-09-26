@@ -5,10 +5,7 @@ pub mod functions;
 pub mod r#type;
 
 use crate::{
-    Parser, ParserError, SyntaxErr,
-    ast::{LoopType, NodeType, RefMutability, comparison::Comparison},
-    ast::{ObjectType, ParserDataType},
-    lexer::{Bracket, Token, TokenType},
+    ast::{binary::BinaryOperator, comparison::Comparison, LoopType, NodeType, ObjectType, ParserDataType, RefMutability}, lexer::{Bracket, Token, TokenType}, Parser, ParserError, SyntaxErr
 };
 use std::{collections::HashMap, str::FromStr};
 
@@ -55,9 +52,13 @@ impl Parser {
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         while !self.is_eof() && self.first().token_type != close_token {
-            let key = self
+            let mut keys = Vec::new();
+
+            while self.first().token_type == TokenType::Identifier {
+                keys.push(self
                 .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)?
-                .value;
+                .value);
+            }
 
             let mut ref_mutability = RefMutability::Value;
 
@@ -75,6 +76,8 @@ impl Parser {
                 ParserDataType::Dynamic
             };
 
+            println!("{:?}", self.first());
+
             let default = if defaulted || self.first().token_type == TokenType::Equals {
                 let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
                 defaulted = true;
@@ -83,7 +86,11 @@ impl Parser {
                 None
             };
 
-            properties.push((key, typ, ref_mutability, default));
+            for key in keys{
+                properties.push((key, typ.clone(), ref_mutability.clone(), default.clone()));
+            }
+
+            println!("{:?}", properties);
 
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
@@ -209,6 +216,7 @@ impl Parser {
     }
 
     pub fn parse_type(&mut self) -> Result<Option<ParserDataType>, ParserError> {
+        let _ = self.split_comparison_lesser();
         let t = self.first().clone();
 
         if self.first().token_type == TokenType::Not {
@@ -261,26 +269,16 @@ impl Parser {
             }))
         } else if t.token_type == TokenType::List {
             let _ = self.eat();
+            let _ = self.split_comparison_lesser();
             let t = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
                 let _ = self.eat();
                 let t = Some(self.parse_type()?.expect("Expected data type"));
-                if self.first().token_type == TokenType::Comparison(Comparison::GreaterEqual) {
-                    let former = self.eat();
-                    self.tokens.push(Token {
-                        value: String::from(">"),
-                        token_type: TokenType::Comparison(Comparison::Greater),
-                        ..former
-                    });
-                    self.tokens.push(Token {
-                        value: String::from("="),
-                        token_type: TokenType::Equals,
-                        ..former
-                    });
-                }
+                println!("{:?}", t);
+                let _ = self.split_comparison_greater()?;
                 let _ = self.expect_eat(
                     &TokenType::Comparison(Comparison::Greater),
                     SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
-                );
+                )?;
                 t
             } else {
                 None
@@ -311,6 +309,57 @@ impl Parser {
         }
 
         typ
+    }
+
+    pub fn split_comparison_lesser(&mut self) -> Result<(), ParserError> {
+        let former = self.tokens[0].clone();
+        
+        let get_lesser_token = || -> Token {
+            Token {
+                value: String::from("<"),
+                token_type: TokenType::Comparison(Comparison::Lesser),
+                ..former
+            }
+        };
+
+        if former.token_type == TokenType::Comparison(Comparison::LesserEqual) {
+            self.tokens[0] = get_lesser_token();
+            self.tokens.insert(1, Token {
+                value: String::from("="),
+                token_type: TokenType::Equals,
+                ..former
+            });
+        } else if former.token_type == TokenType::BinaryOperator(BinaryOperator::Shl) {
+            self.tokens[0] = get_lesser_token();
+            self.tokens.insert(1, get_lesser_token());
+        }
+
+        Ok(())
+    }
+    pub fn split_comparison_greater(&mut self) -> Result<(), ParserError> {
+        let former = self.tokens[0].clone();
+        
+        let get_greater_token = || -> Token {
+            Token {
+                value: String::from(">"),
+                token_type: TokenType::Comparison(Comparison::Greater),
+                ..former
+            }
+        };
+
+        if former.token_type == TokenType::Comparison(Comparison::GreaterEqual) {
+            self.tokens[0] = get_greater_token();
+            self.tokens.insert(1, Token {
+                value: String::from("="),
+                token_type: TokenType::Equals,
+                ..former
+            });
+        } else if former.token_type == TokenType::BinaryOperator(BinaryOperator::Shr) {
+            self.tokens[0] = get_greater_token();
+            self.tokens.insert(1, get_greater_token());
+        }
+
+        Ok(())
     }
 
     pub fn parse_tuple_expression(&mut self) -> Result<NodeType, ParserError> {

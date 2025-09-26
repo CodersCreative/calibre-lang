@@ -108,54 +108,29 @@ impl Environment {
     pub fn evaluate_pipe_expression(
         &mut self,
         scope: &u64,
-        exp: NodeType,
+        values : Vec<NodeType>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::PipeExpression { left, right } = exp {
-            let left_value = self.evaluate(scope, *left.clone())?;
-            let new_scope = self.new_scope_from_parent_shallow(scope.clone());
-
-            let _ = self
-                .force_var(
-                    &scope,
-                    "$".to_string(),
-                    Variable {
-                        value: left_value.clone(),
-                        var_type: VarType::Mutable,
-                    },
-                )
-                .unwrap();
-
-            match left_value {
-                RuntimeValue::Function { .. } => return self.evaluate_function(&new_scope, left_value, vec![(*right, None)]),
-                RuntimeValue::NativeFunction(x) => {
-                    let right = self.evaluate(&new_scope, *right)?;
-                    return x.run(self, &new_scope, &[(right, None)])
+        let mut pre_values : Vec<NodeType> = Vec::new();
+        for value in values.into_iter() {
+            match value {
+                NodeType::Identifier(_) | NodeType::MatchDeclaration { .. } | NodeType::FunctionDeclaration { .. } | NodeType::MemberExpression { .. } | NodeType::EnumExpression { .. } => {
+                    let calculated = self.evaluate(scope, value.clone());
+                    match calculated {
+                        Ok(RuntimeValue::Function { .. }) => {
+                            let args : Vec<(NodeType, Option<NodeType>)> = pre_values.iter().map(|x| (x.clone(), None)).collect();
+                            pre_values.clear();
+                            pre_values.push(NodeType::CallExpression(Box::new(value), args));
+                        },
+                        _ => pre_values.push(value),
+                    }
                 },
-                RuntimeValue::Tuple(mut x) => {
-                    x.push(self.evaluate(&new_scope, *right)?);
-                    return Ok(RuntimeValue::Tuple(x));
-                },
-                _ => {},
-            };
-
-
-
-            let right_value = self.evaluate(&new_scope, *right)?;
-            
-            match right_value {
-                RuntimeValue::Function { .. } => return self.evaluate_function(&new_scope, right_value, vec![(*left, None)]),
-                RuntimeValue::NativeFunction(x) => return x.run(self, &new_scope, &[(left_value, None)]),
-                RuntimeValue::Tuple(mut x) => {
-                    x.push(left_value);
-                    return Ok(RuntimeValue::Tuple(x));
-                },
-                _ => {},
-            };
-
-            Ok(RuntimeValue::Tuple(vec![left_value, right_value]))
-        } else {
-            Err(InterpreterErr::NotImplemented(exp))
+                _ => {
+                    pre_values.push(value);
+                }
+            }
         }
+
+        self.evaluate(scope, pre_values.pop().unwrap())
     }
 
     pub fn evaluate_boolean_expression(

@@ -1,4 +1,6 @@
-let matmul = fn(n : uint, a : list<list<float>>, b : list<list<float>>) -> list<list<float>> => {
+print("Noooo");
+
+let matmul = fn (n : uint, a b : list<list<float>>) -> list<list<float>> => {
   let m : uint = len(b[0]);
   let p : uint = len(a[0]);
   let mut c : list<list<float>> = [];

@@ -19,9 +19,9 @@ recursive_language |> match &mut {
 }
 
 // In order to do an if let statement this syntax is used with extra conditions being added after the let
-if let data.Language.FRENCH{data} if true if ((try 9 as ulong) == 9.0 == 9) <- &language => {
+/*if let Language.FRENCH{data} if true if ((try 9 as ulong) == 9.0 == 9) <- &language => {
   print("Enum 2: " & data)
-}
+}*/
 
 // The const keyword creates an immutable variable that cannot be shadowed.
 const language_forced : Language = Language.ENGLISH (6);
@@ -115,8 +115,8 @@ let smth_fn = fn (y : int) -> int? => {
   some(9)
 }
 
-// The $ operator can be used to represent the previous result from a pipe.
-200 |> smth_fn |> print("This + That = " & $)
+// Closures can be used to easily represent the previous results from pipes.
+200 |> smth_fn |> fn ($) => print("This + That = " & $)
 
 18 |> smth_fn |> match {
   Some(x) if x == 18 => print("Equated to 18"),
@@ -188,10 +188,9 @@ const main = fn () -> !int => {
 let currying = fn (a : int, b : int, c : int) -> int => a * b * c;
 
 // This is an example of currying using pipes
-currying |> 18 |> 20 |> 15 |> print ("Curryed " & $)
-
-// This is also valid: 
-18 |> currying |> (20, 15) |> print ("Curryed " & $)
+let currying = 18 |> 20 |> currying
+let currying = 15 |> currying
+print("Curryed " & currying)
 
 // Currying also works using the normal call syntax
 print("Curryed " & currying(18)(20, 15));

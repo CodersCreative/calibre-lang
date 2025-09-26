@@ -181,7 +181,7 @@ impl Environment {
                 self.evaluate_not(scope, value)
             },
             NodeType::TypeDeclaration { identifier, object } => self.evaluate_type_declaration(scope, identifier, object.into()),
-            NodeType::PipeExpression { .. } => self.evaluate_pipe_expression(scope, node),
+            NodeType::PipeExpression(nodes) => self.evaluate_pipe_expression(scope, nodes),
             NodeType::EnumExpression { identifier, value, data } => self.evaluate_enum_expression(scope, identifier, value, data),
             NodeType::LoopDeclaration { loop_type, body } => self.evaluate_loop_declaration(scope, *loop_type, *body),
             NodeType::IterExpression { map, loop_type, conditionals } => self.evaluate_iter_expression(scope, *map, *loop_type, conditionals),

@@ -98,33 +98,26 @@ impl Parser {
     ) -> Result<Vec<(NodeType, Option<NodeType>)>, ParserError> {
         let mut defaulted = false;
 
-        let mut args = vec![{
-            if defaulted || self.nth(1).token_type == TokenType::Equals {
-                (self.parse_primary_expression()?, {
-                    let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
-                    defaulted = true;
-                    Some(self.parse_statement()?)
-                })
-            } else {
-                (self.parse_statement()?, None)
-            }
-        }];
-
-        while self.first().token_type == TokenType::Comma {
-            let _ = self.eat();
-
-            args.push({
+        macro_rules! parse_arg {
+            () => {{
                 if defaulted || self.nth(1).token_type == TokenType::Equals {
                     (self.parse_primary_expression()?, {
-                        let _ =
-                            self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
+                        let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
                         defaulted = true;
                         Some(self.parse_statement()?)
                     })
                 } else {
                     (self.parse_statement()?, None)
                 }
-            });
+            }};
+        }
+
+        let mut args = vec![parse_arg!()];
+
+        while self.first().token_type == TokenType::Comma {
+            let _ = self.eat();
+
+            args.push(parse_arg!());
 
             if [
                 TokenType::Close(Bracket::Curly),
