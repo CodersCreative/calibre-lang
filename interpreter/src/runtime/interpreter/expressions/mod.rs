@@ -2,11 +2,11 @@ use crate::{
     operators,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment, Variable},
+        scope::{Environment},
         values::{RuntimeType, RuntimeValue},
     },
 };
-use calibre_parser::ast::{binary::BinaryOperator, comparison::{BooleanOperation, Comparison}, NodeType, ParserDataType, VarType};
+use calibre_parser::ast::{binary::BinaryOperator, comparison::{BooleanOperation, Comparison}, NodeType};
 pub mod call;
 pub mod lists;
 pub mod member;
@@ -211,8 +211,10 @@ impl Environment {
 mod tests {
     use calibre_parser::ast::binary::BinaryOperator;
     use calibre_parser::ast::comparison::{BooleanOperation, Comparison};
+    use calibre_parser::ast::VarType;
 
     use super::*;
+    use crate::runtime::scope::Variable;
     use crate::runtime::values::RuntimeValue;
     use std::path::PathBuf;
     use std::str::FromStr;
@@ -249,7 +251,7 @@ mod tests {
         let node = NodeType::NotExpression {
             value: Box::new(NodeType::Identifier(String::from("true"))),
         };
-        let result = env.evaluate_not(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Bool(false));
     }
 
@@ -259,7 +261,7 @@ mod tests {
         let node = NodeType::NotExpression {
             value: Box::new(NodeType::IntLiteral(7)),
         };
-        let result = env.evaluate_not(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Int(-7));
     }
 
@@ -269,7 +271,7 @@ mod tests {
         let node = NodeType::NotExpression {
             value: Box::new(NodeType::FloatLiteral(3.5)),
         };
-        let result = env.evaluate_not(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Float(-3.5));
     }
 
@@ -285,7 +287,7 @@ mod tests {
             }),
         };
 
-        let result = env.evaluate_not(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Range(3, 1));
     }
 
@@ -299,7 +301,7 @@ mod tests {
                 NodeType::IntLiteral(3),
             ])),
         };
-        let result = env.evaluate_not(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         match result {
             RuntimeValue::List { data, .. } => assert_eq!(
                 data,
@@ -321,7 +323,7 @@ mod tests {
             right: Box::new(NodeType::IntLiteral(3)),
             operator: BinaryOperator::Add,
         };
-        let result = env.evaluate_binary_expression(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::UInt(5));
     }
 
@@ -333,7 +335,7 @@ mod tests {
             to: Box::new(NodeType::IntLiteral(3)),
             inclusive: true,
         };
-        let result = env.evaluate_range_expression(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Range(1, 4));
     }
 
@@ -346,7 +348,7 @@ mod tests {
             to: Box::new(NodeType::IntLiteral(3)),
             inclusive: false,
         };
-        let result = env.evaluate_range_expression(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Range(1, 3));
     }
 
@@ -358,7 +360,7 @@ mod tests {
             right: Box::new(NodeType::Identifier(String::from("false"))),
             operator: BooleanOperation::And,
         };
-        let result = env.evaluate_boolean_expression(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Bool(false));
     }
 
@@ -370,7 +372,7 @@ mod tests {
             right: Box::new(NodeType::IntLiteral(2)),
             operator: Comparison::Greater,
         };
-        let result = env.evaluate_comparison_expression(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Bool(true));
     }
 
@@ -393,7 +395,7 @@ mod tests {
         };
 
         let result = env
-            .evaluate_assignment_expression(&scope, node)
+            .evaluate(&scope, node)
             .unwrap()
             .unwrap_val(&env, &scope)
             .unwrap();

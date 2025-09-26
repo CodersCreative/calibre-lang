@@ -171,7 +171,7 @@ mod tests {
         let (mut env, scope) = get_new_env();
         let node =
             NodeType::TupleLiteral(vec![NodeType::IntLiteral(1), NodeType::FloatLiteral(2.0)]);
-        let result = env.evaluate_tuple_expression(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(
             result,
             RuntimeValue::Tuple(vec![RuntimeValue::UInt(1), RuntimeValue::Float(2.0)])
@@ -186,7 +186,7 @@ mod tests {
             NodeType::IntLiteral(2),
             NodeType::IntLiteral(3),
         ]);
-        let result = env.evaluate_list_expression(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         match result {
             RuntimeValue::List { data, data_type } => {
                 assert_eq!(
@@ -208,7 +208,7 @@ mod tests {
         let (mut env, scope) = get_new_env();
         let node =
             NodeType::ListLiteral(vec![NodeType::IntLiteral(1), NodeType::FloatLiteral(2.0)]);
-        let result = env.evaluate_list_expression(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         match result {
             RuntimeValue::List { data, data_type } => {
                 assert_eq!(data, vec![RuntimeValue::UInt(1), RuntimeValue::Float(2.0)]);
@@ -222,7 +222,7 @@ mod tests {
     fn test_evaluate_list_expression_empty() {
         let (mut env, scope) = get_new_env();
         let node = NodeType::ListLiteral(Vec::new());
-        let result = env.evaluate_list_expression(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         match result {
             RuntimeValue::List { data, data_type } => {
                 assert!(data.is_empty());

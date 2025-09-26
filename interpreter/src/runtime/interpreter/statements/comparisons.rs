@@ -3,7 +3,7 @@ use crate::runtime::{
     scope::Environment,
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_parser::ast::{comparison, IfComparisonType, NodeType};
+use calibre_parser::ast::{IfComparisonType, NodeType};
 
 impl Environment {
     fn value_in_list(&self, scope: &u64, value: &RuntimeValue, list: &[RuntimeValue]) -> bool {
@@ -127,12 +127,13 @@ mod tests {
     fn test_evaluate_if_statement_true_branch() {
         let (mut env, scope) = get_new_env();
         let node = NodeType::IfStatement {
-            comparisons: vec![IfComparisonType::If(NodeType::Identifier(String::from(
+            comparison: Box::new(IfComparisonType::If(NodeType::Identifier(String::from(
                 "true",
-            )))],
-            bodies: vec![NodeType::IntLiteral(123)],
+            )))),
+            then: Box::new(NodeType::IntLiteral(123)),
+            otherwise : None
         };
-        let result = env.evaluate_if_statement(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
 
         assert!(env.is_equal(&scope, &result, &RuntimeValue::Int(123)));
     }
@@ -141,12 +142,13 @@ mod tests {
     fn test_evaluate_if_statement_false_else() {
         let (mut env, scope) = get_new_env();
         let node = NodeType::IfStatement {
-            comparisons: vec![IfComparisonType::If(NodeType::Identifier(String::from(
+            comparison: Box::new(IfComparisonType::If(NodeType::Identifier(String::from(
                 "false",
-            )))],
-            bodies: vec![NodeType::IntLiteral(123), NodeType::IntLiteral(2)],
+            )))),
+            then: Box::new(NodeType::IntLiteral(123)),
+            otherwise : Some(Box::new(NodeType::IntLiteral(2)))
         };
-        let result = env.evaluate_if_statement(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
 
         assert!(env.is_equal(&scope, &result, &RuntimeValue::Int(2)));
     }

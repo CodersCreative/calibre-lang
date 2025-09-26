@@ -310,7 +310,7 @@ mod tests {
             Box::new(NodeType::Identifier("foo".to_string())),
             Vec::new(),
         );
-        let result = env.evaluate_call_expression(&scope, call_node).unwrap();
+        let result = env.evaluate(&scope, call_node).unwrap();
         assert_eq!(result, RuntimeValue::Int(7));
     }
 
@@ -330,7 +330,7 @@ mod tests {
         let call_node =
             NodeType::CallExpression(Box::new(NodeType::Identifier("x".to_string())), Vec::new());
         let result = env
-            .evaluate_call_expression(&scope, call_node)
+            .evaluate(&scope, call_node)
             .unwrap()
             .unwrap_val(&env, &scope)
             .unwrap();

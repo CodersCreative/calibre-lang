@@ -307,8 +307,9 @@ mod tests {
             body: vec![NodeType::Return {
                 value: Box::new(NodeType::IntLiteral(42)),
             }],
+            is_temp : true,
         };
-        let result = env.evaluate_scope(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::UInt(42));
     }
 
@@ -317,8 +318,9 @@ mod tests {
         let (mut env, scope) = get_new_env();
         let node = NodeType::ScopeDeclaration {
             body: vec![NodeType::IntLiteral(7)],
+            is_temp : true,
         };
-        let result = env.evaluate_scope(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::UInt(7));
     }
 }

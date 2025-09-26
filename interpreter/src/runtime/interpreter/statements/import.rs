@@ -1,5 +1,3 @@
-use calibre_parser::ast::NodeType;
-
 use crate::runtime::{
     interpreter::InterpreterErr,
     scope::{Environment, Object, Variable},

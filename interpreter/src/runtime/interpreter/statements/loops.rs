@@ -220,7 +220,7 @@ mod tests {
 
         let node = NodeType::LoopDeclaration { loop_type, body };
         let result = env
-            .evaluate_loop_declaration(&scope, node)
+            .evaluate(&scope, node)
             .unwrap()
             .unwrap_val(&env, &scope)
             .unwrap();

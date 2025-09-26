@@ -133,7 +133,7 @@ mod tests {
         };
 
         let result = env
-            .evaluate_variable_declaration(&scope, node)
+            .evaluate(&scope, node)
             .unwrap()
             .unwrap_val(&env, &scope)
             .unwrap();
@@ -157,7 +157,7 @@ mod tests {
             return_type: None,
             is_async: false,
         };
-        let result = env.evaluate_function_declaration(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
 
         match result {
             RuntimeValue::Function { .. } => {}

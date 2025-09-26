@@ -1,9 +1,6 @@
 use core::panic;
 
-use crate::{
-    operators::binary::ASTError,
-    runtime::{interpreter::InterpreterErr, scope::Environment, values::RuntimeValue},
-};
+use crate::runtime::{interpreter::InterpreterErr, scope::Environment, values::RuntimeValue};
 use calibre_parser::ast::comparison::Comparison;
 
 impl Environment {

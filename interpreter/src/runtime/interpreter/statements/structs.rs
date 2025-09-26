@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use calibre_parser::{ast::{NodeType, ObjectType}, parse::functions};
+use calibre_parser::{ast::{NodeType}};
 
 use crate::runtime::{
     interpreter::InterpreterErr,
@@ -59,7 +59,7 @@ impl Environment {
 
 #[cfg(test)]
 mod tests {
-    use calibre_parser::ast::{NodeType, ObjectType};
+    use calibre_parser::ast::{NodeType, ObjectType, TypeDefType};
 
     use crate::runtime::{
         scope::{Environment, Type},
@@ -78,9 +78,9 @@ mod tests {
         let (mut env, scope) = get_new_env();
         let node = NodeType::TypeDeclaration {
             identifier: "Point".to_string(),
-            object: Type::Struct(ObjectType::Tuple(vec![])),
+            object: TypeDefType::Struct(ObjectType::Tuple(vec![])),
         };
-        let result = env.evaluate_type_declaration(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
 
         assert_eq!(result, RuntimeValue::Null);
         assert!(env.get_object(&scope, "Point").is_ok());
@@ -91,9 +91,9 @@ mod tests {
         let (mut env, scope) = get_new_env();
         let node = NodeType::TypeDeclaration {
             identifier: "Color".to_string(),
-            object: Type::Enum(vec![("Red".to_string(), None), ("Blue".to_string(), None)]),
+            object: TypeDefType::Enum(vec![("Red".to_string(), None), ("Blue".to_string(), None)]),
         };
-        let result = env.evaluate_type_declaration(&scope, node).unwrap();
+        let result = env.evaluate(&scope, node).unwrap();
 
         assert_eq!(result, RuntimeValue::Null);
         assert!(env.get_object(&scope, "Color").is_ok());
