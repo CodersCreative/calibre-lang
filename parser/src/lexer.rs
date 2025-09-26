@@ -82,6 +82,7 @@ pub enum TokenType {
     From,
     Import,
     Type,
+    WhiteSpace,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
@@ -234,6 +235,8 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                 '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(
                     BinaryOperator::from_symbol(&c.to_string()).unwrap(),
                 )),
+                ' ' |';' => Some(TokenType::WhiteSpace),
+                _ if c.is_whitespace() => Some(TokenType::WhiteSpace),
                 _ => None,
             }
         };
@@ -246,8 +249,6 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                 col,
             )),
             _ => {
-                let ignore = IGNORE.contains(first);
-
                 if first == &'"' {
                     let mut txt = String::new();
 
@@ -261,10 +262,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                     let _ = buffer.remove(0);
 
                     Some(Token::new(TokenType::String, &txt, line, col))
-                } else if first.is_whitespace() && !ignore {
-                    let _ = buffer.remove(0);
-                    None
-                } else if first.is_numeric() && !ignore {
+                } else if first.is_numeric(){
                     let mut number = String::new();
                     let mut is_int = true;
 
@@ -283,7 +281,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                     } else {
                         Some(Token::new(TokenType::Float, number.trim(), line, col))
                     }
-                } else if (first.is_alphabetic() || first == &'_') && !ignore {
+                } else if first.is_alphabetic() || first == &'_'{
                     let mut txt = String::new();
                     while buffer.len() > 0
                         && (buffer[0].is_alphanumeric() || buffer[0] == '_')
@@ -297,9 +295,6 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                     } else {
                         Some(Token::new(TokenType::Identifier, txt.trim(), line, col))
                     }
-                } else if ignore {
-                    let _ = buffer.remove(0);
-                    None
                 } else {
                     return Err(LexerError::Unrecognized(*first));
                 }
@@ -388,7 +383,7 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
 
     tokens.push(Token::new(TokenType::EOF, "EndOfFile", line, col));
 
-    Ok(tokens)
+    Ok(tokens.into_iter().filter(|x| x.token_type != TokenType::WhiteSpace).collect())
 }
 
 #[cfg(test)]

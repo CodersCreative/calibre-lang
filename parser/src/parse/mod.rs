@@ -33,13 +33,11 @@ impl Parser {
     }
 
     fn expect_eat(&mut self, t: &TokenType, err: SyntaxErr) -> Result<Token, ParserError> {
-        let value = self.eat();
-
-        if &value.token_type != t {
-            return Err(self.get_err(err));
+        if &self.first().token_type != t {
+            Err(self.get_err(err))
+        } else{
+            Ok(self.eat())
         }
-
-        Ok(value)
     }
 
     fn parse_key_type_list_ordered_with_ref(
@@ -76,8 +74,6 @@ impl Parser {
                 ParserDataType::Dynamic
             };
 
-            println!("{:?}", self.first());
-
             let default = if defaulted || self.first().token_type == TokenType::Equals {
                 let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
                 defaulted = true;
@@ -89,8 +85,6 @@ impl Parser {
             for key in keys{
                 properties.push((key, typ.clone(), ref_mutability.clone(), default.clone()));
             }
-
-            println!("{:?}", properties);
 
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
@@ -273,7 +267,6 @@ impl Parser {
             let t = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
                 let _ = self.eat();
                 let t = Some(self.parse_type()?.expect("Expected data type"));
-                println!("{:?}", t);
                 let _ = self.split_comparison_greater()?;
                 let _ = self.expect_eat(
                     &TokenType::Comparison(Comparison::Greater),

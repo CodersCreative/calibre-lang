@@ -1,5 +1,3 @@
-print("Noooo");
-
 let matmul = fn (n : uint, a b : list<list<float>>) -> list<list<float>> => {
   let m : uint = len(b[0]);
   let p : uint = len(a[0]);
@@ -10,7 +8,7 @@ let matmul = fn (n : uint, a b : list<list<float>>) -> list<list<float>> => {
     for k in 0..p => {
       let aik : float = a[i][k];
       let bk : list<float> = b[k];
-      for j in 0..m => ci[j] <<= aik * bk[j]
+      for j in 0..m => ci[j] += aik * bk[j]
     }
     c <<= ci
   }
