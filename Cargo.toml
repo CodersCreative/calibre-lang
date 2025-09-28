@@ -13,6 +13,7 @@ members = [
     "interpreter",
     "parser",
     "cranelift-jit",
+    "type-checker",
 ]
 
 [workspace.dependencies]
@@ -20,9 +21,11 @@ cal = { path = "./cal", version = "0.1.0" }
 calibre-interpreter = { path = "./interpreter", version = "0.1.0" }
 calibre-parser = { path = "./parser", version = "0.1.0" }
 calibre-cranelift-jit = { path = "./cranelift-jit", version = "0.1.0" }
+calibre-type-checker = { path = "./type-checker", version = "0.1.0" }
 
 [features]
 cranelift = ["dep:calibre-cranelift-jit"]
+type-checker = ["dep:calibre-type-checker"]
 
 # For Cal
 [dependencies]
@@ -30,6 +33,7 @@ clap = { version = "4.5.40", features = ["derive"] }
 rustyline = "16.0.0"
 calibre-parser = {workspace = true}
 calibre-interpreter = {workspace = true}
+calibre-type-checker = {workspace = true, optional = true}
 calibre-cranelift-jit = {workspace = true, optional = true}
 
 [[bin]]
