@@ -2,7 +2,7 @@ use crate::{
     operators,
     runtime::{
         interpreter::InterpreterErr,
-        scope::{Environment},
+        scope::{InterpreterEnvironment},
         values::{RuntimeType, RuntimeValue},
     },
 };
@@ -13,7 +13,7 @@ pub mod member;
 pub mod scope;
 pub mod structs;
 
-impl Environment {
+impl InterpreterEnvironment {
     pub fn evaluate_identifier(
         &mut self,
         scope: &u64,

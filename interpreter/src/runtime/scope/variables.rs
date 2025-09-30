@@ -1,18 +1,20 @@
-use super::Scope;
+use calibre_common::{environment::Variable, errors::ScopeErr};
+use calibre_parser::ast::VarType;
+
 use crate::runtime::{
     interpreter::InterpreterErr,
-    scope::{Environment, ScopeErr, VarType, Variable},
+    scope::{InterpreterEnvironment, },
     values::RuntimeValue,
 };
 use std::mem::discriminant;
 
-impl Environment {
+impl InterpreterEnvironment {
     pub fn force_var(
         &mut self,
         scope: &u64,
         key: String,
-        value: Variable,
-    ) -> Result<RuntimeValue, ScopeErr> {
+        value: Variable<RuntimeValue>,
+    ) -> Result<RuntimeValue, ScopeErr<RuntimeValue>> {
         let typ = (&value.value).into();
         if let Some(vars) = self.variables.get_mut(scope) {
             vars.insert(key.clone(), value);
@@ -24,8 +26,8 @@ impl Environment {
         &mut self,
         scope: &u64,
         key: String,
-        value: Variable,
-    ) -> Result<RuntimeValue, ScopeErr> {
+        value: Variable<RuntimeValue>,
+    ) -> Result<RuntimeValue, ScopeErr<RuntimeValue>> {
         let typ = (&value.value).into();
         if let Some(vars) = self.variables.get_mut(scope) {
             if let Some(var) = vars.get(&key) {
@@ -40,7 +42,7 @@ impl Environment {
         Ok(RuntimeValue::Link(*scope, vec![key], typ))
     }
 
-    pub fn get_var_ref<'a>(&'a self, scope: &u64, key: &str) -> Result<Variable, ScopeErr> {
+    pub fn get_var_ref<'a>(&'a self, scope: &u64, key: &str) -> Result<Variable<RuntimeValue>, ScopeErr<RuntimeValue>> {
         Ok(if let Some(vars) = self.variables.get(scope) {
             if let Some(var) = vars.get(key) {
                 Variable {
@@ -64,7 +66,7 @@ impl Environment {
         })
     }
 
-    pub fn get_var<'a>(&'a self, scope: &u64, key: &str) -> Result<&'a Variable, ScopeErr> {
+    pub fn get_var<'a>(&'a self, scope: &u64, key: &str) -> Result<&'a Variable<RuntimeValue>, ScopeErr<RuntimeValue>> {
         Ok(if let Some(vars) = self.variables.get(scope) {
             if let Some(var) = vars.get(key) {
                 var
@@ -78,9 +80,9 @@ impl Environment {
         })
     }
 
-    pub fn update_var<F>(&mut self, scope: &u64, key: &str, mut f: F) -> Result<(), ScopeErr>
+    pub fn update_var<F>(&mut self, scope: &u64, key: &str, mut f: F) -> Result<(), ScopeErr<RuntimeValue>>
     where
-        F: FnMut(&mut Variable),
+        F: FnMut(&mut Variable<RuntimeValue>),
     {
         Ok(if let Some(vars) = self.variables.get_mut(scope) {
             if let Some(var) = vars.get_mut(key) {
@@ -148,9 +150,5 @@ impl Environment {
         }
 
         Ok(RuntimeValue::Link(*scope, vec![key.to_string()], typ))
-    }
-
-    pub fn get_global_scope<'a>(&'a self) -> &'a Scope {
-        self.scopes.get(&0).unwrap()
     }
 }

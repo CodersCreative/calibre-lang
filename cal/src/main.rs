@@ -1,12 +1,12 @@
 use calibre_interpreter::runtime::{
-    scope::Environment, values::RuntimeValue,
+    scope::InterpreterEnvironment, values::RuntimeValue
 };
 use clap::Parser;
 use rustyline::{DefaultEditor, error::ReadlineError};
 use std::{error::Error, fs, path::PathBuf, str::FromStr};
 
 fn repl() -> Result<(), Box<dyn Error>> {
-    let mut env = Environment::new();
+    let mut env = InterpreterEnvironment::new();
     let mut parser = calibre_parser::Parser::default();
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
     let mut editor = DefaultEditor::new()?;
@@ -40,7 +40,7 @@ fn repl() -> Result<(), Box<dyn Error>> {
 }
 
 fn file(path: &str) -> Result<(), Box<dyn Error>> {
-    let mut env = Environment::new();
+    let mut env = InterpreterEnvironment::new();
     let mut parser = calibre_parser::Parser::default();
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
     let program = parser.produce_ast(fs::read_to_string(path)?)?;

@@ -3,9 +3,9 @@ pub mod objects;
 pub mod variables;
 
 use calibre_parser::ast::{NodeType, ObjectType, ParserDataType, TypeDefType, VarType};
-use std::{collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
+use std::{collections::HashMap, fmt::Debug, ops::Deref, path::PathBuf};
 
-use crate::{errors::{InterpreterErr, ScopeErr, ValueErr}, native::NativeFunction};
+use crate::errors::{RuntimeErr, ScopeErr, ValueErr};
 
 pub trait RuntimeType : From<ParserDataType> + PartialEq + Clone + Debug {}
 pub trait RuntimeValue : PartialEq + Clone + Debug {
@@ -80,7 +80,6 @@ pub struct Variable<T> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Environment<T : RuntimeValue, U : RuntimeType> {
-    pub evaluate : fn(&mut Self, &u64, NodeType) -> Result<T, InterpreterErr<T, U>>,
     pub counter: u64,
     pub scopes: HashMap<u64, Scope>,
     pub variables: HashMap<u64, HashMap<String, Variable<T>>>,
@@ -98,9 +97,8 @@ pub struct Scope {
 }
 
 impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
-    pub fn new(evaluate : fn(&mut Self, &u64, NodeType) -> Result<T, InterpreterErr<T, U>>) -> Environment<T, U> {
+    pub fn new() -> Environment<T, U> {
         Environment {
-            evaluate,
             counter: 0,
             scopes: HashMap::new(),
             variables: HashMap::new(),
@@ -191,7 +189,7 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
         &self,
         path: &[String],
         mut parent: Option<u64>,
-    ) -> Result<u64, InterpreterErr<T, U>> {
+    ) -> Result<u64, RuntimeErr<T, U>> {
         let mut skip = 0;
         if let None = parent {
             parent = Some(
@@ -218,7 +216,7 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
         &self,
         parent: u64,
         namespace: &str,
-    ) -> Result<u64, InterpreterErr<T, U>> {
+    ) -> Result<u64, RuntimeErr<T, U>> {
         for (_, child) in self.scopes.get(&parent).unwrap().children.iter() {
             if let Some(x) = self.scopes.get(&child) {
                 if x.namespace == namespace {
@@ -226,7 +224,7 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
                 }
             }
         }
-        Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Scope(
+        Err(RuntimeErr::Value(ValueErr::Scope(ScopeErr::Scope(
             namespace.to_string(),
         ))))
     }
@@ -287,9 +285,9 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
             let _ = self.add_scope(scope);
 
             self.counter - 1
-        } else {
-            self.new_scope_with_stdlib(None, path, namespace.clone())
-        }
+        }else{
+            todo!()
+        }    
     }
 }
 

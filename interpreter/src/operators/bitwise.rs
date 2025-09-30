@@ -1,6 +1,5 @@
 use std::ops::{BitAnd, BitOr, BitXor, Shl, Shr};
-
-use super::binary::ASTError;
+use calibre_common::errors::ASTError;
 use crate::runtime::values::RuntimeValue;
 use calibre_parser::ast::binary::BinaryOperator;
 
@@ -55,7 +54,7 @@ macro_rules! handle_bitwise {
 macro_rules! impl_bitwise {
     ($op_trait:ident, $op_fn:ident, $op:tt) => {
         impl $op_trait for RuntimeValue {
-            type Output = Result<RuntimeValue, ASTError>;
+            type Output = Result<RuntimeValue, ASTError<RuntimeValue>>;
             fn $op_fn(self, rhs: Self) -> Self::Output {
                 handle_bitwise!($op_trait, $op, rhs, self)
             }

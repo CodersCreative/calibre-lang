@@ -1,12 +1,11 @@
+use calibre_common::environment::Variable;
 use calibre_parser::ast::{NodeType, RefMutability, VarType};
 
 use crate::runtime::{
-    interpreter::{InterpreterErr, expressions::member::MembrExprPathRes},
-    scope::{Environment, Variable},
-    values::{RuntimeType, RuntimeValue},
+    interpreter::{expressions::member::MembrExprPathRes, InterpreterErr}, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
 };
 
-impl Environment {
+impl InterpreterEnvironment {
     pub fn get_new_scope_with_values(
         &mut self,
         scope: &u64,

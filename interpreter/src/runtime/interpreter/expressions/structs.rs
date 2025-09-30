@@ -1,13 +1,12 @@
+use calibre_common::{environment::Type, errors::{ScopeErr, ValueErr}};
 use calibre_parser::ast::{NodeType, ObjectType};
 
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, ScopeErr, Type},
-    values::{RuntimeValue, ValueErr},
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
 use std::collections::HashMap;
 
-impl Environment {
+impl InterpreterEnvironment {
     pub fn evaluate_struct_expression(
         &mut self,
         scope: &u64,

@@ -13,7 +13,7 @@ pub enum ASTError<T : RuntimeValue> {
 }
 
 #[derive(Error, Debug, Clone)]
-pub enum InterpreterErr<T : RuntimeValue, U : RuntimeType> {
+pub enum RuntimeErr<T : RuntimeValue, U : RuntimeType> {
     #[error("{0}")]
     Value(ValueErr<T, U>),
     #[error("{0}")]
@@ -80,18 +80,36 @@ pub enum ValueErr<T : RuntimeValue, U : RuntimeType> {
     ParseFloatError(ParseFloatError),
 }
 
-impl<T :RuntimeValue, U: RuntimeType> From<ASTError<T>> for InterpreterErr<T, U> {
+impl<T :RuntimeValue, U: RuntimeType> From<ParseIntError> for ValueErr<T, U> {
+    fn from(value: ParseIntError) -> Self {
+        Self::ParseIntError(value)
+    }
+}
+
+impl<T :RuntimeValue, U: RuntimeType> From<ParseFloatError> for ValueErr<T, U> {
+    fn from(value: ParseFloatError) -> Self {
+        Self::ParseFloatError(value)
+    }
+}
+
+impl<T :RuntimeValue, U: RuntimeType> From<ScopeErr<T>> for ValueErr<T, U> {
+    fn from(value: ScopeErr<T>) -> Self {
+        Self::Scope(value)
+    }
+}
+
+impl<T :RuntimeValue, U: RuntimeType> From<ASTError<T>> for RuntimeErr<T, U> {
     fn from(value: ASTError<T>) -> Self {
         Self::AST(value)
     }
 }
-impl<T :RuntimeValue, U: RuntimeType> From<ValueErr<T, U>> for InterpreterErr<T, U> {
+impl<T :RuntimeValue, U: RuntimeType> From<ValueErr<T, U>> for RuntimeErr<T, U> {
     fn from(value: ValueErr<T, U>) -> Self {
         Self::Value(value)
     }
 }
 
-impl<T :RuntimeValue, U: RuntimeType> From<ScopeErr<T>> for InterpreterErr<T, U> {
+impl<T :RuntimeValue, U: RuntimeType> From<ScopeErr<T>> for RuntimeErr<T, U> {
     fn from(value: ScopeErr<T>) -> Self {
         Self::Value(ValueErr::Scope(value))
     }

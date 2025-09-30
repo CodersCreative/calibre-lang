@@ -1,6 +1,5 @@
 use crate::runtime::{
-    scope::Environment,
-    values::{RuntimeType, RuntimeValue},
+    scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
 };
 
 impl RuntimeValue {
@@ -22,7 +21,7 @@ impl RuntimeValue {
         )
     }
 
-    pub fn is_type(&self, env: &Environment, scope: &u64, t: &RuntimeType) -> bool {
+    pub fn is_type(&self, env: &InterpreterEnvironment, scope: &u64, t: &RuntimeType) -> bool {
         if t == &RuntimeType::Dynamic {
             return true;
         }

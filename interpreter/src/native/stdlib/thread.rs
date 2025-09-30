@@ -1,42 +1,20 @@
 use calibre_parser::ast::VarType;
 
-use crate::{
-    native::NativeFunction,
-    runtime::{
-        scope::{Environment, Variable},
-        values::RuntimeValue,
-    },
-};
+use crate::{native::NativeFunction, runtime::{
+        scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
+    }};
 use std::{
     rc::Rc,
     thread::{self},
     time::Duration,
 };
 
-pub fn setup(env: &mut Environment, parent: &u64) {
-    let scope = env.new_scope_from_parent(*parent, "thread");
-
-    let funcs: Vec<(String, Rc<dyn NativeFunction>)> =
-        vec![(String::from("wait"), Rc::new(Wait()))];
-
-    if let Some(map) = env.variables.get_mut(&scope) {
-        for func in funcs {
-            map.insert(
-                func.0,
-                Variable {
-                    value: RuntimeValue::NativeFunction(func.1),
-                    var_type: VarType::Constant,
-                },
-            );
-        }
-    }
-}
 pub struct Wait();
 
 impl NativeFunction for Wait {
     fn run(
         &self,
-        _env: &mut Environment,
+        _env: &mut InterpreterEnvironment,
         _scope: &u64,
         args: &[(
             crate::runtime::values::RuntimeValue,

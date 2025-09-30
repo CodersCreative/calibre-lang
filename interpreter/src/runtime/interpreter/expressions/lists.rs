@@ -1,12 +1,11 @@
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, Variable},
-    values::{RuntimeType, RuntimeValue},
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
 };
+use calibre_common::environment::Variable;
 use calibre_parser::ast::{LoopType, NodeType, RefMutability, VarType};
 use std::mem::discriminant;
 
-impl Environment {
+impl InterpreterEnvironment {
     pub fn evaluate_tuple_expression(
         &mut self,
         scope: &u64,

@@ -1,50 +1,16 @@
 use crate::{
-    native::NativeFunction,
-    runtime::{scope::ScopeErr, values::helper::MatchBlock},
+    native::{self, NativeFunction},
+    runtime::values::helper::MatchBlock,
 };
 use calibre_parser::ast::{ObjectType, ParserDataType};
 use helper::Block;
 use std::{
-    fmt::Debug,
-    num::{ParseFloatError, ParseIntError},
-    rc::Rc,
+    collections::HashMap, f32::consts::PI, fmt::Debug, rc::Rc
 };
-use thiserror::Error;
 
 pub mod conversion;
 pub mod helper;
 
-#[derive(Error, Debug, Clone)]
-pub enum ValueErr {
-    #[error("Unable to convert: {0:?} -> {1:?}.")]
-    Conversion(RuntimeValue, RuntimeType),
-    #[error("Unable to progress value.")]
-    ProgressErr,
-    #[error("{0}")]
-    Scope(ScopeErr),
-    #[error("{0}")]
-    ParseIntError(ParseIntError),
-    #[error("{0}")]
-    ParseFloatError(ParseFloatError),
-}
-
-impl From<ParseIntError> for ValueErr {
-    fn from(value: ParseIntError) -> Self {
-        Self::ParseIntError(value)
-    }
-}
-
-impl From<ParseFloatError> for ValueErr {
-    fn from(value: ParseFloatError) -> Self {
-        Self::ParseFloatError(value)
-    }
-}
-
-impl From<ScopeErr> for ValueErr {
-    fn from(value: ScopeErr) -> Self {
-        Self::Scope(value)
-    }
-}
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum RuntimeType {
@@ -70,6 +36,57 @@ pub enum RuntimeType {
     },
     Enum(u64, String),
     Struct(u64, Option<String>),
+}
+
+impl calibre_common::environment::RuntimeType for RuntimeType {}
+impl calibre_common::environment::RuntimeValue for RuntimeValue {
+    fn string(txt : String) -> Self {
+        Self::Str(txt)
+    }
+
+    fn constants() -> std::collections::HashMap<String, Self> {
+        HashMap::from([
+            (String::from("PI"), RuntimeValue::Float(PI)),
+            (String::from("FLOAT_MAX"), RuntimeValue::Float(f32::MAX)),
+            (String::from("DOUBLE_MAX"), RuntimeValue::Double(f64::MAX)),
+            (String::from("INT_MAX"), RuntimeValue::Int(i64::MAX)),
+            (String::from("LONG_MAX"), RuntimeValue::Long(i128::MAX)),
+            (String::from("FLOAT_MIN"), RuntimeValue::Float(f32::MIN)),
+            (String::from("DOUBLE_MIN"), RuntimeValue::Double(f64::MIN)),
+            (String::from("INT_MIN"), RuntimeValue::Int(i64::MIN)),
+            (String::from("LONG_MIN"), RuntimeValue::Long(i128::MIN)),
+            (String::from("true"), RuntimeValue::Bool(true)),
+            (String::from("false"), RuntimeValue::Bool(false)),
+        ])
+    }
+
+    fn natives() -> HashMap<String, Self> {
+        let lst : Vec<(&'static str, Rc<dyn NativeFunction>)> = vec![
+            ("print", Rc::new(native::stdlib::console::Out())),
+            ("ok", Rc::new(native::global::OkFn())),
+            ("err", Rc::new(native::global::ErrFn())),
+            ("some", Rc::new(native::global::SomeFn())),
+            ("len", Rc::new(native::global::Len())),
+            ("range", Rc::new(native::global::Range())),
+            ("trim", Rc::new(native::global::Trim())),
+            ("console.out", Rc::new(native::stdlib::console::Out())),
+            ("console.input", Rc::new(native::stdlib::console::Input())),
+            ("console.err", Rc::new(native::stdlib::console::ErrFn())),
+            ("console.clear", Rc::new(native::stdlib::console::Clear())),
+            ("thread.wait", Rc::new(native::stdlib::thread::Wait())),
+            ("random.generate", Rc::new(native::stdlib::random::Generate())),
+            ("random.bool", Rc::new(native::stdlib::random::Bool())),
+            ("random.ratio", Rc::new(native::stdlib::random::Ratio())),
+        ];
+
+        let mut map = HashMap::new();
+
+        for val in lst {
+            map.insert(val.0.to_string(), RuntimeValue::NativeFunction(val.1));
+        }
+
+        map
+    }
 }
 
 impl From<ParserDataType> for RuntimeType {

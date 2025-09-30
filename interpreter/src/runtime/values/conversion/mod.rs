@@ -1,7 +1,7 @@
 use crate::runtime::{
-    scope::{Environment, Type},
-    values::{RuntimeType, RuntimeValue, ValueErr},
+    scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
 };
+use calibre_common::{environment::Type, errors::ValueErr};
 use calibre_parser::ast::ObjectType;
 use numbers::NumberValue;
 use std::{collections::HashMap, mem::discriminant};
@@ -11,7 +11,7 @@ pub mod numbers;
 pub mod similar;
 
 impl RuntimeValue {
-    pub fn unwrap_val(self, env: &Environment, scope: &u64) -> Result<RuntimeValue, ValueErr> {
+    pub fn unwrap_val(self, env: &InterpreterEnvironment, scope: &u64) -> Result<RuntimeValue, ValueErr<RuntimeValue, RuntimeType>> {
         match self {
             RuntimeValue::Result(Ok(x), _) => x.unwrap_val(env, scope),
             RuntimeValue::Result(Err(x), _) => x.unwrap_val(env, scope),
@@ -27,9 +27,9 @@ impl RuntimeValue {
 
     pub fn unwrap<'a>(
         &'a self,
-        env: &'a Environment,
+        env: &'a InterpreterEnvironment,
         scope: &u64,
-    ) -> Result<&'a RuntimeValue, ValueErr> {
+    ) -> Result<&'a RuntimeValue, ValueErr<RuntimeValue, RuntimeType>> {
         match self {
             RuntimeValue::Result(Ok(x), _) => x.unwrap(env, scope),
             RuntimeValue::Result(Err(x), _) => x.unwrap(env, scope),
@@ -43,10 +43,10 @@ impl RuntimeValue {
 
     pub fn unwrap_links<'a>(
         &'a self,
-        env: &'a Environment,
+        env: &'a InterpreterEnvironment,
         _scope: &u64,
         condition: Option<&u64>,
-    ) -> Result<&'a RuntimeValue, ValueErr> {
+    ) -> Result<&'a RuntimeValue, ValueErr<RuntimeValue, RuntimeType>> {
         match self {
             RuntimeValue::Link(scope, path, _)
                 if Some(scope) == condition || condition.is_none() =>
@@ -61,10 +61,10 @@ impl RuntimeValue {
 
     pub fn unwrap_links_val(
         self,
-        env: &Environment,
+        env: &InterpreterEnvironment,
         _scope: &u64,
         condition: Option<u64>,
-    ) -> Result<RuntimeValue, ValueErr> {
+    ) -> Result<RuntimeValue, ValueErr<RuntimeValue, RuntimeType>> {
         match self {
             RuntimeValue::Link(scope, path, _)
                 if Some(scope) == condition || condition.is_none() =>
@@ -80,10 +80,10 @@ impl RuntimeValue {
 
     pub fn into_type(
         &self,
-        env: &Environment,
+        env: &InterpreterEnvironment,
         scope: &u64,
         t: &RuntimeType,
-    ) -> Result<RuntimeValue, ValueErr> {
+    ) -> Result<RuntimeValue, ValueErr<RuntimeValue, RuntimeType>> {
         if t == &RuntimeType::Dynamic {
             return Ok(self.clone());
         }

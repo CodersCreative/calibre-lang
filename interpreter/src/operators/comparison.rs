@@ -1,9 +1,9 @@
 use core::panic;
 
-use crate::runtime::{interpreter::InterpreterErr, scope::Environment, values::RuntimeValue};
+use crate::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue};
 use calibre_parser::ast::comparison::Comparison;
 
-impl Environment {
+impl InterpreterEnvironment {
     pub fn is_equal(&self, scope: &u64, value: &RuntimeValue, other: &RuntimeValue) -> bool {
         if let Ok(RuntimeValue::Bool(x)) = handle(
             &Comparison::Equal,
@@ -32,7 +32,7 @@ fn value_handle<T: PartialEq + PartialOrd>(op: &Comparison, left: T, right: T) -
 
 pub fn handle(
     op: &Comparison,
-    env: &Environment,
+    env: &InterpreterEnvironment,
     scope: &u64,
     left: RuntimeValue,
     right: RuntimeValue,

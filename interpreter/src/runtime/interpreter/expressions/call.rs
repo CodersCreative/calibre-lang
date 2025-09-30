@@ -1,12 +1,10 @@
+use calibre_common::environment::{Type, Variable};
 use calibre_parser::ast::{NodeType, ObjectType, RefMutability, VarType};
 
-use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, ScopeErr, Type, Variable},
-    values::{FunctionType, RuntimeType, RuntimeValue, ValueErr, helper::Block},
-};
+use crate::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{helper::Block, FunctionType, RuntimeType, RuntimeValue}};
 
-impl Environment {
+
+impl InterpreterEnvironment {
     pub fn evaluate_function(
         &mut self,
         scope: &u64,

@@ -1,71 +1,13 @@
-use calibre_parser::ast::VarType;
-
-use crate::{
-    native::{NativeFunction, stdlib::console::Out},
-    runtime::{
-        interpreter::InterpreterErr,
-        scope::{Environment, Variable},
-        values::{RuntimeType, RuntimeValue},
-    },
-};
-use std::{f32::consts::PI, rc::Rc};
-
-pub fn setup(env: &mut Environment, scope: &u64) {
-    let funcs: Vec<(String, Rc<dyn NativeFunction>)> = vec![
-        (String::from("ok"), Rc::new(OkFn())),
-        (String::from("err"), Rc::new(ErrFn())),
-        (String::from("some"), Rc::new(SomeFn())),
-        (String::from("range"), Rc::new(Range())),
-        (String::from("trim"), Rc::new(Trim())),
-        (String::from("print"), Rc::new(Out())),
-        (String::from("len"), Rc::new(Len())),
-    ];
-
-    if let Some(map) = env.variables.get_mut(scope) {
-        for func in funcs {
-            let _ = map.insert(
-                func.0,
-                Variable {
-                    value: RuntimeValue::NativeFunction(func.1),
-                    var_type: VarType::Constant,
-                },
-            );
-        }
-    }
-
-    let vars = vec![
-        (String::from("PI"), RuntimeValue::Float(PI)),
-        (String::from("FLOAT_MAX"), RuntimeValue::Float(f32::MAX)),
-        (String::from("DOUBLE_MAX"), RuntimeValue::Double(f64::MAX)),
-        (String::from("INT_MAX"), RuntimeValue::Int(i64::MAX)),
-        (String::from("LONG_MAX"), RuntimeValue::Long(i128::MAX)),
-        (String::from("FLOAT_MIN"), RuntimeValue::Float(f32::MIN)),
-        (String::from("DOUBLE_MIN"), RuntimeValue::Double(f64::MIN)),
-        (String::from("INT_MIN"), RuntimeValue::Int(i64::MIN)),
-        (String::from("LONG_MIN"), RuntimeValue::Long(i128::MIN)),
-        (String::from("true"), RuntimeValue::Bool(true)),
-        (String::from("false"), RuntimeValue::Bool(false)),
-    ];
-
-    if let Some(map) = env.variables.get_mut(scope) {
-        for var in vars {
-            let _ = map.insert(
-                var.0,
-                Variable {
-                    value: var.1,
-                    var_type: VarType::Constant,
-                },
-            );
-        }
-    }
-}
+use crate::{native::NativeFunction, runtime::{
+        interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
+    }};
 
 pub struct ErrFn();
 
 impl NativeFunction for ErrFn {
     fn run(
         &self,
-        _env: &mut Environment,
+        _env: &mut InterpreterEnvironment,
         _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
@@ -88,7 +30,7 @@ pub struct OkFn();
 impl NativeFunction for OkFn {
     fn run(
         &self,
-        _env: &mut Environment,
+        _env: &mut InterpreterEnvironment,
         _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
@@ -111,7 +53,7 @@ pub struct SomeFn();
 impl NativeFunction for SomeFn {
     fn run(
         &self,
-        _env: &mut Environment,
+        _env: &mut InterpreterEnvironment,
         _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
@@ -131,7 +73,7 @@ pub struct Range();
 impl NativeFunction for Range {
     fn run(
         &self,
-        env: &mut Environment,
+        env: &mut InterpreterEnvironment,
         scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
@@ -187,7 +129,7 @@ pub struct Len();
 impl NativeFunction for Len {
     fn run(
         &self,
-        env: &mut Environment,
+        env: &mut InterpreterEnvironment,
         scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
@@ -208,7 +150,7 @@ pub struct Trim();
 impl NativeFunction for Trim {
     fn run(
         &self,
-        env: &mut Environment,
+        env: &mut InterpreterEnvironment,
         scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {

@@ -1,12 +1,13 @@
+use calibre_common::errors::ASTError;
 use calibre_parser::ast::comparison::BooleanOperation;
 
-use crate::{operators::binary::ASTError, runtime::values::RuntimeValue};
+use crate::{runtime::values::RuntimeValue};
 
 pub fn handle(
     op: &BooleanOperation,
     left: &RuntimeValue,
     right: &RuntimeValue,
-) -> Result<RuntimeValue, ASTError> {
+) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
     if let RuntimeValue::Bool(x) = left {
         if *x && op == &BooleanOperation::Or {
             return Ok(RuntimeValue::Bool(true));

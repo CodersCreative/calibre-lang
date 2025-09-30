@@ -1,43 +1,14 @@
-use crate::{
-    native::NativeFunction,
-    runtime::{
-        interpreter::InterpreterErr,
-        scope::{Environment, Variable},
-        values::{RuntimeType, RuntimeValue},
-    },
-};
-use calibre_parser::ast::VarType;
+use crate::{native::NativeFunction, runtime::{
+        interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
+    }};
 use rand::{self, random_bool, random_range, random_ratio};
-use std::rc::Rc;
-
-pub fn setup(env: &mut Environment, parent: &u64) {
-    let scope = env.new_scope_from_parent(*parent, "random");
-
-    let funcs: Vec<(String, Rc<dyn NativeFunction>)> = vec![
-        (String::from("generate"), Rc::new(Generate())),
-        (String::from("bool"), Rc::new(Bool())),
-        (String::from("ratio"), Rc::new(Ratio())),
-    ];
-
-    if let Some(map) = env.variables.get_mut(&scope) {
-        for func in funcs {
-            map.insert(
-                func.0,
-                Variable {
-                    value: RuntimeValue::NativeFunction(func.1),
-                    var_type: VarType::Constant,
-                },
-            );
-        }
-    }
-}
 
 pub struct Generate();
 
 impl NativeFunction for Generate {
     fn run(
         &self,
-        env: &mut Environment,
+        env: &mut InterpreterEnvironment,
         scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
@@ -79,7 +50,7 @@ pub struct Bool();
 impl NativeFunction for Bool {
     fn run(
         &self,
-        env: &mut Environment,
+        env: &mut InterpreterEnvironment,
         scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
@@ -104,7 +75,7 @@ pub struct Ratio();
 impl NativeFunction for Ratio {
     fn run(
         &self,
-        env: &mut Environment,
+        env: &mut InterpreterEnvironment,
         scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {

@@ -1,15 +1,16 @@
+use calibre_common::errors::ValueErr;
+
 use crate::runtime::{
-    scope::Environment,
-    values::{RuntimeValue, ValueErr},
+    scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
 };
 
 impl RuntimeValue {
     pub fn make_similar(
         self,
-        env: &Environment,
+        env: &InterpreterEnvironment,
         scope: &u64,
         rhs: Self,
-    ) -> Result<(Self, Self), ValueErr> {
+    ) -> Result<(Self, Self), ValueErr<RuntimeValue, RuntimeType>> {
         if self.is_number() && rhs.is_number() {
             match self {
                 RuntimeValue::Double(x) => match rhs {

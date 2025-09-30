@@ -1,11 +1,9 @@
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::Environment,
-    values::{RuntimeType, RuntimeValue},
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
 };
 use calibre_parser::ast::{IfComparisonType, NodeType};
 
-impl Environment {
+impl InterpreterEnvironment {
     fn value_in_list(&self, scope: &u64, value: &RuntimeValue, list: &[RuntimeValue]) -> bool {
         for val in list {
             if self.is_equal(scope, value, val) {

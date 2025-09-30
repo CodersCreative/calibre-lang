@@ -1,11 +1,11 @@
+use calibre_common::environment::{Object, Variable};
+
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, Object, Variable},
-    values::RuntimeValue,
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
 };
 use std::collections::HashMap;
 
-impl Environment {
+impl InterpreterEnvironment {
     pub fn evaluate_import_statement(
         &mut self,
         scope: &u64,
@@ -33,7 +33,7 @@ impl Environment {
             };
 
             if &values[0] == "*" {
-                let vars: Vec<(String, Variable)> = self
+                let vars: Vec<(String, Variable<RuntimeValue>)> = self
                     .variables
                     .get(&new_scope)
                     .unwrap()
@@ -59,7 +59,7 @@ impl Environment {
                     }
                 }
 
-                let obj: Vec<(String, Object)> = self
+                let obj: Vec<(String, Object<RuntimeValue, RuntimeType>)> = self
                     .objects
                     .get(&new_scope)
                     .unwrap()
@@ -68,7 +68,7 @@ impl Environment {
                         (
                             x.0.clone(),
                             Object {
-                                object_type: crate::runtime::scope::Type::Link(
+                                object_type: calibre_common::environment::Type::Link(
                                     new_scope,
                                     x.0.clone(),
                                 ),
@@ -99,8 +99,9 @@ impl Environment {
                                 var_type: var.var_type.clone(),
                             },
                         )?;
-                    } else if let Some(obj) = self.objects.get(&new_scope).unwrap().get(&value) {
-                        self.push_object(scope, value.clone(), obj.clone())?; //Object::Link(path.clone()))?;
+                    } else if self.objects.get(&new_scope).unwrap().contains_key(&value) {
+                        let val = self.objects.get(&new_scope).unwrap().get(&value).unwrap().clone();
+                        self.push_object(scope, value.clone(), val)?; //Object::Link(path.clone()))?;
                     } else {
                         panic!()
                     }

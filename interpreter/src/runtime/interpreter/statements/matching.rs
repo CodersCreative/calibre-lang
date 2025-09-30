@@ -1,13 +1,14 @@
+use calibre_common::environment::Type;
 use calibre_parser::ast::{NodeType, ObjectType, RefMutability, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr,
-    scope::{Environment, Type, links::progress},
+    scope::{links::progress, InterpreterEnvironment},
     values::{RuntimeType, RuntimeValue},
 };
 use std::panic;
 
-impl Environment {
+impl InterpreterEnvironment {
     fn match_inner_pattern(
         &mut self,
         mut scope: u64,

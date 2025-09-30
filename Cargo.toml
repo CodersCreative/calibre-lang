@@ -35,7 +35,7 @@ clap = { version = "4.5.40", features = ["derive"] }
 rustyline = "16.0.0"
 calibre-parser = {workspace = true}
 calibre-interpreter = {workspace = true}
-calibre-common = {workspace = true, optional = true}
+calibre-common = {workspace = true}
 calibre-type-checker = {workspace = true, optional = true}
 calibre-cranelift-jit = {workspace = true, optional = true}
 

@@ -1,14 +1,13 @@
 use std::collections::HashMap;
 
+use calibre_common::environment::{Object, Type};
 use calibre_parser::{ast::{NodeType}};
 
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, Object, Type},
-    values::RuntimeValue,
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
 };
 
-impl Environment {
+impl InterpreterEnvironment {
     pub fn evaluate_impl_declaration(
         &mut self,
         scope: &u64,
@@ -42,7 +41,7 @@ impl Environment {
         &mut self,
         scope: &u64,
         identifier : String,
-        object : Type,
+        object : Type<RuntimeType>,
     ) -> Result<RuntimeValue, InterpreterErr> {
             let _ = self.push_object(
                 scope,

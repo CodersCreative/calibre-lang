@@ -1,13 +1,9 @@
-use crate::{
-    runtime::{
-        interpreter::InterpreterErr,
-        scope::{Environment, Scope},
-        values::RuntimeValue,
-    },
-    utils::get_path,
-};
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, fs, path::PathBuf};
+
+use calibre_common::{environment::Scope, utils::{get_globals_path, get_stdlib_path}};
 use calibre_parser::Parser;
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug, fs, path::PathBuf, str::FromStr};
+
+use crate::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue};
 
 pub mod global;
 pub mod stdlib;
@@ -15,7 +11,7 @@ pub mod stdlib;
 pub trait NativeFunction {
     fn run(
         &self,
-        env: &mut Environment,
+        env: &mut InterpreterEnvironment,
         scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr>;
@@ -58,7 +54,7 @@ impl PartialOrd for dyn NativeFunction {
     }
 }
 
-impl Environment {
+impl InterpreterEnvironment {
     pub fn new_scope_with_stdlib<'a>(
         &'a mut self,
         parent: Option<u64>,
@@ -67,27 +63,28 @@ impl Environment {
     ) -> u64 {
         let mut parser = Parser::default();
         let scope = 0;
+        let counter = self.counter;
 
         self.add_scope(Scope {
             id: 0,
-            namespace: namespace.unwrap_or(&self.counter.to_string()).to_string(),
+            namespace: namespace.unwrap_or(&counter.to_string()).to_string(),
             parent,
             children: HashMap::new(),
             counter: 0,
             path: path.clone(),
         });
 
-        global::setup(self, &scope);
+        calibre_common::native::global::setup(self, &scope);
 
         let program = parser
-            .produce_ast(fs::read_to_string(get_path("native/global/main.cl".to_string())).unwrap())
+            .produce_ast(fs::read_to_string(&get_globals_path()).unwrap())
             .unwrap();
 
         let _ = self.evaluate(&scope, program).unwrap();
 
         let std = self.new_scope(
             Some(scope),
-            PathBuf::from_str(&get_path("native/stdlib/main.cl".to_string())).unwrap(),
+            get_stdlib_path(),
             Some("std"),
         );
 

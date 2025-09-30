@@ -1,19 +1,11 @@
-use crate::runtime::{interpreter::InterpreterErr, scope::Environment, values::RuntimeValue};
+use crate::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue};
+use calibre_common::errors::ASTError;
 use calibre_parser::ast::binary::BinaryOperator;
 use std::ops::{Add, Div, Mul, Sub};
-use thiserror::Error;
-
-#[derive(Error, Debug, Clone)]
-pub enum ASTError {
-    #[error("Cannot {2:?} values of {0:?}, {1:?}.")]
-    BinaryOperator(RuntimeValue, RuntimeValue, BinaryOperator),
-    #[error("Cannot perform a boolean operation to values of {0:?}, {1:?}.")]
-    BooleanOperator(RuntimeValue, RuntimeValue),
-}
 
 pub fn handle(
     op: &BinaryOperator,
-    env: &Environment,
+    env: &InterpreterEnvironment,
     scope: &u64,
     left: RuntimeValue,
     right: RuntimeValue,
@@ -50,7 +42,7 @@ impl RuntimeValue {
         &self,
         rhs: &Self,
         operator: &BinaryOperator,
-    ) -> Result<RuntimeValue, ASTError> {
+    ) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
         Err(ASTError::BinaryOperator(
             self.clone(),
             rhs.clone(),
@@ -124,7 +116,7 @@ macro_rules! handle_binop_numeric {
 macro_rules! impl_binop_numeric {
     ($op_trait:ident, $op_fn:ident, $op:tt) => {
         impl $op_trait for RuntimeValue {
-            type Output = Result<RuntimeValue, ASTError>;
+            type Output = Result<RuntimeValue, ASTError<RuntimeValue>>;
             fn $op_fn(self, rhs: Self) -> Self::Output {
                 handle_binop_numeric!($op_trait, $op, rhs, self)
             }
@@ -138,17 +130,17 @@ impl_binop_numeric!(Mul, mul, *);
 impl_binop_numeric!(Div, div, /);
 
 impl RuntimeValue {
-    fn modulus(self, rhs: Self) -> Result<RuntimeValue, ASTError> {
+    fn modulus(self, rhs: Self) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
         handle_binop_numeric!(Mul, %, rhs, self)
     }
 
     fn special_and(
         self,
         rhs: Self,
-        _env: &Environment,
+        _env: &InterpreterEnvironment,
         _scope: &u64,
-    ) -> Result<RuntimeValue, ASTError> {
-        let add_str = || -> Result<RuntimeValue, ASTError> {
+    ) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
+        let add_str = || -> Result<RuntimeValue, ASTError<RuntimeValue>> {
             let mut x = rhs.to_string();
             x.push_str(&self.to_string());
             Ok(RuntimeValue::Str(x))
@@ -175,9 +167,9 @@ impl RuntimeValue {
     fn special_shr(
         self,
         rhs: Self,
-        _env: &Environment,
+        _env: &InterpreterEnvironment,
         _scope: &u64,
-    ) -> Result<RuntimeValue, ASTError> {
+    ) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
         match rhs {
             Self::Tuple(mut data) => {
                 data.push(self);
@@ -202,9 +194,9 @@ impl RuntimeValue {
     fn special_shl(
         self,
         rhs: Self,
-        _env: &Environment,
+        _env: &InterpreterEnvironment,
         _scope: &u64,
-    ) -> Result<RuntimeValue, ASTError> {
+    ) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
         match self {
             Self::Tuple(mut data) => {
                 data.push(rhs);
@@ -226,7 +218,7 @@ impl RuntimeValue {
         }
     }
 
-    fn pow(self, rhs: Self) -> Result<RuntimeValue, ASTError> {
+    fn pow(self, rhs: Self) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
         match self {
             RuntimeValue::Int(x) => match rhs {
                 RuntimeValue::Int(y) => Ok(RuntimeValue::Int(x.pow(y as u32))),

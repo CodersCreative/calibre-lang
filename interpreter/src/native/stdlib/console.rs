@@ -1,44 +1,14 @@
-use crate::{
-    native::NativeFunction,
-    runtime::{
-        interpreter::InterpreterErr,
-        scope::{Environment, Variable},
-        values::{RuntimeType, RuntimeValue},
-    },
-};
-use calibre_parser::ast::VarType;
+use crate::{native::NativeFunction, runtime::{
+        interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
+    }};
 use rustyline::DefaultEditor;
-use std::rc::Rc;
-
-pub fn setup(env: &mut Environment, parent: &u64) {
-    let scope = env.new_scope_from_parent(*parent, "console");
-
-    let funcs: Vec<(String, Rc<dyn NativeFunction>)> = vec![
-        (String::from("out"), Rc::new(Out())),
-        (String::from("err"), Rc::new(ErrFn())),
-        (String::from("input"), Rc::new(Input())),
-        (String::from("clear"), Rc::new(Clear())),
-    ];
-
-    if let Some(map) = env.variables.get_mut(&scope) {
-        for func in funcs {
-            map.insert(
-                func.0,
-                Variable {
-                    value: RuntimeValue::NativeFunction(func.1),
-                    var_type: VarType::Constant,
-                },
-            );
-        }
-    }
-}
 
 pub struct Out();
 
 impl NativeFunction for Out {
     fn run(
         &self,
-        env: &mut Environment,
+        env: &mut InterpreterEnvironment,
         _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
@@ -67,7 +37,7 @@ pub struct ErrFn();
 impl NativeFunction for ErrFn {
     fn run(
         &self,
-        env: &mut Environment,
+        env: &mut InterpreterEnvironment,
         _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
@@ -96,7 +66,7 @@ pub struct Input();
 impl NativeFunction for Input {
     fn run(
         &self,
-        _env: &mut Environment,
+        _env: &mut InterpreterEnvironment,
         _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
@@ -122,7 +92,7 @@ pub struct Clear();
 impl NativeFunction for Clear {
     fn run(
         &self,
-        _env: &mut Environment,
+        _env: &mut InterpreterEnvironment,
         _scope: &u64,
         _args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
