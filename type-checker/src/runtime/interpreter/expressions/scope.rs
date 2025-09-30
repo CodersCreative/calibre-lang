@@ -74,7 +74,7 @@ impl CheckerEnvironment {
 
                             let typ = {
                                 let var = self.get_link_path(scope, &path)?;
-                                if &var != v {
+                                if !var.is_type(v) {
                                     return Err(InterpreterErr::UnexpectedType(var.clone()));
                                 }
 

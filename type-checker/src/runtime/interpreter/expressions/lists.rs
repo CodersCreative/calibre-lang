@@ -3,7 +3,6 @@ use crate::runtime::{
 };
 use calibre_common::environment::Variable;
 use calibre_parser::ast::{LoopType, NodeType, RefMutability, VarType};
-use std::mem::discriminant;
 
 impl CheckerEnvironment {
     pub fn evaluate_tuple_expression(
@@ -32,9 +31,9 @@ impl CheckerEnvironment {
             }
 
         let t = if values.len() > 0 {
-            let t = discriminant(&values[0]);
+            let t = &values[0];
             let filtered: Vec<&RuntimeType> =
-                values.iter().filter(|x| discriminant(*x) == t).collect();
+                values.iter().filter(|x| x.is_type(t)).collect();
             if values.len() == filtered.len() {
                 Some(values[0].clone())
             } else {

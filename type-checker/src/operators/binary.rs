@@ -1,5 +1,5 @@
 use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
-use calibre_common::errors::ASTError;
+use calibre_common::{ errors::ASTError};
 use calibre_parser::ast::binary::BinaryOperator;
 
 
@@ -10,30 +10,99 @@ pub fn handle(
     left: RuntimeType,
     right: RuntimeType,
 ) -> Result<RuntimeType, InterpreterErr> {
-    // match op {
-    //     BinaryOperator::Add => left + right,
-    //     BinaryOperator::Sub => left - right,
-    //     BinaryOperator::Mul => left * right,
-    //     BinaryOperator::Div => left / right,
-    //     BinaryOperator::Pow => left.pow(right),
-    //     BinaryOperator::Mod => left.modulus(right),
-    //     BinaryOperator::BitXor => left ^ right,
-    //     BinaryOperator::BitOr => left | right,
-    //     BinaryOperator::BitAnd => Ok(match left.clone() & right.clone() {
-    //         Ok(x) => x,
-    //         _ => left.special_and(right, env, scope)?,
-    //     }),
-    //     BinaryOperator::Shl => Ok(match left.clone() << right.clone() {
-    //         Ok(x) => x,
-    //         _ => left.special_shl(right, env, scope)?,
-    //     }),
-    //     BinaryOperator::Shr => Ok(match left.clone() >> right.clone() {
-    //         Ok(x) => x,
-    //         _ => left.special_shr(right, env, scope)?,
-    //     }),
-    // }?;
+    if left == RuntimeType::Dynamic || right == RuntimeType::Dynamic {
+        return Ok(RuntimeType::Dynamic);
+    }
 
-    Ok(left)
+    let generic_handle = || -> Result<RuntimeType, InterpreterErr> {
+            match (&left, &right) {
+                (RuntimeType::Int, RuntimeType::Int ) => {
+                    Ok(RuntimeType::Int)
+                },
+                (RuntimeType::Int, RuntimeType::Float ) |  (RuntimeType::Float, RuntimeType::Int )=> {
+                    Ok(RuntimeType::Float)
+                },
+                (RuntimeType::Float, RuntimeType::Float ) => {
+                    Ok(RuntimeType::Float)
+                },
+                _ => left.panic_operator(&right, op).map_err(|e| e.into()),
+            }
+    }; 
+    
+    let generic_bitwise_handle = || -> Result<RuntimeType, InterpreterErr> {
+            match (&left, &right) {
+                (RuntimeType::Int, RuntimeType::Int ) => {
+                    Ok(RuntimeType::Int)
+                },
+                (RuntimeType::Int, RuntimeType::Bool ) |  (RuntimeType::Bool, RuntimeType::Int )=> {
+                    Ok(RuntimeType::Int)
+                },
+                (RuntimeType::Bool, RuntimeType::Bool ) => {
+                    Ok(RuntimeType::Int)
+                },
+                _ => left.panic_operator(&right, op).map_err(|e| e.into()),
+            }
+    }; 
+    match op {
+        BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mul | BinaryOperator::Pow => generic_handle(),
+        BinaryOperator::Div => {
+            Ok(RuntimeType::Float)
+        },
+        BinaryOperator::Mod => Ok(RuntimeType::Int),
+        BinaryOperator::BitXor | BinaryOperator::BitOr => generic_bitwise_handle(),
+        BinaryOperator::BitAnd => {
+            match generic_bitwise_handle() {
+                Ok(x) => Ok(x),
+                Err(e) => match (&left, &right){
+                    (RuntimeType::Str, RuntimeType::Str ) | (RuntimeType::Char, RuntimeType::Str ) | (RuntimeType::Str, RuntimeType::Char ) | (RuntimeType::Char, RuntimeType::Char )=> Ok(RuntimeType::Str),
+                    _ => Err(e)
+                }
+            }
+        }
+        BinaryOperator::Shl => {
+            match (left.clone(), right.clone()){
+                (RuntimeType::Int, RuntimeType::Int) | (RuntimeType::Bool, RuntimeType::Int) | (RuntimeType::Int, RuntimeType::Bool) | (RuntimeType::Bool, RuntimeType::Bool) => Ok(RuntimeType::Int),
+                (RuntimeType::List(x), y) => {
+                    if let Some(z) = *x.clone() {
+                        if !z.is_type(&y) {
+                            left.panic_operator(&right, op).map_err(|e| e.into())
+                        } else {
+                            Ok(RuntimeType::List(x.clone()))
+                        }
+                    }else{
+                        Ok(RuntimeType::List(x.clone()))
+                    }
+                },
+                (RuntimeType::Tuple(mut x), y) => {
+                    x.push(y);
+                    Ok(RuntimeType::Tuple(x.clone()))
+                },
+                _ => left.panic_operator(&right, op).map_err(|e| e.into()),
+            }
+        }
+        BinaryOperator::Shr => {
+            match (left.clone(), right.clone()){
+                (RuntimeType::Int, RuntimeType::Int) | (RuntimeType::Bool, RuntimeType::Int) | (RuntimeType::Int, RuntimeType::Bool) | (RuntimeType::Bool, RuntimeType::Bool) => Ok(RuntimeType::Int),
+                (y, RuntimeType::List(x)) => {
+                    if let Some(z) = *x.clone() {
+                        if !z.is_type(&y) {
+                            left.panic_operator(&right, op).map_err(|e| e.into())
+                        } else {
+                            Ok(RuntimeType::List(x.clone()))
+                        }
+                    }else{
+                        Ok(RuntimeType::List(x.clone()))
+                    }
+                },
+                (y, RuntimeType::Tuple(mut x)) => {
+                    x.push(y);
+                    Ok(RuntimeType::Tuple(x.clone()))
+                },
+                _ => left.panic_operator(&right, op).map_err(|e| e.into()),
+            }
+        }
+        _ => unimplemented!()
+    }
 }
 
 impl RuntimeType {

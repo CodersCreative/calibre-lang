@@ -57,10 +57,8 @@ impl CheckerEnvironment {
         to : RuntimeType,
         inclusive : bool,
     ) -> Result<RuntimeType, InterpreterErr> {
-        let _ = from
-                    .into_type(self, scope, &RuntimeType::Int)?;
-        let _ = to
-                        .into_type(self, scope, &RuntimeType::Int)?;
+        let _ = from.into_type(self, scope, &RuntimeType::Int)?;
+        let _ = to.into_type(self, scope, &RuntimeType::Int)?;
         Ok(RuntimeType::Range)
     }
 
