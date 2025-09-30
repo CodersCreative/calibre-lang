@@ -1,5 +1,5 @@
 use crate::runtime::scope::{Environment, ScopeErr};
-use calibre_parser::ast::{ParserDataType};
+use calibre_parser::ast::{ObjectType, ParserDataType};
 use std::{
     fmt::Debug,
     num::{ParseFloatError, ParseIntError},
@@ -55,12 +55,13 @@ pub enum RuntimeType {
     Result(Box<RuntimeType>, Box<RuntimeType>),
     Function {
         return_type: Box<Option<RuntimeType>>,
-        parameters: Vec<(RuntimeType, calibre_parser::ast::RefMutability, bool)>,
+        parameters: Vec<(String, RuntimeType, calibre_parser::ast::RefMutability, bool)>,
         is_async: bool,
     },
-    Enum(u64, String),
-    Struct(u64, Option<String>),
+    Enum(u64, String, Option<ObjectType<RuntimeType>>),
+    Struct(u64, Option<String>, ObjectType<RuntimeType>),
     Null,
+    NativeFunction,
 }
 
 impl From<ParserDataType> for RuntimeType {
@@ -84,7 +85,7 @@ impl From<ParserDataType> for RuntimeType {
                 None => None,
             })),
             ParserDataType::Range => Self::Range,
-            ParserDataType::Struct(x) => Self::Struct(0, x),
+            ParserDataType::Struct(x) => Self::Struct(0, x, ObjectType::Tuple(Vec::new())),
             ParserDataType::Function {
                 return_type,
                 parameters,
@@ -96,7 +97,7 @@ impl From<ParserDataType> for RuntimeType {
                 }),
                 parameters: parameters
                     .into_iter()
-                    .map(|x| (RuntimeType::from(x.0), x.1, false))
+                    .map(|x| (String::new(), RuntimeType::from(x.0), x.1, false))
                     .collect(),
                 is_async,
             },

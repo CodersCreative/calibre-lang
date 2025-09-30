@@ -215,38 +215,6 @@ impl Environment {
                 _ => {}
             }
 
-            if let NodeType::Identifier(caller) = caller.clone() {
-                if let Ok(var) = self.get_var_ref(scope, &caller) {
-                    let RuntimeValue::Link(new_scope, _, _) = &var.value else {
-                        panic!()
-                    };
-                    match var.var_type {
-                        VarType::Mutable => {
-                            if arguments.len() <= 0 {
-                                return Ok(var.value);
-                            } else if arguments.len() == 1 {
-                                let value = self.evaluate(&scope, arguments[0].0.clone())?;
-                                let _ = self.assign_var(&new_scope, &caller, value.clone())?;
-                                return Ok(value);
-                            } else {
-                                return Err(InterpreterErr::SetterArgs(arguments));
-                            }
-                        }
-                        _ => match var.value {
-                            RuntimeValue::NativeFunction(_) => {}
-                            _ => {
-                                if arguments.len() <= 0 {
-                                    return Ok(var.value.clone());
-                                } else {
-                                    return Err(InterpreterErr::Value(ValueErr::Scope(
-                                        ScopeErr::AssignConstant(caller.clone()),
-                                    )));
-                                }
-                            }
-                        },
-                    }
-                }
-            }
             panic!("Cannot call non-variable or function value, {:?}", func);
     }
 }

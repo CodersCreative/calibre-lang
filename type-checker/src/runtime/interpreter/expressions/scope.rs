@@ -66,37 +66,36 @@ impl Environment {
                             )?;
                             continue;
                         } else if let NodeType::MemberExpression { path } = &arg.0 {
-                            // let path = match self.get_member_expression_path(scope, path.clone())? {
-                            //     MembrExprPathRes::Path(x) => x,
-                            //     _ => {
-                            //         return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
-                            //     }
-                            // };
-                            //
-                            // let typ = {
-                            //     let var = self.get_link_path(scope, &path)?.unwrap(self, scope)?;
-                            //
-                            //     if !var.is_type(self, &scope, &v) {
-                            //         return Err(InterpreterErr::UnexpectedType(var.clone()));
-                            //     }
-                            //
-                            //     (var).into()
-                            // };
-                            //
-                            // let _ = self.push_var(
-                            //     &new_scope,
-                            //     k.to_string(),
-                            //     Variable {
-                            //         value: RuntimeValue::Link(scope.clone(), path, typ),
-                            //         var_type: match m {
-                            //             RefMutability::MutRef | RefMutability::MutValue => {
-                            //                 VarType::Mutable
-                            //             }
-                            //             _ => VarType::Immutable,
-                            //         },
-                            //     },
-                            // )?;
-                            // continue;
+                            let path = match self.get_member_expression_path(scope, path.clone())? {
+                                MembrExprPathRes::Path(x) => x,
+                                _ => {
+                                    return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
+                                }
+                            };
+
+                            let typ = {
+                                let var = self.get_link_path(scope, &path)?;
+                                if &var != v {
+                                    return Err(InterpreterErr::UnexpectedType(var.clone()));
+                                }
+
+                                (var).into()
+                            };
+
+                            let _ = self.push_var(
+                                &new_scope,
+                                k.to_string(),
+                                Variable {
+                                    value: typ,
+                                    var_type: match m {
+                                        RefMutability::MutRef | RefMutability::MutValue => {
+                                            VarType::Mutable
+                                        }
+                                        _ => VarType::Immutable,
+                                    },
+                                },
+                            )?;
+                            continue;
                         } else {
                             return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
                         }

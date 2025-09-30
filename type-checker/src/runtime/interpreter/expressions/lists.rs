@@ -1,7 +1,7 @@
 use crate::runtime::{
     interpreter::InterpreterErr,
     scope::{Environment, Variable},
-    values::{RuntimeType, RuntimeValue},
+    values::{RuntimeType},
 };
 use calibre_parser::ast::{LoopType, NodeType, RefMutability, VarType};
 use std::mem::discriminant;
@@ -11,21 +11,21 @@ impl Environment {
         &mut self,
         scope: &u64,
         vals : Vec<NodeType>
-    ) -> Result<RuntimeValue, InterpreterErr> {
+    ) -> Result<RuntimeType, InterpreterErr> {
         let mut values = Vec::new();
 
         for val in vals.iter() {
             values.push(self.evaluate(scope, val.clone())?);
         }
 
-        Ok(RuntimeValue::Tuple(values))
+        Ok(RuntimeType::Tuple(values))
     }
 
     pub fn evaluate_list_expression(
         &mut self,
         scope: &u64,
         vals : Vec<NodeType>
-    ) -> Result<RuntimeValue, InterpreterErr> {
+    ) -> Result<RuntimeType, InterpreterErr> {
         let mut values = Vec::new();
 
             for val in vals.iter() {
@@ -34,10 +34,10 @@ impl Environment {
 
         let t = if values.len() > 0 {
             let t = discriminant(&values[0]);
-            let filtered: Vec<&RuntimeValue> =
+            let filtered: Vec<&RuntimeType> =
                 values.iter().filter(|x| discriminant(*x) == t).collect();
             if values.len() == filtered.len() {
-                Some((&values[0]).into())
+                Some(values[0].clone())
             } else {
                 None
             }
@@ -45,10 +45,7 @@ impl Environment {
             None
         };
 
-        Ok(RuntimeValue::List {
-            data: values,
-            data_type: Box::new(t),
-        })
+        Ok(RuntimeType::List(Box::new(t)))
     }
 
     pub fn evaluate_iter_expression(
@@ -57,100 +54,77 @@ impl Environment {
         map : NodeType,
         loop_type : LoopType,
         conditionals : Vec<NodeType>
-    ) -> Result<RuntimeValue, InterpreterErr> {
-            let mut result = Vec::new();
+    ) -> Result<RuntimeType, InterpreterErr> {
+            let mut result = None;
 
             if let LoopType::For(identifier, range) = loop_type {
                 let range = self.evaluate(scope, range)?;
-                if let RuntimeValue::List { data, data_type: _ } = range {
-                    for d in data.into_iter() {
-                        let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-                        let _ = self.push_var(
-                            &new_scope,
-                            identifier.clone(),
-                            Variable {
-                                value: d.clone(),
-                                var_type: VarType::Immutable,
-                            },
-                        );
+                if let RuntimeType::List(d) = range {
+                    let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+                    let _ = self.push_var(
+                        &new_scope,
+                        identifier.clone(),
+                        Variable {
+                            value: d.unwrap_or(RuntimeType::Dynamic),
+                            var_type: VarType::Immutable,
+                        },
+                    );
 
-                        if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                            result.push(
-                                self.evaluate(&new_scope, map.clone())?.unwrap_links_val(
-                                    self,
-                                    &new_scope,
-                                    Some(new_scope),
-                                )?,
-                            );
-                        }
-
-                        self.remove_scope(&new_scope);
+                    if self.handle_conditionals(&new_scope, conditionals.clone())? {
+                        result = Some(
+                            self.evaluate(&new_scope, map.clone())?);
                     }
-                } else if let RuntimeValue::Range(from, to) =
+
+                    self.remove_scope(&new_scope);
+                } else if let RuntimeType::Range =
                     range.into_type(self, scope, &RuntimeType::Range)?
                 {
-                    for i in from..to {
-                        let new_scope = self.get_new_scope(
-                            scope,
-                            vec![(
-                                identifier.clone(),
-                                RuntimeType::Int,
-                                RefMutability::Value,
-                                None,
-                            )],
-                            vec![(NodeType::IntLiteral(i as i128), None)],
-                        )?;
-                        if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                            result.push(
-                                self.evaluate(&new_scope, map.clone())?.unwrap_links_val(
-                                    self,
-                                    &new_scope,
-                                    Some(new_scope),
-                                )?,
-                            );
-                        }
-                        self.remove_scope(&new_scope);
+                    let new_scope = self.get_new_scope(
+                        scope,
+                        vec![(
+                            identifier.clone(),
+                            RuntimeType::Int,
+                            RefMutability::Value,
+                            None,
+                        )],
+                        vec![(NodeType::IntLiteral(1 as i128), None)],
+                    )?;
+
+                    if self.handle_conditionals(&new_scope, conditionals.clone())? {
+                        result = Some(self.evaluate(&new_scope, map.clone())?);
                     }
+                    self.remove_scope(&new_scope);
                 }
             } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = loop_type {
                 let var = self.get_var(scope, &loop_name)?.clone();
-                if let RuntimeValue::List { data, .. } = &var.value {
-                    for d in data.into_iter() {
-                        let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-                        let _ = self.push_var(
-                            &new_scope,
-                            identifier.clone(),
-                            Variable {
-                                value: d.clone(),
-                                var_type: match mutability {
-                                    RefMutability::MutRef | RefMutability::MutValue => {
-                                        VarType::Mutable
-                                    }
-                                    _ => VarType::Immutable,
-                                },
+                if let RuntimeType::List(d) = var.value.clone() {
+                    let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+                    let _ = self.push_var(
+                        &new_scope,
+                        identifier.clone(),
+                        Variable {
+                            value: d.unwrap_or(RuntimeType::Dynamic),
+                            var_type: match mutability {
+                                RefMutability::MutRef | RefMutability::MutValue => {
+                                    VarType::Mutable
+                                }
+                                _ => VarType::Immutable,
                             },
-                        );
+                        },
+                    );
 
-                        if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                            result.push(
-                                self.evaluate(&new_scope, map.clone())?.unwrap_links_val(
-                                    self,
-                                    &new_scope,
-                                    Some(new_scope),
-                                )?,
-                            );
-                        }
-                        self.remove_scope(&new_scope);
+                    if self.handle_conditionals(&new_scope, conditionals.clone())? {
+                        result = Some(
+                            self.evaluate(&new_scope, map.clone())?
+                        );
                     }
+                    self.remove_scope(&new_scope);
                 }
             } else if let LoopType::While(_) = loop_type {
                 panic!()
             }
 
-            Ok(RuntimeValue::List {
-                data: result,
-                data_type: Box::new(None),
-            })
+            Ok(RuntimeType::List(Box::new(result)))
     }
 }
 #[cfg(test)]

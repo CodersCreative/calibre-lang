@@ -27,7 +27,8 @@ impl Environment {
             is_async,
         } = declaration else {panic!()};
         
-            let mut params = vec![(
+            let params = vec![(
+                parameters.0.clone(),
                 if parameters.1 == ParserDataType::Dynamic {
                     if let Some(node) = parameters.3.clone() {
                         self.evaluate(scope, *node)?
@@ -63,6 +64,7 @@ impl Environment {
 
             for parameters in parameters.into_iter() {
                 params.push((
+                parameters.0.clone(),
                 if parameters.1 == ParserDataType::Dynamic {
                     if let Some(node) = parameters.3.clone() {
                         self.evaluate(scope, node)?

@@ -28,6 +28,7 @@ impl Environment {
                 return Ok(RuntimeType::Struct(
                     *scope,
                     None,
+                    ObjectType::Map(properties),
                 ));
             } else if let ObjectType::Tuple(props) = props {
                 let mut properties = Vec::new();
@@ -39,6 +40,7 @@ impl Environment {
                 return Ok(RuntimeType::Struct(
                     *scope,
                     None,
+                    ObjectType::Tuple(properties),
                 ));
             }
         Ok(RuntimeType::Null)
@@ -105,7 +107,7 @@ impl Environment {
                         Some(ObjectType::Map(new_data_vals))
                     };
 
-                    return Ok(RuntimeType::Enum(*scope, identifier));
+                    return Ok(RuntimeType::Enum(*scope, identifier, data));
                 } else if let Some(ObjectType::Tuple(properties)) = &enm.1 {
                     let mut data_vals = Vec::new();
 
@@ -136,9 +138,9 @@ impl Environment {
                         Some(ObjectType::Tuple(new_data_vals))
                     };
 
-                    return Ok(RuntimeType::Enum(*scope, identifier));
+                    return Ok(RuntimeType::Enum(*scope, identifier, data));
                 }
-                return Ok(RuntimeType::Enum(*scope, identifier));
+                return Ok(RuntimeType::Enum(*scope, identifier, None));
             } else {
                 Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
             }

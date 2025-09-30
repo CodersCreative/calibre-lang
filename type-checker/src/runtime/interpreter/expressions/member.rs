@@ -1,9 +1,9 @@
 use calibre_parser::ast::{NodeType, ObjectType};
 
-use crate::runtime::{interpreter::InterpreterErr, scope::Environment, values::RuntimeValue};
+use crate::runtime::{interpreter::InterpreterErr, scope::Environment, values::RuntimeType};
 
 pub enum MembrExprPathRes {
-    Value(RuntimeValue),
+    Value(RuntimeType),
     Path(Vec<String>),
 }
 
@@ -53,22 +53,10 @@ impl Environment {
 
             match self.evaluate(&scope, node.clone()) {
                 Ok(mut value) => loop {
-                    match value.unwrap(self, scope)? {
-                        RuntimeValue::Int(x) => path.push(x.to_string()),
-                        RuntimeValue::UInt(x) => path.push(x.to_string()),
-                        RuntimeValue::Float(x) => path.push(x.to_string()),
-                        RuntimeValue::Double(x) => path.push(x.to_string()),
-                        RuntimeValue::Long(x) => path.push(x.to_string()),
-                        RuntimeValue::ULong(x) => path.push(x.to_string()),
-                        RuntimeValue::Str(x) => path.push(x.to_string()),
-                        RuntimeValue::Char(x) => path.push(x.to_string()),
-                        RuntimeValue::Link(s, path, _) => {
-                            value = self.get_link_path(&s, &path)?.clone();
-                            continue;
-                        }
+                    match value {
+                        RuntimeType::Int | RuntimeType::Float | RuntimeType::Str | RuntimeType::Char => return Ok(MembrExprPathRes::Value(RuntimeType::Dynamic)),
                         x => return Ok(MembrExprPathRes::Value(x.clone())),
                     }
-                    break;
                 },
                 Err(e) if path.len() == 1 => match node {
                     NodeType::Identifier(value) => {
@@ -103,11 +91,11 @@ impl Environment {
                                             self.evaluate_function(scope, x.0.clone(), args)?
                                         } else {
                                             let obj = match match self.get_var(scope, &path[0]) {
-                                                Ok(x) => x.value.unwrap(self, scope)?.clone(),
+                                                Ok(x) => x.value.clone(),
                                                 _ => return Err(e),
                                             } {
-                                                RuntimeValue::Struct(_, p, _) => p.unwrap().clone(),
-                                                RuntimeValue::Enum(_, p, _, _) => p.clone(),
+                                                RuntimeType::Struct(_, p, _) => p.unwrap().clone(),
+                                                RuntimeType::Enum(_, p, _) => p.clone(),
                                                 _ => return Err(e),
                                             };
 
@@ -146,33 +134,18 @@ impl Environment {
         &mut self,
         scope: &u64,
         member: NodeType,
-        value: RuntimeValue,
-    ) -> Result<RuntimeValue, InterpreterErr> {
-        match member {
-            NodeType::MemberExpression { path: og_path } => {
-                let path = match self.get_member_expression_path(scope, og_path)? {
-                    MembrExprPathRes::Path(x) => x,
-                    MembrExprPathRes::Value(x) => return Ok(x),
-                };
-
-                let _ = self
-                    .update_link_path(scope, &path, |x| {
-                        *x = value.clone();
-                        Ok(())
-                    })
-                    .unwrap();
-
-                Ok(value)
-            }
-            _ => Err(InterpreterErr::NotImplemented(member)),
-        }
+        value: RuntimeType,
+    ) -> Result<RuntimeType, InterpreterErr> {
+        let typ = self.evaluate_member_expression(scope,  member)?;
+        let _ = value.into_type(self, scope, &typ)?;
+        Ok(value)
     }
 
     pub fn evaluate_member_expression(
         &mut self,
         scope: &u64,
         exp: NodeType,
-    ) -> Result<RuntimeValue, InterpreterErr> {
+    ) -> Result<RuntimeType, InterpreterErr> {
         match exp {
             NodeType::MemberExpression { path: og_path } => {
                 let mut path = match self.get_member_expression_path(scope, og_path)? {

@@ -12,7 +12,7 @@ impl Environment {
         &mut self,
         mut scope: u64,
         pattern: &NodeType,
-        value: &RuntimeValue,
+        value: &RuntimeType,
         mutability: &RefMutability,
         mut path: Vec<String>,
     ) -> Option<Result<u64, InterpreterErr>> {

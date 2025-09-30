@@ -3,7 +3,7 @@ use calibre_parser::ast::{LoopType, NodeType, RefMutability, VarType};
 use crate::runtime::{
     interpreter::InterpreterErr,
     scope::{Environment, Variable},
-    values::{RuntimeType,helper::StopValue},
+    values::{RuntimeType},
 };
 
 impl Environment {
@@ -57,10 +57,7 @@ impl Environment {
                         &new_scope,
                         identifier.clone(),
                         Variable {
-                            value: match *x {
-                                Some(x) => x,
-                                _ => RuntimeType::Dynamic,
-                            },
+                            value: x.clone().unwrap_or(RuntimeType::Dynamic),
                             var_type: match mutability {
                                 RefMutability::MutRef | RefMutability::MutValue => {
                                     VarType::Mutable
