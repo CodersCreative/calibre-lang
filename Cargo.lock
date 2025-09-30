@@ -103,6 +103,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "calibre-common"
+version = "0.1.0"
+dependencies = [
+ "calibre-parser",
+ "rand",
+ "rustyline",
+ "thiserror",
+]
+
+[[package]]
 name = "calibre-cranelift-jit"
 version = "0.1.0"
 dependencies = [
@@ -128,6 +138,7 @@ dependencies = [
 name = "calibre-language"
 version = "0.1.0"
 dependencies = [
+ "calibre-common",
  "calibre-cranelift-jit",
  "calibre-interpreter",
  "calibre-parser",

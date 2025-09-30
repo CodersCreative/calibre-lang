@@ -1,10 +1,5 @@
 use crate::{
-    runtime::{
-        interpreter::InterpreterErr,
-        scope::{Environment, Scope},
-        values::RuntimeValue,
-    },
-    utils::get_path,
+    environment::{Environment, RuntimeType, RuntimeValue, Scope}, errors::InterpreterErr, utils::get_path
 };
 use calibre_parser::Parser;
 use std::{cmp::Ordering, collections::HashMap, fmt::Debug, fs, path::PathBuf, str::FromStr};
@@ -12,22 +7,22 @@ use std::{cmp::Ordering, collections::HashMap, fmt::Debug, fs, path::PathBuf, st
 pub mod global;
 pub mod stdlib;
 
-pub trait NativeFunction {
+pub trait NativeFunction<T : RuntimeValue, U : RuntimeType> {
     fn run(
         &self,
-        env: &mut Environment,
+        env: &mut Environment<T, U>,
         scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
-    ) -> Result<RuntimeValue, InterpreterErr>;
+        args: &[(T, Option<T>)],
+    ) -> Result<T, InterpreterErr<T, U>>;
 }
 
-impl Debug for dyn NativeFunction {
+impl<T : RuntimeValue, U : RuntimeType> Debug for dyn NativeFunction<T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Native Function")
     }
 }
 
-impl PartialEq for dyn NativeFunction {
+impl<T : RuntimeValue, U : RuntimeType> PartialEq for dyn NativeFunction<T, U> {
     fn ne(&self, _other: &Self) -> bool {
         false
     }
@@ -36,7 +31,7 @@ impl PartialEq for dyn NativeFunction {
         true
     }
 }
-impl PartialOrd for dyn NativeFunction {
+impl<T : RuntimeValue, U : RuntimeType> PartialOrd for dyn NativeFunction<T, U> {
     fn gt(&self, _other: &Self) -> bool {
         false
     }
@@ -58,7 +53,7 @@ impl PartialOrd for dyn NativeFunction {
     }
 }
 
-impl Environment {
+impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
     pub fn new_scope_with_stdlib<'a>(
         &'a mut self,
         parent: Option<u64>,
@@ -83,7 +78,7 @@ impl Environment {
             .produce_ast(fs::read_to_string(get_path("native/global/main.cl".to_string())).unwrap())
             .unwrap();
 
-        let _ = self.evaluate(&scope, program).unwrap();
+        let _ = (self.evaluate)(self, &scope, program).unwrap();
 
         let std = self.new_scope(
             Some(scope),
