@@ -1,13 +1,16 @@
 use calibre_interpreter::runtime::{
     scope::InterpreterEnvironment, values::RuntimeValue
 };
+use calibre_type_checker::runtime::scope::CheckerEnvironment;
 use clap::Parser;
 use rustyline::{DefaultEditor, error::ReadlineError};
 use std::{error::Error, fs, path::PathBuf, str::FromStr};
 
 fn repl() -> Result<(), Box<dyn Error>> {
     let mut env = InterpreterEnvironment::new();
+    let mut checker = CheckerEnvironment::new();
     let mut parser = calibre_parser::Parser::default();
+    let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
     let mut editor = DefaultEditor::new()?;
     loop {
@@ -15,6 +18,7 @@ fn repl() -> Result<(), Box<dyn Error>> {
         match readline {
             Ok(line) => {
                 let program = parser.produce_ast(line)?;
+                let _ = checker.evaluate(&checker_scope, program.clone())?;
                 let val = env.evaluate(&scope, program)?;
 
                 if val != RuntimeValue::Null {
@@ -41,9 +45,12 @@ fn repl() -> Result<(), Box<dyn Error>> {
 
 fn file(path: &str) -> Result<(), Box<dyn Error>> {
     let mut env = InterpreterEnvironment::new();
+    let mut checker = CheckerEnvironment::new();
     let mut parser = calibre_parser::Parser::default();
+    let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
     let program = parser.produce_ast(fs::read_to_string(path)?)?;
+    let _ = checker.evaluate(&checker_scope, program.clone())?;
     let _ = env.evaluate(&scope, program)?;
 
     Ok(())

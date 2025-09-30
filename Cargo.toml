@@ -36,7 +36,6 @@ rustyline = "16.0.0"
 calibre-parser = {workspace = true}
 calibre-interpreter = {workspace = true}
 calibre-common = {workspace = true}
-# calibre-type-checker = {workspace = true, optional = true}
 calibre-type-checker = {workspace = true}
 calibre-cranelift-jit = {workspace = true, optional = true}
 
