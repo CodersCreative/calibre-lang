@@ -161,6 +161,7 @@ dependencies = [
 name = "calibre-type-checker"
 version = "0.1.0"
 dependencies = [
+ "calibre-common",
  "calibre-parser",
  "rand",
  "rustyline",

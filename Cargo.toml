@@ -27,7 +27,7 @@ calibre-common = { path = "./common", version = "0.1.0" }
 
 [features]
 cranelift = ["dep:calibre-cranelift-jit"]
-type-checker = ["dep:calibre-type-checker"]
+# type-checker = ["dep:calibre-type-checker"]
 
 # For Cal
 [dependencies]
@@ -36,7 +36,8 @@ rustyline = "16.0.0"
 calibre-parser = {workspace = true}
 calibre-interpreter = {workspace = true}
 calibre-common = {workspace = true}
-calibre-type-checker = {workspace = true, optional = true}
+# calibre-type-checker = {workspace = true, optional = true}
+calibre-type-checker = {workspace = true}
 calibre-cranelift-jit = {workspace = true, optional = true}
 
 [[bin]]

@@ -1,19 +1,11 @@
-use crate::runtime::{interpreter::InterpreterErr, scope::Environment, values::{RuntimeType, RuntimeValue}};
+use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
+use calibre_common::errors::ASTError;
 use calibre_parser::ast::binary::BinaryOperator;
-use std::ops::{Add, Div, Mul, Sub};
-use thiserror::Error;
 
-#[derive(Error, Debug, Clone)]
-pub enum ASTError {
-    #[error("Cannot {2:?} values of {0:?}, {1:?}.")]
-    BinaryOperator(RuntimeValue, RuntimeValue, BinaryOperator),
-    #[error("Cannot perform a boolean operation to values of {0:?}, {1:?}.")]
-    BooleanOperator(RuntimeValue, RuntimeValue),
-}
 
 pub fn handle(
     op: &BinaryOperator,
-    env: &Environment,
+    env: &CheckerEnvironment,
     scope: &u64,
     left: RuntimeType,
     right: RuntimeType,
@@ -44,12 +36,12 @@ pub fn handle(
     Ok(left)
 }
 
-impl RuntimeValue {
+impl RuntimeType {
     pub fn panic_operator(
         &self,
         rhs: &Self,
         operator: &BinaryOperator,
-    ) -> Result<RuntimeValue, ASTError> {
+    ) -> Result<RuntimeType, ASTError<RuntimeType>> {
         Err(ASTError::BinaryOperator(
             self.clone(),
             rhs.clone(),

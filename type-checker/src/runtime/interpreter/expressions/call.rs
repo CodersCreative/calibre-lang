@@ -1,12 +1,11 @@
+use calibre_common::environment::{Type, Variable};
 use calibre_parser::ast::{NodeType, ObjectType, RefMutability, VarType};
 
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, ScopeErr, Type, Variable},
-    values::{ RuntimeType, ValueErr, helper::Block},
+    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
 };
 
-impl Environment {
+impl CheckerEnvironment {
     pub fn evaluate_function(
         &mut self,
         scope: &u64,
@@ -155,8 +154,8 @@ impl Environment {
                         _ => return Err(InterpreterErr::IndexNonList(arguments[0].0.clone())),
                     }
                 }
-                RuntimeType::NativeFunction => {
-                    return Ok(RuntimeType::Dynamic)
+                RuntimeType::NativeFunction(x) => {
+                    return Ok(*x)
                 }
                 _ => {}
             }

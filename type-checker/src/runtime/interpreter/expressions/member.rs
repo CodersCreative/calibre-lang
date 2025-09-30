@@ -1,13 +1,13 @@
 use calibre_parser::ast::{NodeType, ObjectType};
 
-use crate::runtime::{interpreter::InterpreterErr, scope::Environment, values::RuntimeType};
+use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
 pub enum MembrExprPathRes {
     Value(RuntimeType),
     Path(Vec<String>),
 }
 
-impl Environment {
+impl CheckerEnvironment {
     pub fn get_member_expression_path(
         &mut self,
         scope: &u64,

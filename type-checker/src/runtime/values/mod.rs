@@ -1,44 +1,12 @@
-use crate::runtime::scope::{Environment, ScopeErr};
+use calibre_common::errors::ValueErr;
 use calibre_parser::ast::{ObjectType, ParserDataType};
 use std::{
-    fmt::Debug,
-    num::{ParseFloatError, ParseIntError},
+    collections::HashMap, fmt::Debug
 };
-use thiserror::Error;
+
+use crate::runtime::scope::CheckerEnvironment;
 
 pub mod helper;
-
-#[derive(Error, Debug, Clone)]
-pub enum ValueErr {
-    #[error("Unable to convert: {0:?} -> {1:?}.")]
-    Conversion(RuntimeType, RuntimeType),
-    #[error("Unable to progress value.")]
-    ProgressErr,
-    #[error("{0}")]
-    Scope(ScopeErr),
-    #[error("{0}")]
-    ParseIntError(ParseIntError),
-    #[error("{0}")]
-    ParseFloatError(ParseFloatError),
-}
-
-impl From<ParseIntError> for ValueErr {
-    fn from(value: ParseIntError) -> Self {
-        Self::ParseIntError(value)
-    }
-}
-
-impl From<ParseFloatError> for ValueErr {
-    fn from(value: ParseFloatError) -> Self {
-        Self::ParseFloatError(value)
-    }
-}
-
-impl From<ScopeErr> for ValueErr {
-    fn from(value: ScopeErr) -> Self {
-        Self::Scope(value)
-    }
-}
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum RuntimeType {
@@ -61,9 +29,59 @@ pub enum RuntimeType {
     Enum(u64, String, Option<ObjectType<RuntimeType>>),
     Struct(u64, Option<String>, ObjectType<RuntimeType>),
     Null,
-    NativeFunction,
+    NativeFunction(Box<RuntimeType>),
 }
 
+impl calibre_common::environment::RuntimeType for RuntimeType {}
+impl calibre_common::environment::RuntimeValue for RuntimeType {
+    fn string(_txt : String) -> Self {
+        Self::Str
+    }
+
+    fn constants() -> std::collections::HashMap<String, Self> {
+        HashMap::from([
+            (String::from("PI"), RuntimeType::Float),
+            (String::from("FLOAT_MAX"), RuntimeType::Float),
+            (String::from("DOUBLE_MAX"), RuntimeType::Float),
+            (String::from("INT_MAX"), RuntimeType::Int),
+            (String::from("LONG_MAX"), RuntimeType::Int),
+            (String::from("FLOAT_MIN"), RuntimeType::Float),
+            (String::from("DOUBLE_MIN"), RuntimeType::Float),
+            (String::from("INT_MIN"), RuntimeType::Int),
+            (String::from("LONG_MIN"), RuntimeType::Int),
+            (String::from("true"), RuntimeType::Bool),
+            (String::from("false"), RuntimeType::Bool),
+        ])
+    }
+
+    fn natives() -> HashMap<String, Self> {
+        let lst : Vec<(&'static str, RuntimeType)> = vec![
+            ("print", RuntimeType::Null),
+            ("ok", RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new(RuntimeType::Dynamic))),
+            ("err", RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new(RuntimeType::Dynamic))),
+            ("some", RuntimeType::Option(Box::new(RuntimeType::Dynamic))),
+            ("len", RuntimeType::Int),
+            ("range", RuntimeType::Range),
+            ("trim", RuntimeType::Str),
+            ("console.out", RuntimeType::Null),
+            ("console.input", RuntimeType::Str),
+            ("console.err", RuntimeType::Null),
+            ("console.clear", RuntimeType::Null),
+            ("thread.wait", RuntimeType::Null),
+            ("random.generate", RuntimeType::Float),
+            ("random.bool", RuntimeType::Bool),
+            ("random.ratio", RuntimeType::Bool),
+        ];
+
+        let mut map = HashMap::new();
+
+        for val in lst {
+            map.insert(val.0.to_string(), RuntimeType::NativeFunction(Box::new(val.1)));
+        }
+
+        map
+    }
+}
 impl From<ParserDataType> for RuntimeType {
     fn from(value: ParserDataType) -> Self {
         match value {
@@ -113,10 +131,10 @@ impl From<ParserDataType> for RuntimeType {
 impl RuntimeType {
     pub fn into_type(
         &self,
-        env: &Environment,
+        env: &CheckerEnvironment,
         scope: &u64,
         t: &RuntimeType,
-    ) -> Result<RuntimeType, ValueErr> {
+    ) -> Result<RuntimeType, ValueErr<RuntimeType, RuntimeType>> {
         Ok(t.clone())
     }
 }

@@ -1,9 +1,8 @@
+use calibre_common::errors::{ScopeErr, ValueErr};
 use calibre_parser::ast::{NodeType, ObjectType};
 
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, ScopeErr},
-    values::{RuntimeType, ValueErr},
+    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
 };
 
 pub fn progress(
@@ -68,7 +67,7 @@ pub fn progress(
         _ => return Err(InterpreterErr::Value(ValueErr::ProgressErr)),
     })
 }
-impl Environment {
+impl CheckerEnvironment {
     pub fn get_link_path(
         &self,
         scope: &u64,

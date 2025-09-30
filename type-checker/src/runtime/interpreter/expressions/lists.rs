@@ -1,12 +1,11 @@
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, Variable},
-    values::{RuntimeType},
+    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
 };
+use calibre_common::environment::Variable;
 use calibre_parser::ast::{LoopType, NodeType, RefMutability, VarType};
 use std::mem::discriminant;
 
-impl Environment {
+impl CheckerEnvironment {
     pub fn evaluate_tuple_expression(
         &mut self,
         scope: &u64,
@@ -69,11 +68,9 @@ impl Environment {
                             var_type: VarType::Immutable,
                         },
                     );
-
-                    if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                        result = Some(
-                            self.evaluate(&new_scope, map.clone())?);
-                    }
+                    let _ = self.handle_conditionals(&new_scope, conditionals.clone())?; 
+                    result = Some(
+                        self.evaluate(&new_scope, map.clone())?);
 
                     self.remove_scope(&new_scope);
                 } else if let RuntimeType::Range =
@@ -89,10 +86,8 @@ impl Environment {
                         )],
                         vec![(NodeType::IntLiteral(1 as i128), None)],
                     )?;
-
-                    if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                        result = Some(self.evaluate(&new_scope, map.clone())?);
-                    }
+                    let _ = self.handle_conditionals(&new_scope, conditionals.clone())?; 
+                    result = Some(self.evaluate(&new_scope, map.clone())?);
                     self.remove_scope(&new_scope);
                 }
             } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = loop_type {
@@ -113,11 +108,10 @@ impl Environment {
                         },
                     );
 
-                    if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                        result = Some(
-                            self.evaluate(&new_scope, map.clone())?
-                        );
-                    }
+                    let _ = self.handle_conditionals(&new_scope, conditionals.clone())?; 
+                    result = Some(
+                        self.evaluate(&new_scope, map.clone())?
+                    );
                     self.remove_scope(&new_scope);
                 }
             } else if let LoopType::While(_) = loop_type {

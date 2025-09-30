@@ -1,11 +1,8 @@
+use calibre_common::environment::Variable;
 use calibre_parser::ast::{NodeType, ParserDataType, VarType};
 
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, Variable},
-    values::{
-        RuntimeType,
-    },
+    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
 };
 
 pub mod comparisons;
@@ -14,7 +11,7 @@ pub mod loops;
 pub mod matching;
 pub mod structs;
 
-impl Environment {
+impl CheckerEnvironment {
     pub fn evaluate_match_declaration(
         &mut self,
         scope: &u64,

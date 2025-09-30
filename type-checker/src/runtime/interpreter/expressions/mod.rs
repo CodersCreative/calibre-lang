@@ -1,9 +1,7 @@
 use crate::{
     operators,
     runtime::{
-        interpreter::InterpreterErr,
-        scope::{Environment},
-        values::{RuntimeType},
+        interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
     },
 };
 use calibre_parser::ast::{binary::BinaryOperator, comparison::{BooleanOperation, Comparison}, NodeType};
@@ -13,7 +11,7 @@ pub mod member;
 pub mod scope;
 pub mod structs;
 
-impl Environment {
+impl CheckerEnvironment {
     pub fn evaluate_identifier(
         &mut self,
         scope: &u64,

@@ -1,10 +1,11 @@
+use calibre_common::environment::{Object, Variable};
+
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, Object, Variable}, values::RuntimeType,
+    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType,
 };
 use std::collections::HashMap;
 
-impl Environment {
+impl CheckerEnvironment {
     pub fn evaluate_import_statement(
         &mut self,
         scope: &u64,
@@ -32,7 +33,7 @@ impl Environment {
             };
 
             if &values[0] == "*" {
-                let vars: Vec<(String, Variable)> = self
+                let vars: Vec<(String, Variable<RuntimeType>)> = self
                     .variables
                     .get(&new_scope)
                     .unwrap()
@@ -51,7 +52,7 @@ impl Environment {
                     }
                 }
 
-                let obj: Vec<(String, Object)> = self
+                let obj: Vec<(String, Object<RuntimeType, RuntimeType>)> = self
                     .objects
                     .get(&new_scope)
                     .unwrap()
@@ -60,7 +61,7 @@ impl Environment {
                         (
                             x.0.clone(),
                             Object {
-                                object_type: crate::runtime::scope::Type::Link(
+                                object_type: calibre_common::environment::Type::Link(
                                     new_scope,
                                     x.0.clone(),
                                 ),
@@ -84,8 +85,9 @@ impl Environment {
                             value.clone(),
                             var.clone()
                         )?;
-                    } else if let Some(obj) = self.objects.get(&new_scope).unwrap().get(&value) {
-                        self.push_object(scope, value.clone(), obj.clone())?; //Object::Link(path.clone()))?;
+                    } else if self.objects.get(&new_scope).unwrap().contains_key(&value) {
+                        let val = self.objects.get(&new_scope).unwrap().get(&value).unwrap().clone();
+                        self.push_object(scope, value.clone(), val)?; //Object::Link(path.clone()))?;
                     } else {
                         panic!()
                     }

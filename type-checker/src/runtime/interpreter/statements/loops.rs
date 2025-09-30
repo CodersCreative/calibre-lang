@@ -1,12 +1,11 @@
+use calibre_common::environment::Variable;
 use calibre_parser::ast::{LoopType, NodeType, RefMutability, VarType};
 
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, Variable},
-    values::{RuntimeType},
+    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
 };
 
-impl Environment {
+impl CheckerEnvironment {
     pub fn evaluate_loop_declaration(
         &mut self,
         scope: &u64,

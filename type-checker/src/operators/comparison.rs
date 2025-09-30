@@ -1,9 +1,9 @@
-use crate::runtime::{interpreter::InterpreterErr, scope::Environment, values::{RuntimeType}};
+use crate::runtime::{interpreter::InterpreterErr, scope::{CheckerEnvironment}, values::RuntimeType};
 use calibre_parser::ast::comparison::Comparison;
 
 pub fn handle(
     op: &Comparison,
-    env: &Environment,
+    env: &CheckerEnvironment,
     scope: &u64,
     left: RuntimeType,
     right: RuntimeType,

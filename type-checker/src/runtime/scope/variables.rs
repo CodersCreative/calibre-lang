@@ -1,17 +1,17 @@
-use super::Scope;
+use calibre_common::{environment::{Scope, Variable}, errors::ScopeErr};
+use calibre_parser::ast::VarType;
+
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{Environment, ScopeErr, VarType, Variable},
-    values::RuntimeType,
+    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
 };
 
-impl Environment {
+impl CheckerEnvironment {
     pub fn force_var(
         &mut self,
         scope: &u64,
         key: String,
-        value: Variable,
-    ) -> Result<(), ScopeErr> {
+        value: Variable<RuntimeType>,
+    ) -> Result<(), ScopeErr<RuntimeType>> {
         if let Some(vars) = self.variables.get_mut(scope) {
             vars.insert(key.clone(), value);
         }
@@ -22,8 +22,8 @@ impl Environment {
         &mut self,
         scope: &u64,
         key: String,
-        value: Variable,
-    ) -> Result<(), ScopeErr> {
+        value: Variable<RuntimeType>,
+    ) -> Result<(), ScopeErr<RuntimeType>> {
         if let Some(vars) = self.variables.get_mut(scope) {
             if let Some(var) = vars.get_mut(&key) {
                 if var.var_type == VarType::Constant {
@@ -36,7 +36,7 @@ impl Environment {
         Ok(())
     }
 
-    pub fn get_var<'a>(&'a self, scope: &u64, key: &str) -> Result<&'a Variable, ScopeErr> {
+    pub fn get_var<'a>(&'a self, scope: &u64, key: &str) -> Result<&'a Variable<RuntimeType>, ScopeErr<RuntimeType>> {
         Ok(if let Some(vars) = self.variables.get(scope) {
             if let Some(var) = vars.get(key) {
                 var
@@ -50,9 +50,9 @@ impl Environment {
         })
     }
 
-    pub fn update_var<F>(&mut self, scope: &u64, key: &str, mut f: F) -> Result<(), ScopeErr>
+    pub fn update_var<F>(&mut self, scope: &u64, key: &str, mut f: F) -> Result<(), ScopeErr<RuntimeType>>
     where
-        F: FnMut(&mut Variable),
+        F: FnMut(&mut Variable<RuntimeType>),
     {
         Ok(if let Some(vars) = self.variables.get_mut(scope) {
             if let Some(var) = vars.get_mut(key) {
