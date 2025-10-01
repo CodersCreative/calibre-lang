@@ -99,7 +99,7 @@ impl InterpreterEnvironment {
                                 RefMutability::Value,
                                 None,
                             )],
-                            vec![(Node::new(NodeType::IntLiteral(1 as i128), range_node.line, range_node.col), None)],
+                            vec![(Node::new(NodeType::IntLiteral(i as i128), range_node.line, range_node.col), None)],
                         )?;
                         if self.handle_conditionals(&new_scope, conditionals.clone())? {
                             result.push(
