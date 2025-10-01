@@ -80,13 +80,9 @@ impl InterpreterEnvironment {
         to : RuntimeValue,
         inclusive : bool,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            if let RuntimeValue::Int(from) =
-                from
-                    .into_type(self, scope, &RuntimeType::Int)?
+            if let RuntimeValue::Int(from) = from.unwrap_val(self, scope)?
             {
-                if let RuntimeValue::Int(to) =
-                    to
-                        .into_type(self, scope, &RuntimeType::Int)?
+                if let RuntimeValue::Int(to) = to.unwrap_val(self, scope)?
                 {
                     let to = if inclusive { to + 1 } else { to };
 
@@ -136,9 +132,8 @@ impl InterpreterEnvironment {
         right : RuntimeValue,
         operator : BooleanOperation,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let left = left.into_type(self, scope, &RuntimeType::Bool)?;
-        let right = right.into_type(self, scope, &RuntimeType::Bool)?;
-
+        let left = left.unwrap_val(self, scope)?;
+        let right = right.unwrap_val(self, scope)?;
         Ok(operators::boolean::handle(&operator, &left, &right)?)
     }
 

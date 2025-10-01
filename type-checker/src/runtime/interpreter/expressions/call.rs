@@ -124,8 +124,7 @@ impl CheckerEnvironment {
                         let params = params.clone();
                         for (i, arg) in arguments.into_iter().enumerate() {
                             args.push(
-                                self.evaluate(scope, arg.0)?
-                                    .into_type(self, scope, &params[i])?,
+                                self.evaluate(scope, arg.0)?,
                             );
                         }
 

@@ -111,12 +111,6 @@ impl InterpreterEnvironment {
                     let result = self.evaluate(&new_scope, *body.0.clone())?;
                     self.stop = None;
 
-                    let result = if let Some(t) = return_type {
-                        result.into_type(self, &new_scope, &t)?
-                    } else {
-                        result
-                    };
-
                     let result = result.unwrap_links_val(self, &new_scope, Some(new_scope))?;
 
                     self.remove_scope(&new_scope);
@@ -154,8 +148,7 @@ impl InterpreterEnvironment {
                         for (i, arg) in arguments.into_iter().enumerate() {
                             args.push(
                                 self.evaluate(scope, arg.0)?
-                                    .unwrap(self, scope)?
-                                    .into_type(self, scope, &params[i])?,
+                                    .unwrap_val(self, scope)?,
                             );
                         }
 

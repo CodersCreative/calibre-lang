@@ -87,8 +87,7 @@ impl InterpreterEnvironment {
 
                         self.remove_scope(&new_scope);
                     }
-                } else if let RuntimeValue::Range(from, to) =
-                    range.into_type(self, scope, &RuntimeType::Range)?
+                } else if let RuntimeValue::Range(from, to) = range.unwrap_val(self, scope)?
                 {
                     for i in from..to {
                         let new_scope = self.get_new_scope(

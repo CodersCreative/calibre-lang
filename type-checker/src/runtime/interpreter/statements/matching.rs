@@ -22,7 +22,7 @@ impl CheckerEnvironment {
         conditionals: Vec<Node>,
     ) -> Result<(), InterpreterErr> {
         for condition in conditionals.into_iter() {
-            if RuntimeType::Bool != self.evaluate(scope, condition)?.into_type(self, scope, &RuntimeType::Bool)? {
+            if RuntimeType::Bool != self.evaluate(scope, condition)? {
                 panic!()
             }
         }

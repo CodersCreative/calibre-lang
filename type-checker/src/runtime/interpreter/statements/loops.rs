@@ -34,7 +34,7 @@ impl CheckerEnvironment {
                     result = self.evaluate(&new_scope, body.clone())?;
                     self.remove_scope(&new_scope);
                 } else if let RuntimeType::Range =
-                    range.into_type(self, scope, &RuntimeType::Range)?
+                    range
                 {
                     let new_scope = self.get_new_scope(
                         scope,

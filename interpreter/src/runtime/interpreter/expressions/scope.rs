@@ -129,8 +129,7 @@ impl InterpreterEnvironment {
             if let Some(arg) = arguments.get(i) {
                 if let None = arg.1 {
                     let arg = self
-                        .evaluate(&new_scope, arg.0.clone())?
-                        .into_type(self, &new_scope, &v)?;
+                        .evaluate(&new_scope, arg.0.clone())?;
                     self.push_var(
                         &new_scope,
                         k.to_string(),

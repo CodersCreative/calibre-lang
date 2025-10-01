@@ -57,9 +57,10 @@ impl CheckerEnvironment {
         to : RuntimeType,
         inclusive : bool,
     ) -> Result<RuntimeType, InterpreterErr> {
-        let _ = from.into_type(self, scope, &RuntimeType::Int)?;
-        let _ = to.into_type(self, scope, &RuntimeType::Int)?;
-        Ok(RuntimeType::Range)
+        match (&from, &to) {
+            (RuntimeType::Int, RuntimeType::Int) => Ok(RuntimeType::Range),
+            _ => Err(InterpreterErr::ExpectedType(from, RuntimeType::Int)) 
+        }
     }
 
     pub fn evaluate_pipe_expression(
@@ -97,9 +98,6 @@ impl CheckerEnvironment {
         right : RuntimeType,
         operator : BooleanOperation,
     ) -> Result<RuntimeType, InterpreterErr> {
-        let left = left.into_type(self, scope, &RuntimeType::Bool)?;
-        let right = right.into_type(self, scope, &RuntimeType::Bool)?;
-
         Ok(operators::boolean::handle(&operator, &left, &right)?)
     }
 

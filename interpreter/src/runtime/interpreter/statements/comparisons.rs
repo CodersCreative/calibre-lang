@@ -56,8 +56,7 @@ impl InterpreterEnvironment {
                 IfComparisonType::If(comparison) => {
                     if let Ok(RuntimeValue::Bool(x)) = self
                         .evaluate(scope, comparison.clone())?
-                        .unwrap_val(self, scope)?
-                        .into_type(self, scope, &RuntimeType::Bool)
+                        .unwrap_val(self, scope)
                     {
                         if x {
                             return self.evaluate(scope, then);

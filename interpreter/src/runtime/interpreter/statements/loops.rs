@@ -46,7 +46,7 @@ impl InterpreterEnvironment {
                         };
                     }
                 } else if let RuntimeValue::Range(from, to) =
-                    range.into_type(self, scope, &RuntimeType::Range)?
+                    range.unwrap_val(self, scope)?
                 {
                     for i in from..to {
                         let new_scope = self.get_new_scope(

@@ -91,8 +91,9 @@ impl CheckerEnvironment {
         data_type : Option<RuntimeType>,
     ) -> Result<RuntimeType, InterpreterErr> {
             if let Some(t) = data_type {
-                value = value
-                    .into_type(self, scope, &RuntimeType::from(t))?;
+                if !value.is_type(&RuntimeType::from(t)){
+                    println!("{:?}", self.current_location)
+                }
             }
 
             let _ = self.push_var(scope, identifier, Variable { value : value.clone(), var_type, location : self.current_location.clone()})?;

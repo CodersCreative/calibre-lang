@@ -139,8 +139,11 @@ impl CheckerEnvironment {
         value: RuntimeType,
     ) -> Result<RuntimeType, InterpreterErr> {
         let typ = self.evaluate_member_expression(scope,  member)?;
-        let _ = value.into_type(self, scope, &typ)?;
-        Ok(value)
+        if value.is_type(&typ) {
+            Ok(value)
+        }else{
+            panic!()
+        }
     }
 
     pub fn evaluate_member_expression(

@@ -326,8 +326,8 @@ impl InterpreterEnvironment {
                         {
                             if let (Some(pattern), name) = (args.get(0), args.get(1)) {
                                 if let Ok(pattern) = self.evaluate(&scope, pattern.0.clone()) {
-                                    let RuntimeValue::Str(pattern) =
-                                        pattern.into_type(self, &scope, &RuntimeType::Str).unwrap()
+                                    let Ok(RuntimeValue::Str(pattern)) =
+                                        pattern.unwrap_val(self, &scope)
                                     else {
                                         panic!()
                                     };

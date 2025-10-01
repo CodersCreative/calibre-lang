@@ -23,12 +23,13 @@ impl CheckerEnvironment {
             let mut result = RuntimeType::Null;
             match comparison {
                 IfComparisonType::If(comparison) => {
-                    if let Ok(RuntimeType::Bool) = self
-                        .evaluate(scope, comparison.clone())?
-                        .into_type(self, scope, &RuntimeType::Bool)
+                    let res = self
+                        .evaluate(scope, comparison.clone());
+                    if let Ok(RuntimeType::Bool) = res
                     {
                         result = self.evaluate(scope, then)?;
                     } else {
+                        println!("{:?} - {:?}", self.current_location, res);
                         return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
                     }
                 }

@@ -91,7 +91,7 @@ impl CheckerEnvironment {
 
                     let mut new_data_vals = HashMap::new();
                     for property in properties {
-                        if let Some(val) = data_vals.get(property.0) {
+                        if let Some(val) = data_vals.remove(property.0) {
                             new_data_vals.insert(
                                 property.0.clone(),
                                 val.into_type(self, scope, &property.1)?,
@@ -123,13 +123,13 @@ impl CheckerEnvironment {
 
                     let mut new_data_vals = Vec::new();
                     for (i, property) in properties.into_iter().enumerate() {
-                        if data_vals.len() <= i {
+                        if data_vals.len() <= 0 {
                             return Err(InterpreterErr::OutOfBounds(
                                 String::from("Tuple Object Type"),
                                 i as i16,
                             ));
                         }
-                        new_data_vals.push(data_vals[i].into_type(self, scope, property).unwrap());
+                        new_data_vals.push(data_vals.remove(0));
                     }
 
                     let data = if new_data_vals.is_empty() {

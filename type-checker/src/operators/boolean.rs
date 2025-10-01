@@ -10,7 +10,7 @@ pub fn handle(
 ) -> Result<RuntimeType, ASTError<RuntimeType>> {
     if left == &RuntimeType::Dynamic || right == &RuntimeType::Dynamic {
         Ok(RuntimeType::Bool)
-    } else if !left.is_type(&right) || left != &RuntimeType::Int || left != &RuntimeType::Bool {
+    } else if !left.is_type(&right) || (left != &RuntimeType::Int && left != &RuntimeType::Bool) {
         Err(ASTError::BooleanOperator(left.clone(), right.clone()))
     }else{
         Ok(RuntimeType::Bool)

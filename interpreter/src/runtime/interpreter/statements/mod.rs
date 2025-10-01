@@ -95,13 +95,7 @@ impl InterpreterEnvironment {
         mut value : RuntimeValue,
         data_type : Option<RuntimeType>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            if let Some(t) = data_type {
-                value = value
-                    .unwrap(self, scope)?
-                    .into_type(self, scope, &RuntimeType::from(t))?;
-            }
-
-            Ok(self.push_var(scope, identifier, Variable { value, var_type, location : self.current_location.clone()})?)
+            Ok(self.push_var(scope, identifier, Variable { value: value.unwrap_links_val(self, scope, None)?, var_type, location : self.current_location.clone()})?)
     }
 }
 

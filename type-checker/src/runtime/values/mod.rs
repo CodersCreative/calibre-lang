@@ -42,13 +42,9 @@ impl calibre_common::environment::RuntimeValue for RuntimeType {
         HashMap::from([
             (String::from("PI"), RuntimeType::Float),
             (String::from("FLOAT_MAX"), RuntimeType::Float),
-            (String::from("DOUBLE_MAX"), RuntimeType::Float),
             (String::from("INT_MAX"), RuntimeType::Int),
-            (String::from("LONG_MAX"), RuntimeType::Int),
             (String::from("FLOAT_MIN"), RuntimeType::Float),
-            (String::from("DOUBLE_MIN"), RuntimeType::Float),
             (String::from("INT_MIN"), RuntimeType::Int),
-            (String::from("LONG_MIN"), RuntimeType::Int),
             (String::from("true"), RuntimeType::Bool),
             (String::from("false"), RuntimeType::Bool),
         ])
