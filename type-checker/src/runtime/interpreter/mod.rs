@@ -1,5 +1,5 @@
-use calibre_common::errors::RuntimeErr;
-use calibre_parser::ast::NodeType;
+use calibre_common::{environment::Location, errors::RuntimeErr};
+use calibre_parser::ast::{Node, NodeType};
 
 use crate::runtime::{scope::CheckerEnvironment, values::RuntimeType};
 
@@ -12,9 +12,11 @@ impl CheckerEnvironment {
     pub fn evaluate(
         &mut self,
         scope: &u64,
-        node: NodeType,
+        node: Node,
     ) -> Result<RuntimeType, InterpreterErr> {
-        match node {
+        self.current_location = self.get_location(scope, node.line, node.col);
+
+        match node.node_type {
             NodeType::FloatLiteral(_) => Ok(RuntimeType::Float),
             NodeType::IntLiteral(_) => Ok(RuntimeType::Int),
             NodeType::StringLiteral(_) => Ok(RuntimeType::Str),

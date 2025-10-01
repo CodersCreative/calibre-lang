@@ -2,13 +2,13 @@ use crate::runtime::{
     interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
 };
 use calibre_common::environment::Variable;
-use calibre_parser::ast::{LoopType, NodeType, RefMutability, VarType};
+use calibre_parser::ast::{LoopType, Node, NodeType, RefMutability, VarType};
 
 impl CheckerEnvironment {
     pub fn evaluate_tuple_expression(
         &mut self,
         scope: &u64,
-        vals : Vec<NodeType>
+        vals : Vec<Node>
     ) -> Result<RuntimeType, InterpreterErr> {
         let mut values = Vec::new();
 
@@ -22,7 +22,7 @@ impl CheckerEnvironment {
     pub fn evaluate_list_expression(
         &mut self,
         scope: &u64,
-        vals : Vec<NodeType>
+        vals : Vec<Node>
     ) -> Result<RuntimeType, InterpreterErr> {
         let mut values = Vec::new();
 
@@ -49,14 +49,15 @@ impl CheckerEnvironment {
     pub fn evaluate_iter_expression(
         &mut self,
         scope: &u64,
-        map : NodeType,
+        map : Node,
         loop_type : LoopType,
-        conditionals : Vec<NodeType>
+        conditionals : Vec<Node>
     ) -> Result<RuntimeType, InterpreterErr> {
             let mut result = None;
 
-            if let LoopType::For(identifier, range) = loop_type {
-                let range = self.evaluate(scope, range)?;
+            if let LoopType::For(identifier, range_node) = loop_type {
+                let range = self.evaluate(scope, range_node.clone())?;
+                let location = self.get_location(scope, range_node.line, range_node.col);
                 if let RuntimeType::List(d) = range {
                     let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
                     let _ = self.push_var(
@@ -65,6 +66,7 @@ impl CheckerEnvironment {
                         Variable {
                             value: d.unwrap_or(RuntimeType::Dynamic),
                             var_type: VarType::Immutable,
+                            location,
                         },
                     );
                     let _ = self.handle_conditionals(&new_scope, conditionals.clone())?; 
@@ -83,7 +85,7 @@ impl CheckerEnvironment {
                             RefMutability::Value,
                             None,
                         )],
-                        vec![(NodeType::IntLiteral(1 as i128), None)],
+                        vec![(Node::new(NodeType::IntLiteral(1 as i128), range_node.line, range_node.col), None)],
                     )?;
                     let _ = self.handle_conditionals(&new_scope, conditionals.clone())?; 
                     result = Some(self.evaluate(&new_scope, map.clone())?);
@@ -104,6 +106,7 @@ impl CheckerEnvironment {
                                 }
                                 _ => VarType::Immutable,
                             },
+                            location : var.location.clone(),
                         },
                     );
 

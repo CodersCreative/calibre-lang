@@ -1,7 +1,7 @@
 use crate::runtime::{
     interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
 };
-use calibre_parser::ast::{IfComparisonType, NodeType};
+use calibre_parser::ast::{IfComparisonType, Node, NodeType};
 
 impl CheckerEnvironment {
     pub fn evaluate_in_statement(
@@ -17,8 +17,8 @@ impl CheckerEnvironment {
         &mut self,
         scope: &u64,
         comparison : IfComparisonType,
-        then : NodeType,
-        otherwise: Option<NodeType>,
+        then : Node,
+        otherwise: Option<Node>,
     ) -> Result<RuntimeType, InterpreterErr> {
             let mut result = RuntimeType::Null;
             match comparison {
@@ -37,7 +37,7 @@ impl CheckerEnvironment {
                     value,
                     pattern,
                 } => {
-                    let path = match &value {
+                    let path = match &value.node_type {
                         NodeType::Identifier(x) => vec![x.clone()],
                         _ => Vec::new(),
                     };

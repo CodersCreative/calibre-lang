@@ -1,5 +1,5 @@
 use calibre_common::environment::Variable;
-use calibre_parser::ast::{NodeType, VarType};
+use calibre_parser::ast::{Node, NodeType, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{
@@ -17,14 +17,14 @@ impl InterpreterEnvironment {
     pub fn evaluate_match_declaration(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        declaration: Node,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let NodeType::MatchDeclaration {
             parameters,
             body,
             return_type,
             is_async,
-        } = declaration else {panic!()};
+        } = declaration.node_type else {panic!()};
         
             let mut params = Vec::new();
 
@@ -55,14 +55,14 @@ impl InterpreterEnvironment {
     pub fn evaluate_function_declaration(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        declaration: Node,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let NodeType::FunctionDeclaration {
             parameters,
             body,
             return_type,
             is_async,
-        } = declaration
+        } = declaration.node_type
         else { panic!() };
             let mut params = Vec::new();
 
@@ -101,7 +101,7 @@ impl InterpreterEnvironment {
                     .into_type(self, scope, &RuntimeType::from(t))?;
             }
 
-            Ok(self.push_var(scope, identifier, Variable { value, var_type })?)
+            Ok(self.push_var(scope, identifier, Variable { value, var_type, location : self.current_location.clone()})?)
     }
 }
 

@@ -1,13 +1,13 @@
-use calibre_parser::ast::NodeType;
+use calibre_parser::ast::{Node, NodeType};
 
 use super::RuntimeValue;
 use std::{cmp::Ordering, collections::HashMap};
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Block(pub Box<NodeType>);
+pub struct Block(pub Box<Node>);
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct MatchBlock(pub Vec<(NodeType, Vec<NodeType>, Box<NodeType>)>);
+pub struct MatchBlock(pub Vec<(Node, Vec<Node>, Box<Node>)>);
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Map<T>(pub HashMap<String, T>);

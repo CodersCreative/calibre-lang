@@ -67,6 +67,7 @@ impl CheckerEnvironment {
                                 ),
                                 functions: HashMap::new(),
                                 traits: Vec::new(),
+                                location: None,
                             },
                         )
                     })

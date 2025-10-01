@@ -48,6 +48,7 @@ impl InterpreterEnvironment {
                                     (&x.1.value).into(),
                                 ),
                                 var_type: x.1.var_type.clone(),
+                                location: None,
                             },
                         )
                     })
@@ -74,6 +75,7 @@ impl InterpreterEnvironment {
                                 ),
                                 functions: HashMap::new(),
                                 traits: Vec::new(),
+                                location: None,
                             },
                         )
                     })
@@ -97,6 +99,7 @@ impl InterpreterEnvironment {
                                     (&var.value).into(),
                                 ),
                                 var_type: var.var_type.clone(),
+                                location: None,
                             },
                         )?;
                     } else if self.objects.get(&new_scope).unwrap().contains_key(&value) {

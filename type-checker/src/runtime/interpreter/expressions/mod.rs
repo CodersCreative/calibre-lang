@@ -4,7 +4,7 @@ use crate::{
         interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
     },
 };
-use calibre_parser::ast::{binary::BinaryOperator, comparison::{BooleanOperation, Comparison}, NodeType};
+use calibre_parser::ast::{binary::BinaryOperator, comparison::{BooleanOperation, Comparison}, Node, NodeType};
 pub mod call;
 pub mod lists;
 pub mod member;
@@ -65,18 +65,18 @@ impl CheckerEnvironment {
     pub fn evaluate_pipe_expression(
         &mut self,
         scope: &u64,
-        values : Vec<NodeType>,
+        values : Vec<Node>,
     ) -> Result<RuntimeType, InterpreterErr> {
-        let mut pre_values : Vec<NodeType> = Vec::new();
+        let mut pre_values : Vec<Node> = Vec::new();
         for value in values.into_iter() {
-            match value {
+            match value.node_type {
                 NodeType::Identifier(_) | NodeType::MatchDeclaration { .. } | NodeType::FunctionDeclaration { .. } | NodeType::MemberExpression { .. } | NodeType::EnumExpression { .. } => {
                     let calculated = self.evaluate(scope, value.clone());
                     match calculated {
                         Ok(RuntimeType::Function { .. }) => {
-                            let args : Vec<(NodeType, Option<NodeType>)> = pre_values.iter().map(|x| (x.clone(), None)).collect();
+                            let args : Vec<(Node, Option<Node>)> = pre_values.iter().map(|x| (x.clone(), None)).collect();
                             pre_values.clear();
-                            pre_values.push(NodeType::CallExpression(Box::new(value), args));
+                            pre_values.push(Node::new(NodeType::CallExpression(Box::new(value.clone()), args), value.line, value.col));
                         },
                         _ => pre_values.push(value),
                     }
@@ -116,17 +116,17 @@ impl CheckerEnvironment {
     pub fn evaluate_assignment_expression(
         &mut self,
         scope: &u64,
-        identifier: NodeType,
+        identifier: Node,
         value : RuntimeType,
     ) -> Result<RuntimeType, InterpreterErr> {
-            if let NodeType::Identifier(identifier) = identifier {
+            if let NodeType::Identifier(identifier) = identifier.node_type {
                 let _ = self.assign_var(scope, &identifier, value.clone())?;
                 return Ok(value);
-            } else if let NodeType::MemberExpression { .. } = identifier {
+            } else if let NodeType::MemberExpression { .. } = identifier.node_type {
                 let _ = self.assign_member_expression(scope, identifier, value.clone())?;
                 return Ok(value);
             } else {
-                Err(InterpreterErr::AssignNonVariable(identifier))
+                Err(InterpreterErr::AssignNonVariable(identifier.node_type))
             }
     }
 }

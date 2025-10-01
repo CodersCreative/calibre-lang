@@ -1,5 +1,5 @@
 use calibre_common::environment::Variable;
-use calibre_parser::ast::{NodeType, ParserDataType, VarType};
+use calibre_parser::ast::{Node, NodeType, ParserDataType, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
@@ -15,14 +15,14 @@ impl CheckerEnvironment {
     pub fn evaluate_match_declaration(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        declaration: Node,
     ) -> Result<RuntimeType, InterpreterErr> {
         let NodeType::MatchDeclaration {
             parameters,
             body : _,
             return_type,
             is_async,
-        } = declaration else {panic!()};
+        } = declaration.node_type else {panic!()};
         
             let params = vec![(
                 parameters.0.clone(),
@@ -48,14 +48,14 @@ impl CheckerEnvironment {
     pub fn evaluate_function_declaration(
         &mut self,
         scope: &u64,
-        declaration: NodeType,
+        declaration: Node,
     ) -> Result<RuntimeType, InterpreterErr> {
         let NodeType::FunctionDeclaration {
             parameters,
             body,
             return_type,
             is_async,
-        } = declaration
+        } = declaration.node_type
         else { panic!() };
             let mut params = Vec::new();
 
@@ -95,7 +95,7 @@ impl CheckerEnvironment {
                     .into_type(self, scope, &RuntimeType::from(t))?;
             }
 
-            let _ = self.push_var(scope, identifier, Variable { value : value.clone(), var_type })?;
+            let _ = self.push_var(scope, identifier, Variable { value : value.clone(), var_type, location : self.current_location.clone()})?;
 
             Ok(value)
     }

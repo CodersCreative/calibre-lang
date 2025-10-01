@@ -1,5 +1,5 @@
 use calibre_common::environment::{Type, Variable};
-use calibre_parser::ast::{NodeType, ObjectType, RefMutability, VarType};
+use calibre_parser::ast::{Node, NodeType, ObjectType, RefMutability, VarType};
 
 use crate::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{helper::Block, FunctionType, RuntimeType, RuntimeValue}};
 
@@ -9,7 +9,7 @@ impl InterpreterEnvironment {
         &mut self,
         scope: &u64,
         func: RuntimeValue,
-        mut arguments: Vec<(NodeType, Option<NodeType>)>,
+        mut arguments: Vec<(Node, Option<Node>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let RuntimeValue::Function {
             parameters,
@@ -18,6 +18,7 @@ impl InterpreterEnvironment {
             is_async,
         } = &func
         {
+            let location = self.current_location.clone().unwrap();
             if arguments.len() == 1 && parameters.len() > 1 {
                 if let Ok(x) = self.evaluate(scope, arguments[0].0.clone()) {
                     if let Ok(RuntimeValue::Tuple(x)) = x.unwrap_val(self, scope) {
@@ -34,11 +35,12 @@ impl InterpreterEnvironment {
                                         Variable {
                                             value: x,
                                             var_type: VarType::Mutable,
+                                            location: Some(location.clone())
                                         },
                                     )
                                     .unwrap();
 
-                                (NodeType::Identifier(format!("$-{}", counter)), None)
+                                (Node::new(NodeType::Identifier(format!("$-{}", counter)), location.line, location.col), None)
                             })
                             .collect();
                     }
@@ -52,7 +54,7 @@ impl InterpreterEnvironment {
                         .enumerate()
                         .filter(|(i, x)| {
                             for arg in arguments.iter() {
-                                if let (NodeType::Identifier(y), Some(_)) = arg {
+                                if let (NodeType::Identifier(y), Some(_)) = (&arg.0.node_type, &arg.1) {
                                     if &x.0 == y {
                                         return false;
                                     }
@@ -65,11 +67,11 @@ impl InterpreterEnvironment {
                         .collect();
 
                 if params.iter().filter(|x| x.3.is_none()).count() > 0 {
-                    let arguments: Vec<(NodeType, Option<NodeType>)> = [
+                    let arguments: Vec<(Node, Option<Node>)> = [
                         arguments,
                         params
                             .iter()
-                            .map(|x| (NodeType::Identifier(x.0.clone()), None))
+                            .map(|x| (Node::new(NodeType::Identifier(x.0.clone()), location.line, location.col), None))
                             .collect(),
                     ]
                     .concat();
@@ -84,14 +86,15 @@ impl InterpreterEnvironment {
                             Variable {
                                 value: func.clone(),
                                 var_type: VarType::Mutable,
+                                location : Some(location.clone())
                             },
                         )
                         .unwrap();
 
-                    let body = FunctionType::Regular(Block(Box::new(NodeType::CallExpression(
-                        Box::new(NodeType::Identifier(format!("$-{}", counter))),
+                    let body = FunctionType::Regular(Block(Box::new(Node::new(NodeType::CallExpression(
+                        Box::new(Node::new(NodeType::Identifier(format!("$-{}", counter)), location.line, location.col)),
                         arguments,
-                    ))));
+                    ), location.line, location.col))));
 
                     return Ok(RuntimeValue::Function {
                         parameters: params,
@@ -137,10 +140,10 @@ impl InterpreterEnvironment {
     pub fn evaluate_call_expression(
         &mut self,
         scope: &u64,
-        caller : NodeType,
-        arguments : Vec<(NodeType, Option<NodeType>)>,
+        caller : Node,
+        arguments : Vec<(Node, Option<Node>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            if let NodeType::Identifier(object_name) = caller.clone() {
+            if let NodeType::Identifier(object_name) = caller.node_type.clone() {
                 if let Ok(Type::Struct(ObjectType::Tuple(params))) =
                     self.get_object_type(scope, &object_name)
                 {
@@ -182,7 +185,7 @@ impl InterpreterEnvironment {
                                 .expect("Tried to get index that is larger than list size")
                                 .clone());
                         }
-                        _ => return Err(InterpreterErr::IndexNonList(arguments[0].0.clone())),
+                        _ => return Err(InterpreterErr::IndexNonList(arguments[0].0.node_type.clone())),
                     }
                 }
                 RuntimeValue::NativeFunction(_) => {
@@ -190,7 +193,7 @@ impl InterpreterEnvironment {
 
                     for arg in arguments.iter() {
                         evaluated_arguments.push(if let Some(d) = &arg.1 {
-                            if let NodeType::Identifier(name) = &arg.0 {
+                            if let NodeType::Identifier(name) = &arg.0.node_type {
                                 (
                                     RuntimeValue::Str(name.clone()),
                                     Some(self.evaluate(scope, d.clone())?),

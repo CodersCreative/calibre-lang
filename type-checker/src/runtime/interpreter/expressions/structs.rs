@@ -1,5 +1,5 @@
 use calibre_common::{environment::Type, errors::{ScopeErr, ValueErr}};
-use calibre_parser::ast::{NodeType, ObjectType};
+use calibre_parser::ast::{Node, NodeType, ObjectType};
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType,
@@ -10,7 +10,7 @@ impl CheckerEnvironment {
     pub fn evaluate_struct_expression(
         &mut self,
         scope: &u64,
-        props : ObjectType<Option<NodeType>>
+        props : ObjectType<Option<Node>>
     ) -> Result<RuntimeType, InterpreterErr> {
             if let ObjectType::Map(props) = props {
                 let mut properties = HashMap::new();
@@ -50,19 +50,20 @@ impl CheckerEnvironment {
         scope: &u64,
         identifier: String,
         value : String,
-        data : Option<ObjectType<Option<NodeType>>>
+        data : Option<ObjectType<Option<Node>>>
     ) -> Result<RuntimeType, InterpreterErr> {
             let enm_class = match self.get_object_type(&scope, &identifier) {
                 Ok(Type::Enum(x)) => x.clone(),
                 _ => {
                     if let Some(ObjectType::Tuple(args)) = data {
                         if let Ok(s) = self.get_next_scope(*scope, &identifier) {
+                            let location = self.current_location.clone().unwrap();
                             return self.evaluate(
                                 &s,
-                                NodeType::CallExpression(
-                                    Box::new(NodeType::Identifier(value)),
+                                Node::new(NodeType::CallExpression(
+                                    Box::new(Node::new(NodeType::Identifier(value), location.line, location.col)),
                                     args.into_iter().map(|x| (x.unwrap(), None)).collect(),
-                                ),
+                                ), location.line, location.col),
                             );
                         }
                     }

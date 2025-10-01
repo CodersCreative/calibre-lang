@@ -4,7 +4,7 @@ use crate::{
     },
 };
 use calibre_common::errors::RuntimeErr;
-use calibre_parser::ast::NodeType;
+use calibre_parser::ast::{Node, NodeType};
 
 pub mod expressions;
 pub mod statements;
@@ -15,9 +15,11 @@ impl InterpreterEnvironment {
     pub fn evaluate(
         &mut self,
         scope: &u64,
-        node: NodeType,
+        node: Node,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        match node {
+        self.current_location = self.get_location(scope, node.line, node.col);
+        
+        match node.node_type {
             NodeType::FloatLiteral(x) => Ok(if x > f32::MAX as f64 {
                 RuntimeValue::Double(x as f64)
             } else {

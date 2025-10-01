@@ -1,5 +1,5 @@
 use calibre_common::environment::Variable;
-use calibre_parser::ast::{LoopType, NodeType, RefMutability, VarType};
+use calibre_parser::ast::{LoopType, Node, NodeType, RefMutability, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{helper::StopValue, RuntimeType, RuntimeValue}
@@ -10,21 +10,23 @@ impl InterpreterEnvironment {
         &mut self,
         scope: &u64,
         loop_type : LoopType,
-        body : NodeType,
+        body : Node,
     ) -> Result<RuntimeValue, InterpreterErr> {
             let mut result = RuntimeValue::Null;
 
-            if let LoopType::For(identifier, range) = loop_type {
-                let range = self.evaluate(scope, range)?;
+            if let LoopType::For(identifier, range_node) = loop_type {
+                let range = self.evaluate(scope, range_node.clone())?;
                 if let RuntimeValue::List { data, data_type: _ } = range {
                     for d in data.into_iter() {
                         let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+                        let location = self.get_location(scope, range_node.line, range_node.col);
                         let _ = self.push_var(
                             &new_scope,
                             identifier.clone(),
                             Variable {
                                 value: d.clone(),
                                 var_type: VarType::Immutable,
+                                location
                             },
                         );
                         result = self.evaluate(&new_scope, body.clone())?.unwrap_links_val(
@@ -55,7 +57,7 @@ impl InterpreterEnvironment {
                                 RefMutability::Value,
                                 None,
                             )],
-                            vec![(NodeType::IntLiteral(i as i128), None)],
+                            vec![(Node::new(NodeType::IntLiteral(i as i128), range_node.line, range_node.col), None)],
                         )?;
                         result = self.evaluate(&new_scope, body.clone())?.unwrap_links_val(
                             self,
@@ -95,6 +97,7 @@ impl InterpreterEnvironment {
                                     }
                                     _ => VarType::Immutable,
                                 },
+                                location : var.location.clone(),
                             },
                         );
 
@@ -145,11 +148,11 @@ impl InterpreterEnvironment {
                             scope,
                                 LoopType::For(
                                     String::from("hidden_index"),
-                                    NodeType::RangeDeclaration {
-                                        from: Box::new(NodeType::IntLiteral(from as i128)),
-                                        to: Box::new(NodeType::IntLiteral(to as i128)),
+                                    Node::new(NodeType::RangeDeclaration {
+                                        from: Box::new(Node::new(NodeType::IntLiteral(from as i128), condition.line, condition.col)),
+                                        to: Box::new(Node::new(NodeType::IntLiteral(to as i128), condition.line, condition.col)),
                                         inclusive: false,
-                                    },
+                                    }, condition.line, condition.col),
                                 ),
                                 body,
                         );
@@ -159,7 +162,7 @@ impl InterpreterEnvironment {
                             scope,
                                 LoopType::For(
                                     String::from("hidden_index"),
-                                    NodeType::IntLiteral(x as i128),
+                                    Node::new(NodeType::IntLiteral(x as i128), condition.line, condition.col),
                                 ),
                                 body,
                         );
@@ -169,7 +172,7 @@ impl InterpreterEnvironment {
                             scope,
                             LoopType::For(
                                     String::from("hidden_index"),
-                                    NodeType::FloatLiteral(x as f64),
+                                    Node::new(NodeType::FloatLiteral(x as f64), condition.line, condition.col),
                                 ),
                                 body,
                             

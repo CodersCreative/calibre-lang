@@ -1,5 +1,5 @@
 use calibre_common::environment::Variable;
-use calibre_parser::ast::{LoopType, NodeType, RefMutability, VarType};
+use calibre_parser::ast::{LoopType, Node, NodeType, RefMutability, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
@@ -10,14 +10,15 @@ impl CheckerEnvironment {
         &mut self,
         scope: &u64,
         loop_type : LoopType,
-        body : NodeType,
+        body : Node,
     ) -> Result<RuntimeType, InterpreterErr> {
             let mut result = RuntimeType::Null;
 
-            if let LoopType::For(identifier, range) = loop_type {
-                let range = self.evaluate(scope, range)?;
+            if let LoopType::For(identifier, range_node) = loop_type {
+                let range = self.evaluate(scope, range_node.clone())?;
                 if let RuntimeType::List(x) = range {
                     let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+                    let location = self.get_location(scope, range_node.line, range_node.col);
                     let _ = self.push_var(
                         &new_scope,
                         identifier.clone(),
@@ -27,6 +28,7 @@ impl CheckerEnvironment {
                                 _ => RuntimeType::Dynamic,
                             },
                             var_type: VarType::Immutable,
+                            location
                         },
                     );
                     result = self.evaluate(&new_scope, body.clone())?;
@@ -42,7 +44,7 @@ impl CheckerEnvironment {
                             RefMutability::Value,
                             None,
                         )],
-                        vec![(NodeType::IntLiteral(0 as i128), None)],
+                        vec![(Node::new(NodeType::IntLiteral(0 as i128), range_node.line, range_node.col), None)],
                     )?;
                     result = self.evaluate(&new_scope, body.clone())?;
                     self.remove_scope(&new_scope);
@@ -63,6 +65,7 @@ impl CheckerEnvironment {
                                 }
                                 _ => VarType::Immutable,
                             },
+                            location : var.location.clone(),
                         },
                     );
 
@@ -70,6 +73,7 @@ impl CheckerEnvironment {
                     self.remove_scope(&new_scope);
                 }
             } else if let LoopType::While(condition) = loop_type {
+                let filler_int = Node::new(NodeType::IntLiteral(0 as i128), condition.line, condition.col);
                 match self.evaluate(scope, condition.clone())? {
                     RuntimeType::Bool => {
                         let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
@@ -81,21 +85,21 @@ impl CheckerEnvironment {
                             scope,
                                 LoopType::For(
                                     String::from("hidden_index"),
-                                    NodeType::RangeDeclaration {
-                                        from: Box::new(NodeType::IntLiteral(0 as i128)),
-                                        to: Box::new(NodeType::IntLiteral(0 as i128)),
+                                    Node::new(NodeType::RangeDeclaration {
+                                        from: Box::new(filler_int.clone()),
+                                        to: Box::new(filler_int),
                                         inclusive: false,
-                                    },
+                                    }, condition.line, condition.col),
                                 ),
                                 body,
                         );
                     }
-                    RuntimeType::Range => {
+                    RuntimeType::Int => {
                         return self.evaluate_loop_declaration(
                             scope,
                                 LoopType::For(
                                     String::from("hidden_index"),
-                                    NodeType::IntLiteral(0 as i128),
+                                    filler_int,
                                 ),
                                 body,
                         );
@@ -105,7 +109,7 @@ impl CheckerEnvironment {
                             scope,
                             LoopType::For(
                                     String::from("hidden_index"),
-                                    NodeType::FloatLiteral(0 as f64),
+                                    filler_int,
                                 ),
                                 body,
                             

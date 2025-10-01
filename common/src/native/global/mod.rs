@@ -26,6 +26,7 @@ pub fn setup<T : RuntimeValue, U : RuntimeType>(env: &mut Environment<T, U>, sco
                 Variable {
                     value: func.1.clone(),
                     var_type: VarType::Constant,
+                    location : None,
                 },
             );
         }
@@ -40,6 +41,7 @@ pub fn setup<T : RuntimeValue, U : RuntimeType>(env: &mut Environment<T, U>, sco
                 Variable {
                     value: var.1,
                     var_type: VarType::Constant,
+                    location : None,
                 },
             );
         }

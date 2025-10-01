@@ -33,6 +33,7 @@ pub fn setup_scope(env: &mut CheckerEnvironment, parent: &u64, name : &str, func
                 Variable {
                     value: func.1.clone(),
                     var_type: VarType::Constant,
+                    location : None,
                 },
             );
         }

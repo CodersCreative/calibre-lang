@@ -66,16 +66,25 @@ impl<U : RuntimeType> From<TypeDefType> for Type<U> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Location {
+    pub path : PathBuf,
+    pub line : usize,
+    pub col : usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Object<T : RuntimeValue, U : RuntimeType> {
     pub object_type: Type<U>,
-    pub functions: HashMap<String, (T, bool)>,
+    pub functions: HashMap<String, (T, Option<Location>, bool)>,
     pub traits: Vec<String>,
+    pub location: Option<Location>
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Variable<T> {
     pub value: T,
     pub var_type: VarType,
+    pub location: Option<Location>
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -84,6 +93,7 @@ pub struct Environment<T : RuntimeValue, U : RuntimeType> {
     pub scopes: HashMap<u64, Scope>,
     pub variables: HashMap<u64, HashMap<String, Variable<T>>>,
     pub objects: HashMap<u64, HashMap<String, Object<T, U>>>,
+    pub current_location : Option<Location>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -103,7 +113,12 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
             scopes: HashMap::new(),
             variables: HashMap::new(),
             objects: HashMap::new(),
+            current_location : None,
         }
+    }
+
+    pub fn get_location(&self, scope: &u64, line : usize, col : usize) -> Option<Location>{
+        Some(Location { path: self.scopes.get(scope).unwrap().path.clone(), line, col })
     }
 
     pub fn remove_scope(&mut self, scope: &u64) {
@@ -169,6 +184,7 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
                             },
                         )),
                         var_type: VarType::Constant,
+                        location : None,
                     },
                 ),
                 (
@@ -176,6 +192,7 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
                     Variable {
                         value: T::string(String::from(scope.path.to_str().unwrap())),
                         var_type: VarType::Constant,
+                        location : None,
                     },
                 ),
             ]),

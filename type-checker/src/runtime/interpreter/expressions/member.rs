@@ -1,4 +1,4 @@
-use calibre_parser::ast::{NodeType, ObjectType};
+use calibre_parser::ast::{Node, NodeType, ObjectType};
 
 use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
@@ -11,10 +11,10 @@ impl CheckerEnvironment {
     pub fn get_member_expression_path(
         &mut self,
         scope: &u64,
-        og_path: Vec<(NodeType, bool)>,
+        og_path: Vec<(Node, bool)>,
     ) -> Result<MembrExprPathRes, InterpreterErr> {
         let mut path = Vec::new();
-        if let (NodeType::Identifier(x), false) = &og_path[0] {
+        if let (NodeType::Identifier(x), false) = (&og_path[0].0.node_type, &og_path[0].1) {
             if let Ok(s) = self.get_next_scope(*scope, &x) {
                 if let Ok(x) = self.evaluate(&s, og_path[1].0.clone()) {
                     return Ok(MembrExprPathRes::Value(x));
@@ -27,7 +27,7 @@ impl CheckerEnvironment {
         }
 
         for (node, computed) in og_path.into_iter() {
-            match &node {
+            match &node.node_type {
                 NodeType::MemberExpression { path: p } => {
                     match self.get_member_expression_path(scope, p.to_vec())? {
                         MembrExprPathRes::Value(x) => return Ok(MembrExprPathRes::Value(x)),
@@ -58,23 +58,24 @@ impl CheckerEnvironment {
                         x => return Ok(MembrExprPathRes::Value(x.clone())),
                     }
                 },
-                Err(e) if path.len() == 1 => match node {
+                Err(e) if path.len() == 1 => {
+                    match node.node_type {
                     NodeType::Identifier(value) => {
                         return Ok(MembrExprPathRes::Value(self.evaluate(
                             scope,
-                            NodeType::EnumExpression {
+                            Node::new(NodeType::EnumExpression {
                                 identifier: path.remove(0),
                                 value,
                                 data: None,
-                            },
+                            }, node.line, node.col),
                         )?));
                     }
-                    NodeType::CallExpression(value, mut args) => match *value {
+                    NodeType::CallExpression(value_node, mut args) => match value_node.node_type {
                         NodeType::Identifier(value) => {
                             return Ok(MembrExprPathRes::Value(
                                 match self.evaluate(
                                     scope,
-                                    NodeType::EnumExpression {
+                                    Node::new(NodeType::EnumExpression {
                                         identifier: path[0].clone(),
                                         value: value.to_string(),
                                         data: Some(ObjectType::Tuple(
@@ -83,7 +84,7 @@ impl CheckerEnvironment {
                                                 .map(|x| Some(x.0.clone()))
                                                 .collect(),
                                         )),
-                                    },
+                                    }, value_node.line, value_node.col),
                                 ) {
                                     Ok(x) => x,
                                     Err(e) => {
@@ -100,11 +101,11 @@ impl CheckerEnvironment {
                                             };
 
                                             if let Ok(x) = self.get_function(scope, &obj, &value) {
-                                                if x.1 {
+                                                if x.2 {
                                                     args.insert(
                                                         0,
                                                         (
-                                                            NodeType::Identifier(path[0].clone()),
+                                                            Node::new(NodeType::Identifier(path[0].clone()), value_node.line, value_node.col),
                                                             None,
                                                         ),
                                                     );
@@ -122,6 +123,7 @@ impl CheckerEnvironment {
                         _ => return Err(e),
                     },
                     _ => return Err(e),
+                }
                 },
                 Err(e) => return Err(e),
             }
@@ -133,7 +135,7 @@ impl CheckerEnvironment {
     pub fn assign_member_expression(
         &mut self,
         scope: &u64,
-        member: NodeType,
+        member: Node,
         value: RuntimeType,
     ) -> Result<RuntimeType, InterpreterErr> {
         let typ = self.evaluate_member_expression(scope,  member)?;
@@ -144,9 +146,9 @@ impl CheckerEnvironment {
     pub fn evaluate_member_expression(
         &mut self,
         scope: &u64,
-        exp: NodeType,
+        exp: Node,
     ) -> Result<RuntimeType, InterpreterErr> {
-        match exp {
+        match exp.node_type {
             NodeType::MemberExpression { path: og_path } => {
                 let mut path = match self.get_member_expression_path(scope, og_path)? {
                     MembrExprPathRes::Path(x) => x,
@@ -158,17 +160,17 @@ impl CheckerEnvironment {
                     Err(_) if path.len() == 2 => {
                         return self.evaluate(
                             scope,
-                            NodeType::EnumExpression {
+                            Node::new(NodeType::EnumExpression {
                                 identifier: path.remove(0),
                                 value: path.remove(0),
                                 data: None,
-                            },
+                            }, exp.line, exp.col),
                         );
                     }
                     Err(e) => Err(e),
                 }
             }
-            _ => Err(InterpreterErr::NotImplemented(exp)),
+            _ => Err(InterpreterErr::NotImplemented(exp.node_type)),
         }
     }
 }

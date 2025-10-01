@@ -1,13 +1,10 @@
 use crate::{
-    Parser, ParserError, SyntaxErr,
-    ast::NodeType,
-    ast::{ObjectType, TypeDefType},
-    lexer::{Bracket, TokenType},
+    ast::{Node, NodeType, ObjectType, TypeDefType}, lexer::{Bracket, TokenType}, Parser, ParserError, SyntaxErr
 };
 
 impl Parser {
-    pub fn parse_type_decaration(&mut self) -> Result<NodeType, ParserError> {
-        let _ = self.expect_eat(
+    pub fn parse_type_decaration(&mut self) -> Result<Node, ParserError> {
+        let open = self.expect_eat(
             &TokenType::Type,
             SyntaxErr::ExpectedKeyword(String::from("type")),
         )?;
@@ -30,7 +27,7 @@ impl Parser {
             }
         };
 
-        Ok(NodeType::TypeDeclaration { identifier, object })
+        Ok(Node::new(NodeType::TypeDeclaration { identifier, object }, open.line, open.col))
     }
 
     pub fn parse_enum_declaration(&mut self) -> Result<TypeDefType, ParserError> {

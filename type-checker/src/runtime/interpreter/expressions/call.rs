@@ -1,5 +1,5 @@
 use calibre_common::environment::{Type, Variable};
-use calibre_parser::ast::{NodeType, ObjectType, RefMutability, VarType};
+use calibre_parser::ast::{Node, NodeType, ObjectType, RefMutability, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
@@ -10,8 +10,9 @@ impl CheckerEnvironment {
         &mut self,
         scope: &u64,
         func: RuntimeType,
-        mut arguments: Vec<(NodeType, Option<NodeType>)>,
+        mut arguments: Vec<(Node, Option<Node>)>,
     ) -> Result<RuntimeType, InterpreterErr> {
+        let location = self.current_location.clone().unwrap();
         if let RuntimeType::Function {
             parameters,
             return_type,
@@ -34,11 +35,12 @@ impl CheckerEnvironment {
                                         Variable {
                                             value: x,
                                             var_type: VarType::Mutable,
+                                            location: Some(location.clone()),
                                         },
                                     )
                                     .unwrap();
 
-                                (NodeType::Identifier(format!("$-{}", counter)), None)
+                                (Node::new(NodeType::Identifier(format!("$-{}", counter)), location.line, location.col), None)
                             })
                             .collect();
                     }
@@ -52,7 +54,7 @@ impl CheckerEnvironment {
                         .enumerate()
                         .filter(|(i, x)| {
                             for arg in arguments.iter() {
-                                if let (NodeType::Identifier(y), Some(_)) = arg {
+                                if let (NodeType::Identifier(y), Some(_)) = (&arg.0.node_type, &arg.1) {
                                     if &x.0 == y {
                                         return false;
                                     }
@@ -65,11 +67,11 @@ impl CheckerEnvironment {
                         .collect();
 
                 if params.iter().filter(|x| !x.3).count() > 0 {
-                    let arguments: Vec<(NodeType, Option<NodeType>)> = [
+                    let arguments: Vec<(Node, Option<Node>)> = [
                         arguments,
                         params
                             .iter()
-                            .map(|x| (NodeType::Identifier(x.0.clone()), None))
+                            .map(|x| (Node::new(NodeType::Identifier(x.0.clone()), location.line, location.col), None))
                             .collect(),
                     ]
                     .concat();
@@ -84,6 +86,7 @@ impl CheckerEnvironment {
                             Variable {
                                 value: func.clone(),
                                 var_type: VarType::Mutable,
+                                location : Some(location)
                             },
                         )
                         .unwrap();
@@ -108,10 +111,10 @@ impl CheckerEnvironment {
     pub fn evaluate_call_expression(
         &mut self,
         scope: &u64,
-        caller : NodeType,
-        arguments : Vec<(NodeType, Option<NodeType>)>,
+        caller : Node,
+        arguments : Vec<(Node, Option<Node>)>,
     ) -> Result<RuntimeType, InterpreterErr> {
-            if let NodeType::Identifier(object_name) = caller.clone() {
+            if let NodeType::Identifier(object_name) = caller.node_type.clone() {
                 if let Ok(Type::Struct(ObjectType::Tuple(params))) =
                     self.get_object_type(scope, &object_name)
                 {
@@ -151,7 +154,7 @@ impl CheckerEnvironment {
                                 None => RuntimeType::Dynamic,
                             });
                         }
-                        _ => return Err(InterpreterErr::IndexNonList(arguments[0].0.clone())),
+                        _ => return Err(InterpreterErr::IndexNonList(arguments[0].0.node_type.clone())),
                     }
                 }
                 RuntimeType::NativeFunction(x) => {

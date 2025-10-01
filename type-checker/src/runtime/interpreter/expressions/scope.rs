@@ -1,5 +1,5 @@
-use calibre_common::environment::Variable;
-use calibre_parser::ast::{NodeType, RefMutability, VarType};
+use calibre_common::environment::{Location, Variable};
+use calibre_parser::ast::{Node, NodeType, RefMutability, VarType};
 
 use crate::runtime::{
     interpreter::{expressions::member::MembrExprPathRes, InterpreterErr}, scope::CheckerEnvironment, values::RuntimeType
@@ -9,10 +9,10 @@ impl CheckerEnvironment {
     pub fn get_new_scope_with_values(
         &mut self,
         scope: &u64,
-        arguments: Vec<(String, RuntimeType, RefMutability)>,
+        arguments: Vec<(String, RuntimeType, RefMutability, Option<Location>)>,
     ) -> Result<u64, InterpreterErr> {
         let new_scope = self.new_scope_from_parent_shallow(scope.clone());
-        for (k, v, m) in arguments.into_iter() {
+        for (k, v, m, location) in arguments.into_iter() {
             // if m == RefMutability::MutRef || m == RefMutability::Ref {
             //     todo!()
             // } else {
@@ -25,6 +25,7 @@ impl CheckerEnvironment {
                         RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
                         _ => VarType::Immutable,
                     },
+                    location
                 },
             )?;
             // }
@@ -37,7 +38,7 @@ impl CheckerEnvironment {
         &mut self,
         scope: &u64,
         parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeType>)>,
-        arguments: Vec<(NodeType, Option<NodeType>)>,
+        arguments: Vec<(Node, Option<Node>)>,
     ) -> Result<u64, InterpreterErr> {
         let new_scope = self.new_scope_from_parent_shallow(scope.clone());
 
@@ -45,7 +46,7 @@ impl CheckerEnvironment {
             if m == &RefMutability::MutRef || m == &RefMutability::Ref {
                 if let Some(arg) = &arguments.get(i) {
                     if let None = arg.1 {
-                        if let NodeType::Identifier(x) = &arg.0 {
+                        if let NodeType::Identifier(x) = &arg.0.node_type {
                             let var = self.get_var(scope, x)?.clone();
 
                             match var.var_type {
@@ -64,11 +65,11 @@ impl CheckerEnvironment {
                                 var,
                             )?;
                             continue;
-                        } else if let NodeType::MemberExpression { path } = &arg.0 {
+                        } else if let NodeType::MemberExpression { path } = &arg.0.node_type {
                             let path = match self.get_member_expression_path(scope, path.clone())? {
                                 MembrExprPathRes::Path(x) => x,
                                 _ => {
-                                    return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
+                                    return Err(InterpreterErr::RefNonVar(arguments[0].0.node_type.clone()));
                                 }
                             };
 
@@ -92,11 +93,12 @@ impl CheckerEnvironment {
                                         }
                                         _ => VarType::Immutable,
                                     },
+                                    location: self.get_location(scope, arg.0.line, arg.0.col)
                                 },
                             )?;
                             continue;
                         } else {
-                            return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
+                            return Err(InterpreterErr::RefNonVar(arguments[0].0.node_type.clone()));
                         }
                     }
                 }
@@ -115,13 +117,14 @@ impl CheckerEnvironment {
                                 RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
                                 _ => VarType::Immutable,
                             },
+                            location : self.current_location.clone(),
                         },
                     )?;
                     continue;
                 }
             }
             if let Some(d) = arguments.iter().find(|x| {
-                if let NodeType::Identifier(key) = &x.0 {
+                if let NodeType::Identifier(key) = &x.0.node_type {
                     key == k && x.1.is_some()
                 } else {
                     false
@@ -137,6 +140,7 @@ impl CheckerEnvironment {
                             RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
                             _ => VarType::Immutable,
                         },
+                        location : self.current_location.clone(),
                     },
                 )?;
 
@@ -153,13 +157,14 @@ impl CheckerEnvironment {
                             RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
                             _ => VarType::Immutable,
                         },
+                        location : self.current_location.clone(),
                     },
                 )?;
 
                 continue;
             }
 
-            return Err(InterpreterErr::RefNonVar(arguments[0].0.clone()));
+            return Err(InterpreterErr::RefNonVar(arguments[0].0.node_type.clone()));
         }
 
         Ok(new_scope)
@@ -168,7 +173,7 @@ impl CheckerEnvironment {
     pub fn evaluate_scope(
         &mut self,
         scope: &u64,
-        body : Vec<NodeType>,
+        body : Vec<Node>,
         is_temp : bool,
     ) -> Result<RuntimeType, InterpreterErr> {
             let new_scope = if is_temp {

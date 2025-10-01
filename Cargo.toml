@@ -14,7 +14,8 @@ members = [
     "parser",
     "cranelift-jit",
     "type-checker",
-    "common"
+    "common",
+    "lsp"
 ]
 
 [workspace.dependencies]
@@ -24,10 +25,11 @@ calibre-parser = { path = "./parser", version = "0.1.0" }
 calibre-cranelift-jit = { path = "./cranelift-jit", version = "0.1.0" }
 calibre-type-checker = { path = "./type-checker", version = "0.1.0" }
 calibre-common = { path = "./common", version = "0.1.0" }
+calibre-lsp = { path = "./lsp", version = "0.1.0" }
 
 [features]
 cranelift = ["dep:calibre-cranelift-jit"]
-# type-checker = ["dep:calibre-type-checker"]
+lsp = ["dep:calibre-lsp"]
 
 # For Cal
 [dependencies]
@@ -38,6 +40,7 @@ calibre-interpreter = {workspace = true}
 calibre-common = {workspace = true}
 calibre-type-checker = {workspace = true}
 calibre-cranelift-jit = {workspace = true, optional = true}
+calibre-lsp = {workspace = true, optional = true}
 
 [[bin]]
 name = "cal"           # The name of the target.

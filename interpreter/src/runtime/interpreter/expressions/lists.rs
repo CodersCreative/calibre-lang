@@ -2,14 +2,14 @@ use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
 };
 use calibre_common::environment::Variable;
-use calibre_parser::ast::{LoopType, NodeType, RefMutability, VarType};
+use calibre_parser::ast::{LoopType, Node, NodeType, RefMutability, VarType};
 use std::mem::discriminant;
 
 impl InterpreterEnvironment {
     pub fn evaluate_tuple_expression(
         &mut self,
         scope: &u64,
-        vals : Vec<NodeType>
+        vals : Vec<Node>
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut values = Vec::new();
 
@@ -23,7 +23,7 @@ impl InterpreterEnvironment {
     pub fn evaluate_list_expression(
         &mut self,
         scope: &u64,
-        vals : Vec<NodeType>
+        vals : Vec<Node>
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut values = Vec::new();
 
@@ -53,14 +53,15 @@ impl InterpreterEnvironment {
     pub fn evaluate_iter_expression(
         &mut self,
         scope: &u64,
-        map : NodeType,
+        map : Node,
         loop_type : LoopType,
-        conditionals : Vec<NodeType>
+        conditionals : Vec<Node>
     ) -> Result<RuntimeValue, InterpreterErr> {
             let mut result = Vec::new();
 
-            if let LoopType::For(identifier, range) = loop_type {
-                let range = self.evaluate(scope, range)?;
+            if let LoopType::For(identifier, range_node) = loop_type {
+                let range = self.evaluate(scope, range_node.clone())?;
+                let location = self.get_location(scope, range_node.line, range_node.col);
                 if let RuntimeValue::List { data, data_type: _ } = range {
                     for d in data.into_iter() {
                         let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
@@ -70,6 +71,7 @@ impl InterpreterEnvironment {
                             Variable {
                                 value: d.clone(),
                                 var_type: VarType::Immutable,
+                                location: location.clone(),
                             },
                         );
 
@@ -97,7 +99,7 @@ impl InterpreterEnvironment {
                                 RefMutability::Value,
                                 None,
                             )],
-                            vec![(NodeType::IntLiteral(i as i128), None)],
+                            vec![(Node::new(NodeType::IntLiteral(1 as i128), range_node.line, range_node.col), None)],
                         )?;
                         if self.handle_conditionals(&new_scope, conditionals.clone())? {
                             result.push(
@@ -127,6 +129,7 @@ impl InterpreterEnvironment {
                                     }
                                     _ => VarType::Immutable,
                                 },
+                                location : var.location.clone(),
                             },
                         );
 

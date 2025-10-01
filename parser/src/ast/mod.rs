@@ -2,7 +2,6 @@ pub mod binary;
 pub mod comparison;
 
 use std::{cmp::Ordering, collections::HashMap, str::FromStr, string::ParseError};
-
 use crate::{ast::comparison::BooleanOperation, lexer::TokenType};
 use binary::BinaryOperator;
 use comparison::Comparison;
@@ -27,8 +26,8 @@ impl From<TokenType> for RefMutability {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoopType {
-    While(NodeType),
-    For(String, NodeType),
+    While(Node),
+    For(String, Node),
     ForEach(String, (String, RefMutability)),
 }
 
@@ -99,18 +98,35 @@ pub enum TypeDefType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Node {
+    pub node_type : NodeType,
+    pub line : usize,
+    pub col : usize,
+}
+
+impl Node {
+    pub fn new(node_type : NodeType, line : usize, col : usize) -> Self {
+        Self {
+            node_type,
+            line,
+            col,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
     Break,
     Continue,
     VariableDeclaration {
         var_type: VarType,
         identifier: String,
-        value: Box<NodeType>,
+        value: Box<Node>,
         data_type: Option<ParserDataType>,
     },
     ImplDeclaration {
         identifier: String,
-        functions: Vec<(NodeType, bool)>,
+        functions: Vec<(Node, bool)>,
     },
     TypeDeclaration {
         identifier: String,
@@ -119,113 +135,113 @@ pub enum NodeType {
     EnumExpression {
         identifier: String,
         value: String,
-        data: Option<ObjectType<Option<NodeType>>>,
+        data: Option<ObjectType<Option<Node>>>,
     },
     ScopeDeclaration {
-        body: Vec<NodeType>,
+        body: Vec<Node>,
         is_temp: bool,
     },
     MatchDeclaration {
-        parameters: (String, ParserDataType, RefMutability, Option<Box<NodeType>>),
-        body: Vec<(NodeType, Vec<NodeType>, Box<NodeType>)>,
+        parameters: (String, ParserDataType, RefMutability, Option<Box<Node>>),
+        body: Vec<(Node, Vec<Node>, Box<Node>)>,
         return_type: Option<ParserDataType>,
         is_async: bool,
     },
     FunctionDeclaration {
-        parameters: Vec<(String, ParserDataType, RefMutability, Option<NodeType>)>,
-        body: Box<NodeType>,
+        parameters: Vec<(String, ParserDataType, RefMutability, Option<Node>)>,
+        body: Box<Node>,
         return_type: Option<ParserDataType>,
         is_async: bool,
     },
     AssignmentExpression {
-        identifier: Box<NodeType>,
-        value: Box<NodeType>,
+        identifier: Box<Node>,
+        value: Box<Node>,
     },
     NotExpression {
-        value: Box<NodeType>,
+        value: Box<Node>,
     },
     AsExpression {
-        value: Box<NodeType>,
+        value: Box<Node>,
         typ: ParserDataType,
     },
     InDeclaration {
-        identifier: Box<NodeType>,
-        expression: Box<NodeType>,
+        identifier: Box<Node>,
+        expression: Box<Node>,
     },
     IsDeclaration {
-        value: Box<NodeType>,
+        value: Box<Node>,
         data_type: ParserDataType,
     },
     RangeDeclaration {
-        from: Box<NodeType>,
-        to: Box<NodeType>,
+        from: Box<Node>,
+        to: Box<Node>,
         inclusive: bool,
     },
     IterExpression {
-        map: Box<NodeType>,
+        map: Box<Node>,
         loop_type: Box<LoopType>,
-        conditionals: Vec<NodeType>,
+        conditionals: Vec<Node>,
     },
     LoopDeclaration {
         loop_type: Box<LoopType>,
-        body: Box<NodeType>,
+        body: Box<Node>,
     },
     Try {
-        value: Box<NodeType>,
+        value: Box<Node>,
     },
     Return {
-        value: Box<NodeType>,
+        value: Box<Node>,
     },
     Identifier(String),
     StringLiteral(String),
-    ListLiteral(Vec<NodeType>),
-    TupleLiteral(Vec<NodeType>),
+    ListLiteral(Vec<Node>),
+    TupleLiteral(Vec<Node>),
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(i128),
     MemberExpression {
-        path: Vec<(NodeType, bool)>,
+        path: Vec<(Node, bool)>,
     },
-    CallExpression(Box<NodeType>, Vec<(NodeType, Option<NodeType>)>),
+    CallExpression(Box<Node>, Vec<(Node, Option<Node>)>),
     BinaryExpression {
-        left: Box<NodeType>,
-        right: Box<NodeType>,
+        left: Box<Node>,
+        right: Box<Node>,
         operator: BinaryOperator,
     },
     ComparisonExpression {
-        left: Box<NodeType>,
-        right: Box<NodeType>,
+        left: Box<Node>,
+        right: Box<Node>,
         operator: Comparison,
     },
     PipeExpression (
-        Vec<NodeType>,
+        Vec<Node>,
     ),
     BooleanExpression {
-        left: Box<NodeType>,
-        right: Box<NodeType>,
+        left: Box<Node>,
+        right: Box<Node>,
         operator: BooleanOperation,
     },
     IfStatement {
         comparison: Box<IfComparisonType>,
-        then: Box<NodeType>,
-        otherwise: Option<Box<NodeType>>,
+        then: Box<Node>,
+        otherwise: Option<Box<Node>>,
     },
     ImportStatement {
         module: Vec<String>,
         alias: Option<String>,
         values: Vec<String>,
     },
-    StructLiteral(ObjectType<Option<NodeType>>),
+    StructLiteral(ObjectType<Option<Node>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IfComparisonType {
     IfLet {
         mutability: RefMutability,
-        value: NodeType,
-        pattern: (NodeType, Vec<NodeType>),
+        value: Node,
+        pattern: (Node, Vec<Node>),
     },
-    If(NodeType),
+    If(Node),
 }
 
 impl<T: PartialEq> PartialOrd for ObjectType<T> {

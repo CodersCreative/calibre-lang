@@ -1,4 +1,4 @@
-use crate::{environment::{Environment, Object, RuntimeType, RuntimeValue, Type}, errors::{ScopeErr, ValueErr}};
+use crate::{environment::{Environment, Location, Object, RuntimeType, RuntimeValue, Type}, errors::{ScopeErr, ValueErr}};
 
 
 impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
@@ -38,12 +38,12 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
         &mut self,
         scope: &u64,
         key: &str,
-        value: (String, T, bool),
+        value: (String, T, Option<Location>, bool),
     ) -> Result<(), ScopeErr<T>> {
         if let Some(objects) = self.objects.get_mut(&scope) {
             if let Some(object) = objects.get_mut(key) {
                 if !object.functions.contains_key(&value.0) {
-                    object.functions.insert(value.0, (value.1, value.2));
+                    object.functions.insert(value.0, (value.1, value.2, value.3));
                     return Ok(());
                 }
             }
@@ -56,7 +56,7 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
         scope: &u64,
         key: &str,
         name: &str,
-    ) -> Result<&'a (T, bool), ScopeErr<T>> {
+    ) -> Result<&'a (T, Option<Location>, bool), ScopeErr<T>> {
         if let Some(objects) = self.objects.get(&scope) {
             if let Some(object) = objects.get(key) {
                 if let Some(func) = object.functions.get(name) {

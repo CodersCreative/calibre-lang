@@ -35,6 +35,7 @@ pub fn setup_scope(env: &mut InterpreterEnvironment, parent: &u64, name : &str, 
                 Variable {
                     value: func.1.clone(),
                     var_type: VarType::Constant,
+                    location: None,
                 },
             );
         }

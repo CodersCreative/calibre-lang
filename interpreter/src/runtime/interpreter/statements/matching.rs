@@ -1,5 +1,5 @@
-use calibre_common::environment::Type;
-use calibre_parser::ast::{NodeType, ObjectType, RefMutability, VarType};
+use calibre_common::environment::{Location, Type};
+use calibre_parser::ast::{Node, NodeType, ObjectType, RefMutability, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr,
@@ -12,32 +12,32 @@ impl InterpreterEnvironment {
     fn match_inner_pattern(
         &mut self,
         mut scope: u64,
-        pattern: &NodeType,
+        pattern: &Node,
         value: &RuntimeValue,
         mutability: &RefMutability,
         mut path: Vec<String>,
     ) -> Option<Result<u64, InterpreterErr>> {
-        match pattern {
+        match pattern.node_type.clone() {
             NodeType::Identifier(x) if x.trim() == "_" => {
                 return Some(Ok(scope.clone()));
             }
             NodeType::MemberExpression { path: p } => {
-                if let (NodeType::Identifier(main), _) = &p[0] {
+                if let (NodeType::Identifier(main), _) = (&p[0].0.node_type, p[0].1) {
                     if let Ok(scope) = self.get_next_scope(scope, main) {
                         return self.match_inner_pattern(scope, &p[1].0, value, mutability, path);
                     }
 
-                    if let (NodeType::CallExpression(val, args), _) = &p[1] {
-                        if let NodeType::Identifier(val) = *val.clone() {
+                    if let (NodeType::CallExpression(val, args), _) = (&p[1].0.node_type, p[1].1) {
+                        if let NodeType::Identifier(val) = val.node_type.clone() {
                             return self.match_inner_pattern(
                                 scope,
-                                &NodeType::EnumExpression {
+                                &Node::new(NodeType::EnumExpression {
                                     identifier: main.clone(),
                                     value: val,
                                     data: Some(ObjectType::Tuple(
                                         args.into_iter().map(|x| Some(x.0.clone())).collect(),
                                     )),
-                                },
+                                }, p[0].0.line, p[0].0.col),
                                 value,
                                 mutability,
                                 path,
@@ -54,14 +54,14 @@ impl InterpreterEnvironment {
                                 return Some(Ok(scope));
                             }
                         } else if let Ok(Type::Enum(_)) = self.get_object_type(&scope, &main) {
-                            if let NodeType::Identifier(val) = &p[1].0 {
+                            if let NodeType::Identifier(val) = &p[1].0.node_type {
                                 return self.match_inner_pattern(
                                     scope,
-                                    &NodeType::EnumExpression {
+                                    &Node::new(NodeType::EnumExpression {
                                         identifier: main.clone(),
                                         value: val.to_string(),
                                         data: None,
-                                    },
+                                    }, p[0].0.line, p[0].0.col),
                                     value,
                                     mutability,
                                     path,
@@ -85,11 +85,11 @@ impl InterpreterEnvironment {
                         return None;
                     };
 
-                    let Some(index) = enm.iter().position(|x| &x.0 == enm_value) else {
+                    let Some(index) = enm.iter().position(|x| x.0 == enm_value) else {
                         return None;
                     };
 
-                    if index != val || identifier != &iden {
+                    if index != val || identifier != iden {
                         return None;
                     }
 
@@ -106,46 +106,51 @@ impl InterpreterEnvironment {
                     match data {
                         ObjectType::Map(map) => {
                             if let ObjectType::Map(m) = dat {
-                                let values: Vec<(String, RuntimeValue, RefMutability)> = m
+                                let values: Vec<(String, RuntimeValue, RefMutability, Option<Location>)> = m
                                     .into_iter()
                                     .filter(|(k, _)| map.contains_key(k))
                                     .filter_map(|(k, v)| {
                                         let path = [path.clone(), vec![k.clone()]].concat();
                                         match map.get(&k).unwrap() {
-                                            Some(NodeType::Identifier(k)) => match &mutability {
-                                                RefMutability::Ref | RefMutability::MutRef => {
-                                                    Some((
+                                            Some(node) => match &node.node_type {
+                                                NodeType::Identifier(k) => match &mutability {
+                                                    RefMutability::Ref | RefMutability::MutRef => {
+                                                        Some((
+                                                            k.to_string(),
+                                                            RuntimeValue::Link(
+                                                                obj_scope,
+                                                                path,
+                                                                (&v).into(),
+                                                            ),
+                                                            mutability.clone(),
+                                                            self.get_location(&scope, node.line, node.col),
+                                                        ))
+                                                    }
+                                                    _ => Some((
                                                         k.to_string(),
-                                                        RuntimeValue::Link(
-                                                            obj_scope,
-                                                            path,
-                                                            (&v).into(),
-                                                        ),
+                                                        v.clone(),
                                                         mutability.clone(),
-                                                    ))
-                                                }
-                                                _ => Some((
-                                                    k.to_string(),
-                                                    v.clone(),
-                                                    mutability.clone(),
-                                                )),
-                                            },
-                                            Some(node) => {
-                                                if let Some(Ok(s)) = self.match_inner_pattern(
-                                                    scope,
-                                                    node,
-                                                    progress(&value, &k.to_string()).unwrap(),
-                                                    mutability,
-                                                    path.clone(),
-                                                ) {
-                                                    scope = s;
-                                                    None
-                                                } else {
-                                                    Some((
-                                                        String::from("__failed__"),
-                                                        RuntimeValue::Null,
-                                                        RefMutability::Value,
-                                                    ))
+                                                        self.get_location(&scope, node.line, node.col),
+                                                    )),
+                                                },
+                                                _ => {
+                                                    if let Some(Ok(s)) = self.match_inner_pattern(
+                                                        scope,
+                                                        node,
+                                                        progress(&value, &k.to_string()).unwrap(),
+                                                        mutability,
+                                                        path.clone(),
+                                                    ) {
+                                                        scope = s;
+                                                        None
+                                                    } else {
+                                                        Some((
+                                                            String::from("__failed__"),
+                                                            RuntimeValue::Null,
+                                                            RefMutability::Value,
+                                                            self.get_location(&scope, node.line, node.col),
+                                                        ))
+                                                    }
                                                 }
                                             }
                                             None => match &mutability {
@@ -158,12 +163,14 @@ impl InterpreterEnvironment {
                                                             (&v).into(),
                                                         ),
                                                         mutability.clone(),
+                                                        self.get_location(&scope, pattern.line, pattern.col),
                                                     ))
                                                 }
                                                 _ => Some((
                                                     k.to_string(),
                                                     v.clone(),
                                                     mutability.clone(),
+                                                    self.get_location(&scope, pattern.line, pattern.col),
                                                 )),
                                             },
                                         }
@@ -184,23 +191,26 @@ impl InterpreterEnvironment {
                                     .into_iter()
                                     .enumerate()
                                     .map(|(i, x)| match x {
-                                        Some(NodeType::Identifier(y)) => Some(y.clone()),
-                                        Some(node) => {
-                                            let value = progress(&value, &i.to_string()).unwrap();
-                                            let result = self.match_inner_pattern(
-                                                scope,
-                                                node,
-                                                value,
-                                                mutability,
-                                                [path.clone(), vec![i.to_string()]].concat(),
-                                            );
-                                            if let Some(Ok(s)) = result {
-                                                scope = s;
-                                                None
-                                            } else {
-                                                Some(String::from("__failed__"))
+                                        Some(node) => match node.node_type {
+                                            NodeType::Identifier(y) => Some(y.clone()),
+                                            _ => {
+                                                let value = progress(&value, &i.to_string()).unwrap();
+                                                let result = self.match_inner_pattern(
+                                                    scope,
+                                                    &node,
+                                                    value,
+                                                    mutability,
+                                                    [path.clone(), vec![i.to_string()]].concat(),
+                                                );
+                                                if let Some(Ok(s)) = result {
+                                                    scope = s;
+                                                    None
+                                                } else {
+                                                    Some(String::from("__failed__"))
+                                                }
                                             }
                                         }
+
                                         _ => None,
                                     })
                                     .collect();
@@ -227,12 +237,14 @@ impl InterpreterEnvironment {
                                                             (&v).into(),
                                                         ),
                                                         mutability.clone(),
+                                                        self.get_location(&scope, pattern.line, pattern.col),
                                                     )
                                                 }
                                                 _ => (
                                                     list[i].clone().unwrap(),
                                                     v.clone(),
                                                     mutability.clone(),
+                                                    self.get_location(&scope, pattern.line, pattern.col),
                                                 ),
                                             })
                                             .collect(),
@@ -243,7 +255,7 @@ impl InterpreterEnvironment {
                                 let list: Vec<String> = list
                                     .into_iter()
                                     .map(|x| {
-                                        let NodeType::Identifier(y) = x.clone().unwrap() else {
+                                        let NodeType::Identifier(y) = x.clone().unwrap().node_type else {
                                             panic!()
                                         };
                                         y
@@ -267,9 +279,12 @@ impl InterpreterEnvironment {
                                                             (&v).into(),
                                                         ),
                                                         mutability.clone(),
+                                                        self.get_location(&scope, pattern.line, pattern.col),
                                                     )
                                                 }
-                                                _ => (k.to_string(), v.clone(), mutability.clone()),
+                                                _ => (k.to_string(), v.clone(), mutability.clone(), 
+                                                        self.get_location(&scope, pattern.line, pattern.col),
+                                                    ),
                                             })
                                             .collect(),
                                     )
@@ -289,7 +304,7 @@ impl InterpreterEnvironment {
                 }
             }
             NodeType::CallExpression(callee, args) => {
-                if let NodeType::Identifier(variant) = &**callee {
+                if let NodeType::Identifier(variant) = callee.node_type {
                     match (variant.as_str(), value) {
                         ("Some", RuntimeValue::Option(Some(inner), _)) => {
                             if let Some(arg_pat) = args.get(0) {
@@ -323,18 +338,23 @@ impl InterpreterEnvironment {
                                         value.strip_suffix(&pattern)
                                     } {
                                         let vars =
-                                            if let Some((NodeType::Identifier(name), _)) = name {
-                                                vec![(
-                                                    name.clone(),
-                                                    RuntimeValue::Str(value.to_string()),
-                                                    match mutability {
-                                                        RefMutability::MutRef
-                                                        | RefMutability::MutValue => {
-                                                            RefMutability::MutValue
-                                                        }
-                                                        _ => RefMutability::Value,
-                                                    },
-                                                )]
+                                            if let Some((name, _)) = name {
+                                                if let NodeType::Identifier(name) = &name.node_type {
+                                                    vec![(
+                                                        name.clone(),
+                                                        RuntimeValue::Str(value.to_string()),
+                                                        match mutability {
+                                                            RefMutability::MutRef
+                                                            | RefMutability::MutValue => {
+                                                                RefMutability::MutValue
+                                                            }
+                                                            _ => RefMutability::Value,
+                                                        },
+                                                        self.current_location.clone(),
+                                                    )]
+                                                } else {
+                                                    Vec::new()
+                                                }
                                             } else {
                                                 Vec::new()
                                             };
@@ -369,18 +389,23 @@ impl InterpreterEnvironment {
                             }
                         }
                         ("Let", _) => {
-                            if let Some((NodeType::Identifier(name), _)) = args.get(0) {
-                                let new_scope = self
-                                    .get_new_scope_with_values(
-                                        &scope,
-                                        vec![(
-                                            name.clone(),
-                                            value.clone(),
-                                            RefMutability::MutValue,
-                                        )],
-                                    )
-                                    .ok()?;
-                                Some(Ok(new_scope.clone()))
+                            if let Some((name, _)) = args.get(0) {
+                                if let NodeType::Identifier(name) = &name.node_type {
+                                    let new_scope = self
+                                        .get_new_scope_with_values(
+                                            &scope,
+                                            vec![(
+                                                name.clone(),
+                                                value.clone(),
+                                                RefMutability::MutValue,
+                                                self.get_location(&scope, pattern.line, pattern.col),
+                                            )],
+                                        )
+                                        .ok()?;
+                                    Some(Ok(new_scope.clone()))
+                                } else {
+                                    None
+                                }
                             } else {
                                 None
                             }
@@ -417,9 +442,10 @@ impl InterpreterEnvironment {
                                     var_name.clone(),
                                     RuntimeValue::Link(scope, path.clone(), value.into()),
                                     mutability.clone(),
+                                    self.get_location(&scope, pattern.line, pattern.col),
                                 )]
                             }
-                            _ => vec![(var_name.clone(), value.clone(), mutability.clone())],
+                            _ => vec![(var_name.clone(), value.clone(), mutability.clone(), self.get_location(&scope, pattern.line, pattern.col))],
                         },
                     )
                     .ok()?;
@@ -445,12 +471,12 @@ impl InterpreterEnvironment {
     pub fn match_pattern(
         &mut self,
         scope: &u64,
-        pattern: &NodeType,
+        pattern: &Node,
         value: &RuntimeValue,
         mutability: &RefMutability,
         path: Vec<String>,
-        conditionals: &[NodeType],
-        body: NodeType,
+        conditionals: &[Node],
+        body: Node,
     ) -> Option<Result<RuntimeValue, InterpreterErr>> {
         match match self.evaluate(scope, pattern.clone()) {
             Ok(x) => match x.unwrap_val(self, scope){
@@ -499,15 +525,15 @@ impl InterpreterEnvironment {
         &mut self,
         scope: &u64,
         mutability: &RefMutability,
-        value: NodeType,
-        patterns: Vec<(NodeType, Vec<NodeType>, Box<NodeType>)>,
+        value: Node,
+        patterns: Vec<(Node, Vec<Node>, Box<Node>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let path = match &value {
+        let path = match &value.node_type {
             NodeType::Identifier(x) => vec![x.clone()],
             _ => Vec::new(),
         };
 
-        let value = match (&mutability, value.clone()) {
+        let value = match (&mutability, value.node_type.clone()) {
             (RefMutability::MutRef, NodeType::Identifier(identifier)) => {
                 let var = self.get_var(scope, &identifier)?;
 
@@ -552,7 +578,7 @@ impl InterpreterEnvironment {
     pub fn handle_conditionals(
         &mut self,
         scope: &u64,
-        conditionals: Vec<NodeType>,
+        conditionals: Vec<Node>,
     ) -> Result<bool, InterpreterErr> {
         let mut result = true;
 

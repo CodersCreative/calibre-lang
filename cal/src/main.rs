@@ -47,7 +47,7 @@ fn file(path: &str) -> Result<(), Box<dyn Error>> {
     let mut env = InterpreterEnvironment::new();
     let mut checker = CheckerEnvironment::new();
     let mut parser = calibre_parser::Parser::default();
-    let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
+    let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
     let program = parser.produce_ast(fs::read_to_string(path)?)?;
     let _ = checker.evaluate(&checker_scope, program.clone())?;

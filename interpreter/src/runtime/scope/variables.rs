@@ -55,6 +55,7 @@ impl InterpreterEnvironment {
                         ),
                     },
                     var_type: var.var_type.clone(),
+                    location: var.location.clone()
                 }
             } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
                 self.get_var_ref(&scope, key)?
@@ -117,6 +118,7 @@ impl InterpreterEnvironment {
                         *var = Variable {
                             value,
                             var_type: VarType::Mutable,
+                            location: var.location.clone()
                         };
                     } else {
                         return Err(ScopeErr::TypeMismatch(var.value.clone(), value.clone()).into());
@@ -135,6 +137,7 @@ impl InterpreterEnvironment {
             .unwrap_or(&Variable {
                 value: RuntimeValue::Null,
                 var_type: VarType::Constant,
+                location: None,
             })
             .clone();
 

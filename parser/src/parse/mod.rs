@@ -5,7 +5,7 @@ pub mod functions;
 pub mod r#type;
 
 use crate::{
-    ast::{binary::BinaryOperator, comparison::Comparison, LoopType, NodeType, ObjectType, ParserDataType, RefMutability}, lexer::{Bracket, Token, TokenType}, Parser, ParserError, SyntaxErr
+    ast::{binary::BinaryOperator, comparison::Comparison, LoopType, Node, NodeType, ObjectType, ParserDataType, RefMutability}, lexer::{Bracket, Token, TokenType}, Parser, ParserError, SyntaxErr
 };
 use std::{collections::HashMap, str::FromStr};
 
@@ -44,7 +44,7 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Result<Vec<(String, ParserDataType, RefMutability, Option<NodeType>)>, ParserError> {
+    ) -> Result<Vec<(String, ParserDataType, RefMutability, Option<Node>)>, ParserError> {
         let mut properties = Vec::new();
         let mut defaulted = false;
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
@@ -357,7 +357,7 @@ impl Parser {
         Ok(())
     }
 
-    pub fn parse_tuple_expression(&mut self) -> Result<NodeType, ParserError> {
+    pub fn parse_tuple_expression(&mut self) -> Result<Node, ParserError> {
         let mut has_commas = false;
         let mut index = 0;
 
@@ -382,10 +382,10 @@ impl Parser {
         }
 
         let mut values = Vec::new();
-        let _ = self.expect_eat(
+        let open = self.expect_eat(
             &TokenType::Open(Bracket::Paren),
             SyntaxErr::ExpectedOpeningBracket(Bracket::Paren),
-        );
+        )?;
 
         while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Paren) {
             values.push(self.parse_statement()?);
@@ -398,18 +398,22 @@ impl Parser {
         let _ = self.expect_eat(
             &TokenType::Close(Bracket::Paren),
             SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
-        );
+        )?;
 
         if values.len() == 1 {
             return Ok(values[0].clone());
         }
 
-        Ok(NodeType::TupleLiteral(values))
+        Ok(Node::new(
+            NodeType::TupleLiteral(values),
+            open.line,
+            open.col,
+        ))
     }
 
-    pub fn parse_list_expression(&mut self) -> Result<NodeType, ParserError> {
+    pub fn parse_list_expression(&mut self) -> Result<Node, ParserError> {
         let mut values = Vec::new();
-        let _ = self.eat();
+        let open = self.eat();
 
         while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Square) {
             values.push(self.parse_statement()?);
@@ -433,11 +437,11 @@ impl Parser {
                     SyntaxErr::ExpectedClosingBracket(Bracket::Square),
                 );
 
-                return Ok(NodeType::IterExpression {
+                return Ok(Node::new(NodeType::IterExpression {
                     map: Box::new(values[0].clone()),
                     loop_type: Box::new(loop_type),
                     conditionals,
-                });
+                }, open.line, open.col));
             } else if self.first().token_type != TokenType::Close(Bracket::Square) {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
             }
@@ -448,7 +452,7 @@ impl Parser {
             SyntaxErr::ExpectedClosingBracket(Bracket::Square),
         );
 
-        Ok(NodeType::ListLiteral(values))
+        Ok(Node::new(NodeType::ListLiteral(values), open.line, open.col))
     }
 }
 

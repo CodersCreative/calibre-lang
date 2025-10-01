@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use calibre_common::environment::{Object, Type};
-use calibre_parser::{ast::{NodeType}};
+use calibre_parser::ast::{Node, NodeType};
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
@@ -12,7 +12,7 @@ impl CheckerEnvironment {
         &mut self,
         scope: &u64,
         identifier : String,
-        functions : Vec<(NodeType, bool)>,
+        functions : Vec<(Node, bool)>,
     ) -> Result<RuntimeType, InterpreterErr> {
             for function in functions {
                 let scope_2 = self.new_scope_from_parent_shallow(scope.clone());
@@ -21,11 +21,12 @@ impl CheckerEnvironment {
                     identifier: iden,
                     value,
                     ..
-                } = function.0
+                } = function.0.node_type
                 {
                     let func = self.evaluate(&scope_2, *value)?;
+                    let location = self.get_location(scope, function.0.line, function.0.col);
 
-                    let _ = self.push_function(scope, &identifier, (iden, func, function.1))?;
+                    let _ = self.push_function(scope, &identifier, (iden, func, location, function.1))?;
                     continue;
                 }
 
@@ -43,6 +44,7 @@ impl CheckerEnvironment {
         identifier : String,
         object : Type<RuntimeType>,
     ) -> Result<RuntimeType, InterpreterErr> {
+            let location = self.current_location.clone();
             let _ = self.push_object(
                 scope,
                 identifier,
@@ -50,6 +52,7 @@ impl CheckerEnvironment {
                     object_type: object,
                     functions: HashMap::new(),
                     traits: Vec::new(),
+                    location,
                 },
             )?;
             Ok(RuntimeType::Null)
