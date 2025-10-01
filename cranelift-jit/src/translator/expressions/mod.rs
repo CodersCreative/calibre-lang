@@ -20,9 +20,9 @@ impl<'a> FunctionTranslator<'a> {
         let left = left.value;
         let right = right.value;
         match data_type.clone() {
-            RuntimeType::Int(_) | RuntimeType::UInt(_) | RuntimeType::Bool => {
+            RuntimeType::Int | RuntimeType::Bool => {
                 let signed = match data_type {
-                    RuntimeType::Int(_) => true,
+                    RuntimeType::Int => true,
                     _ => false,
                 };
                 RuntimeValue::new(
@@ -58,7 +58,7 @@ impl<'a> FunctionTranslator<'a> {
                     data_type.clone(),
                 )
             }
-            RuntimeType::Float(_) => RuntimeValue::new(
+            RuntimeType::Float => RuntimeValue::new(
                 match operator {
                     BinaryOperator::Add => self.builder.ins().fadd(left, right),
                     BinaryOperator::Sub => self.builder.ins().fsub(left, right),
@@ -95,7 +95,7 @@ impl<'a> FunctionTranslator<'a> {
         let (left, right) = left.make_similar(&right, self);
         let data_type = left.data_type.clone();
         let value = match data_type.clone() {
-            RuntimeType::Int(_) | RuntimeType::UInt(_) | RuntimeType::Bool => {
+            RuntimeType::Int | RuntimeType::Bool => {
                 let left = left.value;
                 let right = right.value;
                 match operator {
@@ -121,7 +121,7 @@ impl<'a> FunctionTranslator<'a> {
                     }
                 }
             }
-            RuntimeType::Float(_) => {
+            RuntimeType::Float => {
                 let left = left.value;
                 let right = right.value;
                 match operator {
@@ -141,7 +141,7 @@ impl<'a> FunctionTranslator<'a> {
                     }
                 }
             }
-            RuntimeType::List(x) => self.translate_array_compare(left, right, operator),
+            RuntimeType::List(_) => self.translate_array_compare(left, right, operator),
             _ => unimplemented!(),
         };
 

@@ -24,10 +24,10 @@ const BASIC_CODE: &str = r#"
 "#;
 
 use calibre_cranelift_jit::jit::JIT;
-use calibre_parser::{Parser, ast::NodeType, lexer::tokenize};
+use calibre_parser::{ast::{Node, NodeType}, lexer::tokenize, Parser};
 use std::{fmt::Debug, mem};
 
-fn parse(text: String) -> NodeType {
+fn parse(text: String) -> Node {
     let mut parser = Parser::default();
     parser.produce_ast(text).unwrap()
 }
@@ -42,5 +42,5 @@ fn run<I, T: Debug>(input: I) {
 }
 
 fn main() {
-    run::<i64, f32>(20);
+    run::<i64, f64>(20);
 }

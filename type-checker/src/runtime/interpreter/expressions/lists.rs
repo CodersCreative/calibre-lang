@@ -85,7 +85,7 @@ impl CheckerEnvironment {
                             RefMutability::Value,
                             None,
                         )],
-                        vec![(Node::new(NodeType::IntLiteral(1 as i128), range_node.line, range_node.col), None)],
+                        vec![(Node::new(NodeType::IntLiteral(1), range_node.line, range_node.col), None)],
                     )?;
                     let _ = self.handle_conditionals(&new_scope, conditionals.clone())?; 
                     result = Some(self.evaluate(&new_scope, map.clone())?);

@@ -6,21 +6,19 @@ use crate::{
 };
 use calibre_parser::{
     ast::{
-        IfComparisonType, LoopType, NodeType, VarType,
-        binary::BinaryOperator,
-        comparison::{self, Comparison},
+        binary::BinaryOperator, comparison::{self, Comparison}, IfComparisonType, LoopType, Node, NodeType, VarType
     },
     lexer::StopValue,
 };
 use cranelift::{codegen::ir::BlockArg, prelude::*};
 
 impl<'a> FunctionTranslator<'a> {
-    pub fn translate_if_statement(&mut self, node: NodeType) -> RuntimeValue {
+    pub fn translate_if_statement(&mut self, node: Node) -> RuntimeValue {
         if let NodeType::IfStatement {
             comparison,
             then,
             otherwise,
-        } = node
+        } = node.node_type
         {
             let IfComparisonType::If(comparison) = *comparison else {
                 panic!()

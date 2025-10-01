@@ -44,7 +44,7 @@ impl CheckerEnvironment {
                             RefMutability::Value,
                             None,
                         )],
-                        vec![(Node::new(NodeType::IntLiteral(0 as i128), range_node.line, range_node.col), None)],
+                        vec![(Node::new(NodeType::IntLiteral(0), range_node.line, range_node.col), None)],
                     )?;
                     result = self.evaluate(&new_scope, body.clone())?;
                     self.remove_scope(&new_scope);
@@ -73,7 +73,7 @@ impl CheckerEnvironment {
                     self.remove_scope(&new_scope);
                 }
             } else if let LoopType::While(condition) = loop_type {
-                let filler_int = Node::new(NodeType::IntLiteral(0 as i128), condition.line, condition.col);
+                let filler_int = Node::new(NodeType::IntLiteral(0), condition.line, condition.col);
                 match self.evaluate(scope, condition.clone())? {
                     RuntimeType::Bool => {
                         let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;

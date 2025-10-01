@@ -3,7 +3,7 @@ use crate::{
     values::{RuntimeType, RuntimeValue},
 };
 use calibre_parser::ast::{
-    LoopType, NodeType, VarType, binary::BinaryOperator, comparison::Comparison,
+    binary::BinaryOperator, comparison::Comparison, LoopType, Node, NodeType, VarType
 };
 use cranelift::prelude::*;
 
@@ -48,16 +48,16 @@ impl<'a> FunctionTranslator<'a> {
 
         let index_val = self.builder.use_var(index);
         let condition = self.translate_comparisson_expression(
-            RuntimeValue::new(index_val, RuntimeType::Int(64)),
-            RuntimeValue::new(Value::with_number(0).unwrap(), RuntimeType::Int(64)),
+            RuntimeValue::new(index_val, RuntimeType::Int),
+            RuntimeValue::new(Value::with_number(0).unwrap(), RuntimeType::Int),
             Comparison::Greater,
         );
         mid_loop!(self, condition.value, body_block, exit_block);
 
         let index_val = self.builder.use_var(index);
         let idx_sub_one = self.translate_binary_expression(
-            RuntimeValue::new(index_val, RuntimeType::Int(64)),
-            RuntimeValue::new(one, RuntimeType::Int(64)),
+            RuntimeValue::new(index_val, RuntimeType::Int),
+            RuntimeValue::new(one, RuntimeType::Int),
             BinaryOperator::Sub,
         );
         result += 1;
@@ -67,18 +67,18 @@ impl<'a> FunctionTranslator<'a> {
         result
     }
 
-    pub fn translate_loop_statement(&mut self, node: NodeType) -> RuntimeValue {
-        if let NodeType::LoopDeclaration { loop_type, body } = node {
+    pub fn translate_loop_statement(&mut self, node: Node) -> RuntimeValue {
+        if let NodeType::LoopDeclaration { loop_type, body } = node.node_type {
             let value = match *loop_type {
                 LoopType::While(x) => {
                     if self.translate(x.clone()).data_type != RuntimeType::Bool {
-                        return self.translate_loop_statement(NodeType::LoopDeclaration {
+                        return self.translate_loop_statement(Node::new(NodeType::LoopDeclaration {
                             loop_type: Box::new(LoopType::For(
                                 format!("__counter_{}__", rand::random_range(0..100000)),
                                 x,
                             )),
                             body,
-                        });
+                        }, node.line, node.col));
                     }
 
                     let (header_block, body_block, exit_block) = pre_loop!(self);
@@ -95,7 +95,7 @@ impl<'a> FunctionTranslator<'a> {
 
                     let zero = self.builder.ins().iconst(self.types.ptr(), 0);
                     let value = self.translate(x);
-                    let mut compare_value = RuntimeValue::new(zero.clone(), RuntimeType::Int(64));
+                    let mut compare_value = RuntimeValue::new(zero.clone(), RuntimeType::Int);
 
                     let prev = match value.data_type.clone() {
                         RuntimeType::List(x) => {
@@ -112,7 +112,7 @@ impl<'a> FunctionTranslator<'a> {
                                         value.value,
                                         0,
                                     ),
-                                    RuntimeType::Int(64),
+                                    RuntimeType::Int,
                                 );
                                 self.variables
                                     .insert(var_name.clone(), (VarType::Mutable, x, member_var))
@@ -125,7 +125,7 @@ impl<'a> FunctionTranslator<'a> {
                             compare_value = value;
                             self.variables.insert(
                                 var_name.clone(),
-                                (VarType::Mutable, RuntimeType::Int(64), index),
+                                (VarType::Mutable, RuntimeType::Int, index),
                             )
                         }
                     };
@@ -136,7 +136,7 @@ impl<'a> FunctionTranslator<'a> {
 
                     let index_val = self.builder.use_var(index);
                     let condition = self.translate_comparisson_expression(
-                        RuntimeValue::new(index_val, RuntimeType::Int(64)),
+                        RuntimeValue::new(index_val, RuntimeType::Int),
                         compare_value.clone(),
                         Comparison::Lesser,
                     );

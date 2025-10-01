@@ -57,7 +57,7 @@ impl InterpreterEnvironment {
                                 RefMutability::Value,
                                 None,
                             )],
-                            vec![(Node::new(NodeType::IntLiteral(i as i128), range_node.line, range_node.col), None)],
+                            vec![(Node::new(NodeType::IntLiteral(i), range_node.line, range_node.col), None)],
                         )?;
                         result = self.evaluate(&new_scope, body.clone())?.unwrap_links_val(
                             self,
@@ -149,8 +149,8 @@ impl InterpreterEnvironment {
                                 LoopType::For(
                                     String::from("hidden_index"),
                                     Node::new(NodeType::RangeDeclaration {
-                                        from: Box::new(Node::new(NodeType::IntLiteral(from as i128), condition.line, condition.col)),
-                                        to: Box::new(Node::new(NodeType::IntLiteral(to as i128), condition.line, condition.col)),
+                                        from: Box::new(Node::new(NodeType::IntLiteral(from), condition.line, condition.col)),
+                                        to: Box::new(Node::new(NodeType::IntLiteral(to), condition.line, condition.col)),
                                         inclusive: false,
                                     }, condition.line, condition.col),
                                 ),
@@ -162,7 +162,7 @@ impl InterpreterEnvironment {
                             scope,
                                 LoopType::For(
                                     String::from("hidden_index"),
-                                    Node::new(NodeType::IntLiteral(x as i128), condition.line, condition.col),
+                                    Node::new(NodeType::IntLiteral(x), condition.line, condition.col),
                                 ),
                                 body,
                         );

@@ -2,7 +2,7 @@ use crate::{
     translator::FunctionTranslator,
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_parser::ast::{NodeType, comparison::Comparison};
+use calibre_parser::ast::{comparison::Comparison, Node, NodeType};
 use cranelift::{
     codegen::ir::{BlockArg, StackSlot},
     prelude::*,
@@ -209,7 +209,7 @@ impl<'a> FunctionTranslator<'a> {
         RuntimeValue::new(lhs, types[index_int as usize].clone())
     }
 
-    pub fn translate_tuple_expression(&mut self, items: Vec<NodeType>) -> RuntimeValue {
+    pub fn translate_tuple_expression(&mut self, items: Vec<Node>) -> RuntimeValue {
         let items: Vec<RuntimeValue> = items.into_iter().map(|x| self.translate(x)).collect();
         let item_runtime_types: Vec<RuntimeType> =
             items.iter().map(|x| x.data_type.clone()).collect();
@@ -240,14 +240,14 @@ impl<'a> FunctionTranslator<'a> {
         RuntimeValue::new(base_ptr, RuntimeType::Tuple(item_runtime_types))
     }
 
-    pub fn translate_array_expression(&mut self, items: Vec<NodeType>) -> RuntimeValue {
+    pub fn translate_array_expression(&mut self, items: Vec<Node>) -> RuntimeValue {
         let items: Vec<RuntimeValue> = items.into_iter().map(|x| self.translate(x)).collect();
         let len = items.len() as i64;
 
         let element_type = items
             .get(0)
             .map(|v| v.data_type.clone())
-            .unwrap_or(RuntimeType::Int(64));
+            .unwrap_or(RuntimeType::Int);
         let element_ty = self.types.get_type_from_runtime_type(&element_type);
 
         let elem_size = element_ty.bytes() as i64;

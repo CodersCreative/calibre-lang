@@ -189,7 +189,7 @@ pub enum NodeType {
     TupleLiteral(Vec<Node>),
     CharLiteral(char),
     FloatLiteral(f64),
-    IntLiteral(i128),
+    IntLiteral(i64),
     MemberExpression {
         path: Vec<(Node, bool)>,
     },

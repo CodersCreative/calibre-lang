@@ -1,4 +1,4 @@
-use calibre_parser::ast::{NodeType, ParserDataType, VarType};
+use calibre_parser::ast::{Node, NodeType, ParserDataType, VarType};
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{DataDescription, Linkage, Module};
@@ -48,13 +48,13 @@ impl Default for JIT {
 }
 
 impl JIT {
-    pub fn compile(&mut self, program: NodeType) -> Result<*const u8, Box<dyn Error>> {
+    pub fn compile(&mut self, program: Node) -> Result<*const u8, Box<dyn Error>> {
         let mut main = None;
 
-        if let NodeType::ScopeDeclaration { body, is_temp } = program {
+        if let NodeType::ScopeDeclaration { body, is_temp } = program.node_type {
             for func in body {
                 let val = self.compile_const_fns(func.clone())?;
-                if let NodeType::VariableDeclaration { identifier, .. } = func {
+                if let NodeType::VariableDeclaration { identifier, .. } = func.node_type {
                     if identifier == "main" {
                         main = Some(val);
                     }
@@ -65,13 +65,13 @@ impl JIT {
         Ok(main.unwrap())
     }
 
-    pub fn compile_const_fns(&mut self, node: NodeType) -> Result<*const u8, Box<dyn Error>> {
+    pub fn compile_const_fns(&mut self, node: Node) -> Result<*const u8, Box<dyn Error>> {
         if let NodeType::VariableDeclaration {
             var_type,
             mut identifier,
             value,
             data_type: _,
-        } = node
+        } = node.node_type
         {
             if identifier == "main" {
                 identifier = "_start".to_string();
@@ -86,7 +86,7 @@ impl JIT {
                 body,
                 return_type,
                 is_async: _,
-            } = *value
+            } = value.node_type
             {
                 self.translate(
                     parameters
@@ -134,7 +134,7 @@ impl JIT {
         &mut self,
         params: Vec<(String, ParserDataType)>,
         return_type: Option<ParserDataType>,
-        node: NodeType,
+        node: Node,
     ) -> Result<(), Box<dyn Error>> {
         let ptr = self.module.target_config().pointer_type();
         let types = crate::translator::Types::new(ptr);

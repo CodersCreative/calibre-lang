@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error};
 
 use calibre_parser::ast::binary::BinaryOperator;
-use calibre_parser::ast::{NodeType, ParserDataType, VarType};
+use calibre_parser::ast::{Node, NodeType, ParserDataType, VarType};
 use calibre_parser::lexer::StopValue;
 use cranelift::codegen::ir::{GlobalValue, types};
 use cranelift::prelude::*;
@@ -42,24 +42,8 @@ impl Types {
         types::I64
     }
 
-    fn uint(&self) -> Type {
-        types::I64
-    }
-
-    fn long(&self) -> Type {
-        types::I128
-    }
-
-    fn ulong(&self) -> Type {
-        types::I128
-    }
-
     fn float(&self) -> Type {
         types::F32
-    }
-
-    fn double(&self) -> Type {
-        types::F64
     }
 
     fn char(&self) -> Type {
@@ -76,12 +60,8 @@ impl Types {
 
     pub fn get_type_from_runtime_type(&self, t: &RuntimeType) -> Type {
         match t {
-            RuntimeType::Int(x) if *x < 128 => types::I64,
-            RuntimeType::UInt(x) if *x < 128 => types::I64,
-            RuntimeType::Int(_) => types::I128,
-            RuntimeType::UInt(_) => types::I128,
-            RuntimeType::Float(x) if *x < 64 => types::F32,
-            RuntimeType::Float(_) => types::F64,
+            RuntimeType::Int => types::I64,
+            RuntimeType::Float => types::F64,
             RuntimeType::Bool => types::I8.as_truthy(),
             RuntimeType::Char => types::I32,
             RuntimeType::Str => self.str().clone(),
@@ -91,11 +71,7 @@ impl Types {
     pub fn get_type_from_parser_type(&self, t: &ParserDataType) -> Type {
         match t {
             ParserDataType::Int => types::I64,
-            ParserDataType::UInt => types::I64,
-            ParserDataType::Long => types::I128,
-            ParserDataType::ULong => types::I128,
-            ParserDataType::Float => types::F32,
-            ParserDataType::Double => types::F64,
+            ParserDataType::Float => types::F64,
             ParserDataType::Bool => types::I8.as_truthy(),
             ParserDataType::Char => types::I32,
             ParserDataType::Str => self.str().clone(),
@@ -132,51 +108,18 @@ impl<'a> FunctionTranslator<'a> {
     fn translate_null(&mut self) -> RuntimeValue {
         RuntimeValue::new(
             self.builder.ins().iconst(self.types.int(), 0),
-            RuntimeType::Int(64),
+            RuntimeType::Int,
         )
     }
 
-    pub fn translate(&mut self, node: NodeType) -> RuntimeValue {
-        match node {
+    pub fn translate(&mut self, node: Node) -> RuntimeValue {
+        match node.node_type {
             NodeType::Identifier(x) => self.translate_identifier(&x),
-            NodeType::FloatLiteral(x) => {
-                if x > f32::MAX as f64 {
-                    RuntimeValue::new(self.builder.ins().f64const(x), RuntimeType::Float(64))
-                } else {
-                    RuntimeValue::new(
-                        self.builder.ins().f32const(x as f32),
-                        RuntimeType::Float(32),
-                    )
-                }
-            }
-            NodeType::IntLiteral(x) => {
-                // TODO Make long types and unsigned types work.
-                if x > i64::MAX as i128 {
-                    if x.is_negative() {
-                        RuntimeValue::new(
-                            self.builder.ins().iconst(self.types.long(), x as i64),
-                            RuntimeType::Int(128),
-                        )
-                    } else {
-                        RuntimeValue::new(
-                            self.builder.ins().iconst(self.types.ulong(), x as i64),
-                            RuntimeType::UInt(128),
-                        )
-                    }
-                } else {
-                    if x.is_negative() {
-                        RuntimeValue::new(
+            NodeType::FloatLiteral(x) => RuntimeValue::new(self.builder.ins().f64const(x), RuntimeType::Float),
+            NodeType::IntLiteral(x) => RuntimeValue::new(
                             self.builder.ins().iconst(self.types.int(), x as i64),
-                            RuntimeType::Int(64),
-                        )
-                    } else {
-                        RuntimeValue::new(
-                            self.builder.ins().iconst(self.types.uint(), x as i64),
-                            RuntimeType::UInt(64),
-                        )
-                    }
-                }
-            }
+                            RuntimeType::Int,
+                        ),
             NodeType::AsExpression { value, typ } => {
                 let value = self.translate(*value);
                 value.into_type(self, typ.into())
@@ -184,9 +127,8 @@ impl<'a> FunctionTranslator<'a> {
             NodeType::NotExpression { value } => {
                 let mut value = self.translate(*value);
                 match value.data_type.clone() {
-                    RuntimeType::Int(_)
-                    | RuntimeType::UInt(_)
-                    | RuntimeType::Float(_)
+                    RuntimeType::Int
+                    | RuntimeType::Float
                     | RuntimeType::Bool => {
                         value = self.translate_binary_expression(
                             RuntimeValue::new(
@@ -260,7 +202,7 @@ impl<'a> FunctionTranslator<'a> {
                 value
             }
             NodeType::AssignmentExpression { identifier, value } => {
-                let NodeType::Identifier(identifier) = *identifier else {
+                let NodeType::Identifier(identifier) = identifier.node_type else {
                     todo!()
                 };
 
@@ -316,9 +258,11 @@ impl<'a> FunctionTranslator<'a> {
                 self.translate_comparisson_expression(left, right, operator)
             }
             NodeType::MemberExpression { mut path } => {
+                let first = path[0].0.clone();
                 if path.len() == 1 {
-                    return self.translate(path[0].0.clone());
+                    return self.translate(first);
                 }
+                
                 let indexing = if let Some(last) = path.last() {
                     last.1
                 } else {
@@ -326,15 +270,17 @@ impl<'a> FunctionTranslator<'a> {
                 };
 
                 if indexing {
-                    let value = self.translate(NodeType::MemberExpression {
+                    let value = self.translate(Node::new(NodeType::MemberExpression {
                         path: path[0..(path.len() - 1)].to_vec(),
-                    });
+                    }, first.line, first.col));
                     if let RuntimeType::List(_) = value.data_type {
                         let index = self.translate(path.pop().unwrap().0);
                         return self.get_array_member(value, index.value);
                     } else if let RuntimeType::Tuple(_) = value.data_type {
-                        if let Some((NodeType::IntLiteral(index), _)) = path.last() {
-                            return self.get_tuple_member(value, *index as usize);
+                        if let Some((node, _)) = path.last() {
+                            if let NodeType::IntLiteral(index) = node.node_type {
+                                return self.get_tuple_member(value, index as usize);
+                            }
                         }
                     }
                 }

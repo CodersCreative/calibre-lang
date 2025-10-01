@@ -19,12 +19,8 @@ impl From<ParserDataType> for RuntimeType {
     fn from(value: ParserDataType) -> Self {
         match value {
             ParserDataType::Bool => RuntimeType::Bool,
-            ParserDataType::Int => RuntimeType::Int(64),
-            ParserDataType::UInt => RuntimeType::UInt(64),
-            ParserDataType::Long => RuntimeType::Int(128),
-            ParserDataType::ULong => RuntimeType::UInt(128),
-            ParserDataType::Float => RuntimeType::Float(32),
-            ParserDataType::Double => RuntimeType::Float(64),
+            ParserDataType::Int => RuntimeType::Int,
+            ParserDataType::Float => RuntimeType::Float,
             ParserDataType::Str => RuntimeType::Str,
             ParserDataType::Char => RuntimeType::Char,
             ParserDataType::Range => RuntimeType::Range,
@@ -40,9 +36,8 @@ impl From<ParserDataType> for RuntimeType {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum RuntimeType {
-    Float(usize),
-    Int(usize),
-    UInt(usize),
+    Float,
+    Int,
     Bool,
     Str,
     Char,

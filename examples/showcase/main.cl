@@ -205,5 +205,5 @@ if !(4 is list<str>) => print("Yay!! 4 is not a list of strings");
 print("__name__ = " & __name__);
 if (4 in [4, 16, 32]) && __name__ == "__main__" => {
   print("main result: " & main());
-  print("Success, Random Num = " & (std.random.generate(10..=1000) as uint))
+  print("Success, Random Num = " & (std.random.generate(10..=1000) as int))
 }
