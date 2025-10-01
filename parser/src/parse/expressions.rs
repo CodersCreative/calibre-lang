@@ -56,6 +56,7 @@ impl Parser {
                 }, val.line, val.col)
             }
             TokenType::Try => self.parse_try_expression()?,
+            TokenType::Func => self.parse_function_declaration()?,
             _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
         })
     }

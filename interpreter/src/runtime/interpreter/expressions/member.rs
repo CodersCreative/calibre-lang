@@ -55,11 +55,7 @@ impl InterpreterEnvironment {
                 Ok(mut value) => loop {
                     match value.unwrap(self, scope)? {
                         RuntimeValue::Int(x) => path.push(x.to_string()),
-                        RuntimeValue::UInt(x) => path.push(x.to_string()),
                         RuntimeValue::Float(x) => path.push(x.to_string()),
-                        RuntimeValue::Double(x) => path.push(x.to_string()),
-                        RuntimeValue::Long(x) => path.push(x.to_string()),
-                        RuntimeValue::ULong(x) => path.push(x.to_string()),
                         RuntimeValue::Str(x) => path.push(x.to_string()),
                         RuntimeValue::Char(x) => path.push(x.to_string()),
                         RuntimeValue::Link(s, path, _) => {

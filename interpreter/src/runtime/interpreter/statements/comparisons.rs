@@ -27,11 +27,7 @@ impl InterpreterEnvironment {
                 let num: f64 = match value {
                     RuntimeValue::Range(x, y) => (*x as f64 + *y as f64) / 2.0,
                     RuntimeValue::Int(x) => *x as f64,
-                    RuntimeValue::UInt(x) => *x as f64,
-                    RuntimeValue::Long(x) => *x as f64,
-                    RuntimeValue::ULong(x) => *x as f64,
                     RuntimeValue::Float(x) => *x as f64,
-                    RuntimeValue::Double(x) => *x,
                     _ => return false,
                 };
                 num >= *from as f64 && num < *to as f64

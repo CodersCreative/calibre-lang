@@ -5,7 +5,7 @@ use crate::{
 use calibre_parser::ast::{ObjectType, ParserDataType};
 use helper::Block;
 use std::{
-    collections::HashMap, f32::consts::PI, fmt::Debug, rc::Rc
+    collections::HashMap, f64::consts::PI, fmt::Debug, rc::Rc
 };
 
 pub mod conversion;
@@ -16,11 +16,7 @@ pub mod helper;
 pub enum RuntimeType {
     Float,
     Dynamic,
-    Double,
     Int,
-    Long,
-    UInt,
-    ULong,
     Bool,
     Str,
     Char,
@@ -47,14 +43,10 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
     fn constants() -> std::collections::HashMap<String, Self> {
         HashMap::from([
             (String::from("PI"), RuntimeValue::Float(PI)),
-            (String::from("FLOAT_MAX"), RuntimeValue::Float(f32::MAX)),
-            (String::from("DOUBLE_MAX"), RuntimeValue::Double(f64::MAX)),
+            (String::from("FLOAT_MAX"), RuntimeValue::Float(f64::MAX)),
             (String::from("INT_MAX"), RuntimeValue::Int(i64::MAX)),
-            (String::from("LONG_MAX"), RuntimeValue::Long(i128::MAX)),
-            (String::from("FLOAT_MIN"), RuntimeValue::Float(f32::MIN)),
-            (String::from("DOUBLE_MIN"), RuntimeValue::Double(f64::MIN)),
+            (String::from("FLOAT_MIN"), RuntimeValue::Float(f64::MIN)),
             (String::from("INT_MIN"), RuntimeValue::Int(i64::MIN)),
-            (String::from("LONG_MIN"), RuntimeValue::Long(i128::MIN)),
             (String::from("true"), RuntimeValue::Bool(true)),
             (String::from("false"), RuntimeValue::Bool(false)),
         ])
@@ -94,11 +86,7 @@ impl From<ParserDataType> for RuntimeType {
         match value {
             ParserDataType::Float => Self::Float,
             ParserDataType::Dynamic => Self::Dynamic,
-            ParserDataType::Double => Self::Double,
             ParserDataType::Int => Self::Int,
-            ParserDataType::Long => Self::Long,
-            ParserDataType::UInt => Self::UInt,
-            ParserDataType::ULong => Self::ULong,
             ParserDataType::Bool => Self::Bool,
             ParserDataType::Str => Self::Str,
             ParserDataType::Char => Self::Char,
@@ -140,11 +128,7 @@ impl Into<RuntimeType> for &RuntimeValue {
         match self {
             RuntimeValue::Null => RuntimeType::Dynamic,
             RuntimeValue::Float(_) => RuntimeType::Float,
-            RuntimeValue::Double(_) => RuntimeType::Double,
             RuntimeValue::Int(_) => RuntimeType::Int,
-            RuntimeValue::Long(_) => RuntimeType::Long,
-            RuntimeValue::UInt(_) => RuntimeType::UInt,
-            RuntimeValue::ULong(_) => RuntimeType::ULong,
             RuntimeValue::Link(_, _, x) => x.clone(),
             RuntimeValue::Enum(y, x, _, _) => RuntimeType::Enum(*y, x.clone()),
             RuntimeValue::Struct(y, x, _) => RuntimeType::Struct(*y, x.clone()),
@@ -182,13 +166,9 @@ impl Into<RuntimeType> for &RuntimeValue {
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum RuntimeValue {
     Null,
-    Float(f32),
-    Double(f64),
+    Float(f64),
     Int(i64),
-    Long(i128),
-    UInt(u64),
-    ULong(u128),
-    Range(i32, i32),
+    Range(i64, i64),
     Bool(bool),
     Str(String),
     Char(char),
@@ -240,11 +220,7 @@ impl ToString for RuntimeValue {
         match self {
             Self::Null => String::from("null"),
             Self::Float(x) => x.to_string(),
-            Self::UInt(x) => x.to_string(),
             Self::Int(x) => x.to_string(),
-            Self::Long(x) => x.to_string(),
-            Self::ULong(x) => x.to_string(),
-            Self::Double(x) => x.to_string(),
             Self::Enum(_, x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
             Self::Range(from, to) => format!("{}..{}", from, to),
             Self::Link(_, path, _) => format!("link -> {:?}", path),

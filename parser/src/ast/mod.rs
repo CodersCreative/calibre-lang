@@ -34,12 +34,8 @@ pub enum LoopType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserDataType {
     Float,
-    Dynamic,
-    Double,
     Int,
-    Long,
-    UInt,
-    ULong,
+    Dynamic,
     Bool,
     Str,
     Char,
@@ -62,12 +58,7 @@ impl FromStr for ParserDataType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "int" => ParserDataType::Int,
-            "dyn" => ParserDataType::Dynamic,
-            "uint" => ParserDataType::UInt,
-            "long" => ParserDataType::Long,
-            "ulong" => ParserDataType::ULong,
             "float" => ParserDataType::Float,
-            "double" => ParserDataType::Double,
             "struct" => ParserDataType::Struct(None),
             "bool" => ParserDataType::Bool,
             "string" => ParserDataType::Str,

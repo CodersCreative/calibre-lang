@@ -138,15 +138,11 @@ impl RuntimeValue {
         macro_rules! number_cast {
             ($val:expr, $target:ident) => {
                 match t {
-                    RuntimeType::Float => Ok(RuntimeValue::Float($val.as_f32())),
-                    RuntimeType::Double => Ok(RuntimeValue::Double($val.as_f64())),
+                    RuntimeType::Float => Ok(RuntimeValue::Float($val.as_f64())),
                     RuntimeType::Int => Ok(RuntimeValue::Int($val.as_i64())),
-                    RuntimeType::Long => Ok(RuntimeValue::Long($val.as_i128())),
-                    RuntimeType::UInt => Ok(RuntimeValue::UInt($val.as_u64())),
-                    RuntimeType::ULong => Ok(RuntimeValue::ULong($val.as_u128())),
                     RuntimeType::Bool => Ok(RuntimeValue::Bool($val.as_bool())),
                     RuntimeType::Str => Ok(RuntimeValue::Str($val.to_string())),
-                    RuntimeType::Range => Ok(RuntimeValue::Range(0, $val.as_i32())),
+                    RuntimeType::Range => Ok(RuntimeValue::Range(0, $val.as_i64())),
                     RuntimeType::List(_) => list_case(),
                     RuntimeType::Result(_, _) => result_case(),
                     RuntimeType::Option(_) => option_case(),
@@ -157,11 +153,7 @@ impl RuntimeValue {
 
         match self.unwrap(env, scope)? {
             RuntimeValue::Float(x) => number_cast!(x, t),
-            RuntimeValue::Double(x) => number_cast!(x, t),
             RuntimeValue::Int(x) => number_cast!(x, t),
-            RuntimeValue::Long(x) => number_cast!(x, t),
-            RuntimeValue::UInt(x) => number_cast!(x, t),
-            RuntimeValue::ULong(x) => number_cast!(x, t),
             RuntimeValue::Tuple(data) => match t {
                 RuntimeType::Tuple(data_types) => {
                     if data.len() == data_types.len() {
@@ -179,11 +171,7 @@ impl RuntimeValue {
             RuntimeValue::Range(from, to) => match t {
                 RuntimeType::Range => Ok(self.clone()),
                 RuntimeType::Int => Ok(RuntimeValue::Int(*to as i64)),
-                RuntimeType::UInt => Ok(RuntimeValue::UInt(*to as u64)),
-                RuntimeType::Long => Ok(RuntimeValue::Long(*to as i128)),
-                RuntimeType::ULong => Ok(RuntimeValue::ULong(*to as u128)),
-                RuntimeType::Float => Ok(RuntimeValue::Float(*to as f32)),
-                RuntimeType::Double => Ok(RuntimeValue::Double(*to as f64)),
+                RuntimeType::Float => Ok(RuntimeValue::Float(*to as f64)),
                 RuntimeType::List(_) => Ok(RuntimeValue::List {
                     data: (*from..*to)
                         .into_iter()
@@ -197,10 +185,6 @@ impl RuntimeValue {
             },
             RuntimeValue::Str(x) => match t {
                 RuntimeType::Int => Ok(RuntimeValue::Int(x.parse()?)),
-                RuntimeType::UInt => Ok(RuntimeValue::UInt(x.parse()?)),
-                RuntimeType::Long => Ok(RuntimeValue::Long(x.parse()?)),
-                RuntimeType::ULong => Ok(RuntimeValue::ULong(x.parse()?)),
-                RuntimeType::Double => Ok(RuntimeValue::Double(x.parse()?)),
                 RuntimeType::Float => Ok(RuntimeValue::Float(x.parse()?)),
                 RuntimeType::Str => Ok(self.clone()),
                 RuntimeType::Char => Ok(RuntimeValue::Char(x.chars().nth(0).unwrap_or(' '))),
@@ -444,7 +428,7 @@ impl RuntimeValue {
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Result(_, _) => result_case(),
                 RuntimeType::Option(_) => option_case(),
-                _ => RuntimeValue::UInt(if *x { 1 } else { 0 }).into_type(env, scope, t),
+                _ => RuntimeValue::Int(if *x { 1 } else { 0 }).into_type(env, scope, t),
             },
             _ => panic_type(),
         }

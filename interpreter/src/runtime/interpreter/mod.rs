@@ -20,24 +20,8 @@ impl InterpreterEnvironment {
         self.current_location = self.get_location(scope, node.line, node.col);
         
         match node.node_type {
-            NodeType::FloatLiteral(x) => Ok(if x > f32::MAX as f64 {
-                RuntimeValue::Double(x as f64)
-            } else {
-                RuntimeValue::Float(x as f32)
-            }),
-            NodeType::IntLiteral(x) => Ok(if x > i64::MAX as i128 {
-                if x.is_negative() {
-                    RuntimeValue::Long(x)
-                } else {
-                    RuntimeValue::ULong(x as u128)
-                }
-            } else {
-                if x.is_negative() {
-                    RuntimeValue::Int(x as i64)
-                } else {
-                    RuntimeValue::UInt(x as u64)
-                }
-            }),
+            NodeType::FloatLiteral(x) => Ok(RuntimeValue::Float(x as f64)),
+            NodeType::IntLiteral(x) => Ok(RuntimeValue::Int(x as i64)),
             NodeType::StringLiteral(x) => Ok(RuntimeValue::Str(x)),
             NodeType::CharLiteral(x) => Ok(RuntimeValue::Char(x)),
             NodeType::Try { value } => {
@@ -75,7 +59,7 @@ impl InterpreterEnvironment {
                 Ok(RuntimeValue::Null)
             }
             NodeType::BinaryExpression { left, right, operator } => {
-                let (left, right) = (self.evaluate(scope, *left)?, self.evaluate(scope, *right)?);
+                let (left, right) = (self.evaluate(scope, *left)?.unwrap_links_val(self, scope, None)?, self.evaluate(scope, *right)?);
                 self.evaluate_binary_expression(scope, left, right, operator)
             },
             NodeType::Identifier(x) => self.evaluate_identifier(scope, &x),

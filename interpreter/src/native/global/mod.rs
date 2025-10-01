@@ -82,7 +82,7 @@ impl NativeFunction for Range {
                 panic!()
             };
 
-            Ok(RuntimeValue::Range(0, amt as i32))
+            Ok(RuntimeValue::Range(0, amt as i64))
         } else if args.len() == 2 {
             let RuntimeValue::Int(start) = args[0].0.into_type(env, scope, &RuntimeType::Int)?
             else {
@@ -94,7 +94,7 @@ impl NativeFunction for Range {
                 panic!()
             };
 
-            Ok(RuntimeValue::Range(start as i32, stop as i32))
+            Ok(RuntimeValue::Range(start as i64, stop as i64))
         } else if args.len() == 3 {
             let RuntimeValue::Int(start) = args[0].0.into_type(env, scope, &RuntimeType::Int)?
             else {
@@ -134,10 +134,10 @@ impl NativeFunction for Len {
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Some((x, _)) = args.get(0) {
-            Ok(RuntimeValue::UInt(match x.unwrap(env, scope)? {
-                RuntimeValue::List { data, data_type: _ } => data.len() as u64,
-                RuntimeValue::Tuple(data) => data.len() as u64,
-                RuntimeValue::Str(x) => x.len() as u64,
+            Ok(RuntimeValue::Int(match x.unwrap(env, scope)? {
+                RuntimeValue::List { data, data_type: _ } => data.len() as i64,
+                RuntimeValue::Tuple(data) => data.len() as i64,
+                RuntimeValue::Str(x) => x.len() as i64,
                 _ => return Err(InterpreterErr::UnexpectedType(x.clone())),
             }))
         } else {

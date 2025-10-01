@@ -7,17 +7,9 @@ impl RuntimeValue {
         matches!(
             self,
             RuntimeValue::Float(_)
-                | RuntimeValue::Double(_)
                 | RuntimeValue::Int(_)
-                | RuntimeValue::Long(_)
-                | RuntimeValue::UInt(_)
-                | RuntimeValue::ULong(_)
                 | RuntimeValue::Link(_, _, RuntimeType::Int)
-                | RuntimeValue::Link(_, _, RuntimeType::UInt)
-                | RuntimeValue::Link(_, _, RuntimeType::Long)
-                | RuntimeValue::Link(_, _, RuntimeType::ULong)
                 | RuntimeValue::Link(_, _, RuntimeType::Float)
-                | RuntimeValue::Link(_, _, RuntimeType::Double)
         )
     }
 

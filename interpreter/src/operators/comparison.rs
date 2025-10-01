@@ -51,24 +51,8 @@ pub fn handle(
             RuntimeValue::Int(y) => value_handle(op, x, y),
             _ => panic!(),
         },
-        RuntimeValue::UInt(x) => match right {
-            RuntimeValue::UInt(y) => value_handle(op, x, y),
-            _ => panic!(),
-        },
-        RuntimeValue::Long(x) => match right {
-            RuntimeValue::Long(y) => value_handle(op, x, y),
-            _ => panic!(),
-        },
-        RuntimeValue::ULong(x) => match right {
-            RuntimeValue::ULong(y) => value_handle(op, x, y),
-            _ => panic!(),
-        },
         RuntimeValue::Float(x) => match right {
             RuntimeValue::Float(y) => value_handle(op, x, y),
-            _ => panic!(),
-        },
-        RuntimeValue::Double(x) => match right {
-            RuntimeValue::Double(y) => value_handle(op, x, y),
             _ => panic!(),
         },
         _ => value_handle(op, left, right),

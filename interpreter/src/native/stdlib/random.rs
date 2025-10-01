@@ -16,7 +16,7 @@ impl NativeFunction for Generate {
             Ok(RuntimeValue::Float(random_range(0.0..=1.0)))
         } else if args.len() == 1 {
             if let RuntimeValue::Range(start, stop) = args[0].0 {
-                Ok(RuntimeValue::Float(random_range(start as f32..stop as f32)))
+                Ok(RuntimeValue::Float(random_range(start as f64..stop as f64)))
             } else {
                 let RuntimeValue::Float(amt) =
                     args[0].0.into_type(env, scope, &RuntimeType::Float)?
@@ -57,8 +57,8 @@ impl NativeFunction for Bool {
         if args.is_empty() {
             Ok(RuntimeValue::Bool(random_bool(0.5)))
         } else if args.len() == 1 {
-            let RuntimeValue::Double(amt) =
-                args[0].0.into_type(env, scope, &RuntimeType::Double)?
+            let RuntimeValue::Float(amt) =
+                args[0].0.into_type(env, scope, &RuntimeType::Float)?
             else {
                 panic!()
             };
@@ -82,19 +82,19 @@ impl NativeFunction for Ratio {
         if args.is_empty() {
             Ok(RuntimeValue::Bool(random_ratio(1, 2)))
         } else if args.len() == 1 {
-            let RuntimeValue::UInt(amt) = args[0].0.into_type(env, &scope, &RuntimeType::UInt)?
+            let RuntimeValue::Int(amt) = args[0].0.into_type(env, &scope, &RuntimeType::Int)?
             else {
                 panic!()
             };
 
             Ok(RuntimeValue::Bool(random_ratio(1, amt as u32)))
         } else if args.len() == 2 {
-            let RuntimeValue::UInt(start) = args[0].0.into_type(env, &scope, &RuntimeType::UInt)?
+            let RuntimeValue::Int(start) = args[0].0.into_type(env, &scope, &RuntimeType::Int)?
             else {
                 panic!()
             };
 
-            let RuntimeValue::UInt(stop) = args[1].0.into_type(env, &scope, &RuntimeType::UInt)?
+            let RuntimeValue::Int(stop) = args[1].0.into_type(env, &scope, &RuntimeType::Int)?
             else {
                 panic!()
             };

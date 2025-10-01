@@ -87,11 +87,7 @@ impl From<ParserDataType> for RuntimeType {
         match value {
             ParserDataType::Float => Self::Float,
             ParserDataType::Dynamic => Self::Dynamic,
-            ParserDataType::Double => Self::Float,
             ParserDataType::Int => Self::Int,
-            ParserDataType::Long => Self::Int,
-            ParserDataType::UInt => Self::Int,
-            ParserDataType::ULong => Self::Int,
             ParserDataType::Bool => Self::Bool,
             ParserDataType::Str => Self::Str,
             ParserDataType::Char => Self::Char,

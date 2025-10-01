@@ -13,7 +13,7 @@ const area_of_triangle = fn(a : float, b : float, c : float) -> float? => {
   if is_a_trinagle(a, b, c) => return heron(a, b, c) else => none
 }
 
-const factorial = fn(x : uint) -> ulong => {
+const factorial = fn(x : int) -> int => {
   if x <= 1 => return 1;
   x * factorial(x - 1)
 }

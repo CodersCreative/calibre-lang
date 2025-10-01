@@ -154,7 +154,7 @@ const main = fn () -> !int => {
   print("Unsafe : " & u);
 
   // The try keyword can be used to automatically defer errors when inside a function
-	let mut x : long = try x + try "58" as uint;
+	let mut x : int = try x + try "58" as int;
 
 	x++; // should increment by 1
 	x += 4 // same as x = x + 4
@@ -196,7 +196,7 @@ print("Curryed " & currying)
 print("Curryed " & currying(18)(20, 15));
 
 // The is keyword can be used to check types.
-// The is expression also reserves the identifiers "number", "decimal" and "integer" to allow for loose checking between different number types
+// The is expression also reserves the identifier "number" to allow for looser checking between different number types
 if 4 is number => print("Yay!! 4 is a number");
 if !(4 is list<str>) => print("Yay!! 4 is not a list of strings");
 

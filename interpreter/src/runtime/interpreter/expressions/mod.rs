@@ -32,11 +32,7 @@ impl InterpreterEnvironment {
         match value {
             RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
             RuntimeValue::Int(x) => Ok(RuntimeValue::Int(-x)),
-            RuntimeValue::UInt(x) => Ok(RuntimeValue::Int(-(x as i64))),
             RuntimeValue::Float(x) => Ok(RuntimeValue::Float(-x)),
-            RuntimeValue::Double(x) => Ok(RuntimeValue::Double(-x)),
-            RuntimeValue::ULong(x) => Ok(RuntimeValue::Long(-(x as i128))),
-            RuntimeValue::Long(x) => Ok(RuntimeValue::Long(-x)),
             RuntimeValue::Range(f, t) => Ok(RuntimeValue::Range(t, f)),
             RuntimeValue::List {
                 mut data,
@@ -94,7 +90,7 @@ impl InterpreterEnvironment {
                 {
                     let to = if inclusive { to + 1 } else { to };
 
-                    Ok(RuntimeValue::Range(from as i32, to as i32))
+                    Ok(RuntimeValue::Range(from, to))
                 } else {
                     unimplemented!();
                     // Err(InterpreterErr::NotImplemented(to))
@@ -158,18 +154,6 @@ impl InterpreterEnvironment {
             match data_type {
                 RuntimeType::Struct(_, Some(x)) if &x == "number" => {
                     return Ok(RuntimeValue::Bool(value.is_number()));
-                }
-                RuntimeType::Struct(_, Some(x)) if &x == "decimal" => {
-                    return Ok(RuntimeValue::Bool(
-                        [RuntimeType::Float, RuntimeType::Double].contains(&(&value).into()),
-                    ));
-                }
-                RuntimeType::Struct(_, Some(x)) if &x == "integer" => {
-                    return Ok(RuntimeValue::Bool(
-                        value.is_number()
-                            && ![RuntimeType::Float, RuntimeType::Double]
-                                .contains(&(&value).into()),
-                    ));
                 }
                 _ => {}
             }

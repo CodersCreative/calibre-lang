@@ -25,7 +25,7 @@ impl NativeFunction for Wait {
         if let Some((RuntimeValue::Int(x), _)) = args.get(0) {
             thread::sleep(Duration::from_secs(*x as u64));
         } else if let Some((RuntimeValue::Float(x), _)) = args.get(0) {
-            thread::sleep(Duration::from_secs_f32(*x));
+            thread::sleep(Duration::from_secs_f64(*x));
         }
         Ok(RuntimeValue::Null)
     }
