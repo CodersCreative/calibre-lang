@@ -34,4 +34,16 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
     pub fn get_global_scope<'a>(&'a self) -> &'a Scope {
         self.scopes.get(&0).unwrap()
     }
+    
+    pub fn get_root_scope<'a>(&'a self) -> &'a Scope {
+        for i in 1..self.counter{
+            if let Some(scope) = self.scopes.get(&i){
+                if scope.namespace == "root" {
+                    return scope
+                }
+            }
+        }
+
+        todo!()
+    }
 }

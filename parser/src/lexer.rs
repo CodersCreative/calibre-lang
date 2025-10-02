@@ -194,7 +194,7 @@ fn increment_line_col(line: &mut usize, col: &mut usize, c: &char) {
     if c == &'\n' {
         *line += 1;
         *col = 0;
-    } else if c.is_whitespace() {
+    } else {
         *col += 1;
     }
 }
@@ -285,7 +285,9 @@ pub fn tokenize(txt: String) -> Result<Vec<Token>, LexerError> {
                         && (buffer[0].is_alphanumeric() || buffer[0] == '_')
                         && !buffer[0].is_whitespace()
                     {
-                        txt.push(buffer.remove(0));
+                        let char = buffer.remove(0);
+                        increment_line_col(&mut line, &mut col, &char);
+                        txt.push(char);
                     }
 
                     if let Some(identifier) = keywords().get(txt.trim()) {

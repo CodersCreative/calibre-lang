@@ -1,7 +1,9 @@
 use calibre_common::errors::{ScopeErr, ValueErr};
 use calibre_parser::ast::{NodeType, ObjectType};
 
-use crate::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue};
+use crate::runtime::{
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
+};
 
 pub fn progress<'a>(
     mut current: &'a RuntimeValue,
@@ -224,7 +226,10 @@ impl InterpreterEnvironment {
         return Err(ScopeErr::Variable(path[0].to_string()).into());
     }
 
-    pub fn get_link_parent(&self, link: &RuntimeValue) -> Result<&RuntimeValue, ScopeErr<RuntimeValue>> {
+    pub fn get_link_parent(
+        &self,
+        link: &RuntimeValue,
+    ) -> Result<&RuntimeValue, ScopeErr<RuntimeValue>> {
         if let RuntimeValue::Link(scope, path, _) = link {
             Ok(self.get_link_path(scope, &[path[0].clone()]).unwrap())
         } else {

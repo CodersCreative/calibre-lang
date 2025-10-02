@@ -25,24 +25,36 @@ calibre-parser = { path = "./parser", version = "0.1.0" }
 calibre-cranelift-jit = { path = "./cranelift-jit", version = "0.1.0" }
 calibre-type-checker = { path = "./type-checker", version = "0.1.0" }
 calibre-common = { path = "./common", version = "0.1.0" }
-calibre-lsp = { path = "./lsp", version = "0.1.0" }
+cal-lsp = { path = "./lsp", version = "0.1.0" }
 
 [features]
-cranelift = ["dep:calibre-cranelift-jit"]
-lsp = ["dep:calibre-lsp"]
+# cranelift = ["dep:calibre-cranelift-jit"]
+# lsp = ["dep:cal-lsp"]
 
 # For Cal
 [dependencies]
 clap = { version = "4.5.40", features = ["derive"] }
 rustyline = "16.0.0"
+
+async-lsp = { version = "0.2.2", features = ["tokio"] }
+tokio = { version = "1.47.1", features = ["full"] }
+tower = { version = "0.5.2", features = ["full", "tokio"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.20"
+
 calibre-parser = {workspace = true}
 calibre-interpreter = {workspace = true}
 calibre-common = {workspace = true}
 calibre-type-checker = {workspace = true}
 calibre-cranelift-jit = {workspace = true, optional = true}
-calibre-lsp = {workspace = true, optional = true}
+cal-lsp = {workspace = true}
 
 [[bin]]
 name = "cal"           # The name of the target.
 path = "cal/src/main.rs"    # The source file of the target.
+doc = true             # Is documented by default.
+
+[[bin]]
+name = "cal-lsp"           # The name of the target.
+path = "lsp/src/main.rs"    # The source file of the target.
 doc = true             # Is documented by default.

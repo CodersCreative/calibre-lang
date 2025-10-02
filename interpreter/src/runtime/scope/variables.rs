@@ -2,9 +2,7 @@ use calibre_common::{environment::Variable, errors::ScopeErr};
 use calibre_parser::ast::VarType;
 
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::{InterpreterEnvironment, },
-    values::RuntimeValue,
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
 use std::mem::discriminant;
 
@@ -42,7 +40,11 @@ impl InterpreterEnvironment {
         Ok(RuntimeValue::Link(*scope, vec![key], typ))
     }
 
-    pub fn get_var_ref<'a>(&'a self, scope: &u64, key: &str) -> Result<Variable<RuntimeValue>, ScopeErr<RuntimeValue>> {
+    pub fn get_var_ref<'a>(
+        &'a self,
+        scope: &u64,
+        key: &str,
+    ) -> Result<Variable<RuntimeValue>, ScopeErr<RuntimeValue>> {
         Ok(if let Some(vars) = self.variables.get(scope) {
             if let Some(var) = vars.get(key) {
                 Variable {
@@ -55,7 +57,7 @@ impl InterpreterEnvironment {
                         ),
                     },
                     var_type: var.var_type.clone(),
-                    location: var.location.clone()
+                    location: var.location.clone(),
                 }
             } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
                 self.get_var_ref(&scope, key)?
@@ -67,7 +69,11 @@ impl InterpreterEnvironment {
         })
     }
 
-    pub fn get_var<'a>(&'a self, scope: &u64, key: &str) -> Result<&'a Variable<RuntimeValue>, ScopeErr<RuntimeValue>> {
+    pub fn get_var<'a>(
+        &'a self,
+        scope: &u64,
+        key: &str,
+    ) -> Result<&'a Variable<RuntimeValue>, ScopeErr<RuntimeValue>> {
         Ok(if let Some(vars) = self.variables.get(scope) {
             if let Some(var) = vars.get(key) {
                 var
@@ -81,7 +87,12 @@ impl InterpreterEnvironment {
         })
     }
 
-    pub fn update_var<F>(&mut self, scope: &u64, key: &str, mut f: F) -> Result<(), ScopeErr<RuntimeValue>>
+    pub fn update_var<F>(
+        &mut self,
+        scope: &u64,
+        key: &str,
+        mut f: F,
+    ) -> Result<(), ScopeErr<RuntimeValue>>
     where
         F: FnMut(&mut Variable<RuntimeValue>),
     {
@@ -118,7 +129,7 @@ impl InterpreterEnvironment {
                         *var = Variable {
                             value,
                             var_type: VarType::Mutable,
-                            location: var.location.clone()
+                            location: var.location.clone(),
                         };
                     } else {
                         return Err(ScopeErr::TypeMismatch(var.value.clone(), value.clone()).into());

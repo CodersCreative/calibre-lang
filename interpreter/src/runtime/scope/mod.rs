@@ -1,13 +1,23 @@
-pub mod variables;
 pub mod links;
+pub mod variables;
 
-use std::{fs, ops::{Deref, DerefMut}};
+use std::{
+    fs,
+    ops::{Deref, DerefMut},
+};
 
-use calibre_common::{environment::Environment};
+use crate::runtime::{
+    interpreter::InterpreterErr,
+    values::{RuntimeType, RuntimeValue, helper::StopValue},
+};
+use calibre_common::environment::Environment;
 use calibre_parser::Parser;
-use crate::runtime::{interpreter::InterpreterErr, values::{helper::StopValue, RuntimeType, RuntimeValue}};
 
-pub struct InterpreterEnvironment{pub env : Environment<RuntimeValue, RuntimeType>, pub stop : Option<StopValue>}
+#[derive(Debug, Clone, PartialEq)]
+pub struct InterpreterEnvironment {
+    pub env: Environment<RuntimeValue, RuntimeType>,
+    pub stop: Option<StopValue>,
+}
 
 // impl Into<&Environment<RuntimeValue, RuntimeType>> for &InterpreterEnvironment {
 //     fn into(self) -> &Environment<RuntimeValue, RuntimeType> {
@@ -17,8 +27,11 @@ pub struct InterpreterEnvironment{pub env : Environment<RuntimeValue, RuntimeTyp
 //
 //
 impl InterpreterEnvironment {
-    pub fn new() -> Self{
-        Self{env : Environment::new(), stop : None}
+    pub fn new() -> Self {
+        Self {
+            env: Environment::new(true),
+            stop: None,
+        }
     }
 
     pub fn import_scope_list(
@@ -60,7 +73,6 @@ impl InterpreterEnvironment {
             }
         })
     }
-
 }
 impl Deref for InterpreterEnvironment {
     type Target = Environment<RuntimeValue, RuntimeType>;

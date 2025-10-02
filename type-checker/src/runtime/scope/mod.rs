@@ -7,11 +7,12 @@ use calibre_common::{environment::Environment};
 use calibre_parser::Parser;
 use crate::runtime::{interpreter::InterpreterErr, values::{helper::StopValue, RuntimeType}};
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct CheckerEnvironment{pub env : Environment<RuntimeType, RuntimeType>, pub stop : Option<StopValue>}
 
 impl CheckerEnvironment {
     pub fn new() -> Self{
-        Self{env : Environment::new(), stop : None}
+        Self{env : Environment::new(false), stop : None}
     }
 
     pub fn import_scope_list(

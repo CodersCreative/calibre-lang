@@ -15,7 +15,9 @@ impl<'a> FunctionTranslator<'a> {
         right: RuntimeValue,
         operator: BinaryOperator,
     ) -> RuntimeValue {
-        let (left, right) = left.make_similar(&right, self);
+        if left.data_type != right.data_type {
+            panic!()
+        }
         let data_type = left.data_type;
         let left = left.value;
         let right = right.value;
@@ -92,7 +94,9 @@ impl<'a> FunctionTranslator<'a> {
         right: RuntimeValue,
         operator: Comparison,
     ) -> RuntimeValue {
-        let (left, right) = left.make_similar(&right, self);
+        if left.data_type != right.data_type {
+            panic!()
+        }
         let data_type = left.data_type.clone();
         let value = match data_type.clone() {
             RuntimeType::Int | RuntimeType::Bool => {

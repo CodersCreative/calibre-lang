@@ -1,5 +1,5 @@
 [package]
-name = "calibre-lsp"
+name = "cal-lsp"
 version = "0.1.0"
 edition = "2024"
 
@@ -7,6 +7,7 @@ edition = "2024"
 async-lsp = { version = "0.2.2", features = ["tokio"] }
 calibre-parser = {workspace = true}
 calibre-type-checker = {workspace = true}
+calibre-common = {workspace = true}
 tokio = { version = "1.47.1", features = ["full"] }
 tower = { version = "0.5.2", features = ["full", "tokio"] }
 tracing = "0.1.41"

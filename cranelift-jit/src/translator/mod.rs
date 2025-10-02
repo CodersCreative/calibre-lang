@@ -43,7 +43,7 @@ impl Types {
     }
 
     fn float(&self) -> Type {
-        types::F32
+        types::F64
     }
 
     fn char(&self) -> Type {
@@ -191,7 +191,8 @@ impl<'a> FunctionTranslator<'a> {
                 if let Some(data_type) = data_type {
                     let data_type = data_type.into();
                     if value.data_type != data_type {
-                        value = value.into_type(self, data_type);
+                        panic!()
+                        // value = value.into_type(self, data_type);
                     }
                 }
 
@@ -208,10 +209,11 @@ impl<'a> FunctionTranslator<'a> {
 
                 let (var_type, data_type, var) = self.variables.get(&identifier).unwrap().clone();
 
-                let mut value = self.translate(*value);
+                let value = self.translate(*value);
 
                 if value.data_type != data_type {
-                    value = value.into_type(self, data_type.clone());
+                    panic!();
+                    // value = value.into_type(self, data_type.clone());
                 }
 
                 if var_type != VarType::Mutable {

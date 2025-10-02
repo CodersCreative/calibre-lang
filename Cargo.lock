@@ -172,6 +172,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cal-lsp"
+version = "0.1.0"
+dependencies = [
+ "async-lsp",
+ "calibre-common",
+ "calibre-parser",
+ "calibre-type-checker",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "calibre-common"
 version = "0.1.0"
 dependencies = [
@@ -208,23 +222,15 @@ dependencies = [
 name = "calibre-language"
 version = "0.1.0"
 dependencies = [
+ "async-lsp",
+ "cal-lsp",
  "calibre-common",
  "calibre-cranelift-jit",
  "calibre-interpreter",
- "calibre-lsp",
  "calibre-parser",
  "calibre-type-checker",
  "clap",
  "rustyline",
-]
-
-[[package]]
-name = "calibre-lsp"
-version = "0.1.0"
-dependencies = [
- "async-lsp",
- "calibre-parser",
- "calibre-type-checker",
  "tokio",
  "tower",
  "tracing",

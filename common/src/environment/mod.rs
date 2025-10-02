@@ -1,6 +1,7 @@
 pub mod children;
 pub mod objects;
 pub mod variables;
+pub mod scopes;
 
 use calibre_parser::ast::{NodeType, ObjectType, ParserDataType, TypeDefType, VarType};
 use std::{collections::HashMap, fmt::Debug, ops::Deref, path::PathBuf};
@@ -94,6 +95,7 @@ pub struct Environment<T : RuntimeValue, U : RuntimeType> {
     pub variables: HashMap<u64, HashMap<String, Variable<T>>>,
     pub objects: HashMap<u64, HashMap<String, Object<T, U>>>,
     pub current_location : Option<Location>,
+    pub strict_removal : bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -107,13 +109,14 @@ pub struct Scope {
 }
 
 impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
-    pub fn new() -> Environment<T, U> {
+    pub fn new(strict_removal: bool) -> Environment<T, U> {
         Environment {
             counter: 0,
             scopes: HashMap::new(),
             variables: HashMap::new(),
             objects: HashMap::new(),
             current_location : None,
+            strict_removal
         }
     }
 
@@ -122,6 +125,9 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
     }
 
     pub fn remove_scope(&mut self, scope: &u64) {
+        if !self.strict_removal {
+            return;
+        }
         let parent = if let Some(parent) = self.scopes.get(scope).unwrap().parent {
             if let Some(parent_obj) = self.scopes.get(&parent) {
                 if let Some(name) = parent_obj.children.iter().find(|x| x.1 == scope) {
