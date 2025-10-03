@@ -31,6 +31,7 @@ const bitwiseOperators = ["&", "|", "^"];
 const shiftOperators = [">>", "<<"];
 const comparativeOperators = ["==", "!=", "<", "<=", ">", ">="];
 const rangeOperators = ["..", "..="];
+
 const assignmentOperators = multiplicativeOperators
   .concat(additiveOperators)
   .concat(booleanOperators)
@@ -110,12 +111,15 @@ const imaginaryLiteral = seq(
 module.exports = grammar({
   name: "calibre",
   rules: {
-    // TODO: add the actual grammar rules
-    source_file: ($) => "hello",
+    source_file: ($) => $.statement_list,
+
+    extra: ($) => terminator,
 
     _expression: ($) =>
       choice(
         $.not_expression,
+        $.special_binary_expression,
+        $.type_binary_expression,
         $.binary_expression,
         $.try_expression,
         $.identifier,
@@ -128,6 +132,24 @@ module.exports = grammar({
         $.true,
         $.false,
         $.stop_statement,
+        $.scope,
+        $.parens,
+        $.tuple_literal,
+        $.list_literal,
+        $.assignment_expression,
+        $.object_expression,
+        $.member_expression,
+        $.pipe_expression,
+        $.call_expression,
+        $.if_declaration,
+      ),
+
+    _statement: ($) =>
+      choice(
+        $.var_declaration,
+        $.loop_declaration,
+        $.impl_declaration,
+        $.type_declaration,
       ),
 
     identifier: (_) => /(r#)?[_\p{XID_Start}][_\p{XID_Continue}]*/,
@@ -139,22 +161,169 @@ module.exports = grammar({
         field("result", optional(seq("->", $.data_type))),
         field("body", $.block),
       ),
+    impl_declaration: ($) =>
+      seq(
+        "impl",
+        field("name", $.identifier),
+        "{",
+        field("functions", seq(repeat($.var_declaration))),
+        "}",
+      ),
 
+    type_declaration: ($) =>
+      seq(
+        "type",
+        field("name", $.identifier),
+        "=",
+        choice($.data_type, $.enum_declaration, $.struct_declaration),
+      ),
+
+    enum_declaration: ($) =>
+      seq("enum", "{", seq(commaSep1($.enum_member_declaration)), "}"),
+
+    struct_declaration: ($) =>
+      seq(
+        "struct",
+        field("name", $.identifier),
+        optional($.key_type_list_object_val),
+      ),
+
+    enum_member_declaration: ($) =>
+      seq(field("name", $.identifier), optional($.key_type_list_object_val)),
+
+    key_type_list_object_val: ($) =>
+      choice(
+        seq(
+          "{",
+          field(
+            "types",
+            seq(
+              commaSep1(
+                seq(field("name", $.identifier, ":", "type", $.data_type)),
+              ),
+            ),
+          ),
+          "}",
+        ),
+        seq("(", field("types", seq(commaSep1($.data_type))), ")"),
+      ),
+    parens: ($) => prec(PREC.primary, seq("(", $._statement, ")")),
+    list_literal: ($) => seq("[", seq(commaSep($._statement)), "]"),
+    tuple_literal: ($) =>
+      prec(
+        145,
+        seq(
+          "(",
+          choice(seq($._statement, ","), seq(commaSep($._statement))),
+          ")",
+        ),
+      ),
+    or_list: ($) => seq(sep1($._statement, "|")),
+    conditionals_list: ($) => seq("if", sep1("if", $._statement)),
+    if_declaration: ($) =>
+      prec.left(
+        seq(
+          "if",
+          field("comparison", choice($.if_let_comparison, $.if_comparison)),
+          field("then", $.block),
+          field(
+            "otherwise",
+            optional(seq("else", choice($.if_declaration, $.block))),
+          ),
+        ),
+      ),
+
+    if_let_comparison: ($) =>
+      prec(
+        5,
+        seq(
+          "let",
+          field("patterns", $.or_list),
+          field("conditionals", $.conditionals_list),
+          "<-",
+          field("mutability", optional($.mutability)),
+          field("value", $._statement),
+        ),
+      ),
+
+    if_comparison: ($) => prec(1, $._expression),
+    var_declaration: ($) =>
+      seq(
+        choice(seq("let", optional("mut")), "const"),
+        field("name", $.identifier),
+        field("type", optional(seq(":", $.data_type))),
+        "=",
+        field("value", $._statement),
+      ),
+    loop_declaration: ($) =>
+      seq("for", field("loop_type", $.loop_type), field("body", $.block)),
+    mutability: ($) => choice("&", "&mut", "mut"),
+    loop_type: ($) =>
+      choice($.for_loop_type, $.foreach_loop_type, $._statement),
+    for_loop_type: ($) =>
+      prec(
+        2,
+        seq(field("name", $.identifier), "in", field("value", $._statement)),
+      ),
+    foreach_loop_type: ($) =>
+      prec(
+        1,
+        seq(
+          field("name", $.identifier),
+          "in",
+          field("value", choice(seq($.mutability, $._statement), $.identifier)),
+        ),
+      ),
     block: ($) => seq("=>", choice($._statement, $.scope)),
-    scope: ($) => seq("{", $.statement_list, "}"),
-    statement_list: ($) => sep1($._statement, terminator),
+    scope: ($) => prec(PREC.primary, seq("{", $.statement_list, "}")),
+    statement_list: ($) => seq($._statement, repeat($._statement)),
 
+    member_expression: ($) =>
+      seq(
+        field("root", $.identifier),
+        choice(
+          seq($.member_expr_member, $.key_value),
+          seq(repeat($.member_expr_member)),
+        ),
+      ),
+    member_expr_member: ($) =>
+      choice(seq("[", $._expression, "]"), seq(".", $.identifier)),
     stop_statement: ($) =>
       choice("break", "continue", seq("return", $._statement)),
 
-    _statement: ($) => choice($.assignment_expression, $.stop_statement),
+    object_expression: ($) => prec(145, $.key_value),
 
+    potential_key_value: ($) =>
+      choice(
+        $.key_value,
+        seq("(", seq(commaSep1(field("value", $._statement))), ")"),
+      ),
+
+    pipe_expression: ($) => seq(sep1($._statement, "|>")),
+
+    key_value: ($) =>
+      seq(
+        "{",
+        seq(
+          commaSep1(
+            choice(
+              field("value", $.identifier),
+              seq(
+                field("key", $.identifier),
+                ":",
+                field("value", $._statement),
+              ),
+            ),
+          ),
+        ),
+        "}",
+      ),
     parameter_list: ($) =>
       seq(
         "(",
         optional(
           seq(
-            commaSep(
+            commaSep1(
               seq(
                 field("name", sep1($.identifier, " ")),
                 field("type", optional(seq(":", $.data_type))),
@@ -167,7 +336,35 @@ module.exports = grammar({
         ")",
       ),
 
-    data_type: ($) => choice(),
+    data_type: ($) =>
+      prec.left(
+        choice(
+          "int",
+          "float",
+          "dyn",
+          "bool",
+          "str",
+          "char",
+          "range",
+          seq("<", field("types", seq(commaSep1($.data_type))), ">"),
+          choice(
+            seq("!", $.data_type),
+            seq($.data_type, "!"),
+            seq($.data_type, "!", $.data_type),
+          ),
+          seq("list", optional(seq("<", $.data_type, ">"))),
+          seq($.data_type, "?"),
+          seq(
+            "fn",
+            "(",
+            field("parameters", optional(seq(commaSep1($.data_type)))),
+            ")",
+            "->",
+            field("return", $.data_type),
+          ),
+          $.identifier,
+        ),
+      ),
 
     assignment_expression: ($) =>
       seq(
@@ -187,6 +384,26 @@ module.exports = grammar({
         ),
       ),
 
+    call_expression: ($) =>
+      seq(field("caller", $._expression), field("args", $.argument_list)),
+    argument_list: ($) =>
+      seq(
+        "(",
+        seq(
+          commaSep(
+            choice(
+              field("value", $._statement),
+              seq(
+                field("key", $.identifier),
+                "=",
+                field("value", $._statement),
+              ),
+            ),
+          ),
+        ),
+        ")",
+      ),
+
     binary_expression: ($) => {
       const table = [
         [PREC.multiplicative, choice(...multiplicativeOperators)],
@@ -196,9 +413,6 @@ module.exports = grammar({
         [PREC.bitwise, choice(...bitwiseOperators)],
         [PREC.boolean, choice(...booleanOperators)],
         [PREC.range, choice(...rangeOperators)],
-        [PREC.as, "as"],
-        [PREC.is, "is"],
-        [PREC.in, "in"],
         [PREC.power, "**"],
       ];
 
@@ -212,6 +426,47 @@ module.exports = grammar({
               // @ts-ignore
               field("operator", operator),
               field("right", $._expression),
+            ),
+          ),
+        ),
+      );
+    },
+
+    type_binary_expression: ($) => {
+      const table = [
+        [PREC.as, "as"],
+        [PREC.is, "is"],
+      ];
+
+      return choice(
+        ...table.map(([precedence, operator]) =>
+          // @ts-ignore
+          prec.left(
+            precedence,
+            seq(
+              field("left", $._expression),
+              // @ts-ignore
+              field("operator", operator),
+              field("type", $.data_type),
+            ),
+          ),
+        ),
+      );
+    },
+
+    special_binary_expression: ($) => {
+      const table = [[PREC.in, "in"]];
+
+      return choice(
+        ...table.map(([precedence, operator]) =>
+          // @ts-ignore
+          prec.left(
+            precedence,
+            seq(
+              field("left", $._expression),
+              // @ts-ignore
+              field("operator", operator),
+              field("type", $._statement),
             ),
           ),
         ),
