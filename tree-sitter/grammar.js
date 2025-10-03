@@ -142,6 +142,7 @@ module.exports = grammar({
         $.pipe_expression,
         $.call_expression,
         $.if_declaration,
+        $.match_declaration,
       ),
 
     _statement: ($) =>
@@ -158,6 +159,7 @@ module.exports = grammar({
       seq(
         "fn",
         field("parameters", $.parameter_list),
+        field("async", optional("async")),
         field("result", optional(seq("->", $.data_type))),
         field("body", $.block),
       ),
@@ -247,6 +249,25 @@ module.exports = grammar({
       ),
 
     if_comparison: ($) => prec(1, $._expression),
+
+    match_declaration: ($) =>
+      seq(
+        "match",
+        field("async", optional("async")),
+        field("mutability", optional($.mutability)),
+        field("type", optional($.data_type)),
+        field("default", optional(seq("=", $._statement))),
+        field("return", optional(seq("->", $.data_type))),
+        "{",
+        seq(commaSep1($.match_pattern)),
+        "}",
+      ),
+    match_pattern: ($) =>
+      seq(
+        field("values", $.or_list),
+        field("conditionals", $.conditionals_list),
+        field("body", $.block),
+      ),
     var_declaration: ($) =>
       seq(
         choice(seq("let", optional("mut")), "const"),
