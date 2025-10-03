@@ -1,8 +1,15 @@
-use crate::{environment::{Environment, Location, Object, RuntimeType, RuntimeValue, Type}, errors::{ScopeErr, ValueErr}};
+use crate::{
+    environment::{Environment, Location, Object, RuntimeType, RuntimeValue, Type},
+    errors::{ScopeErr, ValueErr},
+};
 
-
-impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
-    pub fn push_object(&mut self, scope: &u64, key: String, value: Object<T, U>) -> Result<(), ScopeErr<T>> {
+impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
+    pub fn push_object(
+        &mut self,
+        scope: &u64,
+        key: String,
+        value: Object<T, U>,
+    ) -> Result<(), ScopeErr<T>> {
         if let Some(objects) = self.objects.get_mut(&scope) {
             if !objects.contains_key(&key) {
                 objects.insert(key, value);
@@ -12,7 +19,11 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
         Err(ScopeErr::Object(key))
     }
 
-    pub fn get_object_type<'a>(&'a self, scope: &u64, key: &str) -> Result<&'a Type<U>, ScopeErr<T>> {
+    pub fn get_object_type<'a>(
+        &'a self,
+        scope: &u64,
+        key: &str,
+    ) -> Result<&'a Type<U>, ScopeErr<T>> {
         if let Some(objects) = self.objects.get(&scope) {
             if let Some(object) = objects.get(key) {
                 return Ok(&object.unwrap(self, scope).unwrap().object_type);
@@ -43,7 +54,9 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
         if let Some(objects) = self.objects.get_mut(&scope) {
             if let Some(object) = objects.get_mut(key) {
                 if !object.functions.contains_key(&value.0) {
-                    object.functions.insert(value.0, (value.1, value.2, value.3));
+                    object
+                        .functions
+                        .insert(value.0, (value.1, value.2, value.3));
                     return Ok(());
                 }
             }
@@ -70,7 +83,7 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
     }
 }
 
-impl<T : RuntimeValue, U : RuntimeType> Object<T, U> {
+impl<T: RuntimeValue, U: RuntimeType> Object<T, U> {
     pub fn unwrap<'a>(
         &'a self,
         env: &'a Environment<T, U>,

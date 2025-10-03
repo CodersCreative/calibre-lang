@@ -10,22 +10,22 @@ publish = false
 [workspace]
 members = [
     "cal",
-    "interpreter",
-    "parser",
-    "cranelift-jit",
-    "type-checker",
-    "common",
-    "lsp"
+    "lsp",
+    "crates/interpreter",
+    "crates/parser",
+    "crates/cranelift-jit",
+    "crates/type-checker",
+    "crates/common",
 ]
 
 [workspace.dependencies]
 cal = { path = "./cal", version = "0.1.0" }
-calibre-interpreter = { path = "./interpreter", version = "0.1.0" }
-calibre-parser = { path = "./parser", version = "0.1.0" }
-calibre-cranelift-jit = { path = "./cranelift-jit", version = "0.1.0" }
-calibre-type-checker = { path = "./type-checker", version = "0.1.0" }
-calibre-common = { path = "./common", version = "0.1.0" }
 cal-lsp = { path = "./lsp", version = "0.1.0" }
+calibre-interpreter = { path = "./crates/interpreter", version = "0.1.0" }
+calibre-parser = { path = "./crates/parser", version = "0.1.0" }
+calibre-cranelift-jit = { path = "./crates/cranelift-jit", version = "0.1.0" }
+calibre-type-checker = { path = "./crates/type-checker", version = "0.1.0" }
+calibre-common = { path = "./crates/common", version = "0.1.0" }
 
 [features]
 # cranelift = ["dep:calibre-cranelift-jit"]

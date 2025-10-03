@@ -1,0 +1,40 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "calibre",
+      "camelcase": "Calibre",
+      "title": "Calibre",
+      "scope": "source.calibre",
+      "file-types": [
+        "cal",
+        "cl"
+      ],
+      "injection-regex": "^calibre$",
+      "class-name": "TreeSitterCalibre"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "A scripting language entirely made in rust for educational purposes",
+    "authors": [
+      {
+        "name": "Creative Coders",
+        "email": "officialccoders@gmail.com"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/CodersCreative/calibre-lang"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "go": true,
+    "node": true,
+    "python": true,
+    "rust": true,
+    "swift": true,
+    "zig": false
+  }
+}
