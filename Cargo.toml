@@ -26,14 +26,12 @@ calibre-parser = { path = "./crates/parser", version = "0.1.0" }
 calibre-cranelift-jit = { path = "./crates/cranelift-jit", version = "0.1.0" }
 calibre-type-checker = { path = "./crates/type-checker", version = "0.1.0" }
 calibre-common = { path = "./crates/common", version = "0.1.0" }
-tree-sitter-calibre = {path = "./tree-sitter-calibre", version = "0.1.0"}
 
 [features]
 cranelift = ["dep:calibre-cranelift-jit", "common"]
 lsp = ["dep:cal-lsp", "common", "dep:calibre-interpreter", "dep:async-lsp", "dep:tokio", "dep:tower", "dep:tracing", "dep:tracing-subscriber"]
 cal = ["dep:cal", "common", "dep:calibre-interpreter", "dep:rustyline", "dep:clap"]
 common = ["dep:calibre-parser", "dep:calibre-common", "dep:calibre-type-checker"]
-tree-sitter = ["dep:tree-sitter-calibre", "dep:tree-sitter", "dep:tree-sitter-language"]
 
 [dependencies]
 # For Cal
@@ -47,10 +45,6 @@ tower = { version = "0.5.2", features = ["full", "tokio"], optional = true}
 tracing = {version = "0.1.41", optional = true}
 tracing-subscriber = {version = "0.3.20", optional = true}
 
-# For Tree Sitter
-tree-sitter-language = {version = "0.1", optional = true}
-tree-sitter = {version = "0.25.8", optional = true}
-
 # Crates
 calibre-parser = {workspace = true, optional = true}
 calibre-interpreter = {workspace = true, optional = true}
@@ -59,7 +53,6 @@ calibre-type-checker = {workspace = true, optional = true}
 calibre-cranelift-jit = {workspace = true, optional = true}
 cal-lsp = {workspace = true, optional = true}
 cal = {workspace = true, optional = true}
-tree-sitter-calibre = {workspace = true, optional = true}
 
 [[bin]]
 name = "cal"           # The name of the target.
