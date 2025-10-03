@@ -110,39 +110,42 @@ const imaginaryLiteral = seq(
 
 module.exports = grammar({
   name: "calibre",
-  rules: {
-    source_file: ($) => $.statement_list,
 
-    extra: ($) => terminator,
+  extras: ($) => [/\s/, /\n/, ";", $.comment],
+  rules: {
+    source_file: ($) => seq(repeat($._statement)),
+
+    // conficts: ($) => [[$._expression, $.member_expression]],
 
     _expression: ($) =>
-      choice(
-        $.not_expression,
-        $.special_binary_expression,
-        $.type_binary_expression,
-        $.binary_expression,
-        $.try_expression,
-        $.identifier,
-        $.func_expression,
-        $.string_literal,
-        $.int_literal,
-        $.float_literal,
-        $.imaginary_literal,
-        $.rune_literal,
-        $.true,
-        $.false,
-        $.stop_statement,
-        $.scope,
-        $.parens,
-        $.tuple_literal,
-        $.list_literal,
-        $.assignment_expression,
-        $.object_expression,
-        $.member_expression,
-        $.pipe_expression,
-        $.call_expression,
-        $.if_declaration,
-        $.match_declaration,
+      prec.left(
+        choice(
+          $.not_expression,
+          $.special_binary_expression,
+          $.type_binary_expression,
+          $.binary_expression,
+          $.try_expression,
+          $.identifier,
+          $.func_expression,
+          $.string_literal,
+          $.int_literal,
+          $.float_literal,
+          $.imaginary_literal,
+          $.rune_literal,
+          $.true,
+          $.false,
+          $.scope,
+          $.parens,
+          $.tuple_literal,
+          $.list_literal,
+          $.assignment_expression,
+          $.object_expression,
+          $.member_expression,
+          $.pipe_expression,
+          $.call_expression,
+          $.if_declaration,
+          $.match_declaration,
+        ),
       ),
 
     _statement: ($) =>
@@ -150,10 +153,13 @@ module.exports = grammar({
         $.var_declaration,
         $.loop_declaration,
         $.impl_declaration,
+        $.stop_statement,
         $.type_declaration,
+        $._expression,
       ),
 
-    identifier: (_) => /(r#)?[_\p{XID_Start}][_\p{XID_Continue}]*/,
+    identifier: (_) =>
+      prec(PREC.primary, /(r#)?[_\p{XID_Start}][_\p{XID_Continue}]*/),
 
     func_expression: ($) =>
       seq(
@@ -181,13 +187,17 @@ module.exports = grammar({
       ),
 
     enum_declaration: ($) =>
-      seq("enum", "{", seq(commaSep1($.enum_member_declaration)), "}"),
+      prec.left(
+        seq("enum", "{", seq(commaSep1($.enum_member_declaration)), "}"),
+      ),
 
     struct_declaration: ($) =>
-      seq(
-        "struct",
-        field("name", $.identifier),
-        optional($.key_type_list_object_val),
+      prec.left(
+        seq(
+          "struct",
+          field("name", $.identifier),
+          optional($.key_type_list_object_val),
+        ),
       ),
 
     enum_member_declaration: ($) =>
@@ -295,22 +305,27 @@ module.exports = grammar({
           field("value", choice(seq($.mutability, $._statement), $.identifier)),
         ),
       ),
-    block: ($) => seq("=>", choice($._statement, $.scope)),
+    block: ($) => seq("=>", $._statement),
     scope: ($) => prec(PREC.primary, seq("{", $.statement_list, "}")),
     statement_list: ($) => seq($._statement, repeat($._statement)),
 
     member_expression: ($) =>
-      seq(
-        field("root", $.identifier),
-        choice(
-          seq($.member_expr_member, $.key_value),
-          seq(repeat($.member_expr_member)),
+      prec(
+        145,
+        prec.left(
+          seq(
+            field("root", $.identifier),
+            choice(
+              seq($.member_expr_member, $.key_value),
+              seq(repeat1($.member_expr_member)),
+            ),
+          ),
         ),
       ),
     member_expr_member: ($) =>
       choice(seq("[", $._expression, "]"), seq(".", $.identifier)),
     stop_statement: ($) =>
-      choice("break", "continue", seq("return", $._statement)),
+      prec(-10, choice("break", "continue", seq("return", $._expression))),
 
     object_expression: ($) => prec(145, $.key_value),
 
@@ -320,7 +335,8 @@ module.exports = grammar({
         seq("(", seq(commaSep1(field("value", $._statement))), ")"),
       ),
 
-    pipe_expression: ($) => seq(sep1($._statement, "|>")),
+    pipe_expression: ($) =>
+      prec(10, prec.left(seq($._statement, "|>", sep1($._statement, "|>")))),
 
     key_value: ($) =>
       seq(
@@ -348,7 +364,7 @@ module.exports = grammar({
               seq(
                 field("name", sep1($.identifier, " ")),
                 field("type", optional(seq(":", $.data_type))),
-                field("default", optional(seq("=", $._statement))),
+                field("default", optional(seq("=", $._expression))),
               ),
             ),
             optional(","),
@@ -358,43 +374,49 @@ module.exports = grammar({
       ),
 
     data_type: ($) =>
-      prec.left(
-        choice(
-          "int",
-          "float",
-          "dyn",
-          "bool",
-          "str",
-          "char",
-          "range",
-          seq("<", field("types", seq(commaSep1($.data_type))), ">"),
+      prec(
+        PREC.primary,
+        prec.left(
           choice(
-            seq("!", $.data_type),
-            seq($.data_type, "!"),
-            seq($.data_type, "!", $.data_type),
+            "int",
+            "float",
+            "dyn",
+            "bool",
+            "str",
+            "char",
+            "range",
+            "struct",
+            seq("<", field("types", seq(commaSep1($.data_type))), ">"),
+            choice(
+              seq("!", $.data_type),
+              seq($.data_type, "!"),
+              seq($.data_type, "!", $.data_type),
+            ),
+            seq("list", optional(seq("<", $.data_type, ">"))),
+            seq($.data_type, "?"),
+            seq(
+              "fn",
+              "(",
+              field("parameters", optional(seq(commaSep1($.data_type)))),
+              ")",
+              "->",
+              field("return", $.data_type),
+            ),
+            $.identifier,
           ),
-          seq("list", optional(seq("<", $.data_type, ">"))),
-          seq($.data_type, "?"),
-          seq(
-            "fn",
-            "(",
-            field("parameters", optional(seq(commaSep1($.data_type)))),
-            ")",
-            "->",
-            field("return", $.data_type),
-          ),
-          $.identifier,
         ),
       ),
 
     assignment_expression: ($) =>
-      seq(
-        field("left", $._expression),
-        field("operator", choice(...assignmentOperators)),
-        field("right", $._statement),
+      prec.left(
+        seq(
+          field("left", choice($.identifier, $.member_expression)),
+          field("operator", choice(...assignmentOperators)),
+          field("right", $._statement),
+        ),
       ),
 
-    try_expression: ($) => seq("try", $._statement),
+    try_expression: ($) => prec(PREC.primary, seq("try", $._expression)),
 
     not_expression: ($) =>
       prec(
@@ -406,24 +428,12 @@ module.exports = grammar({
       ),
 
     call_expression: ($) =>
-      seq(field("caller", $._expression), field("args", $.argument_list)),
-    argument_list: ($) =>
-      seq(
-        "(",
-        seq(
-          commaSep(
-            choice(
-              field("value", $._statement),
-              seq(
-                field("key", $.identifier),
-                "=",
-                field("value", $._statement),
-              ),
-            ),
-          ),
-        ),
-        ")",
+      prec(
+        PREC.unary,
+        seq(field("caller", $._expression), field("args", $.argument_list)),
       ),
+    argument_list: ($) =>
+      seq("(", seq(commaSep(field("value", $._statement))), ")"),
 
     binary_expression: ($) => {
       const table = [
@@ -495,7 +505,10 @@ module.exports = grammar({
     },
 
     string_literal: ($) =>
-      seq('"', repeat(choice($.escape_sequence, char)), token.immediate('"')),
+      prec(
+        PREC.primary,
+        seq('"', repeat(choice($.escape_sequence, char)), token.immediate('"')),
+      ),
 
     escape_sequence: (_) =>
       token.immediate(
@@ -511,45 +524,50 @@ module.exports = grammar({
         ),
       ),
 
-    int_literal: (_) => token(intLiteral),
+    int_literal: (_) => prec(PREC.primary, token(intLiteral)),
 
-    float_literal: (_) => token(floatLiteral),
+    float_literal: (_) => prec(PREC.primary, token(floatLiteral)),
 
-    imaginary_literal: (_) => token(imaginaryLiteral),
+    imaginary_literal: (_) => prec(PREC.primary, token(imaginaryLiteral)),
 
     rune_literal: (_) =>
-      token(
-        seq(
-          "'",
-          choice(
-            /[^'\\]/,
-            seq(
-              "\\",
-              choice(
-                seq("x", hexDigit, hexDigit),
-                seq(octalDigit, octalDigit, octalDigit),
-                seq("u", hexDigit, hexDigit, hexDigit, hexDigit),
-                seq(
-                  "U",
-                  hexDigit,
-                  hexDigit,
-                  hexDigit,
-                  hexDigit,
-                  hexDigit,
-                  hexDigit,
-                  hexDigit,
-                  hexDigit,
+      prec(
+        PREC.primary,
+        token(
+          seq(
+            "'",
+            choice(
+              /[^'\\]/,
+              seq(
+                "\\",
+                choice(
+                  seq("x", hexDigit, hexDigit),
+                  seq(octalDigit, octalDigit, octalDigit),
+                  seq("u", hexDigit, hexDigit, hexDigit, hexDigit),
+                  seq(
+                    "U",
+                    hexDigit,
+                    hexDigit,
+                    hexDigit,
+                    hexDigit,
+                    hexDigit,
+                    hexDigit,
+                    hexDigit,
+                    hexDigit,
+                  ),
+                  seq(
+                    choice("a", "b", "f", "n", "r", "t", "v", "\\", "'", '"'),
+                  ),
                 ),
-                seq(choice("a", "b", "f", "n", "r", "t", "v", "\\", "'", '"')),
               ),
             ),
+            "'",
           ),
-          "'",
         ),
       ),
 
-    true: (_) => "true",
-    false: (_) => "false",
+    true: (_) => prec(PREC.primary, "true"),
+    false: (_) => prec(PREC.primary, "false"),
 
     // http://stackoverflow.com/questions/13014947/regex-to-match-a-c-style-multiline-comment/36328890#36328890
     comment: (_) =>
