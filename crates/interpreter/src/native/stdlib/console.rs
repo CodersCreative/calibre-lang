@@ -1,6 +1,11 @@
-use crate::{native::NativeFunction, runtime::{
-        interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
-    }};
+use crate::{
+    native::NativeFunction,
+    runtime::{
+        interpreter::InterpreterErr,
+        scope::InterpreterEnvironment,
+        values::{RuntimeType, RuntimeValue},
+    },
+};
 use rustyline::DefaultEditor;
 
 pub struct Out();
@@ -17,11 +22,7 @@ impl NativeFunction for Out {
         let mut handle = stdout.lock();
 
         for arg in args {
-            let mut s = arg.0.to_string();
-
-            if let RuntimeValue::Link(scope, path, _) = &arg.0 {
-                s = env.get_link_path(scope, &path)?.to_string();
-            }
+            let s = arg.0.to_string();
 
             handle.write_all(s.as_bytes()).unwrap();
         }
@@ -46,11 +47,7 @@ impl NativeFunction for ErrFn {
         let mut handle = stderr.lock();
 
         for arg in args {
-            let mut s = arg.0.to_string();
-
-            if let RuntimeValue::Link(scope, path, _) = &arg.0 {
-                s = env.get_link_path(scope, &path)?.to_string();
-            }
+            let s = arg.0.to_string();
 
             handle.write_all(s.as_bytes()).unwrap();
         }

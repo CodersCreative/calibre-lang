@@ -1,16 +1,11 @@
 use crate::runtime::{
-    scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
+    scope::InterpreterEnvironment,
+    values::{RuntimeType, RuntimeValue},
 };
 
 impl RuntimeValue {
     pub fn is_number(&self) -> bool {
-        matches!(
-            self,
-            RuntimeValue::Float(_)
-                | RuntimeValue::Int(_)
-                | RuntimeValue::Link(_, _, RuntimeType::Int)
-                | RuntimeValue::Link(_, _, RuntimeType::Float)
-        )
+        matches!(self, RuntimeValue::Float(_) | RuntimeValue::Int(_))
     }
 
     pub fn is_type(&self, env: &InterpreterEnvironment, scope: &u64, t: &RuntimeType) -> bool {
@@ -19,7 +14,7 @@ impl RuntimeValue {
         }
 
         match self {
-            RuntimeValue::Link(_, _, x) => x == t,
+            RuntimeValue::Ref(_, x) => x == t,
             RuntimeValue::Null => false,
             RuntimeValue::NativeFunction(_) => false,
             RuntimeValue::Struct(_, _, _) => match self.into_type(env, scope, t) {

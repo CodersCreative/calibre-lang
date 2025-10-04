@@ -1,8 +1,12 @@
 use calibre_parser::ast::VarType;
 
-use crate::{native::NativeFunction, runtime::{
-        scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
-    }};
+use crate::{
+    native::NativeFunction,
+    runtime::{
+        scope::InterpreterEnvironment,
+        values::{RuntimeType, RuntimeValue},
+    },
+};
 use std::{
     rc::Rc,
     thread::{self},

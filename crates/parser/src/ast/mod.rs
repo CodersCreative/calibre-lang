@@ -108,7 +108,10 @@ pub enum NodeType {
     Continue,
     RefStatement {
         mutability: RefMutability,
-        value: String,
+        value: Box<Node>,
+    },
+    DerefStatement {
+        value: Box<Node>,
     },
     VariableDeclaration {
         var_type: VarType,
@@ -140,7 +143,7 @@ pub enum NodeType {
         is_async: bool,
     },
     FunctionDeclaration {
-        parameters: Vec<(String, ParserDataType, RefMutability, Option<Node>)>,
+        parameters: Vec<(String, ParserDataType, Option<Node>)>,
         body: Box<Node>,
         return_type: Option<ParserDataType>,
         is_async: bool,

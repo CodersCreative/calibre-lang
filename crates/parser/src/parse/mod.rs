@@ -49,7 +49,7 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Result<Vec<(String, ParserDataType, RefMutability, Option<Node>)>, ParserError> {
+    ) -> Result<Vec<(String, ParserDataType, Option<Node>)>, ParserError> {
         let mut properties = Vec::new();
         let mut defaulted = false;
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
@@ -64,16 +64,8 @@ impl Parser {
                 );
             }
 
-            let mut ref_mutability = RefMutability::Value;
-
             let typ = if self.first().token_type == TokenType::Colon {
                 let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
-
-                ref_mutability = RefMutability::from(self.first().token_type.clone());
-
-                if ref_mutability != RefMutability::Value {
-                    let _ = self.eat();
-                }
 
                 self.parse_type()?.expect("Expected data type.")
             } else {
@@ -89,7 +81,7 @@ impl Parser {
             };
 
             for key in keys {
-                properties.push((key, typ.clone(), ref_mutability.clone(), default.clone()));
+                properties.push((key, typ.clone(), default.clone()));
             }
 
             if self.first().token_type != close_token {

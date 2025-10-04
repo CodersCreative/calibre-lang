@@ -1,4 +1,6 @@
-use crate::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue};
+use crate::runtime::{
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
+};
 use calibre_common::errors::ASTError;
 use calibre_parser::ast::binary::BinaryOperator;
 use std::ops::{Add, Div, Mul, Sub};
@@ -10,9 +12,6 @@ pub fn handle(
     left: RuntimeValue,
     right: RuntimeValue,
 ) -> Result<RuntimeValue, InterpreterErr> {
-    let left = left.unwrap_val(env, scope)?;
-    let right = right.unwrap_val(env, scope)?;
-
     Ok(match op {
         BinaryOperator::Add => left + right,
         BinaryOperator::Sub => left - right,

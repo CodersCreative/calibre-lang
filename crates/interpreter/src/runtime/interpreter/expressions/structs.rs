@@ -1,4 +1,7 @@
-use calibre_common::{environment::Type, errors::{ScopeErr, ValueErr}};
+use calibre_common::{
+    environment::Type,
+    errors::{ScopeErr, ValueErr},
+};
 use calibre_parser::ast::{Node, NodeType, ObjectType};
 
 use crate::runtime::{
@@ -10,38 +13,38 @@ impl InterpreterEnvironment {
     pub fn evaluate_struct_expression(
         &mut self,
         scope: &u64,
-        props : ObjectType<Option<Node>>
+        props: ObjectType<Option<Node>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            if let ObjectType::Map(props) = props {
-                let mut properties = HashMap::new();
-                for (k, v) in props {
-                    let value = if let Some(value) = v {
-                        self.evaluate(scope, value)?.unwrap_val(self, scope)?
-                    } else {
-                        self.get_var(scope, &k)?.value.clone()
-                    };
+        if let ObjectType::Map(props) = props {
+            let mut properties = HashMap::new();
+            for (k, v) in props {
+                let value = if let Some(value) = v {
+                    self.evaluate(scope, value)?
+                } else {
+                    self.get_var(scope, &k)?.value.clone()
+                };
 
-                    properties.insert(k, value);
-                }
-
-                return Ok(RuntimeValue::Struct(
-                    *scope,
-                    None,
-                    ObjectType::Map(properties),
-                ));
-            } else if let ObjectType::Tuple(props) = props {
-                let mut properties = Vec::new();
-                for v in props {
-                    if let Some(value) = v {
-                        properties.push(self.evaluate(scope, value)?.unwrap_val(self, scope)?);
-                    }
-                }
-                return Ok(RuntimeValue::Struct(
-                    *scope,
-                    None,
-                    ObjectType::Tuple(properties),
-                ));
+                properties.insert(k, value);
             }
+
+            return Ok(RuntimeValue::Struct(
+                *scope,
+                None,
+                ObjectType::Map(properties),
+            ));
+        } else if let ObjectType::Tuple(props) = props {
+            let mut properties = Vec::new();
+            for v in props {
+                if let Some(value) = v {
+                    properties.push(self.evaluate(scope, value)?);
+                }
+            }
+            return Ok(RuntimeValue::Struct(
+                *scope,
+                None,
+                ObjectType::Tuple(properties),
+            ));
+        }
         Ok(RuntimeValue::Null)
     }
 
@@ -49,108 +52,106 @@ impl InterpreterEnvironment {
         &mut self,
         scope: &u64,
         identifier: String,
-        value : String,
-        data : Option<ObjectType<Option<Node>>>
+        value: String,
+        data: Option<ObjectType<Option<Node>>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            let enm_class = match self.get_object_type(&scope, &identifier) {
-                Ok(Type::Enum(x)) => x.clone(),
-                _ => {
-                    if let Some(ObjectType::Tuple(args)) = data {
-                        if let Ok(s) = self.get_next_scope(*scope, &identifier) {
-                            let location = self.current_location.clone().unwrap();
-                            return self.evaluate(
-                                &s,
-                                Node::new(NodeType::CallExpression(
-                                    Box::new(Node::new(NodeType::Identifier(value), location.line, location.col)),
+        let enm_class = match self.get_object_type(&scope, &identifier) {
+            Ok(Type::Enum(x)) => x.clone(),
+            _ => {
+                if let Some(ObjectType::Tuple(args)) = data {
+                    if let Ok(s) = self.get_next_scope(*scope, &identifier) {
+                        let location = self.current_location.clone().unwrap();
+                        return self.evaluate(
+                            &s,
+                            Node::new(
+                                NodeType::CallExpression(
+                                    Box::new(Node::new(NodeType::Identifier(value), location.span)),
                                     args.into_iter().map(|x| (x.unwrap(), None)).collect(),
-                                ), location.line, location.col),
-                            );
-                        }
+                                ),
+                                location.span,
+                            ),
+                        );
                     }
-
-                    return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(
-                        identifier,
-                    ))));
                 }
-            };
 
-            if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
-                if let Some(ObjectType::Map(properties)) = &enm.1 {
-                    let mut data_vals = HashMap::new();
-                    if let Some(ObjectType::Map(data)) = data {
-                        for (k, v) in data {
-                            let value = if let Some(value) = v {
-                                self.evaluate(scope, value)?.unwrap_val(self, scope)?
-                            } else {
-                                self.get_var(scope, &k)?.value.clone()
-                            };
-
-                            data_vals.insert(k, value);
-                        }
-                    }
-
-                    let mut new_data_vals = HashMap::new();
-                    for property in properties {
-                        if let Some(val) = data_vals.remove(property.0) {
-                            new_data_vals.insert(
-                                property.0.clone(),
-                                val,
-                            );
-                        } else {
-                            return Err(InterpreterErr::PropertyNotFound(property.0.to_string()));
-                        }
-                    }
-
-                    let data = if new_data_vals.is_empty() {
-                        None
-                    } else {
-                        Some(ObjectType::Map(new_data_vals))
-                    };
-
-                    return Ok(RuntimeValue::Enum(*scope, identifier, i, data));
-                } else if let Some(ObjectType::Tuple(properties)) = &enm.1 {
-                    let mut data_vals = Vec::new();
-
-                    if let Some(ObjectType::Tuple(data)) = data {
-                        for v in data {
-                            if let Some(value) = v {
-                                data_vals.push(
-                                    self.evaluate(scope, value)?.unwrap_val(self, scope)?,
-                                );
-                            };
-                        }
-                    }
-
-                    let mut new_data_vals = Vec::new();
-                    for (i, property) in properties.into_iter().enumerate() {
-                        if data_vals.len() <= 0 {
-                            return Err(InterpreterErr::OutOfBounds(
-                                String::from("Tuple Object Type"),
-                                i as i16,
-                            ));
-                        }
-                        new_data_vals.push(data_vals.remove(0).unwrap_val(self, scope)?);
-                    }
-
-                    let data = if new_data_vals.is_empty() {
-                        None
-                    } else {
-                        Some(ObjectType::Tuple(new_data_vals))
-                    };
-
-                    return Ok(RuntimeValue::Enum(*scope, identifier, i, data));
-                }
-                return Ok(RuntimeValue::Enum(*scope, identifier, i, None));
-            } else {
-                Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
+                return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(
+                    identifier,
+                ))));
             }
+        };
+
+        if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
+            if let Some(ObjectType::Map(properties)) = &enm.1 {
+                let mut data_vals = HashMap::new();
+                if let Some(ObjectType::Map(data)) = data {
+                    for (k, v) in data {
+                        let value = if let Some(value) = v {
+                            self.evaluate(scope, value)?
+                        } else {
+                            self.get_var(scope, &k)?.value.clone()
+                        };
+
+                        data_vals.insert(k, value);
+                    }
+                }
+
+                let mut new_data_vals = HashMap::new();
+                for property in properties {
+                    if let Some(val) = data_vals.remove(property.0) {
+                        new_data_vals.insert(property.0.clone(), val);
+                    } else {
+                        return Err(InterpreterErr::PropertyNotFound(property.0.to_string()));
+                    }
+                }
+
+                let data = if new_data_vals.is_empty() {
+                    None
+                } else {
+                    Some(ObjectType::Map(new_data_vals))
+                };
+
+                return Ok(RuntimeValue::Enum(*scope, identifier, i, data));
+            } else if let Some(ObjectType::Tuple(properties)) = &enm.1 {
+                let mut data_vals = Vec::new();
+
+                if let Some(ObjectType::Tuple(data)) = data {
+                    for v in data {
+                        if let Some(value) = v {
+                            data_vals.push(self.evaluate(scope, value)?);
+                        };
+                    }
+                }
+
+                let mut new_data_vals = Vec::new();
+                for (i, property) in properties.into_iter().enumerate() {
+                    if data_vals.len() <= 0 {
+                        return Err(InterpreterErr::OutOfBounds(
+                            String::from("Tuple Object Type"),
+                            i as i16,
+                        ));
+                    }
+                    new_data_vals.push(data_vals.remove(0));
+                }
+
+                let data = if new_data_vals.is_empty() {
+                    None
+                } else {
+                    Some(ObjectType::Tuple(new_data_vals))
+                };
+
+                return Ok(RuntimeValue::Enum(*scope, identifier, i, data));
+            }
+            return Ok(RuntimeValue::Enum(*scope, identifier, i, None));
+        } else {
+            Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use calibre_parser::ast::TypeDefType;
     use calibre_parser::ast::ParserDataType;
+    use calibre_parser::ast::TypeDefType;
 
     use super::*;
     use crate::runtime::values::RuntimeValue;

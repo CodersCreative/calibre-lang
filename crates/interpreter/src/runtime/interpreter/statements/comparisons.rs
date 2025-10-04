@@ -1,5 +1,7 @@
 use crate::runtime::{
-    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
+    interpreter::InterpreterErr,
+    scope::InterpreterEnvironment,
+    values::{RuntimeType, RuntimeValue},
 };
 use calibre_parser::ast::{IfComparisonType, Node, NodeType};
 
@@ -42,64 +44,51 @@ impl InterpreterEnvironment {
         left: RuntimeValue,
         right: RuntimeValue,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            Ok(RuntimeValue::Bool(self.is_value_in(scope, &left, &right)))
+        Ok(RuntimeValue::Bool(self.is_value_in(scope, &left, &right)))
     }
 
     pub fn evaluate_if_statement(
         &mut self,
         scope: &u64,
-        comparison : IfComparisonType,
-        then : Node,
+        comparison: IfComparisonType,
+        then: Node,
         otherwise: Option<Node>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            match comparison {
-                IfComparisonType::If(comparison) => {
-                    if let Ok(RuntimeValue::Bool(x)) = self
-                        .evaluate(scope, comparison.clone())?
-                        .unwrap_val(self, scope)
-                    {
-                        if x {
-                            return self.evaluate(scope, then);
-                        }
-                    } else {
-                        return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
+        match comparison {
+            IfComparisonType::If(comparison) => {
+                if let RuntimeValue::Bool(x) = self.evaluate(scope, comparison.clone())? {
+                    if x {
+                        return self.evaluate(scope, then);
                     }
+                } else {
+                    return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
                 }
-                IfComparisonType::IfLet {
-                    mutability,
-                    value,
-                    pattern,
-                } => {
-                    let path = match &value.node_type {
-                        NodeType::Identifier(x) => vec![x.clone()],
-                        _ => Vec::new(),
-                    };
+            }
+            IfComparisonType::IfLet { value, pattern } => {
+                let path = match &value.node_type {
+                    NodeType::Identifier(x) => vec![x.clone()],
+                    _ => Vec::new(),
+                };
 
-                    let value = self.evaluate(scope, value.clone())?;
+                let value = self.evaluate(scope, value.clone())?;
 
-                    if let Some(result) = self.match_pattern(
-                        scope,
-                        &pattern.0,
-                        &value,
-                        &mutability,
-                        path.clone(),
-                        &pattern.1,
-                        then,
-                    ) {
-                        match result {
-                            Ok(x) => return Ok(x),
-                            Err(InterpreterErr::ExpectedFunctions) => {}
-                            Err(e) => return Err(e),
-                        }
+                if let Some(result) =
+                    self.match_pattern(scope, &pattern.0, &value, path.clone(), &pattern.1, then)
+                {
+                    match result {
+                        Ok(x) => return Ok(x),
+                        Err(InterpreterErr::ExpectedFunctions) => {}
+                        Err(e) => return Err(e),
                     }
                 }
             }
+        }
 
-            if let Some(last) = otherwise {
-                return self.evaluate(scope, last);
-            }
+        if let Some(last) = otherwise {
+            return self.evaluate(scope, last);
+        }
 
-            Ok(RuntimeValue::Null)
+        Ok(RuntimeValue::Null)
     }
 }
 
@@ -124,7 +113,7 @@ mod tests {
                 "true",
             )))),
             then: Box::new(NodeType::IntLiteral(123)),
-            otherwise : None
+            otherwise: None,
         };
         let result = env.evaluate(&scope, node).unwrap();
 
@@ -139,7 +128,7 @@ mod tests {
                 "false",
             )))),
             then: Box::new(NodeType::IntLiteral(123)),
-            otherwise : Some(Box::new(NodeType::IntLiteral(2)))
+            otherwise: Some(Box::new(NodeType::IntLiteral(2))),
         };
         let result = env.evaluate(&scope, node).unwrap();
 

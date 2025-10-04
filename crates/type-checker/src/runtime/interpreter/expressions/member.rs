@@ -54,20 +54,28 @@ impl CheckerEnvironment {
             match self.evaluate(&scope, node.clone()) {
                 Ok(mut value) => loop {
                     match value {
-                        RuntimeType::Int | RuntimeType::Float | RuntimeType::Str | RuntimeType::Char => return Ok(MembrExprPathRes::Value(RuntimeType::Dynamic)),
+                        RuntimeType::Int
+                        | RuntimeType::Float
+                        | RuntimeType::Str
+                        | RuntimeType::Char => {
+                            return Ok(MembrExprPathRes::Value(RuntimeType::Dynamic));
+                        }
                         x => return Ok(MembrExprPathRes::Value(x.clone())),
                     }
                 },
-                Err(e) if path.len() == 1 => {
-                    match node.node_type {
+                Err(e) if path.len() == 1 => match node.node_type {
                     NodeType::Identifier(value) => {
                         return Ok(MembrExprPathRes::Value(self.evaluate(
                             scope,
-                            Node::new(NodeType::EnumExpression {
-                                identifier: path.remove(0),
-                                value,
-                                data: None,
-                            }, node.line, node.col),
+                            Node::new(
+                                NodeType::EnumExpression {
+                                    identifier: path.remove(0),
+                                    value,
+                                    data: None,
+                                },
+                                node.line,
+                                node.col,
+                            ),
                         )?));
                     }
                     NodeType::CallExpression(value_node, mut args) => match value_node.node_type {
@@ -75,16 +83,20 @@ impl CheckerEnvironment {
                             return Ok(MembrExprPathRes::Value(
                                 match self.evaluate(
                                     scope,
-                                    Node::new(NodeType::EnumExpression {
-                                        identifier: path[0].clone(),
-                                        value: value.to_string(),
-                                        data: Some(ObjectType::Tuple(
-                                            args.clone()
-                                                .into_iter()
-                                                .map(|x| Some(x.0.clone()))
-                                                .collect(),
-                                        )),
-                                    }, value_node.line, value_node.col),
+                                    Node::new(
+                                        NodeType::EnumExpression {
+                                            identifier: path[0].clone(),
+                                            value: value.to_string(),
+                                            data: Some(ObjectType::Tuple(
+                                                args.clone()
+                                                    .into_iter()
+                                                    .map(|x| Some(x.0.clone()))
+                                                    .collect(),
+                                            )),
+                                        },
+                                        value_node.line,
+                                        value_node.col,
+                                    ),
                                 ) {
                                     Ok(x) => x,
                                     Err(e) => {
@@ -105,7 +117,13 @@ impl CheckerEnvironment {
                                                     args.insert(
                                                         0,
                                                         (
-                                                            Node::new(NodeType::Identifier(path[0].clone()), value_node.line, value_node.col),
+                                                            Node::new(
+                                                                NodeType::Identifier(
+                                                                    path[0].clone(),
+                                                                ),
+                                                                value_node.line,
+                                                                value_node.col,
+                                                            ),
                                                             None,
                                                         ),
                                                     );
@@ -123,7 +141,6 @@ impl CheckerEnvironment {
                         _ => return Err(e),
                     },
                     _ => return Err(e),
-                }
                 },
                 Err(e) => return Err(e),
             }
@@ -138,10 +155,10 @@ impl CheckerEnvironment {
         member: Node,
         value: RuntimeType,
     ) -> Result<RuntimeType, InterpreterErr> {
-        let typ = self.evaluate_member_expression(scope,  member)?;
+        let typ = self.evaluate_member_expression(scope, member)?;
         if value.is_type(&typ) {
             Ok(value)
-        }else{
+        } else {
             panic!()
         }
     }
@@ -163,11 +180,15 @@ impl CheckerEnvironment {
                     Err(_) if path.len() == 2 => {
                         return self.evaluate(
                             scope,
-                            Node::new(NodeType::EnumExpression {
-                                identifier: path.remove(0),
-                                value: path.remove(0),
-                                data: None,
-                            }, exp.line, exp.col),
+                            Node::new(
+                                NodeType::EnumExpression {
+                                    identifier: path.remove(0),
+                                    value: path.remove(0),
+                                    data: None,
+                                },
+                                exp.line,
+                                exp.col,
+                            ),
                         );
                     }
                     Err(e) => Err(e),

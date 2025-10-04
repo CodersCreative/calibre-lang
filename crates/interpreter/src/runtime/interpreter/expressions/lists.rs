@@ -1,15 +1,17 @@
 use crate::runtime::{
-    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
+    interpreter::InterpreterErr,
+    scope::InterpreterEnvironment,
+    values::{RuntimeType, RuntimeValue},
 };
 use calibre_common::environment::Variable;
-use calibre_parser::ast::{LoopType, Node, NodeType, RefMutability, VarType};
+use calibre_parser::ast::{LoopType, Node, NodeType, VarType};
 use std::mem::discriminant;
 
 impl InterpreterEnvironment {
     pub fn evaluate_tuple_expression(
         &mut self,
         scope: &u64,
-        vals : Vec<Node>
+        vals: Vec<Node>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut values = Vec::new();
 
@@ -23,13 +25,13 @@ impl InterpreterEnvironment {
     pub fn evaluate_list_expression(
         &mut self,
         scope: &u64,
-        vals : Vec<Node>
+        vals: Vec<Node>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut values = Vec::new();
 
-            for val in vals.iter() {
-                values.push(self.evaluate(scope, val.clone())?);
-            }
+        for val in vals.iter() {
+            values.push(self.evaluate(scope, val.clone())?);
+        }
 
         let t = if values.len() > 0 {
             let t = discriminant(&values[0]);
@@ -53,105 +55,55 @@ impl InterpreterEnvironment {
     pub fn evaluate_iter_expression(
         &mut self,
         scope: &u64,
-        map : Node,
-        loop_type : LoopType,
-        conditionals : Vec<Node>
+        map: Node,
+        loop_type: LoopType,
+        conditionals: Vec<Node>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            let mut result = Vec::new();
+        let mut result = Vec::new();
 
-            if let LoopType::For(identifier, range_node) = loop_type {
-                let range = self.evaluate(scope, range_node.clone())?;
-                let location = self.get_location(scope, range_node.line, range_node.col);
-                if let RuntimeValue::List { data, data_type: _ } = range {
-                    for d in data.into_iter() {
-                        let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-                        let _ = self.push_var(
-                            &new_scope,
-                            identifier.clone(),
-                            Variable {
-                                value: d.clone(),
-                                var_type: VarType::Immutable,
-                                location: location.clone(),
-                            },
-                        );
+        if let LoopType::For(identifier, range_node) = loop_type {
+            let range = self.evaluate(scope, range_node.clone())?;
+            let location = self.get_location(scope, range_node.span);
+            if let RuntimeValue::List { data, data_type: _ } = range {
+                for d in data.into_iter() {
+                    let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+                    let _ = self.push_var(
+                        &new_scope,
+                        identifier.clone(),
+                        Variable {
+                            value: d.clone(),
+                            var_type: VarType::Immutable,
+                            location: location.clone(),
+                        },
+                    );
 
-                        if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                            result.push(
-                                self.evaluate(&new_scope, map.clone())?.unwrap_links_val(
-                                    self,
-                                    &new_scope,
-                                    Some(new_scope),
-                                )?,
-                            );
-                        }
-
-                        self.remove_scope(&new_scope);
+                    if self.handle_conditionals(&new_scope, conditionals.clone())? {
+                        result.push(self.evaluate(&new_scope, map.clone())?);
                     }
-                } else if let RuntimeValue::Range(from, to) = range.unwrap_val(self, scope)?
-                {
-                    for i in from..to {
-                        let new_scope = self.get_new_scope(
-                            scope,
-                            vec![(
-                                identifier.clone(),
-                                RuntimeType::Int,
-                                RefMutability::Value,
-                                None,
-                            )],
-                            vec![(Node::new(NodeType::IntLiteral(i), range_node.line, range_node.col), None)],
-                        )?;
-                        if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                            result.push(
-                                self.evaluate(&new_scope, map.clone())?.unwrap_links_val(
-                                    self,
-                                    &new_scope,
-                                    Some(new_scope),
-                                )?,
-                            );
-                        }
-                        self.remove_scope(&new_scope);
-                    }
+
+                    self.remove_scope(&new_scope);
                 }
-            } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = loop_type {
-                let var = self.get_var(scope, &loop_name)?.clone();
-                if let RuntimeValue::List { data, .. } = &var.value {
-                    for d in data.into_iter() {
-                        let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-                        let _ = self.push_var(
-                            &new_scope,
-                            identifier.clone(),
-                            Variable {
-                                value: d.clone(),
-                                var_type: match mutability {
-                                    RefMutability::MutRef | RefMutability::MutValue => {
-                                        VarType::Mutable
-                                    }
-                                    _ => VarType::Immutable,
-                                },
-                                location : var.location.clone(),
-                            },
-                        );
-
-                        if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                            result.push(
-                                self.evaluate(&new_scope, map.clone())?.unwrap_links_val(
-                                    self,
-                                    &new_scope,
-                                    Some(new_scope),
-                                )?,
-                            );
-                        }
-                        self.remove_scope(&new_scope);
+            } else if let RuntimeValue::Range(from, to) = range {
+                for i in from..to {
+                    let new_scope = self.get_new_scope(
+                        scope,
+                        vec![(identifier.clone(), RuntimeType::Int, None)],
+                        vec![(Node::new(NodeType::IntLiteral(i), range_node.span), None)],
+                    )?;
+                    if self.handle_conditionals(&new_scope, conditionals.clone())? {
+                        result.push(self.evaluate(&new_scope, map.clone())?);
                     }
+                    self.remove_scope(&new_scope);
                 }
-            } else if let LoopType::While(_) = loop_type {
-                panic!()
             }
+        } else if let LoopType::While(_) = loop_type {
+            panic!()
+        }
 
-            Ok(RuntimeValue::List {
-                data: result,
-                data_type: Box::new(None),
-            })
+        Ok(RuntimeValue::List {
+            data: result,
+            data_type: Box::new(None),
+        })
     }
 }
 #[cfg(test)]

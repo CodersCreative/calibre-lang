@@ -2,9 +2,12 @@ use calibre_common::environment::Variable;
 use calibre_parser::ast::{Node, NodeType, VarType};
 
 use crate::runtime::{
-    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{
-        helper::{Block, MatchBlock}, FunctionType, RuntimeType, RuntimeValue
-    }
+    interpreter::InterpreterErr,
+    scope::InterpreterEnvironment,
+    values::{
+        FunctionType, RuntimeType, RuntimeValue,
+        helper::{Block, MatchBlock},
+    },
 };
 
 pub mod comparisons;
@@ -24,32 +27,30 @@ impl InterpreterEnvironment {
             body,
             return_type,
             is_async,
-        } = declaration.node_type else {panic!()};
-        
-            let mut params = Vec::new();
+        } = declaration.node_type
+        else {
+            panic!()
+        };
 
-            let default = if let Some(node) = parameters.3 {
-                Some(self.evaluate(scope, *node)?)
-            } else {
-                None
-            };
+        let mut params = Vec::new();
 
-            params.push((
-                parameters.0,
-                RuntimeType::from(parameters.1),
-                parameters.2,
-                default,
-            ));
+        let default = if let Some(node) = parameters.2 {
+            Some(self.evaluate(scope, *node)?)
+        } else {
+            None
+        };
 
-            Ok(RuntimeValue::Function {
-                parameters: params,
-                body: FunctionType::Match(MatchBlock(body)),
-                return_type: match return_type {
-                    Some(x) => Some(RuntimeType::from(x)),
-                    None => None,
-                },
-                is_async,
-            })
+        params.push((parameters.0, RuntimeType::from(parameters.1), default));
+
+        Ok(RuntimeValue::Function {
+            parameters: params,
+            body: FunctionType::Match(MatchBlock(body)),
+            return_type: match return_type {
+                Some(x) => Some(RuntimeType::from(x)),
+                None => None,
+            },
+            is_async,
+        })
     }
 
     pub fn evaluate_function_declaration(
@@ -63,39 +64,49 @@ impl InterpreterEnvironment {
             return_type,
             is_async,
         } = declaration.node_type
-        else { panic!() };
-            let mut params = Vec::new();
+        else {
+            panic!()
+        };
+        let mut params = Vec::new();
 
-            for p in parameters.into_iter() {
-                let default = if let Some(node) = p.3 {
-                    Some(self.evaluate(scope, node)?)
-                } else {
-                    None
-                };
+        for p in parameters.into_iter() {
+            let default = if let Some(node) = p.2 {
+                Some(self.evaluate(scope, node)?)
+            } else {
+                None
+            };
 
-                params.push((p.0, RuntimeType::from(p.1), p.2, default));
-            }
+            params.push((p.0, RuntimeType::from(p.1), default));
+        }
 
-            Ok(RuntimeValue::Function {
-                parameters: params,
-                body: FunctionType::Regular(Block(body)),
-                return_type: match return_type {
-                    Some(x) => Some(RuntimeType::from(x)),
-                    None => None,
-                },
-                is_async,
-            })
+        Ok(RuntimeValue::Function {
+            parameters: params,
+            body: FunctionType::Regular(Block(body)),
+            return_type: match return_type {
+                Some(x) => Some(RuntimeType::from(x)),
+                None => None,
+            },
+            is_async,
+        })
     }
 
     pub fn evaluate_variable_declaration(
         &mut self,
         scope: &u64,
-        var_type : VarType,
-        identifier : String,
-        mut value : RuntimeValue,
-        data_type : Option<RuntimeType>,
+        var_type: VarType,
+        identifier: String,
+        value: RuntimeValue,
+        data_type: Option<RuntimeType>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            Ok(self.push_var(scope, identifier, Variable { value: value.unwrap_links_val(self, scope, None)?, var_type, location : self.current_location.clone()})?)
+        Ok(self.push_var(
+            scope,
+            identifier,
+            Variable {
+                value,
+                var_type,
+                location: self.current_location.clone(),
+            },
+        )?)
     }
 }
 

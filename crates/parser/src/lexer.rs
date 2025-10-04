@@ -103,6 +103,7 @@ pub enum TokenType {
     Try,
     This,
     FullStop,
+    EOL,
     EOF,
     Struct,
     Else,

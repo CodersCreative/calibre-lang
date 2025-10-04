@@ -1,8 +1,11 @@
 use calibre_common::environment::{Type, Variable};
 use calibre_parser::ast::{Node, NodeType, ObjectType, RefMutability, VarType};
 
-use crate::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{helper::Block, FunctionType, RuntimeType, RuntimeValue}};
-
+use crate::runtime::{
+    interpreter::InterpreterErr,
+    scope::InterpreterEnvironment,
+    values::{FunctionType, RuntimeType, RuntimeValue, helper::Block},
+};
 
 impl InterpreterEnvironment {
     pub fn evaluate_function(
@@ -21,7 +24,7 @@ impl InterpreterEnvironment {
             let location = self.current_location.clone().unwrap();
             if arguments.len() == 1 && parameters.len() > 1 {
                 if let Ok(x) = self.evaluate(scope, arguments[0].0.clone()) {
-                    if let Ok(RuntimeValue::Tuple(x)) = x.unwrap_val(self, scope) {
+                    if let RuntimeValue::Tuple(x) = x {
                         arguments = x
                             .into_iter()
                             .map(|x| {
@@ -35,12 +38,18 @@ impl InterpreterEnvironment {
                                         Variable {
                                             value: x,
                                             var_type: VarType::Mutable,
-                                            location: Some(location.clone())
+                                            location: Some(location.clone()),
                                         },
                                     )
                                     .unwrap();
 
-                                (Node::new(NodeType::Identifier(format!("$-{}", counter)), location.line, location.col), None)
+                                (
+                                    Node::new(
+                                        NodeType::Identifier(format!("$-{}", counter)),
+                                        location.span,
+                                    ),
+                                    None,
+                                )
                             })
                             .collect();
                     }
@@ -48,30 +57,34 @@ impl InterpreterEnvironment {
             };
 
             if parameters.len() > arguments.len() {
-                let params: Vec<(String, RuntimeType, RefMutability, Option<RuntimeValue>)> =
-                    parameters
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, x)| {
-                            for arg in arguments.iter() {
-                                if let (NodeType::Identifier(y), Some(_)) = (&arg.0.node_type, &arg.1) {
-                                    if &x.0 == y {
-                                        return false;
-                                    }
+                let params: Vec<(String, RuntimeType, Option<RuntimeValue>)> = parameters
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, x)| {
+                        for arg in arguments.iter() {
+                            if let (NodeType::Identifier(y), Some(_)) = (&arg.0.node_type, &arg.1) {
+                                if &x.0 == y {
+                                    return false;
                                 }
                             }
+                        }
 
-                            i > &(arguments.len() - 1)
-                        })
-                        .map(|x| x.1.clone())
-                        .collect();
+                        i > &(arguments.len() - 1)
+                    })
+                    .map(|x| x.1.clone())
+                    .collect();
 
-                if params.iter().filter(|x| x.3.is_none()).count() > 0 {
+                if params.iter().filter(|x| x.2.is_none()).count() > 0 {
                     let arguments: Vec<(Node, Option<Node>)> = [
                         arguments,
                         params
                             .iter()
-                            .map(|x| (Node::new(NodeType::Identifier(x.0.clone()), location.line, location.col), None))
+                            .map(|x| {
+                                (
+                                    Node::new(NodeType::Identifier(x.0.clone()), location.span),
+                                    None,
+                                )
+                            })
                             .collect(),
                     ]
                     .concat();
@@ -86,15 +99,21 @@ impl InterpreterEnvironment {
                             Variable {
                                 value: func.clone(),
                                 var_type: VarType::Mutable,
-                                location : Some(location.clone())
+                                location: Some(location.clone()),
                             },
                         )
                         .unwrap();
 
-                    let body = FunctionType::Regular(Block(Box::new(Node::new(NodeType::CallExpression(
-                        Box::new(Node::new(NodeType::Identifier(format!("$-{}", counter)), location.line, location.col)),
-                        arguments,
-                    ), location.line, location.col))));
+                    let body = FunctionType::Regular(Block(Box::new(Node::new(
+                        NodeType::CallExpression(
+                            Box::new(Node::new(
+                                NodeType::Identifier(format!("$-{}", counter)),
+                                location.span,
+                            )),
+                            arguments,
+                        ),
+                        location.span,
+                    ))));
 
                     return Ok(RuntimeValue::Function {
                         parameters: params,
@@ -111,8 +130,6 @@ impl InterpreterEnvironment {
                     let result = self.evaluate(&new_scope, *body.0.clone())?;
                     self.stop = None;
 
-                    let result = result.unwrap_links_val(self, &new_scope, Some(new_scope))?;
-
                     self.remove_scope(&new_scope);
 
                     Ok(result)
@@ -120,7 +137,6 @@ impl InterpreterEnvironment {
                 FunctionType::Match(body) => {
                     return self.evaluate_match_function(
                         scope,
-                        &parameters[0].2,
                         arguments[0].0.clone(),
                         body.0.clone(),
                     );
@@ -134,82 +150,78 @@ impl InterpreterEnvironment {
     pub fn evaluate_call_expression(
         &mut self,
         scope: &u64,
-        caller : Node,
-        arguments : Vec<(Node, Option<Node>)>,
+        caller: Node,
+        arguments: Vec<(Node, Option<Node>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            if let NodeType::Identifier(object_name) = caller.node_type.clone() {
-                if let Ok(Type::Struct(ObjectType::Tuple(params))) =
-                    self.get_object_type(scope, &object_name)
-                {
-                    if arguments.len() == params.len() {
-                        let mut args = Vec::new();
+        if let NodeType::Identifier(object_name) = caller.node_type.clone() {
+            if let Ok(Type::Struct(ObjectType::Tuple(params))) =
+                self.get_object_type(scope, &object_name)
+            {
+                if arguments.len() == params.len() {
+                    let mut args = Vec::new();
+                    for (_, arg) in arguments.into_iter().enumerate() {
+                        args.push(self.evaluate(scope, arg.0)?);
+                    }
 
-                        let params = params.clone();
-                        for (i, arg) in arguments.into_iter().enumerate() {
-                            args.push(
-                                self.evaluate(scope, arg.0)?
-                                    .unwrap_val(self, scope)?,
-                            );
-                        }
+                    return Ok(RuntimeValue::Struct(
+                        scope.clone(),
+                        Some(object_name),
+                        ObjectType::Tuple(args),
+                    ));
+                }
+            }
+        }
 
-                        return Ok(RuntimeValue::Struct(
-                            scope.clone(),
-                            Some(object_name),
-                            ObjectType::Tuple(args),
+        let func = self.evaluate(scope, caller.clone())?;
+
+        match func {
+            RuntimeValue::Function { .. } => {
+                return self.evaluate_function(scope, func, arguments);
+            }
+            RuntimeValue::List { data, .. } if arguments.len() == 1 => {
+                match self.evaluate(scope, arguments[0].0.clone())? {
+                    RuntimeValue::Int(i) if arguments.len() == 1 => {
+                        return Ok(data
+                            .get(i as usize)
+                            .expect("Tried to get index that is larger than list size")
+                            .clone());
+                    }
+                    _ => {
+                        return Err(InterpreterErr::IndexNonList(
+                            arguments[0].0.node_type.clone(),
                         ));
                     }
                 }
             }
+            RuntimeValue::NativeFunction(_) => {
+                let mut evaluated_arguments = Vec::new();
 
-            let func = self
-                .evaluate(scope, caller.clone())?
-                .unwrap(self, scope)?
-                .clone();
-
-            match func {
-                RuntimeValue::Function { .. } => {
-                    return self.evaluate_function(scope, func, arguments);
-                }
-                RuntimeValue::List { data, .. } if arguments.len() == 1 => {
-                    match self.evaluate(scope, arguments[0].0.clone())? {
-                        RuntimeValue::Int(i) if arguments.len() == 1 => {
-                            return Ok(data
-                                .get(i as usize)
-                                .expect("Tried to get index that is larger than list size")
-                                .clone());
-                        }
-                        _ => return Err(InterpreterErr::IndexNonList(arguments[0].0.node_type.clone())),
-                    }
-                }
-                RuntimeValue::NativeFunction(_) => {
-                    let mut evaluated_arguments = Vec::new();
-
-                    for arg in arguments.iter() {
-                        evaluated_arguments.push(if let Some(d) = &arg.1 {
-                            if let NodeType::Identifier(name) = &arg.0.node_type {
-                                (
-                                    RuntimeValue::Str(name.clone()),
-                                    Some(self.evaluate(scope, d.clone())?),
-                                )
-                            } else {
-                                panic!()
-                            }
+                for arg in arguments.iter() {
+                    evaluated_arguments.push(if let Some(d) = &arg.1 {
+                        if let NodeType::Identifier(name) = &arg.0.node_type {
+                            (
+                                RuntimeValue::Str(name.clone()),
+                                Some(self.evaluate(scope, d.clone())?),
+                            )
                         } else {
-                            (self.evaluate(scope, arg.0.clone())?, None)
-                        });
-                    }
-
-                    match func {
-                        RuntimeValue::NativeFunction(x) => {
-                            return x.run(self, scope, &evaluated_arguments);
+                            panic!()
                         }
-                        _ => {}
-                    }
+                    } else {
+                        (self.evaluate(scope, arg.0.clone())?, None)
+                    });
                 }
-                _ => {}
-            }
 
-            panic!("Cannot call non-variable or function value, {:?}", func);
+                match func {
+                    RuntimeValue::NativeFunction(x) => {
+                        return x.run(self, scope, &evaluated_arguments);
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+
+        panic!("Cannot call non-variable or function value, {:?}", func);
     }
 }
 

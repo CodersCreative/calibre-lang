@@ -1,6 +1,8 @@
 use calibre_parser::ast::{Node, NodeType, ObjectType};
 
-use crate::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue};
+use crate::runtime::{
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
+};
 
 pub enum MembrExprPathRes {
     Value(RuntimeValue),
@@ -52,29 +54,25 @@ impl InterpreterEnvironment {
             }
 
             match self.evaluate(&scope, node.clone()) {
-                Ok(mut value) => loop {
-                    match value.unwrap(self, scope)? {
-                        RuntimeValue::Int(x) => path.push(x.to_string()),
-                        RuntimeValue::Float(x) => path.push(x.to_string()),
-                        RuntimeValue::Str(x) => path.push(x.to_string()),
-                        RuntimeValue::Char(x) => path.push(x.to_string()),
-                        RuntimeValue::Link(s, path, _) => {
-                            value = self.get_link_path(&s, &path)?.clone();
-                            continue;
-                        }
-                        x => return Ok(MembrExprPathRes::Value(x.clone())),
-                    }
-                    break;
+                Ok(value) => match value {
+                    RuntimeValue::Int(x) => path.push(x.to_string()),
+                    RuntimeValue::Float(x) => path.push(x.to_string()),
+                    RuntimeValue::Str(x) => path.push(x.to_string()),
+                    RuntimeValue::Char(x) => path.push(x.to_string()),
+                    x => return Ok(MembrExprPathRes::Value(x.clone())),
                 },
                 Err(e) if path.len() == 1 => match node.node_type {
                     NodeType::Identifier(value) => {
                         return Ok(MembrExprPathRes::Value(self.evaluate(
                             scope,
-                            Node::new(NodeType::EnumExpression {
-                                identifier: path.remove(0),
-                                value,
-                                data: None,
-                            }, node.line, node.col),
+                            Node::new(
+                                NodeType::EnumExpression {
+                                    identifier: path.remove(0),
+                                    value,
+                                    data: None,
+                                },
+                                node.span,
+                            ),
                         )?));
                     }
                     NodeType::CallExpression(value_node, mut args) => match value_node.node_type {
@@ -82,16 +80,19 @@ impl InterpreterEnvironment {
                             return Ok(MembrExprPathRes::Value(
                                 match self.evaluate(
                                     scope,
-                                    Node::new(NodeType::EnumExpression {
-                                        identifier: path[0].clone(),
-                                        value: value.to_string(),
-                                        data: Some(ObjectType::Tuple(
-                                            args.clone()
-                                                .into_iter()
-                                                .map(|x| Some(x.0.clone()))
-                                                .collect(),
-                                        )),
-                                    }, value_node.line, value_node.col),
+                                    Node::new(
+                                        NodeType::EnumExpression {
+                                            identifier: path[0].clone(),
+                                            value: value.to_string(),
+                                            data: Some(ObjectType::Tuple(
+                                                args.clone()
+                                                    .into_iter()
+                                                    .map(|x| Some(x.0.clone()))
+                                                    .collect(),
+                                            )),
+                                        },
+                                        value_node.span,
+                                    ),
                                 ) {
                                     Ok(x) => x,
                                     Err(e) => {
@@ -99,7 +100,7 @@ impl InterpreterEnvironment {
                                             self.evaluate_function(scope, x.0.clone(), args)?
                                         } else {
                                             let obj = match match self.get_var(scope, &path[0]) {
-                                                Ok(x) => x.value.unwrap(self, scope)?.clone(),
+                                                Ok(x) => x.value.clone(),
                                                 _ => return Err(e),
                                             } {
                                                 RuntimeValue::Struct(_, p, _) => p.unwrap().clone(),
@@ -112,7 +113,12 @@ impl InterpreterEnvironment {
                                                     args.insert(
                                                         0,
                                                         (
-                                                            Node::new(NodeType::Identifier(path[0].clone()), value_node.line, value_node.col),
+                                                            Node::new(
+                                                                NodeType::Identifier(
+                                                                    path[0].clone(),
+                                                                ),
+                                                                value_node.span,
+                                                            ),
                                                             None,
                                                         ),
                                                     );
@@ -151,14 +157,11 @@ impl InterpreterEnvironment {
                     MembrExprPathRes::Value(x) => return Ok(x),
                 };
 
-                let _ = self
-                    .update_link_path(scope, &path, |x| {
-                        *x = value.clone();
-                        Ok(())
-                    })
-                    .unwrap();
+                let RuntimeValue::Ref(pointer, _) = self.get_member_ref(scope, &path)? else {
+                    panic!()
+                };
 
-                Ok(value)
+                Ok(self.assign_var_from_ref_pointer(&pointer, value)?)
             }
             _ => Err(InterpreterErr::NotImplemented(member.node_type)),
         }
@@ -176,16 +179,22 @@ impl InterpreterEnvironment {
                     MembrExprPathRes::Value(x) => return Ok(x),
                 };
 
-                match self.get_link_path(scope, &path) {
-                    Ok(x) => Ok(x.clone()),
+                match self.get_member_ref(scope, &path) {
+                    Ok(RuntimeValue::Ref(pointer, _)) => {
+                        Ok(self.get_value_from_ref_pointer(&pointer)?.value)
+                    }
+                    Ok(x) => Ok(x),
                     Err(_) if path.len() == 2 => {
                         return self.evaluate(
                             scope,
-                            Node::new(NodeType::EnumExpression {
-                                identifier: path.remove(0),
-                                value: path.remove(0),
-                                data: None,
-                            }, exp.line, exp.col),
+                            Node::new(
+                                NodeType::EnumExpression {
+                                    identifier: path.remove(0),
+                                    value: path.remove(0),
+                                    data: None,
+                                },
+                                exp.span,
+                            ),
                         );
                     }
                     Err(e) => Err(e),

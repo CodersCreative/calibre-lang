@@ -1,6 +1,8 @@
 use core::panic;
 
-use crate::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue};
+use crate::runtime::{
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
+};
 use calibre_parser::ast::comparison::Comparison;
 
 impl InterpreterEnvironment {
@@ -37,9 +39,6 @@ pub fn handle(
     left: RuntimeValue,
     right: RuntimeValue,
 ) -> Result<RuntimeValue, InterpreterErr> {
-    let left = left.unwrap_val(env, scope)?;
-    let right = right.unwrap_val(env, scope)?;
-
     let (left, right) = if left == RuntimeValue::Null || right == RuntimeValue::Null {
         (left, right)
     } else {

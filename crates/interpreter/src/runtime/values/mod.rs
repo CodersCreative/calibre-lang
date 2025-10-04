@@ -24,7 +24,7 @@ pub enum RuntimeType {
     Result(Box<RuntimeType>, Box<RuntimeType>),
     Function {
         return_type: Box<Option<RuntimeType>>,
-        parameters: Vec<(RuntimeType, calibre_parser::ast::RefMutability)>,
+        parameters: Vec<RuntimeType>,
         is_async: bool,
     },
     Enum(u64, String),
@@ -111,7 +111,7 @@ impl From<ParserDataType> for RuntimeType {
                 }),
                 parameters: parameters
                     .into_iter()
-                    .map(|x| (RuntimeType::from(x.0), x.1))
+                    .map(|x| RuntimeType::from(x))
                     .collect(),
                 is_async,
             },
@@ -120,6 +120,7 @@ impl From<ParserDataType> for RuntimeType {
                 Box::new(RuntimeType::from(*x)),
                 Box::new(RuntimeType::from(*y)),
             ),
+            ParserDataType::Ref(x, _) => Self::Ref(Box::new(RuntimeType::from(*x))),
         }
     }
 }
@@ -153,10 +154,7 @@ impl Into<RuntimeType> for &RuntimeValue {
                     Some(x) => Box::new(Some(x.clone())),
                     None => Box::new(None),
                 },
-                parameters: parameters
-                    .iter()
-                    .map(|x| (x.1.clone(), x.2.clone()))
-                    .collect(),
+                parameters: parameters.iter().map(|x| x.1.clone()).collect(),
                 is_async: *is_async,
             },
             RuntimeValue::NativeFunction(_) => RuntimeType::Dynamic,
@@ -184,12 +182,7 @@ pub enum RuntimeValue {
     Option(Option<Box<RuntimeValue>>, RuntimeType),
     Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>, RuntimeType),
     Function {
-        parameters: Vec<(
-            String,
-            RuntimeType,
-            calibre_parser::ast::RefMutability,
-            Option<RuntimeValue>,
-        )>,
+        parameters: Vec<(String, RuntimeType, Option<RuntimeValue>)>,
         body: FunctionType,
         return_type: Option<RuntimeType>,
         is_async: bool,
@@ -224,7 +217,7 @@ impl ToString for RuntimeValue {
             Self::Int(x) => x.to_string(),
             Self::Enum(_, x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
             Self::Range(from, to) => format!("{}..{}", from, to),
-            Self::Link(_, path, _) => format!("link -> {:?}", path),
+            Self::Ref(_, ty) => format!("link -> {:?}", ty),
             Self::Bool(x) => x.to_string(),
             Self::Struct(_, y, x) => format!("{y:?} = {}", x.to_string()),
             Self::NativeFunction(_) => format!("native function"),
