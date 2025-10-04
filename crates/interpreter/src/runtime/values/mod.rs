@@ -4,13 +4,10 @@ use crate::{
 };
 use calibre_parser::ast::{ObjectType, ParserDataType};
 use helper::Block;
-use std::{
-    collections::HashMap, f64::consts::PI, fmt::Debug, rc::Rc
-};
+use std::{collections::HashMap, f64::consts::PI, fmt::Debug, rc::Rc};
 
 pub mod conversion;
 pub mod helper;
-
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum RuntimeType {
@@ -32,11 +29,12 @@ pub enum RuntimeType {
     },
     Enum(u64, String),
     Struct(u64, Option<String>),
+    Ref(Box<RuntimeType>),
 }
 
 impl calibre_common::environment::RuntimeType for RuntimeType {}
 impl calibre_common::environment::RuntimeValue for RuntimeValue {
-    fn string(txt : String) -> Self {
+    fn string(txt: String) -> Self {
         Self::Str(txt)
     }
 
@@ -53,7 +51,7 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
     }
 
     fn natives() -> HashMap<String, Self> {
-        let lst : Vec<(&'static str, Rc<dyn NativeFunction>)> = vec![
+        let lst: Vec<(&'static str, Rc<dyn NativeFunction>)> = vec![
             ("print", Rc::new(native::stdlib::console::Out())),
             ("ok", Rc::new(native::global::OkFn())),
             ("err", Rc::new(native::global::ErrFn())),
@@ -66,7 +64,10 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
             ("console.err", Rc::new(native::stdlib::console::ErrFn())),
             ("console.clear", Rc::new(native::stdlib::console::Clear())),
             ("thread.wait", Rc::new(native::stdlib::thread::Wait())),
-            ("random.generate", Rc::new(native::stdlib::random::Generate())),
+            (
+                "random.generate",
+                Rc::new(native::stdlib::random::Generate()),
+            ),
             ("random.bool", Rc::new(native::stdlib::random::Bool())),
             ("random.ratio", Rc::new(native::stdlib::random::Ratio())),
         ];
@@ -129,7 +130,7 @@ impl Into<RuntimeType> for &RuntimeValue {
             RuntimeValue::Null => RuntimeType::Dynamic,
             RuntimeValue::Float(_) => RuntimeType::Float,
             RuntimeValue::Int(_) => RuntimeType::Int,
-            RuntimeValue::Link(_, _, x) => x.clone(),
+            RuntimeValue::Ref(_, x) => x.clone(),
             RuntimeValue::Enum(y, x, _, _) => RuntimeType::Enum(*y, x.clone()),
             RuntimeValue::Struct(y, x, _) => RuntimeType::Struct(*y, x.clone()),
             RuntimeValue::Bool(_) => RuntimeType::Bool,
@@ -175,7 +176,7 @@ pub enum RuntimeValue {
     Struct(u64, Option<String>, ObjectType<RuntimeValue>),
     Enum(u64, String, usize, Option<ObjectType<RuntimeValue>>),
     Tuple(Vec<RuntimeValue>),
-    Link(u64, Vec<String>, RuntimeType),
+    Ref(u64, RuntimeType),
     List {
         data: Vec<RuntimeValue>,
         data_type: Box<Option<RuntimeType>>,

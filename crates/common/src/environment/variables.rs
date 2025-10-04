@@ -1,15 +1,20 @@
-use crate::{environment::{Environment, RuntimeType, RuntimeValue, Variable}, errors::ScopeErr};
+use crate::{
+    environment::{Environment, RuntimeType, RuntimeValue, Variable},
+    errors::ScopeErr,
+};
 
-impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
+impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
     pub fn get_var<'a>(&'a self, scope: &u64, key: &str) -> Result<&'a Variable<T>, ScopeErr<T>> {
-        Ok(if let Some(vars) = self.variables.get(scope) {
-            if let Some(var) = vars.get(key) {
-                var
-            } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
-                self.get_var(&scope, key)?
-            } else {
-                return Err(ScopeErr::Variable(key.to_string()));
-            }
+        let pointer = if let Some(pointer) = self.scopes.get(scope).unwrap().variables.get(key) {
+            pointer.clone()
+        } else {
+            return Err(ScopeErr::Variable(key.to_string()));
+        };
+
+        Ok(if let Some(var) = self.variables.get(&pointer) {
+            var
+        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+            self.get_var(&scope, key)?
         } else {
             return Err(ScopeErr::Variable(key.to_string()));
         })
@@ -19,15 +24,18 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
     where
         F: FnMut(&mut Variable<T>),
     {
-        Ok(if let Some(vars) = self.variables.get_mut(scope) {
-            if let Some(var) = vars.get_mut(key) {
-                f(var);
-            } else {
-                return Err(ScopeErr::Variable(key.to_string()));
-            }
+        let pointer = if let Some(pointer) = self.scopes.get(scope).unwrap().variables.get(key) {
+            pointer.clone()
+        } else {
+            return Err(ScopeErr::Variable(key.to_string()));
+        };
+
+        Ok(if let Some(var) = self.variables.get_mut(&pointer) {
+            f(var)
+        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+            self.update_var(&scope, key, f)?
         } else {
             return Err(ScopeErr::Variable(key.to_string()));
         })
     }
-
 }

@@ -1,18 +1,42 @@
-pub mod variables;
 pub mod links;
+pub mod variables;
 
-use std::{fs, ops::{Deref, DerefMut}};
+use std::{
+    fs,
+    ops::{Deref, DerefMut},
+};
 
-use calibre_common::{environment::Environment};
+use crate::runtime::{
+    interpreter::InterpreterErr,
+    values::{RuntimeType, helper::StopValue},
+};
+use calibre_common::environment::Environment;
 use calibre_parser::Parser;
-use crate::runtime::{interpreter::InterpreterErr, values::{helper::StopValue, RuntimeType}};
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct CheckerEnvironment{pub env : Environment<RuntimeType, RuntimeType>, pub stop : Option<StopValue>}
+#[derive(Debug, Clone)]
+pub struct CheckerEnvironment {
+    pub env: Environment<RuntimeType, RuntimeType>,
+    pub stop: Option<StopValue>,
+    pub errors: Vec<Result<RuntimeType, InterpreterErr>>,
+}
+
+impl PartialEq for CheckerEnvironment {
+    fn eq(&self, other: &Self) -> bool {
+        self.env == other.env && self.stop == other.stop
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.env != other.env || self.stop != other.stop
+    }
+}
 
 impl CheckerEnvironment {
-    pub fn new() -> Self{
-        Self{env : Environment::new(false), stop : None}
+    pub fn new() -> Self {
+        Self {
+            env: Environment::new(false),
+            stop: None,
+            errors: Vec::new(),
+        }
     }
 
     pub fn import_scope_list(
@@ -28,8 +52,8 @@ impl CheckerEnvironment {
         self.import_scope_list(scope, list)
     }
 
-    pub fn import_next_scope(&mut self, scope: u64, key: &str) -> Result<u64, InterpreterErr> {
-        Ok(match key {
+    pub fn import_next_scope(&mut self, scope: u64, key: &str) -> u64 {
+        match key {
             "super" => self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
             _ => {
                 let current = self.scopes.get(&scope).unwrap().clone();
@@ -52,9 +76,8 @@ impl CheckerEnvironment {
                     }
                 }
             }
-        })
+        }
     }
-
 }
 impl Deref for CheckerEnvironment {
     type Target = Environment<RuntimeType, RuntimeType>;

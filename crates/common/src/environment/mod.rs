@@ -1,29 +1,31 @@
 pub mod children;
 pub mod objects;
-pub mod variables;
 pub mod scopes;
+pub mod variables;
 
-use calibre_parser::ast::{NodeType, ObjectType, ParserDataType, TypeDefType, VarType};
+use calibre_parser::{
+    ast::{NodeType, ObjectType, ParserDataType, TypeDefType, VarType},
+    lexer::Span,
+};
 use std::{collections::HashMap, fmt::Debug, ops::Deref, path::PathBuf};
 
 use crate::errors::{RuntimeErr, ScopeErr, ValueErr};
 
-pub trait RuntimeType : From<ParserDataType> + PartialEq + Clone + Debug {}
-pub trait RuntimeValue : PartialEq + Clone + Debug {
-    fn string(txt : String) -> Self;
+pub trait RuntimeType: From<ParserDataType> + PartialEq + Clone + Debug {}
+pub trait RuntimeValue: PartialEq + Clone + Debug {
+    fn string(txt: String) -> Self;
     fn natives() -> HashMap<String, Self>;
     fn constants() -> HashMap<String, Self>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Type<U : RuntimeType> {
+pub enum Type<U: RuntimeType> {
     Enum(Vec<(String, Option<ObjectType<U>>)>),
     Struct(ObjectType<U>),
     NewType(U),
-    Link(u64, String),
 }
 
-fn type_def_type_obj_to_runtime<U : RuntimeType>(obj: ObjectType<ParserDataType>) -> ObjectType<U> {
+fn type_def_type_obj_to_runtime<U: RuntimeType>(obj: ObjectType<ParserDataType>) -> ObjectType<U> {
     match obj {
         ObjectType::Tuple(x) => {
             let mut vec: Vec<U> = Vec::new();
@@ -44,7 +46,7 @@ fn type_def_type_obj_to_runtime<U : RuntimeType>(obj: ObjectType<ParserDataType>
     }
 }
 
-impl<U : RuntimeType> From<TypeDefType> for Type<U> {
+impl<U: RuntimeType> From<TypeDefType> for Type<U> {
     fn from(value: TypeDefType) -> Self {
         match value {
             TypeDefType::Enum(x) => Type::Enum(
@@ -68,34 +70,33 @@ impl<U : RuntimeType> From<TypeDefType> for Type<U> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Location {
-    pub path : PathBuf,
-    pub line : usize,
-    pub col : usize,
+    pub path: PathBuf,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Object<T : RuntimeValue, U : RuntimeType> {
+pub struct Object<T: RuntimeValue, U: RuntimeType> {
     pub object_type: Type<U>,
     pub functions: HashMap<String, (T, Option<Location>, bool)>,
     pub traits: Vec<String>,
-    pub location: Option<Location>
+    pub location: Option<Location>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Variable<T> {
     pub value: T,
     pub var_type: VarType,
-    pub location: Option<Location>
+    pub location: Option<Location>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Environment<T : RuntimeValue, U : RuntimeType> {
+pub struct Environment<T: RuntimeValue, U: RuntimeType> {
     pub counter: u64,
     pub scopes: HashMap<u64, Scope>,
-    pub variables: HashMap<u64, HashMap<String, Variable<T>>>,
-    pub objects: HashMap<u64, HashMap<String, Object<T, U>>>,
-    pub current_location : Option<Location>,
-    pub strict_removal : bool,
+    pub variables: HashMap<u64, Variable<T>>,
+    pub objects: HashMap<u64, Object<T, U>>,
+    pub current_location: Option<Location>,
+    pub strict_removal: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -106,22 +107,27 @@ pub struct Scope {
     pub children: HashMap<String, u64>,
     pub namespace: String,
     pub path: PathBuf,
+    pub variables: HashMap<String, u64>,
+    pub objects: HashMap<String, u64>,
 }
 
-impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
+impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
     pub fn new(strict_removal: bool) -> Environment<T, U> {
         Environment {
             counter: 0,
             scopes: HashMap::new(),
             variables: HashMap::new(),
             objects: HashMap::new(),
-            current_location : None,
-            strict_removal
+            current_location: None,
+            strict_removal,
         }
     }
 
-    pub fn get_location(&self, scope: &u64, line : usize, col : usize) -> Option<Location>{
-        Some(Location { path: self.scopes.get(scope).unwrap().path.clone(), line, col })
+    pub fn get_location(&self, scope: &u64, span: Span) -> Option<Location> {
+        Some(Location {
+            path: self.scopes.get(scope).unwrap().path.clone(),
+            span,
+        })
     }
 
     pub fn remove_scope(&mut self, scope: &u64) {
@@ -176,36 +182,37 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
         };
 
         scope.id = self.counter;
+
         self.variables.insert(
-            self.counter,
-            HashMap::from([
-                (
-                    String::from("__name__"),
-                    Variable {
-                        value: T::string(String::from(
-                            if !has_parent || scope.namespace == "root" {
-                                "__main__"
-                            } else {
-                                &scope.namespace
-                            },
-                        )),
-                        var_type: VarType::Constant,
-                        location : None,
-                    },
-                ),
-                (
-                    String::from("__file__"),
-                    Variable {
-                        value: T::string(String::from(scope.path.to_str().unwrap())),
-                        var_type: VarType::Constant,
-                        location : None,
-                    },
-                ),
-            ]),
+            self.counter + 1,
+            Variable {
+                value: T::string(String::from(if !has_parent || scope.namespace == "root" {
+                    "__main__"
+                } else {
+                    &scope.namespace
+                })),
+                var_type: VarType::Constant,
+                location: None,
+            },
         );
-        self.objects.insert(self.counter, HashMap::new());
-        self.scopes.insert(self.counter, scope);
-        self.counter += 1;
+
+        self.variables.insert(
+            self.counter + 2,
+            Variable {
+                value: T::string(String::from(scope.path.to_str().unwrap())),
+                var_type: VarType::Constant,
+                location: None,
+            },
+        );
+
+        scope
+            .variables
+            .insert(String::from("__name__"), self.counter + 1);
+        scope
+            .variables
+            .insert(String::from("__file__"), self.counter + 2);
+        self.scopes.insert(scope.id.clone(), scope);
+        self.counter += 3;
     }
 
     pub fn get_scope_from_path(
@@ -303,14 +310,16 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
                 parent: Some(parent),
                 children: HashMap::new(),
                 counter: 0,
+                variables: HashMap::new(),
+                objects: HashMap::new(),
                 path,
             };
             let _ = self.add_scope(scope);
 
             self.counter - 1
-        }else{
+        } else {
             todo!()
-        }    
+        }
     }
 }
 

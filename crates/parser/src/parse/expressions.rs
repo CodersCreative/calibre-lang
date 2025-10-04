@@ -1,5 +1,7 @@
 use crate::{
-    ast::{Node, ObjectType}, lexer::{Bracket, LexerError, StopValue}, Parser, ParserError, SyntaxErr
+    Parser, ParserError, SyntaxErr,
+    ast::{Node, ObjectType, RefMutability},
+    lexer::{Bracket, LexerError, Span, StopValue},
 };
 use crate::{
     ast::{NodeType, binary::BinaryOperator},
@@ -12,58 +14,87 @@ impl Parser {
         Ok(match &self.first().token_type {
             TokenType::Identifier => {
                 let val = self.eat();
-                Node::new(NodeType::Identifier(val.value), val.line, val.col)
-            },
+                Node::new(NodeType::Identifier(val.value), val.span)
+            }
             TokenType::Float => {
                 let val = self.eat();
-                Node::new(NodeType::FloatLiteral(val.value.trim().parse().unwrap()), val.line, val.col)
-            },
+                Node::new(
+                    NodeType::FloatLiteral(val.value.trim().parse().unwrap()),
+                    val.span,
+                )
+            }
             TokenType::Integer => {
                 let val = self.eat();
-                Node::new(NodeType::IntLiteral(val.value.trim().parse().unwrap()), val.line, val.col)
-            },
+                Node::new(
+                    NodeType::IntLiteral(val.value.trim().parse().unwrap()),
+                    val.span,
+                )
+            }
             TokenType::Stop(x) => match x {
                 StopValue::Return => self.parse_return_declaration()?,
                 StopValue::Break => {
                     let val = self.eat();
-                    Node::new(NodeType::Break, val.line, val.col)
+                    Node::new(NodeType::Break, val.span)
                 }
                 StopValue::Continue => {
                     let val = self.eat();
-                    Node::new(NodeType::Continue, val.line, val.col)
+                    Node::new(NodeType::Continue, val.span)
                 }
             },
             TokenType::String => {
                 let val = self.eat();
                 if val.value.len() == 1 {
-                    Node::new(NodeType::CharLiteral(val.value.chars().nth(0).unwrap()), val.line, val.col)
+                    Node::new(
+                        NodeType::CharLiteral(val.value.chars().nth(0).unwrap()),
+                        val.span,
+                    )
                 } else {
-                    Node::new(NodeType::StringLiteral(val.value.to_string()), val.line, val.col)
+                    Node::new(NodeType::StringLiteral(val.value.to_string()), val.span)
                 }
             }
             TokenType::Open(Bracket::Paren) => self.parse_tuple_expression()?,
             TokenType::Open(Bracket::Square) => self.parse_list_expression()?,
             TokenType::BinaryOperator(x) if x == &BinaryOperator::Sub => {
-                let val = self.eat();
-                Node::new(NodeType::NotExpression {
-                    value: Box::new(self.parse_statement()?),
-                }, val.line, val.col)
+                let open = self.eat();
+                let val = self.parse_statement()?;
+                let span = Span::new_from_spans(open.span, val.span);
+                Node::new(
+                    NodeType::NotExpression {
+                        value: Box::new(val),
+                    },
+                    span,
+                )
             }
             TokenType::Not => {
-                let val = self.eat();
-                Node::new(NodeType::NotExpression {
-                    value: Box::new(self.parse_statement()?),
-                }, val.line, val.col)
+                let open = self.eat();
+                let val = self.parse_statement()?;
+                let span = Span::new_from_spans(open.span, val.span);
+                Node::new(
+                    NodeType::NotExpression {
+                        value: Box::new(val),
+                    },
+                    span,
+                )
             }
             TokenType::Try => self.parse_try_expression()?,
             TokenType::Func => self.parse_function_declaration()?,
+            x if RefMutability::from(x.clone()) != RefMutability::Value => {
+                let open = self.eat();
+                let close =
+                    self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?;
+                Node::new(
+                    NodeType::RefStatement {
+                        mutability: RefMutability::from(open.token_type),
+                        value: close.value,
+                    },
+                    Span::new_from_spans(open.span, close.span),
+                )
+            }
             _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
         })
     }
 
-    pub fn parse_potential_key_value(
-        &mut self,
-    ) -> Result<ObjectType<Option<Node>>, ParserError> {
+    pub fn parse_potential_key_value(&mut self) -> Result<ObjectType<Option<Node>>, ParserError> {
         match self.first().token_type {
             TokenType::Open(Bracket::Curly) => {
                 let _ = self.eat();
@@ -128,51 +159,41 @@ impl Parser {
 
         let open = self.first().clone();
 
-        Ok(Node::new(NodeType::StructLiteral(self.parse_potential_key_value()?), open.line, open.col))
+        Ok(Node::new(
+            NodeType::StructLiteral(self.parse_potential_key_value()?),
+            open.span,
+        ))
     }
 
     pub fn parse_assignment_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left : Node = self.parse_pipe_expression()?;
-        let line = left.line.clone();
-        let col = left.col.clone();
+        let mut left: Node = self.parse_pipe_expression()?;
 
-        if let TokenType::UnaryAssign(op) = self.first().token_type.clone() {
-            let _ = self.eat();
-            if [
-                BinaryOperator::Pow,
-                BinaryOperator::Div,
-                BinaryOperator::Mul,
-            ]
-            .contains(&op)
-            {
-                return Err(ParserError::Lexer(LexerError::BinaryOperatorShortHand));
-            }
-
-            left = Node::new(NodeType::AssignmentExpression {
-                identifier: Box::new(left.clone()),
-                value: Box::new(Node::new(NodeType::BinaryExpression {
-                    left: Box::new(left),
-                    right: Box::new(Node::new(NodeType::IntLiteral(1), line, col)),
-                    operator: op,
-                }, line, col)),
-            }, line, col);
-        } else if let TokenType::BinaryAssign(op) = self.first().token_type.clone() {
-            let _ = self.eat();
-            left = Node::new(NodeType::AssignmentExpression {
-                identifier: Box::new(left.clone()),
-                value: Box::new(Node::new(NodeType::BinaryExpression {
-                    left: Box::new(left),
-                    right: Box::new(self.parse_statement()?),
-                    operator: op,
-                }, line, col)),
-            }, line, col);
+        if let TokenType::BinaryAssign(op) = self.first().token_type.clone() {
+            let open = self.eat();
+            left = Node::new(
+                NodeType::AssignmentExpression {
+                    identifier: Box::new(left.clone()),
+                    value: Box::new(Node::new(
+                        NodeType::BinaryExpression {
+                            left: Box::new(left),
+                            right: Box::new(self.parse_statement()?),
+                            operator: op,
+                        },
+                        open.span.clone(),
+                    )),
+                },
+                open.span,
+            );
         } else if [TokenType::Equals].contains(&self.first().token_type) {
-            let _ = self.eat();
+            let open = self.eat();
             let right = self.parse_statement()?;
-            left = Node::new(NodeType::AssignmentExpression {
-                identifier: Box::new(left),
-                value: Box::new(right),
-            }, line, col);
+            left = Node::new(
+                NodeType::AssignmentExpression {
+                    identifier: Box::new(left),
+                    value: Box::new(right),
+                },
+                open.span,
+            );
         }
 
         Ok(left)

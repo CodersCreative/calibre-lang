@@ -1,5 +1,10 @@
 use crate::{
-    ast::{binary::BinaryOperator, IfComparisonType, LoopType, Node, ParserDataType, RefMutability, VarType}, lexer::{Bracket, StopValue}, Parser, ParserError, SyntaxErr
+    Parser, ParserError, SyntaxErr,
+    ast::{
+        IfComparisonType, LoopType, Node, ParserDataType, RefMutability, VarType,
+        binary::BinaryOperator,
+    },
+    lexer::{Bracket, Span, StopValue},
 };
 use crate::{ast::NodeType, lexer::TokenType};
 
@@ -15,11 +20,11 @@ impl Parser {
                 StopValue::Return => self.parse_return_declaration(),
                 StopValue::Break => {
                     let val = self.eat();
-                    Ok(Node::new(NodeType::Break, val.line, val.col))
+                    Ok(Node::new(NodeType::Break, val.span))
                 }
                 StopValue::Continue => {
                     let val = self.eat();
-                    Ok(Node::new(NodeType::Continue, val.line, val.col))
+                    Ok(Node::new(NodeType::Continue, val.span))
                 }
             },
             TokenType::Trait => self.parse_if_statement(),
@@ -45,15 +50,18 @@ impl Parser {
             body.push(self.parse_statement()?);
         }
 
-        let _ = self.expect_eat(
+        let close = self.expect_eat(
             &TokenType::Close(Bracket::Curly),
             SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
         )?;
 
-        Ok(Node::new(NodeType::ScopeDeclaration {
-            body,
-            is_temp: true,
-        }, open.line, open.col))
+        Ok(Node::new(
+            NodeType::ScopeDeclaration {
+                body,
+                is_temp: true,
+            },
+            Span::new_from_spans(open.span, close.span),
+        ))
     }
 
     pub fn parse_variable_declaration(&mut self) -> Result<Node, ParserError> {
@@ -70,8 +78,7 @@ impl Parser {
             _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
         };
 
-        let identifier = self
-            .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedName)?;
+        let identifier = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedName)?;
 
         let data_type = match self.first().token_type {
             TokenType::Colon => {
@@ -82,12 +89,15 @@ impl Parser {
         };
 
         let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
-        Ok(Node::new(NodeType::VariableDeclaration {
-            var_type,
-            identifier: identifier.value,
-            data_type,
-            value: Box::new(self.parse_statement()?),
-        }, identifier.line, identifier.col))
+        Ok(Node::new(
+            NodeType::VariableDeclaration {
+                var_type,
+                identifier: identifier.value,
+                data_type,
+                value: Box::new(self.parse_statement()?),
+            },
+            identifier.span,
+        ))
     }
 
     pub fn parse_impl_declaration(&mut self) -> Result<Node, ParserError> {
@@ -96,8 +106,7 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("impl")),
         )?;
 
-        let identifier = self
-            .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?;
+        let identifier = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?;
 
         let mut functions = Vec::new();
 
@@ -131,18 +140,24 @@ impl Parser {
                             }
                         }
 
-                        functions.push((Node::new(
-                            NodeType::VariableDeclaration {
-                                var_type: VarType::Constant,
-                                identifier: name,
-                                value: Box::new(Node::new(NodeType::FunctionDeclaration {
-                                    parameters,
-                                    body,
-                                    return_type,
-                                    is_async,
-                                }, func.line, func.col)),
-                                data_type,
-                            }, decl.line, decl.col),
+                        functions.push((
+                            Node::new(
+                                NodeType::VariableDeclaration {
+                                    var_type: VarType::Constant,
+                                    identifier: name,
+                                    value: Box::new(Node::new(
+                                        NodeType::FunctionDeclaration {
+                                            parameters,
+                                            body,
+                                            return_type,
+                                            is_async,
+                                        },
+                                        func.span,
+                                    )),
+                                    data_type,
+                                },
+                                decl.span,
+                            ),
                             depends,
                         ));
                     } else if let NodeType::MatchDeclaration {
@@ -159,18 +174,24 @@ impl Parser {
                             }
                         }
 
-                        functions.push((Node::new(
-                            NodeType::VariableDeclaration {
-                                var_type: VarType::Constant,
-                                identifier: name,
-                                value: Box::new(Node::new(NodeType::MatchDeclaration {
-                                    parameters,
-                                    body,
-                                    return_type,
-                                    is_async,
-                                }, func.line, func.col)),
-                                data_type,
-                            }, decl.line, decl.col),
+                        functions.push((
+                            Node::new(
+                                NodeType::VariableDeclaration {
+                                    var_type: VarType::Constant,
+                                    identifier: name,
+                                    value: Box::new(Node::new(
+                                        NodeType::MatchDeclaration {
+                                            parameters,
+                                            body,
+                                            return_type,
+                                            is_async,
+                                        },
+                                        func.span,
+                                    )),
+                                    data_type,
+                                },
+                                decl.span,
+                            ),
                             depends,
                         ));
                     }
@@ -184,10 +205,13 @@ impl Parser {
             SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
         );
 
-        Ok(Node::new(NodeType::ImplDeclaration {
-            identifier: identifier.value,
-            functions,
-        }, identifier.line, identifier.col))
+        Ok(Node::new(
+            NodeType::ImplDeclaration {
+                identifier: identifier.value,
+                functions,
+            },
+            identifier.span,
+        ))
     }
     pub fn parse_try_expression(&mut self) -> Result<Node, ParserError> {
         if self.first().token_type == TokenType::Try {
@@ -196,9 +220,16 @@ impl Parser {
                 SyntaxErr::ExpectedKeyword(String::from("try")),
             )?;
 
-            Ok(Node::new(NodeType::Try {
-                value: Box::new(self.parse_statement()?),
-            }, open.line, open.col))
+            let val = self.parse_statement()?;
+
+            let span = Span::new_from_spans(open.span, val.span);
+
+            Ok(Node::new(
+                NodeType::Try {
+                    value: Box::new(val),
+                },
+                span,
+            ))
         } else {
             self.parse_range_expression()
         }
@@ -254,11 +285,14 @@ impl Parser {
             )?;
 
             let module = get_module(self)?;
-            return Ok(Node::new(NodeType::ImportStatement {
-                module,
-                alias: None,
-                values,
-            }, open.line, open.col));
+            return Ok(Node::new(
+                NodeType::ImportStatement {
+                    module,
+                    alias: None,
+                    values,
+                },
+                open.span,
+            ));
         }
 
         let module = get_module(self)?;
@@ -273,11 +307,14 @@ impl Parser {
             None
         };
 
-        Ok(Node::new(NodeType::ImportStatement {
-            module,
-            alias,
-            values: Vec::new(),
-        }, open.line, open.col))
+        Ok(Node::new(
+            NodeType::ImportStatement {
+                module,
+                alias,
+                values: Vec::new(),
+            },
+            open.span,
+        ))
     }
 
     pub fn parse_return_declaration(&mut self) -> Result<Node, ParserError> {
@@ -286,9 +323,15 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("return")),
         )?;
 
-        Ok(Node::new(NodeType::Return {
-            value: Box::new(self.parse_statement()?),
-        }, open.line, open.col))
+        let val = self.parse_statement()?;
+
+        let span = Span::new_from_spans(open.span, val.span);
+        Ok(Node::new(
+            NodeType::Return {
+                value: Box::new(val),
+            },
+            span,
+        ))
     }
 
     pub fn parse_match_declaration(&mut self) -> Result<Node, ParserError> {
@@ -302,12 +345,6 @@ impl Parser {
         if is_async {
             let _ = self.eat();
         };
-
-        let ref_mutability = RefMutability::from(self.first().token_type.clone());
-
-        if ref_mutability != RefMutability::Value {
-            let _ = self.eat();
-        }
 
         let typ = if self.first().token_type != TokenType::Open(Bracket::Curly) {
             self.parse_type()?
@@ -364,22 +401,24 @@ impl Parser {
             }
         }
 
-        let _ = self.expect_eat(
+        let close = self.expect_eat(
             &TokenType::Close(Bracket::Curly),
             SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
-        );
+        )?;
 
-        let func = Node::new(NodeType::MatchDeclaration {
-            parameters: (
-                String::from("input_value"),
-                typ.unwrap_or(ParserDataType::Dynamic),
-                ref_mutability,
-                default,
-            ),
-            body: patterns,
-            return_type,
-            is_async,
-        }, open.line, open.col);
+        let func = Node::new(
+            NodeType::MatchDeclaration {
+                parameters: (
+                    String::from("input_value"),
+                    typ.unwrap_or(ParserDataType::Dynamic),
+                    default,
+                ),
+                body: patterns,
+                return_type,
+                is_async,
+            },
+            Span::new_from_spans(open.span, close.span),
+        );
 
         if self.first().token_type == TokenType::Open(Bracket::Paren) {
             self.parse_call_expression(func)
@@ -398,26 +437,7 @@ impl Parser {
                     .value;
 
                 let _ = self.eat();
-
-                let ref_mutability = RefMutability::from(self.first().token_type.clone());
-
-                if ref_mutability != RefMutability::Value {
-                    let _ = self.eat();
-
-                    let var = self
-                        .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
-                        .value;
-
-                    LoopType::ForEach(identifier, (var, ref_mutability))
-                } else {
-                    let lst = self.parse_statement()?;
-
-                    if let NodeType::Identifier(x) = lst.node_type {
-                        LoopType::ForEach(identifier, (x, ref_mutability))
-                    } else {
-                        LoopType::For(identifier, lst)
-                    }
-                }
+                LoopType::For(identifier, self.parse_statement()?)
             } else {
                 let task = self.parse_statement()?;
                 LoopType::While(task)
@@ -430,11 +450,18 @@ impl Parser {
             &TokenType::For,
             SyntaxErr::ExpectedKeyword(String::from("for")),
         )?;
+        let typ = self.get_loop_type()?;
+        let block = self.parse_block()?;
 
-        Ok(Node::new(NodeType::LoopDeclaration {
-            loop_type: Box::new(self.get_loop_type()?),
-            body: Box::new(self.parse_block()?),
-        }, open.line, open.col))
+        let span = Span::new_from_spans(open.span, block.span);
+
+        Ok(Node::new(
+            NodeType::LoopDeclaration {
+                loop_type: Box::new(typ),
+                body: Box::new(block),
+            },
+            span,
+        ))
     }
 
     pub fn parse_function_declaration(&mut self) -> Result<Node, ParserError> {
@@ -464,12 +491,18 @@ impl Parser {
             self.parse_type()?
         };
 
-        let func = Node::new(NodeType::FunctionDeclaration {
-            parameters,
-            body: Box::new(self.parse_block()?),
-            return_type,
-            is_async,
-        }, open.line, open.col);
+        let block = self.parse_block()?;
+
+        let span = Span::new_from_spans(open.span, block.span);
+        let func = Node::new(
+            NodeType::FunctionDeclaration {
+                parameters,
+                body: Box::new(block),
+                return_type,
+                is_async,
+            },
+            span,
+        );
 
         if self.first().token_type == TokenType::Open(Bracket::Paren) {
             self.parse_call_expression(func)
@@ -517,15 +550,8 @@ impl Parser {
                 SyntaxErr::ExpectedKeyword(String::from("<-")),
             )?;
 
-            let ref_mutability = RefMutability::from(self.first().token_type.clone());
-
-            if ref_mutability != RefMutability::Value {
-                let _ = self.eat();
-            }
-
             let value = self.parse_statement()?;
             IfComparisonType::IfLet {
-                mutability: ref_mutability.clone(),
                 value: value.clone(),
                 pattern: (value, conditions.clone()),
             }
@@ -546,11 +572,22 @@ impl Parser {
             None
         };
 
-        Ok(Node::new(NodeType::IfStatement {
-            comparison: Box::new(comparison),
-            then,
-            otherwise,
-        }, open.line, open.col))
+        let span = Span::new_from_spans(
+            open.span,
+            match otherwise.clone() {
+                Some(x) => x.span,
+                None => then.span,
+            },
+        );
+
+        Ok(Node::new(
+            NodeType::IfStatement {
+                comparison: Box::new(comparison),
+                then,
+                otherwise,
+            },
+            span,
+        ))
     }
 }
 

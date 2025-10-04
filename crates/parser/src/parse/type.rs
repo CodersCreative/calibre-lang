@@ -1,17 +1,17 @@
 use crate::{
-    ast::{Node, NodeType, ObjectType, TypeDefType}, lexer::{Bracket, TokenType}, Parser, ParserError, SyntaxErr
+    Parser, ParserError, SyntaxErr,
+    ast::{Node, NodeType, ObjectType, TypeDefType},
+    lexer::{Bracket, Span, TokenType},
 };
 
 impl Parser {
     pub fn parse_type_decaration(&mut self) -> Result<Node, ParserError> {
-        let open = self.expect_eat(
+        let _ = self.expect_eat(
             &TokenType::Type,
             SyntaxErr::ExpectedKeyword(String::from("type")),
         )?;
 
-        let identifier = self
-            .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
-            .value;
+        let identifier = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?;
 
         let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
 
@@ -27,7 +27,13 @@ impl Parser {
             }
         };
 
-        Ok(Node::new(NodeType::TypeDeclaration { identifier, object }, open.line, open.col))
+        Ok(Node::new(
+            NodeType::TypeDeclaration {
+                identifier: identifier.value,
+                object,
+            },
+            identifier.span,
+        ))
     }
 
     pub fn parse_enum_declaration(&mut self) -> Result<TypeDefType, ParserError> {
@@ -78,15 +84,10 @@ impl Parser {
                 TokenType::Open(Bracket::Curly),
                 TokenType::Close(Bracket::Curly),
             )?),
-            _ => ObjectType::Tuple(
-                self.parse_type_list(
-                    TokenType::Open(Bracket::Paren),
-                    TokenType::Close(Bracket::Paren),
-                )?
-                .into_iter()
-                .map(|x| x.0)
-                .collect(),
-            ),
+            _ => ObjectType::Tuple(self.parse_type_list(
+                TokenType::Open(Bracket::Paren),
+                TokenType::Close(Bracket::Paren),
+            )?),
         }))
     }
 }

@@ -1,10 +1,13 @@
 pub mod binary;
 pub mod comparison;
 
-use std::{cmp::Ordering, collections::HashMap, str::FromStr, string::ParseError};
-use crate::{ast::comparison::BooleanOperation, lexer::TokenType};
+use crate::{
+    ast::comparison::BooleanOperation,
+    lexer::{Span, TokenType},
+};
 use binary::BinaryOperator;
 use comparison::Comparison;
+use std::{cmp::Ordering, collections::HashMap, str::FromStr, string::ParseError};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RefMutability {
@@ -28,7 +31,6 @@ impl From<TokenType> for RefMutability {
 pub enum LoopType {
     While(Node),
     For(String, Node),
-    ForEach(String, (String, RefMutability)),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,10 +48,10 @@ pub enum ParserDataType {
     Result(Box<ParserDataType>, Box<ParserDataType>),
     Function {
         return_type: Box<Option<ParserDataType>>,
-        parameters: Vec<(ParserDataType, RefMutability)>,
+        parameters: Vec<ParserDataType>,
         is_async: bool,
     },
-    // Enum(String),
+    Ref(Box<ParserDataType>, RefMutability),
     Struct(Option<String>),
 }
 
@@ -90,18 +92,13 @@ pub enum TypeDefType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Node {
-    pub node_type : NodeType,
-    pub line : usize,
-    pub col : usize,
+    pub node_type: NodeType,
+    pub span: Span,
 }
 
 impl Node {
-    pub fn new(node_type : NodeType, line : usize, col : usize) -> Self {
-        Self {
-            node_type,
-            line,
-            col,
-        }
+    pub fn new(node_type: NodeType, span: Span) -> Self {
+        Self { node_type, span }
     }
 }
 
@@ -109,6 +106,10 @@ impl Node {
 pub enum NodeType {
     Break,
     Continue,
+    RefStatement {
+        mutability: RefMutability,
+        value: String,
+    },
     VariableDeclaration {
         var_type: VarType,
         identifier: String,
@@ -133,7 +134,7 @@ pub enum NodeType {
         is_temp: bool,
     },
     MatchDeclaration {
-        parameters: (String, ParserDataType, RefMutability, Option<Box<Node>>),
+        parameters: (String, ParserDataType, Option<Box<Node>>),
         body: Vec<(Node, Vec<Node>, Box<Node>)>,
         return_type: Option<ParserDataType>,
         is_async: bool,
@@ -204,9 +205,7 @@ pub enum NodeType {
         right: Box<Node>,
         operator: Comparison,
     },
-    PipeExpression (
-        Vec<Node>,
-    ),
+    PipeExpression(Vec<Node>),
     BooleanExpression {
         left: Box<Node>,
         right: Box<Node>,
@@ -228,7 +227,6 @@ pub enum NodeType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum IfComparisonType {
     IfLet {
-        mutability: RefMutability,
         value: Node,
         pattern: (Node, Vec<Node>),
     },
