@@ -18,7 +18,7 @@ pub fn setup<T: RuntimeValue, U: RuntimeType>(env: &mut Environment<T, U>, scope
 
     for var in vars {
         let _ = env.variables.insert(
-            env.counter,
+            env.var_counter,
             Variable {
                 value: var.1,
                 var_type: VarType::Constant,
@@ -30,8 +30,8 @@ pub fn setup<T: RuntimeValue, U: RuntimeType>(env: &mut Environment<T, U>, scope
             .get_mut(&scope)
             .unwrap()
             .variables
-            .insert(var.0, env.counter);
+            .insert(var.0, env.var_counter);
 
-        env.counter += 1;
+        env.var_counter += 1;
     }
 }

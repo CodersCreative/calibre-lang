@@ -46,7 +46,7 @@ pub fn setup_scope(
     });
 
     for var in funcs {
-        let counter = env.counter;
+        let counter = env.var_counter;
         let _ = env.variables.insert(
             counter,
             Variable {
@@ -62,6 +62,6 @@ pub fn setup_scope(
             .variables
             .insert(var.0, counter);
 
-        env.counter += 1;
+        env.var_counter += 1;
     }
 }

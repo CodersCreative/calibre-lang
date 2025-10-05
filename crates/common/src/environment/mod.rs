@@ -91,7 +91,8 @@ pub struct Variable<T> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Environment<T: RuntimeValue, U: RuntimeType> {
-    pub counter: u64,
+    pub var_counter: u64,
+    pub scope_counter: u64,
     pub scopes: HashMap<u64, Scope>,
     pub variables: HashMap<u64, Variable<T>>,
     pub objects: HashMap<u64, Object<T, U>>,
@@ -114,7 +115,8 @@ pub struct Scope {
 impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
     pub fn new(strict_removal: bool) -> Environment<T, U> {
         Environment {
-            counter: 0,
+            var_counter: 0,
+            scope_counter: 0,
             scopes: HashMap::new(),
             variables: HashMap::new(),
             objects: HashMap::new(),
@@ -157,10 +159,8 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
                 .remove(&parent.1);
         }
 
-        if &(self.counter - 1) == scope {
-            while !self.scopes.contains_key(&(self.counter - 1)) {
-                self.counter -= 1;
-            }
+        if &(self.scope_counter - 1) == scope {
+            self.scope_counter -= 1;
         }
 
         self.variables.remove(scope);
@@ -173,7 +173,7 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
             if let Some(parent) = self.scopes.get_mut(&parent) {
                 parent
                     .children
-                    .insert(scope.namespace.clone(), self.counter);
+                    .insert(scope.namespace.clone(), self.scope_counter);
             }
 
             true
@@ -181,10 +181,10 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
             false
         };
 
-        scope.id = self.counter;
+        scope.id = self.scope_counter;
 
         self.variables.insert(
-            self.counter + 1,
+            self.var_counter,
             Variable {
                 value: T::string(String::from(if !has_parent || scope.namespace == "root" {
                     "__main__"
@@ -197,7 +197,7 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         );
 
         self.variables.insert(
-            self.counter + 2,
+            self.var_counter + 1,
             Variable {
                 value: T::string(String::from(scope.path.to_str().unwrap())),
                 var_type: VarType::Constant,
@@ -207,12 +207,13 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
 
         scope
             .variables
-            .insert(String::from("__name__"), self.counter + 1);
+            .insert(String::from("__name__"), self.var_counter);
         scope
             .variables
-            .insert(String::from("__file__"), self.counter + 2);
+            .insert(String::from("__file__"), self.var_counter + 1);
         self.scopes.insert(scope.id.clone(), scope);
-        self.counter += 3;
+        self.scope_counter += 1;
+        self.var_counter += 2;
     }
 
     pub fn get_scope_from_path(
@@ -305,8 +306,10 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
     ) -> u64 {
         if let Some(parent) = parent {
             let scope = Scope {
-                id: self.counter.clone(),
-                namespace: namespace.unwrap_or(&self.counter.to_string()).to_string(),
+                id: self.scope_counter.clone(),
+                namespace: namespace
+                    .unwrap_or(&self.scope_counter.to_string())
+                    .to_string(),
                 parent: Some(parent),
                 children: HashMap::new(),
                 counter: 0,
@@ -316,7 +319,7 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
             };
             let _ = self.add_scope(scope);
 
-            self.counter - 1
+            self.scope_counter - 1
         } else {
             todo!()
         }

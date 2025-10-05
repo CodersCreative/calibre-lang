@@ -363,73 +363,61 @@ impl Tokenizer {
 
             if let Some(token) = token {
                 if let Some(last) = tokens.last() {
-                    if last.token_type != TokenType::WhiteSpace
-                        && token.token_type != TokenType::WhiteSpace
-                    {
-                        if last.value == "/" && (token.value == "*" || token.value == "/") {
-                            let _ = tokens.pop();
-                            let mut first = '/';
-                            let mut second = '*';
+                    if last.value == "/" && (token.value == "*" || token.value == "/") {
+                        let _ = tokens.pop();
+                        let mut first = '/';
+                        let mut second = '*';
 
-                            let can_continue = |f: char, s: char, short: bool| -> bool {
-                                if short {
-                                    s != '\n'
-                                } else {
-                                    f != '*' || s != '/'
-                                }
-                            };
-
-                            while buffer.len() > 0
-                                && can_continue(first, second, token.value == "/")
-                            {
-                                first = second;
-                                second = buffer.remove(0);
-                                self.increment_line_col(&second);
+                        let can_continue = |f: char, s: char, short: bool| -> bool {
+                            if short {
+                                s != '\n'
+                            } else {
+                                f != '*' || s != '/'
                             }
+                        };
 
-                            continue;
+                        while buffer.len() > 0 && can_continue(first, second, token.value == "/") {
+                            first = second;
+                            second = buffer.remove(0);
+                            self.increment_line_col(&second);
                         }
 
-                        let combined = format!("{}{}", last.value, token.value);
+                        continue;
+                    }
+
+                    let combined = format!("{}{}", last.value, token.value);
+
+                    if let Some(t) = special_keywords().get(&combined) {
+                        let token = self.new_token(t.clone(), &combined);
+                        tokens.pop();
+                        tokens.push(token);
+                        continue;
+                    }
+
+                    if tokens.len() > 2 {
+                        let combined = format!(
+                            "{}{}{}",
+                            tokens[tokens.len() - 2].value,
+                            last.value,
+                            token.value
+                        );
 
                         if let Some(t) = special_keywords().get(&combined) {
-                            if token.span.to.col > 0 && last.span.to.col / token.span.to.col == 1 {
-                                let token = self.new_token(t.clone(), &combined);
-                                tokens.pop();
-                                tokens.push(token);
-                                continue;
-                            }
+                            let token = self.new_token(t.clone(), &combined);
+                            tokens.pop();
+                            tokens.pop();
+                            tokens.push(token);
+                            continue;
                         }
+                    }
 
-                        if tokens.len() > 2 {
-                            let combined = format!(
-                                "{}{}{}",
-                                tokens[tokens.len() - 2].value,
-                                last.value,
-                                token.value
-                            );
-
-                            if let Some(t) = special_keywords().get(&combined) {
-                                if token.span.to.col > 0
-                                    && last.span.to.col / token.span.to.col == 1
-                                {
-                                    let token = self.new_token(t.clone(), &combined);
-                                    tokens.pop();
-                                    tokens.pop();
-                                    tokens.push(token);
-                                    continue;
-                                }
-                            }
-                        }
-
-                        if let TokenType::BinaryOperator(x) = &last.token_type {
-                            if token.token_type == TokenType::Equals {
-                                let token =
-                                    self.new_token(TokenType::BinaryAssign(x.clone()), &last.value);
-                                tokens.pop();
-                                tokens.push(token);
-                                continue;
-                            }
+                    if let TokenType::BinaryOperator(x) = &last.token_type {
+                        if token.token_type == TokenType::Equals {
+                            let token =
+                                self.new_token(TokenType::BinaryAssign(x.clone()), &last.value);
+                            tokens.pop();
+                            tokens.push(token);
+                            continue;
                         }
                     }
                 }

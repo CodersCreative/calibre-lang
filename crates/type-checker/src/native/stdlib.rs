@@ -42,7 +42,7 @@ pub fn setup_scope(env: &mut CheckerEnvironment, parent: &u64, name: &str, funcs
     });
 
     for var in funcs {
-        let counter = env.counter;
+        let counter = env.var_counter;
         let _ = env.variables.insert(
             counter,
             Variable {
@@ -58,6 +58,6 @@ pub fn setup_scope(env: &mut CheckerEnvironment, parent: &u64, name: &str, funcs
             .variables
             .insert(var.0, counter);
 
-        env.counter += 1;
+        env.var_counter += 1;
     }
 }

@@ -32,6 +32,47 @@ impl Parser {
         Ok(expression)
     }
 
+    pub fn parse_purely_member(&mut self) -> Result<Node, ParserError> {
+        let first = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?;
+        let mut path = vec![(
+            Node {
+                node_type: NodeType::Identifier(first.value),
+                span: first.span,
+            },
+            false,
+        )];
+
+        while self.first().token_type == TokenType::FullStop
+            || self.first().token_type == TokenType::Open(Bracket::Square)
+        {
+            if self.eat().token_type == TokenType::FullStop {
+                let first =
+                    self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?;
+                path.push((
+                    Node {
+                        node_type: NodeType::Identifier(first.value),
+                        span: first.span,
+                    },
+                    false,
+                ));
+            } else {
+                path.push((self.parse_statement()?, true));
+
+                self.expect_eat(
+                    &TokenType::Close(Bracket::Square),
+                    SyntaxErr::ExpectedClosingBracket(Bracket::Square),
+                )?;
+            }
+        }
+
+        if path.len() <= 1 {
+            Ok(path.remove(0).0)
+        } else {
+            let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
+            Ok(Node::new(NodeType::MemberExpression { path: path }, first))
+        }
+    }
+
     pub fn parse_member_expression(&mut self) -> Result<Node, ParserError> {
         let mut path: Vec<(Node, bool)> = vec![(self.parse_primary_expression()?, false)];
 

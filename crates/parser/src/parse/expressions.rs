@@ -80,10 +80,9 @@ impl Parser {
             TokenType::Func => self.parse_function_declaration()?,
             TokenType::BinaryOperator(BinaryOperator::Mul) => {
                 let open = self.eat();
-                let close = self.parse_statement()?;
+                let close = self.parse_purely_member()?;
                 Node::new(
-                    NodeType::RefStatement {
-                        mutability: RefMutability::from(open.token_type),
+                    NodeType::DerefStatement {
                         value: Box::new(close.clone()),
                     },
                     Span::new_from_spans(open.span, close.span),
@@ -91,7 +90,7 @@ impl Parser {
             }
             x if RefMutability::from(x.clone()) != RefMutability::Value => {
                 let open = self.eat();
-                let close = self.parse_statement()?;
+                let close = self.parse_purely_member()?;
                 Node::new(
                     NodeType::RefStatement {
                         mutability: RefMutability::from(open.token_type),

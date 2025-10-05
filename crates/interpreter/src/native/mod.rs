@@ -68,7 +68,7 @@ impl InterpreterEnvironment {
     ) -> u64 {
         let mut parser = Parser::default();
         let scope = 0;
-        let counter = self.counter;
+        let counter = self.scope_counter;
 
         self.add_scope(Scope {
             id: 0,

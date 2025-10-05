@@ -16,7 +16,7 @@ impl CheckerEnvironment {
         value: Variable<RuntimeType>,
     ) -> Result<RuntimeType, ScopeErr<RuntimeType>> {
         let typ = value.value.clone();
-        let counter = self.counter.clone();
+        let counter = self.var_counter.clone();
 
         let value = self.convert_runtime_var_into_saveable(value);
         self.scopes
@@ -25,7 +25,7 @@ impl CheckerEnvironment {
             .variables
             .insert(key, counter);
         self.variables.insert(counter, value);
-        self.counter += 1;
+        self.var_counter += 1;
 
         Ok(RuntimeType::Ref(Box::new(typ)))
     }

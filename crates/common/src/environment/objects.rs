@@ -11,13 +11,13 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         value: Object<T, U>,
     ) -> Result<(), ScopeErr<T>> {
         if !self.scopes.get(scope).unwrap().objects.contains_key(&key) {
-            self.objects.insert(self.counter, value);
+            self.objects.insert(self.var_counter, value);
             self.scopes
                 .get_mut(scope)
                 .unwrap()
                 .objects
-                .insert(key, self.counter);
-            self.counter += 1;
+                .insert(key, self.var_counter);
+            self.var_counter += 1;
             return Ok(());
         }
 

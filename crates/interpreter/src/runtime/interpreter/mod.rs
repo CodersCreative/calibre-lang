@@ -52,7 +52,9 @@ impl InterpreterEnvironment {
                     }
                     _ => return Err(InterpreterErr::RefNonVar(value.node_type)),
                 } {
-                    Ok(self.get_value_from_ref_pointer(&pointer)?.value)
+                    let value = self.get_value_from_ref_pointer(&pointer)?.value;
+                    println!("{:?}", value);
+                    Ok(value)
                 } else {
                     panic!()
                 }

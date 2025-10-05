@@ -16,7 +16,7 @@ impl InterpreterEnvironment {
         value: Variable<RuntimeValue>,
     ) -> Result<RuntimeValue, ScopeErr<RuntimeValue>> {
         let typ = (&value.value).into();
-        let counter = self.counter.clone();
+        let counter = self.var_counter.clone();
 
         let value = self.convert_runtime_var_into_saveable(value);
         self.scopes
@@ -25,9 +25,9 @@ impl InterpreterEnvironment {
             .variables
             .insert(key, counter);
         self.variables.insert(counter, value);
-        self.counter += 1;
+        self.var_counter += 1;
 
-        Ok(RuntimeValue::Ref(self.counter - 1, typ))
+        Ok(RuntimeValue::Ref(self.var_counter - 1, typ))
     }
 
     fn convert_saveable_into_runtime_var(
@@ -79,56 +79,52 @@ impl InterpreterEnvironment {
             }
         };
 
-        match value.value {
-            RuntimeValue::Struct(x, y, ObjectType::Map(map)) => Variable {
-                value: RuntimeValue::Struct(x, y, ObjectType::Map(get_new_map(map))),
-                var_type,
-                location,
-            },
-            RuntimeValue::Struct(x, y, ObjectType::Tuple(vec)) => Variable {
-                value: RuntimeValue::Struct(x, y, ObjectType::Tuple(get_new_list(vec))),
-                var_type,
-                location,
-            },
-            RuntimeValue::Tuple(vec) => Variable {
-                value: RuntimeValue::Tuple(get_new_list(vec)),
-                var_type,
-                location,
-            },
-            RuntimeValue::Enum(x, y, z, Some(ObjectType::Map(map))) => Variable {
-                value: RuntimeValue::Enum(x, y, z, Some(ObjectType::Map(get_new_map(map)))),
-                var_type,
-                location,
-            },
-            RuntimeValue::Option(Some(data), typ) => Variable {
-                value: RuntimeValue::Option(Some(Box::new(get_singular(*data))), typ),
-                var_type,
-                location,
-            },
-            RuntimeValue::Result(Ok(data), typ) => Variable {
-                value: RuntimeValue::Result(Ok(Box::new(get_singular(*data))), typ),
-                var_type,
-                location,
-            },
-            RuntimeValue::Result(Err(data), typ) => Variable {
-                value: RuntimeValue::Result(Err(Box::new(get_singular(*data))), typ),
-                var_type,
-                location,
-            },
-            RuntimeValue::Enum(x, y, z, Some(ObjectType::Tuple(vec))) => Variable {
-                value: RuntimeValue::Enum(x, y, z, Some(ObjectType::Tuple(get_new_list(vec)))),
-                var_type,
-                location,
-            },
-            RuntimeValue::List { data, data_type } => Variable {
-                value: RuntimeValue::List {
+        let mut runtime_value = value.value;
+        let mut unwrapped = false;
+
+        loop {
+            runtime_value = match runtime_value {
+                RuntimeValue::Struct(x, y, ObjectType::Map(map)) => {
+                    RuntimeValue::Struct(x, y, ObjectType::Map(get_new_map(map)))
+                }
+                RuntimeValue::Struct(x, y, ObjectType::Tuple(vec)) => {
+                    RuntimeValue::Struct(x, y, ObjectType::Tuple(get_new_list(vec)))
+                }
+                RuntimeValue::Tuple(vec) => RuntimeValue::Tuple(get_new_list(vec)),
+                RuntimeValue::Enum(x, y, z, Some(ObjectType::Map(map))) => {
+                    RuntimeValue::Enum(x, y, z, Some(ObjectType::Map(get_new_map(map))))
+                }
+                RuntimeValue::Option(Some(data), typ) => {
+                    RuntimeValue::Option(Some(Box::new(get_singular(*data))), typ)
+                }
+                RuntimeValue::Result(Ok(data), typ) => {
+                    RuntimeValue::Result(Ok(Box::new(get_singular(*data))), typ)
+                }
+                RuntimeValue::Result(Err(data), typ) => {
+                    RuntimeValue::Result(Err(Box::new(get_singular(*data))), typ)
+                }
+                RuntimeValue::Enum(x, y, z, Some(ObjectType::Tuple(vec))) => {
+                    RuntimeValue::Enum(x, y, z, Some(ObjectType::Tuple(get_new_list(vec))))
+                }
+                RuntimeValue::List { data, data_type } => RuntimeValue::List {
                     data: get_new_list(data),
                     data_type,
                 },
-                var_type,
-                location,
-            },
-            _ => value,
+                RuntimeValue::Ref(pointer, _) if !unwrapped => {
+                    runtime_value = self.variables.get(&pointer).unwrap().value.clone();
+                    unwrapped = true;
+                    continue;
+                }
+                x => x,
+            };
+
+            break;
+        }
+
+        Variable {
+            value: runtime_value,
+            var_type,
+            location,
         }
     }
 
@@ -144,7 +140,7 @@ impl InterpreterEnvironment {
 
             for v in list {
                 let typ = (&v).into();
-                let counter = this.counter;
+                let counter = this.var_counter;
                 this.variables.insert(
                     counter,
                     Variable {
@@ -154,9 +150,9 @@ impl InterpreterEnvironment {
                     },
                 );
 
-                new_vec.push(RuntimeValue::Ref(this.counter.clone(), typ));
+                new_vec.push(RuntimeValue::Ref(this.var_counter.clone(), typ));
 
-                this.counter += 1;
+                this.var_counter += 1;
             }
             new_vec
         };
@@ -168,7 +164,7 @@ impl InterpreterEnvironment {
 
             for (k, v) in map {
                 let typ = (&v).into();
-                let counter = this.counter;
+                let counter = this.var_counter;
                 this.variables.insert(
                     counter,
                     Variable {
@@ -178,9 +174,9 @@ impl InterpreterEnvironment {
                     },
                 );
 
-                new_map.insert(k.clone(), RuntimeValue::Ref(this.counter.clone(), typ));
+                new_map.insert(k.clone(), RuntimeValue::Ref(this.var_counter.clone(), typ));
 
-                this.counter += 1;
+                this.var_counter += 1;
             }
 
             new_map
@@ -188,7 +184,7 @@ impl InterpreterEnvironment {
 
         let get_singular = |this: &mut Self, value: RuntimeValue| -> RuntimeValue {
             let typ = (&value).into();
-            let counter = this.counter;
+            let counter = this.var_counter;
             this.variables.insert(
                 counter,
                 Variable {
@@ -198,8 +194,8 @@ impl InterpreterEnvironment {
                 },
             );
 
-            let value = RuntimeValue::Ref(this.counter, typ);
-            this.counter += 1;
+            let value = RuntimeValue::Ref(this.var_counter, typ);
+            this.var_counter += 1;
 
             value
         };
@@ -282,16 +278,31 @@ impl InterpreterEnvironment {
         pointer: &u64,
         value: RuntimeValue,
     ) -> Result<RuntimeValue, ScopeErr<RuntimeValue>> {
-        let var = self.variables.get(pointer).unwrap().clone();
+        let var = {
+            let value = self.variables.get(pointer).unwrap();
+
+            let pointer = if let RuntimeValue::Ref(pointer, _) = value.value {
+                Some(pointer.clone())
+            } else {
+                None
+            };
+
+            (pointer, value.var_type.clone(), value.location.clone())
+        };
+
+        if let Some(pointer) = var.0 {
+            return self.assign_var_from_ref_pointer(&pointer, value);
+        }
+
         let value = self.convert_runtime_var_into_saveable(Variable {
             value,
-            var_type: var.var_type.clone(),
-            location: var.location,
+            var_type: var.1.clone(),
+            location: var.2,
         });
 
         let typ = (&value.value).into();
 
-        if var.var_type != VarType::Mutable {
+        if var.1 != VarType::Mutable {
             Err(ScopeErr::AssignConstant(pointer.to_string()))
         } else {
             self.variables.insert(*pointer, value);

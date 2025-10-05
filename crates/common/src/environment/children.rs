@@ -1,10 +1,17 @@
 use calibre_parser::Parser;
 use std::fs;
 
-use crate::{environment::{Environment, RuntimeType, RuntimeValue, Scope}, errors::{RuntimeErr, ScopeErr}};
+use crate::{
+    environment::{Environment, RuntimeType, RuntimeValue, Scope},
+    errors::{RuntimeErr, ScopeErr},
+};
 
-impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
-    pub fn get_scope_list(&mut self, scope: u64, mut list: Vec<String>) -> Result<u64, ScopeErr<T>> {
+impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
+    pub fn get_scope_list(
+        &mut self,
+        scope: u64,
+        mut list: Vec<String>,
+    ) -> Result<u64, ScopeErr<T>> {
         if list.len() <= 0 {
             return Ok(scope);
         }
@@ -34,12 +41,12 @@ impl<T : RuntimeValue, U : RuntimeType> Environment<T, U> {
     pub fn get_global_scope<'a>(&'a self) -> &'a Scope {
         self.scopes.get(&0).unwrap()
     }
-    
+
     pub fn get_root_scope<'a>(&'a self) -> &'a Scope {
-        for i in 1..self.counter{
-            if let Some(scope) = self.scopes.get(&i){
+        for i in 1..self.scope_counter {
+            if let Some(scope) = self.scopes.get(&i) {
                 if scope.namespace == "root" {
-                    return scope
+                    return scope;
                 }
             }
         }
