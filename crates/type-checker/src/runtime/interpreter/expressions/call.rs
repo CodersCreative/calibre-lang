@@ -1,9 +1,7 @@
 use calibre_common::environment::{Type, Variable};
 use calibre_parser::ast::{Node, NodeType, ObjectType, RefMutability, VarType};
 
-use crate::runtime::{
-    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
-};
+use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
 impl CheckerEnvironment {
     pub fn evaluate_function(
@@ -40,7 +38,13 @@ impl CheckerEnvironment {
                                     )
                                     .unwrap();
 
-                                (Node::new(NodeType::Identifier(format!("$-{}", counter)), location.line, location.col), None)
+                                (
+                                    Node::new(
+                                        NodeType::Identifier(format!("$-{}", counter)),
+                                        location.span,
+                                    ),
+                                    None,
+                                )
                             })
                             .collect();
                     }
@@ -48,30 +52,34 @@ impl CheckerEnvironment {
             };
 
             if parameters.len() > arguments.len() {
-                let params: Vec<(String, RuntimeType, RefMutability, bool)> =
-                    parameters
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, x)| {
-                            for arg in arguments.iter() {
-                                if let (NodeType::Identifier(y), Some(_)) = (&arg.0.node_type, &arg.1) {
-                                    if &x.0 == y {
-                                        return false;
-                                    }
+                let params: Vec<(String, RuntimeType, bool)> = parameters
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, x)| {
+                        for arg in arguments.iter() {
+                            if let (NodeType::Identifier(y), Some(_)) = (&arg.0.node_type, &arg.1) {
+                                if &x.0 == y {
+                                    return false;
                                 }
                             }
+                        }
 
-                            i > &(arguments.len() - 1)
-                        })
-                        .map(|x| x.1.clone())
-                        .collect();
+                        i > &(arguments.len() - 1)
+                    })
+                    .map(|x| x.1.clone())
+                    .collect();
 
-                if params.iter().filter(|x| !x.3).count() > 0 {
+                if params.iter().filter(|x| !x.2).count() > 0 {
                     let arguments: Vec<(Node, Option<Node>)> = [
                         arguments,
                         params
                             .iter()
-                            .map(|x| (Node::new(NodeType::Identifier(x.0.clone()), location.line, location.col), None))
+                            .map(|x| {
+                                (
+                                    Node::new(NodeType::Identifier(x.0.clone()), location.span),
+                                    None,
+                                )
+                            })
                             .collect(),
                     ]
                     .concat();
@@ -86,7 +94,7 @@ impl CheckerEnvironment {
                             Variable {
                                 value: func.clone(),
                                 var_type: VarType::Mutable,
-                                location : Some(location)
+                                location: Some(location),
                             },
                         )
                         .unwrap();
@@ -111,57 +119,53 @@ impl CheckerEnvironment {
     pub fn evaluate_call_expression(
         &mut self,
         scope: &u64,
-        caller : Node,
-        arguments : Vec<(Node, Option<Node>)>,
+        caller: Node,
+        arguments: Vec<(Node, Option<Node>)>,
     ) -> Result<RuntimeType, InterpreterErr> {
-            if let NodeType::Identifier(object_name) = caller.node_type.clone() {
-                if let Ok(Type::Struct(ObjectType::Tuple(params))) =
-                    self.get_object_type(scope, &object_name)
-                {
-                    if arguments.len() == params.len() {
-                        let mut args = Vec::new();
+        if let NodeType::Identifier(object_name) = caller.node_type.clone() {
+            if let Ok(Type::Struct(ObjectType::Tuple(params))) =
+                self.get_object_type(scope, &object_name)
+            {
+                if arguments.len() == params.len() {
+                    let mut args = Vec::new();
+                    for (i, arg) in arguments.into_iter().enumerate() {
+                        args.push(self.evaluate(scope, arg.0)?);
+                    }
 
-                        let params = params.clone();
-                        for (i, arg) in arguments.into_iter().enumerate() {
-                            args.push(
-                                self.evaluate(scope, arg.0)?,
-                            );
-                        }
+                    return Ok(RuntimeType::Struct(
+                        scope.clone(),
+                        Some(object_name),
+                        ObjectType::Tuple(args),
+                    ));
+                }
+            }
+        }
 
-                        return Ok(RuntimeType::Struct(
-                            scope.clone(),
-                            Some(object_name),
-                            ObjectType::Tuple(args),
+        let func = self.evaluate(scope, caller.clone())?.clone();
+
+        match func {
+            RuntimeType::Function { .. } => {
+                return self.evaluate_function(scope, func, arguments);
+            }
+            RuntimeType::List(x) if arguments.len() == 1 => {
+                match self.evaluate(scope, arguments[0].0.clone())? {
+                    RuntimeType::Int if arguments.len() == 1 => {
+                        return Ok(match *x.clone() {
+                            Some(x) => x,
+                            None => RuntimeType::Dynamic,
+                        });
+                    }
+                    _ => {
+                        return Err(InterpreterErr::IndexNonList(
+                            arguments[0].0.node_type.clone(),
                         ));
                     }
                 }
             }
-
-            let func = self
-                .evaluate(scope, caller.clone())?
-                .clone();
-
-            match func {
-                RuntimeType::Function { .. } => {
-                    return self.evaluate_function(scope, func, arguments);
-                }
-                RuntimeType::List(x) if arguments.len() == 1 => {
-                    match self.evaluate(scope, arguments[0].0.clone())? {
-                        RuntimeType::Int if arguments.len() == 1 => {
-                            return Ok(match *x.clone() {
-                                Some(x) => x,
-                                None => RuntimeType::Dynamic,
-                            });
-                        }
-                        _ => return Err(InterpreterErr::IndexNonList(arguments[0].0.node_type.clone())),
-                    }
-                }
-                RuntimeType::NativeFunction(x) => {
-                    return Ok(*x)
-                }
-                _ => {}
-            }
-            panic!("Cannot call non-variable or function value, {:?}", func);
+            RuntimeType::NativeFunction(x) => return Ok(*x),
+            _ => {}
+        }
+        panic!("Cannot call non-variable or function value, {:?}", func);
     }
 }
 

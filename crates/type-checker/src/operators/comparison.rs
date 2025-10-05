@@ -1,4 +1,4 @@
-use crate::runtime::{interpreter::InterpreterErr, scope::{CheckerEnvironment}, values::RuntimeType};
+use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 use calibre_parser::ast::comparison::Comparison;
 
 pub fn handle(
@@ -10,7 +10,7 @@ pub fn handle(
 ) -> Result<RuntimeType, InterpreterErr> {
     if left.is_type(&right) {
         Ok(RuntimeType::Bool)
-    }else{
+    } else {
         panic!()
     }
 }

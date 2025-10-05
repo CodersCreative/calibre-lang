@@ -52,16 +52,14 @@ impl CheckerEnvironment {
             }
 
             match self.evaluate(&scope, node.clone()) {
-                Ok(mut value) => loop {
-                    match value {
-                        RuntimeType::Int
-                        | RuntimeType::Float
-                        | RuntimeType::Str
-                        | RuntimeType::Char => {
-                            return Ok(MembrExprPathRes::Value(RuntimeType::Dynamic));
-                        }
-                        x => return Ok(MembrExprPathRes::Value(x.clone())),
+                Ok(value) => match value {
+                    RuntimeType::Int
+                    | RuntimeType::Float
+                    | RuntimeType::Str
+                    | RuntimeType::Char => {
+                        return Ok(MembrExprPathRes::Value(RuntimeType::Dynamic));
                     }
+                    x => return Ok(MembrExprPathRes::Value(x.clone())),
                 },
                 Err(e) if path.len() == 1 => match node.node_type {
                     NodeType::Identifier(value) => {
@@ -73,8 +71,7 @@ impl CheckerEnvironment {
                                     value,
                                     data: None,
                                 },
-                                node.line,
-                                node.col,
+                                node.span,
                             ),
                         )?));
                     }
@@ -94,8 +91,7 @@ impl CheckerEnvironment {
                                                     .collect(),
                                             )),
                                         },
-                                        value_node.line,
-                                        value_node.col,
+                                        value_node.span,
                                     ),
                                 ) {
                                     Ok(x) => x,
@@ -121,8 +117,7 @@ impl CheckerEnvironment {
                                                                 NodeType::Identifier(
                                                                     path[0].clone(),
                                                                 ),
-                                                                value_node.line,
-                                                                value_node.col,
+                                                                value_node.span,
                                                             ),
                                                             None,
                                                         ),
@@ -157,7 +152,7 @@ impl CheckerEnvironment {
     ) -> Result<RuntimeType, InterpreterErr> {
         let typ = self.evaluate_member_expression(scope, member)?;
         if value.is_type(&typ) {
-            Ok(value)
+            Ok(RuntimeType::Ref(value))
         } else {
             panic!()
         }
@@ -175,8 +170,11 @@ impl CheckerEnvironment {
                     MembrExprPathRes::Value(x) => return Ok(x),
                 };
 
-                match self.get_link_path(scope, &path) {
-                    Ok(x) => Ok(x.clone()),
+                match self.get_member_ref(scope, &path) {
+                    Ok(RuntimeType::Ref(pointer, _)) => {
+                        Ok(self.get_value_from_ref_pointer(&pointer)?.value)
+                    }
+                    Ok(x) => Ok(x),
                     Err(_) if path.len() == 2 => {
                         return self.evaluate(
                             scope,
@@ -186,8 +184,7 @@ impl CheckerEnvironment {
                                     value: path.remove(0),
                                     data: None,
                                 },
-                                exp.line,
-                                exp.col,
+                                exp.span,
                             ),
                         );
                     }

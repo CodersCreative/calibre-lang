@@ -1,4 +1,3 @@
-pub mod links;
 pub mod variables;
 
 use std::{
@@ -11,7 +10,7 @@ use crate::runtime::{
     values::{RuntimeType, helper::StopValue},
 };
 use calibre_common::environment::Environment;
-use calibre_parser::Parser;
+use calibre_parser::{Parser, lexer::Tokenizer};
 
 #[derive(Debug, Clone)]
 pub struct CheckerEnvironment {
@@ -52,27 +51,36 @@ impl CheckerEnvironment {
         self.import_scope_list(scope, list)
     }
 
-    pub fn import_next_scope(&mut self, scope: u64, key: &str) -> u64 {
+    pub fn import_next_scope(&mut self, scope: u64, key: &str) -> Result<u64, InterpreterErr> {
         match key {
-            "super" => self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
+            "super" => Ok(self.scopes.get(&scope).unwrap().parent.clone().unwrap()),
             _ => {
                 let current = self.scopes.get(&scope).unwrap().clone();
                 if let Some(x) = current.children.get(key) {
-                    x.clone()
+                    Ok(x.clone())
                 } else {
                     if let Some(s) = self.get_global_scope().children.get(key) {
-                        s.clone()
+                        Ok(s.clone())
                     } else {
                         let scope = self.new_scope_from_parent(current.id, key);
                         let mut parser = Parser::default();
+
+                        let mut tokenizer = Tokenizer::default();
                         let program = parser
                             .produce_ast(
-                                fs::read_to_string(self.scopes.get(&scope).unwrap().path.clone())
+                                tokenizer
+                                    .tokenize(
+                                        fs::read_to_string(
+                                            self.scopes.get(&scope).unwrap().path.clone(),
+                                        )
+                                        .unwrap(),
+                                    )
                                     .unwrap(),
                             )
                             .unwrap();
+
                         let _ = self.evaluate(&scope, program)?;
-                        scope
+                        Ok(scope)
                     }
                 }
             }
