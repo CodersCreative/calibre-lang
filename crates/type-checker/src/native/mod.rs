@@ -45,6 +45,7 @@ impl CheckerEnvironment {
         let _ = self.evaluate(&scope, program).unwrap();
 
         let std = self.new_scope(Some(scope), get_stdlib_path(), Some("std"));
+        println!("std: {:?}", std);
 
         stdlib::setup(self, &std);
 

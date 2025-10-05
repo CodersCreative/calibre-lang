@@ -11,10 +11,14 @@ use crate::runtime::values::RuntimeType;
 pub fn setup(env: &mut CheckerEnvironment, scope: &u64) {
     let mut parser = Parser::default();
     let mut tokenizer = Tokenizer::default();
+
     let program = parser
         .produce_ast(
             tokenizer
-                .tokenize(fs::read_to_string(env.scopes.get(scope).unwrap().path.clone()).unwrap())
+                .tokenize(
+                    fs::read_to_string(env.scopes.get(scope).unwrap().path.clone())
+                        .unwrap_or(String::new()),
+                )
                 .unwrap(),
         )
         .unwrap();
@@ -29,6 +33,7 @@ pub fn setup(env: &mut CheckerEnvironment, scope: &u64) {
 pub fn setup_scope(env: &mut CheckerEnvironment, parent: &u64, name: &str, funcs: &[&'static str]) {
     let scope = env.new_scope_from_parent(*parent, name);
     let map: std::collections::HashMap<String, RuntimeType> = RuntimeType::natives();
+
     let funcs = funcs.into_iter().map(|x| {
         (
             String::from(*x),

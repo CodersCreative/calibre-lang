@@ -1,7 +1,13 @@
-use calibre_common::{environment::Location, errors::RuntimeErr};
+use calibre_common::{
+    environment::{Location, RuntimeValue},
+    errors::RuntimeErr,
+};
 use calibre_parser::ast::{Node, NodeType};
 
-use crate::runtime::{scope::CheckerEnvironment, values::RuntimeType};
+use crate::runtime::{
+    interpreter::expressions::member::MembrExprPathRes, scope::CheckerEnvironment,
+    values::RuntimeType,
+};
 
 pub mod expressions;
 pub mod statements;
@@ -36,6 +42,43 @@ impl CheckerEnvironment {
             NodeType::CallExpression(caller, args) => {
                 self.evaluate_call_expression(scope, *caller, args)
             }
+            NodeType::DerefStatement { value } => {
+                if let RuntimeType::Ref(t) = match value.node_type.clone() {
+                    NodeType::Identifier(x) => self.get_var_ref(scope, &x)?,
+                    NodeType::MemberExpression { path } => {
+                        let MembrExprPathRes::Path(path) =
+                            self.get_member_expression_path(scope, path)?
+                        else {
+                            return Err(InterpreterErr::RefNonVar(value.node_type));
+                        };
+
+                        self.get_member_ref(scope, &path)?
+                    }
+                    _ => return Err(InterpreterErr::RefNonVar(value.node_type)),
+                } {
+                    Ok(*t.clone())
+                } else {
+                    panic!()
+                }
+            }
+            NodeType::RefStatement { mutability, value } => {
+                let value = match value.node_type.clone() {
+                    NodeType::Identifier(x) => self.get_var_ref(scope, &x)?,
+                    NodeType::MemberExpression { path } => {
+                        let MembrExprPathRes::Path(path) =
+                            self.get_member_expression_path(scope, path)?
+                        else {
+                            return Err(InterpreterErr::RefNonVar(value.node_type));
+                        };
+
+                        self.get_member_ref(scope, &path)?
+                    }
+                    _ => return Err(InterpreterErr::RefNonVar(value.node_type)),
+                };
+
+                Ok(value)
+            }
+
             NodeType::VariableDeclaration {
                 var_type,
                 identifier,

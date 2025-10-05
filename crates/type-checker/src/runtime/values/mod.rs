@@ -122,7 +122,7 @@ impl From<ParserDataType> for RuntimeType {
                 }),
                 parameters: parameters
                     .into_iter()
-                    .map(|x| (String::new(), RuntimeType::from(x.0), false))
+                    .map(|x| (String::new(), RuntimeType::from(x), false))
                     .collect(),
                 is_async,
             },

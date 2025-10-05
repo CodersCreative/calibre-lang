@@ -73,12 +73,7 @@ impl CheckerEnvironment {
             } else if let RuntimeType::Range = range {
                 let new_scope = self.get_new_scope(
                     scope,
-                    vec![(
-                        identifier.clone(),
-                        RuntimeType::Int,
-                        RefMutability::Value,
-                        None,
-                    )],
+                    vec![(identifier.clone(), RuntimeType::Int, None)],
                     vec![(Node::new(NodeType::IntLiteral(1), range_node.span), None)],
                 )?;
                 let _ = self.handle_conditionals(&new_scope, conditionals.clone())?;

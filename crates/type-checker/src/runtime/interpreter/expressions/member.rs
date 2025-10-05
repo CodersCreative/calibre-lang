@@ -152,7 +152,7 @@ impl CheckerEnvironment {
     ) -> Result<RuntimeType, InterpreterErr> {
         let typ = self.evaluate_member_expression(scope, member)?;
         if value.is_type(&typ) {
-            Ok(RuntimeType::Ref(value))
+            Ok(RuntimeType::Ref(Box::new(value)))
         } else {
             panic!()
         }
@@ -171,9 +171,7 @@ impl CheckerEnvironment {
                 };
 
                 match self.get_member_ref(scope, &path) {
-                    Ok(RuntimeType::Ref(pointer, _)) => {
-                        Ok(self.get_value_from_ref_pointer(&pointer)?.value)
-                    }
+                    Ok(RuntimeType::Ref(t)) => Ok(*t),
                     Ok(x) => Ok(x),
                     Err(_) if path.len() == 2 => {
                         return self.evaluate(

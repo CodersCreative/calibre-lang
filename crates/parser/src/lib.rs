@@ -29,7 +29,14 @@ impl Parser {
             body.push(self.parse_statement()?)
         }
 
-        let span = Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span);
+        let span = if body.len() > 0 {
+            Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span)
+        } else {
+            Span::new(
+                lexer::Position { line: 1, col: 1 },
+                lexer::Position { line: 1, col: 1 },
+            )
+        };
 
         Ok(Node::new(
             NodeType::ScopeDeclaration {

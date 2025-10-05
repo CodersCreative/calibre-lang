@@ -228,13 +228,18 @@ impl Tokenizer {
         }
     }
     pub fn new_token(&self, token_type: TokenType, value: &str) -> Token {
+        let mut from = self.col as i32 - value.len() as i32;
+        if from < 0 {
+            from = 0;
+        }
+
         Token {
             value: value.to_string(),
             token_type,
             span: Span {
                 from: Position {
                     line: self.line,
-                    col: self.col - value.len() as u32,
+                    col: from as u32,
                 },
                 to: Position {
                     line: self.line,

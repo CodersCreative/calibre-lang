@@ -15,7 +15,7 @@ impl CheckerEnvironment {
     ) -> Result<u64, InterpreterErr> {
         let new_scope = self.new_scope_from_parent_shallow(scope.clone());
         for (k, v, location) in arguments.into_iter() {
-            let mutability = if let RuntimeType::Ref(_, _) = v {
+            let mutability = if let RuntimeType::Ref(_) = v {
                 RefMutability::MutRef
             } else {
                 RefMutability::MutValue
@@ -48,7 +48,7 @@ impl CheckerEnvironment {
 
         for (i, (k, v, d)) in parameters.iter().enumerate() {
             let m = match v {
-                RuntimeType::Ref(_, _) => RefMutability::MutRef,
+                RuntimeType::Ref(_) => RefMutability::MutRef,
                 _ => RefMutability::MutValue,
             };
 
