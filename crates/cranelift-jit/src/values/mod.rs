@@ -51,6 +51,7 @@ pub enum RuntimeType {
         parameters: Vec<(RuntimeType, calibre_parser::ast::RefMutability)>,
         is_async: bool,
     },
+    Ref(Box<RuntimeType>),
     Enum(String),
     Struct(Option<String>),
 }

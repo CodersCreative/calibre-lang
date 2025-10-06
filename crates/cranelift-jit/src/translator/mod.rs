@@ -115,21 +115,23 @@ impl<'a> FunctionTranslator<'a> {
     pub fn translate(&mut self, node: Node) -> RuntimeValue {
         match node.node_type {
             NodeType::Identifier(x) => self.translate_identifier(&x),
-            NodeType::FloatLiteral(x) => RuntimeValue::new(self.builder.ins().f64const(x), RuntimeType::Float),
+            NodeType::FloatLiteral(x) => {
+                RuntimeValue::new(self.builder.ins().f64const(x), RuntimeType::Float)
+            }
             NodeType::IntLiteral(x) => RuntimeValue::new(
-                            self.builder.ins().iconst(self.types.int(), x as i64),
-                            RuntimeType::Int,
-                        ),
+                self.builder.ins().iconst(self.types.int(), x as i64),
+                RuntimeType::Int,
+            ),
             NodeType::AsExpression { value, typ } => {
                 let value = self.translate(*value);
                 value.into_type(self, typ.into())
             }
+            // NodeType::RefStatement { mutability, value } => {}
+            // NodeType::DerefStatement { value } => {}
             NodeType::NotExpression { value } => {
                 let mut value = self.translate(*value);
                 match value.data_type.clone() {
-                    RuntimeType::Int
-                    | RuntimeType::Float
-                    | RuntimeType::Bool => {
+                    RuntimeType::Int | RuntimeType::Float | RuntimeType::Bool => {
                         value = self.translate_binary_expression(
                             RuntimeValue::new(
                                 Value::with_number(0).unwrap(),
@@ -264,7 +266,7 @@ impl<'a> FunctionTranslator<'a> {
                 if path.len() == 1 {
                     return self.translate(first);
                 }
-                
+
                 let indexing = if let Some(last) = path.last() {
                     last.1
                 } else {
@@ -272,9 +274,13 @@ impl<'a> FunctionTranslator<'a> {
                 };
 
                 if indexing {
-                    let value = self.translate(Node::new(NodeType::MemberExpression {
-                        path: path[0..(path.len() - 1)].to_vec(),
-                    }, first.line, first.col));
+                    let value = self.translate(Node::new(
+                        NodeType::MemberExpression {
+                            path: path[0..(path.len() - 1)].to_vec(),
+                        },
+                        first.line,
+                        first.col,
+                    ));
                     if let RuntimeType::List(_) = value.data_type {
                         let index = self.translate(path.pop().unwrap().0);
                         return self.get_array_member(value, index.value);

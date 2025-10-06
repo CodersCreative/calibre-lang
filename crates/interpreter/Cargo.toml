@@ -7,5 +7,5 @@ edition = "2024"
 rand = "0.9.1"
 rustyline = "16.0.0"
 thiserror = "2.0.12"
-calibre-parser = {workspace = true}
-calibre-common = {workspace = true}
+calibre-parser = {path = "../parser"}
+calibre-common = {path = "../common"}
