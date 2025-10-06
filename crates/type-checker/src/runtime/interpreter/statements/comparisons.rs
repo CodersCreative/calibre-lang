@@ -25,7 +25,6 @@ impl CheckerEnvironment {
                 if let Ok(RuntimeType::Bool) = res {
                     result = self.evaluate(scope, then)?;
                 } else {
-                    println!("{:?} - {:?}", self.current_location, res);
                     return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
                 }
             }

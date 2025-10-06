@@ -101,7 +101,7 @@ impl CheckerEnvironment {
     ) -> Result<RuntimeType, InterpreterErr> {
         if let Some(t) = data_type {
             if !value.is_type(&RuntimeType::from(t)) {
-                println!("{:?}", self.current_location)
+                // println!("{:?}", self.current_location)
             }
         }
 

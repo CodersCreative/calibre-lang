@@ -62,7 +62,12 @@ impl InterpreterEnvironment {
         let mut result = Vec::new();
 
         if let LoopType::For(identifier, range_node) = loop_type {
-            let range = self.evaluate(scope, range_node.clone())?;
+            let mut range = self.evaluate(scope, range_node.clone())?;
+
+            if let RuntimeValue::Ref(pointer, _) = range {
+                range = self.variables.get(&pointer).unwrap().value.clone();
+            }
+
             let location = self.get_location(scope, range_node.span);
             if let RuntimeValue::List { data, data_type: _ } = range {
                 for d in data.into_iter() {

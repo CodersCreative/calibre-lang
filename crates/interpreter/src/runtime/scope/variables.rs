@@ -16,9 +16,10 @@ impl InterpreterEnvironment {
         value: Variable<RuntimeValue>,
     ) -> Result<RuntimeValue, ScopeErr<RuntimeValue>> {
         let typ = (&value.value).into();
-        let counter = self.var_counter.clone();
 
         let value = self.convert_runtime_var_into_saveable(value);
+
+        let counter = self.var_counter.clone();
         self.scopes
             .get_mut(scope)
             .unwrap()
