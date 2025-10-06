@@ -4,7 +4,9 @@ use crate::environment::{Environment, RuntimeType, RuntimeValue, Variable};
 use std::collections::HashMap;
 
 pub fn setup<T: RuntimeValue, U: RuntimeType>(env: &mut Environment<T, U>, scope: &u64) {
-    let funcs: Vec<&str> = vec!["ok", "err", "some", "range", "trim", "print", "len"];
+    let funcs: Vec<&str> = vec![
+        "ok", "err", "some", "range", "trim", "print", "len", "panic",
+    ];
 
     let map = T::natives();
 

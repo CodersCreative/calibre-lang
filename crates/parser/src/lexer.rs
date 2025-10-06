@@ -296,11 +296,18 @@ impl Tokenizer {
             };
 
             let token = match get_token(*first) {
-                Some(t) => {
-                    self.increment_line_col(first);
+                Some(t) => match t {
+                    TokenType::WhiteSpace => {
+                        self.increment_line_col(first);
+                        let _ = buffer.remove(0);
+                        Some(self.new_token(t, ";"))
+                    }
+                    t => {
+                        self.increment_line_col(first);
 
-                    Some(self.new_token(t, buffer.remove(0).to_string().trim()))
-                }
+                        Some(self.new_token(t, buffer.remove(0).to_string().trim()))
+                    }
+                },
                 _ => {
                     if first == &'"' {
                         let mut txt = String::new();

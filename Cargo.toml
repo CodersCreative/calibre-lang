@@ -1,13 +1,5 @@
-[package]
-name = "calibre-language"
-version = "0.1.0"
-edition = "2024"
-authors = ["Creative Coders <officialccoders@gmail.com>"]
-license = "MIT"
-repository = "https://github.com/CodersCreative/calibre-lang"
-publish = false
-
 [workspace]
+resolver = "2"
 members = [
     "cal",
     "lsp",

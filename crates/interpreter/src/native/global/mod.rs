@@ -73,6 +73,18 @@ impl NativeFunction for SomeFn {
     }
 }
 
+pub struct PanicFn();
+
+impl NativeFunction for PanicFn {
+    fn run(
+        &self,
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
+        args: &[(RuntimeValue, Option<RuntimeValue>)],
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        panic!();
+    }
+}
 pub struct Range();
 
 impl NativeFunction for Range {
@@ -145,6 +157,7 @@ impl NativeFunction for Len {
         }
     }
 }
+
 pub struct Trim();
 
 impl NativeFunction for Trim {

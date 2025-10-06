@@ -63,7 +63,7 @@ impl FromStr for ParserDataType {
             "float" => ParserDataType::Float,
             "struct" => ParserDataType::Struct(None),
             "bool" => ParserDataType::Bool,
-            "string" => ParserDataType::Str,
+            "str" => ParserDataType::Str,
             "char" => ParserDataType::Char,
             _ => ParserDataType::Struct(Some(s.to_string())),
         })

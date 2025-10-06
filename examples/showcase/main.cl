@@ -9,7 +9,7 @@ let mut recursive_language = Language.ARABIC(language, Language.SPANISH);
 // A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
 // Mutability needs to be specified at the beginning for all branches
 // match statements need to be called, either using a pipe or brackets as they're considered functions
-recursive_language |> match &mut {
+recursive_language |> match &mut Language {
   data.Language.ARABIC(Language.FRENCH{_}, Language.ARABIC(Language.FRENCH{code})) => print("Code: " & code),
   data.Language.ARABIC(Language.FRENCH{data}, Language.SPANISH) => {
     print("Enum: " & data)
@@ -50,7 +50,7 @@ print("b -> " & b);
 
 /* input function to get an input from the user.
 A value can be inputted to this function and will outputted to the user.*/
-if trim(std.console.input("Hello enter 1: ")) == "Yes" => {
+if trim(unwrap(std.console.input("Hello enter 1: "))) == "Yes" => {
   print("Yes");
 }
 
@@ -62,14 +62,14 @@ let mut list_dyn = [0, 10, 30, "Hello"];
 let mut lst : list<int> = [x**2 for x in (0..100) if x % 2 == 0 if x % 8 != 0];
 
 print("lst")
-print(lst);// A static array
+print(*lst);// A static array
 
 // A foreach loop.
 for l in &mut lst => {
-  l *= 2;
+  *l *= 2;
 }
 print("lst 2")
-print(lst);// A static array
+print(*lst);// A static array
 
 // A for loop using the recommended range syntax.
 for index in 1..=100 => number += index;
@@ -91,7 +91,7 @@ for i in range2(100, step = 25) => {
 
 let smth_fn = fn (y) -> str!int => {
   if y > 10 => {
-    return ok(y);
+    return y as str!int;
   }
 
   err("needs to be larger than 10")
@@ -110,7 +110,7 @@ let smth_fn = fn (y) -> str!int => {
 
 // The previous function was shadowed
 let smth_fn = fn (y : int) -> int? => {
-  if y > 10 => return some(y);
+  if y > 10 => return y as int?;
 
   some(9)
 }
@@ -148,15 +148,13 @@ let smth_fn = fn (y : int) -> int? => {
 const main = fn () -> !int => {
   // Values can be manually coercced, but using this method will return a result type.
   let x : !int = "50" as int;
-
-  // The result type will be unwrapped if an operation forces it to unwrap or if its type is forced.
-  let u = x + 70;
+  // The result type will need to be unwrapped using the unwrap or unwrap_err methods. The unwrap method also works for options.
+  let u : int = unwrap(*x) + 70;
   print("Unsafe : " & u);
 
   // The try keyword can be used to automatically defer errors when inside a function
-	let mut x : int = try x + try "58" as int;
+	let mut x : int = unwrap(*x) + try "58" as int;
 
-	x++; // should increment by 1
 	x += 4 // same as x = x + 4
 	print(x);
 
@@ -172,13 +170,6 @@ const main = fn () -> !int => {
 
 	print(x);
 	print(number);
-  let sentence = "Hello, World!";
-
-  sentence |> match {
-    // The Prefix and Suffix keywords can be used to pattern match on a string easily.
-    Prefix("Hello,", line) if false => print(trim(line)),
-    Suffix(", World!", line) => print(trim(line))
-  }
 
 	number
 }
@@ -188,9 +179,9 @@ const main = fn () -> !int => {
 let currying = fn (a : int, b : int, c : int) -> int => a * b * c;
 
 // This is an example of currying using pipes
-let currying = 18 |> 20 |> currying
-let currying = 15 |> currying
-print("Curryed " & currying)
+let currying_2 = 18 |> 20 |> currying
+let currying_2 = 15 |> currying_2
+print("Curryed " & currying_2)
 
 // Currying also works using the normal call syntax
 print("Curryed " & currying(18)(20, 15));

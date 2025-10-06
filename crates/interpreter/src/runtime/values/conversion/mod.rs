@@ -346,7 +346,7 @@ impl RuntimeValue {
             RuntimeValue::Option(x, typ) => {
                 if let Some(x) = x {
                     x.into_type(env, scope, t)
-                } else if t == typ {
+                } else if t == &RuntimeType::Option(Box::new(typ.clone())) {
                     Ok(RuntimeValue::Option(x.clone(), t.clone()))
                 } else {
                     match x {

@@ -59,6 +59,7 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
             ("len", Rc::new(native::global::Len())),
             ("range", Rc::new(native::global::Range())),
             ("trim", Rc::new(native::global::Trim())),
+            ("panic", Rc::new(native::global::PanicFn())),
             ("console.out", Rc::new(native::stdlib::console::Out())),
             ("console.input", Rc::new(native::stdlib::console::Input())),
             ("console.err", Rc::new(native::stdlib::console::ErrFn())),
