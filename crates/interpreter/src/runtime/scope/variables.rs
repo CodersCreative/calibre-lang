@@ -141,15 +141,15 @@ impl InterpreterEnvironment {
 
             for v in list {
                 let typ = (&v).into();
+
+                let value = this.convert_runtime_var_into_saveable(Variable {
+                    value: v,
+                    var_type: var_type.clone(),
+                    location: location.clone(),
+                });
+
                 let counter = this.var_counter;
-                this.variables.insert(
-                    counter,
-                    Variable {
-                        value: v,
-                        var_type: var_type.clone(),
-                        location: location.clone(),
-                    },
-                );
+                this.variables.insert(counter, value);
 
                 new_vec.push(RuntimeValue::Ref(this.var_counter.clone(), typ));
 
@@ -165,15 +165,14 @@ impl InterpreterEnvironment {
 
             for (k, v) in map {
                 let typ = (&v).into();
+
+                let value = this.convert_runtime_var_into_saveable(Variable {
+                    value: v,
+                    var_type: var_type.clone(),
+                    location: location.clone(),
+                });
                 let counter = this.var_counter;
-                this.variables.insert(
-                    counter,
-                    Variable {
-                        value: v,
-                        var_type: var_type.clone(),
-                        location: location.clone(),
-                    },
-                );
+                this.variables.insert(counter, value);
 
                 new_map.insert(k.clone(), RuntimeValue::Ref(this.var_counter.clone(), typ));
 
@@ -185,15 +184,13 @@ impl InterpreterEnvironment {
 
         let get_singular = |this: &mut Self, value: RuntimeValue| -> RuntimeValue {
             let typ = (&value).into();
+            let value = this.convert_runtime_var_into_saveable(Variable {
+                value: value,
+                var_type: var_type.clone(),
+                location: location.clone(),
+            });
             let counter = this.var_counter;
-            this.variables.insert(
-                counter,
-                Variable {
-                    value: value,
-                    var_type: var_type.clone(),
-                    location: location.clone(),
-                },
-            );
+            this.variables.insert(counter, value);
 
             let value = RuntimeValue::Ref(this.var_counter, typ);
             this.var_counter += 1;
@@ -339,6 +336,7 @@ impl InterpreterEnvironment {
         };
 
         for key in keys.iter().skip(1) {
+            // println!("{:?}", pointer);
             match &self.variables.get(&pointer).unwrap().value {
                 RuntimeValue::Struct(_, _, ObjectType::Map(map))
                 | RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))) => match map.get(key) {
@@ -363,6 +361,8 @@ impl InterpreterEnvironment {
             }
         }
 
+        // println!("{:?}", pointer);
+        println!("val = {:?}", &self.variables.get(&pointer).unwrap().value);
         let typ = (&self.variables.get(&pointer).unwrap().value).into();
         Ok(RuntimeValue::Ref(pointer, typ))
     }
