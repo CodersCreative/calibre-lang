@@ -54,17 +54,17 @@ recursive_language |> match &mut {
 1. **Clone the repository:**
    ```sh
    git clone https://github.com/CodersCreative/calibre-lang.git
-   cd calibre-lang
+   cd calibre-lang/cal
    ```
 
 2. **Run a REPL:**
    ```sh
-   cargo run --bin cal
+   cargo run
    ```
 
 3. **Run an example:**
    ```sh
-   cargo run --bin cal -- --path examples/showcase/main.cl
+   cargo run -- --path ../examples/showcase/main.cl
    ```
 
 ---
