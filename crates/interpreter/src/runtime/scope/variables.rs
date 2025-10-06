@@ -38,89 +38,83 @@ impl InterpreterEnvironment {
         let var_type = value.var_type.clone();
         let location = value.location.clone();
 
-        let mut get_new_list = |list: Vec<RuntimeValue>| -> Vec<RuntimeValue> {
-            let mut new_vec = Vec::new();
-
-            for v in list {
-                new_vec.push(match v {
+        fn unwrap_list(env: &InterpreterEnvironment, list: Vec<RuntimeValue>) -> Vec<RuntimeValue> {
+            list.into_iter()
+                .map(|v| match v {
                     RuntimeValue::Ref(pointer, _) => {
-                        self.variables.get(&pointer).unwrap().value.clone()
+                        let inner = env.variables.get(&pointer).unwrap().clone();
+                        unwrap_runtime_value(env, inner.value)
                     }
-                    _ => v,
-                });
-            }
-            new_vec
-        };
+                    other => unwrap_runtime_value(env, other),
+                })
+                .collect()
+        }
 
-        let mut get_new_map =
-            |map: HashMap<String, RuntimeValue>| -> HashMap<String, RuntimeValue> {
-                let mut new_map = HashMap::new();
+        fn unwrap_map(
+            env: &InterpreterEnvironment,
+            map: HashMap<String, RuntimeValue>,
+        ) -> HashMap<String, RuntimeValue> {
+            map.into_iter()
+                .map(|(k, v)| {
+                    let val = match v {
+                        RuntimeValue::Ref(pointer, _) => {
+                            let inner = env.variables.get(&pointer).unwrap().clone();
+                            unwrap_runtime_value(env, inner.value)
+                        }
+                        other => unwrap_runtime_value(env, other),
+                    };
+                    (k, val)
+                })
+                .collect()
+        }
 
-                for (k, v) in map {
-                    new_map.insert(
-                        k.clone(),
-                        match v {
-                            RuntimeValue::Ref(pointer, _) => {
-                                self.variables.get(&pointer).unwrap().value.clone()
-                            }
-                            _ => v,
-                        },
-                    );
-                }
-
-                new_map
-            };
-
-        let mut get_singular = |value: RuntimeValue| -> RuntimeValue {
+        fn unwrap_singular(env: &InterpreterEnvironment, value: RuntimeValue) -> RuntimeValue {
             match value {
                 RuntimeValue::Ref(pointer, _) => {
-                    self.variables.get(&pointer).unwrap().value.clone()
+                    let inner = env.variables.get(&pointer).unwrap().clone();
+                    unwrap_runtime_value(env, inner.value)
                 }
-                _ => value,
+                other => unwrap_runtime_value(env, other),
             }
-        };
+        }
 
-        let mut runtime_value = value.value;
-        let mut unwrapped = false;
-
-        loop {
-            runtime_value = match runtime_value {
+        fn unwrap_runtime_value(env: &InterpreterEnvironment, value: RuntimeValue) -> RuntimeValue {
+            match value {
                 RuntimeValue::Struct(x, y, ObjectType::Map(map)) => {
-                    RuntimeValue::Struct(x, y, ObjectType::Map(get_new_map(map)))
+                    RuntimeValue::Struct(x, y, ObjectType::Map(unwrap_map(env, map)))
                 }
                 RuntimeValue::Struct(x, y, ObjectType::Tuple(vec)) => {
-                    RuntimeValue::Struct(x, y, ObjectType::Tuple(get_new_list(vec)))
+                    RuntimeValue::Struct(x, y, ObjectType::Tuple(unwrap_list(env, vec)))
                 }
-                RuntimeValue::Tuple(vec) => RuntimeValue::Tuple(get_new_list(vec)),
+                RuntimeValue::Tuple(vec) => RuntimeValue::Tuple(unwrap_list(env, vec)),
                 RuntimeValue::Enum(x, y, z, Some(ObjectType::Map(map))) => {
-                    RuntimeValue::Enum(x, y, z, Some(ObjectType::Map(get_new_map(map))))
-                }
-                RuntimeValue::Option(Some(data), typ) => {
-                    RuntimeValue::Option(Some(Box::new(get_singular(*data))), typ)
-                }
-                RuntimeValue::Result(Ok(data), typ) => {
-                    RuntimeValue::Result(Ok(Box::new(get_singular(*data))), typ)
-                }
-                RuntimeValue::Result(Err(data), typ) => {
-                    RuntimeValue::Result(Err(Box::new(get_singular(*data))), typ)
+                    RuntimeValue::Enum(x, y, z, Some(ObjectType::Map(unwrap_map(env, map))))
                 }
                 RuntimeValue::Enum(x, y, z, Some(ObjectType::Tuple(vec))) => {
-                    RuntimeValue::Enum(x, y, z, Some(ObjectType::Tuple(get_new_list(vec))))
+                    RuntimeValue::Enum(x, y, z, Some(ObjectType::Tuple(unwrap_list(env, vec))))
+                }
+                RuntimeValue::Option(Some(data), typ) => {
+                    RuntimeValue::Option(Some(Box::new(unwrap_singular(env, *data))), typ)
+                }
+                RuntimeValue::Result(Ok(data), typ) => {
+                    RuntimeValue::Result(Ok(Box::new(unwrap_singular(env, *data))), typ)
+                }
+                RuntimeValue::Result(Err(data), typ) => {
+                    RuntimeValue::Result(Err(Box::new(unwrap_singular(env, *data))), typ)
                 }
                 RuntimeValue::List { data, data_type } => RuntimeValue::List {
-                    data: get_new_list(data),
+                    data: unwrap_list(env, data),
                     data_type,
                 },
-                RuntimeValue::Ref(pointer, _) if !unwrapped => {
-                    runtime_value = self.variables.get(&pointer).unwrap().value.clone();
-                    unwrapped = true;
-                    continue;
+                RuntimeValue::Ref(pointer, _) => {
+                    let inner = env.variables.get(&pointer).unwrap().clone();
+                    unwrap_runtime_value(env, inner.value)
                 }
-                x => x,
-            };
-
-            break;
+                other => other,
+            }
         }
+
+        let runtime_value = unwrap_runtime_value(self, value.value);
 
         Variable {
             value: runtime_value,
