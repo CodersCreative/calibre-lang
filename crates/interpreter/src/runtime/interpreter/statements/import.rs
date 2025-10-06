@@ -1,7 +1,9 @@
 use calibre_common::environment::{Object, Variable};
 
 use crate::runtime::{
-    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
+    interpreter::InterpreterErr,
+    scope::InterpreterEnvironment,
+    values::{RuntimeType, RuntimeValue},
 };
 use std::collections::HashMap;
 
@@ -9,108 +11,102 @@ impl InterpreterEnvironment {
     pub fn evaluate_import_statement(
         &mut self,
         scope: &u64,
-        module : Vec<String>,
-        alias : Option<String>,
-        values : Vec<String>,
+        module: Vec<String>,
+        alias: Option<String>,
+        values: Vec<String>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            let new_scope = if let Some(alias) = alias {
-                if ["super", "root"].contains(&alias.as_str()) {
-                    return Ok(RuntimeValue::Null);
-                }
-                let new_scope_id = self.get_scope_list(*scope, module)?;
-                self.scopes
-                    .get_mut(scope)
-                    .unwrap()
-                    .children
-                    .insert(alias, new_scope_id);
-
+        let new_scope = if let Some(alias) = alias {
+            if ["super", "root"].contains(&alias.as_str()) {
                 return Ok(RuntimeValue::Null);
-            } else if !values.is_empty() {
-                self.get_scope_list(*scope, module.clone())?
-            } else {
-                let _ = self.import_scope_list(*scope, module.clone());
-                return Ok(RuntimeValue::Null);
-            };
+            }
+            let new_scope_id = self.get_scope_list(*scope, module)?;
+            self.scopes
+                .get_mut(scope)
+                .unwrap()
+                .children
+                .insert(alias, new_scope_id);
 
-            if &values[0] == "*" {
-                let vars: Vec<(String, Variable<RuntimeValue>)> = self
-                    .variables
-                    .get(&new_scope)
-                    .unwrap()
-                    .iter()
-                    .map(|x| {
-                        (
-                            x.0.clone(),
-                            Variable {
-                                value: RuntimeValue::Link(
-                                    new_scope,
-                                    vec![x.0.to_string()],
-                                    (&x.1.value).into(),
-                                ),
-                                var_type: x.1.var_type.clone(),
-                                location: None,
-                            },
-                        )
-                    })
-                    .collect();
+            return Ok(RuntimeValue::Null);
+        } else if !values.is_empty() {
+            self.get_scope_list(*scope, module.clone())?
+        } else {
+            let _ = self.import_scope_list(*scope, module.clone());
+            return Ok(RuntimeValue::Null);
+        };
 
-                for (key, value) in vars {
-                    if !key.starts_with("__") {
-                        let _ = self.push_var(scope, key, value.clone());
-                    }
-                }
+        if &values[0] == "*" {
+            let vars: Vec<(String, u64)> = self
+                .scopes
+                .get(&new_scope)
+                .unwrap()
+                .variables
+                .iter()
+                .map(|x| (x.0.clone(), x.1.clone()))
+                .collect();
 
-                let obj: Vec<(String, Object<RuntimeValue, RuntimeType>)> = self
-                    .objects
-                    .get(&new_scope)
-                    .unwrap()
-                    .iter()
-                    .map(|x| {
-                        (
-                            x.0.clone(),
-                            Object {
-                                object_type: calibre_common::environment::Type::Link(
-                                    new_scope,
-                                    x.0.clone(),
-                                ),
-                                functions: HashMap::new(),
-                                traits: Vec::new(),
-                                location: None,
-                            },
-                        )
-                    })
-                    .collect();
-
-                for (value, obj) in obj {
-                    if !value.starts_with("__") {
-                        let _ = self.push_object(scope, value.clone(), obj.clone());
-                    }
-                }
-            } else {
-                for value in values {
-                    if let Some(var) = self.variables.get(&new_scope).unwrap().get(&value) {
-                        self.push_var(
-                            scope,
-                            value.clone(),
-                            Variable {
-                                value: RuntimeValue::Link(
-                                    new_scope,
-                                    vec![value.clone()],
-                                    (&var.value).into(),
-                                ),
-                                var_type: var.var_type.clone(),
-                                location: None,
-                            },
-                        )?;
-                    } else if self.objects.get(&new_scope).unwrap().contains_key(&value) {
-                        let val = self.objects.get(&new_scope).unwrap().get(&value).unwrap().clone();
-                        self.push_object(scope, value.clone(), val)?; //Object::Link(path.clone()))?;
-                    } else {
-                        panic!()
-                    }
+            for (key, value) in vars {
+                if !key.starts_with("__") {
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .variables
+                        .insert(key, value);
                 }
             }
 
-            Ok(RuntimeValue::Null)
+            let objs: Vec<(String, u64)> = self
+                .scopes
+                .get(&new_scope)
+                .unwrap()
+                .objects
+                .iter()
+                .map(|x| (x.0.clone(), x.1.clone()))
+                .collect();
+
+            for (key, value) in objs {
+                if !key.starts_with("__") {
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .objects
+                        .insert(key, value);
+                }
+            }
+        } else {
+            for key in values {
+                if let Some(value) = self
+                    .scopes
+                    .get(&new_scope)
+                    .unwrap()
+                    .variables
+                    .get(&key)
+                    .map(|x| x.clone())
+                {
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .variables
+                        .insert(key.clone(), value);
+                }
+                if let Some(value) = self
+                    .scopes
+                    .get(&new_scope)
+                    .unwrap()
+                    .objects
+                    .get(&key)
+                    .map(|x| x.clone())
+                {
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .objects
+                        .insert(key, value);
+                } else {
+                    panic!()
+                }
+            }
+        }
+
+        Ok(RuntimeValue::Null)
     }
 }

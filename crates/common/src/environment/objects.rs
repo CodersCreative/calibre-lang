@@ -10,12 +10,17 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         key: String,
         value: Object<T, U>,
     ) -> Result<(), ScopeErr<T>> {
-        if let Some(objects) = self.objects.get_mut(&scope) {
-            if !objects.contains_key(&key) {
-                objects.insert(key, value);
-                return Ok(());
-            }
+        if !self.scopes.get(scope).unwrap().objects.contains_key(&key) {
+            self.objects.insert(self.var_counter, value);
+            self.scopes
+                .get_mut(scope)
+                .unwrap()
+                .objects
+                .insert(key, self.var_counter);
+            self.var_counter += 1;
+            return Ok(());
         }
+
         Err(ScopeErr::Object(key))
     }
 
@@ -24,25 +29,37 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         scope: &u64,
         key: &str,
     ) -> Result<&'a Type<U>, ScopeErr<T>> {
-        if let Some(objects) = self.objects.get(&scope) {
-            if let Some(object) = objects.get(key) {
-                return Ok(&object.unwrap(self, scope).unwrap().object_type);
-            } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
-                return self.get_object_type(&scope, key);
-            }
+        if let Some(object) = self
+            .scopes
+            .get(scope)
+            .unwrap()
+            .objects
+            .get(key)
+            .map(|x| x.clone())
+        {
+            Ok(&self.objects.get(&object).unwrap().object_type)
+        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+            self.get_object_type(&scope, key)
+        } else {
+            Err(ScopeErr::Object(key.to_string()))
         }
-        Err(ScopeErr::Object(key.to_string()))
     }
 
     pub fn get_object(&self, scope: &u64, key: &str) -> Result<&Object<T, U>, ScopeErr<T>> {
-        if let Some(objects) = self.objects.get(&scope) {
-            if let Some(object) = objects.get(key) {
-                return Ok(object.unwrap(self, scope).unwrap());
-            } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
-                return self.get_object(&scope, key);
-            }
+        if let Some(object) = self
+            .scopes
+            .get(scope)
+            .unwrap()
+            .objects
+            .get(key)
+            .map(|x| x.clone())
+        {
+            Ok(self.objects.get(&object).unwrap())
+        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+            self.get_object(&scope, key)
+        } else {
+            Err(ScopeErr::Object(key.to_string()))
         }
-        Err(ScopeErr::Function(key.to_string()))
     }
 
     pub fn push_function(
@@ -51,8 +68,15 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         key: &str,
         value: (String, T, Option<Location>, bool),
     ) -> Result<(), ScopeErr<T>> {
-        if let Some(objects) = self.objects.get_mut(&scope) {
-            if let Some(object) = objects.get_mut(key) {
+        if let Some(object) = self
+            .scopes
+            .get(scope)
+            .unwrap()
+            .objects
+            .get(key)
+            .map(|x| x.clone())
+        {
+            if let Some(object) = self.objects.get_mut(&object) {
                 if !object.functions.contains_key(&value.0) {
                     object
                         .functions
@@ -60,7 +84,10 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
                     return Ok(());
                 }
             }
+        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+            return self.push_function(&scope, key, value);
         }
+
         Err(ScopeErr::Function(key.to_string()))
     }
 
@@ -70,28 +97,23 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         key: &str,
         name: &str,
     ) -> Result<&'a (T, Option<Location>, bool), ScopeErr<T>> {
-        if let Some(objects) = self.objects.get(&scope) {
-            if let Some(object) = objects.get(key) {
-                if let Some(func) = object.functions.get(name) {
-                    return Ok(func);
-                } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
-                    return self.get_function(&scope, key, name);
-                }
+        if let Some(object) = self
+            .scopes
+            .get(scope)
+            .unwrap()
+            .objects
+            .get(key)
+            .map(|x| x.clone())
+        {
+            if let Some(f) = &self.objects.get(&object).unwrap().functions.get(name) {
+                Ok(f)
+            } else {
+                Err(ScopeErr::Function(key.to_string()))
             }
-        }
-        Err(ScopeErr::Function(key.to_string()))
-    }
-}
-
-impl<T: RuntimeValue, U: RuntimeType> Object<T, U> {
-    pub fn unwrap<'a>(
-        &'a self,
-        env: &'a Environment<T, U>,
-        _scope: &u64,
-    ) -> Result<&'a Object<T, U>, ValueErr<T, U>> {
-        match &self.object_type {
-            Type::Link(scope, name) => Ok(env.objects.get(&scope).unwrap().get(name).unwrap()),
-            _ => Ok(self),
+        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
+            self.get_function(&scope, key, name)
+        } else {
+            Err(ScopeErr::Object(key.to_string()))
         }
     }
 }

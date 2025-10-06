@@ -1,125 +1,89 @@
 use calibre_common::environment::Variable;
 use calibre_parser::ast::{LoopType, Node, NodeType, RefMutability, VarType};
 
-use crate::runtime::{
-    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
-};
+use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
 impl CheckerEnvironment {
     pub fn evaluate_loop_declaration(
         &mut self,
         scope: &u64,
-        loop_type : LoopType,
-        body : Node,
+        loop_type: LoopType,
+        body: Node,
     ) -> Result<RuntimeType, InterpreterErr> {
-            let mut result = RuntimeType::Null;
+        let mut result = RuntimeType::Null;
 
-            if let LoopType::For(identifier, range_node) = loop_type {
-                let range = self.evaluate(scope, range_node.clone())?;
-                if let RuntimeType::List(x) = range {
-                    let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-                    let location = self.get_location(scope, range_node.line, range_node.col);
-                    let _ = self.push_var(
-                        &new_scope,
-                        identifier.clone(),
-                        Variable {
-                            value: match *x {
-                                Some(x) => x,
-                                _ => RuntimeType::Dynamic,
-                            },
-                            var_type: VarType::Immutable,
-                            location
+        if let LoopType::For(identifier, range_node) = loop_type {
+            let range = self.evaluate(scope, range_node.clone())?;
+            if let RuntimeType::List(x) = range {
+                let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+                let location = self.get_location(scope, range_node.span);
+                let _ = self.push_var(
+                    &new_scope,
+                    identifier.clone(),
+                    Variable {
+                        value: match *x {
+                            Some(x) => x,
+                            _ => RuntimeType::Dynamic,
                         },
-                    );
-                    result = self.evaluate(&new_scope, body.clone())?;
-                    self.remove_scope(&new_scope);
-                } else if let RuntimeType::Range =
-                    range
-                {
-                    let new_scope = self.get_new_scope(
-                        scope,
-                        vec![(
-                            identifier.clone(),
-                            RuntimeType::Int,
-                            RefMutability::Value,
-                            None,
-                        )],
-                        vec![(Node::new(NodeType::IntLiteral(0), range_node.line, range_node.col), None)],
-                    )?;
-                    result = self.evaluate(&new_scope, body.clone())?;
-                    self.remove_scope(&new_scope);
-                }
-            } else if let LoopType::ForEach(identifier, (loop_name, mutability)) = loop_type {
-                let var = self.get_var(scope, &loop_name)?.clone();
-                if let RuntimeType::List(x) = &var.value {
-                    let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-
-                    let _ = self.push_var(
-                        &new_scope,
-                        identifier.clone(),
-                        Variable {
-                            value: x.clone().unwrap_or(RuntimeType::Dynamic),
-                            var_type: match mutability {
-                                RefMutability::MutRef | RefMutability::MutValue => {
-                                    VarType::Mutable
-                                }
-                                _ => VarType::Immutable,
-                            },
-                            location : var.location.clone(),
-                        },
-                    );
-
-                    result = self.evaluate(&new_scope, body.clone())?;
-                    self.remove_scope(&new_scope);
-                }
-            } else if let LoopType::While(condition) = loop_type {
-                let filler_int = Node::new(NodeType::IntLiteral(0), condition.line, condition.col);
-                match self.evaluate(scope, condition.clone())? {
-                    RuntimeType::Bool => {
-                        let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-                        result = self.evaluate(&new_scope, body.clone())?;
-                        self.remove_scope(&new_scope);
-                    }
-                    RuntimeType::Range => {
-                        return self.evaluate_loop_declaration(
-                            scope,
-                                LoopType::For(
-                                    String::from("hidden_index"),
-                                    Node::new(NodeType::RangeDeclaration {
-                                        from: Box::new(filler_int.clone()),
-                                        to: Box::new(filler_int),
-                                        inclusive: false,
-                                    }, condition.line, condition.col),
-                                ),
-                                body,
-                        );
-                    }
-                    RuntimeType::Int => {
-                        return self.evaluate_loop_declaration(
-                            scope,
-                                LoopType::For(
-                                    String::from("hidden_index"),
-                                    filler_int,
-                                ),
-                                body,
-                        );
-                    }
-                    RuntimeType::Float => {
-                        return self.evaluate_loop_declaration(
-                            scope,
-                            LoopType::For(
-                                    String::from("hidden_index"),
-                                    filler_int,
-                                ),
-                                body,
-                            
-                        );
-                    }
-                    _ => {}
-                }
+                        var_type: VarType::Immutable,
+                        location,
+                    },
+                );
+                result = self.evaluate(&new_scope, body.clone())?;
+                self.remove_scope(&new_scope);
+            } else if let RuntimeType::Range = range {
+                let new_scope = self.get_new_scope(
+                    scope,
+                    vec![(identifier.clone(), RuntimeType::Int, None)],
+                    vec![(Node::new(NodeType::IntLiteral(0), range_node.span), None)],
+                )?;
+                result = self.evaluate(&new_scope, body.clone())?;
+                self.remove_scope(&new_scope);
             }
+        } else if let LoopType::While(condition) = loop_type {
+            let filler_int = Node::new(NodeType::IntLiteral(0), condition.span);
+            match self.evaluate(scope, condition.clone())? {
+                RuntimeType::Bool => {
+                    let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+                    result = self.evaluate(&new_scope, body.clone())?;
+                    self.remove_scope(&new_scope);
+                }
+                RuntimeType::Range => {
+                    return self.evaluate_loop_declaration(
+                        scope,
+                        LoopType::For(
+                            String::from("hidden_index"),
+                            Node::new(
+                                NodeType::RangeDeclaration {
+                                    from: Box::new(filler_int.clone()),
+                                    to: Box::new(filler_int),
+                                    inclusive: false,
+                                },
+                                condition.span,
+                            ),
+                        ),
+                        body,
+                    );
+                }
+                RuntimeType::Int => {
+                    return self.evaluate_loop_declaration(
+                        scope,
+                        LoopType::For(String::from("hidden_index"), filler_int),
+                        body,
+                    );
+                }
+                RuntimeType::Float => {
+                    return self.evaluate_loop_declaration(
+                        scope,
+                        LoopType::For(String::from("hidden_index"), filler_int),
+                        body,
+                    );
+                }
+                _ => {}
+            }
+        }
 
-            Ok(result)
+        Ok(result)
     }
 }
 

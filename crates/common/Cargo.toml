@@ -4,7 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rand = "0.9.1"
-rustyline = "16.0.0"
 thiserror = "2.0.12"
-calibre-parser = {workspace = true}
+calibre-parser = {path = "../parser"}

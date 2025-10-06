@@ -5,7 +5,12 @@ pub mod functions;
 pub mod r#type;
 
 use crate::{
-    ast::{binary::BinaryOperator, comparison::Comparison, LoopType, Node, NodeType, ObjectType, ParserDataType, RefMutability}, lexer::{Bracket, Token, TokenType}, Parser, ParserError, SyntaxErr
+    Parser, ParserError, SyntaxErr,
+    ast::{
+        LoopType, Node, NodeType, ObjectType, ParserDataType, RefMutability,
+        binary::BinaryOperator, comparison::Comparison,
+    },
+    lexer::{Bracket, Span, Token, TokenType},
 };
 use std::{collections::HashMap, str::FromStr};
 
@@ -35,7 +40,7 @@ impl Parser {
     fn expect_eat(&mut self, t: &TokenType, err: SyntaxErr) -> Result<Token, ParserError> {
         if &self.first().token_type != t {
             Err(self.get_err(err))
-        } else{
+        } else {
             Ok(self.eat())
         }
     }
@@ -44,7 +49,7 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Result<Vec<(String, ParserDataType, RefMutability, Option<Node>)>, ParserError> {
+    ) -> Result<Vec<(String, ParserDataType, Option<Node>)>, ParserError> {
         let mut properties = Vec::new();
         let mut defaulted = false;
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
@@ -53,21 +58,14 @@ impl Parser {
             let mut keys = Vec::new();
 
             while self.first().token_type == TokenType::Identifier {
-                keys.push(self
-                .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)?
-                .value);
+                keys.push(
+                    self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)?
+                        .value,
+                );
             }
-
-            let mut ref_mutability = RefMutability::Value;
 
             let typ = if self.first().token_type == TokenType::Colon {
                 let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
-
-                ref_mutability = RefMutability::from(self.first().token_type.clone());
-
-                if ref_mutability != RefMutability::Value {
-                    let _ = self.eat();
-                }
 
                 self.parse_type()?.expect("Expected data type.")
             } else {
@@ -82,8 +80,8 @@ impl Parser {
                 None
             };
 
-            for key in keys{
-                properties.push((key, typ.clone(), ref_mutability.clone(), default.clone()));
+            for key in keys {
+                properties.push((key, typ.clone(), default.clone()));
             }
 
             if self.first().token_type != close_token {
@@ -182,23 +180,16 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Result<Vec<(ParserDataType, RefMutability)>, ParserError> {
+    ) -> Result<Vec<ParserDataType>, ParserError> {
         let mut properties = Vec::new();
         let _ = self.split_comparison_lesser();
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         while !self.is_eof() && self.first().token_type != close_token {
-            let ref_mutability = RefMutability::from(self.first().token_type.clone());
-
-            if ref_mutability != RefMutability::Value {
-                let _ = self.eat();
-            }
-
-            properties.push((
+            properties.push(
                 self.parse_type()?
                     .expect("Expected data type after identifier"),
-                ref_mutability,
-            ));
+            );
 
             let _ = self.split_comparison_greater()?;
             if self.first().token_type != close_token {
@@ -225,16 +216,19 @@ impl Parser {
             )));
         }
 
-        let mut typ = if t.token_type == TokenType::Comparison(Comparison::Lesser) {
-            Ok(Some(ParserDataType::Tuple(
-                self.parse_type_list(
-                    TokenType::Comparison(Comparison::Lesser),
-                    TokenType::Comparison(Comparison::Greater),
-                )?
-                .into_iter()
-                .map(|x| x.0)
-                .collect(),
+        let mutability = RefMutability::from(t.token_type.clone());
+
+        let mut typ = if mutability != RefMutability::Value {
+            let _ = self.eat();
+            Ok(Some(ParserDataType::Ref(
+                Box::new(self.parse_type()?.unwrap()),
+                mutability.clone(),
             )))
+        } else if t.token_type == TokenType::Comparison(Comparison::Lesser) {
+            Ok(Some(ParserDataType::Tuple(self.parse_type_list(
+                TokenType::Comparison(Comparison::Lesser),
+                TokenType::Comparison(Comparison::Greater),
+            )?)))
         } else if t.token_type == TokenType::Func || t.token_type == TokenType::Async {
             let _ = self.eat();
             let is_async = if t.token_type == TokenType::Async {
@@ -308,7 +302,7 @@ impl Parser {
 
     pub fn split_comparison_lesser(&mut self) -> Result<(), ParserError> {
         let former = self.tokens[0].clone();
-        
+
         let get_lesser_token = || -> Token {
             Token {
                 value: String::from("<"),
@@ -319,11 +313,14 @@ impl Parser {
 
         if former.token_type == TokenType::Comparison(Comparison::LesserEqual) {
             self.tokens[0] = get_lesser_token();
-            self.tokens.insert(1, Token {
-                value: String::from("="),
-                token_type: TokenType::Equals,
-                ..former
-            });
+            self.tokens.insert(
+                1,
+                Token {
+                    value: String::from("="),
+                    token_type: TokenType::Equals,
+                    ..former
+                },
+            );
         } else if former.token_type == TokenType::BinaryOperator(BinaryOperator::Shl) {
             self.tokens[0] = get_lesser_token();
             self.tokens.insert(1, get_lesser_token());
@@ -333,7 +330,7 @@ impl Parser {
     }
     pub fn split_comparison_greater(&mut self) -> Result<(), ParserError> {
         let former = self.tokens[0].clone();
-        
+
         let get_greater_token = || -> Token {
             Token {
                 value: String::from(">"),
@@ -344,11 +341,14 @@ impl Parser {
 
         if former.token_type == TokenType::Comparison(Comparison::GreaterEqual) {
             self.tokens[0] = get_greater_token();
-            self.tokens.insert(1, Token {
-                value: String::from("="),
-                token_type: TokenType::Equals,
-                ..former
-            });
+            self.tokens.insert(
+                1,
+                Token {
+                    value: String::from("="),
+                    token_type: TokenType::Equals,
+                    ..former
+                },
+            );
         } else if former.token_type == TokenType::BinaryOperator(BinaryOperator::Shr) {
             self.tokens[0] = get_greater_token();
             self.tokens.insert(1, get_greater_token());
@@ -395,7 +395,7 @@ impl Parser {
             }
         }
 
-        let _ = self.expect_eat(
+        let close = self.expect_eat(
             &TokenType::Close(Bracket::Paren),
             SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
         )?;
@@ -406,8 +406,7 @@ impl Parser {
 
         Ok(Node::new(
             NodeType::TupleLiteral(values),
-            open.line,
-            open.col,
+            Span::new_from_spans(open.span, close.span),
         ))
     }
 
@@ -432,27 +431,33 @@ impl Parser {
                     conditionals.push(self.parse_statement()?);
                 }
 
-                let _ = self.expect_eat(
+                let close = self.expect_eat(
                     &TokenType::Close(Bracket::Square),
                     SyntaxErr::ExpectedClosingBracket(Bracket::Square),
-                );
+                )?;
 
-                return Ok(Node::new(NodeType::IterExpression {
-                    map: Box::new(values[0].clone()),
-                    loop_type: Box::new(loop_type),
-                    conditionals,
-                }, open.line, open.col));
+                return Ok(Node::new(
+                    NodeType::IterExpression {
+                        map: Box::new(values[0].clone()),
+                        loop_type: Box::new(loop_type),
+                        conditionals,
+                    },
+                    Span::new_from_spans(open.span, close.span),
+                ));
             } else if self.first().token_type != TokenType::Close(Bracket::Square) {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
             }
         }
 
-        let _ = self.expect_eat(
+        let close = self.expect_eat(
             &TokenType::Close(Bracket::Square),
             SyntaxErr::ExpectedClosingBracket(Bracket::Square),
-        );
+        )?;
 
-        Ok(Node::new(NodeType::ListLiteral(values), open.line, open.col))
+        Ok(Node::new(
+            NodeType::ListLiteral(values),
+            Span::new_from_spans(open.span, close.span),
+        ))
     }
 }
 

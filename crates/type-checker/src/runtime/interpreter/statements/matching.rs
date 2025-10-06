@@ -1,8 +1,6 @@
 use calibre_parser::ast::{Node, NodeType, ObjectType, RefMutability, VarType};
 
-use crate::runtime::{
-    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
-};
+use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 use std::panic;
 
 impl CheckerEnvironment {

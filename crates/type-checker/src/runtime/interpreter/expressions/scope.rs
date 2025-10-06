@@ -2,33 +2,37 @@ use calibre_common::environment::{Location, Variable};
 use calibre_parser::ast::{Node, NodeType, RefMutability, VarType};
 
 use crate::runtime::{
-    interpreter::{expressions::member::MembrExprPathRes, InterpreterErr}, scope::CheckerEnvironment, values::RuntimeType
+    interpreter::{InterpreterErr, expressions::member::MembrExprPathRes},
+    scope::CheckerEnvironment,
+    values::RuntimeType,
 };
 
 impl CheckerEnvironment {
     pub fn get_new_scope_with_values(
         &mut self,
         scope: &u64,
-        arguments: Vec<(String, RuntimeType, RefMutability, Option<Location>)>,
+        arguments: Vec<(String, RuntimeType, Option<Location>)>,
     ) -> Result<u64, InterpreterErr> {
         let new_scope = self.new_scope_from_parent_shallow(scope.clone());
-        for (k, v, m, location) in arguments.into_iter() {
-            // if m == RefMutability::MutRef || m == RefMutability::Ref {
-            //     todo!()
-            // } else {
+        for (k, v, location) in arguments.into_iter() {
+            let mutability = if let RuntimeType::Ref(_) = v {
+                RefMutability::MutRef
+            } else {
+                RefMutability::MutValue
+            };
+
             let _ = self.push_var(
                 &new_scope,
                 k.to_string(),
                 Variable {
                     value: v.clone(),
-                    var_type: match m {
+                    var_type: match mutability {
                         RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
                         _ => VarType::Immutable,
                     },
-                    location
+                    location,
                 },
             )?;
-            // }
         }
 
         Ok(new_scope)
@@ -37,90 +41,32 @@ impl CheckerEnvironment {
     pub fn get_new_scope(
         &mut self,
         scope: &u64,
-        parameters: Vec<(String, RuntimeType, RefMutability, Option<RuntimeType>)>,
+        parameters: Vec<(String, RuntimeType, Option<RuntimeType>)>,
         arguments: Vec<(Node, Option<Node>)>,
     ) -> Result<u64, InterpreterErr> {
         let new_scope = self.new_scope_from_parent_shallow(scope.clone());
 
-        for (i, (k, v, m, d)) in parameters.iter().enumerate() {
-            if m == &RefMutability::MutRef || m == &RefMutability::Ref {
-                if let Some(arg) = &arguments.get(i) {
-                    if let None = arg.1 {
-                        if let NodeType::Identifier(x) = &arg.0.node_type {
-                            let var = self.get_var(scope, x)?.clone();
+        for (i, (k, v, d)) in parameters.iter().enumerate() {
+            let m = match v {
+                RuntimeType::Ref(_) => RefMutability::MutRef,
+                _ => RefMutability::MutValue,
+            };
 
-                            match var.var_type {
-                                VarType::Mutable => {}
-                                _ if m == &RefMutability::MutRef => {
-                                    return Err(InterpreterErr::MutRefNonMut(
-                                        var.value.clone(),
-                                    ));
-                                }
-                                _ => {}
-                            }
-
-                            let _ = self.push_var(
-                                &new_scope,
-                                k.to_string(),
-                                var,
-                            )?;
-                            continue;
-                        } else if let NodeType::MemberExpression { path } = &arg.0.node_type {
-                            let path = match self.get_member_expression_path(scope, path.clone())? {
-                                MembrExprPathRes::Path(x) => x,
-                                _ => {
-                                    return Err(InterpreterErr::RefNonVar(arguments[0].0.node_type.clone()));
-                                }
-                            };
-
-                            let typ = {
-                                let var = self.get_link_path(scope, &path)?;
-                                if !var.is_type(v) {
-                                    return Err(InterpreterErr::UnexpectedType(var.clone()));
-                                }
-
-                                (var).into()
-                            };
-
-                            let _ = self.push_var(
-                                &new_scope,
-                                k.to_string(),
-                                Variable {
-                                    value: typ,
-                                    var_type: match m {
-                                        RefMutability::MutRef | RefMutability::MutValue => {
-                                            VarType::Mutable
-                                        }
-                                        _ => VarType::Immutable,
-                                    },
-                                    location: self.get_location(scope, arg.0.line, arg.0.col)
-                                },
-                            )?;
-                            continue;
-                        } else {
-                            return Err(InterpreterErr::RefNonVar(arguments[0].0.node_type.clone()));
-                        }
-                    }
-                }
-            }
-            if let Some(arg) = arguments.get(i) {
-                if let None = arg.1 {
-                    let arg = self
-                        .evaluate(&new_scope, arg.0.clone())?;
-                    self.push_var(
-                        &new_scope,
-                        k.to_string(),
-                        Variable {
-                            value: arg,
-                            var_type: match m {
-                                RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
-                                _ => VarType::Immutable,
-                            },
-                            location : self.current_location.clone(),
+            if let Some((arg, None)) = arguments.get(i) {
+                let arg = self.evaluate(&new_scope, arg.clone())?;
+                self.push_var(
+                    &new_scope,
+                    k.to_string(),
+                    Variable {
+                        value: arg,
+                        var_type: match m {
+                            RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
+                            _ => VarType::Immutable,
                         },
-                    )?;
-                    continue;
-                }
+                        location: self.current_location.clone(),
+                    },
+                )?;
+                continue;
             }
             if let Some(d) = arguments.iter().find(|x| {
                 if let NodeType::Identifier(key) = &x.0.node_type {
@@ -139,7 +85,7 @@ impl CheckerEnvironment {
                             RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
                             _ => VarType::Immutable,
                         },
-                        location : self.current_location.clone(),
+                        location: self.current_location.clone(),
                     },
                 )?;
 
@@ -156,7 +102,7 @@ impl CheckerEnvironment {
                             RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
                             _ => VarType::Immutable,
                         },
-                        location : self.current_location.clone(),
+                        location: self.current_location.clone(),
                     },
                 )?;
 
@@ -172,28 +118,28 @@ impl CheckerEnvironment {
     pub fn evaluate_scope(
         &mut self,
         scope: &u64,
-        body : Vec<Node>,
-        is_temp : bool,
+        body: Vec<Node>,
+        is_temp: bool,
     ) -> Result<RuntimeType, InterpreterErr> {
-            let new_scope = if is_temp {
-                self.get_new_scope(scope, Vec::new(), Vec::new())?
-            } else {
-                scope.clone()
-            };
+        let new_scope = if is_temp {
+            self.get_new_scope(scope, Vec::new(), Vec::new())?
+        } else {
+            scope.clone()
+        };
 
-            let mut result: RuntimeType = RuntimeType::Null;
-            for statement in body.into_iter() {
-                match self.stop {
-                    Some(_) if is_temp => return Ok(result),
-                    _ => result = self.evaluate(&new_scope, statement)?,
-                }
+        let mut result: RuntimeType = RuntimeType::Null;
+        for statement in body.into_iter() {
+            match self.stop {
+                Some(_) if is_temp => return Ok(result),
+                _ => result = self.evaluate(&new_scope, statement)?,
             }
+        }
 
-            if is_temp {
-                self.remove_scope(&new_scope);
-            }
+        if is_temp {
+            self.remove_scope(&new_scope);
+        }
 
-            Ok(result)
+        Ok(result)
     }
 }
 
@@ -288,7 +234,7 @@ mod tests {
             body: vec![NodeType::Return {
                 value: Box::new(NodeType::IntLiteral(42)),
             }],
-            is_temp : true,
+            is_temp: true,
         };
         let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::UInt(42));
@@ -299,7 +245,7 @@ mod tests {
         let (mut env, scope) = get_new_env();
         let node = NodeType::ScopeDeclaration {
             body: vec![NodeType::IntLiteral(7)],
-            is_temp : true,
+            is_temp: true,
         };
         let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::UInt(7));

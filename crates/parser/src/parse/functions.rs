@@ -1,5 +1,5 @@
 use crate::ast::Node;
-use crate::lexer::Bracket;
+use crate::lexer::{Bracket, Span};
 use crate::{Parser, ParserError, SyntaxErr};
 use crate::{ast::NodeType, lexer::TokenType};
 
@@ -15,13 +15,15 @@ impl Parser {
     }
 
     pub fn parse_call_expression(&mut self, caller: Node) -> Result<Node, ParserError> {
-        let mut expression = Node::new(NodeType::CallExpression(
-            Box::new(caller.clone()),
-            self.parse_arguments(
-                TokenType::Open(Bracket::Paren),
-                TokenType::Close(Bracket::Paren),
-            )?,
-        ), caller.line, caller.col);
+        let args = self.parse_arguments(
+            TokenType::Open(Bracket::Paren),
+            TokenType::Close(Bracket::Paren),
+        )?;
+
+        let mut expression = Node::new(
+            NodeType::CallExpression(Box::new(caller.clone()), args),
+            caller.span,
+        );
 
         if self.first().token_type == TokenType::Open(Bracket::Paren) {
             expression = self.parse_call_expression(expression)?;
@@ -30,8 +32,49 @@ impl Parser {
         Ok(expression)
     }
 
+    pub fn parse_purely_member(&mut self) -> Result<Node, ParserError> {
+        let first = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?;
+        let mut path = vec![(
+            Node {
+                node_type: NodeType::Identifier(first.value),
+                span: first.span,
+            },
+            false,
+        )];
+
+        while self.first().token_type == TokenType::FullStop
+            || self.first().token_type == TokenType::Open(Bracket::Square)
+        {
+            if self.eat().token_type == TokenType::FullStop {
+                let first =
+                    self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?;
+                path.push((
+                    Node {
+                        node_type: NodeType::Identifier(first.value),
+                        span: first.span,
+                    },
+                    false,
+                ));
+            } else {
+                path.push((self.parse_statement()?, true));
+
+                self.expect_eat(
+                    &TokenType::Close(Bracket::Square),
+                    SyntaxErr::ExpectedClosingBracket(Bracket::Square),
+                )?;
+            }
+        }
+
+        if path.len() <= 1 {
+            Ok(path.remove(0).0)
+        } else {
+            let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
+            Ok(Node::new(NodeType::MemberExpression { path: path }, first))
+        }
+    }
+
     pub fn parse_member_expression(&mut self) -> Result<Node, ParserError> {
-        let mut path : Vec<(Node, bool)> = vec![(self.parse_primary_expression()?, false)];
+        let mut path: Vec<(Node, bool)> = vec![(self.parse_primary_expression()?, false)];
 
         while self.first().token_type == TokenType::FullStop
             || self.first().token_type == TokenType::Open(Bracket::Square)
@@ -57,11 +100,14 @@ impl Parser {
                     NodeType::Identifier(value) => {
                         if self.first().token_type == TokenType::Open(Bracket::Curly) {
                             let data = self.parse_potential_key_value()?;
-                            return Ok(Node::new(NodeType::EnumExpression {
-                                identifier: identifier.to_string(),
-                                value: value.to_string(),
-                                data: Some(data),
-                            }, path[0].0.line, path[0].0.col));
+                            return Ok(Node::new(
+                                NodeType::EnumExpression {
+                                    identifier: identifier.to_string(),
+                                    value: value.to_string(),
+                                    data: Some(data),
+                                },
+                                Span::new_from_spans(path[0].0.span, path[1].0.span),
+                            ));
                         }
                     }
                     _ => {}
@@ -72,8 +118,8 @@ impl Parser {
         if path.len() <= 1 {
             Ok(path.remove(0).0)
         } else {
-            let first = path[0].clone();
-            Ok(Node::new(NodeType::MemberExpression { path: path }, first.0.line, first.0.col))
+            let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
+            Ok(Node::new(NodeType::MemberExpression { path: path }, first))
         }
     }
 
@@ -95,16 +141,15 @@ impl Parser {
         Ok(args)
     }
 
-    pub fn parse_arguments_list(
-        &mut self,
-    ) -> Result<Vec<(Node, Option<Node>)>, ParserError> {
+    pub fn parse_arguments_list(&mut self) -> Result<Vec<(Node, Option<Node>)>, ParserError> {
         let mut defaulted = false;
 
         macro_rules! parse_arg {
             () => {{
                 if defaulted || self.nth(1).token_type == TokenType::Equals {
                     (self.parse_primary_expression()?, {
-                        let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
+                        let _ =
+                            self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
                         defaulted = true;
                         Some(self.parse_statement()?)
                     })

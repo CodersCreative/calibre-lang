@@ -1,6 +1,5 @@
-use calibre_interpreter::runtime::{
-    scope::InterpreterEnvironment, values::RuntimeValue
-};
+use calibre_interpreter::runtime::{scope::InterpreterEnvironment, values::RuntimeValue};
+use calibre_parser::lexer::Tokenizer;
 use calibre_type_checker::runtime::scope::CheckerEnvironment;
 use clap::Parser;
 use rustyline::{DefaultEditor, error::ReadlineError};
@@ -17,7 +16,10 @@ fn repl() -> Result<(), Box<dyn Error>> {
         let readline = editor.readline(">> ");
         match readline {
             Ok(line) => {
-                let program = parser.produce_ast(line)?;
+                let mut tokenizer = Tokenizer::default();
+                let program = parser
+                    .produce_ast(tokenizer.tokenize(line).unwrap())
+                    .unwrap();
                 let _ = checker.evaluate(&checker_scope, program.clone())?;
                 let val = env.evaluate(&scope, program)?;
 
@@ -49,7 +51,10 @@ fn file(path: &str) -> Result<(), Box<dyn Error>> {
     let mut parser = calibre_parser::Parser::default();
     let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
-    let program = parser.produce_ast(fs::read_to_string(path)?)?;
+    let mut tokenizer = Tokenizer::default();
+    let program = parser
+        .produce_ast(tokenizer.tokenize(fs::read_to_string(path)?).unwrap())
+        .unwrap();
     let _ = checker.evaluate(&checker_scope, program.clone())?;
     let _ = env.evaluate(&scope, program)?;
 

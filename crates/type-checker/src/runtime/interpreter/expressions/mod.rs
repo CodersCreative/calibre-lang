@@ -1,10 +1,12 @@
 use crate::{
     operators,
-    runtime::{
-        interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
-    },
+    runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType},
 };
-use calibre_parser::ast::{binary::BinaryOperator, comparison::{BooleanOperation, Comparison}, Node, NodeType};
+use calibre_parser::ast::{
+    Node, NodeType,
+    binary::BinaryOperator,
+    comparison::{BooleanOperation, Comparison},
+};
 pub mod call;
 pub mod lists;
 pub mod member;
@@ -23,7 +25,7 @@ impl CheckerEnvironment {
     pub fn evaluate_not<'a>(
         &mut self,
         scope: &u64,
-        value : RuntimeType,
+        value: RuntimeType,
     ) -> Result<RuntimeType, InterpreterErr> {
         return Ok(value);
     }
@@ -31,7 +33,7 @@ impl CheckerEnvironment {
     pub fn evaluate_as_expression(
         &mut self,
         scope: &u64,
-        value : RuntimeType,
+        value: RuntimeType,
         data_type: RuntimeType,
     ) -> Result<RuntimeType, InterpreterErr> {
         Ok(match value.into_type(self, scope, &data_type) {
@@ -43,9 +45,9 @@ impl CheckerEnvironment {
     pub fn evaluate_binary_expression(
         &mut self,
         scope: &u64,
-        left : RuntimeType,
-        right : RuntimeType,
-        operator : BinaryOperator,
+        left: RuntimeType,
+        right: RuntimeType,
+        operator: BinaryOperator,
     ) -> Result<RuntimeType, InterpreterErr> {
         operators::binary::handle(&operator, self, scope, left, right)
     }
@@ -53,35 +55,43 @@ impl CheckerEnvironment {
     pub fn evaluate_range_expression(
         &mut self,
         scope: &u64,
-        from : RuntimeType,
-        to : RuntimeType,
-        inclusive : bool,
+        from: RuntimeType,
+        to: RuntimeType,
+        inclusive: bool,
     ) -> Result<RuntimeType, InterpreterErr> {
         match (&from, &to) {
             (RuntimeType::Int, RuntimeType::Int) => Ok(RuntimeType::Range),
-            _ => Err(InterpreterErr::ExpectedType(from, RuntimeType::Int)) 
+            _ => Err(InterpreterErr::ExpectedType(from, RuntimeType::Int)),
         }
     }
 
     pub fn evaluate_pipe_expression(
         &mut self,
         scope: &u64,
-        values : Vec<Node>,
+        values: Vec<Node>,
     ) -> Result<RuntimeType, InterpreterErr> {
-        let mut pre_values : Vec<Node> = Vec::new();
+        let mut pre_values: Vec<Node> = Vec::new();
         for value in values.into_iter() {
             match value.node_type {
-                NodeType::Identifier(_) | NodeType::MatchDeclaration { .. } | NodeType::FunctionDeclaration { .. } | NodeType::MemberExpression { .. } | NodeType::EnumExpression { .. } => {
+                NodeType::Identifier(_)
+                | NodeType::MatchDeclaration { .. }
+                | NodeType::FunctionDeclaration { .. }
+                | NodeType::MemberExpression { .. }
+                | NodeType::EnumExpression { .. } => {
                     let calculated = self.evaluate(scope, value.clone());
                     match calculated {
                         Ok(RuntimeType::Function { .. }) => {
-                            let args : Vec<(Node, Option<Node>)> = pre_values.iter().map(|x| (x.clone(), None)).collect();
+                            let args: Vec<(Node, Option<Node>)> =
+                                pre_values.iter().map(|x| (x.clone(), None)).collect();
                             pre_values.clear();
-                            pre_values.push(Node::new(NodeType::CallExpression(Box::new(value.clone()), args), value.line, value.col));
-                        },
+                            pre_values.push(Node::new(
+                                NodeType::CallExpression(Box::new(value.clone()), args),
+                                value.span,
+                            ));
+                        }
                         _ => pre_values.push(value),
                     }
-                },
+                }
                 _ => {
                     pre_values.push(value);
                 }
@@ -94,9 +104,9 @@ impl CheckerEnvironment {
     pub fn evaluate_boolean_expression(
         &mut self,
         scope: &u64,
-        left : RuntimeType,
-        right : RuntimeType,
-        operator : BooleanOperation,
+        left: RuntimeType,
+        right: RuntimeType,
+        operator: BooleanOperation,
     ) -> Result<RuntimeType, InterpreterErr> {
         Ok(operators::boolean::handle(&operator, &left, &right)?)
     }
@@ -104,9 +114,9 @@ impl CheckerEnvironment {
     pub fn evaluate_comparison_expression(
         &mut self,
         scope: &u64,
-        left : RuntimeType,
-        right : RuntimeType,
-        operator : Comparison,
+        left: RuntimeType,
+        right: RuntimeType,
+        operator: Comparison,
     ) -> Result<RuntimeType, InterpreterErr> {
         operators::comparison::handle(&operator, self, scope, left, right)
     }
@@ -115,24 +125,24 @@ impl CheckerEnvironment {
         &mut self,
         scope: &u64,
         identifier: Node,
-        value : RuntimeType,
+        value: RuntimeType,
     ) -> Result<RuntimeType, InterpreterErr> {
-            if let NodeType::Identifier(identifier) = identifier.node_type {
-                let _ = self.assign_var(scope, &identifier, value.clone())?;
-                return Ok(value);
-            } else if let NodeType::MemberExpression { .. } = identifier.node_type {
-                let _ = self.assign_member_expression(scope, identifier, value.clone())?;
-                return Ok(value);
-            } else {
-                Err(InterpreterErr::AssignNonVariable(identifier.node_type))
-            }
+        if let NodeType::Identifier(identifier) = identifier.node_type {
+            let _ = self.assign_var(scope, &identifier, value.clone())?;
+            return Ok(value);
+        } else if let NodeType::MemberExpression { .. } = identifier.node_type {
+            let _ = self.assign_member_expression(scope, identifier, value.clone())?;
+            return Ok(value);
+        } else {
+            Err(InterpreterErr::AssignNonVariable(identifier.node_type))
+        }
     }
 }
 #[cfg(test)]
 mod tests {
+    use calibre_parser::ast::VarType;
     use calibre_parser::ast::binary::BinaryOperator;
     use calibre_parser::ast::comparison::{BooleanOperation, Comparison};
-    use calibre_parser::ast::VarType;
 
     use super::*;
     use crate::runtime::scope::Variable;

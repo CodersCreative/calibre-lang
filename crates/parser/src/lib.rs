@@ -1,6 +1,6 @@
 use crate::{
     ast::{Node, NodeType},
-    lexer::{tokenize, Bracket, LexerError, Token, TokenType},
+    lexer::{Bracket, LexerError, Span, Token, TokenType, Tokenizer},
 };
 use thiserror::Error;
 
@@ -21,23 +21,30 @@ impl Parser {
             true
         }
     }
-    pub fn produce_ast(&mut self, source: String) -> Result<Node, ParserError> {
-        self.tokens = tokenize(source)?;
+    pub fn produce_ast(&mut self, tokens: Vec<Token>) -> Result<Node, ParserError> {
+        self.tokens = tokens;
         let mut body = Vec::new();
 
         while !self.is_eof() {
             body.push(self.parse_statement()?)
         }
 
-        let first = match body.first() {
-            Some(x) => (x.line, x.col),
-            None => (0, 0)
+        let span = if body.len() > 0 {
+            Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span)
+        } else {
+            Span::new(
+                lexer::Position { line: 1, col: 1 },
+                lexer::Position { line: 1, col: 1 },
+            )
         };
 
-        Ok(Node::new(NodeType::ScopeDeclaration {
-            body,
-            is_temp: false,
-        }, first.0, first.1))
+        Ok(Node::new(
+            NodeType::ScopeDeclaration {
+                body,
+                is_temp: false,
+            },
+            span,
+        ))
     }
 }
 

@@ -1,4 +1,3 @@
-pub mod links;
 pub mod variables;
 
 use std::{
@@ -11,7 +10,7 @@ use crate::runtime::{
     values::{RuntimeType, RuntimeValue, helper::StopValue},
 };
 use calibre_common::environment::Environment;
-use calibre_parser::Parser;
+use calibre_parser::{Parser, lexer::Tokenizer};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InterpreterEnvironment {
@@ -60,12 +59,21 @@ impl InterpreterEnvironment {
                     } else {
                         let scope = self.new_scope_from_parent(current.id, key);
                         let mut parser = Parser::default();
+
+                        let mut tokenizer = Tokenizer::default();
                         let program = parser
                             .produce_ast(
-                                fs::read_to_string(self.scopes.get(&scope).unwrap().path.clone())
+                                tokenizer
+                                    .tokenize(
+                                        fs::read_to_string(
+                                            self.scopes.get(&scope).unwrap().path.clone(),
+                                        )
+                                        .unwrap(),
+                                    )
                                     .unwrap(),
                             )
                             .unwrap();
+
                         let _ = self.evaluate(&scope, program)?;
                         scope
                     }

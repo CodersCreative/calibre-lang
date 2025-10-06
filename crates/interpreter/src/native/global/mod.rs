@@ -1,6 +1,11 @@
-use crate::{native::NativeFunction, runtime::{
-        interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
-    }};
+use crate::{
+    native::NativeFunction,
+    runtime::{
+        interpreter::InterpreterErr,
+        scope::InterpreterEnvironment,
+        values::{RuntimeType, RuntimeValue},
+    },
+};
 
 pub struct ErrFn();
 
@@ -78,36 +83,31 @@ impl NativeFunction for Range {
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if args.len() <= 1 {
-            let RuntimeValue::Int(amt) = *args[0].0.unwrap(env, scope)? else {
+            let RuntimeValue::Int(amt) = args[0].0 else {
                 panic!()
             };
 
             Ok(RuntimeValue::Range(0, amt as i64))
         } else if args.len() == 2 {
-            let RuntimeValue::Int(start) = *args[0].0.unwrap(env, scope)?
-            else {
+            let RuntimeValue::Int(start) = args[0].0 else {
                 panic!()
             };
 
-            let RuntimeValue::Int(stop) = *args[1].0.unwrap(env, scope)?
-            else {
+            let RuntimeValue::Int(stop) = args[1].0 else {
                 panic!()
             };
 
             Ok(RuntimeValue::Range(start as i64, stop as i64))
         } else if args.len() == 3 {
-            let RuntimeValue::Int(start) = *args[0].0.unwrap(env, scope)?
-            else {
+            let RuntimeValue::Int(start) = args[0].0 else {
                 panic!()
             };
 
-            let RuntimeValue::Int(stop) = *args[1].0.unwrap(env, scope)?
-            else {
+            let RuntimeValue::Int(stop) = args[1].0 else {
                 panic!()
             };
 
-            let RuntimeValue::Int(step) = *args[2].0.unwrap(env, scope)?
-            else {
+            let RuntimeValue::Int(step) = args[2].0 else {
                 panic!()
             };
 
@@ -134,7 +134,7 @@ impl NativeFunction for Len {
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Some((x, _)) = args.get(0) {
-            Ok(RuntimeValue::Int(match x.unwrap(env, scope)? {
+            Ok(RuntimeValue::Int(match x {
                 RuntimeValue::List { data, data_type: _ } => data.len() as i64,
                 RuntimeValue::Tuple(data) => data.len() as i64,
                 RuntimeValue::Str(x) => x.len() as i64,
@@ -155,11 +155,7 @@ impl NativeFunction for Trim {
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Some((x, _)) = args.get(0) {
-            let RuntimeValue::Str(x) =
-                x.unwrap(env, scope)?
-            else {
-                panic!()
-            };
+            let RuntimeValue::Str(x) = x else { panic!() };
             Ok(RuntimeValue::Str(x.trim().to_string()))
         } else {
             Ok(RuntimeValue::Null)

@@ -1,9 +1,7 @@
 use calibre_common::environment::Variable;
 use calibre_parser::ast::{Node, NodeType, ParserDataType, VarType};
 
-use crate::runtime::{
-    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
-};
+use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
 pub mod comparisons;
 pub mod import;
@@ -19,30 +17,36 @@ impl CheckerEnvironment {
     ) -> Result<RuntimeType, InterpreterErr> {
         let NodeType::MatchDeclaration {
             parameters,
-            body : _,
+            body: _,
             return_type,
             is_async,
-        } = declaration.node_type else {panic!()};
-        
-            let params = vec![(
-                parameters.0.clone(),
-                if parameters.1 == ParserDataType::Dynamic {
-                    if let Some(node) = parameters.3.clone() {
-                        self.evaluate(scope, *node)?
-                    } else {
-                        RuntimeType::Dynamic
-                    }
-                }else{
-                    RuntimeType::from(parameters.1)
-                },
-                parameters.2,
-                parameters.3.is_some() ,
-            )];
+        } = declaration.node_type
+        else {
+            panic!()
+        };
 
-            Ok(RuntimeType::Function { return_type: Box::new(match return_type {
+        let params = vec![(
+            parameters.0.clone(),
+            if parameters.1 == ParserDataType::Dynamic {
+                if let Some(node) = parameters.2.clone() {
+                    self.evaluate(scope, *node)?
+                } else {
+                    RuntimeType::Dynamic
+                }
+            } else {
+                RuntimeType::from(parameters.1)
+            },
+            parameters.2.is_some(),
+        )];
+
+        Ok(RuntimeType::Function {
+            return_type: Box::new(match return_type {
                 Some(x) => Some(RuntimeType::from(x)),
                 None => None,
-            }), parameters: params, is_async })
+            }),
+            parameters: params,
+            is_async,
+        })
     }
 
     pub fn evaluate_function_declaration(
@@ -56,49 +60,62 @@ impl CheckerEnvironment {
             return_type,
             is_async,
         } = declaration.node_type
-        else { panic!() };
-            let mut params = Vec::new();
+        else {
+            panic!()
+        };
+        let mut params = Vec::new();
 
-            for parameters in parameters.into_iter() {
-                params.push((
+        for parameters in parameters.into_iter() {
+            params.push((
                 parameters.0.clone(),
                 if parameters.1 == ParserDataType::Dynamic {
-                    if let Some(node) = parameters.3.clone() {
+                    if let Some(node) = parameters.2.clone() {
                         self.evaluate(scope, node)?
                     } else {
                         RuntimeType::Dynamic
                     }
-                }else{
+                } else {
                     RuntimeType::from(parameters.1)
                 },
-                parameters.2,
-                parameters.3.is_some() ,
+                parameters.2.is_some(),
             ));
-            }
+        }
 
-            Ok(RuntimeType::Function { return_type: Box::new(match return_type {
+        Ok(RuntimeType::Function {
+            return_type: Box::new(match return_type {
                 Some(x) => Some(RuntimeType::from(x)),
                 None => None,
-            }), parameters: params, is_async })
+            }),
+            parameters: params,
+            is_async,
+        })
     }
 
     pub fn evaluate_variable_declaration(
         &mut self,
         scope: &u64,
-        var_type : VarType,
-        identifier : String,
-        mut value : RuntimeType,
-        data_type : Option<RuntimeType>,
+        var_type: VarType,
+        identifier: String,
+        value: RuntimeType,
+        data_type: Option<RuntimeType>,
     ) -> Result<RuntimeType, InterpreterErr> {
-            if let Some(t) = data_type {
-                if !value.is_type(&RuntimeType::from(t)){
-                    println!("{:?}", self.current_location)
-                }
+        if let Some(t) = data_type {
+            if !value.is_type(&RuntimeType::from(t)) {
+                // println!("{:?}", self.current_location)
             }
+        }
 
-            let _ = self.push_var(scope, identifier, Variable { value : value.clone(), var_type, location : self.current_location.clone()})?;
+        let _ = self.push_var(
+            scope,
+            identifier,
+            Variable {
+                value: value.clone(),
+                var_type,
+                location: self.current_location.clone(),
+            },
+        )?;
 
-            Ok(value)
+        Ok(value)
     }
 }
 

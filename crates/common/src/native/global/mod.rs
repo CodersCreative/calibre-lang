@@ -1,49 +1,37 @@
 use calibre_parser::ast::VarType;
 
-use crate::{
-    environment::{Environment, RuntimeType, RuntimeValue, Variable}
-};
-use std::{collections::HashMap};
+use crate::environment::{Environment, RuntimeType, RuntimeValue, Variable};
+use std::collections::HashMap;
 
-pub fn setup<T : RuntimeValue, U : RuntimeType>(env: &mut Environment<T, U>, scope: &u64) {
-    let funcs: Vec<&str> = vec![
-        "ok",
-        "err",
-        "some",
-        "range",
-        "trim",
-        "print",
-        "len",
-    ];
+pub fn setup<T: RuntimeValue, U: RuntimeType>(env: &mut Environment<T, U>, scope: &u64) {
+    let funcs: Vec<&str> = vec!["ok", "err", "some", "range", "trim", "print", "len"];
 
     let map = T::natives();
-    let funcs = funcs.into_iter().map(|x| (String::from(x), map.get(x).clone().unwrap()));
 
-    if let Some(map) = env.variables.get_mut(scope) {
-        for func in funcs {
-            let _ = map.insert(
-                func.0,
-                Variable {
-                    value: func.1.clone(),
-                    var_type: VarType::Constant,
-                    location : None,
-                },
-            );
-        }
-    }
+    let mut funcs = funcs
+        .into_iter()
+        .map(|x| (String::from(x), map.get(x).unwrap().clone()))
+        .collect();
 
-    let vars : HashMap<String, T> = T::constants();
+    let mut vars: Vec<(String, T)> = T::constants().into_iter().map(|x| x).collect();
+    vars.append(&mut funcs);
 
-    if let Some(map) = env.variables.get_mut(scope) {
-        for var in vars {
-            let _ = map.insert(
-                var.0,
-                Variable {
-                    value: var.1,
-                    var_type: VarType::Constant,
-                    location : None,
-                },
-            );
-        }
+    for var in vars {
+        let _ = env.variables.insert(
+            env.var_counter,
+            Variable {
+                value: var.1,
+                var_type: VarType::Constant,
+                location: None,
+            },
+        );
+
+        env.scopes
+            .get_mut(&scope)
+            .unwrap()
+            .variables
+            .insert(var.0, env.var_counter);
+
+        env.var_counter += 1;
     }
 }

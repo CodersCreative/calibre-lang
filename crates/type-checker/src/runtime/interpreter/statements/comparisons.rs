@@ -1,6 +1,4 @@
-use crate::runtime::{
-    interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType
-};
+use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 use calibre_parser::ast::{IfComparisonType, Node, NodeType};
 
 impl CheckerEnvironment {
@@ -10,49 +8,42 @@ impl CheckerEnvironment {
         left: RuntimeType,
         right: RuntimeType,
     ) -> Result<RuntimeType, InterpreterErr> {
-            Ok(RuntimeType::Bool)
+        Ok(RuntimeType::Bool)
     }
 
     pub fn evaluate_if_statement(
         &mut self,
         scope: &u64,
-        comparison : IfComparisonType,
-        then : Node,
+        comparison: IfComparisonType,
+        then: Node,
         otherwise: Option<Node>,
     ) -> Result<RuntimeType, InterpreterErr> {
-            let mut result = RuntimeType::Null;
-            match comparison {
-                IfComparisonType::If(comparison) => {
-                    let res = self
-                        .evaluate(scope, comparison.clone());
-                    if let Ok(RuntimeType::Bool) = res
-                    {
-                        result = self.evaluate(scope, then)?;
-                    } else {
-                        println!("{:?} - {:?}", self.current_location, res);
-                        return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
-                    }
-                }
-                IfComparisonType::IfLet {
-                    mutability,
-                    value,
-                    pattern,
-                } => {
-                    let path = match &value.node_type {
-                        NodeType::Identifier(x) => vec![x.clone()],
-                        _ => Vec::new(),
-                    };
-
-                    let value = self.evaluate(scope, value.clone())?;
-                    result = RuntimeType::Dynamic;
+        let mut result = RuntimeType::Null;
+        match comparison {
+            IfComparisonType::If(comparison) => {
+                let res = self.evaluate(scope, comparison.clone());
+                if let Ok(RuntimeType::Bool) = res {
+                    result = self.evaluate(scope, then)?;
+                } else {
+                    return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
                 }
             }
+            IfComparisonType::IfLet { value, pattern } => {
+                let path = match &value.node_type {
+                    NodeType::Identifier(x) => vec![x.clone()],
+                    _ => Vec::new(),
+                };
 
-            if let Some(last) = otherwise {
-                result = self.evaluate(scope, last)?;
+                let value = self.evaluate(scope, value.clone())?;
+                result = RuntimeType::Dynamic;
             }
+        }
 
-            Ok(result)
+        if let Some(last) = otherwise {
+            result = self.evaluate(scope, last)?;
+        }
+
+        Ok(result)
     }
 }
 
@@ -77,7 +68,7 @@ mod tests {
                 "true",
             )))),
             then: Box::new(NodeType::IntLiteral(123)),
-            otherwise : None
+            otherwise: None,
         };
         let result = env.evaluate(&scope, node).unwrap();
 
@@ -92,7 +83,7 @@ mod tests {
                 "false",
             )))),
             then: Box::new(NodeType::IntLiteral(123)),
-            otherwise : Some(Box::new(NodeType::IntLiteral(2)))
+            otherwise: Some(Box::new(NodeType::IntLiteral(2))),
         };
         let result = env.evaluate(&scope, node).unwrap();
 

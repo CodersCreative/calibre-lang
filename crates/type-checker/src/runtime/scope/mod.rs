@@ -1,18 +1,41 @@
 pub mod variables;
-pub mod links;
 
-use std::{fs, ops::{Deref, DerefMut}};
+use std::{
+    fs,
+    ops::{Deref, DerefMut},
+};
 
-use calibre_common::{environment::Environment};
-use calibre_parser::Parser;
-use crate::runtime::{interpreter::InterpreterErr, values::{helper::StopValue, RuntimeType}};
+use crate::runtime::{
+    interpreter::InterpreterErr,
+    values::{RuntimeType, helper::StopValue},
+};
+use calibre_common::environment::Environment;
+use calibre_parser::{Parser, lexer::Tokenizer};
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct CheckerEnvironment{pub env : Environment<RuntimeType, RuntimeType>, pub stop : Option<StopValue>}
+#[derive(Debug, Clone)]
+pub struct CheckerEnvironment {
+    pub env: Environment<RuntimeType, RuntimeType>,
+    pub stop: Option<StopValue>,
+    pub errors: Vec<Result<RuntimeType, InterpreterErr>>,
+}
+
+impl PartialEq for CheckerEnvironment {
+    fn eq(&self, other: &Self) -> bool {
+        self.env == other.env && self.stop == other.stop
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.env != other.env || self.stop != other.stop
+    }
+}
 
 impl CheckerEnvironment {
-    pub fn new() -> Self{
-        Self{env : Environment::new(false), stop : None}
+    pub fn new() -> Self {
+        Self {
+            env: Environment::new(false),
+            stop: None,
+            errors: Vec::new(),
+        }
     }
 
     pub fn import_scope_list(
@@ -29,32 +52,40 @@ impl CheckerEnvironment {
     }
 
     pub fn import_next_scope(&mut self, scope: u64, key: &str) -> Result<u64, InterpreterErr> {
-        Ok(match key {
-            "super" => self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
+        match key {
+            "super" => Ok(self.scopes.get(&scope).unwrap().parent.clone().unwrap()),
             _ => {
                 let current = self.scopes.get(&scope).unwrap().clone();
                 if let Some(x) = current.children.get(key) {
-                    x.clone()
+                    Ok(x.clone())
                 } else {
                     if let Some(s) = self.get_global_scope().children.get(key) {
-                        s.clone()
+                        Ok(s.clone())
                     } else {
                         let scope = self.new_scope_from_parent(current.id, key);
                         let mut parser = Parser::default();
+
+                        let mut tokenizer = Tokenizer::default();
                         let program = parser
                             .produce_ast(
-                                fs::read_to_string(self.scopes.get(&scope).unwrap().path.clone())
+                                tokenizer
+                                    .tokenize(
+                                        fs::read_to_string(
+                                            self.scopes.get(&scope).unwrap().path.clone(),
+                                        )
+                                        .unwrap(),
+                                    )
                                     .unwrap(),
                             )
                             .unwrap();
+
                         let _ = self.evaluate(&scope, program)?;
-                        scope
+                        Ok(scope)
                     }
                 }
             }
-        })
+        }
     }
-
 }
 impl Deref for CheckerEnvironment {
     type Target = Environment<RuntimeType, RuntimeType>;

@@ -1,8 +1,6 @@
-use calibre_common::{environment::{Type}, errors::ValueErr};
+use calibre_common::{environment::Type, errors::ValueErr};
 use calibre_parser::ast::{ObjectType, ParserDataType};
-use std::{
-    collections::HashMap, fmt::Debug
-};
+use std::{collections::HashMap, fmt::Debug};
 
 use crate::runtime::scope::CheckerEnvironment;
 
@@ -23,18 +21,19 @@ pub enum RuntimeType {
     Result(Box<RuntimeType>, Box<RuntimeType>),
     Function {
         return_type: Box<Option<RuntimeType>>,
-        parameters: Vec<(String, RuntimeType, calibre_parser::ast::RefMutability, bool)>,
+        parameters: Vec<(String, RuntimeType, bool)>,
         is_async: bool,
     },
     Enum(u64, String, Option<ObjectType<RuntimeType>>),
     Struct(u64, Option<String>, ObjectType<RuntimeType>),
+    Ref(Box<RuntimeType>),
     Null,
     NativeFunction(Box<RuntimeType>),
 }
 
 impl calibre_common::environment::RuntimeType for RuntimeType {}
 impl calibre_common::environment::RuntimeValue for RuntimeType {
-    fn string(_txt : String) -> Self {
+    fn string(_txt: String) -> Self {
         Self::Str
     }
 
@@ -51,10 +50,22 @@ impl calibre_common::environment::RuntimeValue for RuntimeType {
     }
 
     fn natives() -> HashMap<String, Self> {
-        let lst : Vec<(&'static str, RuntimeType)> = vec![
+        let lst: Vec<(&'static str, RuntimeType)> = vec![
             ("print", RuntimeType::Null),
-            ("ok", RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new(RuntimeType::Dynamic))),
-            ("err", RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new(RuntimeType::Dynamic))),
+            (
+                "ok",
+                RuntimeType::Result(
+                    Box::new(RuntimeType::Dynamic),
+                    Box::new(RuntimeType::Dynamic),
+                ),
+            ),
+            (
+                "err",
+                RuntimeType::Result(
+                    Box::new(RuntimeType::Dynamic),
+                    Box::new(RuntimeType::Dynamic),
+                ),
+            ),
             ("some", RuntimeType::Option(Box::new(RuntimeType::Dynamic))),
             ("len", RuntimeType::Int),
             ("range", RuntimeType::Range),
@@ -72,7 +83,10 @@ impl calibre_common::environment::RuntimeValue for RuntimeType {
         let mut map = HashMap::new();
 
         for val in lst {
-            map.insert(val.0.to_string(), RuntimeType::NativeFunction(Box::new(val.1)));
+            map.insert(
+                val.0.to_string(),
+                RuntimeType::NativeFunction(Box::new(val.1)),
+            );
         }
 
         map
@@ -94,6 +108,7 @@ impl From<ParserDataType> for RuntimeType {
                 Some(x) => Some(RuntimeType::from(x)),
                 None => None,
             })),
+            ParserDataType::Ref(x, _) => Self::Ref(Box::new(RuntimeType::from(*x))),
             ParserDataType::Range => Self::Range,
             ParserDataType::Struct(x) => Self::Struct(0, x, ObjectType::Tuple(Vec::new())),
             ParserDataType::Function {
@@ -107,7 +122,7 @@ impl From<ParserDataType> for RuntimeType {
                 }),
                 parameters: parameters
                     .into_iter()
-                    .map(|x| (String::new(), RuntimeType::from(x.0), x.1, false))
+                    .map(|x| (String::new(), RuntimeType::from(x), false))
                     .collect(),
                 is_async,
             },
@@ -136,13 +151,13 @@ impl RuntimeType {
             return Err(ValueErr::Conversion(self.clone(), typ));
         };
 
-        let result_case = || -> Result<RuntimeType, ValueErr<RuntimeType, RuntimeType>>{
+        let result_case = || -> Result<RuntimeType, ValueErr<RuntimeType, RuntimeType>> {
             if let RuntimeType::Result(x, y) = t.clone() {
                 if self.is_type(&*x) || self.is_type(&*y) {
                     Ok(t.clone())
                 } else if let Ok(_) = self.into_type(env, scope, &*x) {
                     Ok(t.clone())
-                }else if let Ok(_) = self.into_type(env, scope, &*y) {
+                } else if let Ok(_) = self.into_type(env, scope, &*y) {
                     Ok(t.clone())
                 } else {
                     Err(ValueErr::Conversion(self.clone(), t.clone()))
@@ -150,10 +165,9 @@ impl RuntimeType {
             } else {
                 Err(ValueErr::Conversion(self.clone(), t.clone()))
             }
-
         };
 
-        let option_case = || -> Result<RuntimeType, ValueErr<RuntimeType, RuntimeType>>{
+        let option_case = || -> Result<RuntimeType, ValueErr<RuntimeType, RuntimeType>> {
             if let RuntimeType::Option(x) = t.clone() {
                 if let Ok(_) = self.into_type(env, scope, &*x) {
                     return Ok(t.clone());
@@ -162,12 +176,12 @@ impl RuntimeType {
             return Err(ValueErr::Conversion(self.clone(), t.clone()));
         };
 
-        let list_case = || -> Result<RuntimeType, ValueErr<RuntimeType, RuntimeType>>{
+        let list_case = || -> Result<RuntimeType, ValueErr<RuntimeType, RuntimeType>> {
             if let RuntimeType::List(x) = t.clone() {
                 if let Some(x) = *x {
                     if let Ok(_) = self.into_type(env, scope, &x) {
                         return Ok(t.clone());
-                    }else {
+                    } else {
                         Err(ValueErr::Conversion(self.clone(), t.clone()))
                     }
                 } else {
@@ -183,10 +197,30 @@ impl RuntimeType {
         }
 
         match (self.clone(), t.clone()) {
-            (RuntimeType::Int, RuntimeType::Range) | (RuntimeType::Range, RuntimeType::Int) | (RuntimeType::Float, RuntimeType::Range) | (RuntimeType::Range, RuntimeType::Float) => Ok(t.clone()),
-            (RuntimeType::Int, RuntimeType::Str) | (RuntimeType::Str, RuntimeType::Int) | (RuntimeType::Float, RuntimeType::Str) | (RuntimeType::Str, RuntimeType::Float) => Ok(t.clone()),
-            (RuntimeType::Int, RuntimeType::Char) | (RuntimeType::Char, RuntimeType::Int) | (RuntimeType::Float, RuntimeType::Char) | (RuntimeType::Char, RuntimeType::Float) => Ok(t.clone()),
-            (RuntimeType::Function { return_type: val_type, parameters : val_parameters, is_async : val_is_async }, RuntimeType::Function { return_type, parameters, is_async }) => {
+            (RuntimeType::Int, RuntimeType::Range)
+            | (RuntimeType::Range, RuntimeType::Int)
+            | (RuntimeType::Float, RuntimeType::Range)
+            | (RuntimeType::Range, RuntimeType::Float) => Ok(t.clone()),
+            (RuntimeType::Int, RuntimeType::Str)
+            | (RuntimeType::Str, RuntimeType::Int)
+            | (RuntimeType::Float, RuntimeType::Str)
+            | (RuntimeType::Str, RuntimeType::Float) => Ok(t.clone()),
+            (RuntimeType::Int, RuntimeType::Char)
+            | (RuntimeType::Char, RuntimeType::Int)
+            | (RuntimeType::Float, RuntimeType::Char)
+            | (RuntimeType::Char, RuntimeType::Float) => Ok(t.clone()),
+            (
+                RuntimeType::Function {
+                    return_type: val_type,
+                    parameters: val_parameters,
+                    is_async: val_is_async,
+                },
+                RuntimeType::Function {
+                    return_type,
+                    parameters,
+                    is_async,
+                },
+            ) => {
                 if is_async != val_is_async {
                     return panic_type();
                 };
@@ -208,7 +242,10 @@ impl RuntimeType {
                 Ok(self.clone())
             }
             (RuntimeType::Struct(_, _, _), RuntimeType::Struct(_, None, _)) => Ok(self.clone()),
-            (RuntimeType::Struct(o, _ , ObjectType::Tuple(x)), RuntimeType::Struct(_, Some(identifier), _)) => {
+            (
+                RuntimeType::Struct(o, _, ObjectType::Tuple(x)),
+                RuntimeType::Struct(_, Some(identifier), _),
+            ) => {
                 let Ok(Type::Struct(ObjectType::Tuple(properties))) =
                     env.get_object_type(&o, &identifier)
                 else {
@@ -230,7 +267,10 @@ impl RuntimeType {
                     ObjectType::Tuple(new_values),
                 ))
             }
-            (RuntimeType::Struct(o, _ , ObjectType::Map(x)), RuntimeType::Struct(_, Some(identifier), _)) => {
+            (
+                RuntimeType::Struct(o, _, ObjectType::Map(x)),
+                RuntimeType::Struct(_, Some(identifier), _),
+            ) => {
                 let Type::Struct(ObjectType::Map(properties)) =
                     env.get_object_type(&o, &identifier)?
                 else {
@@ -240,10 +280,8 @@ impl RuntimeType {
 
                 for property in properties.iter() {
                     if let Some(val) = x.get(property.0) {
-                        new_values.insert(
-                            property.0.clone(),
-                            val.into_type(env, scope, &property.1)?,
-                        );
+                        new_values
+                            .insert(property.0.clone(), val.into_type(env, scope, &property.1)?);
                     } else {
                         return panic_type();
                     }
@@ -264,45 +302,41 @@ impl RuntimeType {
                     Err(_) => panic_type(),
                 }
             }
-            (RuntimeType::Enum(_, x, _), RuntimeType::Enum(_, y, _)) if x == y => {
-                Ok(t.clone())
-            }
-            (RuntimeType::List(_), t) => {
-                Ok(RuntimeType::List(Box::new(Some(t))))
-            },
+            (RuntimeType::Enum(_, x, _), RuntimeType::Enum(_, y, _)) if x == y => Ok(t.clone()),
+            (RuntimeType::List(_), t) => Ok(RuntimeType::List(Box::new(Some(t)))),
             (RuntimeType::Option(x), t) => {
-                if let Ok(_) = x.into_type(env, scope, &t){
+                if let Ok(_) = x.into_type(env, scope, &t) {
                     Ok(t)
-                }else{
+                } else {
                     panic_type()
                 }
-            },
+            }
             (RuntimeType::Result(x, y), t) => {
-                if let Ok(_) = x.into_type(env, scope, &t){
+                if let Ok(_) = x.into_type(env, scope, &t) {
                     Ok(t)
-                }else if let Ok(_) = y.into_type(env, scope, &t){
+                } else if let Ok(_) = y.into_type(env, scope, &t) {
                     Ok(t)
-                }else{
+                } else {
                     panic_type()
                 }
-            },
+            }
             (_, RuntimeType::Str) => Ok(RuntimeType::Str),
             (_, RuntimeType::List(_)) => list_case(),
             (_, RuntimeType::Option(_)) => option_case(),
             (_, RuntimeType::Result(_, _)) => result_case(),
-            (RuntimeType::Char, _) => {
-                RuntimeType::Str.into_type(env, scope, t)
-            }
+            (RuntimeType::Char, _) => RuntimeType::Str.into_type(env, scope, t),
             _ => panic_type(),
         }
     }
 
-    pub fn is_type(&self, other : &RuntimeType) -> bool {
+    pub fn is_type(&self, other: &RuntimeType) -> bool {
         if self == &RuntimeType::Dynamic || other == &RuntimeType::Dynamic {
             true
-        }else if self == &RuntimeType::Int && other == &RuntimeType::Float || self == &RuntimeType::Float && other == &RuntimeType::Int {
+        } else if self == &RuntimeType::Int && other == &RuntimeType::Float
+            || self == &RuntimeType::Float && other == &RuntimeType::Int
+        {
             true
-        }else {
+        } else {
             self == other
         }
     }

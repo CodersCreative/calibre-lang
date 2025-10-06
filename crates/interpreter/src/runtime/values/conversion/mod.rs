@@ -1,5 +1,6 @@
 use crate::runtime::{
-    scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
+    scope::InterpreterEnvironment,
+    values::{RuntimeType, RuntimeValue},
 };
 use calibre_common::{environment::Type, errors::ValueErr};
 use calibre_parser::ast::ObjectType;
@@ -11,73 +12,6 @@ pub mod numbers;
 pub mod similar;
 
 impl RuntimeValue {
-    pub fn unwrap_val(self, env: &InterpreterEnvironment, scope: &u64) -> Result<RuntimeValue, ValueErr<RuntimeValue, RuntimeType>> {
-        match self {
-            RuntimeValue::Result(Ok(x), _) => x.unwrap_val(env, scope),
-            RuntimeValue::Result(Err(x), _) => x.unwrap_val(env, scope),
-            RuntimeValue::Option(Some(x), _) => x.unwrap_val(env, scope),
-            RuntimeValue::Link(scope, path, _) => env
-                .get_link_path(&scope, &path)
-                .unwrap()
-                .clone()
-                .unwrap_val(env, &scope),
-            _ => Ok(self),
-        }
-    }
-
-    pub fn unwrap<'a>(
-        &'a self,
-        env: &'a InterpreterEnvironment,
-        scope: &u64,
-    ) -> Result<&'a RuntimeValue, ValueErr<RuntimeValue, RuntimeType>> {
-        match self {
-            RuntimeValue::Result(Ok(x), _) => x.unwrap(env, scope),
-            RuntimeValue::Result(Err(x), _) => x.unwrap(env, scope),
-            RuntimeValue::Option(Some(x), _) => x.unwrap(env, scope),
-            RuntimeValue::Link(scope, path, _) => {
-                env.get_link_path(scope, path).unwrap().unwrap(env, scope)
-            }
-            _ => Ok(self),
-        }
-    }
-
-    pub fn unwrap_links<'a>(
-        &'a self,
-        env: &'a InterpreterEnvironment,
-        _scope: &u64,
-        condition: Option<&u64>,
-    ) -> Result<&'a RuntimeValue, ValueErr<RuntimeValue, RuntimeType>> {
-        match self {
-            RuntimeValue::Link(scope, path, _)
-                if Some(scope) == condition || condition.is_none() =>
-            {
-                env.get_link_path(scope, path)
-                    .unwrap()
-                    .unwrap_links(env, scope, condition)
-            }
-            _ => Ok(self),
-        }
-    }
-
-    pub fn unwrap_links_val(
-        self,
-        env: &InterpreterEnvironment,
-        _scope: &u64,
-        condition: Option<u64>,
-    ) -> Result<RuntimeValue, ValueErr<RuntimeValue, RuntimeType>> {
-        match self {
-            RuntimeValue::Link(scope, path, _)
-                if Some(scope) == condition || condition.is_none() =>
-            {
-                env.get_link_path(&scope, &path)
-                    .unwrap()
-                    .clone()
-                    .unwrap_links_val(env, &scope, condition)
-            }
-            _ => Ok(self),
-        }
-    }
-
     pub fn into_type(
         &self,
         env: &InterpreterEnvironment,
@@ -151,7 +85,7 @@ impl RuntimeValue {
             };
         }
 
-        match self.unwrap(env, scope)? {
+        match self {
             RuntimeValue::Float(x) => number_cast!(x, t),
             RuntimeValue::Int(x) => number_cast!(x, t),
             RuntimeValue::Tuple(data) => match t {

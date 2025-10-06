@@ -1,10 +1,11 @@
 use std::fs;
 
-use calibre_common::environment::{Variable, RuntimeValue as Value};
-use calibre_parser::ast::VarType;
-use calibre_parser::Parser;
-use crate::runtime::values::{RuntimeType, RuntimeValue};
 use crate::runtime::scope::InterpreterEnvironment;
+use crate::runtime::values::{RuntimeType, RuntimeValue};
+use calibre_common::environment::{RuntimeValue as Value, Variable};
+use calibre_parser::Parser;
+use calibre_parser::ast::VarType;
+use calibre_parser::lexer::Tokenizer;
 
 pub mod console;
 pub mod random;
@@ -12,8 +13,14 @@ pub mod thread;
 
 pub fn setup(env: &mut InterpreterEnvironment, scope: &u64) {
     let mut parser = Parser::default();
+
+    let mut tokenizer = Tokenizer::default();
     let program = parser
-        .produce_ast(fs::read_to_string(env.scopes.get(scope).unwrap().path.clone()).unwrap())
+        .produce_ast(
+            tokenizer
+                .tokenize(fs::read_to_string(env.scopes.get(scope).unwrap().path.clone()).unwrap())
+                .unwrap(),
+        )
         .unwrap();
 
     let _ = env.evaluate(scope, program).unwrap();
@@ -23,21 +30,38 @@ pub fn setup(env: &mut InterpreterEnvironment, scope: &u64) {
     setup_scope(env, scope, "random", &["generate", "bool", "ratio"]);
 }
 
-pub fn setup_scope(env: &mut InterpreterEnvironment, parent: &u64, name : &str, funcs : &[&'static str]) {
+pub fn setup_scope(
+    env: &mut InterpreterEnvironment,
+    parent: &u64,
+    name: &str,
+    funcs: &[&'static str],
+) {
     let scope = env.new_scope_from_parent(*parent, name);
-    let map : std::collections::HashMap<String, RuntimeValue> = RuntimeValue::natives();
-    let funcs = funcs.into_iter().map(|x| (String::from(*x), map.get(&format!("{}.{}", name, x)).clone().unwrap()));
+    let map: std::collections::HashMap<String, RuntimeValue> = RuntimeValue::natives();
+    let funcs = funcs.into_iter().map(|x| {
+        (
+            String::from(*x),
+            map.get(&format!("{}.{}", name, x)).clone().unwrap(),
+        )
+    });
 
-    if let Some(map) = env.variables.get_mut(&scope) {
-        for func in funcs {
-            map.insert(
-                func.0,
-                Variable {
-                    value: func.1.clone(),
-                    var_type: VarType::Constant,
-                    location: None,
-                },
-            );
-        }
+    for var in funcs {
+        let counter = env.var_counter;
+        let _ = env.variables.insert(
+            counter,
+            Variable {
+                value: var.1.clone(),
+                var_type: VarType::Constant,
+                location: None,
+            },
+        );
+
+        env.scopes
+            .get_mut(&scope)
+            .unwrap()
+            .variables
+            .insert(var.0, counter);
+
+        env.var_counter += 1;
     }
 }

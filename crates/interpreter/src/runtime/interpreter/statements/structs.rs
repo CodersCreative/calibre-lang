@@ -4,58 +4,61 @@ use calibre_common::environment::{Object, Type};
 use calibre_parser::ast::{Node, NodeType};
 
 use crate::runtime::{
-    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::{RuntimeType, RuntimeValue}
+    interpreter::InterpreterErr,
+    scope::InterpreterEnvironment,
+    values::{RuntimeType, RuntimeValue},
 };
 
 impl InterpreterEnvironment {
     pub fn evaluate_impl_declaration(
         &mut self,
         scope: &u64,
-        identifier : String,
-        functions : Vec<(Node, bool)>,
+        identifier: String,
+        functions: Vec<(Node, bool)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            for function in functions {
-                let scope_2 = self.new_scope_from_parent_shallow(scope.clone());
+        for function in functions {
+            let scope_2 = self.new_scope_from_parent_shallow(scope.clone());
 
-                if let NodeType::VariableDeclaration {
-                    identifier: iden,
-                    value,
-                    ..
-                } = function.0.node_type
-                {
-                    let func = self.evaluate(&scope_2, *value)?.unwrap_val(self, scope)?;
-                    let location = self.get_location(scope, function.0.line, function.0.col);
+            if let NodeType::VariableDeclaration {
+                identifier: iden,
+                value,
+                ..
+            } = function.0.node_type
+            {
+                let func = self.evaluate(&scope_2, *value)?;
+                let location = self.get_location(scope, function.0.span);
 
-                    let _ = self.push_function(scope, &identifier, (iden, func, location, function.1))?;
-                    continue;
-                }
-
-                self.remove_scope(&scope_2);
-
-                return Err(InterpreterErr::ExpectedFunctions);
+                let _ =
+                    self.push_function(scope, &identifier, (iden, func, location, function.1))?;
+                continue;
             }
 
-            Ok(RuntimeValue::Null)
+            self.remove_scope(&scope_2);
+
+            return Err(InterpreterErr::ExpectedFunctions);
+        }
+
+        Ok(RuntimeValue::Null)
     }
 
     pub fn evaluate_type_declaration(
         &mut self,
         scope: &u64,
-        identifier : String,
-        object : Type<RuntimeType>,
+        identifier: String,
+        object: Type<RuntimeType>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-            let location = self.current_location.clone();
-            let _ = self.push_object(
-                scope,
-                identifier,
-                Object {
-                    object_type: object,
-                    functions: HashMap::new(),
-                    traits: Vec::new(),
-                    location,
-                },
-            )?;
-            Ok(RuntimeValue::Null)
+        let location = self.current_location.clone();
+        let _ = self.push_object(
+            scope,
+            identifier,
+            Object {
+                object_type: object,
+                functions: HashMap::new(),
+                traits: Vec::new(),
+                location,
+            },
+        )?;
+        Ok(RuntimeValue::Null)
     }
 }
 

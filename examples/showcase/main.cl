@@ -89,7 +89,7 @@ for i in range2(100, step = 25) => {
   print("val: " & i);
 }
 
-let smth_fn = fn (y) -> string!int => {
+let smth_fn = fn (y) -> str!int => {
   if y > 10 => {
     return ok(y);
   }

@@ -4,13 +4,10 @@ use crate::{
 };
 use calibre_parser::ast::{ObjectType, ParserDataType};
 use helper::Block;
-use std::{
-    collections::HashMap, f64::consts::PI, fmt::Debug, rc::Rc
-};
+use std::{collections::HashMap, f64::consts::PI, fmt::Debug, rc::Rc};
 
 pub mod conversion;
 pub mod helper;
-
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum RuntimeType {
@@ -27,16 +24,17 @@ pub enum RuntimeType {
     Result(Box<RuntimeType>, Box<RuntimeType>),
     Function {
         return_type: Box<Option<RuntimeType>>,
-        parameters: Vec<(RuntimeType, calibre_parser::ast::RefMutability)>,
+        parameters: Vec<RuntimeType>,
         is_async: bool,
     },
     Enum(u64, String),
     Struct(u64, Option<String>),
+    Ref(Box<RuntimeType>),
 }
 
 impl calibre_common::environment::RuntimeType for RuntimeType {}
 impl calibre_common::environment::RuntimeValue for RuntimeValue {
-    fn string(txt : String) -> Self {
+    fn string(txt: String) -> Self {
         Self::Str(txt)
     }
 
@@ -53,7 +51,7 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
     }
 
     fn natives() -> HashMap<String, Self> {
-        let lst : Vec<(&'static str, Rc<dyn NativeFunction>)> = vec![
+        let lst: Vec<(&'static str, Rc<dyn NativeFunction>)> = vec![
             ("print", Rc::new(native::stdlib::console::Out())),
             ("ok", Rc::new(native::global::OkFn())),
             ("err", Rc::new(native::global::ErrFn())),
@@ -66,7 +64,10 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
             ("console.err", Rc::new(native::stdlib::console::ErrFn())),
             ("console.clear", Rc::new(native::stdlib::console::Clear())),
             ("thread.wait", Rc::new(native::stdlib::thread::Wait())),
-            ("random.generate", Rc::new(native::stdlib::random::Generate())),
+            (
+                "random.generate",
+                Rc::new(native::stdlib::random::Generate()),
+            ),
             ("random.bool", Rc::new(native::stdlib::random::Bool())),
             ("random.ratio", Rc::new(native::stdlib::random::Ratio())),
         ];
@@ -110,7 +111,7 @@ impl From<ParserDataType> for RuntimeType {
                 }),
                 parameters: parameters
                     .into_iter()
-                    .map(|x| (RuntimeType::from(x.0), x.1))
+                    .map(|x| RuntimeType::from(x))
                     .collect(),
                 is_async,
             },
@@ -119,6 +120,7 @@ impl From<ParserDataType> for RuntimeType {
                 Box::new(RuntimeType::from(*x)),
                 Box::new(RuntimeType::from(*y)),
             ),
+            ParserDataType::Ref(x, _) => Self::Ref(Box::new(RuntimeType::from(*x))),
         }
     }
 }
@@ -129,7 +131,7 @@ impl Into<RuntimeType> for &RuntimeValue {
             RuntimeValue::Null => RuntimeType::Dynamic,
             RuntimeValue::Float(_) => RuntimeType::Float,
             RuntimeValue::Int(_) => RuntimeType::Int,
-            RuntimeValue::Link(_, _, x) => x.clone(),
+            RuntimeValue::Ref(_, x) => x.clone(),
             RuntimeValue::Enum(y, x, _, _) => RuntimeType::Enum(*y, x.clone()),
             RuntimeValue::Struct(y, x, _) => RuntimeType::Struct(*y, x.clone()),
             RuntimeValue::Bool(_) => RuntimeType::Bool,
@@ -152,10 +154,7 @@ impl Into<RuntimeType> for &RuntimeValue {
                     Some(x) => Box::new(Some(x.clone())),
                     None => Box::new(None),
                 },
-                parameters: parameters
-                    .iter()
-                    .map(|x| (x.1.clone(), x.2.clone()))
-                    .collect(),
+                parameters: parameters.iter().map(|x| x.1.clone()).collect(),
                 is_async: *is_async,
             },
             RuntimeValue::NativeFunction(_) => RuntimeType::Dynamic,
@@ -175,7 +174,7 @@ pub enum RuntimeValue {
     Struct(u64, Option<String>, ObjectType<RuntimeValue>),
     Enum(u64, String, usize, Option<ObjectType<RuntimeValue>>),
     Tuple(Vec<RuntimeValue>),
-    Link(u64, Vec<String>, RuntimeType),
+    Ref(u64, RuntimeType),
     List {
         data: Vec<RuntimeValue>,
         data_type: Box<Option<RuntimeType>>,
@@ -183,12 +182,7 @@ pub enum RuntimeValue {
     Option(Option<Box<RuntimeValue>>, RuntimeType),
     Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>, RuntimeType),
     Function {
-        parameters: Vec<(
-            String,
-            RuntimeType,
-            calibre_parser::ast::RefMutability,
-            Option<RuntimeValue>,
-        )>,
+        parameters: Vec<(String, RuntimeType, Option<RuntimeValue>)>,
         body: FunctionType,
         return_type: Option<RuntimeType>,
         is_async: bool,
@@ -223,7 +217,7 @@ impl ToString for RuntimeValue {
             Self::Int(x) => x.to_string(),
             Self::Enum(_, x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
             Self::Range(from, to) => format!("{}..{}", from, to),
-            Self::Link(_, path, _) => format!("link -> {:?}", path),
+            Self::Ref(_, ty) => format!("link -> {:?}", ty),
             Self::Bool(x) => x.to_string(),
             Self::Struct(_, y, x) => format!("{y:?} = {}", x.to_string()),
             Self::NativeFunction(_) => format!("native function"),
