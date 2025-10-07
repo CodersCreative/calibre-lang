@@ -1,3 +1,6 @@
+pub mod layout;
+pub mod memory;
+
 use std::{collections::HashMap, error::Error};
 
 use calibre_parser::ast::binary::BinaryOperator;

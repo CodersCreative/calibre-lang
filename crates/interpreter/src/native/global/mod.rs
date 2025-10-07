@@ -85,56 +85,6 @@ impl NativeFunction for PanicFn {
         panic!();
     }
 }
-pub struct Range();
-
-impl NativeFunction for Range {
-    fn run(
-        &self,
-        env: &mut InterpreterEnvironment,
-        scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
-    ) -> Result<RuntimeValue, InterpreterErr> {
-        if args.len() <= 1 {
-            let RuntimeValue::Int(amt) = args[0].0 else {
-                panic!()
-            };
-
-            Ok(RuntimeValue::Range(0, amt as i64))
-        } else if args.len() == 2 {
-            let RuntimeValue::Int(start) = args[0].0 else {
-                panic!()
-            };
-
-            let RuntimeValue::Int(stop) = args[1].0 else {
-                panic!()
-            };
-
-            Ok(RuntimeValue::Range(start as i64, stop as i64))
-        } else if args.len() == 3 {
-            let RuntimeValue::Int(start) = args[0].0 else {
-                panic!()
-            };
-
-            let RuntimeValue::Int(stop) = args[1].0 else {
-                panic!()
-            };
-
-            let RuntimeValue::Int(step) = args[2].0 else {
-                panic!()
-            };
-
-            Ok(RuntimeValue::List {
-                data: (start..stop)
-                    .step_by(step as usize)
-                    .map(|x| RuntimeValue::Int(x))
-                    .collect(),
-                data_type: Box::new(Some(RuntimeType::Int)),
-            })
-        } else {
-            Ok(RuntimeValue::Null)
-        }
-    }
-}
 
 pub struct Len();
 

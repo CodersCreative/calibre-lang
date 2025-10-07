@@ -330,7 +330,6 @@ impl InterpreterEnvironment {
         };
 
         for key in keys.iter().skip(1) {
-            // println!("{:?}", pointer);
             match &self.variables.get(&pointer).unwrap().value {
                 RuntimeValue::Struct(_, _, ObjectType::Map(map))
                 | RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))) => match map.get(key) {
@@ -342,7 +341,10 @@ impl InterpreterEnvironment {
                 | RuntimeValue::Enum(_, _, _, Some(ObjectType::Tuple(data)))
                 | RuntimeValue::Tuple(data) => match data.get(key.parse::<usize>().unwrap()) {
                     Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
-                    _ => break,
+                    x => {
+                        println!("why {x:?}");
+                        break;
+                    }
                 },
                 RuntimeValue::Option(Some(data), _)
                 | RuntimeValue::Result(Ok(data), _)
@@ -355,8 +357,6 @@ impl InterpreterEnvironment {
             }
         }
 
-        // println!("{:?}", pointer);
-        println!("val = {:?}", &self.variables.get(&pointer).unwrap().value);
         let typ = (&self.variables.get(&pointer).unwrap().value).into();
         Ok(RuntimeValue::Ref(pointer, typ))
     }
@@ -411,11 +411,11 @@ impl InterpreterEnvironment {
         }
     }
 
-    pub fn get_var<'a>(
-        &'a self,
+    pub fn get_var(
+        &self,
         scope: &u64,
         key: &str,
-    ) -> Result<&'a Variable<RuntimeValue>, ScopeErr<RuntimeValue>> {
+    ) -> Result<Variable<RuntimeValue>, ScopeErr<RuntimeValue>> {
         if let Some(pointer) = self
             .scopes
             .get(scope)
@@ -424,7 +424,8 @@ impl InterpreterEnvironment {
             .get(key)
             .map(|x| x.clone())
         {
-            Ok(self.variables.get(&pointer).unwrap())
+            let value = self.variables.get(&pointer).unwrap().clone();
+            Ok(self.convert_saveable_into_runtime_var(value))
         } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
             self.get_var(&scope, key)
         } else {

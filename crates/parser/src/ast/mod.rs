@@ -9,7 +9,7 @@ use binary::BinaryOperator;
 use comparison::Comparison;
 use std::{cmp::Ordering, collections::HashMap, str::FromStr, string::ParseError};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RefMutability {
     Value,
     Ref,

@@ -15,6 +15,12 @@ impl RuntimeValue {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MemberType {
+    pub name: String,
+    pub ty: RuntimeType,
+}
+
 impl From<ParserDataType> for RuntimeType {
     fn from(value: ParserDataType) -> Self {
         match value {
@@ -28,21 +34,25 @@ impl From<ParserDataType> for RuntimeType {
                 Some(x) => Some(x.into()),
                 None => None,
             })),
-            ParserDataType::Struct(x) => RuntimeType::Struct(x),
+            ParserDataType::Struct(Some(x)) => RuntimeType::Named(x),
             _ => unimplemented!(),
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Hash, Eq)]
 pub enum RuntimeType {
     Float,
     Int,
     Bool,
     Str,
     Char,
+    Dynamic,
+    Ref {
+        mutable : bool,
+    }
     Tuple(Vec<RuntimeType>),
-    List(Box<Option<RuntimeType>>),
+    List(u64, Some<Box<RuntimeType>>),
     Range,
     Option(Box<RuntimeType>),
     Result(Box<RuntimeType>, Box<RuntimeType>),
@@ -51,7 +61,26 @@ pub enum RuntimeType {
         parameters: Vec<(RuntimeType, calibre_parser::ast::RefMutability)>,
         is_async: bool,
     },
-    Ref(Box<RuntimeType>),
-    Enum(String),
-    Struct(Option<String>),
+    Enum{
+        uid : u32,
+        
+    },
+    Struct{
+        uid : Option<u32>,
+        members : Vec<MemberType>,
+    },
+    Named(String),
+}
+
+impl RuntimeType {
+        pub fn is_aggregate(&self) -> bool {
+        match self.absolute_ty() {
+            RuntimeType::Struct { .. }
+            | RuntimeType::Enum { .. }
+            | RuntimeType::Result { .. }
+            | RuntimeType::List { .. }
+            | RuntimeType::Dynamic => true,
+            _ => false,
+        }
+    }
 }
