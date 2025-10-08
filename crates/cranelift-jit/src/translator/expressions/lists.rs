@@ -2,7 +2,7 @@ use crate::{
     translator::FunctionTranslator,
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_parser::ast::{comparison::Comparison, Node, NodeType};
+use calibre_parser::ast::{Node, NodeType, comparison::Comparison};
 use cranelift::{
     codegen::ir::{BlockArg, StackSlot},
     prelude::*,

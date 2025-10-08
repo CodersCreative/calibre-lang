@@ -8,20 +8,6 @@ use calibre_parser::ast::{LoopType, Node, NodeType, VarType};
 use std::mem::discriminant;
 
 impl InterpreterEnvironment {
-    pub fn evaluate_tuple_expression(
-        &mut self,
-        scope: &u64,
-        vals: Vec<Node>,
-    ) -> Result<RuntimeValue, InterpreterErr> {
-        let mut values = Vec::new();
-
-        for val in vals.iter() {
-            values.push(self.evaluate(scope, val.clone())?);
-        }
-
-        Ok(RuntimeValue::Tuple(values))
-    }
-
     pub fn evaluate_list_expression(
         &mut self,
         scope: &u64,

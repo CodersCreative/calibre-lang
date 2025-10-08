@@ -52,7 +52,7 @@ impl Parser {
                     Node::new(NodeType::StringLiteral(val.value.to_string()), val.span)
                 }
             }
-            TokenType::Open(Bracket::Paren) => self.parse_tuple_expression()?,
+            TokenType::Open(Bracket::Paren) => self.parse_paren_expression()?,
             TokenType::Open(Bracket::Square) => self.parse_list_expression()?,
             TokenType::BinaryOperator(x) if x == &BinaryOperator::Sub => {
                 let open = self.eat();

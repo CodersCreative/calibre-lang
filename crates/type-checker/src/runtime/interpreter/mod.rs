@@ -38,7 +38,6 @@ impl CheckerEnvironment {
             NodeType::Identifier(x) => self.evaluate_identifier(scope, &x),
             NodeType::StructLiteral(obj) => self.evaluate_struct_expression(scope, obj),
             NodeType::ListLiteral(vals) => self.evaluate_list_expression(scope, vals),
-            NodeType::TupleLiteral(vals) => self.evaluate_tuple_expression(scope, vals),
             NodeType::CallExpression(caller, args) => {
                 self.evaluate_call_expression(scope, *caller, args)
             }

@@ -3,20 +3,6 @@ use calibre_common::environment::Variable;
 use calibre_parser::ast::{LoopType, Node, NodeType, RefMutability, VarType};
 
 impl CheckerEnvironment {
-    pub fn evaluate_tuple_expression(
-        &mut self,
-        scope: &u64,
-        vals: Vec<Node>,
-    ) -> Result<RuntimeType, InterpreterErr> {
-        let mut values = Vec::new();
-
-        for val in vals.iter() {
-            values.push(self.evaluate(scope, val.clone())?);
-        }
-
-        Ok(RuntimeType::Tuple(values))
-    }
-
     pub fn evaluate_list_expression(
         &mut self,
         scope: &u64,

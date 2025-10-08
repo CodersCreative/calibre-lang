@@ -53,6 +53,22 @@ impl NativeFunction for OkFn {
     }
 }
 
+pub struct TupleFn();
+
+impl NativeFunction for TupleFn {
+    fn run(
+        &self,
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
+        args: &[(RuntimeValue, Option<RuntimeValue>)],
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        let mut tple = Vec::new();
+        for arg in args {
+            tple.push(arg.0.clone());
+        }
+        Ok(RuntimeValue::Tuple(tple))
+    }
+}
 pub struct SomeFn();
 
 impl NativeFunction for SomeFn {

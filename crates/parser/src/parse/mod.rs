@@ -357,57 +357,20 @@ impl Parser {
         Ok(())
     }
 
-    pub fn parse_tuple_expression(&mut self) -> Result<Node, ParserError> {
-        let mut has_commas = false;
-        let mut index = 0;
-
-        while ![TokenType::Close(Bracket::Paren), TokenType::EOF]
-            .contains(&self.nth(index).token_type)
-        {
-            index += 1;
-
-            if self.nth(index).token_type == TokenType::Comma {
-                has_commas = true;
-            }
-        }
-
-        if !has_commas {
-            self.eat();
-            let value = self.parse_statement();
-            let _ = self.expect_eat(
-                &TokenType::Close(Bracket::Paren),
-                SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
-            )?;
-            return value;
-        }
-
-        let mut values = Vec::new();
-        let open = self.expect_eat(
+    pub fn parse_paren_expression(&mut self) -> Result<Node, ParserError> {
+        let _ = self.expect_eat(
             &TokenType::Open(Bracket::Paren),
             SyntaxErr::ExpectedOpeningBracket(Bracket::Paren),
         )?;
 
-        while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Paren) {
-            values.push(self.parse_statement()?);
+        let value = self.parse_statement();
 
-            if self.first().token_type != TokenType::Close(Bracket::Paren) {
-                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
-            }
-        }
-
-        let close = self.expect_eat(
+        let _ = self.expect_eat(
             &TokenType::Close(Bracket::Paren),
             SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
         )?;
 
-        if values.len() == 1 {
-            return Ok(values[0].clone());
-        }
-
-        Ok(Node::new(
-            NodeType::TupleLiteral(values),
-            Span::new_from_spans(open.span, close.span),
-        ))
+        value
     }
 
     pub fn parse_list_expression(&mut self) -> Result<Node, ParserError> {

@@ -69,6 +69,7 @@ impl calibre_common::environment::RuntimeValue for RuntimeType {
             ("some", RuntimeType::Option(Box::new(RuntimeType::Dynamic))),
             ("len", RuntimeType::Int),
             ("panic", RuntimeType::Null),
+            ("tuple", RuntimeType::Dynamic),
             ("trim", RuntimeType::Str),
             ("console.out", RuntimeType::Null),
             ("console.input", RuntimeType::Str),

@@ -298,7 +298,6 @@ impl<'a> FunctionTranslator<'a> {
 
                 todo!()
             }
-            NodeType::TupleLiteral(items) => self.translate_tuple_expression(items),
             NodeType::IfStatement { .. } => self.translate_if_statement(node),
             NodeType::LoopDeclaration { .. } => self.translate_loop_statement(node),
             _ => unimplemented!(),

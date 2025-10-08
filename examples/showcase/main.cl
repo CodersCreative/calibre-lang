@@ -45,7 +45,7 @@ print(language_forced);
 let mut x = 100;
 
 // statements will automatically return the last value they use.
-let mut b : <int, int> = (10, if x == 100 => {100} else => {10});
+let mut b : <int, int> = tuple(10, if x == 100 => {100} else => {10});
 print("b -> " & b);
 
 /* input function to get an input from the user.
