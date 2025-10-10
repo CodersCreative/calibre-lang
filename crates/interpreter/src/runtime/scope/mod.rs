@@ -18,13 +18,6 @@ pub struct InterpreterEnvironment {
     pub stop: Option<StopValue>,
 }
 
-// impl Into<&Environment<RuntimeValue, RuntimeType>> for &InterpreterEnvironment {
-//     fn into(self) -> &Environment<RuntimeValue, RuntimeType> {
-//         &self.env
-//     }
-// }
-//
-//
 impl InterpreterEnvironment {
     pub fn new() -> Self {
         Self {

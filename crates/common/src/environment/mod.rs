@@ -4,10 +4,10 @@ pub mod scopes;
 pub mod variables;
 
 use calibre_parser::{
-    ast::{NodeType, ObjectType, ParserDataType, TypeDefType, VarType},
+    ast::{ObjectType, ParserDataType, TypeDefType, VarType},
     lexer::Span,
 };
-use std::{collections::HashMap, fmt::Debug, ops::Deref, path::PathBuf};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf};
 
 use crate::errors::{RuntimeErr, ScopeErr, ValueErr};
 

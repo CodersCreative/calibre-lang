@@ -3,7 +3,7 @@ use crate::runtime::{
     scope::InterpreterEnvironment,
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_common::environment::Variable;
+use calibre_common::{environment::Variable, errors::RuntimeErr};
 use calibre_parser::ast::{LoopType, Node, NodeType, VarType};
 use std::mem::discriminant;
 
@@ -88,7 +88,7 @@ impl InterpreterEnvironment {
                 }
             }
         } else if let LoopType::While(_) = loop_type {
-            panic!()
+            return Err(RuntimeErr::IterWhileLoop(loop_type));
         }
 
         Ok(RuntimeValue::List {

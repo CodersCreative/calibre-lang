@@ -1,6 +1,6 @@
 use crate::{
     ast::{Node, NodeType},
-    lexer::{Bracket, LexerError, Span, Token, TokenType, Tokenizer},
+    lexer::{Bracket, LexerError, Span, Token, TokenType},
 };
 use thiserror::Error;
 

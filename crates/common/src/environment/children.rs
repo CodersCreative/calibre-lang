@@ -1,9 +1,6 @@
-use calibre_parser::Parser;
-use std::fs;
-
 use crate::{
     environment::{Environment, RuntimeType, RuntimeValue, Scope},
-    errors::{RuntimeErr, ScopeErr},
+    errors::ScopeErr,
 };
 
 impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {

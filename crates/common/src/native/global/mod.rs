@@ -1,7 +1,6 @@
 use calibre_parser::ast::VarType;
 
 use crate::environment::{Environment, RuntimeType, RuntimeValue, Variable};
-use std::collections::HashMap;
 
 pub fn setup<T: RuntimeValue, U: RuntimeType>(env: &mut Environment<T, U>, scope: &u64) {
     let funcs: Vec<&str> = vec![

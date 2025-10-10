@@ -37,7 +37,7 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         &mut self,
         scope: u64,
         counter: u64,
-        mut node: Node,
+        node: Node,
         target: Location,
     ) -> ScopeSearchResult {
         if node.span.from >= target.span.from {

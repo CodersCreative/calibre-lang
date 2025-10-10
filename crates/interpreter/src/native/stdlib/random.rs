@@ -1,10 +1,6 @@
 use crate::{
     native::NativeFunction,
-    runtime::{
-        interpreter::InterpreterErr,
-        scope::InterpreterEnvironment,
-        values::{RuntimeType, RuntimeValue},
-    },
+    runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue},
 };
 use rand::{self, random_bool, random_range, random_ratio};
 
@@ -13,8 +9,8 @@ pub struct Generate();
 impl NativeFunction for Generate {
     fn run(
         &self,
-        env: &mut InterpreterEnvironment,
-        scope: &u64,
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if args.is_empty() {
@@ -50,8 +46,8 @@ pub struct Bool();
 impl NativeFunction for Bool {
     fn run(
         &self,
-        env: &mut InterpreterEnvironment,
-        scope: &u64,
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if args.is_empty() {
@@ -73,8 +69,8 @@ pub struct Ratio();
 impl NativeFunction for Ratio {
     fn run(
         &self,
-        env: &mut InterpreterEnvironment,
-        scope: &u64,
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if args.is_empty() {

@@ -1,7 +1,7 @@
 use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{Node, ObjectType, RefMutability},
-    lexer::{Bracket, LexerError, Span, StopValue},
+    lexer::{Bracket, Span, StopValue},
 };
 use crate::{
     ast::{NodeType, binary::BinaryOperator},

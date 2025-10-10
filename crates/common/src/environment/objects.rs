@@ -1,6 +1,6 @@
 use crate::{
     environment::{Environment, Location, Object, RuntimeType, RuntimeValue, Type},
-    errors::{ScopeErr, ValueErr},
+    errors::ScopeErr,
 };
 
 impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {

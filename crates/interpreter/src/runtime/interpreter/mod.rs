@@ -45,21 +45,24 @@ impl InterpreterEnvironment {
                         let MembrExprPathRes::Path(path) =
                             self.get_member_expression_path(scope, path)?
                         else {
-                            return Err(InterpreterErr::RefNonVar(value.node_type));
+                            return Err(InterpreterErr::DerefNonRef(value.node_type));
                         };
 
                         self.get_member_ref(scope, &path)?
                     }
-                    _ => return Err(InterpreterErr::RefNonVar(value.node_type)),
+                    _ => return Err(InterpreterErr::DerefNonRef(value.node_type)),
                 } {
                     let value = self.get_value_from_ref_pointer(&pointer)?.value;
 
                     Ok(value)
                 } else {
-                    panic!()
+                    Err(RuntimeErr::DerefNonRef(value.node_type))
                 }
             }
-            NodeType::RefStatement { mutability, value } => {
+            NodeType::RefStatement {
+                mutability: _,
+                value,
+            } => {
                 let value = match value.node_type.clone() {
                     NodeType::Identifier(x) => self.get_var_ref(scope, &x)?,
                     NodeType::MemberExpression { path } => {

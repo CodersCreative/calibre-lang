@@ -6,8 +6,10 @@ let matmul = fn (n : int, a b : list<list<float>>) -> list<list<float>> => {
   for i in 0..n => {
     let mut ci : list<float> = [0.0 for _ in 0..m];
     for k in 0..p => {
-      let aik : float = a[i][k];
-      let bk : list<float> = b[k];
+      let aik : float = *a[i][k];
+
+      let bk : list<float> = *b[k];
+      // print(a[i][k]);
       for j in 0..m => ci[j] += aik * bk[j]
     }
     c <<= ci
@@ -16,7 +18,7 @@ let matmul = fn (n : int, a b : list<list<float>>) -> list<list<float>> => {
 } 
 
 let main = fn() => {
-  let n : int = 100;
+  let n : int = 5;
   let tmp : float = 1.0 / n / n
 	let a : list<list<float>> = [[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n]
 	let b : list<list<float>> = [[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n]

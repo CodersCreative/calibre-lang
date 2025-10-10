@@ -130,7 +130,7 @@ impl InterpreterEnvironment {
         let var_type = value.var_type.clone();
         let location = value.location.clone();
 
-        let mut get_new_list = |this: &mut Self, list: Vec<RuntimeValue>| -> Vec<RuntimeValue> {
+        let get_new_list = |this: &mut Self, list: Vec<RuntimeValue>| -> Vec<RuntimeValue> {
             let mut new_vec = Vec::new();
 
             for v in list {

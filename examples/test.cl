@@ -1,27 +1,5 @@
-let mut a = 1;
+let mut d : list<list<int>> = [[2, 0, 4], [1, 9, 3], [4, 7, 9], [9, 0, 1]]
 
-let mut b : <str, int>= ( "Ty", 9);
+for i in range(10) => print(i);
 
-let mut c : list<int> = [10, 9, 32, 2];
-
-print("b " & b[1])
-print("c " & c[1])
-
-print("The num is " & fn(num : &mut int) -> int => {
-  *num = 10;
-  let hello = *num
-  print(*num);
-  return -10;
-}(&mut b[1]))
-
-for i in &mut c => {
-  *i += 5;
-}
-
-print("b " & b[1])
-print("c " & c[1])
-print(a)
-a = 2;
-print(a)
-
-print(a + fn () => {a += 1 }())
+print(d[0][0]);

@@ -28,7 +28,7 @@ impl InterpreterEnvironment {
 
     pub fn evaluate_not<'a>(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         value: RuntimeValue,
     ) -> Result<RuntimeValue, InterpreterErr> {
         match value {
@@ -43,7 +43,7 @@ impl InterpreterEnvironment {
                 data.reverse();
                 Ok(RuntimeValue::List { data, data_type })
             }
-            _ => Err(InterpreterErr::UnexpectedType(value)),
+            _ => Err(InterpreterErr::CantPerformNot(value)),
         }
     }
 
@@ -77,7 +77,7 @@ impl InterpreterEnvironment {
 
     pub fn evaluate_range_expression(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         from: RuntimeValue,
         to: RuntimeValue,
         inclusive: bool,
@@ -88,12 +88,10 @@ impl InterpreterEnvironment {
 
                 Ok(RuntimeValue::Range(from, to))
             } else {
-                unimplemented!();
-                // Err(InterpreterErr::NotImplemented(to))
+                Err(InterpreterErr::UnexpectedType(to))
             }
         } else {
-            unimplemented!();
-            // Err(InterpreterErr::NotImplemented(from))
+            Err(InterpreterErr::UnexpectedType(from))
         }
     }
 
@@ -135,7 +133,7 @@ impl InterpreterEnvironment {
 
     pub fn evaluate_boolean_expression(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         left: RuntimeValue,
         right: RuntimeValue,
         operator: BooleanOperation,
@@ -193,7 +191,7 @@ impl InterpreterEnvironment {
             } {
                 Ok(self.assign_var_from_ref_pointer(&pointer, value)?)
             } else {
-                panic!()
+                Err(InterpreterErr::AssignNonVariable(node.node_type))
             }
         } else if let NodeType::Identifier(identifier) = identifier.node_type {
             let _ = self.assign_var(scope, &identifier, value.clone())?;
@@ -202,7 +200,6 @@ impl InterpreterEnvironment {
             let _ = self.assign_member_expression(scope, identifier, value.clone())?;
             return Ok(value);
         } else {
-            panic!();
             Err(InterpreterErr::AssignNonVariable(identifier.node_type))
         }
     }

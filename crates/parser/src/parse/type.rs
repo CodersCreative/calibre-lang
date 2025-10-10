@@ -1,7 +1,7 @@
 use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{Node, NodeType, ObjectType, TypeDefType},
-    lexer::{Bracket, Span, TokenType},
+    lexer::{Bracket, TokenType},
 };
 
 impl Parser {

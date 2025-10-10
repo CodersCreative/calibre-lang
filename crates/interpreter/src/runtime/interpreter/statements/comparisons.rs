@@ -1,7 +1,5 @@
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::InterpreterEnvironment,
-    values::{RuntimeType, RuntimeValue},
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
 use calibre_parser::ast::{IfComparisonType, Node, NodeType};
 

@@ -1,5 +1,8 @@
-use calibre_common::environment::{Type, Variable};
-use calibre_parser::ast::{Node, NodeType, ObjectType, RefMutability, VarType};
+use calibre_common::{
+    environment::{Type, Variable},
+    errors::RuntimeErr,
+};
+use calibre_parser::ast::{Node, NodeType, ObjectType, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr,
@@ -143,7 +146,7 @@ impl InterpreterEnvironment {
                 }
             }
         } else {
-            panic!()
+            unreachable!()
         }
     }
 
@@ -181,10 +184,10 @@ impl InterpreterEnvironment {
             RuntimeValue::List { data, .. } if arguments.len() == 1 => {
                 match self.evaluate(scope, arguments[0].0.clone())? {
                     RuntimeValue::Int(i) if arguments.len() == 1 => {
-                        return Ok(data
-                            .get(i as usize)
-                            .expect("Tried to get index that is larger than list size")
-                            .clone());
+                        return match data.get(i as usize) {
+                            Some(x) => Ok(x.clone()),
+                            None => Err(RuntimeErr::InvalidIndex(i)),
+                        };
                     }
                     _ => {
                         return Err(InterpreterErr::IndexNonList(
@@ -204,7 +207,7 @@ impl InterpreterEnvironment {
                                 Some(self.evaluate(scope, d.clone())?),
                             )
                         } else {
-                            panic!()
+                            return Err(RuntimeErr::InvalidDefaultFuncArg);
                         }
                     } else {
                         (self.evaluate(scope, arg.0.clone())?, None)
@@ -221,7 +224,7 @@ impl InterpreterEnvironment {
             _ => {}
         }
 
-        panic!("Cannot call non-variable or function value, {:?}", func);
+        Err(RuntimeErr::CantCallNonFunc(func))
     }
 }
 

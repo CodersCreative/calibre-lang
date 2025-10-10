@@ -1,11 +1,7 @@
-use calibre_common::environment::{Object, Variable};
-
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::InterpreterEnvironment,
-    values::{RuntimeType, RuntimeValue},
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
-use std::collections::HashMap;
+use calibre_common::errors::RuntimeErr;
 
 impl InterpreterEnvironment {
     pub fn evaluate_import_statement(
@@ -102,7 +98,7 @@ impl InterpreterEnvironment {
                         .objects
                         .insert(key, value);
                 } else {
-                    panic!()
+                    return Err(RuntimeErr::CantImport(format!("{} at {:?}", key, module)));
                 }
             }
         }

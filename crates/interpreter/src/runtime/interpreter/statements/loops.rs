@@ -1,5 +1,5 @@
-use calibre_common::environment::Variable;
-use calibre_parser::ast::{LoopType, Node, NodeType, RefMutability, VarType};
+use calibre_common::{environment::Variable, errors::RuntimeErr};
+use calibre_parser::ast::{LoopType, Node, NodeType, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr,
@@ -67,6 +67,8 @@ impl InterpreterEnvironment {
                         _ => {}
                     };
                 }
+            } else {
+                return Err(RuntimeErr::UnableToLoop(range));
             }
         } else if let LoopType::While(condition) = loop_type {
             match self.evaluate(scope, condition.clone())? {

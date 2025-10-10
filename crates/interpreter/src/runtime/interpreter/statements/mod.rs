@@ -29,7 +29,7 @@ impl InterpreterEnvironment {
             is_async,
         } = declaration.node_type
         else {
-            panic!()
+            unreachable!()
         };
 
         let mut params = Vec::new();
@@ -65,7 +65,7 @@ impl InterpreterEnvironment {
             is_async,
         } = declaration.node_type
         else {
-            panic!()
+            unreachable!()
         };
         let mut params = Vec::new();
 
@@ -96,7 +96,7 @@ impl InterpreterEnvironment {
         var_type: VarType,
         identifier: String,
         value: RuntimeValue,
-        data_type: Option<RuntimeType>,
+        _data_type: Option<RuntimeType>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(self.push_var(
             scope,

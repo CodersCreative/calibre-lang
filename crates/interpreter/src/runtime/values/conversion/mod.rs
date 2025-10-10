@@ -9,7 +9,6 @@ use std::{collections::HashMap, mem::discriminant};
 
 pub mod check;
 pub mod numbers;
-pub mod similar;
 
 impl RuntimeValue {
     pub fn into_type(

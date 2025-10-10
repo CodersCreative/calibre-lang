@@ -1,4 +1,4 @@
-use calibre_parser::ast::{Node, NodeType};
+use calibre_parser::ast::Node;
 
 use super::RuntimeValue;
 use std::{cmp::Ordering, collections::HashMap};

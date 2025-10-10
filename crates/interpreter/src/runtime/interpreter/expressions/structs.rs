@@ -1,12 +1,11 @@
+use crate::runtime::{
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
+};
 use calibre_common::{
     environment::Type,
     errors::{ScopeErr, ValueErr},
 };
 use calibre_parser::ast::{Node, NodeType, ObjectType};
-
-use crate::runtime::{
-    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
-};
 use std::collections::HashMap;
 
 impl InterpreterEnvironment {
@@ -123,12 +122,9 @@ impl InterpreterEnvironment {
                 }
 
                 let mut new_data_vals = Vec::new();
-                for (i, property) in properties.into_iter().enumerate() {
+                for (i, _property) in properties.into_iter().enumerate() {
                     if data_vals.len() <= 0 {
-                        return Err(InterpreterErr::OutOfBounds(
-                            String::from("Tuple Object Type"),
-                            i as i16,
-                        ));
+                        return Err(InterpreterErr::InvalidIndex(i as i64));
                     }
                     new_data_vals.push(data_vals.remove(0));
                 }

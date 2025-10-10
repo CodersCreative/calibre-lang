@@ -96,7 +96,7 @@ impl NativeFunction for PanicFn {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        _args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         panic!();
     }
@@ -107,8 +107,8 @@ pub struct Len();
 impl NativeFunction for Len {
     fn run(
         &self,
-        env: &mut InterpreterEnvironment,
-        scope: &u64,
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Some((x, _)) = args.get(0) {
@@ -129,8 +129,8 @@ pub struct Trim();
 impl NativeFunction for Trim {
     fn run(
         &self,
-        env: &mut InterpreterEnvironment,
-        scope: &u64,
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Some((x, _)) = args.get(0) {

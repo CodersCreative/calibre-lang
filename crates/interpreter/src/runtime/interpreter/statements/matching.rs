@@ -1,10 +1,8 @@
 use calibre_common::environment::{Location, Type};
-use calibre_parser::ast::{Node, NodeType, ObjectType, RefMutability, VarType};
+use calibre_parser::ast::{Node, NodeType, ObjectType};
 
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::InterpreterEnvironment,
-    values::{RuntimeType, RuntimeValue},
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
 use std::panic;
 
@@ -81,7 +79,7 @@ impl InterpreterEnvironment {
                 data,
                 value: enm_value,
             } => {
-                if let RuntimeValue::Enum(obj_scope, iden, val, dat) = value.clone() {
+                if let RuntimeValue::Enum(_obj_scope, iden, val, dat) = value.clone() {
                     let Type::Enum(enm) = self.get_object_type(&scope, &iden).unwrap() else {
                         return None;
                     };
@@ -271,7 +269,7 @@ impl InterpreterEnvironment {
                             if let (Some(pattern), name) = (args.get(0), args.get(1)) {
                                 if let Ok(pattern) = self.evaluate(&scope, pattern.0.clone()) {
                                     let RuntimeValue::Str(pattern) = pattern else {
-                                        panic!()
+                                        return None;
                                     };
 
                                     if let Some(value) = if part == "Prefix" {

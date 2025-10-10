@@ -1,7 +1,7 @@
 use std::fs;
 
 use crate::runtime::scope::InterpreterEnvironment;
-use crate::runtime::values::{RuntimeType, RuntimeValue};
+use crate::runtime::values::RuntimeValue;
 use calibre_common::environment::{RuntimeValue as Value, Variable};
 use calibre_parser::Parser;
 use calibre_parser::ast::VarType;

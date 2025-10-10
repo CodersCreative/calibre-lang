@@ -13,7 +13,7 @@ pub struct Out();
 impl NativeFunction for Out {
     fn run(
         &self,
-        env: &mut InterpreterEnvironment,
+        _env: &mut InterpreterEnvironment,
         _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
@@ -38,7 +38,7 @@ pub struct ErrFn();
 impl NativeFunction for ErrFn {
     fn run(
         &self,
-        env: &mut InterpreterEnvironment,
+        _env: &mut InterpreterEnvironment,
         _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {

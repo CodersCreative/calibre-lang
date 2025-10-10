@@ -158,12 +158,12 @@ impl InterpreterEnvironment {
                 };
 
                 let RuntimeValue::Ref(pointer, _) = self.get_member_ref(scope, &path)? else {
-                    panic!()
+                    unreachable!()
                 };
 
                 Ok(self.assign_var_from_ref_pointer(&pointer, value)?)
             }
-            _ => Err(InterpreterErr::NotImplemented(member.node_type)),
+            _ => unreachable!(),
         }
     }
 
@@ -200,7 +200,7 @@ impl InterpreterEnvironment {
                     Err(e) => Err(e),
                 }
             }
-            _ => Err(InterpreterErr::NotImplemented(exp.node_type)),
+            _ => unreachable!(),
         }
     }
 }

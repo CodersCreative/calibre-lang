@@ -1,19 +1,20 @@
-
+use crate::environment::{RuntimeType, RuntimeValue};
+use calibre_parser::ast::{LoopType, NodeType, binary::BinaryOperator};
 use std::num::{ParseFloatError, ParseIntError};
-use calibre_parser::ast::{binary::BinaryOperator, NodeType};
 use thiserror::Error;
-use crate::environment::{RuntimeValue, RuntimeType};
 
 #[derive(Error, Debug, Clone)]
-pub enum ASTError<T : RuntimeValue> {
+pub enum ASTError<T: RuntimeValue> {
     #[error("Cannot {2:?} values of {0:?}, {1:?}.")]
     BinaryOperator(T, T, BinaryOperator),
     #[error("Cannot perform a boolean operation to values of {0:?}, {1:?}.")]
     BooleanOperator(T, T),
+    #[error("Cannot perform a comparison operation to values of {0:?}, {1:?}.")]
+    ComparisonOperation(T, T),
 }
 
 #[derive(Error, Debug, Clone)]
-pub enum RuntimeErr<T : RuntimeValue, U : RuntimeType> {
+pub enum RuntimeErr<T: RuntimeValue, U: RuntimeType> {
     #[error("{0}")]
     Value(ValueErr<T, U>),
     #[error("{0}")]
@@ -24,14 +25,28 @@ pub enum RuntimeErr<T : RuntimeValue, U : RuntimeType> {
     MutRefNonMut(T),
     #[error("Cannot mutably reference a non variable, {0:?}.")]
     RefNonVar(NodeType),
+    #[error("Cannot de-reference a non reference, {0:?}.")]
+    DerefNonRef(NodeType),
     #[error("Cannot index a value that is not a list, {0:?}.")]
     IndexNonList(NodeType),
     #[error("This AST Node has not been implemented, {0:?}.")]
     NotImplemented(NodeType),
+    #[error("Cannot call non-callable value, {0:?}.")]
+    CantCallNonFunc(T),
+    #[error("Cannot perform not opertion on {0:?}.")]
+    CantPerformNot(T),
+    #[error("Cannot create list comprehension with a while loop, {0:?}.")]
+    IterWhileLoop(LoopType),
+    #[error("Cannot loop through value {0:?}.")]
+    UnableToLoop(T),
     #[error("Expected {0:?} operation.")]
     ExpectedOperation(String),
     #[error("Expected only functions.")]
     ExpectedFunctions,
+    #[error("Index out of bounds for list, {0:?}.")]
+    InvalidIndex(i64),
+    #[error("Default value name not identifier.")]
+    InvalidDefaultFuncArg,
     #[error("{0:?} is not of type {1:?}.")]
     ExpectedType(T, U),
     #[error("Variable {0:?} has an unexpected type.")]
@@ -44,12 +59,12 @@ pub enum RuntimeErr<T : RuntimeValue, U : RuntimeType> {
     SetterArgs(Vec<(NodeType, Option<NodeType>)>),
     #[error("Property not found, {0:?}")]
     PropertyNotFound(String),
-    #[error("Out of bounds of a array: {0:?} - Value : {1:?}")]
-    OutOfBounds(String, i16),
+    #[error("Unable to import {0:?}")]
+    CantImport(String),
 }
 
 #[derive(Error, Debug, Clone)]
-pub enum ScopeErr<T : RuntimeValue> {
+pub enum ScopeErr<T: RuntimeValue> {
     #[error("Unable to resolve variable : {0}.")]
     Variable(String),
     #[error("Unable to assign immutable variable : {0}.")]
@@ -67,7 +82,7 @@ pub enum ScopeErr<T : RuntimeValue> {
 }
 
 #[derive(Error, Debug, Clone)]
-pub enum ValueErr<T : RuntimeValue, U : RuntimeType> {
+pub enum ValueErr<T: RuntimeValue, U: RuntimeType> {
     #[error("Unable to convert: {0:?} -> {1:?}.")]
     Conversion(T, U),
     #[error("Unable to progress value.")]
@@ -80,36 +95,36 @@ pub enum ValueErr<T : RuntimeValue, U : RuntimeType> {
     ParseFloatError(ParseFloatError),
 }
 
-impl<T :RuntimeValue, U: RuntimeType> From<ParseIntError> for ValueErr<T, U> {
+impl<T: RuntimeValue, U: RuntimeType> From<ParseIntError> for ValueErr<T, U> {
     fn from(value: ParseIntError) -> Self {
         Self::ParseIntError(value)
     }
 }
 
-impl<T :RuntimeValue, U: RuntimeType> From<ParseFloatError> for ValueErr<T, U> {
+impl<T: RuntimeValue, U: RuntimeType> From<ParseFloatError> for ValueErr<T, U> {
     fn from(value: ParseFloatError) -> Self {
         Self::ParseFloatError(value)
     }
 }
 
-impl<T :RuntimeValue, U: RuntimeType> From<ScopeErr<T>> for ValueErr<T, U> {
+impl<T: RuntimeValue, U: RuntimeType> From<ScopeErr<T>> for ValueErr<T, U> {
     fn from(value: ScopeErr<T>) -> Self {
         Self::Scope(value)
     }
 }
 
-impl<T :RuntimeValue, U: RuntimeType> From<ASTError<T>> for RuntimeErr<T, U> {
+impl<T: RuntimeValue, U: RuntimeType> From<ASTError<T>> for RuntimeErr<T, U> {
     fn from(value: ASTError<T>) -> Self {
         Self::AST(value)
     }
 }
-impl<T :RuntimeValue, U: RuntimeType> From<ValueErr<T, U>> for RuntimeErr<T, U> {
+impl<T: RuntimeValue, U: RuntimeType> From<ValueErr<T, U>> for RuntimeErr<T, U> {
     fn from(value: ValueErr<T, U>) -> Self {
         Self::Value(value)
     }
 }
 
-impl<T :RuntimeValue, U: RuntimeType> From<ScopeErr<T>> for RuntimeErr<T, U> {
+impl<T: RuntimeValue, U: RuntimeType> From<ScopeErr<T>> for RuntimeErr<T, U> {
     fn from(value: ScopeErr<T>) -> Self {
         Self::Value(ValueErr::Scope(value))
     }

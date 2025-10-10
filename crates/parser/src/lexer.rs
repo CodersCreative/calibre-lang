@@ -2,7 +2,7 @@ use crate::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperation, Comparison},
 };
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 use thiserror::Error;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
