@@ -5,7 +5,7 @@ use crate::ast::{
 use std::collections::HashMap;
 use thiserror::Error;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Span {
     pub from: Position,
     pub to: Position,
@@ -24,7 +24,7 @@ impl Span {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Position {
     pub line: u32,
     pub col: u32,

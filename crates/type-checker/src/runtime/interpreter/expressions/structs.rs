@@ -150,7 +150,6 @@ mod tests {
     use calibre_parser::ast::TypeDefType;
 
     use super::*;
-    use crate::runtime::values::RuntimeValue;
     use std::collections::HashMap;
     use std::path::PathBuf;
     use std::str::FromStr;

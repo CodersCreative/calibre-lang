@@ -68,7 +68,7 @@ impl<U: RuntimeType> From<TypeDefType> for Type<U> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Location {
     pub path: PathBuf,
     pub span: Span,

@@ -100,6 +100,13 @@ impl Node {
     pub fn new(node_type: NodeType, span: Span) -> Self {
         Self { node_type, span }
     }
+
+    pub fn new_from_type(node_type: NodeType) -> Self {
+        Self {
+            node_type,
+            span: Span::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
