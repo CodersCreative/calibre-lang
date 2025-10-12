@@ -38,6 +38,13 @@ impl InterpreterEnvironment {
 
                 Ok(value)
             }
+            NodeType::DebugExpression { value } => {
+                let val = self.evaluate(scope, *value.clone())?;
+                println!("Debug at span : {:?}", self.current_location);
+                println!("Node : {:?}", value);
+                println!("Evaluates to : {}", val.to_string());
+                Ok(val)
+            }
             NodeType::DerefStatement { value } => {
                 if let RuntimeValue::Ref(pointer, _) = match value.node_type.clone() {
                     NodeType::Identifier(x) => self.get_var_ref(scope, &x)?,

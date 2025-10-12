@@ -124,10 +124,7 @@ impl CheckerEnvironment {
                 let mut new_data_vals = Vec::new();
                 for (i, property) in properties.into_iter().enumerate() {
                     if data_vals.len() <= 0 {
-                        return Err(InterpreterErr::OutOfBounds(
-                            String::from("Tuple Object Type"),
-                            i as i16,
-                        ));
+                        return Err(InterpreterErr::InvalidIndex(i as i64));
                     }
                     new_data_vals.push(data_vals.remove(0));
                 }

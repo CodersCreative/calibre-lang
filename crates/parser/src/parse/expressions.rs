@@ -76,6 +76,17 @@ impl Parser {
                     span,
                 )
             }
+            TokenType::Debug => {
+                let open = self.eat();
+                let val = self.parse_statement()?;
+                let span = Span::new_from_spans(open.span, val.span);
+                Node::new(
+                    NodeType::DebugExpression {
+                        value: Box::new(val),
+                    },
+                    span,
+                )
+            }
             TokenType::Try => self.parse_try_expression()?,
             TokenType::Func => self.parse_function_declaration()?,
             TokenType::BinaryOperator(BinaryOperator::Mul) => {

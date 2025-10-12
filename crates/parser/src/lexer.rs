@@ -112,6 +112,7 @@ pub enum TokenType {
     Import,
     Type,
     WhiteSpace,
+    Debug,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
@@ -125,6 +126,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("fn"), TokenType::Func),
         (String::from("else"), TokenType::Else),
         (String::from("list"), TokenType::List),
+        (String::from("debug"), TokenType::Debug),
         (String::from("return"), TokenType::Stop(StopValue::Return)),
         (String::from("in"), TokenType::In),
         (String::from("break"), TokenType::Stop(StopValue::Break)),

@@ -155,6 +155,9 @@ pub enum NodeType {
     NotExpression {
         value: Box<Node>,
     },
+    DebugExpression {
+        value: Box<Node>,
+    },
     AsExpression {
         value: Box<Node>,
         typ: ParserDataType,

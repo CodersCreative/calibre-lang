@@ -25,6 +25,7 @@ impl CheckerEnvironment {
             NodeType::CharLiteral(_) => Ok(RuntimeType::Char),
             NodeType::Try { value } => self.evaluate(scope, *value),
             NodeType::Return { value } => self.evaluate(scope, *value),
+            NodeType::DebugExpression { value } => self.evaluate(scope, *value),
             NodeType::Break => Ok(RuntimeType::Null),
             NodeType::Continue => Ok(RuntimeType::Null),
             NodeType::BinaryExpression {
