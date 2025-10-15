@@ -8,5 +8,5 @@ members = [
     "crates/cranelift-jit",
     "crates/type-checker",
     "crates/common",
-    "crates/mir",
+    "crates/mir", "fmt",
 ]

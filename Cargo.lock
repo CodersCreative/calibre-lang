@@ -173,6 +173,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cal-fmt"
+version = "0.1.0"
+dependencies = [
+ "calibre-parser",
+ "clap",
+]
+
+[[package]]
 name = "cal-lsp"
 version = "0.1.0"
 dependencies = [

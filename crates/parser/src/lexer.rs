@@ -68,6 +68,7 @@ pub enum TokenType {
     Open(Bracket),
     Close(Bracket),
     Colon,
+    Comment,
     Comma,
     Comparison(Comparison),
     Boolean(BooleanOperation),
@@ -377,6 +378,7 @@ impl Tokenizer {
                         let mut first = '/';
                         let mut second = '*';
 
+                        let mut txt = String::new();
                         let can_continue = |f: char, s: char, short: bool| -> bool {
                             if short {
                                 s != '\n'
@@ -389,7 +391,9 @@ impl Tokenizer {
                             first = second;
                             second = buffer.remove(0);
                             self.increment_line_col(&second);
+                            txt.push(second);
                         }
+                        tokens.push(self.new_token(TokenType::Comment, &txt));
 
                         continue;
                     }
@@ -436,10 +440,19 @@ impl Tokenizer {
 
         tokens.push(self.new_token(TokenType::EOF, "EndOfFile"));
 
-        Ok(tokens
-            .into_iter()
-            .filter(|x| x.token_type != TokenType::WhiteSpace)
-            .collect())
+        if !self.include_comments {
+            Ok(tokens
+                .into_iter()
+                .filter(|x| {
+                    x.token_type != TokenType::Comment && x.token_type != TokenType::WhiteSpace
+                })
+                .collect())
+        } else {
+            Ok(tokens
+                .into_iter()
+                .filter(|x| x.token_type != TokenType::WhiteSpace)
+                .collect())
+        }
     }
 }
 
