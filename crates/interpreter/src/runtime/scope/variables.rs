@@ -2,7 +2,7 @@ use calibre_common::{environment::Variable, errors::ScopeErr};
 use calibre_parser::ast::{ObjectType, VarType};
 
 use crate::runtime::{
-    interpreter::InterpreterErr,
+    interpreter::{InterpreterErr, expressions::member::MemberPathType},
     scope::InterpreterEnvironment,
     values::{RuntimeType, RuntimeValue},
 };
@@ -317,9 +317,15 @@ impl InterpreterEnvironment {
     pub fn get_member_ref(
         &self,
         scope: &u64,
-        keys: &[String],
+        keys: &[MemberPathType],
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let first = self.get_var_ref(scope, keys.get(0).unwrap())?;
+        let first = self.get_var_ref(scope, {
+            let Some(MemberPathType::Dot(first)) = keys.get(0) else {
+                panic!()
+            };
+
+            first
+        })?;
 
         if keys.len() <= 1 {
             return Ok(first);
@@ -330,29 +336,59 @@ impl InterpreterEnvironment {
         };
 
         for key in keys.iter().skip(1) {
-            match &self.variables.get(&pointer).unwrap().value {
-                RuntimeValue::Struct(_, _, ObjectType::Map(map))
-                | RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))) => match map.get(key) {
+            match (&self.variables.get(&pointer).unwrap().value, key) {
+                (RuntimeValue::Struct(_, _, ObjectType::Map(map)), _) => {
+                    match map.get(&key.to_string()) {
+                        Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
+                        _ => break,
+                    }
+                }
+                (
+                    RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))),
+                    MemberPathType::Dot(key),
+                ) => match map.get(key) {
                     Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
                     _ => break,
                 },
-                RuntimeValue::List { data, data_type: _ }
-                | RuntimeValue::Struct(_, _, ObjectType::Tuple(data))
-                | RuntimeValue::Enum(_, _, _, Some(ObjectType::Tuple(data)))
-                | RuntimeValue::Tuple(data) => match data.get(key.parse::<usize>().unwrap()) {
+                (RuntimeValue::Struct(_, _, ObjectType::Tuple(data)), _) => {
+                    match data.get(key.to_string().parse::<usize>().unwrap()) {
+                        Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
+                        x => {
+                            println!("why {x:?}");
+                            break;
+                        }
+                    }
+                }
+                (RuntimeValue::List { data, data_type: _ }, MemberPathType::Computed(key)) => {
+                    match data.get(key.parse::<usize>().unwrap()) {
+                        Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
+                        x => {
+                            println!("why {x:?}");
+                            break;
+                        }
+                    }
+                }
+                (
+                    RuntimeValue::Enum(_, _, _, Some(ObjectType::Tuple(data)))
+                    | RuntimeValue::Tuple(data),
+                    MemberPathType::Dot(key),
+                ) => match data.get(key.parse::<usize>().unwrap()) {
                     Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
                     x => {
                         println!("why {x:?}");
                         break;
                     }
                 },
-                RuntimeValue::Option(Some(data), _)
-                | RuntimeValue::Result(Ok(data), _)
-                | RuntimeValue::Result(Err(data), _) => match **data {
+                (
+                    RuntimeValue::Option(Some(data), _)
+                    | RuntimeValue::Result(Ok(data), _)
+                    | RuntimeValue::Result(Err(data), _),
+                    _,
+                ) => match **data {
                     RuntimeValue::Ref(p, _) => pointer = p.clone(),
                     _ => break,
                 },
-                RuntimeValue::Ref(x, _) => pointer = x.clone(),
+                (RuntimeValue::Ref(x, _), _) => pointer = x.clone(),
                 _ => unimplemented!(),
             }
         }

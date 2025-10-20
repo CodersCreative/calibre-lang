@@ -1,12 +1,31 @@
+use std::fmt::{Debug, Display};
+
 use calibre_parser::ast::{Node, NodeType, ObjectType};
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
 
+#[derive(Clone, Debug)]
+pub enum MemberPathType {
+    Dot(String),
+    Computed(String),
+}
+
+impl Display for MemberPathType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let txt = match self {
+            Self::Dot(x) => x.clone(),
+            Self::Computed(x) => x.clone(),
+        };
+        write!(f, "{}", txt)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum MembrExprPathRes {
     Value(RuntimeValue),
-    Path(Vec<String>),
+    Path(Vec<MemberPathType>),
 }
 
 impl InterpreterEnvironment {
@@ -15,7 +34,7 @@ impl InterpreterEnvironment {
         scope: &u64,
         og_path: Vec<(Node, bool)>,
     ) -> Result<MembrExprPathRes, InterpreterErr> {
-        let mut path = Vec::new();
+        let mut path: Vec<MemberPathType> = Vec::new();
         if let (NodeType::Identifier(x), false) = (&og_path[0].0.node_type, og_path[0].1) {
             if let Ok(s) = self.get_next_scope(*scope, &x) {
                 if let Ok(x) = self.evaluate(&s, og_path[1].0.clone()) {
@@ -29,6 +48,20 @@ impl InterpreterEnvironment {
         }
 
         for (node, computed) in og_path.into_iter() {
+            if !computed {
+                match &node.node_type {
+                    NodeType::Identifier(x) => {
+                        path.push(MemberPathType::Dot(x.to_string()));
+                    }
+                    NodeType::IntLiteral(x) => {
+                        path.push(MemberPathType::Dot(x.to_string()));
+                    }
+                    _ => return Err(InterpreterErr::UnexpectedNode(node.node_type)),
+                }
+
+                continue;
+            }
+
             match &node.node_type {
                 NodeType::MemberExpression { path: p } => {
                     match self.get_member_expression_path(scope, p.to_vec())? {
@@ -39,35 +72,35 @@ impl InterpreterEnvironment {
                 }
                 _ if computed => {}
                 NodeType::Identifier(x) => {
-                    path.push(x.to_string());
+                    path.push(MemberPathType::Computed(x.to_string()));
                     continue;
                 }
                 NodeType::FloatLiteral(x) => {
-                    path.push(x.to_string());
+                    path.push(MemberPathType::Computed(x.to_string()));
                     continue;
                 }
                 NodeType::IntLiteral(x) => {
-                    path.push(x.to_string());
+                    path.push(MemberPathType::Computed(x.to_string()));
                     continue;
                 }
                 _ => {}
             }
 
             match self.evaluate(&scope, node.clone()) {
-                Ok(value) => match value {
-                    RuntimeValue::Int(x) => path.push(x.to_string()),
-                    RuntimeValue::Float(x) => path.push(x.to_string()),
-                    RuntimeValue::Str(x) => path.push(x.to_string()),
-                    RuntimeValue::Char(x) => path.push(x.to_string()),
+                Ok(value) => path.push(MemberPathType::Computed(match value {
+                    RuntimeValue::Int(x) => x.to_string(),
+                    RuntimeValue::Float(x) => x.to_string(),
+                    RuntimeValue::Str(x) => x.to_string(),
+                    RuntimeValue::Char(x) => x.to_string(),
                     x => return Ok(MembrExprPathRes::Value(x.clone())),
-                },
+                })),
                 Err(e) if path.len() == 1 => match node.node_type {
                     NodeType::Identifier(value) => {
                         return Ok(MembrExprPathRes::Value(self.evaluate(
                             scope,
                             Node::new(
                                 NodeType::EnumExpression {
-                                    identifier: path.remove(0),
+                                    identifier: path.remove(0).to_string(),
                                     value,
                                     data: None,
                                 },
@@ -82,7 +115,7 @@ impl InterpreterEnvironment {
                                     scope,
                                     Node::new(
                                         NodeType::EnumExpression {
-                                            identifier: path[0].clone(),
+                                            identifier: path[0].clone().to_string(),
                                             value: value.to_string(),
                                             data: Some(ObjectType::Tuple(
                                                 args.clone()
@@ -96,10 +129,14 @@ impl InterpreterEnvironment {
                                 ) {
                                     Ok(x) => x,
                                     Err(e) => {
-                                        if let Ok(x) = self.get_function(scope, &path[0], &value) {
+                                        if let Ok(x) =
+                                            self.get_function(scope, &path[0].to_string(), &value)
+                                        {
                                             self.evaluate_function(scope, x.0.clone(), args)?
                                         } else {
-                                            let obj = match match self.get_var(scope, &path[0]) {
+                                            let obj = match match self
+                                                .get_var(scope, &path[0].to_string())
+                                            {
                                                 Ok(x) => x.value.clone(),
                                                 _ => return Err(e),
                                             } {
@@ -115,7 +152,7 @@ impl InterpreterEnvironment {
                                                         (
                                                             Node::new(
                                                                 NodeType::Identifier(
-                                                                    path[0].clone(),
+                                                                    path[0].to_string(),
                                                                 ),
                                                                 value_node.span,
                                                             ),
@@ -189,8 +226,8 @@ impl InterpreterEnvironment {
                             scope,
                             Node::new(
                                 NodeType::EnumExpression {
-                                    identifier: path.remove(0),
-                                    value: path.remove(0),
+                                    identifier: path.remove(0).to_string(),
+                                    value: path.remove(0).to_string(),
                                     data: None,
                                 },
                                 exp.span,

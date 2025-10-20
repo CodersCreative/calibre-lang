@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use crate::environment::{Environment, Object, RuntimeType, RuntimeValue, Variable};
+use crate::environment::{Object, RuntimeType, RuntimeValue, Variable};
 
 pub enum TestingResult<T: RuntimeValue> {
     Ok,
