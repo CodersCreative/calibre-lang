@@ -57,7 +57,7 @@ impl MemoryLoc {
     }
 
     /// As opposed to `write_all`, this writes a single `Value` to an `offset`
-    fn write_val(&self, builder: &mut FunctionBuilder, x: Value, offset: i32) {
+    pub fn write_val(&self, builder: &mut FunctionBuilder, x: Value, offset: i32) {
         match self.addr {
             Location::Stack(slot) => {
                 builder

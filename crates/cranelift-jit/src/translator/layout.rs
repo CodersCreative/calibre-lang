@@ -71,7 +71,7 @@ impl GetLayoutInfo for RuntimeType {
     }
 
     fn ensure_layout(&self) {
-        if let None = LAYOUTS.lock().unwrap().get().unwrap().sizes.get(self) {
+        if None == LAYOUTS.lock().unwrap().get().unwrap().sizes.get(self) {
             calc_single(self);
         }
     }
@@ -122,7 +122,7 @@ fn calc_single(ty: &RuntimeType) {
         }
         RuntimeType::List(t) => {
             calc_single(&**t);
-            t.stride() * 128 as u32
+            t.stride() * 32 as u32
         }
         RuntimeType::Function { .. } => pointer_bit_width / 8,
         RuntimeType::Option(t) => {

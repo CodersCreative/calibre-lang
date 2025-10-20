@@ -154,12 +154,10 @@ impl<'a> FunctionTranslator<'a> {
             panic!()
         };
 
-        let lhs = self.builder.ins().load(
-            self.types.ptr(),
-            MemFlags::trusted(),
-            left.value,
-            self.types.ptr().bytes() as i32,
-        );
+        let lhs = self
+            .builder
+            .ins()
+            .load(self.types.ptr(), MemFlags::trusted(), left.value, 0);
 
         let lhs_offset = self
             .builder
@@ -183,28 +181,19 @@ impl<'a> FunctionTranslator<'a> {
             panic!()
         };
 
-        let lhs = self.builder.ins().load(
-            self.types.ptr(),
-            MemFlags::trusted(),
-            left.value,
-            self.types.ptr().bytes() as i32,
-        );
-
-        let lhs_offset = Value::with_number(
-            types[0..index]
-                .iter()
-                .map(|x| x.stride() as i64)
-                .sum::<i64>() as u32,
-        )
-        .unwrap();
-
-        let lhs_addr = self.builder.ins().iadd(lhs, lhs_offset);
+        let lhs = self
+            .builder
+            .ins()
+            .load(self.types.ptr(), MemFlags::trusted(), left.value, 0);
 
         let lhs = self.builder.ins().load(
             self.types.get_type_from_runtime_type(&types[index]),
-            MemFlags::trusted(),
-            lhs_addr,
-            0,
+            MemFlags::new().with_aligned(),
+            lhs,
+            types[0..index]
+                .iter()
+                .map(|x| x.stride() as i32)
+                .sum::<i32>(),
         );
 
         RuntimeValue::new(lhs, types[index].clone())
@@ -215,10 +204,10 @@ impl<'a> FunctionTranslator<'a> {
         let item_runtime_types: Vec<RuntimeType> =
             items.iter().map(|x| x.data_type.clone()).collect();
 
-        let total_size: i64 = item_runtime_types.iter().map(|x| x.size() as i64).sum();
+        let total_size: u32 = item_runtime_types.iter().map(|x| x.stride()).sum();
         let slot = self.builder.create_sized_stack_slot(StackSlotData::new(
             StackSlotKind::ExplicitSlot,
-            total_size as u32,
+            total_size,
             0,
         ));
 
@@ -249,22 +238,20 @@ impl<'a> FunctionTranslator<'a> {
 
     pub fn translate_array_expression(&mut self, items: Vec<Node>) -> RuntimeValue {
         let items: Vec<RuntimeValue> = items.into_iter().map(|x| self.translate(x)).collect();
-        let len = items.len() as u32;
 
         let element_type = items
             .get(0)
             .map(|v| v.data_type.clone())
             .unwrap_or(RuntimeType::Int);
-        let element_size = element_type.size();
+        let stride = element_type.stride();
 
         let slot = self.builder.create_sized_stack_slot(StackSlotData {
             kind: StackSlotKind::ExplicitSlot,
-            size: element_size * 128,
+            size: stride * 32,
             align_shift: element_type.align_shift(),
         });
 
         let memory = MemoryLoc::from_stack(slot, 0);
-        let stride = element_type.stride();
 
         for (i, item) in items.iter().enumerate() {
             let offset = (i as u32) * stride;
