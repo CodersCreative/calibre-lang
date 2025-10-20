@@ -6,7 +6,9 @@ use crate::{
 };
 use calibre_parser::{
     ast::{
-        binary::BinaryOperator, comparison::{self, Comparison}, IfComparisonType, LoopType, Node, NodeType, VarType
+        IfComparisonType, LoopType, Node, NodeType, VarType,
+        binary::BinaryOperator,
+        comparison::{self, Comparison},
     },
     lexer::StopValue,
 };

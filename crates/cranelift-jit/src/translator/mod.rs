@@ -281,8 +281,7 @@ impl<'a> FunctionTranslator<'a> {
                         NodeType::MemberExpression {
                             path: path[0..(path.len() - 1)].to_vec(),
                         },
-                        first.line,
-                        first.col,
+                        first.span,
                     ));
                     if let RuntimeType::List(_) = value.data_type {
                         let index = self.translate(path.pop().unwrap().0);
@@ -294,6 +293,14 @@ impl<'a> FunctionTranslator<'a> {
                             }
                         }
                     }
+                }
+
+                todo!()
+            }
+            NodeType::CallExpression(caller, args) => {
+                if NodeType::Identifier("tuple".to_string()) == caller.node_type {
+                    return self
+                        .translate_tuple_expression(args.into_iter().map(|x| x.0).collect());
                 }
 
                 todo!()

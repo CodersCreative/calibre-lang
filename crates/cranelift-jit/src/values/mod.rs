@@ -31,8 +31,8 @@ impl From<ParserDataType> for RuntimeType {
             ParserDataType::Char => RuntimeType::Char,
             ParserDataType::Range => RuntimeType::Range,
             ParserDataType::List(x) => RuntimeType::List(Box::new(match *x {
-                Some(x) => Some(x.into()),
-                None => None,
+                Some(x) => x.into(),
+                None => RuntimeType::Dynamic,
             })),
             ParserDataType::Struct(Some(x)) => RuntimeType::Named(x),
             _ => unimplemented!(),
@@ -49,10 +49,10 @@ pub enum RuntimeType {
     Char,
     Dynamic,
     Ref {
-        mutable : bool,
-    }
+        mutable: bool,
+    },
     Tuple(Vec<RuntimeType>),
-    List(u64, Some<Box<RuntimeType>>),
+    List(Box<RuntimeType>),
     Range,
     Option(Box<RuntimeType>),
     Result(Box<RuntimeType>, Box<RuntimeType>),
@@ -61,20 +61,19 @@ pub enum RuntimeType {
         parameters: Vec<(RuntimeType, calibre_parser::ast::RefMutability)>,
         is_async: bool,
     },
-    Enum{
-        uid : u32,
-        
+    Enum {
+        uid: u32,
     },
-    Struct{
-        uid : Option<u32>,
-        members : Vec<MemberType>,
+    Struct {
+        uid: Option<u32>,
+        members: Vec<MemberType>,
     },
     Named(String),
 }
 
 impl RuntimeType {
-        pub fn is_aggregate(&self) -> bool {
-        match self.absolute_ty() {
+    pub fn is_aggregate(&self) -> bool {
+        match self {
             RuntimeType::Struct { .. }
             | RuntimeType::Enum { .. }
             | RuntimeType::Result { .. }

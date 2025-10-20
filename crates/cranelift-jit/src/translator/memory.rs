@@ -35,7 +35,7 @@ impl MemoryLoc {
         }
     }
 
-    fn with_offset(self, offset: u32) -> MemoryLoc {
+    pub fn with_offset(self, offset: u32) -> MemoryLoc {
         MemoryLoc {
             addr: self.addr,
             offset: self.offset + offset,
@@ -43,7 +43,7 @@ impl MemoryLoc {
     }
 
     /// This converts the address + offset into a single address if needed
-    fn into_value(self, builder: &mut FunctionBuilder, ptr_ty: Type) -> Value {
+    pub fn into_value(self, builder: &mut FunctionBuilder, ptr_ty: Type) -> Value {
         match self.addr {
             Location::Stack(slot) => builder.ins().stack_addr(ptr_ty, slot, self.offset as i32),
             Location::Addr(addr) => {
@@ -80,7 +80,7 @@ impl MemoryLoc {
     ///
     /// You also promise that the alignment of val matches the alignment of the
     /// the given MemoryLoc.
-    fn write_all(
+    pub fn write_all(
         self,
         val: Option<Value>,
         ty: RuntimeType,

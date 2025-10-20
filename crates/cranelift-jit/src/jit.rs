@@ -4,7 +4,7 @@ use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{DataDescription, Linkage, Module};
 use std::{collections::HashMap, error::Error};
 
-use crate::translator::FunctionTranslator;
+use crate::translator::{FunctionTranslator, layout::create_layout};
 
 pub struct JIT {
     /// The function builder context, which is reused across multiple
@@ -36,7 +36,6 @@ impl Default for JIT {
             .finish(settings::Flags::new(flag_builder))
             .unwrap();
         let builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
-
         let module = JITModule::new(builder);
         Self {
             builder_context: FunctionBuilderContext::new(),
@@ -138,6 +137,8 @@ impl JIT {
     ) -> Result<(), Box<dyn Error>> {
         let ptr = self.module.target_config().pointer_type();
         let types = crate::translator::Types::new(ptr);
+        create_layout(ptr.bits());
+
         for p in &params {
             self.ctx
                 .func

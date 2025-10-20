@@ -3,7 +3,7 @@ use crate::{
     values::{RuntimeType, RuntimeValue},
 };
 use calibre_parser::ast::{
-    binary::BinaryOperator, comparison::Comparison, LoopType, Node, NodeType, VarType
+    LoopType, Node, NodeType, VarType, binary::BinaryOperator, comparison::Comparison,
 };
 use cranelift::prelude::*;
 
@@ -72,13 +72,16 @@ impl<'a> FunctionTranslator<'a> {
             let value = match *loop_type {
                 LoopType::While(x) => {
                     if self.translate(x.clone()).data_type != RuntimeType::Bool {
-                        return self.translate_loop_statement(Node::new(NodeType::LoopDeclaration {
-                            loop_type: Box::new(LoopType::For(
-                                format!("__counter_{}__", rand::random_range(0..100000)),
-                                x,
-                            )),
-                            body,
-                        }, node.line, node.col));
+                        return self.translate_loop_statement(Node::new(
+                            NodeType::LoopDeclaration {
+                                loop_type: Box::new(LoopType::For(
+                                    format!("__counter_{}__", rand::random_range(0..100000)),
+                                    x,
+                                )),
+                                body,
+                            },
+                            node.span,
+                        ));
                     }
 
                     let (header_block, body_block, exit_block) = pre_loop!(self);
@@ -99,26 +102,22 @@ impl<'a> FunctionTranslator<'a> {
 
                     let prev = match value.data_type.clone() {
                         RuntimeType::List(x) => {
-                            if let Some(x) = *x {
-                                let member = self.get_array_member(value.clone(), zero);
-                                let member_var = self
-                                    .builder
-                                    .declare_var(self.types.get_type_from_runtime_type(&x));
-                                self.builder.def_var(member_var, member.value);
-                                compare_value = RuntimeValue::new(
-                                    self.builder.ins().load(
-                                        self.types.ptr(),
-                                        MemFlags::trusted(),
-                                        value.value,
-                                        0,
-                                    ),
-                                    RuntimeType::Int,
-                                );
-                                self.variables
-                                    .insert(var_name.clone(), (VarType::Mutable, x, member_var))
-                            } else {
-                                todo!()
-                            }
+                            let member = self.get_array_member(value.clone(), zero);
+                            let member_var = self
+                                .builder
+                                .declare_var(self.types.get_type_from_runtime_type(&x));
+                            self.builder.def_var(member_var, member.value);
+                            compare_value = RuntimeValue::new(
+                                self.builder.ins().load(
+                                    self.types.ptr(),
+                                    MemFlags::trusted(),
+                                    value.value,
+                                    0,
+                                ),
+                                RuntimeType::Int,
+                            );
+                            self.variables
+                                .insert(var_name.clone(), (VarType::Mutable, *x, member_var))
                         }
                         RuntimeType::Tuple(x) => None,
                         _ => {
@@ -166,7 +165,6 @@ impl<'a> FunctionTranslator<'a> {
                     }
                     value
                 }
-                LoopType::ForEach(_, _) => todo!(),
             };
 
             // Just return 0 for now.

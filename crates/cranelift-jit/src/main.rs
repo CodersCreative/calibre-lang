@@ -4,13 +4,13 @@ const BASIC_CODE: &str = r#"
    const main = fn (x : int) -> float =>  {
     let mut index : float = 1.0;
     let arr : list<float> = [10.5, 40.8, 50.2];
-    let tuple = (10, 90.8, "hello", "fire!");
+    // let tpl = tuple(10, 90.8, "hello", "fire!");
     let mut counter : float = 1 as float;
     for counter < 98.0 => {
         counter += 1.2 + 1 as float ;
         index *= counter
     }
-    // let itm : float= tuple[1];
+    // let itm : float = tpl[1];
 
     for i in 100 => counter += i as float;
 
@@ -24,12 +24,20 @@ const BASIC_CODE: &str = r#"
 "#;
 
 use calibre_cranelift_jit::jit::JIT;
-use calibre_parser::{ast::{Node, NodeType}, lexer::tokenize, Parser};
+use calibre_parser::{
+    Parser,
+    ast::{Node, NodeType},
+    lexer::Tokenizer,
+};
 use std::{fmt::Debug, mem};
 
 fn parse(text: String) -> Node {
     let mut parser = Parser::default();
-    parser.produce_ast(text).unwrap()
+
+    let mut tokenizer = Tokenizer::default();
+    parser
+        .produce_ast(tokenizer.tokenize(text).unwrap())
+        .unwrap()
 }
 
 fn run<I, T: Debug>(input: I) {
