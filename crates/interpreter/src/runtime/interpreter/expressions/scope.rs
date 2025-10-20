@@ -128,9 +128,10 @@ impl InterpreterEnvironment {
 
         let mut result: RuntimeValue = RuntimeValue::Null;
         for statement in body.into_iter() {
-            match self.stop {
+            result = match self.stop {
                 Some(_) if is_temp => return Ok(result),
-                _ => result = self.evaluate(&new_scope, statement)?,
+                _ if !is_temp => self.evaluate_global(&new_scope, statement)?,
+                _ => self.evaluate(&new_scope, statement)?,
             }
         }
 

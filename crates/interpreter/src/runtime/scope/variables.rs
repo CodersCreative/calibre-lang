@@ -424,7 +424,11 @@ impl InterpreterEnvironment {
             .get(key)
             .map(|x| x.clone())
         {
-            let value = self.variables.get(&pointer).unwrap().clone();
+            let value = self
+                .variables
+                .get(&pointer)
+                .expect(&format!("unexpectedly failed to get {:?}", key))
+                .clone();
             Ok(self.convert_saveable_into_runtime_var(value))
         } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
             self.get_var(&scope, key)

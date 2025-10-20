@@ -4,7 +4,7 @@ use crate::runtime::{
     values::{RuntimeType, RuntimeValue, helper::StopValue},
 };
 use calibre_common::errors::RuntimeErr;
-use calibre_parser::ast::{Node, NodeType};
+use calibre_parser::ast::{Node, NodeType, VarType};
 
 pub mod expressions;
 pub mod statements;
@@ -180,11 +180,6 @@ impl InterpreterEnvironment {
                     None => None,
                 },
             ),
-            NodeType::ImportStatement {
-                module,
-                alias,
-                values,
-            } => self.evaluate_import_statement(scope, module, alias, values),
             NodeType::MatchDeclaration { .. } => self.evaluate_match_declaration(scope, node),
             NodeType::InDeclaration {
                 identifier,
@@ -201,19 +196,12 @@ impl InterpreterEnvironment {
                 self.evaluate_as_expression(scope, value, typ.into())
             }
             NodeType::MemberExpression { .. } => self.evaluate_member_expression(scope, node),
-            NodeType::ImplDeclaration {
-                identifier,
-                functions,
-            } => self.evaluate_impl_declaration(scope, identifier, functions),
             NodeType::ScopeDeclaration { body, is_temp } => {
                 self.evaluate_scope(scope, body, is_temp)
             }
             NodeType::NotExpression { value } => {
                 let value = self.evaluate(scope, *value)?;
                 self.evaluate_not(scope, value)
-            }
-            NodeType::TypeDeclaration { identifier, object } => {
-                self.evaluate_type_declaration(scope, identifier, object.into())
             }
             NodeType::PipeExpression(nodes) => self.evaluate_pipe_expression(scope, nodes),
             NodeType::EnumExpression {
@@ -229,6 +217,49 @@ impl InterpreterEnvironment {
                 loop_type,
                 conditionals,
             } => self.evaluate_iter_expression(scope, *map, *loop_type, conditionals),
+            _ => Err(InterpreterErr::UnexpectedNodeInTemp(node.node_type)),
+        }
+    }
+
+    pub fn evaluate_global(
+        &mut self,
+        scope: &u64,
+        node: Node,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        self.current_location = self.get_location(scope, node.span);
+
+        match node.node_type {
+            NodeType::VariableDeclaration {
+                var_type: VarType::Constant,
+                identifier,
+                value,
+                data_type,
+            } => {
+                let value = self.evaluate(scope, *value)?;
+                self.evaluate_variable_declaration(
+                    scope,
+                    VarType::Constant,
+                    identifier,
+                    value,
+                    match data_type {
+                        Some(x) => Some(x.into()),
+                        None => None,
+                    },
+                )
+            }
+            NodeType::ImportStatement {
+                module,
+                alias,
+                values,
+            } => self.evaluate_import_statement(scope, module, alias, values),
+            NodeType::ImplDeclaration {
+                identifier,
+                functions,
+            } => self.evaluate_impl_declaration(scope, identifier, functions),
+            NodeType::TypeDeclaration { identifier, object } => {
+                self.evaluate_type_declaration(scope, identifier, object.into())
+            }
+            _ => Err(InterpreterErr::UnexpectedNodeInGlobal(node.node_type)),
         }
     }
 }

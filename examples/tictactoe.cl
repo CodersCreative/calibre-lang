@@ -184,5 +184,3 @@ const main = fn() => {
     }(board.get_winner())
   }
 }
-
-main();

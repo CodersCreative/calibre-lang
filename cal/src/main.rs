@@ -1,5 +1,5 @@
 use calibre_interpreter::runtime::{scope::InterpreterEnvironment, values::RuntimeValue};
-use calibre_parser::lexer::Tokenizer;
+use calibre_parser::{ast::Node, lexer::Tokenizer};
 use calibre_type_checker::runtime::scope::CheckerEnvironment;
 use clap::Parser;
 use rustyline::{DefaultEditor, error::ReadlineError};
@@ -20,8 +20,24 @@ fn repl() -> Result<(), Box<dyn Error>> {
                 let program = parser
                     .produce_ast(tokenizer.tokenize(line).unwrap())
                     .unwrap();
-                let _ = checker.evaluate(&checker_scope, program.clone())?;
-                let val = env.evaluate(&scope, program)?;
+                let calibre_parser::ast::NodeType::ScopeDeclaration {
+                    body: program,
+                    is_temp: _,
+                } = program.node_type
+                else {
+                    panic!("Unexpected node after parsing")
+                };
+
+                let mut val = RuntimeValue::Null;
+
+                for node in program {
+                    val = if let Ok(_) = checker.evaluate_global(&checker_scope, node.clone()) {
+                        env.evaluate_global(&scope, node)?
+                    } else {
+                        let _ = checker.evaluate(&checker_scope, node.clone())?;
+                        env.evaluate(&scope, node)?
+                    }
+                }
 
                 if val != RuntimeValue::Null {
                     println!("{}", val.to_string());
@@ -45,7 +61,10 @@ fn repl() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn file(path: &str) -> Result<(), Box<dyn Error>> {
+fn file(
+    path: &str,
+    args: Vec<(calibre_parser::ast::Node, Option<calibre_parser::ast::Node>)>,
+) -> Result<(), Box<dyn Error>> {
     let mut env = InterpreterEnvironment::new();
     let mut checker = CheckerEnvironment::new();
     let mut parser = calibre_parser::Parser::default();
@@ -57,6 +76,16 @@ fn file(path: &str) -> Result<(), Box<dyn Error>> {
         .unwrap();
     let _ = checker.evaluate(&checker_scope, program.clone())?;
     let _ = env.evaluate(&scope, program)?;
+
+    let _ = env.evaluate(
+        &scope,
+        calibre_parser::ast::Node::new_from_type(calibre_parser::ast::NodeType::CallExpression(
+            Box::new(calibre_parser::ast::Node::new_from_type(
+                calibre_parser::ast::NodeType::Identifier("main".to_string()),
+            )),
+            args,
+        )),
+    );
 
     Ok(())
 }
@@ -72,7 +101,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
     if let Some(path) = args.path {
-        file(&path)
+        file(&path, Vec::new())
     } else {
         repl()
     }

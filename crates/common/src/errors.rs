@@ -53,6 +53,10 @@ pub enum RuntimeErr<T: RuntimeValue, U: RuntimeType> {
     UnexpectedType(T),
     #[error("Node {0:?} has an unexpected type.")]
     UnexpectedNode(NodeType),
+    #[error("Node {0:?} needs to be used in the global scope.")]
+    UnexpectedNodeInTemp(NodeType),
+    #[error("Node {0:?} can't be used in the global scope.")]
+    UnexpectedNodeInGlobal(NodeType),
     #[error("No associated enum item : {1:?} in enum {0:?}")]
     UnexpectedEnumItem(String, String),
     #[error("Setters can only have one argument, {0:?}")]

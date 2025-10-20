@@ -1,4 +1,4 @@
-let matmul = fn (n : int, a b : list<list<float>>) -> list<list<float>> => {
+const matmul = fn (n : int, a b : list<list<float>>) -> list<list<float>> => {
   let m : int = len(b[0]);
   let p : int = len(a[0]);
   let mut c : list<list<float>> = [];
@@ -17,7 +17,7 @@ let matmul = fn (n : int, a b : list<list<float>>) -> list<list<float>> => {
   c
 } 
 
-let main = fn() => {
+const main = fn() => {
   let n : int = 5;
   let tmp : float = 1.0 / n / n
 	let a : list<list<float>> = [[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n]
@@ -27,5 +27,3 @@ let main = fn() => {
   print(d[n / 2 as int][n / 2 as int])
   print("Success");
 }
-
-if __name__ == "__main__" => main();

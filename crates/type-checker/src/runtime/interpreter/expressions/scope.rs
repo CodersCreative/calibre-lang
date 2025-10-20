@@ -129,9 +129,10 @@ impl CheckerEnvironment {
 
         let mut result: RuntimeType = RuntimeType::Null;
         for statement in body.into_iter() {
-            match self.stop {
+            result = match self.stop {
                 Some(_) if is_temp => return Ok(result),
-                _ => result = self.evaluate(&new_scope, statement)?,
+                _ if !is_temp => self.evaluate_global(&new_scope, statement)?,
+                _ => self.evaluate(&new_scope, statement)?,
             }
         }
 
