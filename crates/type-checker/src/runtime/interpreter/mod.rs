@@ -1,7 +1,4 @@
-use calibre_common::{
-    environment::{Location, RuntimeValue},
-    errors::RuntimeErr,
-};
+use calibre_common::errors::RuntimeErr;
 use calibre_parser::ast::{Node, NodeType, VarType};
 
 use crate::runtime::{
@@ -15,6 +12,11 @@ pub mod statements;
 pub type InterpreterErr = RuntimeErr<RuntimeType, RuntimeType>;
 
 impl CheckerEnvironment {
+    pub fn start_evaluate(&mut self, scope: &u64, node: Node) -> RuntimeType {
+        let val = self.evaluate(scope, node);
+        self.unwrap_type(val)
+    }
+
     pub fn evaluate(&mut self, scope: &u64, node: Node) -> Result<RuntimeType, InterpreterErr> {
         self.current_location = self.get_location(scope, node.span);
 
@@ -61,7 +63,10 @@ impl CheckerEnvironment {
                     panic!()
                 }
             }
-            NodeType::RefStatement { mutability, value } => {
+            NodeType::RefStatement {
+                mutability: _,
+                value,
+            } => {
                 let value = match value.node_type.clone() {
                     NodeType::Identifier(x) => self.get_var_ref(scope, &x)?,
                     NodeType::MemberExpression { path } => {
@@ -105,7 +110,10 @@ impl CheckerEnvironment {
                 let (from, to) = (self.evaluate(scope, *from)?, self.evaluate(scope, *to)?);
                 self.evaluate_range_expression(scope, from, to, inclusive)
             }
-            NodeType::IsDeclaration { value, data_type } => Ok(RuntimeType::Bool),
+            NodeType::IsDeclaration {
+                value: _,
+                data_type: _,
+            } => Ok(RuntimeType::Bool),
             NodeType::AssignmentExpression { identifier, value } => {
                 let value = self.evaluate(scope, *value)?;
                 self.evaluate_assignment_expression(scope, *identifier, value)

@@ -1,5 +1,8 @@
 use crate::environment::{RuntimeType, RuntimeValue};
-use calibre_parser::ast::{LoopType, NodeType, binary::BinaryOperator};
+use calibre_parser::{
+    ParserError,
+    ast::{LoopType, NodeType, binary::BinaryOperator},
+};
 use std::num::{ParseFloatError, ParseIntError};
 use thiserror::Error;
 
@@ -83,6 +86,8 @@ pub enum ScopeErr<T: RuntimeValue> {
     Function(String),
     #[error("Unable to resolve scope : {0}.")]
     Scope(String),
+    #[error("Unable to parse scope : {0:?}.")]
+    Parser(Vec<ParserError>),
 }
 
 #[derive(Error, Debug, Clone)]
@@ -99,6 +104,17 @@ pub enum ValueErr<T: RuntimeValue, U: RuntimeType> {
     ParseFloatError(ParseFloatError),
 }
 
+impl<T: RuntimeValue> From<ParserError> for ScopeErr<T> {
+    fn from(value: ParserError) -> Self {
+        Self::Parser(vec![value])
+    }
+}
+
+impl<T: RuntimeValue> From<Vec<ParserError>> for ScopeErr<T> {
+    fn from(value: Vec<ParserError>) -> Self {
+        Self::Parser(value)
+    }
+}
 impl<T: RuntimeValue, U: RuntimeType> From<ParseIntError> for ValueErr<T, U> {
     fn from(value: ParseIntError) -> Self {
         Self::ParseIntError(value)
@@ -117,11 +133,24 @@ impl<T: RuntimeValue, U: RuntimeType> From<ScopeErr<T>> for ValueErr<T, U> {
     }
 }
 
+impl<T: RuntimeValue, U: RuntimeType> From<ParserError> for RuntimeErr<T, U> {
+    fn from(value: ParserError) -> Self {
+        Self::Value(ValueErr::Scope(value.into()))
+    }
+}
+
+impl<T: RuntimeValue, U: RuntimeType> From<Vec<ParserError>> for RuntimeErr<T, U> {
+    fn from(value: Vec<ParserError>) -> Self {
+        Self::Value(ValueErr::Scope(value.into()))
+    }
+}
+
 impl<T: RuntimeValue, U: RuntimeType> From<ASTError<T>> for RuntimeErr<T, U> {
     fn from(value: ASTError<T>) -> Self {
         Self::AST(value)
     }
 }
+
 impl<T: RuntimeValue, U: RuntimeType> From<ValueErr<T, U>> for RuntimeErr<T, U> {
     fn from(value: ValueErr<T, U>) -> Self {
         Self::Value(value)

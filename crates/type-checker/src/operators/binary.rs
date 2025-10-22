@@ -4,8 +4,8 @@ use calibre_parser::ast::binary::BinaryOperator;
 
 pub fn handle(
     op: &BinaryOperator,
-    env: &CheckerEnvironment,
-    scope: &u64,
+    _env: &CheckerEnvironment,
+    _scope: &u64,
     left: RuntimeType,
     right: RuntimeType,
 ) -> Result<RuntimeType, InterpreterErr> {
@@ -95,7 +95,6 @@ pub fn handle(
             }
             _ => left.panic_operator(&right, op).map_err(|e| e.into()),
         },
-        _ => unimplemented!(),
     }
 }
 

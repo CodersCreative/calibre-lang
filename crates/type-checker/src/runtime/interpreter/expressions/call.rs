@@ -1,5 +1,5 @@
 use calibre_common::environment::{Type, Variable};
-use calibre_parser::ast::{Node, NodeType, ObjectType, RefMutability, VarType};
+use calibre_parser::ast::{Node, NodeType, ObjectType, VarType};
 
 use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
@@ -70,7 +70,7 @@ impl CheckerEnvironment {
                     .collect();
 
                 if params.iter().filter(|x| !x.2).count() > 0 {
-                    let arguments: Vec<(Node, Option<Node>)> = [
+                    let _arguments: Vec<(Node, Option<Node>)> = [
                         arguments,
                         params
                             .iter()
@@ -128,7 +128,7 @@ impl CheckerEnvironment {
             {
                 if arguments.len() == params.len() {
                     let mut args = Vec::new();
-                    for (i, arg) in arguments.into_iter().enumerate() {
+                    for arg in arguments.into_iter() {
                         args.push(self.evaluate(scope, arg.0)?);
                     }
 

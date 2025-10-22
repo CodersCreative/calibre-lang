@@ -11,6 +11,7 @@ pub mod parse;
 #[derive(Debug, Default)]
 pub struct Parser {
     tokens: Vec<Token>,
+    pub errors: Vec<ParserError>,
 }
 
 impl Parser {
@@ -21,12 +22,13 @@ impl Parser {
             true
         }
     }
-    pub fn produce_ast(&mut self, tokens: Vec<Token>) -> Result<Node, ParserError> {
+    pub fn produce_ast(&mut self, tokens: Vec<Token>) -> Node {
+        self.errors.clear();
         self.tokens = tokens;
         let mut body = Vec::new();
 
         while !self.is_eof() {
-            body.push(self.parse_statement()?)
+            body.push(self.parse_statement())
         }
 
         let span = if body.len() > 0 {
@@ -38,13 +40,13 @@ impl Parser {
             )
         };
 
-        Ok(Node::new(
+        Node::new(
             NodeType::ScopeDeclaration {
                 body,
                 is_temp: false,
             },
             span,
-        ))
+        )
     }
 }
 
@@ -54,7 +56,7 @@ impl From<LexerError> for ParserError {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum ParserError {
     #[error("{0}")]
     Lexer(LexerError),
@@ -62,7 +64,7 @@ pub enum ParserError {
     Syntax(SyntaxErr, Token, Token, Token, Token),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum SyntaxErr {
     #[error("Expected opening bracket, {0:?}.")]
     ExpectedOpeningBracket(Bracket),

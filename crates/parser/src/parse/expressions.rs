@@ -1,5 +1,5 @@
 use crate::{
-    Parser, ParserError, SyntaxErr,
+    Parser, SyntaxErr,
     ast::{Node, ObjectType, RefMutability},
     lexer::{Bracket, Span, StopValue},
 };
@@ -10,8 +10,8 @@ use crate::{
 use std::collections::HashMap;
 
 impl Parser {
-    pub fn parse_primary_expression(&mut self) -> Result<Node, ParserError> {
-        Ok(match &self.first().token_type {
+    pub fn parse_primary_expression(&mut self) -> Node {
+        match &self.first().token_type {
             TokenType::Identifier => {
                 let val = self.eat();
                 Node::new(NodeType::Identifier(val.value), val.span)
@@ -31,7 +31,7 @@ impl Parser {
                 )
             }
             TokenType::Stop(x) => match x {
-                StopValue::Return => self.parse_return_declaration()?,
+                StopValue::Return => self.parse_return_declaration(),
                 StopValue::Break => {
                     let val = self.eat();
                     Node::new(NodeType::Break, val.span)
@@ -52,11 +52,11 @@ impl Parser {
                     Node::new(NodeType::StringLiteral(val.value.to_string()), val.span)
                 }
             }
-            TokenType::Open(Bracket::Paren) => self.parse_paren_expression()?,
-            TokenType::Open(Bracket::Square) => self.parse_list_expression()?,
+            TokenType::Open(Bracket::Paren) => self.parse_paren_expression(),
+            TokenType::Open(Bracket::Square) => self.parse_list_expression(),
             TokenType::BinaryOperator(x) if x == &BinaryOperator::Sub => {
                 let open = self.eat();
-                let val = self.parse_statement()?;
+                let val = self.parse_statement();
                 let span = Span::new_from_spans(open.span, val.span);
                 Node::new(
                     NodeType::NotExpression {
@@ -67,7 +67,7 @@ impl Parser {
             }
             TokenType::Not => {
                 let open = self.eat();
-                let val = self.parse_statement()?;
+                let val = self.parse_statement();
                 let span = Span::new_from_spans(open.span, val.span);
                 Node::new(
                     NodeType::NotExpression {
@@ -78,7 +78,7 @@ impl Parser {
             }
             TokenType::Debug => {
                 let open = self.eat();
-                let val = self.parse_statement()?;
+                let val = self.parse_statement();
                 let span = Span::new_from_spans(open.span, val.span);
                 Node::new(
                     NodeType::DebugExpression {
@@ -87,11 +87,11 @@ impl Parser {
                     span,
                 )
             }
-            TokenType::Try => self.parse_try_expression()?,
-            TokenType::Func => self.parse_function_declaration()?,
+            TokenType::Try => self.parse_try_expression(),
+            TokenType::Func => self.parse_function_declaration(),
             TokenType::BinaryOperator(BinaryOperator::Mul) => {
                 let open = self.eat();
-                let close = self.parse_purely_member()?;
+                let close = self.parse_purely_member();
                 Node::new(
                     NodeType::DerefStatement {
                         value: Box::new(close.clone()),
@@ -101,7 +101,7 @@ impl Parser {
             }
             x if RefMutability::from(x.clone()) != RefMutability::Value => {
                 let open = self.eat();
-                let close = self.parse_purely_member()?;
+                let close = self.parse_purely_member();
                 Node::new(
                     NodeType::RefStatement {
                         mutability: RefMutability::from(open.token_type),
@@ -110,11 +110,15 @@ impl Parser {
                     Span::new_from_spans(open.span, close.span),
                 )
             }
-            _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
-        })
+            _ => {
+                self.add_err(SyntaxErr::UnexpectedToken);
+                let _ = self.eat();
+                self.parse_statement()
+            }
+        }
     }
 
-    pub fn parse_potential_key_value(&mut self) -> Result<ObjectType<Option<Node>>, ParserError> {
+    pub fn parse_potential_key_value(&mut self) -> ObjectType<Option<Node>> {
         match self.first().token_type {
             TokenType::Open(Bracket::Curly) => {
                 let _ = self.eat();
@@ -122,7 +126,7 @@ impl Parser {
                 while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Curly)
                 {
                     let key = self
-                        .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
+                        .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
                         .value;
 
                     if [TokenType::Comma, TokenType::Close(Bracket::Curly)]
@@ -136,19 +140,19 @@ impl Parser {
                         continue;
                     }
 
-                    let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'))?;
+                    let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-                    properties.insert(key, Some(self.parse_statement()?));
+                    properties.insert(key, Some(self.parse_statement()));
 
                     if self.first().token_type != TokenType::Close(Bracket::Curly) {
-                        let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
+                        let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
                     }
                 }
                 let _ = self.expect_eat(
                     &TokenType::Close(Bracket::Curly),
                     SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
-                )?;
-                Ok(ObjectType::Map(properties))
+                );
+                ObjectType::Map(properties)
             }
             _ => {
                 let _ = self.expect_eat(
@@ -158,35 +162,35 @@ impl Parser {
                 let mut tuple = Vec::new();
                 while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Paren)
                 {
-                    tuple.push(Some(self.parse_statement()?));
+                    tuple.push(Some(self.parse_statement()));
                     if self.first().token_type != TokenType::Close(Bracket::Paren) {
-                        let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','))?;
+                        let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
                     }
                 }
                 let _ = self.expect_eat(
                     &TokenType::Close(Bracket::Paren),
                     SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
-                )?;
-                Ok(ObjectType::Tuple(tuple))
+                );
+                ObjectType::Tuple(tuple)
             }
         }
     }
 
-    pub fn parse_object_expression(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_object_expression(&mut self) -> Node {
         if self.first().token_type != TokenType::Open(Bracket::Curly) {
             return self.parse_try_expression();
         }
 
         let open = self.first().clone();
 
-        Ok(Node::new(
-            NodeType::StructLiteral(self.parse_potential_key_value()?),
+        Node::new(
+            NodeType::StructLiteral(self.parse_potential_key_value()),
             open.span,
-        ))
+        )
     }
 
-    pub fn parse_assignment_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left: Node = self.parse_pipe_expression()?;
+    pub fn parse_assignment_expression(&mut self) -> Node {
+        let mut left: Node = self.parse_pipe_expression();
 
         if let TokenType::BinaryAssign(op) = self.first().token_type.clone() {
             let open = self.eat();
@@ -196,7 +200,7 @@ impl Parser {
                     value: Box::new(Node::new(
                         NodeType::BinaryExpression {
                             left: Box::new(left),
-                            right: Box::new(self.parse_statement()?),
+                            right: Box::new(self.parse_statement()),
                             operator: op,
                         },
                         open.span.clone(),
@@ -206,7 +210,7 @@ impl Parser {
             );
         } else if [TokenType::Equals].contains(&self.first().token_type) {
             let open = self.eat();
-            let right = self.parse_statement()?;
+            let right = self.parse_statement();
             left = Node::new(
                 NodeType::AssignmentExpression {
                     identifier: Box::new(left),
@@ -216,7 +220,7 @@ impl Parser {
             );
         }
 
-        Ok(left)
+        left
     }
 }
 

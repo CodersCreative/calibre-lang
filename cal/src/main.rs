@@ -1,5 +1,5 @@
 use calibre_interpreter::runtime::{scope::InterpreterEnvironment, values::RuntimeValue};
-use calibre_parser::{ast::Node, lexer::Tokenizer};
+use calibre_parser::lexer::Tokenizer;
 use calibre_type_checker::runtime::scope::CheckerEnvironment;
 use clap::Parser;
 use rustyline::{DefaultEditor, error::ReadlineError};
@@ -17,9 +17,15 @@ fn repl() -> Result<(), Box<dyn Error>> {
         match readline {
             Ok(line) => {
                 let mut tokenizer = Tokenizer::default();
-                let program = parser
-                    .produce_ast(tokenizer.tokenize(line).unwrap())
-                    .unwrap();
+                let program = parser.produce_ast(tokenizer.tokenize(line).unwrap());
+
+                if !parser.errors.is_empty() {
+                    eprintln!(
+                        "Unable to parse input due to : {:?}.\n\nPlease Retry.",
+                        parser.errors
+                    );
+                    continue;
+                }
                 let calibre_parser::ast::NodeType::ScopeDeclaration {
                     body: program,
                     is_temp: _,
@@ -31,16 +37,34 @@ fn repl() -> Result<(), Box<dyn Error>> {
                 let mut val = RuntimeValue::Null;
 
                 for node in program {
-                    val = if let Ok(_) = checker.evaluate_global(&checker_scope, node.clone()) {
-                        env.evaluate_global(&scope, node)?
+                    let res = if let Ok(x) = env.evaluate_global(&scope, node.clone()) {
+                        let _ = checker.evaluate_global(&checker_scope, node);
+                        Ok(x)
                     } else {
-                        let _ = checker.evaluate(&checker_scope, node.clone())?;
-                        env.evaluate(&scope, node)?
+                        let _ = checker.start_evaluate(&checker_scope, node.clone());
+                        env.evaluate(&scope, node)
+                    };
+
+                    for err in &checker.errors {
+                        eprintln!("Line caused the following type checker errors:");
+                        eprintln!("{}", err)
                     }
+
+                    match res {
+                        Ok(x) => val = x,
+                        Err(e) => {
+                            eprintln!("Error found in line {}:", e);
+                        }
+                    }
+
+                    checker.errors.clear();
                 }
 
-                if val != RuntimeValue::Null {
-                    println!("{}", val.to_string());
+                match val {
+                    RuntimeValue::Null | RuntimeValue::Ref(_, _) => {}
+                    _ => {
+                        println!("{}", val.to_string());
+                    }
                 }
             }
             Err(ReadlineError::Interrupted) => {
@@ -71,10 +95,19 @@ fn file(
     let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
     let mut tokenizer = Tokenizer::default();
-    let program = parser
-        .produce_ast(tokenizer.tokenize(fs::read_to_string(path)?).unwrap())
-        .unwrap();
+    let program = parser.produce_ast(tokenizer.tokenize(fs::read_to_string(path)?).unwrap());
+    if !parser.errors.is_empty() {
+        return Err(
+            calibre_type_checker::runtime::interpreter::InterpreterErr::from(parser.errors).into(),
+        );
+    }
     let _ = checker.evaluate(&checker_scope, program.clone())?;
+
+    for err in &checker.errors {
+        eprintln!("Type checker errors:");
+        eprintln!("{}", err)
+    }
+
     let _ = env.evaluate(&scope, program)?;
 
     let _ = env.evaluate(

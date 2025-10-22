@@ -30,14 +30,14 @@ impl CheckerEnvironment {
         Ok(RuntimeType::Ref(Box::new(typ)))
     }
 
-    fn convert_saveable_into_runtime_var(
+    fn _convert_saveable_into_runtime_var(
         &self,
         value: Variable<RuntimeType>,
     ) -> Variable<RuntimeType> {
         let var_type = value.var_type.clone();
         let location = value.location.clone();
 
-        let mut get_new_list = |list: Vec<RuntimeType>| -> Vec<RuntimeType> {
+        let get_new_list = |list: Vec<RuntimeType>| -> Vec<RuntimeType> {
             let mut new_vec = Vec::new();
 
             for v in list {
@@ -49,7 +49,7 @@ impl CheckerEnvironment {
             new_vec
         };
 
-        let mut get_new_map = |map: HashMap<String, RuntimeType>| -> HashMap<String, RuntimeType> {
+        let get_new_map = |map: HashMap<String, RuntimeType>| -> HashMap<String, RuntimeType> {
             let mut new_map = HashMap::new();
 
             for (k, v) in map {
@@ -102,7 +102,7 @@ impl CheckerEnvironment {
         let var_type = value.var_type.clone();
         let location = value.location.clone();
 
-        let mut get_new_list = |this: &mut Self, list: Vec<RuntimeType>| -> Vec<RuntimeType> {
+        let get_new_list = |_this: &mut Self, list: Vec<RuntimeType>| -> Vec<RuntimeType> {
             let mut new_vec = Vec::new();
 
             for v in list {
@@ -112,7 +112,7 @@ impl CheckerEnvironment {
         };
 
         let get_new_map =
-            |this: &mut Self, map: HashMap<String, RuntimeType>| -> HashMap<String, RuntimeType> {
+            |_this: &mut Self, map: HashMap<String, RuntimeType>| -> HashMap<String, RuntimeType> {
                 let mut new_map = HashMap::new();
 
                 for (k, v) in map {

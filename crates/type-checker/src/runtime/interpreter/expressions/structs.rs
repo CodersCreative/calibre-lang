@@ -78,7 +78,7 @@ impl CheckerEnvironment {
             }
         };
 
-        if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
+        if let Some((_, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
             if let Some(ObjectType::Map(properties)) = &enm.1 {
                 let mut data_vals = HashMap::new();
                 if let Some(ObjectType::Map(data)) = data {
@@ -122,7 +122,7 @@ impl CheckerEnvironment {
                 }
 
                 let mut new_data_vals = Vec::new();
-                for (i, property) in properties.into_iter().enumerate() {
+                for (i, _property) in properties.into_iter().enumerate() {
                     if data_vals.len() <= 0 {
                         return Err(InterpreterErr::InvalidIndex(i as i64));
                     }

@@ -36,7 +36,7 @@ pub struct Tokenizer {
     col: u32,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum LexerError {
     #[error("Unrecognized character '{0}'")]
     Unrecognized(char),

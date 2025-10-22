@@ -12,18 +12,18 @@ pub fn setup(env: &mut CheckerEnvironment, scope: &u64) {
     let mut parser = Parser::default();
     let mut tokenizer = Tokenizer::default();
 
-    let program = parser
-        .produce_ast(
-            tokenizer
-                .tokenize(
-                    fs::read_to_string(env.scopes.get(scope).unwrap().path.clone())
-                        .unwrap_or(String::new()),
-                )
-                .unwrap(),
-        )
-        .unwrap();
+    let program = parser.produce_ast(
+        tokenizer
+            .tokenize(
+                fs::read_to_string(env.scopes.get(scope).unwrap().path.clone())
+                    .unwrap_or(String::new()),
+            )
+            .unwrap(),
+    );
 
-    let _ = env.evaluate(scope, program).unwrap();
+    env.add_parser_errors(parser.errors);
+
+    let _ = env.start_evaluate(scope, program);
 
     setup_scope(env, scope, "thread", &["wait"]);
     setup_scope(env, scope, "console", &["out", "input", "err", "clear"]);

@@ -56,7 +56,7 @@ impl CheckerEnvironment {
     ) -> Result<RuntimeType, InterpreterErr> {
         let NodeType::FunctionDeclaration {
             parameters,
-            body,
+            body: _,
             return_type,
             is_async,
         } = declaration.node_type
@@ -100,8 +100,11 @@ impl CheckerEnvironment {
         data_type: Option<RuntimeType>,
     ) -> Result<RuntimeType, InterpreterErr> {
         if let Some(t) = data_type {
-            if !value.is_type(&RuntimeType::from(t)) {
-                // println!("{:?}", self.current_location)
+            if !value.is_type(&RuntimeType::from(t.clone())) {
+                self.add_err(InterpreterErr::ExpectedType(
+                    value.clone(),
+                    RuntimeType::from(t),
+                ));
             }
         }
 

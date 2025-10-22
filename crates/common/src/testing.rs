@@ -1,13 +1,29 @@
 use std::{collections::HashMap, time::Duration};
 
-use crate::environment::{Object, RuntimeType, RuntimeValue, Variable};
+use thiserror::Error;
 
-pub enum TestingResult<T: RuntimeValue> {
-    Ok,
+use crate::{
+    environment::{Object, RuntimeType, RuntimeValue, Variable},
+    errors::RuntimeErr,
+};
+
+#[derive(Error, Debug, Clone)]
+
+pub enum TestingError<T: RuntimeValue, U: RuntimeType> {
+    #[error("{0}")]
+    Runtime(RuntimeErr<T, U>),
+    #[error("Variable not found : {0}")]
     Variable(String),
+    #[error("Object not found : {0}")]
     Object(String),
-    Duration,
+    #[error("Took too long : {0:?}")]
+    Duration(Duration),
+    #[error("Incorrect value returned : {0}")]
     Result(T),
+}
+
+pub trait Testable<T: RuntimeValue, U: RuntimeType> {
+    fn test(program: String, params: TestingParams<T, U>) -> (Vec<TestingError<T, U>>, Self);
 }
 
 pub struct TestingParams<T: RuntimeValue, U: RuntimeType> {

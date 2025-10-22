@@ -1,5 +1,6 @@
 use std::fs;
 
+use crate::runtime::interpreter::InterpreterErr;
 use crate::runtime::scope::InterpreterEnvironment;
 use crate::runtime::values::RuntimeValue;
 use calibre_common::environment::{RuntimeValue as Value, Variable};
@@ -15,13 +16,15 @@ pub fn setup(env: &mut InterpreterEnvironment, scope: &u64) {
     let mut parser = Parser::default();
 
     let mut tokenizer = Tokenizer::default();
-    let program = parser
-        .produce_ast(
-            tokenizer
-                .tokenize(fs::read_to_string(env.scopes.get(scope).unwrap().path.clone()).unwrap())
-                .unwrap(),
-        )
-        .unwrap();
+    let program = parser.produce_ast(
+        tokenizer
+            .tokenize(fs::read_to_string(env.scopes.get(scope).unwrap().path.clone()).unwrap())
+            .unwrap(),
+    );
+
+    if !parser.errors.is_empty() {
+        Err(InterpreterErr::from(parser.errors)).unwrap()
+    }
 
     let _ = env.evaluate(scope, program).unwrap();
 

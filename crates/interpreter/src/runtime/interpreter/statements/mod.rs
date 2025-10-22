@@ -96,8 +96,14 @@ impl InterpreterEnvironment {
         var_type: VarType,
         identifier: String,
         value: RuntimeValue,
-        _data_type: Option<RuntimeType>,
+        data_type: Option<RuntimeType>,
     ) -> Result<RuntimeValue, InterpreterErr> {
+        if let Some(t) = data_type {
+            if !value.is_type(self, scope, &t) {
+                return Err(InterpreterErr::ExpectedType(value.clone(), t));
+            }
+        }
+
         Ok(self.push_var(
             scope,
             identifier,

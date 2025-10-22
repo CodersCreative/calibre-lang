@@ -4,9 +4,9 @@ use calibre_parser::ast::{IfComparisonType, Node, NodeType};
 impl CheckerEnvironment {
     pub fn evaluate_in_statement(
         &mut self,
-        scope: &u64,
-        left: RuntimeType,
-        right: RuntimeType,
+        _scope: &u64,
+        _left: RuntimeType,
+        _right: RuntimeType,
     ) -> Result<RuntimeType, InterpreterErr> {
         Ok(RuntimeType::Bool)
     }
@@ -28,13 +28,13 @@ impl CheckerEnvironment {
                     return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
                 }
             }
-            IfComparisonType::IfLet { value, pattern } => {
-                let path = match &value.node_type {
+            IfComparisonType::IfLet { value, pattern: _ } => {
+                let _path = match &value.node_type {
                     NodeType::Identifier(x) => vec![x.clone()],
                     _ => Vec::new(),
                 };
 
-                let value = self.evaluate(scope, value.clone())?;
+                let _value = self.evaluate(scope, value.clone())?;
                 result = RuntimeType::Dynamic;
             }
         }

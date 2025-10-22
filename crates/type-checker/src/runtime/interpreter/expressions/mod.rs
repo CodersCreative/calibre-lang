@@ -24,7 +24,7 @@ impl CheckerEnvironment {
 
     pub fn evaluate_not<'a>(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         value: RuntimeType,
     ) -> Result<RuntimeType, InterpreterErr> {
         return Ok(value);
@@ -54,10 +54,10 @@ impl CheckerEnvironment {
 
     pub fn evaluate_range_expression(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         from: RuntimeType,
         to: RuntimeType,
-        inclusive: bool,
+        _inclusive: bool,
     ) -> Result<RuntimeType, InterpreterErr> {
         match (&from, &to) {
             (RuntimeType::Int, RuntimeType::Int) => Ok(RuntimeType::Range),
@@ -103,7 +103,7 @@ impl CheckerEnvironment {
 
     pub fn evaluate_boolean_expression(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         left: RuntimeType,
         right: RuntimeType,
         operator: BooleanOperation,

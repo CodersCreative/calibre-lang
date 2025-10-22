@@ -201,12 +201,16 @@ impl RuntimeType {
             (RuntimeType::Int, RuntimeType::Range)
             | (RuntimeType::Range, RuntimeType::Int)
             | (RuntimeType::Float, RuntimeType::Range)
-            | (RuntimeType::Range, RuntimeType::Float) => Ok(t.clone()),
-            (RuntimeType::Int, RuntimeType::Str)
+            | (RuntimeType::Range, RuntimeType::Float)
+            | (RuntimeType::Int, RuntimeType::Str)
+            | (RuntimeType::Bool, RuntimeType::Int)
+            | (RuntimeType::Int, RuntimeType::Bool)
+            | (RuntimeType::Bool, RuntimeType::Float)
+            | (RuntimeType::Float, RuntimeType::Bool)
             | (RuntimeType::Str, RuntimeType::Int)
             | (RuntimeType::Float, RuntimeType::Str)
-            | (RuntimeType::Str, RuntimeType::Float) => Ok(t.clone()),
-            (RuntimeType::Int, RuntimeType::Char)
+            | (RuntimeType::Str, RuntimeType::Float)
+            | (RuntimeType::Int, RuntimeType::Char)
             | (RuntimeType::Char, RuntimeType::Int)
             | (RuntimeType::Float, RuntimeType::Char)
             | (RuntimeType::Char, RuntimeType::Float) => Ok(t.clone()),
@@ -332,10 +336,6 @@ impl RuntimeType {
 
     pub fn is_type(&self, other: &RuntimeType) -> bool {
         if self == &RuntimeType::Dynamic || other == &RuntimeType::Dynamic {
-            true
-        } else if self == &RuntimeType::Int && other == &RuntimeType::Float
-            || self == &RuntimeType::Float && other == &RuntimeType::Int
-        {
             true
         } else {
             self == other

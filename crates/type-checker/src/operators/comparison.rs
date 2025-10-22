@@ -2,15 +2,15 @@ use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, val
 use calibre_parser::ast::comparison::Comparison;
 
 pub fn handle(
-    op: &Comparison,
-    env: &CheckerEnvironment,
-    scope: &u64,
+    _op: &Comparison,
+    _env: &CheckerEnvironment,
+    _scope: &u64,
     left: RuntimeType,
     right: RuntimeType,
 ) -> Result<RuntimeType, InterpreterErr> {
     if left.is_type(&right) {
         Ok(RuntimeType::Bool)
     } else {
-        panic!()
+        Err(InterpreterErr::ExpectedType(left, right))
     }
 }

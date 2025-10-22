@@ -1,6 +1,6 @@
 use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 use calibre_common::environment::Variable;
-use calibre_parser::ast::{LoopType, Node, NodeType, RefMutability, VarType};
+use calibre_parser::ast::{LoopType, Node, NodeType, VarType};
 
 impl CheckerEnvironment {
     pub fn evaluate_list_expression(

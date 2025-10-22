@@ -1,7 +1,4 @@
-use calibre_common::environment::{Object, Variable};
-
 use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
-use std::collections::HashMap;
 
 impl CheckerEnvironment {
     pub fn evaluate_import_statement(
