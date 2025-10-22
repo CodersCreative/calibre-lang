@@ -102,6 +102,7 @@ impl From<ParserDataType> for RuntimeType {
             ParserDataType::Bool => Self::Bool,
             ParserDataType::Str => Self::Str,
             ParserDataType::Char => Self::Char,
+            ParserDataType::Scope(_) => Self::Dynamic,
             ParserDataType::Tuple(x) => {
                 Self::Tuple(x.into_iter().map(|x| RuntimeType::from(x)).collect())
             }

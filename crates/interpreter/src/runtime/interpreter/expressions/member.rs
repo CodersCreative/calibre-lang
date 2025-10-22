@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display};
 
+use calibre_common::errors::ScopeErr;
 use calibre_parser::ast::{Node, NodeType, ObjectType};
 
 use crate::runtime::{
@@ -29,23 +30,42 @@ pub enum MembrExprPathRes {
 }
 
 impl InterpreterEnvironment {
+    pub fn get_scope_member_scope_path(
+        &mut self,
+        scope: &u64,
+        mut path: Vec<Node>,
+    ) -> Result<(u64, Node), InterpreterErr> {
+        if let NodeType::Identifier(x) = &path[0].node_type {
+            if let Ok(s) = self.get_next_scope(*scope, &x) {
+                if path.len() <= 2 {
+                    return Ok((s, path.remove(1)));
+                }
+
+                match self.get_scope_member_scope_path(&s, path[1..].to_vec()) {
+                    Ok(x) => return Ok(x),
+                    _ => {}
+                }
+            }
+        }
+
+        Err(ScopeErr::Scope(format!("{:?}", path[0].node_type)).into())
+    }
+
+    pub fn evaluate_scope_member_expression(
+        &mut self,
+        scope: &u64,
+        path: Vec<Node>,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        let (s, node) = self.get_scope_member_scope_path(scope, path)?;
+        self.evaluate(&s, node)
+    }
+
     pub fn get_member_expression_path(
         &mut self,
         scope: &u64,
         og_path: Vec<(Node, bool)>,
     ) -> Result<MembrExprPathRes, InterpreterErr> {
         let mut path: Vec<MemberPathType> = Vec::new();
-        if let (NodeType::Identifier(x), false) = (&og_path[0].0.node_type, og_path[0].1) {
-            if let Ok(s) = self.get_next_scope(*scope, &x) {
-                if let Ok(x) = self.evaluate(&s, og_path[1].0.clone()) {
-                    return Ok(MembrExprPathRes::Value(x));
-                }
-                match self.get_member_expression_path(&s, og_path[1..].to_vec()) {
-                    Ok(x) => return Ok(x),
-                    _ => {}
-                }
-            }
-        }
 
         for (node, computed) in og_path.into_iter() {
             if !computed {
@@ -186,19 +206,26 @@ impl InterpreterEnvironment {
         scope: &u64,
         member: Node,
         value: RuntimeValue,
-    ) -> Result<RuntimeValue, InterpreterErr> {
+    ) -> Result<(), InterpreterErr> {
         match member.node_type {
             NodeType::MemberExpression { path: og_path } => {
                 let path = match self.get_member_expression_path(scope, og_path)? {
                     MembrExprPathRes::Path(x) => x,
-                    MembrExprPathRes::Value(x) => return Ok(x),
+                    MembrExprPathRes::Value(x) => return Ok(()),
                 };
 
                 let RuntimeValue::Ref(pointer, _) = self.get_member_ref(scope, &path)? else {
                     unreachable!()
                 };
 
-                Ok(self.assign_var_from_ref_pointer(&pointer, value)?)
+                let _ = self.assign_var_from_ref_pointer(&pointer, value)?;
+
+                Ok(())
+            }
+            NodeType::ScopeMemberExpression { path } => {
+                let (s, node) = self.get_scope_member_scope_path(scope, path)?;
+                let _ = self.evaluate_assignment_expression(&s, node, value)?;
+                Ok(())
             }
             _ => unreachable!(),
         }

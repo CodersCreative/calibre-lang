@@ -196,6 +196,9 @@ impl InterpreterEnvironment {
                 self.evaluate_as_expression(scope, value, typ.into())
             }
             NodeType::MemberExpression { .. } => self.evaluate_member_expression(scope, node),
+            NodeType::ScopeMemberExpression { path } => {
+                self.evaluate_scope_member_expression(scope, path)
+            }
             NodeType::ScopeDeclaration { body, is_temp } => {
                 self.evaluate_scope(scope, body, is_temp)
             }

@@ -5,7 +5,7 @@ use crate::{ast::NodeType, lexer::TokenType};
 
 impl Parser {
     pub fn parse_call_member_expression(&mut self) -> Node {
-        let member = self.parse_member_expression();
+        let member = self.parse_scope_member_expression();
 
         if self.first().token_type == TokenType::Open(Bracket::Paren) {
             return self.parse_call_expression(member);
@@ -70,6 +70,24 @@ impl Parser {
         } else {
             let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
             Node::new(NodeType::MemberExpression { path: path }, first)
+        }
+    }
+
+    pub fn parse_scope_member_expression(&mut self) -> Node {
+        let mut path: Vec<Node> = vec![self.parse_member_expression()];
+
+        if let NodeType::Identifier(_) = path[0].node_type {
+            while self.first().token_type == TokenType::Colon {
+                let _ = self.eat();
+                path.push(self.parse_member_expression());
+            }
+        }
+
+        if path.len() <= 1 {
+            path.remove(0)
+        } else {
+            let first = Span::new_from_spans(path[0].span, path.last().unwrap().span);
+            Node::new(NodeType::ScopeMemberExpression { path: path }, first)
         }
     }
 
@@ -146,13 +164,22 @@ impl Parser {
 
         macro_rules! parse_arg {
             () => {{
-                if defaulted || self.nth(1).token_type == TokenType::Equals {
-                    (self.parse_primary_expression(), {
-                        let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
-                        defaulted = true;
-                        Some(self.parse_statement())
-                    })
+                if let Some(equals) = self.nth(1) {
+                    if defaulted || equals.token_type == TokenType::Equals {
+                        (self.parse_primary_expression(), {
+                            let _ =
+                                self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
+                            defaulted = true;
+                            Some(self.parse_statement())
+                        })
+                    } else {
+                        (self.parse_statement(), None)
+                    }
                 } else {
+                    if defaulted {
+                        self.add_err(SyntaxErr::ExpectedChar('='))
+                    }
+
                     (self.parse_statement(), None)
                 }
             }};

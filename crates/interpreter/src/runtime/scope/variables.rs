@@ -269,7 +269,7 @@ impl InterpreterEnvironment {
         &mut self,
         pointer: &u64,
         value: RuntimeValue,
-    ) -> Result<RuntimeValue, ScopeErr<RuntimeValue>> {
+    ) -> Result<(), ScopeErr<RuntimeValue>> {
         let var = {
             let value = self.variables.get(pointer).unwrap();
 
@@ -292,14 +292,12 @@ impl InterpreterEnvironment {
             location: var.2,
         });
 
-        let typ = (&value.value).into();
-
         if var.1 != VarType::Mutable {
             Err(ScopeErr::AssignConstant(pointer.to_string()))
         } else {
             self.variables.insert(*pointer, value);
 
-            Ok(RuntimeValue::Ref(*pointer, typ))
+            Ok(())
         }
     }
 

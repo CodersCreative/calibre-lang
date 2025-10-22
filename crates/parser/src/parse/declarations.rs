@@ -45,7 +45,13 @@ impl Parser {
         while ![TokenType::EOF, TokenType::Close(Bracket::Curly)].contains(&self.first().token_type)
         {
             body.push(self.parse_statement());
+            let _ = self.parse_delimited();
         }
+
+        let body: Vec<Node> = body
+            .into_iter()
+            .filter(|x| x.node_type != NodeType::EmptyLine)
+            .collect();
 
         let close = self.expect_eat(
             &TokenType::Close(Bracket::Curly),
@@ -90,12 +96,14 @@ impl Parser {
 
         let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
 
+        let value = self.parse_statement();
+
         Node::new(
             NodeType::VariableDeclaration {
                 var_type,
                 identifier: identifier.value,
                 data_type,
-                value: Box::new(self.parse_statement()),
+                value: Box::new(value),
             },
             identifier.span,
         )
@@ -431,19 +439,21 @@ impl Parser {
     }
 
     pub fn get_loop_type(&mut self) -> LoopType {
-        if self.first().token_type == TokenType::Identifier
-            && self.nth(1).token_type == TokenType::In
-        {
-            let identifier = self
-                .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
-                .value;
+        if let Some(in_token) = self.nth(1) {
+            if self.first().token_type == TokenType::Identifier
+                && in_token.token_type == TokenType::In
+            {
+                let identifier = self
+                    .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
+                    .value;
 
-            let _ = self.eat();
-            LoopType::For(identifier, self.parse_statement())
-        } else {
-            let task = self.parse_statement();
-            LoopType::While(task)
+                let _ = self.eat();
+                return LoopType::For(identifier, self.parse_statement());
+            }
         }
+
+        let task = self.parse_statement();
+        LoopType::While(task)
     }
 
     pub fn parse_loop_declaration(&mut self) -> Node {

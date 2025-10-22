@@ -43,6 +43,7 @@ pub enum ParserDataType {
     Char,
     Tuple(Vec<ParserDataType>),
     List(Box<Option<ParserDataType>>),
+    Scope(Vec<ParserDataType>),
     Range,
     Option(Box<ParserDataType>),
     Result(Box<ParserDataType>, Box<ParserDataType>),
@@ -113,6 +114,7 @@ impl Node {
 pub enum NodeType {
     Break,
     Continue,
+    EmptyLine,
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
@@ -205,6 +207,9 @@ pub enum NodeType {
     IntLiteral(i64),
     MemberExpression {
         path: Vec<(Node, bool)>,
+    },
+    ScopeMemberExpression {
+        path: Vec<Node>,
     },
     CallExpression(Box<Node>, Vec<(Node, Option<Node>)>),
     BinaryExpression {

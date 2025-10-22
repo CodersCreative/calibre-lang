@@ -1,5 +1,5 @@
-import data
-import * from data
+import data;
+import * from data;
 
 // The const keyword creates an immutable variable that cannot be shadowed.
 const language_forced : Language = Language.ENGLISH (6);
@@ -15,11 +15,11 @@ const main = fn() => {
   // Mutability needs to be specified at the beginning for all branches
   // match statements need to be called, either using a pipe or brackets as they're considered functions
   recursive_language |> match &mut Language {
-    data.Language.ARABIC(Language.FRENCH{_}, Language.ARABIC(Language.FRENCH{code})) => print("Code: " & code),
-    data.Language.ARABIC(Language.FRENCH{data}, Language.SPANISH) => {
-      print("Enum: " & data)
+    data:Language.ARABIC(Language.FRENCH{_}, Language.ARABIC(Language.FRENCH{code})) => print("Code: " & code),
+    data:Language.ARABIC(Language.FRENCH{data}, Language.SPANISH) => {
+      print("Enum: " & data);
       data = 5;
-      print("Enum Changed: " & data)
+      print("Enum Changed: " & data);
     },
   }
 
@@ -39,7 +39,7 @@ const main = fn() => {
   let mut num : int = 0;
 
   // If a type is specified the data will automatically be converted to the type.
-  let country = Country(Language.SPANISH)
+  let country = Country(Language.SPANISH);
 
   // print function to output to stdout.
   print(language_forced);
@@ -63,14 +63,14 @@ const main = fn() => {
   // Typed arrays are created using the following syntax:
   let mut lst : list<int> = [x**2 for x in (0..100) if x % 2 == 0 if x % 8 != 0];
 
-  print("lst")
+  print("lst");
   print(*lst);// A static array
 
   // A foreach loop.
   for l in &mut lst => {
     *l *= 2;
   }
-  print("lst 2")
+  print("lst 2");
   print(*lst);// A static array
 
   // A for loop using the recommended range syntax.
@@ -93,7 +93,7 @@ const main = fn() => {
       return y as str!int;
     }
 
-    err("needs to be larger than 10")
+    err("needs to be larger than 10");
   }
 
   18 |> smth_fn |> match {
@@ -115,7 +115,7 @@ const main = fn() => {
   }
 
   // Closures can be used to easily represent the previous results from pipes.
-  200 |> smth_fn |> fn ($) => print("This + That = " & $)
+  200 |> smth_fn |> fn ($) => print("This + That = " & $);
 
   18 |> smth_fn |> match {
     Some(x) if x == 18 => print("Equated to 18"),
@@ -145,7 +145,7 @@ const main = fn() => {
 
 // Return types and parameters of functions are recommended to have a specified type but it's not required
 const range2 = fn (stop : int, start : int = 0, step : int = 10) -> list<int> => {
-  range(start, stop * 2, step * 2)
+  range(start, stop * 2, step * 2);
 }
 
 // TODO Implement generics with dyn<Add, Sub, Mul...>
@@ -163,7 +163,7 @@ const secondary = fn (num : int) -> !int => {
   // The try keyword can be used to automatically defer errors when inside a function
 	let mut x : int = unwrap(*x) + try "58" as int;
 
-	x += 4 // same as x = x + 4
+	x += 4; // same as x = x + 4;
 	print(x);
 
 	let mut x = true;
@@ -179,7 +179,7 @@ const secondary = fn (num : int) -> !int => {
 	print(x);
 	print(num);
 
-	number
+	number;
 }
 
 const tertiary = fn() => {
@@ -188,9 +188,9 @@ const tertiary = fn() => {
   let currying = fn (a : int, b : int, c : int) -> int => a * b * c;
 
   // This is an example of currying using pipes
-  let currying_2 = 18 |> 20 |> currying
-  let currying_2 = 15 |> currying_2
-  print("Curryed " & currying_2)
+  let currying_2 = 18 |> 20 |> currying;
+  let currying_2 = 15 |> currying_2;
+  print("Curryed " & currying_2);
 
   // Currying also works using the normal call syntax
   print("Curryed " & currying(18)(20, 15));
@@ -205,6 +205,6 @@ const tertiary = fn() => {
   print("__name__ = " & __name__);
 
   if (4 in [4, 16, 32]) && __name__ == "__main__" => {
-    print("Success, Random Num = " & (std.random.generate(10..=1000) as int))
+    print("Success, Random Num = " & (std.random.generate(10..=1000) as int));
   }
 }

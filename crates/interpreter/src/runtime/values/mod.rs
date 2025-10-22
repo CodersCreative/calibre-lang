@@ -99,6 +99,7 @@ impl From<ParserDataType> for RuntimeType {
                 Some(x) => Some(RuntimeType::from(x)),
                 None => None,
             })),
+            ParserDataType::Scope(x) => Self::Dynamic,
             ParserDataType::Range => Self::Range,
             ParserDataType::Struct(x) => Self::Struct(0, x),
             ParserDataType::Function {

@@ -53,7 +53,7 @@ fn repl() -> Result<(), Box<dyn Error>> {
                     match res {
                         Ok(x) => val = x,
                         Err(e) => {
-                            eprintln!("Error found in line {}:", e);
+                            eprintln!("Error found in line : {}", e);
                         }
                     }
 
@@ -96,6 +96,7 @@ fn file(
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
     let mut tokenizer = Tokenizer::default();
     let program = parser.produce_ast(tokenizer.tokenize(fs::read_to_string(path)?).unwrap());
+
     if !parser.errors.is_empty() {
         return Err(
             calibre_type_checker::runtime::interpreter::InterpreterErr::from(parser.errors).into(),

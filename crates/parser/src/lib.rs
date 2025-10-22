@@ -12,6 +12,7 @@ pub mod parse;
 pub struct Parser {
     tokens: Vec<Token>,
     pub errors: Vec<ParserError>,
+    prev_token: Option<Token>,
 }
 
 impl Parser {
@@ -25,11 +26,18 @@ impl Parser {
     pub fn produce_ast(&mut self, tokens: Vec<Token>) -> Node {
         self.errors.clear();
         self.tokens = tokens;
+        self.prev_token = None;
         let mut body = Vec::new();
 
         while !self.is_eof() {
-            body.push(self.parse_statement())
+            body.push(self.parse_statement());
+            self.parse_delimited();
         }
+
+        let body: Vec<Node> = body
+            .into_iter()
+            .filter(|x| x.node_type != NodeType::EmptyLine)
+            .collect();
 
         let span = if body.len() > 0 {
             Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span)
@@ -61,7 +69,7 @@ pub enum ParserError {
     #[error("{0}")]
     Lexer(LexerError),
     #[error("{0}\nFound : {1:?}\nNext : {2:?}")]
-    Syntax(SyntaxErr, Token, Token, Token, Token),
+    Syntax(SyntaxErr, Option<Token>, Option<Token>),
 }
 
 #[derive(Error, Debug, Clone)]
@@ -88,6 +96,8 @@ pub enum SyntaxErr {
     ExpectedFunctions,
     #[error("Cant use while loop with iterators syntax.")]
     UnexpectedWhileLoop,
+    #[error("Unexpectedly found EOF")]
+    UnexpectedEOF,
     #[error("Constants cannot be null.")]
     NullConstant,
     #[error("Cannot use self outside of an implementation block.")]

@@ -3,6 +3,7 @@ use calibre_parser::ast::{IfComparisonType, LoopType, Node, NodeType, ObjectType
 pub fn identifiers_used<'a>(node: &'a Node) -> Vec<&'a String> {
     let used = match &node.node_type {
         NodeType::Break
+        | NodeType::EmptyLine
         | NodeType::Continue
         | NodeType::TypeDeclaration {
             identifier: _,
@@ -128,6 +129,7 @@ pub fn identifiers_used<'a>(node: &'a Node) -> Vec<&'a String> {
 
             amt
         }
+        NodeType::ScopeMemberExpression { path } => identifiers_used(&path.last().unwrap()),
         NodeType::MemberExpression { path } => match path.len() {
             2 | 3 => identifiers_used(&path.get(0).unwrap().0),
             _ => todo!(),

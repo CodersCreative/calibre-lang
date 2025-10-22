@@ -110,10 +110,10 @@ impl Parser {
                     Span::new_from_spans(open.span, close.span),
                 )
             }
+            TokenType::EOL => Node::new(NodeType::EmptyLine, self.eat().span),
             _ => {
                 self.add_err(SyntaxErr::UnexpectedToken);
-                let _ = self.eat();
-                self.parse_statement()
+                Node::new(NodeType::EmptyLine, self.eat().span)
             }
         }
     }

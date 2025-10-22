@@ -175,35 +175,40 @@ impl InterpreterEnvironment {
         identifier: Node,
         value: RuntimeValue,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::DerefStatement { value: node } = identifier.node_type {
-            if let RuntimeValue::Ref(pointer, _) = match node.node_type.clone() {
-                NodeType::Identifier(x) => self.get_var_ref(scope, &x)?,
-                NodeType::MemberExpression { path } => {
-                    let MembrExprPathRes::Path(path) =
-                        self.get_member_expression_path(scope, path)?
-                    else {
-                        return Err(InterpreterErr::RefNonVar(node.node_type));
-                    };
+        match identifier.node_type {
+            NodeType::DerefStatement { value: node } => {
+                if let RuntimeValue::Ref(pointer, _) = match node.node_type.clone() {
+                    NodeType::Identifier(x) => self.get_var_ref(scope, &x)?,
+                    NodeType::MemberExpression { path } => {
+                        let MembrExprPathRes::Path(path) =
+                            self.get_member_expression_path(scope, path)?
+                        else {
+                            return Err(InterpreterErr::RefNonVar(node.node_type));
+                        };
 
-                    self.get_member_ref(scope, &path)?
+                        self.get_member_ref(scope, &path)?
+                    }
+                    _ => return Err(InterpreterErr::RefNonVar(node.node_type)),
+                } {
+                    let _ = self.assign_var_from_ref_pointer(&pointer, value)?;
+                    Ok(RuntimeValue::Null)
+                } else {
+                    Err(InterpreterErr::AssignNonVariable(node.node_type))
                 }
-                _ => return Err(InterpreterErr::RefNonVar(node.node_type)),
-            } {
-                Ok(self.assign_var_from_ref_pointer(&pointer, value)?)
-            } else {
-                Err(InterpreterErr::AssignNonVariable(node.node_type))
             }
-        } else if let NodeType::Identifier(identifier) = identifier.node_type {
-            let _ = self.assign_var(scope, &identifier, value.clone())?;
-            return Ok(value);
-        } else if let NodeType::MemberExpression { .. } = identifier.node_type {
-            let _ = self.assign_member_expression(scope, identifier, value.clone())?;
-            return Ok(value);
-        } else {
-            Err(InterpreterErr::AssignNonVariable(identifier.node_type))
+            NodeType::Identifier(identifier) => {
+                let _ = self.assign_var(scope, &identifier, value.clone())?;
+                Ok(RuntimeValue::Null)
+            }
+            NodeType::MemberExpression { .. } | NodeType::ScopeMemberExpression { .. } => {
+                let _ = self.assign_member_expression(scope, identifier, value.clone())?;
+                Ok(RuntimeValue::Null)
+            }
+            _ => Err(InterpreterErr::AssignNonVariable(identifier.node_type)),
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use calibre_parser::ast::VarType;

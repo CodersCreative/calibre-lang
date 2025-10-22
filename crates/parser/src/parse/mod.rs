@@ -19,21 +19,21 @@ impl Parser {
         self.tokens.first().unwrap()
     }
 
-    fn nth(&self, i: usize) -> &Token {
-        self.tokens.get(i).unwrap()
+    fn nth(&self, i: usize) -> Option<&Token> {
+        self.tokens.get(i)
     }
 
     fn eat(&mut self) -> Token {
-        self.tokens.remove(0)
+        let token = self.tokens.remove(0);
+        self.prev_token = Some(token.clone());
+        token
     }
 
     fn add_err(&mut self, err: SyntaxErr) {
         self.errors.push(ParserError::Syntax(
             err,
-            self.first().clone(),
-            self.nth(1).clone(),
-            self.nth(2).clone(),
-            self.nth(3).clone(),
+            self.prev_token.clone(),
+            self.tokens.first().map(|x| x.clone()),
         ))
     }
 
@@ -205,6 +205,25 @@ impl Parser {
         properties
     }
 
+    pub fn parse_delimited(&mut self) -> Token {
+        match self.first().token_type {
+            TokenType::Close(Bracket::Curly) => self.first().clone(),
+            TokenType::EOL => self.eat(),
+            _ => {
+                if let Some(prev) = self.prev_token.clone() {
+                    match prev.token_type {
+                        TokenType::Close(Bracket::Curly) | TokenType::EOL => {
+                            return prev;
+                        }
+                        _ => {}
+                    }
+                }
+
+                self.expect_eat(&TokenType::EOL, SyntaxErr::ExpectedChar(';'))
+            }
+        }
+    }
+
     pub fn parse_type(&mut self) -> Option<ParserDataType> {
         let _ = self.split_comparison_lesser();
         let t = self.first().clone();
@@ -276,9 +295,21 @@ impl Parser {
             };
             Some(ParserDataType::List(Box::new(t)))
         } else {
-            let _ = self.eat();
             match ParserDataType::from_str(&t.value) {
-                Ok(x) => Some(x),
+                Ok(x) => {
+                    let _ = self.eat();
+                    let mut path = vec![x];
+
+                    while self.first().token_type == TokenType::Colon {
+                        path.push(ParserDataType::from_str(&self.eat().value).unwrap());
+                    }
+
+                    if path.len() == 1 {
+                        Some(path.remove(0))
+                    } else {
+                        Some(ParserDataType::Scope(path))
+                    }
+                }
                 Err(_) => None,
             }
         };

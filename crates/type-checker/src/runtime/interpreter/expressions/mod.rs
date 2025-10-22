@@ -2,6 +2,7 @@ use crate::{
     operators,
     runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType},
 };
+use calibre_common::environment::identifiers;
 use calibre_parser::ast::{
     Node, NodeType,
     binary::BinaryOperator,
@@ -127,14 +128,18 @@ impl CheckerEnvironment {
         identifier: Node,
         value: RuntimeType,
     ) -> Result<RuntimeType, InterpreterErr> {
-        if let NodeType::Identifier(identifier) = identifier.node_type {
-            let _ = self.assign_var(scope, &identifier, value.clone())?;
-            return Ok(value);
-        } else if let NodeType::MemberExpression { .. } = identifier.node_type {
-            let _ = self.assign_member_expression(scope, identifier, value.clone())?;
-            return Ok(value);
-        } else {
-            Err(InterpreterErr::AssignNonVariable(identifier.node_type))
+        match identifier.node_type {
+            NodeType::DerefStatement { .. }
+            | NodeType::Identifier(_)
+            | NodeType::MemberExpression { .. } => {
+                let typ = self.evaluate(scope, identifier)?;
+                if value.is_type(&typ) {
+                    Ok(RuntimeType::Null)
+                } else {
+                    Err(InterpreterErr::ExpectedType(value, typ))
+                }
+            }
+            _ => Err(InterpreterErr::AssignNonVariable(identifier.node_type)),
         }
     }
 }

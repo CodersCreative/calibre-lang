@@ -292,7 +292,7 @@ impl Tokenizer {
                     '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(
                         BinaryOperator::from_symbol(&c.to_string()).unwrap(),
                     )),
-                    ';' => Some(TokenType::WhiteSpace),
+                    ';' => Some(TokenType::EOL),
                     _ if c.is_whitespace() => Some(TokenType::WhiteSpace),
                     _ => None,
                 }
