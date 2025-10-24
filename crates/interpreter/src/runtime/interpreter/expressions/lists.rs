@@ -24,7 +24,7 @@ impl InterpreterEnvironment {
             let filtered: Vec<&RuntimeValue> =
                 values.iter().filter(|x| discriminant(*x) == t).collect();
             if values.len() == filtered.len() {
-                Some((&values[0]).into())
+                Some(Box::new((&values[0]).into()))
             } else {
                 None
             }
@@ -34,7 +34,7 @@ impl InterpreterEnvironment {
 
         Ok(RuntimeValue::List {
             data: values,
-            data_type: Box::new(t),
+            data_type: t,
         })
     }
 
@@ -93,7 +93,7 @@ impl InterpreterEnvironment {
 
         Ok(RuntimeValue::List {
             data: result,
-            data_type: Box::new(None),
+            data_type: None,
         })
     }
 }

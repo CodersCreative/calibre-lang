@@ -107,8 +107,8 @@ impl CheckerEnvironment {
                 }
             }
 
-            Ok(match *return_type.clone() {
-                Some(x) => x,
+            Ok(match return_type.clone() {
+                Some(x) => *x,
                 _ => RuntimeType::Null,
             })
         } else {
@@ -123,20 +123,17 @@ impl CheckerEnvironment {
         arguments: Vec<(Node, Option<Node>)>,
     ) -> Result<RuntimeType, InterpreterErr> {
         if let NodeType::Identifier(object_name) = caller.node_type.clone() {
-            if let Ok(Type::Struct(ObjectType::Tuple(params))) =
-                self.get_object_type(scope, &object_name)
-            {
-                if arguments.len() == params.len() {
-                    let mut args = Vec::new();
-                    for arg in arguments.into_iter() {
-                        args.push(self.evaluate(scope, arg.0)?);
-                    }
+            if let Ok(pointer) = self.get_object_pointer(scope, &object_name) {
+                if let Ok(Type::Struct(ObjectType::Tuple(params))) = self.get_object_type(&pointer)
+                {
+                    if arguments.len() == params.len() {
+                        let mut args = Vec::new();
+                        for arg in arguments.into_iter() {
+                            args.push(self.evaluate(scope, arg.0)?);
+                        }
 
-                    return Ok(RuntimeType::Struct(
-                        scope.clone(),
-                        Some(object_name),
-                        ObjectType::Tuple(args),
-                    ));
+                        return Ok(RuntimeType::Struct(Some(pointer), ObjectType::Tuple(args)));
+                    }
                 }
             }
         }
@@ -150,8 +147,8 @@ impl CheckerEnvironment {
             RuntimeType::List(x) if arguments.len() == 1 => {
                 match self.evaluate(scope, arguments[0].0.clone())? {
                     RuntimeType::Int if arguments.len() == 1 => {
-                        return Ok(match *x.clone() {
-                            Some(x) => x,
+                        return Ok(match x.clone() {
+                            Some(x) => *x,
                             None => RuntimeType::Dynamic,
                         });
                     }

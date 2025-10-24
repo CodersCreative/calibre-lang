@@ -71,15 +71,15 @@ pub enum RuntimeErr<T: RuntimeValue, U: RuntimeType> {
 }
 
 #[derive(Error, Debug, Clone)]
-pub enum ScopeErr<T: RuntimeValue> {
+pub enum ScopeErr {
     #[error("Unable to resolve variable : {0}.")]
     Variable(String),
     #[error("Unable to assign immutable variable : {0}.")]
     AssignConstant(String),
     #[error("Unable to shadow immutable variable : {0}.")]
     ShadowConstant(String),
-    #[error("Variable types dont match : {0:?} and {1:?}.")]
-    TypeMismatch(T, T),
+    #[error("Variable types dont match : {0:?}.")]
+    TypeMismatch(String),
     #[error("Unable to resolve object : {0:?}.")]
     Object(String),
     #[error("Unable to resolve static function : {0}.")]
@@ -97,20 +97,20 @@ pub enum ValueErr<T: RuntimeValue, U: RuntimeType> {
     #[error("Unable to progress value.")]
     ProgressErr,
     #[error("{0}")]
-    Scope(ScopeErr<T>),
+    Scope(ScopeErr),
     #[error("{0}")]
     ParseIntError(ParseIntError),
     #[error("{0}")]
     ParseFloatError(ParseFloatError),
 }
 
-impl<T: RuntimeValue> From<ParserError> for ScopeErr<T> {
+impl From<ParserError> for ScopeErr {
     fn from(value: ParserError) -> Self {
         Self::Parser(vec![value])
     }
 }
 
-impl<T: RuntimeValue> From<Vec<ParserError>> for ScopeErr<T> {
+impl From<Vec<ParserError>> for ScopeErr {
     fn from(value: Vec<ParserError>) -> Self {
         Self::Parser(value)
     }
@@ -127,8 +127,8 @@ impl<T: RuntimeValue, U: RuntimeType> From<ParseFloatError> for ValueErr<T, U> {
     }
 }
 
-impl<T: RuntimeValue, U: RuntimeType> From<ScopeErr<T>> for ValueErr<T, U> {
-    fn from(value: ScopeErr<T>) -> Self {
+impl<T: RuntimeValue, U: RuntimeType> From<ScopeErr> for ValueErr<T, U> {
+    fn from(value: ScopeErr) -> Self {
         Self::Scope(value)
     }
 }
@@ -157,8 +157,8 @@ impl<T: RuntimeValue, U: RuntimeType> From<ValueErr<T, U>> for RuntimeErr<T, U> 
     }
 }
 
-impl<T: RuntimeValue, U: RuntimeType> From<ScopeErr<T>> for RuntimeErr<T, U> {
-    fn from(value: ScopeErr<T>) -> Self {
+impl<T: RuntimeValue, U: RuntimeType> From<ScopeErr> for RuntimeErr<T, U> {
+    fn from(value: ScopeErr) -> Self {
         Self::Value(ValueErr::Scope(value))
     }
 }

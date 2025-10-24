@@ -2,7 +2,6 @@ use crate::{
     operators,
     runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType},
 };
-use calibre_common::environment::identifiers;
 use calibre_parser::ast::{
     Node, NodeType,
     binary::BinaryOperator,
@@ -20,7 +19,8 @@ impl CheckerEnvironment {
         scope: &u64,
         identifier: &str,
     ) -> Result<RuntimeType, InterpreterErr> {
-        Ok(self.get_var(scope, identifier)?.value.clone())
+        let pointer = self.get_var_pointer(scope, identifier)?;
+        Ok(self.get_var(&pointer)?.value.clone())
     }
 
     pub fn evaluate_not<'a>(

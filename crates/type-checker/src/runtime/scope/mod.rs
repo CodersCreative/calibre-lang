@@ -98,7 +98,7 @@ impl CheckerEnvironment {
 
                         self.add_parser_errors(parser.errors);
 
-                        let _ = self.evaluate(&scope, program);
+                        let _ = self.start_evaluate(&scope, program);
                         scope
                     }
                 }

@@ -1,11 +1,7 @@
 use calibre_common::environment::{Location, Variable};
 use calibre_parser::ast::{Node, NodeType, RefMutability, VarType};
 
-use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::CheckerEnvironment,
-    values::RuntimeType,
-};
+use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
 impl CheckerEnvironment {
     pub fn get_new_scope_with_values(

@@ -17,9 +17,9 @@ impl RuntimeValue {
             RuntimeValue::Ref(_, x) => x == t,
             RuntimeValue::Null => false,
             RuntimeValue::NativeFunction(_) => false,
-            RuntimeValue::Struct(_, _, _) => match self.into_type(env, scope, t) {
-                Ok(_) => true,
-                Err(_) => false,
+            RuntimeValue::Struct(x, _) => match t {
+                RuntimeType::Struct(y) => x == y,
+                _ => false,
             },
             RuntimeValue::Option(d, x) => d.is_none() || x == t,
             RuntimeValue::Result(d, x) => {
@@ -48,9 +48,9 @@ impl RuntimeValue {
                 }
                 _ => false,
             },
-            RuntimeValue::Enum(_, x, _, _) => match t {
-                RuntimeType::Enum(_, y) => x == y,
-                RuntimeType::Struct(_, y) => Some(x) == y.as_ref(),
+            RuntimeValue::Enum(x, _, _) => match t {
+                RuntimeType::Enum(y) => x == y,
+                RuntimeType::Struct(y) => Some(x) == y.as_ref(),
                 _ => false,
             },
             RuntimeValue::Function {
@@ -68,9 +68,9 @@ impl RuntimeValue {
                         return false;
                     };
 
-                    if let Some(x) = &**return_type {
+                    if let Some(x) = return_type {
                         if let Some(y) = val_type {
-                            if x != y {
+                            if **x != *y {
                                 return false;
                             }
                         } else {

@@ -9,8 +9,7 @@ use calibre_parser::lexer::StopValue;
 use cranelift::codegen::ir::{GlobalValue, types};
 use cranelift::prelude::*;
 use cranelift_jit::JITModule;
-use cranelift_module::{DataDescription, DataId, Linkage, Module, ModuleRelocTarget};
-use rand::seq::IndexedRandom;
+use cranelift_module::{DataDescription, Linkage, Module};
 
 use crate::values::{RuntimeType, RuntimeValue};
 

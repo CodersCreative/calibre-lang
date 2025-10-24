@@ -21,8 +21,8 @@ impl CheckerEnvironment {
                     &new_scope,
                     identifier.clone(),
                     Variable {
-                        value: match *x {
-                            Some(x) => x,
+                        value: match x {
+                            Some(x) => *x,
                             _ => RuntimeType::Dynamic,
                         },
                         var_type: VarType::Immutable,

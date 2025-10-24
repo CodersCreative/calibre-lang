@@ -12,7 +12,20 @@ use std::{collections::HashMap, fmt::Debug, path::PathBuf};
 
 use crate::errors::{RuntimeErr, ScopeErr, ValueErr};
 
-pub trait RuntimeType: From<ParserDataType> + PartialEq + Clone + Debug {}
+pub trait InterpreterFrom<U>: Sized {
+    type Interpreter;
+    fn interpreter_from(env: &Self::Interpreter, scope: &u64, value: U) -> Result<Self, ScopeErr>;
+}
+
+pub trait FromParser: Sized {
+    fn from_parser_type<I, T: RuntimeValue>(
+        env: &I,
+        scope: &u64,
+        value: ParserDataType,
+    ) -> Result<Self, ScopeErr>;
+}
+
+pub trait RuntimeType: PartialEq + Clone + Debug + InterpreterFrom<ParserDataType> {}
 pub trait RuntimeValue: PartialEq + Clone + Debug {
     fn string(txt: String) -> Self;
     fn natives() -> HashMap<String, Self>;
@@ -26,46 +39,62 @@ pub enum Type<U: RuntimeType> {
     NewType(U),
 }
 
-fn type_def_type_obj_to_runtime<U: RuntimeType>(obj: ObjectType<ParserDataType>) -> ObjectType<U> {
-    match obj {
-        ObjectType::Tuple(x) => {
-            let mut vec: Vec<U> = Vec::new();
+impl<U: RuntimeType> InterpreterFrom<ObjectType<ParserDataType>> for ObjectType<U> {
+    type Interpreter = U::Interpreter;
+    fn interpreter_from(
+        env: &Self::Interpreter,
+        scope: &u64,
+        value: ObjectType<ParserDataType>,
+    ) -> Result<Self, ScopeErr> {
+        match value {
+            ObjectType::Tuple(x) => {
+                let mut vec: Vec<U> = Vec::new();
 
-            for v in x {
-                vec.push(U::from(v));
-            }
+                for v in x {
+                    vec.push(U::interpreter_from(env, scope, v)?);
+                }
 
-            ObjectType::Tuple(vec)
-        }
-        ObjectType::Map(x) => {
-            let mut map: HashMap<String, U> = HashMap::new();
-            for (k, v) in x {
-                map.insert(k, U::from(v));
+                Ok(ObjectType::Tuple(vec))
             }
-            ObjectType::Map(map)
+            ObjectType::Map(x) => {
+                let mut map: HashMap<String, U> = HashMap::new();
+                for (k, v) in x {
+                    map.insert(k, U::interpreter_from(env, scope, v)?);
+                }
+                Ok(ObjectType::Map(map))
+            }
         }
     }
 }
 
-impl<U: RuntimeType> From<TypeDefType> for Type<U> {
-    fn from(value: TypeDefType) -> Self {
-        match value {
+impl<U: RuntimeType> InterpreterFrom<TypeDefType> for Type<U> {
+    type Interpreter = U::Interpreter;
+    fn interpreter_from(
+        env: &Self::Interpreter,
+        scope: &u64,
+        value: TypeDefType,
+    ) -> Result<Self, ScopeErr> {
+        Ok(match value {
             TypeDefType::Enum(x) => Type::Enum(
                 x.into_iter()
                     .map(|x| {
                         (
                             x.0,
                             match x.1 {
-                                Some(x) => Some(type_def_type_obj_to_runtime(x)),
+                                Some(x) => {
+                                    Some(ObjectType::<U>::interpreter_from(env, scope, x).unwrap())
+                                }
                                 None => None,
                             },
                         )
                     })
                     .collect(),
             ),
-            TypeDefType::Struct(x) => Type::Struct(type_def_type_obj_to_runtime(x)),
-            TypeDefType::NewType(x) => Type::NewType(U::from(x)),
-        }
+            TypeDefType::Struct(x) => {
+                Type::Struct(ObjectType::<U>::interpreter_from(env, scope, x)?)
+            }
+            TypeDefType::NewType(x) => Type::NewType(U::interpreter_from(env, scope, x)?),
+        })
     }
 }
 

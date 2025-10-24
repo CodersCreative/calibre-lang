@@ -18,12 +18,13 @@ impl InterpreterEnvironment {
             NodeType::Identifier(x) if x.trim() == "_" => {
                 return Some(Ok(scope.clone()));
             }
+            NodeType::ScopeMemberExpression { path: p } => {
+                let (s, node) = self.get_scope_member_scope_path(&scope, p).unwrap();
+
+                return self.match_inner_pattern(s, &node, value, path);
+            }
             NodeType::MemberExpression { path: p } => {
                 if let (NodeType::Identifier(main), _) = (&p[0].0.node_type, p[0].1) {
-                    if let Ok(scope) = self.get_next_scope(scope, main) {
-                        return self.match_inner_pattern(scope, &p[1].0, value, path);
-                    }
-
                     if let (NodeType::CallExpression(val, args), _) = (&p[1].0.node_type, p[1].1) {
                         if let NodeType::Identifier(val) = val.node_type.clone() {
                             return self.match_inner_pattern(
@@ -52,21 +53,23 @@ impl InterpreterEnvironment {
                             {
                                 return Some(Ok(scope));
                             }
-                        } else if let Ok(Type::Enum(_)) = self.get_object_type(&scope, &main) {
-                            if let NodeType::Identifier(val) = &p[1].0.node_type {
-                                return self.match_inner_pattern(
-                                    scope,
-                                    &Node::new(
-                                        NodeType::EnumExpression {
-                                            identifier: main.clone(),
-                                            value: val.to_string(),
-                                            data: None,
-                                        },
-                                        p[0].0.span,
-                                    ),
-                                    value,
-                                    path,
-                                );
+                        } else if let Ok(pointer) = self.get_object_pointer(&scope, &main) {
+                            if let Ok(Type::Enum(_)) = self.get_object_type(&pointer) {
+                                if let NodeType::Identifier(val) = &p[1].0.node_type {
+                                    return self.match_inner_pattern(
+                                        scope,
+                                        &Node::new(
+                                            NodeType::EnumExpression {
+                                                identifier: main.clone(),
+                                                value: val.to_string(),
+                                                data: None,
+                                            },
+                                            p[0].0.span,
+                                        ),
+                                        value,
+                                        path,
+                                    );
+                                }
                             }
                         }
                     }
@@ -79,8 +82,9 @@ impl InterpreterEnvironment {
                 data,
                 value: enm_value,
             } => {
-                if let RuntimeValue::Enum(_obj_scope, iden, val, dat) = value.clone() {
-                    let Type::Enum(enm) = self.get_object_type(&scope, &iden).unwrap() else {
+                if let RuntimeValue::Enum(pointer, val, dat) = value.clone() {
+                    let Ok(Type::Enum(enm)) = self.get_object_type(&pointer).map(|x| x.clone())
+                    else {
                         return None;
                     };
 
@@ -88,7 +92,9 @@ impl InterpreterEnvironment {
                         return None;
                     };
 
-                    if index != val || identifier != iden {
+                    if index != val
+                        || self.get_object_pointer(&scope, &identifier).unwrap() != pointer
+                    {
                         return None;
                     }
 

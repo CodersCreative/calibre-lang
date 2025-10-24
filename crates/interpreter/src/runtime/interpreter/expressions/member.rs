@@ -149,23 +149,26 @@ impl InterpreterEnvironment {
                                 ) {
                                     Ok(x) => x,
                                     Err(e) => {
-                                        if let Ok(x) =
-                                            self.get_function(scope, &path[0].to_string(), &value)
+                                        if let Ok(pointer) =
+                                            self.get_object_pointer(scope, &path[0].to_string())
                                         {
-                                            self.evaluate_function(scope, x.0.clone(), args)?
-                                        } else {
-                                            let obj = match match self
-                                                .get_var(scope, &path[0].to_string())
-                                            {
+                                            let x = self
+                                                .get_function(&pointer, &value)
+                                                .map(|x| x.0.clone())?;
+                                            self.evaluate_function(scope, x, args)?
+                                        } else if let Ok(pointer) =
+                                            self.get_var_pointer(scope, &path[0].to_string())
+                                        {
+                                            let obj = match match self.get_var(&pointer) {
                                                 Ok(x) => x.value.clone(),
                                                 _ => return Err(e),
                                             } {
-                                                RuntimeValue::Struct(_, p, _) => p.unwrap().clone(),
-                                                RuntimeValue::Enum(_, p, _, _) => p.clone(),
+                                                RuntimeValue::Struct(p, _) => p.unwrap().clone(),
+                                                RuntimeValue::Enum(p, _, _) => p.clone(),
                                                 _ => return Err(e),
                                             };
 
-                                            if let Ok(x) = self.get_function(scope, &obj, &value) {
+                                            if let Ok(x) = self.get_function(&obj, &value) {
                                                 if x.2 {
                                                     args.insert(
                                                         0,
@@ -185,6 +188,8 @@ impl InterpreterEnvironment {
                                             } else {
                                                 return Err(e);
                                             }
+                                        } else {
+                                            return Err(e);
                                         }
                                     }
                                 },
@@ -211,7 +216,7 @@ impl InterpreterEnvironment {
             NodeType::MemberExpression { path: og_path } => {
                 let path = match self.get_member_expression_path(scope, og_path)? {
                     MembrExprPathRes::Path(x) => x,
-                    MembrExprPathRes::Value(x) => return Ok(()),
+                    MembrExprPathRes::Value(_) => return Ok(()),
                 };
 
                 let RuntimeValue::Ref(pointer, _) = self.get_member_ref(scope, &path)? else {
@@ -244,9 +249,7 @@ impl InterpreterEnvironment {
                 };
 
                 match self.get_member_ref(scope, &path) {
-                    Ok(RuntimeValue::Ref(pointer, _)) => {
-                        Ok(self.get_value_from_ref_pointer(&pointer)?.value)
-                    }
+                    Ok(RuntimeValue::Ref(pointer, _)) => Ok(self.get_var(&pointer)?.value.clone()),
                     Ok(x) => Ok(x),
                     Err(_) if path.len() == 2 => {
                         return self.evaluate(

@@ -52,20 +52,21 @@ impl Testable<RuntimeValue, RuntimeType> for InterpreterEnvironment {
         }
 
         for var in params.variables {
-            let v = match env.get_var(&scope, &var.0) {
+            let v = match env.get_var_pointer(&scope, &var.0) {
                 Ok(x) => x,
                 Err(e) => {
                     errs.push(TestingError::Runtime(e.into()));
                     continue;
                 }
             };
+            let v = env.get_var(&v).unwrap();
             if v.value != var.1.value || v.var_type != var.1.var_type {
                 errs.push(TestingError::Variable(var.0));
             }
         }
 
         for obj in params.objects {
-            let o = match env.get_object(&scope, &obj.0) {
+            let o = match env.get_object_pointer(&scope, &obj.0) {
                 Ok(x) => x,
                 Err(e) => {
                     errs.push(TestingError::Runtime(e.into()));
@@ -73,6 +74,7 @@ impl Testable<RuntimeValue, RuntimeType> for InterpreterEnvironment {
                 }
             };
 
+            let o = env.get_object(&o).unwrap();
             if o.object_type != obj.1.object_type
                 || o.functions != obj.1.functions
                 || o.traits != obj.1.traits

@@ -14,7 +14,7 @@ impl InterpreterEnvironment {
         scope: &u64,
         key: String,
         value: Variable<RuntimeValue>,
-    ) -> Result<RuntimeValue, ScopeErr<RuntimeValue>> {
+    ) -> Result<RuntimeValue, ScopeErr> {
         let typ = (&value.value).into();
 
         let value = self.convert_runtime_var_into_saveable(value);
@@ -31,7 +31,7 @@ impl InterpreterEnvironment {
         Ok(RuntimeValue::Ref(self.var_counter - 1, typ))
     }
 
-    fn convert_saveable_into_runtime_var(
+    fn _convert_saveable_into_runtime_var(
         &self,
         value: Variable<RuntimeValue>,
     ) -> Variable<RuntimeValue> {
@@ -80,18 +80,18 @@ impl InterpreterEnvironment {
 
         fn unwrap_runtime_value(env: &InterpreterEnvironment, value: RuntimeValue) -> RuntimeValue {
             match value {
-                RuntimeValue::Struct(x, y, ObjectType::Map(map)) => {
-                    RuntimeValue::Struct(x, y, ObjectType::Map(unwrap_map(env, map)))
+                RuntimeValue::Struct(x, ObjectType::Map(map)) => {
+                    RuntimeValue::Struct(x, ObjectType::Map(unwrap_map(env, map)))
                 }
-                RuntimeValue::Struct(x, y, ObjectType::Tuple(vec)) => {
-                    RuntimeValue::Struct(x, y, ObjectType::Tuple(unwrap_list(env, vec)))
+                RuntimeValue::Struct(x, ObjectType::Tuple(vec)) => {
+                    RuntimeValue::Struct(x, ObjectType::Tuple(unwrap_list(env, vec)))
                 }
                 RuntimeValue::Tuple(vec) => RuntimeValue::Tuple(unwrap_list(env, vec)),
-                RuntimeValue::Enum(x, y, z, Some(ObjectType::Map(map))) => {
-                    RuntimeValue::Enum(x, y, z, Some(ObjectType::Map(unwrap_map(env, map))))
+                RuntimeValue::Enum(x, y, Some(ObjectType::Map(map))) => {
+                    RuntimeValue::Enum(x, y, Some(ObjectType::Map(unwrap_map(env, map))))
                 }
-                RuntimeValue::Enum(x, y, z, Some(ObjectType::Tuple(vec))) => {
-                    RuntimeValue::Enum(x, y, z, Some(ObjectType::Tuple(unwrap_list(env, vec))))
+                RuntimeValue::Enum(x, y, Some(ObjectType::Tuple(vec))) => {
+                    RuntimeValue::Enum(x, y, Some(ObjectType::Tuple(unwrap_list(env, vec))))
                 }
                 RuntimeValue::Option(Some(data), typ) => {
                     RuntimeValue::Option(Some(Box::new(unwrap_singular(env, *data))), typ)
@@ -193,13 +193,13 @@ impl InterpreterEnvironment {
         };
 
         match value.value {
-            RuntimeValue::Struct(x, y, ObjectType::Map(map)) => Variable {
-                value: RuntimeValue::Struct(x, y, ObjectType::Map(get_new_map(self, map))),
+            RuntimeValue::Struct(x, ObjectType::Map(map)) => Variable {
+                value: RuntimeValue::Struct(x, ObjectType::Map(get_new_map(self, map))),
                 var_type,
                 location,
             },
-            RuntimeValue::Struct(x, y, ObjectType::Tuple(vec)) => Variable {
-                value: RuntimeValue::Struct(x, y, ObjectType::Tuple(get_new_list(self, vec))),
+            RuntimeValue::Struct(x, ObjectType::Tuple(vec)) => Variable {
+                value: RuntimeValue::Struct(x, ObjectType::Tuple(get_new_list(self, vec))),
                 var_type,
                 location,
             },
@@ -208,8 +208,8 @@ impl InterpreterEnvironment {
                 var_type,
                 location,
             },
-            RuntimeValue::Enum(x, y, z, Some(ObjectType::Map(map))) => Variable {
-                value: RuntimeValue::Enum(x, y, z, Some(ObjectType::Map(get_new_map(self, map)))),
+            RuntimeValue::Enum(x, y, Some(ObjectType::Map(map))) => Variable {
+                value: RuntimeValue::Enum(x, y, Some(ObjectType::Map(get_new_map(self, map)))),
                 var_type,
                 location,
             },
@@ -228,13 +228,8 @@ impl InterpreterEnvironment {
                 var_type,
                 location,
             },
-            RuntimeValue::Enum(x, y, z, Some(ObjectType::Tuple(vec))) => Variable {
-                value: RuntimeValue::Enum(
-                    x,
-                    y,
-                    z,
-                    Some(ObjectType::Tuple(get_new_list(self, vec))),
-                ),
+            RuntimeValue::Enum(x, y, Some(ObjectType::Tuple(vec))) => Variable {
+                value: RuntimeValue::Enum(x, y, Some(ObjectType::Tuple(get_new_list(self, vec)))),
                 var_type,
                 location,
             },
@@ -255,7 +250,7 @@ impl InterpreterEnvironment {
         scope: &u64,
         key: String,
         value: Variable<RuntimeValue>,
-    ) -> Result<RuntimeValue, ScopeErr<RuntimeValue>> {
+    ) -> Result<RuntimeValue, ScopeErr> {
         if let Some(var) = self.scopes.get(scope).unwrap().variables.get(&key) {
             if self.variables.get(var).unwrap().var_type == VarType::Constant {
                 return Err(ScopeErr::AssignConstant(key));
@@ -269,7 +264,7 @@ impl InterpreterEnvironment {
         &mut self,
         pointer: &u64,
         value: RuntimeValue,
-    ) -> Result<(), ScopeErr<RuntimeValue>> {
+    ) -> Result<(), ScopeErr> {
         let var = {
             let value = self.variables.get(pointer).unwrap();
 
@@ -301,17 +296,6 @@ impl InterpreterEnvironment {
         }
     }
 
-    pub fn get_value_from_ref_pointer(
-        &self,
-        pointer: &u64,
-    ) -> Result<Variable<RuntimeValue>, ScopeErr<RuntimeValue>> {
-        if let Some(var) = self.variables.get(&pointer).map(|x| x.clone()) {
-            Ok(self.convert_saveable_into_runtime_var(var))
-        } else {
-            Err(ScopeErr::Variable(format!("pointer : {}", pointer)))
-        }
-    }
-
     pub fn get_member_ref(
         &self,
         scope: &u64,
@@ -335,20 +319,20 @@ impl InterpreterEnvironment {
 
         for key in keys.iter().skip(1) {
             match (&self.variables.get(&pointer).unwrap().value, key) {
-                (RuntimeValue::Struct(_, _, ObjectType::Map(map)), _) => {
+                (RuntimeValue::Struct(_, ObjectType::Map(map)), _) => {
                     match map.get(&key.to_string()) {
                         Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
                         _ => break,
                     }
                 }
                 (
-                    RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))),
+                    RuntimeValue::Enum(_, _, Some(ObjectType::Map(map))),
                     MemberPathType::Dot(key),
                 ) => match map.get(key) {
                     Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
                     _ => break,
                 },
-                (RuntimeValue::Struct(_, _, ObjectType::Tuple(data)), _) => {
+                (RuntimeValue::Struct(_, ObjectType::Tuple(data)), _) => {
                     match data.get(key.to_string().parse::<usize>().unwrap()) {
                         Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
                         x => {
@@ -367,7 +351,7 @@ impl InterpreterEnvironment {
                     }
                 }
                 (
-                    RuntimeValue::Enum(_, _, _, Some(ObjectType::Tuple(data)))
+                    RuntimeValue::Enum(_, _, Some(ObjectType::Tuple(data)))
                     | RuntimeValue::Tuple(data),
                     MemberPathType::Dot(key),
                 ) => match data.get(key.parse::<usize>().unwrap()) {
@@ -404,14 +388,14 @@ impl InterpreterEnvironment {
             RuntimeValue::Ref(pointer, _) => {
                 self.progress_var(&self.variables.get(&pointer).unwrap().value, key)
             }
-            RuntimeValue::Struct(_, _, ObjectType::Map(map))
-            | RuntimeValue::Enum(_, _, _, Some(ObjectType::Map(map))) => match map.get(key) {
+            RuntimeValue::Struct(_, ObjectType::Map(map))
+            | RuntimeValue::Enum(_, _, Some(ObjectType::Map(map))) => match map.get(key) {
                 Some(x) => Ok(x.clone()),
                 _ => panic!(),
             },
             RuntimeValue::List { data, data_type: _ }
-            | RuntimeValue::Struct(_, _, ObjectType::Tuple(data))
-            | RuntimeValue::Enum(_, _, _, Some(ObjectType::Tuple(data)))
+            | RuntimeValue::Struct(_, ObjectType::Tuple(data))
+            | RuntimeValue::Enum(_, _, Some(ObjectType::Tuple(data)))
             | RuntimeValue::Tuple(data) => match data.get(key.parse::<usize>().unwrap()) {
                 Some(x) => Ok(x.clone()),
                 _ => panic!(),
@@ -423,76 +407,23 @@ impl InterpreterEnvironment {
         }
     }
 
-    pub fn get_var_ref(
-        &self,
-        scope: &u64,
-        key: &str,
-    ) -> Result<RuntimeValue, ScopeErr<RuntimeValue>> {
-        if let Some(pointer) = self
-            .scopes
-            .get(scope)
-            .unwrap()
-            .variables
-            .get(key)
-            .map(|x| x.clone())
-        {
-            let typ = (&self.variables.get(&pointer).unwrap().value).into();
+    pub fn get_var_ref(&self, scope: &u64, key: &str) -> Result<RuntimeValue, ScopeErr> {
+        let pointer = self.get_var_pointer(scope, key)?;
+        if let Some(typ) = self.variables.get(&pointer).map(|x| (&x.value).into()) {
             Ok(RuntimeValue::Ref(pointer, typ))
-        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
-            self.get_var_ref(&scope, key)
         } else {
-            Err(ScopeErr::Variable(key.to_string()))
+            Err(ScopeErr::Variable(pointer.to_string()))
         }
     }
 
-    pub fn get_var(
-        &self,
-        scope: &u64,
-        key: &str,
-    ) -> Result<Variable<RuntimeValue>, ScopeErr<RuntimeValue>> {
-        if let Some(pointer) = self
-            .scopes
-            .get(scope)
-            .unwrap()
-            .variables
-            .get(key)
-            .map(|x| x.clone())
-        {
-            let value = self
-                .variables
-                .get(&pointer)
-                .expect(&format!("unexpectedly failed to get {:?}", key))
-                .clone();
-            Ok(self.convert_saveable_into_runtime_var(value))
-        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
-            self.get_var(&scope, key)
-        } else {
-            Err(ScopeErr::Variable(key.to_string()))
-        }
-    }
-
-    pub fn update_var<F>(
-        &mut self,
-        scope: &u64,
-        key: &str,
-        mut f: F,
-    ) -> Result<(), ScopeErr<RuntimeValue>>
+    pub fn update_var<F>(&mut self, pointer: &u64, mut f: F) -> Result<(), ScopeErr>
     where
         F: FnMut(&mut Variable<RuntimeValue>),
     {
-        if let Some(pointer) = self
-            .scopes
-            .get(scope)
-            .unwrap()
-            .variables
-            .get(key)
-            .map(|x| x.clone())
-        {
-            Ok(f(self.variables.get_mut(&pointer).unwrap()))
-        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
-            self.update_var(&scope, key, f)
+        if let Some(value) = self.variables.get_mut(pointer) {
+            Ok(f(value))
         } else {
-            Err(ScopeErr::Variable(key.to_string()))
+            Err(ScopeErr::Variable(pointer.to_string()))
         }
     }
 
@@ -527,7 +458,7 @@ impl InterpreterEnvironment {
                     self.variables.insert(pointer, new_var);
                     Ok(RuntimeValue::Ref(pointer, typ))
                 } else {
-                    Err(ScopeErr::TypeMismatch(var.value.clone(), value.clone()).into())
+                    Err(ScopeErr::TypeMismatch(key.to_string()).into())
                 }
             } else {
                 Err(ScopeErr::Variable(key.to_string()).into())

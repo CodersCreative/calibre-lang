@@ -1,4 +1,4 @@
-use calibre_common::environment::Variable;
+use calibre_common::environment::{InterpreterFrom, Variable};
 use calibre_parser::ast::{Node, NodeType, VarType};
 
 use crate::runtime::{
@@ -40,13 +40,17 @@ impl InterpreterEnvironment {
             None
         };
 
-        params.push((parameters.0, RuntimeType::from(parameters.1), default));
+        params.push((
+            parameters.0,
+            RuntimeType::interpreter_from(self, scope, parameters.1)?,
+            default,
+        ));
 
         Ok(RuntimeValue::Function {
             parameters: params,
             body: FunctionType::Match(MatchBlock(body)),
             return_type: match return_type {
-                Some(x) => Some(RuntimeType::from(x)),
+                Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
                 None => None,
             },
             is_async,
@@ -76,14 +80,18 @@ impl InterpreterEnvironment {
                 None
             };
 
-            params.push((p.0, RuntimeType::from(p.1), default));
+            params.push((
+                p.0,
+                RuntimeType::interpreter_from(self, scope, p.1)?,
+                default,
+            ));
         }
 
         Ok(RuntimeValue::Function {
             parameters: params,
             body: FunctionType::Regular(Block(body)),
             return_type: match return_type {
-                Some(x) => Some(RuntimeType::from(x)),
+                Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
                 None => None,
             },
             is_async,
@@ -95,10 +103,16 @@ impl InterpreterEnvironment {
         scope: &u64,
         var_type: VarType,
         identifier: String,
-        value: RuntimeValue,
+        mut value: RuntimeValue,
         data_type: Option<RuntimeType>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Some(t) = data_type {
+            value = match value {
+                RuntimeValue::List { data, data_type } if data.len() <= 0 => {
+                    RuntimeValue::List { data, data_type }.into_type(self, scope, &t)?
+                }
+                x => x,
+            };
             if !value.is_type(self, scope, &t) {
                 return Err(InterpreterErr::ExpectedType(value.clone(), t));
             }

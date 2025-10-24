@@ -19,17 +19,14 @@ impl CheckerEnvironment {
                 let value = if let Some(value) = v {
                     self.evaluate(scope, value)?.clone()
                 } else {
-                    self.get_var(scope, &k)?.value.clone()
+                    let pointer = self.get_var_pointer(scope, &k)?;
+                    self.get_var(&pointer)?.value.clone()
                 };
 
                 properties.insert(k, value);
             }
 
-            return Ok(RuntimeType::Struct(
-                *scope,
-                None,
-                ObjectType::Map(properties),
-            ));
+            return Ok(RuntimeType::Struct(None, ObjectType::Map(properties)));
         } else if let ObjectType::Tuple(props) = props {
             let mut properties = Vec::new();
             for v in props {
@@ -37,11 +34,7 @@ impl CheckerEnvironment {
                     properties.push(self.evaluate(scope, value)?.clone());
                 }
             }
-            return Ok(RuntimeType::Struct(
-                *scope,
-                None,
-                ObjectType::Tuple(properties),
-            ));
+            return Ok(RuntimeType::Struct(None, ObjectType::Tuple(properties)));
         }
         Ok(RuntimeType::Null)
     }
@@ -53,7 +46,8 @@ impl CheckerEnvironment {
         value: String,
         data: Option<ObjectType<Option<Node>>>,
     ) -> Result<RuntimeType, InterpreterErr> {
-        let enm_class = match self.get_object_type(&scope, &identifier) {
+        let pointer = self.get_object_pointer(scope, &identifier)?;
+        let enm_class = match self.get_object_type(&pointer) {
             Ok(Type::Enum(x)) => x.clone(),
             _ => {
                 if let Some(ObjectType::Tuple(args)) = data {
@@ -86,7 +80,8 @@ impl CheckerEnvironment {
                         let value = if let Some(value) = v {
                             self.evaluate(scope, value)?.clone()
                         } else {
-                            self.get_var(scope, &k)?.value.clone()
+                            let pointer = self.get_var_pointer(scope, &k)?;
+                            self.get_var(&pointer)?.value.clone()
                         };
 
                         data_vals.insert(k, value);
@@ -109,7 +104,7 @@ impl CheckerEnvironment {
                     Some(ObjectType::Map(new_data_vals))
                 };
 
-                return Ok(RuntimeType::Enum(*scope, identifier, data));
+                return Ok(RuntimeType::Enum(pointer, data));
             } else if let Some(ObjectType::Tuple(properties)) = &enm.1 {
                 let mut data_vals = Vec::new();
 
@@ -135,9 +130,9 @@ impl CheckerEnvironment {
                     Some(ObjectType::Tuple(new_data_vals))
                 };
 
-                return Ok(RuntimeType::Enum(*scope, identifier, data));
+                return Ok(RuntimeType::Enum(pointer, data));
             }
-            return Ok(RuntimeType::Enum(*scope, identifier, None));
+            return Ok(RuntimeType::Enum(pointer, None));
         } else {
             Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
         }

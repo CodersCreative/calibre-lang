@@ -42,13 +42,13 @@ pub enum ParserDataType {
     Str,
     Char,
     Tuple(Vec<ParserDataType>),
-    List(Box<Option<ParserDataType>>),
+    List(Option<Box<ParserDataType>>),
     Scope(Vec<ParserDataType>),
     Range,
     Option(Box<ParserDataType>),
     Result(Box<ParserDataType>, Box<ParserDataType>),
     Function {
-        return_type: Box<Option<ParserDataType>>,
+        return_type: Option<Box<ParserDataType>>,
         parameters: Vec<ParserDataType>,
         is_async: bool,
     },
@@ -66,6 +66,7 @@ impl FromStr for ParserDataType {
             "bool" => ParserDataType::Bool,
             "str" => ParserDataType::Str,
             "char" => ParserDataType::Char,
+            "dyn" => ParserDataType::Dynamic,
             _ => ParserDataType::Struct(Some(s.to_string())),
         })
     }

@@ -5,7 +5,7 @@ use calibre_common::{
     environment::Type,
     errors::{ScopeErr, ValueErr},
 };
-use calibre_parser::ast::{Node, NodeType, ObjectType};
+use calibre_parser::ast::{Node, ObjectType};
 use std::collections::HashMap;
 
 impl InterpreterEnvironment {
@@ -20,17 +20,14 @@ impl InterpreterEnvironment {
                 let value = if let Some(value) = v {
                     self.evaluate(scope, value)?
                 } else {
-                    self.get_var(scope, &k)?.value.clone()
+                    let pointer = self.get_var_pointer(scope, &k)?;
+                    self.get_var(&pointer)?.value.clone()
                 };
 
                 properties.insert(k, value);
             }
 
-            return Ok(RuntimeValue::Struct(
-                *scope,
-                None,
-                ObjectType::Map(properties),
-            ));
+            return Ok(RuntimeValue::Struct(None, ObjectType::Map(properties)));
         } else if let ObjectType::Tuple(props) = props {
             let mut properties = Vec::new();
             for v in props {
@@ -38,11 +35,7 @@ impl InterpreterEnvironment {
                     properties.push(self.evaluate(scope, value)?);
                 }
             }
-            return Ok(RuntimeValue::Struct(
-                *scope,
-                None,
-                ObjectType::Tuple(properties),
-            ));
+            return Ok(RuntimeValue::Struct(None, ObjectType::Tuple(properties)));
         }
         Ok(RuntimeValue::Null)
     }
@@ -54,25 +47,12 @@ impl InterpreterEnvironment {
         value: String,
         data: Option<ObjectType<Option<Node>>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let enm_class = match self.get_object_type(&scope, &identifier) {
-            Ok(Type::Enum(x)) => x.clone(),
-            _ => {
-                if let Some(ObjectType::Tuple(args)) = data {
-                    if let Ok(s) = self.get_next_scope(*scope, &identifier) {
-                        let location = self.current_location.clone().unwrap();
-                        return self.evaluate(
-                            &s,
-                            Node::new(
-                                NodeType::CallExpression(
-                                    Box::new(Node::new(NodeType::Identifier(value), location.span)),
-                                    args.into_iter().map(|x| (x.unwrap(), None)).collect(),
-                                ),
-                                location.span,
-                            ),
-                        );
-                    }
-                }
+        let pointer = self.get_object_pointer(scope, &identifier)?;
 
+        let enm_class = match self.get_object_type(&pointer) {
+            Ok(Type::Enum(x)) => x.clone(),
+            Err(e) => return Err(e.into()),
+            _ => {
                 return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(
                     identifier,
                 ))));
@@ -87,7 +67,8 @@ impl InterpreterEnvironment {
                         let value = if let Some(value) = v {
                             self.evaluate(scope, value)?
                         } else {
-                            self.get_var(scope, &k)?.value.clone()
+                            let pointer = self.get_var_pointer(scope, &k)?;
+                            self.get_var(&pointer)?.value.clone()
                         };
 
                         data_vals.insert(k, value);
@@ -109,7 +90,7 @@ impl InterpreterEnvironment {
                     Some(ObjectType::Map(new_data_vals))
                 };
 
-                return Ok(RuntimeValue::Enum(*scope, identifier, i, data));
+                return Ok(RuntimeValue::Enum(pointer, i, data));
             } else if let Some(ObjectType::Tuple(properties)) = &enm.1 {
                 let mut data_vals = Vec::new();
 
@@ -135,9 +116,9 @@ impl InterpreterEnvironment {
                     Some(ObjectType::Tuple(new_data_vals))
                 };
 
-                return Ok(RuntimeValue::Enum(*scope, identifier, i, data));
+                return Ok(RuntimeValue::Enum(pointer, i, data));
             }
-            return Ok(RuntimeValue::Enum(*scope, identifier, i, None));
+            return Ok(RuntimeValue::Enum(pointer, i, None));
         } else {
             Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
         }

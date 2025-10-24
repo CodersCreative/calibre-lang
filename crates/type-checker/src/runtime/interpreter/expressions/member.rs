@@ -1,11 +1,28 @@
+use std::fmt::Display;
+
 use calibre_common::errors::ScopeErr;
 use calibre_parser::ast::{Node, NodeType, ObjectType};
 
 use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
+#[derive(Clone, Debug)]
+pub enum MemberPathType {
+    Dot(String),
+    Computed(String),
+}
+
+impl Display for MemberPathType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let txt = match self {
+            Self::Dot(x) => x.clone(),
+            Self::Computed(x) => x.clone(),
+        };
+        write!(f, "{}", txt)
+    }
+}
 pub enum MembrExprPathRes {
     Value(RuntimeType),
-    Path(Vec<String>),
+    Path(Vec<MemberPathType>),
 }
 
 impl CheckerEnvironment {
@@ -44,9 +61,23 @@ impl CheckerEnvironment {
         scope: &u64,
         og_path: Vec<(Node, bool)>,
     ) -> Result<MembrExprPathRes, InterpreterErr> {
-        let mut path = Vec::new();
+        let mut path: Vec<MemberPathType> = Vec::new();
 
         for (node, computed) in og_path.into_iter() {
+            if !computed {
+                match &node.node_type {
+                    NodeType::Identifier(x) => {
+                        path.push(MemberPathType::Dot(x.to_string()));
+                    }
+                    NodeType::IntLiteral(x) => {
+                        path.push(MemberPathType::Dot(x.to_string()));
+                    }
+                    _ => return Err(InterpreterErr::UnexpectedNode(node.node_type)),
+                }
+
+                continue;
+            }
+
             match &node.node_type {
                 NodeType::MemberExpression { path: p } => {
                     match self.get_member_expression_path(scope, p.to_vec())? {
@@ -57,15 +88,15 @@ impl CheckerEnvironment {
                 }
                 _ if computed => {}
                 NodeType::Identifier(x) => {
-                    path.push(x.to_string());
+                    path.push(MemberPathType::Computed(x.to_string()));
                     continue;
                 }
                 NodeType::FloatLiteral(x) => {
-                    path.push(x.to_string());
+                    path.push(MemberPathType::Computed(x.to_string()));
                     continue;
                 }
                 NodeType::IntLiteral(x) => {
-                    path.push(x.to_string());
+                    path.push(MemberPathType::Computed(x.to_string()));
                     continue;
                 }
                 _ => {}
@@ -87,7 +118,7 @@ impl CheckerEnvironment {
                             scope,
                             Node::new(
                                 NodeType::EnumExpression {
-                                    identifier: path.remove(0),
+                                    identifier: path.remove(0).to_string(),
                                     value,
                                     data: None,
                                 },
@@ -102,7 +133,7 @@ impl CheckerEnvironment {
                                     scope,
                                     Node::new(
                                         NodeType::EnumExpression {
-                                            identifier: path[0].clone(),
+                                            identifier: path[0].clone().to_string(),
                                             value: value.to_string(),
                                             data: Some(ObjectType::Tuple(
                                                 args.clone()
@@ -116,26 +147,33 @@ impl CheckerEnvironment {
                                 ) {
                                     Ok(x) => x,
                                     Err(e) => {
-                                        if let Ok(x) = self.get_function(scope, &path[0], &value) {
-                                            self.evaluate_function(scope, x.0.clone(), args)?
-                                        } else {
-                                            let obj = match match self.get_var(scope, &path[0]) {
+                                        if let Ok(pointer) =
+                                            self.get_object_pointer(scope, &path[0].to_string())
+                                        {
+                                            let x = self
+                                                .get_function(&pointer, &value)
+                                                .map(|x| x.0.clone())?;
+                                            self.evaluate_function(scope, x, args)?
+                                        } else if let Ok(pointer) =
+                                            self.get_var_pointer(scope, &path[0].to_string())
+                                        {
+                                            let obj = match match self.get_var(&pointer) {
                                                 Ok(x) => x.value.clone(),
                                                 _ => return Err(e),
                                             } {
-                                                RuntimeType::Struct(_, p, _) => p.unwrap().clone(),
-                                                RuntimeType::Enum(_, p, _) => p.clone(),
+                                                RuntimeType::Struct(p, _) => p.unwrap().clone(),
+                                                RuntimeType::Enum(p, _) => p.clone(),
                                                 _ => return Err(e),
                                             };
 
-                                            if let Ok(x) = self.get_function(scope, &obj, &value) {
+                                            if let Ok(x) = self.get_function(&obj, &value) {
                                                 if x.2 {
                                                     args.insert(
                                                         0,
                                                         (
                                                             Node::new(
                                                                 NodeType::Identifier(
-                                                                    path[0].clone(),
+                                                                    path[0].to_string(),
                                                                 ),
                                                                 value_node.span,
                                                             ),
@@ -148,6 +186,8 @@ impl CheckerEnvironment {
                                             } else {
                                                 return Err(e);
                                             }
+                                        } else {
+                                            return Err(e);
                                         }
                                     }
                                 },
@@ -184,8 +224,8 @@ impl CheckerEnvironment {
                             scope,
                             Node::new(
                                 NodeType::EnumExpression {
-                                    identifier: path.remove(0),
-                                    value: path.remove(0),
+                                    identifier: path.remove(0).to_string(),
+                                    value: path.remove(0).to_string(),
                                     data: None,
                                 },
                                 exp.span,

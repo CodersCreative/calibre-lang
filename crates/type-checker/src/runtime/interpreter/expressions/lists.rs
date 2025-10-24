@@ -18,7 +18,7 @@ impl CheckerEnvironment {
             let t = &values[0];
             let filtered: Vec<&RuntimeType> = values.iter().filter(|x| x.is_type(t)).collect();
             if values.len() == filtered.len() {
-                Some(values[0].clone())
+                Some(Box::new(values[0].clone()))
             } else {
                 None
             }
@@ -26,7 +26,7 @@ impl CheckerEnvironment {
             None
         };
 
-        Ok(RuntimeType::List(Box::new(t)))
+        Ok(RuntimeType::List(t))
     }
 
     pub fn evaluate_iter_expression(
@@ -47,13 +47,13 @@ impl CheckerEnvironment {
                     &new_scope,
                     identifier.clone(),
                     Variable {
-                        value: d.unwrap_or(RuntimeType::Dynamic),
+                        value: d.map(|x| *x).unwrap_or(RuntimeType::Dynamic),
                         var_type: VarType::Immutable,
                         location,
                     },
                 );
                 let _ = self.handle_conditionals(&new_scope, conditionals.clone())?;
-                result = Some(self.evaluate(&new_scope, map.clone())?);
+                result = Some(Box::new(self.evaluate(&new_scope, map.clone())?));
 
                 self.remove_scope(&new_scope);
             } else if let RuntimeType::Range = range {
@@ -63,14 +63,14 @@ impl CheckerEnvironment {
                     vec![(Node::new(NodeType::IntLiteral(1), range_node.span), None)],
                 )?;
                 let _ = self.handle_conditionals(&new_scope, conditionals.clone())?;
-                result = Some(self.evaluate(&new_scope, map.clone())?);
+                result = Some(Box::new(self.evaluate(&new_scope, map.clone())?));
                 self.remove_scope(&new_scope);
             }
         } else if let LoopType::While(_) = loop_type {
             panic!()
         }
 
-        Ok(RuntimeType::List(Box::new(result)))
+        Ok(RuntimeType::List(result))
     }
 }
 #[cfg(test)]

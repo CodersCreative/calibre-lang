@@ -23,7 +23,8 @@ impl InterpreterEnvironment {
         scope: &u64,
         identifier: &str,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        Ok(self.get_var(scope, identifier)?.value.clone())
+        let pointer = self.get_var_pointer(scope, identifier)?;
+        Ok(self.get_var(&pointer)?.value.clone())
     }
 
     pub fn evaluate_not<'a>(
@@ -148,14 +149,8 @@ impl InterpreterEnvironment {
         data_type: RuntimeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
         match data_type {
-            RuntimeType::Struct(_, Some(x)) if &x == "number" => {
-                Ok(RuntimeValue::Bool(value.is_number()))
-            }
-            _ => Ok(RuntimeValue::Bool(value.is_type(
-                self,
-                scope,
-                &data_type.into(),
-            ))),
+            RuntimeType::Struct(Some(x)) if x == 0 => Ok(RuntimeValue::Bool(value.is_number())),
+            _ => Ok(RuntimeValue::Bool(value.is_type(self, scope, &data_type))),
         }
     }
 

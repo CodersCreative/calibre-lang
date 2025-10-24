@@ -3,6 +3,7 @@ use crate::runtime::{
     scope::InterpreterEnvironment,
     values::{RuntimeType, RuntimeValue, helper::StopValue},
 };
+use calibre_common::environment::InterpreterFrom;
 use calibre_common::errors::RuntimeErr;
 use calibre_parser::ast::{Node, NodeType, VarType};
 
@@ -59,7 +60,7 @@ impl InterpreterEnvironment {
                     }
                     _ => return Err(InterpreterErr::DerefNonRef(value.node_type)),
                 } {
-                    let value = self.get_value_from_ref_pointer(&pointer)?.value;
+                    let value = self.get_var(&pointer)?.value.clone();
 
                     Ok(value)
                 } else {
@@ -129,7 +130,7 @@ impl InterpreterEnvironment {
                     identifier,
                     value,
                     match data_type {
-                        Some(x) => Some(x.into()),
+                        Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
                         None => None,
                     },
                 )
@@ -144,7 +145,11 @@ impl InterpreterEnvironment {
             }
             NodeType::IsDeclaration { value, data_type } => {
                 let value = self.evaluate(scope, *value)?;
-                self.evaluate_is_expression(scope, value, data_type.into())
+                self.evaluate_is_expression(
+                    scope,
+                    value,
+                    RuntimeType::interpreter_from(self, scope, data_type)?,
+                )
             }
             NodeType::AssignmentExpression { identifier, value } => {
                 let value = self.evaluate(scope, *value)?;
@@ -193,7 +198,11 @@ impl InterpreterEnvironment {
             }
             NodeType::AsExpression { value, typ } => {
                 let value = self.evaluate(scope, *value)?;
-                self.evaluate_as_expression(scope, value, typ.into())
+                self.evaluate_as_expression(
+                    scope,
+                    value,
+                    RuntimeType::interpreter_from(self, scope, typ)?,
+                )
             }
             NodeType::MemberExpression { .. } => self.evaluate_member_expression(scope, node),
             NodeType::ScopeMemberExpression { path } => {
@@ -245,7 +254,7 @@ impl InterpreterEnvironment {
                     identifier,
                     value,
                     match data_type {
-                        Some(x) => Some(x.into()),
+                        Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
                         None => None,
                     },
                 )
@@ -259,9 +268,13 @@ impl InterpreterEnvironment {
                 identifier,
                 functions,
             } => self.evaluate_impl_declaration(scope, identifier, functions),
-            NodeType::TypeDeclaration { identifier, object } => {
-                self.evaluate_type_declaration(scope, identifier, object.into())
-            }
+            NodeType::TypeDeclaration { identifier, object } => self.evaluate_type_declaration(
+                scope,
+                identifier,
+                calibre_common::environment::Type::<RuntimeType>::interpreter_from(
+                    self, scope, object,
+                )?,
+            ),
             _ => Err(InterpreterErr::UnexpectedNodeInGlobal(node.node_type)),
         }
     }

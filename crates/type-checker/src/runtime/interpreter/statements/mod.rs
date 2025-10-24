@@ -1,4 +1,4 @@
-use calibre_common::environment::Variable;
+use calibre_common::environment::{InterpreterFrom, Variable};
 use calibre_parser::ast::{Node, NodeType, ParserDataType, VarType};
 
 use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
@@ -34,16 +34,16 @@ impl CheckerEnvironment {
                     RuntimeType::Dynamic
                 }
             } else {
-                RuntimeType::from(parameters.1)
+                RuntimeType::interpreter_from(self, scope, parameters.1)?
             },
             parameters.2.is_some(),
         )];
 
         Ok(RuntimeType::Function {
-            return_type: Box::new(match return_type {
-                Some(x) => Some(RuntimeType::from(x)),
+            return_type: match return_type {
+                Some(x) => Some(Box::new(RuntimeType::interpreter_from(self, scope, x)?)),
                 None => None,
-            }),
+            },
             parameters: params,
             is_async,
         })
@@ -75,17 +75,17 @@ impl CheckerEnvironment {
                         RuntimeType::Dynamic
                     }
                 } else {
-                    RuntimeType::from(parameters.1)
+                    RuntimeType::interpreter_from(self, scope, parameters.1)?
                 },
                 parameters.2.is_some(),
             ));
         }
 
         Ok(RuntimeType::Function {
-            return_type: Box::new(match return_type {
-                Some(x) => Some(RuntimeType::from(x)),
+            return_type: match return_type {
+                Some(x) => Some(Box::new(RuntimeType::interpreter_from(self, scope, x)?)),
                 None => None,
-            }),
+            },
             parameters: params,
             is_async,
         })
@@ -96,10 +96,14 @@ impl CheckerEnvironment {
         scope: &u64,
         var_type: VarType,
         identifier: String,
-        value: RuntimeType,
+        mut value: RuntimeType,
         data_type: Option<RuntimeType>,
     ) -> Result<RuntimeType, InterpreterErr> {
         if let Some(t) = data_type {
+            value = match value {
+                RuntimeType::List(None) => RuntimeType::List(None).into_type(self, scope, &t)?,
+                x => x,
+            };
             if !value.is_type(&RuntimeType::from(t.clone())) {
                 self.add_err(InterpreterErr::ExpectedType(
                     value.clone(),

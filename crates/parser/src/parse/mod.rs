@@ -270,11 +270,11 @@ impl Parser {
 
             if self.first().token_type == TokenType::Arrow {
                 let _ = self.eat();
-                ret = Some(self.expect_type());
+                ret = Some(Box::new(self.expect_type()));
             }
 
             Some(ParserDataType::Function {
-                return_type: Box::new(ret),
+                return_type: ret,
                 parameters: args,
                 is_async,
             })
@@ -283,7 +283,7 @@ impl Parser {
             let _ = self.split_comparison_lesser();
             let t = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
                 let _ = self.eat();
-                let t = Some(self.expect_type());
+                let t = Some(Box::new(self.expect_type()));
                 let _ = self.split_comparison_greater();
                 let _ = self.expect_eat(
                     &TokenType::Comparison(Comparison::Greater),
@@ -293,21 +293,27 @@ impl Parser {
             } else {
                 None
             };
-            Some(ParserDataType::List(Box::new(t)))
+            Some(ParserDataType::List(t))
         } else {
             match ParserDataType::from_str(&t.value) {
                 Ok(x) => {
+                    let mut path = Vec::new();
                     let _ = self.eat();
-                    let mut path = vec![x];
 
-                    while self.first().token_type == TokenType::Colon {
-                        path.push(ParserDataType::from_str(&self.eat().value).unwrap());
-                    }
+                    if let ParserDataType::Struct(_) = x {
+                        path.push(x);
 
-                    if path.len() == 1 {
-                        Some(path.remove(0))
+                        while self.first().token_type == TokenType::Colon {
+                            path.push(ParserDataType::from_str(&self.eat().value).unwrap());
+                        }
+
+                        if path.len() == 1 {
+                            Some(path.remove(0))
+                        } else {
+                            Some(ParserDataType::Scope(path))
+                        }
                     } else {
-                        Some(ParserDataType::Scope(path))
+                        Some(x)
                     }
                 }
                 Err(_) => None,

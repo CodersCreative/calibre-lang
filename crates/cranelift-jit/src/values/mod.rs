@@ -30,8 +30,8 @@ impl From<ParserDataType> for RuntimeType {
             ParserDataType::Str => RuntimeType::Str,
             ParserDataType::Char => RuntimeType::Char,
             ParserDataType::Range => RuntimeType::Range,
-            ParserDataType::List(x) => RuntimeType::List(Box::new(match *x {
-                Some(x) => x.into(),
+            ParserDataType::List(x) => RuntimeType::List(Box::new(match x {
+                Some(x) => RuntimeType::from(*x),
                 None => RuntimeType::Dynamic,
             })),
             ParserDataType::Struct(Some(x)) => RuntimeType::Named(x),
@@ -57,7 +57,7 @@ pub enum RuntimeType {
     Option(Box<RuntimeType>),
     Result(Box<RuntimeType>, Box<RuntimeType>),
     Function {
-        return_type: Box<Option<RuntimeType>>,
+        return_type: Option<Box<RuntimeType>>,
         parameters: Vec<(RuntimeType, calibre_parser::ast::RefMutability)>,
         is_async: bool,
     },

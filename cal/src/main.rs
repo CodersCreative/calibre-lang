@@ -3,69 +3,126 @@ use calibre_parser::lexer::Tokenizer;
 use calibre_type_checker::runtime::scope::CheckerEnvironment;
 use clap::Parser;
 use rustyline::{DefaultEditor, error::ReadlineError};
-use std::{error::Error, fs, path::PathBuf, str::FromStr};
+use std::{error::Error, fs, io::Write, path::PathBuf, str::FromStr};
 
 fn repl() -> Result<(), Box<dyn Error>> {
     let mut env = InterpreterEnvironment::new();
     let mut checker = CheckerEnvironment::new();
+    let mut tokenizer = Tokenizer::default();
     let mut parser = calibre_parser::Parser::default();
     let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
     let mut editor = DefaultEditor::new()?;
+    let mut logical_history = Vec::new();
+
+    let mut perform_line = |line: String| -> Option<RuntimeValue> {
+        let program = parser.produce_ast(tokenizer.tokenize(line).unwrap());
+
+        if !parser.errors.is_empty() {
+            eprintln!(
+                "Unable to parse input due to : {:?}.\nPlease Retry.",
+                parser.errors
+            );
+            return None;
+        }
+        let calibre_parser::ast::NodeType::ScopeDeclaration {
+            body: program,
+            is_temp: _,
+        } = program.node_type
+        else {
+            eprintln!("Unexpected node after parsing");
+            return None;
+        };
+
+        let mut val = RuntimeValue::Null;
+
+        for node in program {
+            let res = if let Ok(x) = env.evaluate_global(&scope, node.clone()) {
+                let _ = checker.evaluate_global(&checker_scope, node);
+                Ok(x)
+            } else {
+                let _ = checker.start_evaluate(&checker_scope, node.clone());
+                env.evaluate(&scope, node)
+            };
+
+            let has_errs = !checker.errors.is_empty() || res.is_err();
+            for err in &checker.errors {
+                eprintln!("Line caused the following type checker errors:");
+                eprintln!("{}", err)
+            }
+
+            match res {
+                Ok(x) => val = x,
+                Err(e) => {
+                    eprintln!("Error found in line : {}", e);
+                }
+            }
+
+            checker.errors.clear();
+            if has_errs {
+                eprintln!("Please Retry.");
+                return None;
+            }
+        }
+        Some(val)
+    };
+
     loop {
         let readline = editor.readline(">> ");
         match readline {
             Ok(line) => {
-                let mut tokenizer = Tokenizer::default();
-                let program = parser.produce_ast(tokenizer.tokenize(line).unwrap());
+                editor.add_history_entry(line.clone())?;
+                if let Some(x) = line.split_whitespace().nth(0) {
+                    match x.trim() {
+                        "SAVE" => {
+                            logical_history.push(line.clone());
+                            let path = line.split_whitespace().nth(1).unwrap_or("repl.cl");
 
-                if !parser.errors.is_empty() {
-                    eprintln!(
-                        "Unable to parse input due to : {:?}.\n\nPlease Retry.",
-                        parser.errors
-                    );
-                    continue;
-                }
-                let calibre_parser::ast::NodeType::ScopeDeclaration {
-                    body: program,
-                    is_temp: _,
-                } = program.node_type
-                else {
-                    panic!("Unexpected node after parsing")
-                };
+                            let mut file = fs::File::create(&path)?;
+                            let mut txt = String::from(
+                                "/*CLREPL\nCALIBRE LANG REPL FILE.\nCan only be run by the REPL using the 'LOAD' keyword*/",
+                            );
 
-                let mut val = RuntimeValue::Null;
+                            for line in logical_history.iter() {
+                                txt.push_str(&format!("\n{line}"));
+                            }
 
-                for node in program {
-                    let res = if let Ok(x) = env.evaluate_global(&scope, node.clone()) {
-                        let _ = checker.evaluate_global(&checker_scope, node);
-                        Ok(x)
-                    } else {
-                        let _ = checker.start_evaluate(&checker_scope, node.clone());
-                        env.evaluate(&scope, node)
-                    };
+                            let _ = file.write_all(txt.as_bytes())?;
 
-                    for err in &checker.errors {
-                        eprintln!("Line caused the following type checker errors:");
-                        eprintln!("{}", err)
-                    }
-
-                    match res {
-                        Ok(x) => val = x,
-                        Err(e) => {
-                            eprintln!("Error found in line : {}", e);
+                            continue;
                         }
-                    }
+                        "LOAD" => {
+                            logical_history.push(line.clone());
+                            let contents = fs::read_to_string(
+                                line.split_whitespace().nth(1).unwrap_or("repl.cl"),
+                            )?;
 
-                    checker.errors.clear();
+                            for line in contents.lines().skip(3) {
+                                if let Some(x) = line.split_whitespace().nth(0) {
+                                    match x.trim() {
+                                        "SAVE" | "LOAD" => continue,
+                                        _ => {}
+                                    }
+                                }
+
+                                let _ = perform_line(line.to_string());
+                            }
+
+                            continue;
+                        }
+                        _ => {}
+                    }
                 }
 
-                match val {
-                    RuntimeValue::Null | RuntimeValue::Ref(_, _) => {}
-                    _ => {
+                match perform_line(line.clone()) {
+                    None => continue,
+                    Some(RuntimeValue::Null) | Some(RuntimeValue::Ref(_, _)) => {}
+                    Some(val) => {
                         println!("{}", val.to_string());
                     }
                 }
+
+                logical_history.push(line);
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
@@ -95,7 +152,12 @@ fn file(
     let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
     let mut tokenizer = Tokenizer::default();
-    let program = parser.produce_ast(tokenizer.tokenize(fs::read_to_string(path)?).unwrap());
+    let contents = fs::read_to_string(path)?;
+    if contents.starts_with("/*CLREPL") {
+        return Err(String::from("Cannot run file using --path. It can only be run in the REPL using the 'LOAD' keyword.").into());
+    }
+
+    let program = parser.produce_ast(tokenizer.tokenize(contents).unwrap());
 
     if !parser.errors.is_empty() {
         return Err(
@@ -104,9 +166,12 @@ fn file(
     }
     let _ = checker.evaluate(&checker_scope, program.clone())?;
 
-    for err in &checker.errors {
+    if !checker.errors.is_empty() {
         eprintln!("Type checker errors:");
-        eprintln!("{}", err)
+
+        for err in &checker.errors {
+            eprintln!("{}", err)
+        }
     }
 
     let _ = env.evaluate(&scope, program)?;
