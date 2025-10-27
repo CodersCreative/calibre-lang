@@ -250,13 +250,10 @@ impl Parser {
                 TokenType::Comparison(Comparison::Lesser),
                 TokenType::Comparison(Comparison::Greater),
             )))
-        } else if t.token_type == TokenType::Func || t.token_type == TokenType::Async {
+        } else if t.token_type == TokenType::Func {
             let _ = self.eat();
-            let is_async = if t.token_type == TokenType::Async {
-                let _ = self.expect_eat(
-                    &TokenType::Async,
-                    SyntaxErr::ExpectedKeyword(String::from("async")),
-                );
+            let is_async = if self.first().token_type == TokenType::Async {
+                let _ = self.eat();
                 true
             } else {
                 false
@@ -396,6 +393,14 @@ impl Parser {
         );
 
         let value = self.parse_statement();
+        let span = value.span.clone();
+
+        let value = Node::new(
+            NodeType::ParenExpression {
+                value: Box::new(value),
+            },
+            span,
+        );
 
         let _ = self.expect_eat(
             &TokenType::Close(Bracket::Paren),

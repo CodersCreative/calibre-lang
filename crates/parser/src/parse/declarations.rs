@@ -258,7 +258,7 @@ impl Parser {
                     .value,
             ];
 
-            while this.first().token_type == TokenType::FullStop {
+            while this.first().token_type == TokenType::Colon {
                 module.push(
                     this.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
                         .value,

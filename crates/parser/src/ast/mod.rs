@@ -7,7 +7,7 @@ use crate::{
 };
 use binary::BinaryOperator;
 use comparison::Comparison;
-use std::{cmp::Ordering, collections::HashMap, str::FromStr, string::ParseError};
+use std::{cmp::Ordering, collections::HashMap, fmt::Display, str::FromStr, string::ParseError};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RefMutability {
@@ -16,6 +16,29 @@ pub enum RefMutability {
     MutRef,
     MutValue,
 }
+
+impl RefMutability {
+    pub fn fmt_with_val(&self, val: &str) -> String {
+        match self {
+            Self::MutRef | Self::MutValue => {
+                format!("{} {}", self, val)
+            }
+            _ => format!("{}{}", self, val),
+        }
+    }
+}
+
+impl Display for RefMutability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Value => write!(f, ""),
+            Self::Ref => write!(f, "&"),
+            Self::MutRef => write!(f, "&mut"),
+            Self::MutValue => write!(f, "mut"),
+        }
+    }
+}
+
 impl From<TokenType> for RefMutability {
     fn from(value: TokenType) -> Self {
         match value {
@@ -56,6 +79,86 @@ pub enum ParserDataType {
     Struct(Option<String>),
 }
 
+impl Display for ParserDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Float => write!(f, "float"),
+            Self::Int => write!(f, "int"),
+            Self::Dynamic => write!(f, "dyn"),
+            Self::Bool => write!(f, "bool"),
+            Self::Str => write!(f, "str"),
+            Self::Char => write!(f, "char"),
+            Self::Range => write!(f, "range"),
+            Self::Ref(typ, mutability) => {
+                write!(f, "{}", mutability.fmt_with_val(&typ.to_string()))
+            }
+            Self::Result(x, y) => write!(f, "{}!{}", x, y),
+            Self::Option(x) => write!(f, "{}?", x),
+            Self::Struct(x) => match x {
+                Some(x) => write!(f, "{}", x),
+                None => write!(f, "struct"),
+            },
+            Self::List(x) => match x {
+                Some(x) => write!(f, "list<{}>", x),
+                None => write!(f, "list"),
+            },
+            Self::Tuple(types) => {
+                let mut txt = format!(
+                    "<{}",
+                    types.get(0).map(|x| x.to_string()).unwrap_or(String::new())
+                );
+                for typ in types.iter().skip(1) {
+                    txt.push_str(&format!(", {}", typ));
+                }
+
+                txt.push_str(">");
+
+                write!(f, "{}", txt)
+            }
+            Self::Scope(values) => {
+                let mut txt = values[0].to_string();
+
+                for typ in values.iter().skip(1) {
+                    txt.push_str(&format!(":{}", typ));
+                }
+
+                write!(f, "{}", txt)
+            }
+            Self::Function {
+                return_type,
+                parameters,
+                is_async,
+            } => {
+                let mut txt = if *is_async {
+                    String::from("fn async")
+                } else {
+                    String::from("fn")
+                };
+
+                txt.push_str(&format!(
+                    "({}",
+                    parameters
+                        .get(0)
+                        .map(|x| x.to_string())
+                        .unwrap_or(String::new())
+                ));
+
+                for typ in parameters.iter().skip(1) {
+                    txt.push_str(&format!(", {}", typ));
+                }
+
+                txt.push_str(")");
+
+                if let Some(typ) = return_type {
+                    txt.push_str(&format!(" -> {}", typ));
+                }
+
+                write!(f, "{}", txt)
+            }
+        }
+    }
+}
+
 impl FromStr for ParserDataType {
     type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -83,6 +186,16 @@ pub enum VarType {
     Mutable,
     Immutable,
     Constant,
+}
+
+impl Display for VarType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Mutable => write!(f, "let mut"),
+            Self::Immutable => write!(f, "let"),
+            Self::Constant => write!(f, "const"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -121,6 +234,10 @@ pub enum NodeType {
         value: Box<Node>,
     },
     DerefStatement {
+        value: Box<Node>,
+    },
+
+    ParenExpression {
         value: Box<Node>,
     },
     VariableDeclaration {
@@ -163,6 +280,9 @@ pub enum NodeType {
         value: Box<Node>,
     },
     NotExpression {
+        value: Box<Node>,
+    },
+    NegExpression {
         value: Box<Node>,
     },
     DebugExpression {
@@ -299,7 +419,7 @@ fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {
         txt.push_str(&format!("{}, ", val.to_string()));
     }
 
-    let _ = (txt.pop(), txt.pop());
+    let _ = txt.trim_end_matches(", ");
     txt.push(close);
 
     txt

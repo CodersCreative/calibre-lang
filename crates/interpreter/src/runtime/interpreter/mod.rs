@@ -211,6 +211,11 @@ impl InterpreterEnvironment {
             NodeType::ScopeDeclaration { body, is_temp } => {
                 self.evaluate_scope(scope, body, is_temp)
             }
+            NodeType::NegExpression { value } => {
+                let value = self.evaluate(scope, *value)?;
+                self.evaluate_neg(scope, value)
+            }
+            NodeType::ParenExpression { value } => self.evaluate(scope, *value),
             NodeType::NotExpression { value } => {
                 let value = self.evaluate(scope, *value)?;
                 self.evaluate_not(scope, value)

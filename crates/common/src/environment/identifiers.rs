@@ -36,6 +36,8 @@ pub fn identifiers_used<'a>(node: &'a Node) -> Vec<&'a String> {
             data_type: _,
         }
         | NodeType::NotExpression { value }
+        | NodeType::NegExpression { value }
+        | NodeType::ParenExpression { value }
         | NodeType::DebugExpression { value }
         | NodeType::AsExpression { value, typ: _ }
         | NodeType::IsDeclaration {

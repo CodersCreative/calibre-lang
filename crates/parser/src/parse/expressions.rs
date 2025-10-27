@@ -59,7 +59,7 @@ impl Parser {
                 let val = self.parse_statement();
                 let span = Span::new_from_spans(open.span, val.span);
                 Node::new(
-                    NodeType::NotExpression {
+                    NodeType::NegExpression {
                         value: Box::new(val),
                     },
                     span,

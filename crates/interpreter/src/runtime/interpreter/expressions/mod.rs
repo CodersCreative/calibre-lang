@@ -34,6 +34,16 @@ impl InterpreterEnvironment {
     ) -> Result<RuntimeValue, InterpreterErr> {
         match value {
             RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
+            _ => Err(InterpreterErr::CantPerformNot(value)),
+        }
+    }
+
+    pub fn evaluate_neg<'a>(
+        &mut self,
+        _scope: &u64,
+        value: RuntimeValue,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        match value {
             RuntimeValue::Int(x) => Ok(RuntimeValue::Int(-x)),
             RuntimeValue::Float(x) => Ok(RuntimeValue::Float(-x)),
             RuntimeValue::Range(f, t) => Ok(RuntimeValue::Range(t, f)),

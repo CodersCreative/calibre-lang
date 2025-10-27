@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Comparison {
     Greater,
@@ -8,10 +10,22 @@ pub enum Comparison {
     NotEqual,
 }
 
+impl Display for Comparison {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_operator())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BooleanOperation {
     And,
     Or,
+}
+
+impl Display for BooleanOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_operator())
+    }
 }
 
 impl BooleanOperation {

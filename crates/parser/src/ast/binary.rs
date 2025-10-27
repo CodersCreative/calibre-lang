@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BinaryOperator {
     Sub,
@@ -11,6 +13,12 @@ pub enum BinaryOperator {
     BitXor,
     Shl,
     Shr,
+}
+
+impl Display for BinaryOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_symbol())
+    }
 }
 
 impl BinaryOperator {

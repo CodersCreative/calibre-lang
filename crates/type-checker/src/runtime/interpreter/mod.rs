@@ -171,10 +171,9 @@ impl CheckerEnvironment {
             NodeType::ScopeDeclaration { body, is_temp } => {
                 self.evaluate_scope(scope, body, is_temp)
             }
-            NodeType::NotExpression { value } => {
-                let value = self.evaluate(scope, *value)?;
-                self.evaluate_not(scope, value)
-            }
+            NodeType::NotExpression { value }
+            | NodeType::NegExpression { value }
+            | NodeType::ParenExpression { value } => self.evaluate(scope, *value),
             NodeType::PipeExpression(nodes) => self.evaluate_pipe_expression(scope, nodes),
             NodeType::EnumExpression {
                 identifier,

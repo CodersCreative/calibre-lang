@@ -23,14 +23,6 @@ impl CheckerEnvironment {
         Ok(self.get_var(&pointer)?.value.clone())
     }
 
-    pub fn evaluate_not<'a>(
-        &mut self,
-        _scope: &u64,
-        value: RuntimeType,
-    ) -> Result<RuntimeType, InterpreterErr> {
-        return Ok(value);
-    }
-
     pub fn evaluate_as_expression(
         &mut self,
         scope: &u64,

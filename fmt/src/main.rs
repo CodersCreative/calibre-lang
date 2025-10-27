@@ -2,6 +2,7 @@ use std::error::Error;
 
 use calibre_parser::{
     Parser,
+    ast::{Node, NodeType},
     lexer::{Span, Token, TokenType, Tokenizer},
 };
 
@@ -26,6 +27,21 @@ impl Default for Formatter {
 }
 
 impl Formatter {
+    pub fn generate_lines(&mut self, ast: Node) -> Result<(), Box<dyn Error>> {
+        if let NodeType::ScopeDeclaration {
+            body,
+            is_temp: false,
+        } = ast.node_type
+        {
+            for node in body {
+                let line = self.format(&node);
+                self.lines.push(line);
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn start_format(&mut self, text: String) -> Result<String, Box<dyn Error>> {
         self.lines.clear();
         self.position = None;
@@ -44,9 +60,16 @@ impl Formatter {
             .collect();
 
         let mut parser = Parser::default();
-        let ast = parser.produce_ast(tokens)?;
+        let ast = parser.produce_ast(tokens);
 
-        Ok(self.format(ast))
+        let _ = self.generate_lines(ast)?;
+
+        let mut text = String::new();
+        for line in &self.lines {
+            text.push_str(&format!("{}\n", line));
+        }
+
+        Ok(text)
     }
 }
 
