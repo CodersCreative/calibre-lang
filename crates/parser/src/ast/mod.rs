@@ -402,7 +402,7 @@ impl<T: PartialEq + ToString> ToString for ObjectType<T> {
                     txt.push_str(&format!("{k} : {}, ", v.to_string()));
                 }
 
-                let _ = (txt.pop(), txt.pop());
+                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push_str("}");
 
                 txt
@@ -419,7 +419,7 @@ fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {
         txt.push_str(&format!("{}, ", val.to_string()));
     }
 
-    let _ = txt.trim_end_matches(", ");
+    let mut txt = txt.trim_end().trim_end_matches(",").to_string();
     txt.push(close);
 
     txt

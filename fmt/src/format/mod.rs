@@ -1,4 +1,7 @@
-use calibre_parser::ast::{self, Node, NodeType};
+use calibre_parser::{
+    ast::{self, Node, NodeType},
+    lexer::{self, Span, Token},
+};
 
 use crate::Formatter;
 
@@ -85,7 +88,11 @@ impl Formatter {
                 let mut txt = format!("impl {} {{\n", identifier);
 
                 for func in functions {
-                    txt.push_str(&format!("{};\n", self.format(&func.0)));
+                    let temp = self.format(&func.0);
+                    txt.push_str(&format!(
+                        "{};\n",
+                        self.fmt_txt_with_comments_and_tab(&temp, &func.0.span, 1, true)
+                    ));
                 }
 
                 txt.push_str("}");
@@ -142,7 +149,7 @@ impl Formatter {
                     }
                 }
 
-                let _ = txt.trim_end_matches(", ");
+                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
 
                 txt
@@ -238,7 +245,7 @@ impl Formatter {
                     txt.push_str(", ");
                 }
 
-                let _ = txt.trim_end_matches(", ");
+                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
 
                 if let Some(typ) = return_type {
@@ -306,20 +313,22 @@ impl Formatter {
                     txt.push_str(&format!(" -> {}", typ));
                 }
 
-                txt.push_str("{\n");
+                txt.push_str(" {\n");
 
                 for arm in body {
-                    txt.push_str(&format!(
-                        "{}{} => {},\n",
+                    let temp = &format!(
+                        "{}{} => {}",
                         self.format(&arm.0),
                         format!(" {}", self.fmt_conditionals(&arm.1)),
                         self.format(&*arm.2)
+                    );
+                    txt.push_str(&format!(
+                        "{},\n",
+                        &self.fmt_txt_with_comments_and_tab(temp, &arm.0.span, 1, true)
                     ));
                 }
-
-                let _ = txt.trim_end();
-                let _ = txt.trim_end_matches(",");
-                txt.push_str("\n}");
+                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                txt.push_str("}");
 
                 txt
             }
@@ -366,8 +375,16 @@ impl Formatter {
             NodeType::ScopeDeclaration { body, is_temp: _ } => {
                 let mut txt = String::from("{");
 
-                for node in body {
-                    txt.push_str(&format!("{};\n", self.format(&node)));
+                if !body.is_empty() {
+                    txt.push_str("\n");
+                    for node in body {
+                        let temp = self.format(&node);
+                        txt.push_str(&format!(
+                            "{};\n",
+                            self.fmt_txt_with_comments_and_tab(&temp, &node.span, 1, true)
+                                .trim_end()
+                        ));
+                    }
                 }
 
                 txt.push_str("}");
@@ -401,16 +418,91 @@ impl Formatter {
         }
     }
 
+    pub fn fmt_txt_with_comments_and_tab(
+        &mut self,
+        txt: &str,
+        span: &lexer::Span,
+        tab_amt: usize,
+        starting_tab: bool,
+    ) -> String {
+        let tab = self.fmt_cur_tab(tab_amt);
+        let txt = txt.replace('\n', &format!("\n{}", tab));
+        if let Some(comment) = self.fmt_potential_comment(span) {
+            format!(
+                "{}{}\n{}{}\n",
+                if starting_tab { &tab } else { "" },
+                comment.replace('\n', &format!("\n{}", tab)),
+                tab,
+                txt
+            )
+        } else {
+            format!("{}{}\n", if starting_tab { &tab } else { "" }, txt)
+        }
+    }
+
+    fn fmt_txt_with_tab(&mut self, txt: &str, tab_amt: usize, starting_tab: bool) -> String {
+        let tab = self.fmt_cur_tab(tab_amt);
+        let txt = txt.replace('\n', &format!("\n{}", tab));
+        format!("{}{}\n", if starting_tab { &tab } else { "" }, txt)
+    }
+
+    fn fmt_potential_comment(&mut self, span: &lexer::Span) -> Option<String> {
+        if let Some(first) = self.comments.first() {
+            if first.span.to.line < span.from.line {
+                let mut comments = vec![self.comments.remove(0)];
+
+                while let Some(comment) = self.comments.first() {
+                    if (comment.span.from.line - comments.last().unwrap().span.to.line) <= 1 {
+                        comments.push(self.comments.remove(0));
+                    }
+                }
+
+                if comments.len() > 1 {
+                    let mut txt = format!("/* {}\n", comments.remove(0).value);
+
+                    while comments.len() > 0 {
+                        txt.push_str(&format!("{}\n", comments.remove(0).value));
+                    }
+
+                    return Some(format!("{}*/", txt));
+                } else {
+                    let comment = comments.remove(0);
+                    if comment.span.from.line == comment.span.to.line {
+                        return Some(format!("// {}", comment.value));
+                    } else {
+                        return Some(format!("/* {}\n*/", comment.value));
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    fn fmt_cur_tab(&mut self, tab_amt: usize) -> String {
+        let mut txt = String::new();
+        for _ in 0..tab_amt {
+            txt.push('\t');
+        }
+        txt
+    }
+
     fn fmt_struct_literal(&mut self, object_type: &ast::ObjectType<Option<Node>>) -> String {
         match object_type {
             ast::ObjectType::Map(map) => {
                 let mut txt = String::from("{");
                 for (key, value) in map.iter() {
-                    if let Some(value) = value {
-                        txt.push_str(&format!("{} : {}, ", key, self.format(value)));
+                    let (temp, span) = if let Some(value) = value {
+                        (
+                            format!("{} : {}, ", key, self.format(value)),
+                            value.span.clone(),
+                        )
                     } else {
-                        txt.push_str(&format!("{}, ", key));
-                    }
+                        let mut span = Span::default();
+                        (format!("{}, ", key), span)
+                    };
+
+                    txt.push_str(&self.fmt_txt_with_comments_and_tab(&temp, &span, 1, false));
                 }
                 let _ = txt.trim_end_matches(", ");
                 txt.push('}');
@@ -420,7 +512,13 @@ impl Formatter {
                 let mut txt = String::from("(");
                 for value in lst.iter() {
                     if let Some(value) = value {
-                        txt.push_str(&format!("{}, ", self.format(value)));
+                        let temp = self.format(value);
+                        txt.push_str(&self.fmt_txt_with_comments_and_tab(
+                            &format!("{}, ", temp),
+                            &value.span,
+                            1,
+                            false,
+                        ));
                     }
                 }
                 let _ = txt.trim_end_matches(", ");
@@ -441,7 +539,13 @@ impl Formatter {
         let mut txt = String::new();
 
         for node in conditionals {
-            txt.push_str(&format!("if {} ", self.format(node)));
+            let temp = self.format(node);
+            txt.push_str(&self.fmt_txt_with_comments_and_tab(
+                &format!("if {} ", temp),
+                &node.span,
+                0,
+                false,
+            ));
         }
         let _ = txt.trim_end();
         txt

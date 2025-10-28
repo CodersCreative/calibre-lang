@@ -9,9 +9,10 @@ use calibre_parser::{
 pub mod format;
 
 pub struct Formatter {
-    pub lines: Vec<String>,
+    pub lines: Vec<(String, Span)>,
     pub comments: Vec<Token>,
     pub max_width: usize,
+    pub cur_tab: usize,
     pub position: Option<Span>,
 }
 
@@ -21,6 +22,7 @@ impl Default for Formatter {
             lines: Vec::new(),
             comments: Vec::new(),
             max_width: 200,
+            cur_tab: 0,
             position: None,
         }
     }
@@ -35,7 +37,7 @@ impl Formatter {
         {
             for node in body {
                 let line = self.format(&node);
-                self.lines.push(line);
+                self.lines.push((line, node.span));
             }
         }
 
@@ -65,14 +67,30 @@ impl Formatter {
         let _ = self.generate_lines(ast)?;
 
         let mut text = String::new();
-        for line in &self.lines {
-            text.push_str(&format!("{}\n", line));
+        for line in self.lines.clone().into_iter() {
+            text.push_str(&format!(
+                "{};\n",
+                self.fmt_txt_with_comments_and_tab(&line.0, &line.1, 0, true)
+                    .trim_end()
+            ));
         }
 
         Ok(text)
     }
 }
 
+const BASIC_CODE: &str = r#"
+const thirty = fn () -> int => 30;
+
+const forty = match {
+    Some(x) => x,
+};   
+"#;
+
 fn main() {
-    println!("Hello, world!");
+    let mut formatter = Formatter::default();
+    println!(
+        "{}",
+        formatter.start_format(BASIC_CODE.to_string()).unwrap()
+    );
 }
