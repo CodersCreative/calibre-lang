@@ -9,7 +9,7 @@ use calibre_parser::{
 pub mod format;
 
 pub struct Formatter {
-    pub lines: Vec<(String, Span)>,
+    pub lines: Vec<String>,
     pub comments: Vec<Token>,
     pub max_width: usize,
     pub cur_tab: usize,
@@ -36,8 +36,13 @@ impl Formatter {
         } = ast.node_type
         {
             for node in body {
-                let line = self.format(&node);
-                self.lines.push((line, node.span));
+                let temp = if let Some(comment) = self.get_potential_comment(&node.span) {
+                    let line = self.format(&node);
+                    format!("{}{}", comment, line)
+                } else {
+                    self.format(&node)
+                };
+                self.lines.push(temp);
             }
         }
 
@@ -68,23 +73,26 @@ impl Formatter {
 
         let mut text = String::new();
         for line in self.lines.clone().into_iter() {
-            text.push_str(&format!(
-                "{};\n",
-                self.fmt_txt_with_comments_and_tab(&line.0, &line.1, 0, true)
-                    .trim_end()
-            ));
+            text.push_str(&format!("{};\n\n", line.trim_end().trim_end_matches("\n")));
         }
 
-        Ok(text)
+        while !self.comments.is_empty() {
+            text.push_str(&format!("{}\n\n", self.fmt_next_comment().unwrap()));
+        }
+
+        Ok(text.trim_end().trim_end_matches("\n").to_string())
     }
 }
 
 const BASIC_CODE: &str = r#"
-const thirty = fn () -> int => 30;
+// const thirty = fn () -> int => 30;
 
 const forty = match {
     Some(x) => x,
-};   
+};
+
+// const thirty = fn () -> int => 30;
+const thirty = fn () -> int => 30;  
 "#;
 
 fn main() {

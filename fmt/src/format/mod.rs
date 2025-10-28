@@ -213,7 +213,7 @@ impl Formatter {
                     String::from("fn")
                 };
 
-                txt.push_str("(");
+                txt.push_str(" (");
 
                 let mut adjusted_params = parameters
                     .get(0)
@@ -378,6 +378,10 @@ impl Formatter {
                 if !body.is_empty() {
                     txt.push_str("\n");
                     for node in body {
+                        if let Some(comment) = self.get_potential_comment(&node.span) {
+                            txt.push_str(&self.fmt_txt_with_tab(&comment, 1, true));
+                        }
+
                         let temp = self.format(&node);
                         txt.push_str(&format!(
                             "{};\n",
@@ -418,61 +422,72 @@ impl Formatter {
         }
     }
 
-    pub fn fmt_txt_with_comments_and_tab(
+    pub(crate) fn fmt_txt_with_comments_and_tab(
         &mut self,
         txt: &str,
         span: &lexer::Span,
         tab_amt: usize,
         starting_tab: bool,
     ) -> String {
-        let tab = self.fmt_cur_tab(tab_amt);
-        let txt = txt.replace('\n', &format!("\n{}", tab));
-        if let Some(comment) = self.fmt_potential_comment(span) {
+        if let Some(comment) = self.get_potential_comment(span) {
             format!(
-                "{}{}\n{}{}\n",
-                if starting_tab { &tab } else { "" },
-                comment.replace('\n', &format!("\n{}", tab)),
-                tab,
-                txt
+                "{}{}",
+                self.fmt_txt_with_tab(&comment, tab_amt, starting_tab),
+                self.fmt_txt_with_tab(txt, tab_amt, true)
             )
         } else {
-            format!("{}{}\n", if starting_tab { &tab } else { "" }, txt)
+            self.fmt_txt_with_tab(txt, tab_amt, starting_tab)
         }
     }
 
-    fn fmt_txt_with_tab(&mut self, txt: &str, tab_amt: usize, starting_tab: bool) -> String {
+    pub(crate) fn fmt_txt_with_tab(
+        &mut self,
+        txt: &str,
+        tab_amt: usize,
+        starting_tab: bool,
+    ) -> String {
         let tab = self.fmt_cur_tab(tab_amt);
         let txt = txt.replace('\n', &format!("\n{}", tab));
         format!("{}{}\n", if starting_tab { &tab } else { "" }, txt)
     }
 
-    fn fmt_potential_comment(&mut self, span: &lexer::Span) -> Option<String> {
+    pub(crate) fn fmt_next_comment(&mut self) -> Option<String> {
+        if !self.comments.is_empty() {
+            let mut comments = vec![self.comments.remove(0)];
+
+            while let Some(comment) = self.comments.first() {
+                if (comment.span.from.line - comments.last().unwrap().span.to.line) <= 1 {
+                    comments.push(self.comments.remove(0));
+                } else {
+                    break;
+                }
+            }
+
+            if comments.len() > 1 {
+                let mut txt = format!("/* {}\n", comments.remove(0).value);
+
+                while comments.len() > 0 {
+                    txt.push_str(&format!("{}\n", comments.remove(0).value));
+                }
+
+                return Some(format!("{}*/", txt));
+            } else {
+                let comment = comments.remove(0);
+                if comment.span.from.line == comment.span.to.line {
+                    return Some(format!("// {}", comment.value));
+                } else {
+                    return Some(format!("/* {}\n*/", comment.value));
+                }
+            }
+        }
+
+        None
+    }
+
+    pub(crate) fn get_potential_comment(&mut self, span: &lexer::Span) -> Option<String> {
         if let Some(first) = self.comments.first() {
             if first.span.to.line < span.from.line {
-                let mut comments = vec![self.comments.remove(0)];
-
-                while let Some(comment) = self.comments.first() {
-                    if (comment.span.from.line - comments.last().unwrap().span.to.line) <= 1 {
-                        comments.push(self.comments.remove(0));
-                    }
-                }
-
-                if comments.len() > 1 {
-                    let mut txt = format!("/* {}\n", comments.remove(0).value);
-
-                    while comments.len() > 0 {
-                        txt.push_str(&format!("{}\n", comments.remove(0).value));
-                    }
-
-                    return Some(format!("{}*/", txt));
-                } else {
-                    let comment = comments.remove(0);
-                    if comment.span.from.line == comment.span.to.line {
-                        return Some(format!("// {}", comment.value));
-                    } else {
-                        return Some(format!("/* {}\n*/", comment.value));
-                    }
-                }
+                return self.fmt_next_comment();
             }
         }
 
