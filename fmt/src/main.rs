@@ -3,7 +3,7 @@ use std::error::Error;
 use calibre_parser::{
     Parser,
     ast::{Node, NodeType},
-    lexer::{Span, Token, TokenType, Tokenizer},
+    lexer::{Token, TokenType, Tokenizer},
 };
 
 pub mod format;
@@ -12,8 +12,6 @@ pub struct Formatter {
     pub lines: Vec<String>,
     pub comments: Vec<Token>,
     pub max_width: usize,
-    pub cur_tab: usize,
-    pub position: Option<Span>,
 }
 
 impl Default for Formatter {
@@ -22,8 +20,6 @@ impl Default for Formatter {
             lines: Vec::new(),
             comments: Vec::new(),
             max_width: 200,
-            cur_tab: 0,
-            position: None,
         }
     }
 }
@@ -36,12 +32,8 @@ impl Formatter {
         } = ast.node_type
         {
             for node in body {
-                let temp = if let Some(comment) = self.get_potential_comment(&node.span) {
-                    let line = self.format(&node);
-                    format!("{}{}", comment, line)
-                } else {
-                    self.format(&node)
-                };
+                let temp =
+                    handle_comment!(self.get_potential_comment(&node.span), self.format(&node));
                 self.lines.push(temp);
             }
         }
@@ -51,7 +43,6 @@ impl Formatter {
 
     pub fn start_format(&mut self, text: String) -> Result<String, Box<dyn Error>> {
         self.lines.clear();
-        self.position = None;
 
         let mut tokenizer = Tokenizer::new(true);
         let tokens = tokenizer.tokenize(text)?;
