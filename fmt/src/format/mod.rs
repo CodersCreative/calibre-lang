@@ -130,17 +130,23 @@ impl Formatter {
                 identifier,
                 functions,
             } => {
-                let mut txt = format!("impl {} {{\n", identifier);
+                let mut txt = format!("impl {} {{", identifier);
 
-                for func in functions {
-                    let temp = handle_comment!(
-                        self.get_potential_comment(&func.0.span),
-                        self.format(&func.0)
-                    );
-                    txt.push_str(&format!("{};\n", self.fmt_txt_with_tab(&temp, 1, true)));
+                if !functions.is_empty() {
+                    for func in functions {
+                        let temp = handle_comment!(
+                            self.get_potential_comment(&func.0.span),
+                            self.format(&func.0)
+                        );
+                        txt.push_str(&format!("\n{};\n", self.fmt_txt_with_tab(&temp, 1, true)));
+                    }
+
+                    txt = txt.trim().to_string();
+
+                    txt.push_str("\n}");
+                } else {
+                    txt.push_str("}");
                 }
-
-                txt.push_str("}");
 
                 txt
             }
@@ -446,7 +452,15 @@ impl Formatter {
             }
             NodeType::Identifier(x) => x.to_string(),
             NodeType::IntLiteral(x) => x.to_string(),
-            NodeType::FloatLiteral(x) => x.to_string(),
+            NodeType::FloatLiteral(x) => {
+                let mut temp = x.to_string();
+                if temp.contains(".") {
+                    temp
+                } else {
+                    temp.push_str(".0");
+                    temp
+                }
+            }
             NodeType::CharLiteral(x) => format!("'{}'", x),
             NodeType::StringLiteral(x) => format!("\"{}\"", x),
             NodeType::ListLiteral(values) => {
