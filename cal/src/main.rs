@@ -3,9 +3,9 @@ use calibre_parser::lexer::Tokenizer;
 use calibre_type_checker::runtime::scope::CheckerEnvironment;
 use clap::Parser;
 use rustyline::{DefaultEditor, error::ReadlineError};
-use std::{error::Error, fs, io::Write, path::PathBuf, str::FromStr};
+use std::{error::Error, fs, io::Write, path::PathBuf, process::Command, str::FromStr};
 
-fn repl(file: Option<&str>) -> Result<(), Box<dyn Error>> {
+fn repl(file: Option<&PathBuf>) -> Result<(), Box<dyn Error>> {
     let mut env = InterpreterEnvironment::new();
     let mut checker = CheckerEnvironment::new();
     let mut tokenizer = Tokenizer::default();
@@ -16,7 +16,7 @@ fn repl(file: Option<&str>) -> Result<(), Box<dyn Error>> {
     let mut logical_history = Vec::new();
 
     if let Some(file) = file {
-        logical_history.push(format!("LOAD {}", file));
+        logical_history.push(format!("LOAD {}", file.to_str().unwrap()));
 
         match perform_repl_line(
             &mut env,
@@ -34,7 +34,7 @@ fn repl(file: Option<&str>) -> Result<(), Box<dyn Error>> {
                 println!("{}", val.to_string());
             }
         }
-        println!("Successfully Loaded : {}", file);
+        println!("Successfully Loaded : {}", file.to_str().unwrap());
     }
 
     loop {
@@ -91,13 +91,20 @@ fn perform_repl_line(
     line: String,
 ) -> Option<RuntimeValue> {
     let mut perform_line = |line: String| -> Option<RuntimeValue> {
-        let tokens = match tokenizer.tokenize(line) {
+        let tokens: Vec<calibre_parser::lexer::Token> = match tokenizer.tokenize(line) {
             Ok(x) => x,
             Err(e) => {
                 eprintln!("Unable to parse input due to : {:?}.\nPlease Retry.", e);
                 return None;
             }
-        };
+        }
+        .into_iter()
+        .filter(|x| x.token_type != calibre_parser::lexer::TokenType::Comment)
+        .collect();
+
+        if tokens.is_empty() {
+            return Some(RuntimeValue::Null);
+        }
 
         let program = parser.produce_ast(tokens);
 
@@ -161,7 +168,7 @@ fn perform_repl_line(
                         return None;
                     }
                 };
-                let mut txt = String::from("/*CLREPL\nCALIBRE LANG REPL FILE.*/\n");
+                let mut txt = String::from("// CLREPL\n");
 
                 for line in logical_history.iter() {
                     txt.push_str(&format!("\n{line}"));
@@ -187,7 +194,7 @@ fn perform_repl_line(
                         }
                     };
                 let mut val = RuntimeValue::Null;
-                for line2 in contents.lines().skip(3) {
+                for line2 in contents.lines().skip(2) {
                     if let Some(x) = line2.split_whitespace().nth(0) {
                         match x.trim() {
                             "SAVE" => continue,
@@ -223,17 +230,17 @@ fn perform_repl_line(
 }
 
 fn file(
-    path: &str,
+    path: &PathBuf,
     args: Vec<(calibre_parser::ast::Node, Option<calibre_parser::ast::Node>)>,
 ) -> Result<(), Box<dyn Error>> {
     let mut env = InterpreterEnvironment::new();
     let mut checker = CheckerEnvironment::new();
     let mut parser = calibre_parser::Parser::default();
-    let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
-    let scope = env.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
+    let checker_scope = checker.new_scope_with_stdlib(None, path.clone(), None);
+    let scope = env.new_scope_with_stdlib(None, path.clone(), None);
     let mut tokenizer = Tokenizer::default();
     let contents = fs::read_to_string(path)?;
-    if contents.starts_with("/*CLREPL") {
+    if contents.starts_with("// CLREPL") {
         println!("File is a REPL file switching to REPL.");
         return repl(Some(path));
     }
@@ -273,14 +280,20 @@ fn file(
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long)]
+    #[arg(index(1))]
     path: Option<String>,
+    #[arg(short, long)]
+    fmt: bool,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
     if let Some(path) = args.path {
+        if args.fmt {
+            Command::new("cal-fmt").arg(&path).output()?;
+        }
+        let path = PathBuf::from_str(&path)?;
         file(&path, Vec::new())
     } else {
         repl(None)

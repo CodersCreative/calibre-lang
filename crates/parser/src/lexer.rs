@@ -71,8 +71,10 @@ pub enum TokenType {
     Comment,
     Comma,
     Comparison(Comparison),
+    Boolean(BooleanOperation),
     BinaryOperator(BinaryOperator),
     BinaryAssign(BinaryOperator),
+    BooleanAssign(BooleanOperation),
     Stop(StopValue),
     Not,
     Ref,
@@ -159,13 +161,38 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
         (String::from("=>"), TokenType::FatArrow),
         (String::from(".."), TokenType::Range),
         (
+            String::from("**"),
+            TokenType::BinaryOperator(BinaryOperator::Pow),
+        ),
+        (
             String::from("**="),
             TokenType::BinaryAssign(BinaryOperator::Pow),
+        ),
+        (
+            String::from("<<="),
+            TokenType::BinaryAssign(BinaryOperator::Shl),
+        ),
+        (
+            String::from(">>="),
+            TokenType::BinaryAssign(BinaryOperator::Shr),
         ),
         (
             String::from("&="),
             TokenType::BinaryOperator(BinaryOperator::BitAnd),
         ),
+        (
+            String::from("&&="),
+            TokenType::BooleanAssign(BooleanOperation::And),
+        ),
+        (
+            String::from("||="),
+            TokenType::BooleanAssign(BooleanOperation::Or),
+        ),
+        (
+            String::from("&&"),
+            TokenType::Boolean(BooleanOperation::And),
+        ),
+        (String::from("||"), TokenType::Boolean(BooleanOperation::Or)),
         (
             String::from("|="),
             TokenType::BinaryOperator(BinaryOperator::BitOr),
@@ -367,6 +394,8 @@ impl Tokenizer {
                             self.increment_line_col(&second);
                             txt.push(second);
                         }
+
+                        txt = txt.trim_end().trim_end_matches("*/").trim().to_string();
                         tokens.push(self.new_token(TokenType::Comment, &txt));
 
                         continue;

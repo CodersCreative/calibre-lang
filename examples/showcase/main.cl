@@ -52,9 +52,7 @@ const main = fn() => {
 
   /* input function to get an input from the user.
   A value can be inputted to this function and will outputted to the user.*/
-  if trim(unwrap(std.console.input("Hello enter 1: "))) == "Yes" => {
-    print("Yes");
-  }
+  if trim(unwrap(std.console.input("Hello enter 1: "))) == "Yes" => print("Yes");
 
   // Arrays are dynamic if some values are of a different type when it is created, otherwise a type will be infered.
   let mut list_dyn = [0, 10, 30, "Hello"];
@@ -77,11 +75,7 @@ const main = fn() => {
   for index in 1..=100 => num += index;
 
   // A while loop.
-  for x == num => {
-    print(x + num);
-  }
-
-  
+  for x == num => print(x + num);
 
   // Loops also allow for function calls including the built-in range() function.
   for i in range2(100, step = 25) => {
@@ -144,9 +138,7 @@ const main = fn() => {
 }
 
 // Return types and parameters of functions are recommended to have a specified type but it's not required
-const range2 = fn (stop : int, start : int = 0, step : int = 10) -> list<int> => {
-  range(start, stop * 2, step * 2);
-}
+const range2 = fn (stop : int, start : int = 0, step : int = 10) -> list<int> => range(start, stop * 2, step * 2);
 
 // TODO Implement generics with dyn<Add, Sub, Mul...>
 // TODO Allow traits of generics to be easily specified and add to new type system. Like : "type Output = dyn<...traits...>;"
@@ -161,14 +153,14 @@ const secondary = fn (num : int) -> !int => {
   print("Unsafe : " & u);
 
   // The try keyword can be used to automatically defer errors when inside a function
-	let mut x : int = unwrap(*x) + try "58" as int;
+  let mut x : int = unwrap(*x) + try "58" as int;
 
-	x += 4; // same as x = x + 4;
-	print(x);
+  x += 4; // same as x = x + 4;
+  print(x);
 
-	let mut x = true;
+  let mut x = true;
 
-	let z = "a";
+  let z = "a";
   if z == "a" => {
     let w = "b";
     let d = z & w ; // Should give "ab"
@@ -176,10 +168,10 @@ const secondary = fn (num : int) -> !int => {
     print(d & " ; " & x & " ; " & num);
   }
 
-	print(x);
-	print(num);
+  print(x);
+  print(num);
 
-	number;
+  number;
 }
 
 const tertiary = fn() => {
@@ -204,7 +196,5 @@ const tertiary = fn() => {
   // the __name__ special variable can also be used to check if the current scipt is the root file.
   print("__name__ = " & __name__);
 
-  if (4 in [4, 16, 32]) && __name__ == "__main__" => {
-    print("Success, Random Num = " & (std.random.generate(10..=1000) as int));
-  }
+  if (4 in [4, 16, 32]) && __name__ == "__main__" => print("Success, Random Num = " & (std.random.generate(10..=1000) as int));
 }

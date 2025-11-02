@@ -54,7 +54,7 @@ impl Parser {
             }
             TokenType::Open(Bracket::Paren) => self.parse_paren_expression(),
             TokenType::Open(Bracket::Square) => self.parse_list_expression(),
-            TokenType::BinaryOperator(x) if x == &BinaryOperator::Sub => {
+            TokenType::BinaryOperator(BinaryOperator::Sub) => {
                 let open = self.eat();
                 let val = self.parse_statement();
                 let span = Span::new_from_spans(open.span, val.span);
@@ -95,6 +95,39 @@ impl Parser {
                 Node::new(
                     NodeType::DerefStatement {
                         value: Box::new(close.clone()),
+                    },
+                    Span::new_from_spans(open.span, close.span),
+                )
+            }
+            TokenType::BinaryOperator(BinaryOperator::Pow) => {
+                let open = self.eat();
+                let close = self.parse_purely_member();
+                Node::new(
+                    NodeType::DerefStatement {
+                        value: Box::new(Node::new(
+                            NodeType::DerefStatement {
+                                value: Box::new(close.clone()),
+                            },
+                            Span::new_from_spans(open.span, close.span),
+                        )),
+                    },
+                    Span::new_from_spans(open.span, close.span),
+                )
+            }
+
+            TokenType::Boolean(crate::ast::comparison::BooleanOperation::And) => {
+                let open = self.eat();
+                let close = self.parse_purely_member();
+                Node::new(
+                    NodeType::RefStatement {
+                        mutability: RefMutability::Ref,
+                        value: Box::new(Node::new(
+                            NodeType::RefStatement {
+                                mutability: RefMutability::Ref,
+                                value: Box::new(close.clone()),
+                            },
+                            Span::new_from_spans(open.span, close.span),
+                        )),
                     },
                     Span::new_from_spans(open.span, close.span),
                 )
@@ -192,7 +225,23 @@ impl Parser {
     pub fn parse_assignment_expression(&mut self) -> Node {
         let mut left: Node = self.parse_pipe_expression();
 
-        if let TokenType::BinaryAssign(op) = self.first().token_type.clone() {
+        if let TokenType::BooleanAssign(op) = self.first().token_type.clone() {
+            let open = self.eat();
+            left = Node::new(
+                NodeType::AssignmentExpression {
+                    identifier: Box::new(left.clone()),
+                    value: Box::new(Node::new(
+                        NodeType::BooleanExpression {
+                            left: Box::new(left),
+                            right: Box::new(self.parse_statement()),
+                            operator: op,
+                        },
+                        open.span.clone(),
+                    )),
+                },
+                open.span,
+            );
+        } else if let TokenType::BinaryAssign(op) = self.first().token_type.clone() {
             let open = self.eat();
             left = Node::new(
                 NodeType::AssignmentExpression {

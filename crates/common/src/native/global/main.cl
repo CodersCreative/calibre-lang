@@ -17,9 +17,7 @@ const range = fn(start end : mut int = INT_MIN, step : int = 1, inclusive : bool
   if start != INT_MIN && end == INT_MIN => {
     end = start;
     start = 0;
-  } else if start == INT_MIN && end == INT_MIN => {
-    return [];
-  }
+  } else if start == INT_MIN && end == INT_MIN => return [];
 
   if inclusive => end += step;
 

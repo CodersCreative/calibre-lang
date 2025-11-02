@@ -234,15 +234,8 @@ impl Parser {
     pub fn parse_power_expression(&mut self) -> Node {
         let mut left = self.parse_as_expression();
 
-        while let (
-            TokenType::BinaryOperator(BinaryOperator::Mul),
-            TokenType::BinaryOperator(BinaryOperator::Mul),
-        ) = (
-            self.first().token_type.clone(),
-            self.second().token_type.clone(),
-        ) {
+        while let TokenType::BinaryOperator(BinaryOperator::Pow) = self.first().token_type.clone() {
             let token = self.eat();
-            let _ = self.eat();
 
             left = Node::new(
                 NodeType::BinaryExpression {
@@ -291,39 +284,17 @@ impl Parser {
 
     pub fn parse_boolean_expression(&mut self) -> Node {
         let mut left = self.parse_comparison_expression();
-        while match (
-            self.first().token_type.clone(),
-            self.second().token_type.clone(),
-        ) {
-            (TokenType::Or, TokenType::Or) => true,
-            (TokenType::Ref, TokenType::Ref) => true,
-            _ => false,
-        } {
+        while let TokenType::Boolean(operator) = self.first().token_type.clone() {
             let token = self.eat();
-            match self.first().token_type {
-                TokenType::Or => {
-                    left = Node::new(
-                        NodeType::BooleanExpression {
-                            left: Box::new(left),
-                            right: Box::new(self.parse_comparison_expression()),
-                            operator: crate::ast::comparison::BooleanOperation::Or,
-                        },
-                        token.span,
-                    );
-                }
-                _ => {
-                    let _ = self.eat();
 
-                    left = Node::new(
-                        NodeType::BooleanExpression {
-                            left: Box::new(left),
-                            right: Box::new(self.parse_comparison_expression()),
-                            operator: crate::ast::comparison::BooleanOperation::And,
-                        },
-                        token.span,
-                    );
-                }
-            }
+            left = Node::new(
+                NodeType::BooleanExpression {
+                    left: Box::new(left),
+                    right: Box::new(self.parse_comparison_expression()),
+                    operator,
+                },
+                token.span,
+            );
         }
 
         left

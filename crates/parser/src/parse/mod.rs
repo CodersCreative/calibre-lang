@@ -7,8 +7,7 @@ pub mod r#type;
 use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{
-        LoopType, Node, NodeType, ObjectType, ParserDataType, RefMutability,
-        binary::BinaryOperator, comparison::Comparison,
+        LoopType, Node, NodeType, ObjectType, ParserDataType, RefMutability, comparison::Comparison,
     },
     lexer::{Bracket, Span, Token, TokenType},
 };

@@ -281,7 +281,7 @@ impl Formatter {
 
                     let last = params.last().unwrap();
 
-                    txt.push_str(&format!(" : {}", last.1));
+                    txt.push_str(&format!(": {}", last.1));
 
                     if let Some(default) = &last.2 {
                         txt.push_str(&format!(" = {}", self.format(&default)));
@@ -331,7 +331,12 @@ impl Formatter {
                 txt.push_str(&format!(" => {}", self.format(&then)));
 
                 if let Some(otherwise) = otherwise {
-                    txt.push_str(&format!(" else {}", self.format(&*otherwise)));
+                    let otherwise = self.format(&*otherwise);
+                    if otherwise.trim().starts_with("if") {
+                        txt.push_str(&format!(" else {}", otherwise));
+                    } else {
+                        txt.push_str(&format!(" else => {}", otherwise));
+                    }
                 }
 
                 txt
@@ -397,7 +402,7 @@ impl Formatter {
             NodeType::ScopeMemberExpression { path } => {
                 let mut txt = self.format(&path[0]);
 
-                for node in path {
+                for node in path.iter().skip(1) {
                     txt.push_str(&format!(":{}", self.format(&node)));
                 }
 
@@ -531,7 +536,10 @@ impl Formatter {
             let mut comments = vec![self.comments.remove(0)];
 
             while let Some(comment) = self.comments.first() {
-                if (comment.span.from.line - comments.last().unwrap().span.to.line) <= 1 {
+                if (comment.span.from.line as i32 - comments.last().unwrap().span.to.line as i32)
+                    .abs()
+                    <= 1
+                {
                     comments.push(self.comments.remove(0));
                 } else {
                     break;
