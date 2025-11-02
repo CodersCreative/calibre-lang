@@ -25,16 +25,19 @@ impl Player {
 const get_pos = fn(x : int, y : int) -> int => y * 3 + x;
 
 const get_user_input = fn() -> int => {
-  let mut x : int = std.console.input("Enter x position (min = 1, max = 3): ");
-  let mut y : int = std.console.input("Enter y position (min = 1, max = 3): ");
-  x--; y--;
+  let mut x : int = unwrap(std.console.input("Enter x position (min = 1, max = 3): "));
+  let mut y : int = unwrap(std.console.input("Enter y position (min = 1, max = 3): "));
+
+  x -= 1;
+  y -= 1;
+
   get_pos(x, y);
 }
 
 type Board = struct(list<Player>)
 
 impl Board {
-  const default = fn() -> Board => Board([Player.None for i in 0..9])
+  const default = fn() -> Board => Board([Player.None for _ in 0..9])
 
   const print_board = fn(self : &Board) => {
     // std.console.clear();
@@ -143,7 +146,7 @@ impl Board {
 }
 
 const get_ais = fn() -> <bool, bool> => {
-  let mut ais = (false, false);
+  let mut ais = tuple(false, false);
   
   if trim(std.console.input("Enter 'y' to make Player X (1) an AI: ")) == "y" => ais.0 = true;
   if trim(std.console.input("Enter 'y' to make Player O (2) an AI: ")) == "y" => ais.1 = true;

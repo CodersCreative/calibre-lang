@@ -1,3 +1,5 @@
+use std::env::temp_dir;
+
 use calibre_parser::{
     ast::{self, Node, NodeType, ObjectType},
     lexer::{self, Span},
@@ -411,7 +413,7 @@ impl Formatter {
             NodeType::MemberExpression { path } => {
                 let mut txt = self.format(&path[0].0);
 
-                for node in path {
+                for node in path.iter().skip(1) {
                     txt.push_str(&format!(".{}", self.format(&node.0)));
                 }
 
@@ -475,13 +477,13 @@ impl Formatter {
                 let fmt_obj = |obj: &ObjectType<ast::ParserDataType>| -> String {
                     match obj {
                         ObjectType::Map(x) => {
-                            let mut txt = String::from("{\n");
+                            let mut txt = String::from("{\n\t");
                             for (key, value) in x {
-                                txt.push_str(&format!("{} : {},\n", key, value));
+                                txt.push_str(&format!("{} : {},\n\t", key, value));
                             }
 
                             let mut txt = txt.trim_end().trim_end_matches(",").to_string();
-                            txt.push_str("}");
+                            txt.push_str("\n}");
                             txt
                         }
 
@@ -503,15 +505,18 @@ impl Formatter {
                     ast::TypeDefType::Enum(values) => {
                         txt.push_str("enum {\n");
 
+                        let mut temp = String::new();
+
                         for arm in values {
                             if let Some(x) = &arm.1 {
-                                txt.push_str(&format!("{}{},\n", arm.0, fmt_obj(x)));
+                                temp.push_str(&format!("{}{},\n", arm.0, fmt_obj(x)));
                             } else {
-                                txt.push_str(&format!("{},\n", arm.0));
+                                temp.push_str(&format!("{},\n", arm.0));
                             }
                         }
 
-                        let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                        txt.push_str(&self.fmt_txt_with_tab(&temp, 1, true));
+                        txt = txt.trim_end().trim_end_matches(",").to_string();
                         txt.push_str("\n}");
                     }
                     ast::TypeDefType::NewType(x) => txt.push_str(&x.to_string()),
