@@ -139,6 +139,7 @@ impl CheckerEnvironment {
                 comparison,
                 then,
                 otherwise,
+                ..
             } => self.evaluate_if_statement(
                 scope,
                 *comparison,

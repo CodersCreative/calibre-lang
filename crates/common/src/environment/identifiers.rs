@@ -201,6 +201,7 @@ pub fn identifiers_used<'a>(node: &'a Node) -> Vec<&'a String> {
             comparison,
             then,
             otherwise,
+            ..
         } => {
             let mut amt = identifiers_used(&then);
             if let Some(otherwise) = &*otherwise {

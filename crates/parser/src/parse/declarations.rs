@@ -124,8 +124,10 @@ impl Parser {
             SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
         );
 
-        while self.first().token_type == TokenType::Const {
+        while self.first().token_type != TokenType::Close(Bracket::Curly) {
             let decl = self.parse_variable_declaration();
+
+            let _ = self.parse_delimited();
 
             match decl.node_type {
                 NodeType::VariableDeclaration {
@@ -571,6 +573,7 @@ impl Parser {
         };
 
         let then = Box::new(self.parse_block());
+        let mut special_delim = false;
 
         let otherwise = if self.first().token_type == TokenType::Else {
             let _ = self.eat();
@@ -579,6 +582,12 @@ impl Parser {
             } else {
                 Some(Box::new(self.parse_block()))
             }
+        } else if self.first().token_type == TokenType::EOL
+            && self.second().token_type == TokenType::Else
+        {
+            let _ = self.eat();
+            special_delim = true;
+            None
         } else {
             None
         };
@@ -596,6 +605,7 @@ impl Parser {
                 comparison: Box::new(comparison),
                 then,
                 otherwise,
+                special_delim,
             },
             span,
         )

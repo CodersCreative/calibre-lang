@@ -57,6 +57,10 @@ impl Formatter {
         let mut parser = calibre_parser::Parser::default();
         let ast = parser.produce_ast(tokens);
 
+        if !parser.errors.is_empty() {
+            return Err(format!("{:?}", parser.errors).into());
+        }
+
         let _ = self.generate_lines(ast)?;
 
         let mut text = String::new();

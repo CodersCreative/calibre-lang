@@ -178,7 +178,7 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
         ),
         (
             String::from("&="),
-            TokenType::BinaryOperator(BinaryOperator::BitAnd),
+            TokenType::BinaryAssign(BinaryOperator::BitAnd),
         ),
         (
             String::from("&&="),
@@ -195,7 +195,7 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
         (String::from("||"), TokenType::Boolean(BooleanOperation::Or)),
         (
             String::from("|="),
-            TokenType::BinaryOperator(BinaryOperator::BitOr),
+            TokenType::BinaryAssign(BinaryOperator::BitOr),
         ),
         (String::from("&mut"), TokenType::RefMut),
         (String::from("=="), TokenType::Comparison(Comparison::Equal)),

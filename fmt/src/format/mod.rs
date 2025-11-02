@@ -1,5 +1,3 @@
-use std::env::temp_dir;
-
 use calibre_parser::{
     ast::{self, Node, NodeType, ObjectType},
     lexer::{self, Span},
@@ -151,9 +149,29 @@ impl Formatter {
             NodeType::Try { value } => format!("try {{{}}}", self.format(&*value)),
             NodeType::DebugExpression { value } => format!("debug {{{}}}", self.format(&*value)),
             NodeType::Return { value } => format!("return {}", self.format(&*value)),
-            NodeType::AssignmentExpression { identifier, value } => {
-                format!("{} = {}", self.format(&*identifier), self.format(&*value))
-            }
+            NodeType::AssignmentExpression { identifier, value } => match value.node_type.clone() {
+                NodeType::BinaryExpression {
+                    left,
+                    right,
+                    operator,
+                } if left.node_type == identifier.node_type => format!(
+                    "{} {}= {}",
+                    self.format(&*identifier),
+                    operator,
+                    self.format(&*right)
+                ),
+                NodeType::BooleanExpression {
+                    left,
+                    right,
+                    operator,
+                } if left.node_type == identifier.node_type => format!(
+                    "{} {}= {}",
+                    self.format(&*identifier),
+                    operator,
+                    self.format(&*right)
+                ),
+                _ => format!("{} = {}", self.format(&*identifier), self.format(&*value)),
+            },
             NodeType::VariableDeclaration {
                 var_type,
                 identifier,
@@ -314,6 +332,7 @@ impl Formatter {
                 comparison,
                 then,
                 otherwise,
+                special_delim,
             } => {
                 let mut txt = String::from("if");
                 match &**comparison {
@@ -339,6 +358,8 @@ impl Formatter {
                     } else {
                         txt.push_str(&format!(" else => {}", otherwise));
                     }
+                } else if *special_delim {
+                    txt.push_str(";");
                 }
 
                 txt
@@ -414,7 +435,11 @@ impl Formatter {
                 let mut txt = self.format(&path[0].0);
 
                 for node in path.iter().skip(1) {
-                    txt.push_str(&format!(".{}", self.format(&node.0)));
+                    if node.1 {
+                        txt.push_str(&format!("[{}]", self.format(&node.0)));
+                    } else {
+                        txt.push_str(&format!(".{}", self.format(&node.0)));
+                    }
                 }
 
                 txt

@@ -19,7 +19,7 @@ impl Player {
     Player.X => "X",
     Player.O => "O",
     _ => " ",
-  }
+  };
 }
 
 const get_pos = fn(x : int, y : int) -> int => y * 3 + x;
@@ -34,17 +34,17 @@ const get_user_input = fn() -> int => {
   get_pos(x, y);
 }
 
-type Board = struct(list<Player>)
+type Board = struct(list<Player>);
 
 impl Board {
-  const default = fn() -> Board => Board([Player.None for _ in 0..9])
+  const default = fn() -> Board => Board([Player.None for _ in 0..9]);
 
   const print_board = fn(self : &Board) => {
     // std.console.clear();
     print("|---|---|---|");
 
     for y in 0..3 => {
-      let mut out : string = "| ";
+      let mut out : str = "| ";
       for x in 0..3 => {
         let point : Player = self.0[y * 3 + x];
         out &= point.to_char();
@@ -74,7 +74,7 @@ impl Board {
 
     if self.0[2] != Player.None && self.0[2] == self.0[4] && self.0[2] == self.0[6] => return self.0[2];
 
-    Player.None
+    Player.None;
   }
 
   const get_pos_value = fn(self : &Board, x : int, y : int) -> Player => self.0[get_pos(x, y)];
@@ -90,15 +90,15 @@ impl Board {
     }
 
     print(index);
-    index
+    index;
   }
 
   const set_user_input = fn(self : &mut Board, player : Player) => self.0[self.get_user_input_checked()] = player;
 
   const get_best_position = fn(self : &mut Board, player : Player) -> int => {
-    let maximising = player == Player.X
+    let maximising = player == Player.X;
     let mut best_pos = 0;
-    let mut best_value = if maximising => INT_MAX else => INT_MIN
+    let mut best_value = if maximising => INT_MAX else => INT_MIN;
     
     for i in 9 => {
       if self.0[i] != Player.None => continue;
@@ -110,14 +110,14 @@ impl Board {
       if maximising => if best_value < value => {
           best_value = value;
           best_pos = i;
-        }
-      else => if best_value > value => {
+        };
+		else => if best_value > value => {
           best_value = value;
           best_pos = i;
-        }
+		}
     }
     
-    best_pos
+    best_pos;
   }
 
   const minimax = fn(self : &mut Board, player : Player, depth : int = 0) -> int => {
@@ -127,9 +127,8 @@ impl Board {
       Player.None if board.is_full() => return 0,
     }
 
-    let maximising = player == Player.X 
-
-    let mut best_value = if maximising => INT_MAX else => INT_MIN
+    let maximising = player == Player.X;
+    let mut best_value = if maximising => INT_MAX else => INT_MIN;
     
     for i in 9 => {
       if self.0[i] != Player.None => continue;
@@ -138,8 +137,7 @@ impl Board {
       let value = self.minimax(player.get_opposite(), depth + 1);
       self.0[i] = Player.None;
 
-      if maximising => if best_value < value => best_value = value;
-      else => if best_value > value => best_value = value;
+      if maximising => if best_value < value => best_value = value; else => if best_value > value => best_value = value;
     }
     best_value;
   }
@@ -151,7 +149,7 @@ const get_ais = fn() -> <bool, bool> => {
   if trim(std.console.input("Enter 'y' to make Player X (1) an AI: ")) == "y" => ais.0 = true;
   if trim(std.console.input("Enter 'y' to make Player O (2) an AI: ")) == "y" => ais.1 = true;
 
-  ais
+  ais;
 }
 
 const main = fn() => {
@@ -184,6 +182,6 @@ const main = fn() => {
       Player.X => print("Player X Won!"),
       Player.O => print("Player O Won!"),
       Player.None => print("Tied!"),
-    }(board.get_winner())
+    }(board.get_winner());
   }
 }

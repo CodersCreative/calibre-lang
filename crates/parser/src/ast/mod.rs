@@ -353,6 +353,7 @@ pub enum NodeType {
         comparison: Box<IfComparisonType>,
         then: Box<Node>,
         otherwise: Option<Box<Node>>,
+        special_delim: bool,
     },
     ImportStatement {
         module: Vec<String>,
