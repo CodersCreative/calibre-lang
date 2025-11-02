@@ -71,7 +71,6 @@ pub enum TokenType {
     Comment,
     Comma,
     Comparison(Comparison),
-    Boolean(BooleanOperation),
     BinaryOperator(BinaryOperator),
     BinaryAssign(BinaryOperator),
     Stop(StopValue),
@@ -171,32 +170,7 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
             String::from("|="),
             TokenType::BinaryOperator(BinaryOperator::BitOr),
         ),
-        (
-            String::from("**"),
-            TokenType::BinaryOperator(BinaryOperator::Pow),
-        ),
-        (
-            String::from("<<"),
-            TokenType::BinaryOperator(BinaryOperator::Shl),
-        ),
-        (
-            String::from(">>"),
-            TokenType::BinaryOperator(BinaryOperator::Shr),
-        ),
-        (
-            String::from("&&"),
-            TokenType::Boolean(BooleanOperation::And),
-        ),
-        (String::from("||"), TokenType::Boolean(BooleanOperation::Or)),
         (String::from("&mut"), TokenType::RefMut),
-        (
-            String::from(">="),
-            TokenType::Comparison(Comparison::GreaterEqual),
-        ),
-        (
-            String::from("<="),
-            TokenType::Comparison(Comparison::LesserEqual),
-        ),
         (String::from("=="), TokenType::Comparison(Comparison::Equal)),
         (
             String::from("!="),

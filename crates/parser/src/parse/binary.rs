@@ -196,21 +196,36 @@ impl Parser {
     }
     pub fn parse_shift_expression(&mut self) -> Node {
         let mut left = self.parse_additive_expression();
-        while let TokenType::BinaryOperator(op) = self.first().token_type.clone() {
-            if [BinaryOperator::Shl, BinaryOperator::Shr].contains(&op) {
-                let token = self.eat();
+        while [
+            (
+                TokenType::Comparison(crate::ast::comparison::Comparison::Greater),
+                TokenType::Comparison(crate::ast::comparison::Comparison::Greater),
+            ),
+            (
+                TokenType::Comparison(crate::ast::comparison::Comparison::Lesser),
+                TokenType::Comparison(crate::ast::comparison::Comparison::Lesser),
+            ),
+        ]
+        .contains(&(
+            self.first().token_type.clone(),
+            self.second().token_type.clone(),
+        )) {
+            let token = self.eat();
+            let _ = self.eat();
 
-                left = Node::new(
-                    NodeType::BinaryExpression {
-                        left: Box::new(left),
-                        right: Box::new(self.parse_additive_expression()),
-                        operator: op,
+            left = Node::new(
+                NodeType::BinaryExpression {
+                    left: Box::new(left),
+                    right: Box::new(self.parse_additive_expression()),
+                    operator: match token.token_type {
+                        TokenType::Comparison(crate::ast::comparison::Comparison::Greater) => {
+                            BinaryOperator::Shr
+                        }
+                        _ => BinaryOperator::Shl,
                     },
-                    token.span,
-                );
-            } else {
-                break;
-            }
+                },
+                token.span,
+            );
         }
 
         left
@@ -219,8 +234,15 @@ impl Parser {
     pub fn parse_power_expression(&mut self) -> Node {
         let mut left = self.parse_as_expression();
 
-        while let TokenType::BinaryOperator(BinaryOperator::Pow) = self.first().token_type.clone() {
+        while let (
+            TokenType::BinaryOperator(BinaryOperator::Mul),
+            TokenType::BinaryOperator(BinaryOperator::Mul),
+        ) = (
+            self.first().token_type.clone(),
+            self.second().token_type.clone(),
+        ) {
             let token = self.eat();
+            let _ = self.eat();
 
             left = Node::new(
                 NodeType::BinaryExpression {
@@ -237,8 +259,22 @@ impl Parser {
 
     pub fn parse_comparison_expression(&mut self) -> Node {
         let mut left = self.parse_in_expression();
-        while let TokenType::Comparison(comparison) = self.first().token_type.clone() {
+        while let TokenType::Comparison(mut comparison) = self.first().token_type.clone() {
             let token = self.eat();
+
+            if self.first().token_type == TokenType::Equals {
+                match comparison {
+                    crate::ast::comparison::Comparison::Greater => {
+                        let _ = self.eat();
+                        comparison = crate::ast::comparison::Comparison::GreaterEqual;
+                    }
+                    crate::ast::comparison::Comparison::Lesser => {
+                        let _ = self.eat();
+                        comparison = crate::ast::comparison::Comparison::LesserEqual;
+                    }
+                    _ => {}
+                }
+            }
 
             left = Node::new(
                 NodeType::ComparisonExpression {
@@ -255,17 +291,39 @@ impl Parser {
 
     pub fn parse_boolean_expression(&mut self) -> Node {
         let mut left = self.parse_comparison_expression();
-        while let TokenType::Boolean(comparison) = self.first().token_type.clone() {
+        while match (
+            self.first().token_type.clone(),
+            self.second().token_type.clone(),
+        ) {
+            (TokenType::Or, TokenType::Or) => true,
+            (TokenType::Ref, TokenType::Ref) => true,
+            _ => false,
+        } {
             let token = self.eat();
+            match self.first().token_type {
+                TokenType::Or => {
+                    left = Node::new(
+                        NodeType::BooleanExpression {
+                            left: Box::new(left),
+                            right: Box::new(self.parse_comparison_expression()),
+                            operator: crate::ast::comparison::BooleanOperation::Or,
+                        },
+                        token.span,
+                    );
+                }
+                _ => {
+                    let _ = self.eat();
 
-            left = Node::new(
-                NodeType::BooleanExpression {
-                    left: Box::new(left),
-                    right: Box::new(self.parse_comparison_expression()),
-                    operator: comparison,
-                },
-                token.span,
-            );
+                    left = Node::new(
+                        NodeType::BooleanExpression {
+                            left: Box::new(left),
+                            right: Box::new(self.parse_comparison_expression()),
+                            operator: crate::ast::comparison::BooleanOperation::And,
+                        },
+                        token.span,
+                    );
+                }
+            }
         }
 
         left

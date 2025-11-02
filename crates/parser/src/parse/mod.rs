@@ -19,6 +19,10 @@ impl Parser {
         self.tokens.first().unwrap()
     }
 
+    fn second(&self) -> &Token {
+        self.nth(1).unwrap()
+    }
+
     fn nth(&self, i: usize) -> Option<&Token> {
         self.tokens.get(i)
     }
@@ -188,13 +192,11 @@ impl Parser {
         close_token: TokenType,
     ) -> Vec<ParserDataType> {
         let mut properties = Vec::new();
-        let _ = self.split_comparison_lesser();
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         while !self.is_eof() && self.first().token_type != close_token {
             properties.push(self.expect_type());
 
-            let _ = self.split_comparison_greater();
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
             }
@@ -225,7 +227,6 @@ impl Parser {
     }
 
     pub fn parse_type(&mut self) -> Option<ParserDataType> {
-        let _ = self.split_comparison_lesser();
         let t = self.first().clone();
 
         if self.first().token_type == TokenType::Not {
@@ -277,11 +278,9 @@ impl Parser {
             })
         } else if t.token_type == TokenType::List {
             let _ = self.eat();
-            let _ = self.split_comparison_lesser();
             let t = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
                 let _ = self.eat();
                 let t = Some(Box::new(self.expect_type()));
-                let _ = self.split_comparison_greater();
                 let _ = self.expect_eat(
                     &TokenType::Comparison(Comparison::Greater),
                     SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
@@ -331,59 +330,6 @@ impl Parser {
         }
 
         typ
-    }
-
-    pub fn split_comparison_lesser(&mut self) {
-        let former = self.tokens[0].clone();
-
-        let get_lesser_token = || -> Token {
-            Token {
-                value: String::from("<"),
-                token_type: TokenType::Comparison(Comparison::Lesser),
-                ..former
-            }
-        };
-
-        if former.token_type == TokenType::Comparison(Comparison::LesserEqual) {
-            self.tokens[0] = get_lesser_token();
-            self.tokens.insert(
-                1,
-                Token {
-                    value: String::from("="),
-                    token_type: TokenType::Equals,
-                    ..former
-                },
-            );
-        } else if former.token_type == TokenType::BinaryOperator(BinaryOperator::Shl) {
-            self.tokens[0] = get_lesser_token();
-            self.tokens.insert(1, get_lesser_token());
-        }
-    }
-    pub fn split_comparison_greater(&mut self) {
-        let former = self.tokens[0].clone();
-
-        let get_greater_token = || -> Token {
-            Token {
-                value: String::from(">"),
-                token_type: TokenType::Comparison(Comparison::Greater),
-                ..former
-            }
-        };
-
-        if former.token_type == TokenType::Comparison(Comparison::GreaterEqual) {
-            self.tokens[0] = get_greater_token();
-            self.tokens.insert(
-                1,
-                Token {
-                    value: String::from("="),
-                    token_type: TokenType::Equals,
-                    ..former
-                },
-            );
-        } else if former.token_type == TokenType::BinaryOperator(BinaryOperator::Shr) {
-            self.tokens[0] = get_greater_token();
-            self.tokens.insert(1, get_greater_token());
-        }
     }
 
     pub fn parse_paren_expression(&mut self) -> Node {
