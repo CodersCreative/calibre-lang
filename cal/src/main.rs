@@ -245,7 +245,7 @@ fn file(
         return repl(Some(path));
     }
 
-    let program = parser.produce_ast(tokenizer.tokenize(contents).unwrap());
+    let program = parser.produce_ast(tokenizer.tokenize(contents)?);
 
     if !parser.errors.is_empty() {
         return Err(

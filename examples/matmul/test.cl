@@ -17,10 +17,13 @@ const matmul = fn (n : int, a b : list<list<float>>) -> list<list<float>> => {
 };
 
 const main = fn () => {
-	let n : int = 5;
+	let n : int = 100;
 	let tmp : float = 1.0 / n / n;
+	
 	let a : list<list<float>> = [[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n];
 	let b : list<list<float>> = [[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n];
+	print("hello");
+	
 	let d = matmul(n, a, b);
 	
 	print(d[n / 2 as int][n / 2 as int]);

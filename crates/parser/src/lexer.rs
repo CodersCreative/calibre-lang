@@ -63,6 +63,7 @@ pub enum TokenType {
     Float,
     Integer,
     String,
+    Char,
     Identifier,
     Equals,
     Open(Bracket),
@@ -313,7 +314,16 @@ impl Tokenizer {
                     }
                 },
                 _ => {
-                    if first == &'"' {
+                    if first.to_string() == "'" {
+                        let _ = buffer.remove(0);
+                        let c = buffer.remove(0);
+                        let end = buffer.remove(0);
+                        if end.to_string() != "'" {
+                            return Err(LexerError::Unrecognized(end));
+                        }
+
+                        Some(self.new_token(TokenType::Char, &c.to_string()))
+                    } else if first == &'"' {
                         let mut txt = String::new();
 
                         let c = buffer.remove(0);
@@ -350,10 +360,17 @@ impl Tokenizer {
                         } else {
                             Some(self.new_token(TokenType::Float, number.trim()))
                         }
-                    } else if first.is_alphabetic() || first == &'_' {
+                    } else if first.is_alphabetic()
+                        || first == &'_'
+                        || first.to_uppercase().to_string().trim()
+                            != first.to_lowercase().to_string().trim()
+                    {
                         let mut txt = String::new();
                         while buffer.len() > 0
-                            && (buffer[0].is_alphanumeric() || buffer[0] == '_')
+                            && (buffer[0].is_alphanumeric()
+                                || buffer[0] == '_'
+                                || buffer[0].to_uppercase().to_string().trim()
+                                    != buffer[0].to_lowercase().to_string().trim())
                             && !buffer[0].is_whitespace()
                         {
                             let char = buffer.remove(0);

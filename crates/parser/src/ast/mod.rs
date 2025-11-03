@@ -317,7 +317,6 @@ pub enum NodeType {
     DerefStatement {
         value: Box<Node>,
     },
-
     ParenExpression {
         value: Box<Node>,
     },

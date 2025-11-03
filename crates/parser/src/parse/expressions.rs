@@ -43,14 +43,16 @@ impl Parser {
             },
             TokenType::String => {
                 let val = self.eat();
-                if val.value.len() == 1 {
-                    Node::new(
-                        NodeType::CharLiteral(val.value.chars().nth(0).unwrap()),
-                        val.span,
-                    )
-                } else {
-                    Node::new(NodeType::StringLiteral(val.clone().into()), val.span)
-                }
+
+                Node::new(NodeType::StringLiteral(val.clone().into()), val.span)
+            }
+            TokenType::Char => {
+                let val = self.eat();
+
+                Node::new(
+                    NodeType::CharLiteral(val.value.chars().nth(0).unwrap()),
+                    val.span,
+                )
             }
             TokenType::Open(Bracket::Paren) => self.parse_paren_expression(),
             TokenType::Open(Bracket::Square) => self.parse_list_expression(),
