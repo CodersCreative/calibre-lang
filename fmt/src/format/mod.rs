@@ -624,7 +624,7 @@ impl Formatter {
 
             format!("{}*/", txt)
         } else {
-            if comment.span.from.line == comment.span.to.line {
+            if !comment.value.trim().contains("\n") {
                 format!("// {}", comment.value.trim())
             } else {
                 format!("/* {}\n*/", comment.value.trim())

@@ -11,8 +11,8 @@ const main = fn () => {
 	let mut recursive_language = Language.ARABIC(language, Language.SPANISH);
 	
 	/* A simple match statement for enums with values.. If a specific ennum meember isnt required then it can be left out of the match.
-	Mutability needs to be specified at the beginning for all branches
-	match statements need to be called, either using a pipe or brackets as they're considered functions
+		Mutability needs to be specified at the beginning for all branches
+		match statements need to be called, either using a pipe or brackets as they're considered functions
 	*/
 	recursive_language |> match &mut Language {
 		data:Language.ARABIC(Language.FRENCH{_}, Language.ARABIC(Language.FRENCH{code})) => print("Code: " & code),
@@ -24,11 +24,11 @@ const main = fn () => {
 	};
 	
 	/* In order to do an if let statement this syntax is used with extra conditions being added after the let
-	if let Language.FRENCH{data} if true if ((try 9 as ulong) == 9.0 == 9) <- &language => {
-	    print("Enum 2: " & data)
-	  }
-	By not putting any data by the match it will only check for the enum member.
-	Ifs can be added for further selection.
+		if let Language.FRENCH{data} if true if ((try 9 as ulong) == 9.0 == 9) <- &language => {
+		    print("Enum 2: " & data)
+		  }
+		By not putting any data by the match it will only check for the enum member.
+		Ifs can be added for further selection.
 	*/
 	language_forced |> match dyn {
 		Language.ENGLISH if false => print("Enum: ENGLISH?"),
@@ -51,7 +51,7 @@ const main = fn () => {
 	print("b -> " & b);
 	
 	/* input function to get an input from the user.
-	A value can be inputted to this function and will outputted to the user.
+		A value can be inputted to this function and will outputted to the user.
 	*/
 	if trim(unwrap(std.console.input("Hello enter 1: "))) == "Yes" => print("Yes");
 	
@@ -154,9 +154,12 @@ const secondary = fn (num : int) -> dyn!int => {
 	print("Unsafe : " & u);
 	
 	// The try keyword can be used to automatically defer errors when inside a function
-	let mut x : int = unwrap(*x) + try {"58" as int};
+	let mut x : int = unwrap(*x) + try {{
+		"58" as int;
+	}};
 	
 	x += 4;
+	
 	// same as x = x + 4;
 	print(x);
 	

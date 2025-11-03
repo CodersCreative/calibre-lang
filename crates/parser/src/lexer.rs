@@ -314,15 +314,22 @@ impl Tokenizer {
                     }
                 },
                 _ => {
-                    if first.to_string() == "'" {
-                        let _ = buffer.remove(0);
+                    if first == &'\'' {
+                        let mut txt = String::new();
+
                         let c = buffer.remove(0);
-                        let end = buffer.remove(0);
-                        if end.to_string() != "'" {
-                            return Err(LexerError::Unrecognized(end));
+                        self.increment_line_col(&c);
+
+                        while buffer[0] != '\'' {
+                            let c = buffer.remove(0);
+                            self.increment_line_col(&c);
+                            txt.push(c);
                         }
 
-                        Some(self.new_token(TokenType::Char, &c.to_string()))
+                        let c = buffer.remove(0);
+                        self.increment_line_col(&c);
+
+                        Some(self.new_token(TokenType::Char, &txt))
                     } else if first == &'"' {
                         let mut txt = String::new();
 

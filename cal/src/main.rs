@@ -291,7 +291,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if let Some(path) = args.path {
         if args.fmt {
-            Command::new("cal-fmt").arg(&path).output()?;
+            Command::new("cal-fmt").arg("-a").arg(&path).output()?;
         }
         let path = PathBuf::from_str(&path)?;
         file(&path, Vec::new())
