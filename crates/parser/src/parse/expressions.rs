@@ -14,7 +14,7 @@ impl Parser {
         match &self.first().token_type {
             TokenType::Identifier => {
                 let val = self.eat();
-                Node::new(NodeType::Identifier(val.value), val.span)
+                Node::new(NodeType::Identifier(val.clone().into()), val.span)
             }
             TokenType::Float => {
                 let val = self.eat();
@@ -49,7 +49,7 @@ impl Parser {
                         val.span,
                     )
                 } else {
-                    Node::new(NodeType::StringLiteral(val.value.to_string()), val.span)
+                    Node::new(NodeType::StringLiteral(val.clone().into()), val.span)
                 }
             }
             TokenType::Open(Bracket::Paren) => self.parse_paren_expression(),

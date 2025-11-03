@@ -54,7 +54,7 @@ impl JIT {
             for func in body {
                 let val = self.compile_const_fns(func.clone())?;
                 if let NodeType::VariableDeclaration { identifier, .. } = func.node_type {
-                    if identifier == "main" {
+                    if identifier.to_string() == "main" {
                         main = Some(val);
                     }
                 }
@@ -72,8 +72,8 @@ impl JIT {
             data_type: _,
         } = node.node_type
         {
-            if identifier == "main" {
-                identifier = "_start".to_string();
+            if identifier.to_string() == "main" {
+                identifier = "_start".to_string().into();
             }
 
             if var_type != VarType::Constant {
@@ -90,7 +90,7 @@ impl JIT {
                 self.translate(
                     parameters
                         .into_iter()
-                        .map(|x| (x.0.clone(), x.1.clone()))
+                        .map(|x| (x.0.to_string(), x.1.clone()))
                         .collect(),
                     return_type,
                     *body,

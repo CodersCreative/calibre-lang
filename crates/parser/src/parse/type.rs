@@ -23,14 +23,17 @@ impl Parser {
                     TypeDefType::NewType(t)
                 } else {
                     self.add_err(SyntaxErr::ExpectedType);
-                    TypeDefType::NewType(crate::ast::ParserDataType::Dynamic)
+                    TypeDefType::NewType(crate::ast::ParserDataType::new(
+                        crate::ast::ParserInnerType::Dynamic,
+                        self.first().span,
+                    ))
                 }
             }
         };
 
         Node::new(
             NodeType::TypeDeclaration {
-                identifier: identifier.value,
+                identifier: identifier.clone().into(),
                 object,
             },
             identifier.span,
@@ -51,7 +54,7 @@ impl Parser {
         let mut options = Vec::new();
 
         while self.first().token_type == TokenType::Identifier {
-            let option = self.eat().value;
+            let option = self.eat().into();
 
             if self.first().token_type == TokenType::Open(Bracket::Curly)
                 || self.first().token_type == TokenType::Open(Bracket::Paren)

@@ -7,7 +7,8 @@ pub mod r#type;
 use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{
-        LoopType, Node, NodeType, ObjectType, ParserDataType, RefMutability, comparison::Comparison,
+        LoopType, Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
+        RefMutability, comparison::Comparison,
     },
     lexer::{Bracket, Span, Token, TokenType},
 };
@@ -52,7 +53,7 @@ impl Parser {
             x
         } else {
             self.add_err(SyntaxErr::ExpectedType);
-            ParserDataType::Dynamic
+            ParserDataType::new(ParserInnerType::Dynamic, self.first().span.clone())
         }
     }
 
@@ -60,7 +61,7 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<(String, ParserDataType, Option<Node>)> {
+    ) -> Vec<(ParserText, ParserDataType, Option<Node>)> {
         let mut properties = Vec::new();
         let mut defaulted = false;
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
@@ -71,7 +72,7 @@ impl Parser {
             while self.first().token_type == TokenType::Identifier {
                 keys.push(
                     self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)
-                        .value,
+                        .into(),
                 );
             }
 
@@ -80,7 +81,7 @@ impl Parser {
 
                 self.expect_type()
             } else {
-                ParserDataType::Dynamic
+                ParserDataType::new(ParserInnerType::Dynamic, self.first().span.clone())
             };
 
             let default = if defaulted || self.first().token_type == TokenType::Equals {
@@ -229,29 +230,44 @@ impl Parser {
         let t = self.first().clone();
 
         if self.first().token_type == TokenType::Not {
-            let _ = self.eat();
-
-            return Some(ParserDataType::Result(
-                Box::new(ParserDataType::Dynamic),
-                Box::new(self.expect_type()),
+            let not = self.eat();
+            let typ = self.expect_type();
+            return Some(ParserDataType::new(
+                ParserInnerType::Result(
+                    Box::new(ParserDataType::new(ParserInnerType::Dynamic, not.span)),
+                    Box::new(typ.clone()),
+                ),
+                Span::new_from_spans(not.span, typ.span),
             ));
         }
 
         let mutability = RefMutability::from(t.token_type.clone());
 
         let mut typ = if mutability != RefMutability::Value {
-            let _ = self.eat();
-            Some(ParserDataType::Ref(
-                Box::new(self.expect_type()),
-                mutability.clone(),
+            let mutability_token = self.eat();
+            let typ = self.expect_type();
+            Some(ParserDataType::new(
+                ParserInnerType::Ref(Box::new(typ.clone()), mutability.clone()),
+                Span::new_from_spans(mutability_token.span, typ.span),
             ))
         } else if t.token_type == TokenType::Comparison(Comparison::Lesser) {
-            Some(ParserDataType::Tuple(self.parse_type_list(
+            let types = self.parse_type_list(
                 TokenType::Comparison(Comparison::Lesser),
                 TokenType::Comparison(Comparison::Greater),
-            )))
+            );
+
+            let span = if types.is_empty() {
+                self.first().span.clone()
+            } else {
+                Span::new_from_spans(
+                    types.first().unwrap().span.clone(),
+                    types.last().unwrap().span.clone(),
+                )
+            };
+
+            Some(ParserDataType::new(ParserInnerType::Tuple(types), span))
         } else if t.token_type == TokenType::Func {
-            let _ = self.eat();
+            let open = self.eat();
             let is_async = if self.first().token_type == TokenType::Async {
                 let _ = self.eat();
                 true
@@ -270,17 +286,29 @@ impl Parser {
                 ret = Some(Box::new(self.expect_type()));
             }
 
-            Some(ParserDataType::Function {
-                return_type: ret,
-                parameters: args,
-                is_async,
-            })
+            let close = if let Some(ret) = &ret {
+                ret.span.clone()
+            } else if let Some(arg) = args.last() {
+                arg.span.clone()
+            } else {
+                open.span.clone()
+            };
+
+            Some(ParserDataType::new(
+                ParserInnerType::Function {
+                    return_type: ret,
+                    parameters: args,
+                    is_async,
+                },
+                Span::new_from_spans(open.span, close),
+            ))
         } else if t.token_type == TokenType::List {
-            let _ = self.eat();
+            let open = self.eat();
+            let mut close = open.clone();
             let t = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
                 let _ = self.eat();
                 let t = Some(Box::new(self.expect_type()));
-                let _ = self.expect_eat(
+                close = self.expect_eat(
                     &TokenType::Comparison(Comparison::Greater),
                     SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
                 );
@@ -288,24 +316,39 @@ impl Parser {
             } else {
                 None
             };
-            Some(ParserDataType::List(t))
+
+            Some(ParserDataType::new(
+                ParserInnerType::List(t),
+                Span::new_from_spans(open.span, close.span),
+            ))
         } else {
-            match ParserDataType::from_str(&t.value) {
+            match ParserInnerType::from_str(&t.value) {
                 Ok(x) => {
                     let mut path = Vec::new();
-                    let _ = self.eat();
+                    let open = self.eat().span;
+                    let mut close = open.clone();
+                    let x = ParserDataType::new(x, open.clone());
 
-                    if let ParserDataType::Struct(_) = x {
+                    if let ParserInnerType::Struct(_) = x.data_type {
                         path.push(x);
 
                         while self.first().token_type == TokenType::Colon {
-                            path.push(ParserDataType::from_str(&self.eat().value).unwrap());
+                            let value = self.eat();
+                            close = value.span;
+
+                            path.push(ParserDataType::new(
+                                ParserInnerType::from_str(&value.value).unwrap(),
+                                value.span,
+                            ));
                         }
 
                         if path.len() == 1 {
                             Some(path.remove(0))
                         } else {
-                            Some(ParserDataType::Scope(path))
+                            Some(ParserDataType::new(
+                                ParserInnerType::Scope(path),
+                                Span::new_from_spans(open, close),
+                            ))
                         }
                     } else {
                         Some(x)
@@ -316,16 +359,22 @@ impl Parser {
         };
 
         if self.first().token_type == TokenType::Question {
-            let _ = self.eat();
+            let close = self.eat();
 
-            typ = Some(ParserDataType::Option(Box::new(typ?)));
+            typ = Some(ParserDataType::new(
+                ParserInnerType::Option(Box::new(typ.clone()?)),
+                Span::new_from_spans(typ?.span, close.span),
+            ));
         }
 
         if self.first().token_type == TokenType::Not {
             let _ = self.eat();
-            let t = self.parse_type();
+            let t = self.parse_type()?;
 
-            typ = Some(ParserDataType::Result(Box::new(typ?), Box::new(t?)));
+            typ = Some(ParserDataType::new(
+                ParserInnerType::Result(Box::new(typ.clone()?), Box::new(t.clone())),
+                Span::new_from_spans(typ?.span, t.span),
+            ));
         }
 
         typ

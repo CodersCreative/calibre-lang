@@ -20,6 +20,7 @@ impl<'a> FunctionTranslator<'a> {
             comparison,
             then,
             otherwise,
+            ..
         } = node.node_type
         {
             let IfComparisonType::If(comparison) = *comparison else {

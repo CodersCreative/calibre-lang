@@ -1,6 +1,6 @@
 pub mod cast;
 
-use calibre_parser::ast::ParserDataType;
+use calibre_parser::ast::{ParserDataType, ParserInnerType};
 use cranelift::prelude::Value;
 
 #[derive(Clone, Debug)]
@@ -23,18 +23,18 @@ pub struct MemberType {
 
 impl From<ParserDataType> for RuntimeType {
     fn from(value: ParserDataType) -> Self {
-        match value {
-            ParserDataType::Bool => RuntimeType::Bool,
-            ParserDataType::Int => RuntimeType::Int,
-            ParserDataType::Float => RuntimeType::Float,
-            ParserDataType::Str => RuntimeType::Str,
-            ParserDataType::Char => RuntimeType::Char,
-            ParserDataType::Range => RuntimeType::Range,
-            ParserDataType::List(x) => RuntimeType::List(Box::new(match x {
+        match value.data_type {
+            ParserInnerType::Bool => RuntimeType::Bool,
+            ParserInnerType::Int => RuntimeType::Int,
+            ParserInnerType::Float => RuntimeType::Float,
+            ParserInnerType::Str => RuntimeType::Str,
+            ParserInnerType::Char => RuntimeType::Char,
+            ParserInnerType::Range => RuntimeType::Range,
+            ParserInnerType::List(x) => RuntimeType::List(Box::new(match x {
                 Some(x) => RuntimeType::from(*x),
                 None => RuntimeType::Dynamic,
             })),
-            ParserDataType::Struct(Some(x)) => RuntimeType::Named(x),
+            ParserInnerType::Struct(Some(x)) => RuntimeType::Named(x),
             _ => unimplemented!(),
         }
     }

@@ -94,7 +94,7 @@ impl CheckerEnvironment {
                 self.evaluate_variable_declaration(
                     scope,
                     var_type,
-                    identifier,
+                    identifier.to_string(),
                     value,
                     match data_type {
                         Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
@@ -180,7 +180,12 @@ impl CheckerEnvironment {
                 identifier,
                 value,
                 data,
-            } => self.evaluate_enum_expression(scope, identifier, value, data),
+            } => self.evaluate_enum_expression(
+                scope,
+                identifier.to_string(),
+                value.to_string(),
+                data,
+            ),
             NodeType::LoopDeclaration { loop_type, body } => {
                 self.evaluate_loop_declaration(scope, *loop_type, *body)
             }
@@ -212,7 +217,7 @@ impl CheckerEnvironment {
                 self.evaluate_variable_declaration(
                     scope,
                     VarType::Constant,
-                    identifier,
+                    identifier.to_string(),
                     value,
                     match data_type {
                         Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
@@ -224,14 +229,19 @@ impl CheckerEnvironment {
                 module,
                 alias,
                 values,
-            } => self.evaluate_import_statement(scope, module, alias, values),
+            } => self.evaluate_import_statement(
+                scope,
+                module.into_iter().map(|x| x.to_string()).collect(),
+                alias.map(|x| x.to_string()),
+                values.into_iter().map(|x| x.to_string()).collect(),
+            ),
             NodeType::ImplDeclaration {
                 identifier,
                 functions,
-            } => self.evaluate_impl_declaration(scope, identifier, functions),
+            } => self.evaluate_impl_declaration(scope, identifier.to_string(), functions),
             NodeType::TypeDeclaration { identifier, object } => self.evaluate_type_declaration(
                 scope,
-                identifier,
+                identifier.to_string(),
                 calibre_common::environment::Type::<RuntimeType>::interpreter_from(
                     self, scope, object,
                 )?,

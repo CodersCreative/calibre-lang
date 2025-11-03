@@ -61,7 +61,7 @@ impl InterpreterEnvironment {
                                         &Node::new(
                                             NodeType::EnumExpression {
                                                 identifier: main.clone(),
-                                                value: val.to_string(),
+                                                value: val.clone(),
                                                 data: None,
                                             },
                                             p[0].0.span,
@@ -88,7 +88,7 @@ impl InterpreterEnvironment {
                         return None;
                     };
 
-                    let Some(index) = enm.iter().position(|x| x.0 == enm_value) else {
+                    let Some(index) = enm.iter().position(|x| x.0 == enm_value.to_string()) else {
                         return None;
                     };
 
@@ -167,7 +167,7 @@ impl InterpreterEnvironment {
                                     .enumerate()
                                     .map(|(i, x)| match x {
                                         Some(node) => match node.node_type {
-                                            NodeType::Identifier(y) => Some(y.clone()),
+                                            NodeType::Identifier(y) => Some(y.to_string()),
                                             _ => {
                                                 let value = self
                                                     .progress_var(&value, &i.to_string())
@@ -220,7 +220,7 @@ impl InterpreterEnvironment {
                                         else {
                                             panic!()
                                         };
-                                        y
+                                        y.to_string()
                                     })
                                     .collect();
 
@@ -286,7 +286,7 @@ impl InterpreterEnvironment {
                                         let vars = if let Some((name, _)) = name {
                                             if let NodeType::Identifier(name) = &name.node_type {
                                                 vec![(
-                                                    name.clone(),
+                                                    name.to_string(),
                                                     RuntimeValue::Str(value.to_string()),
                                                     self.current_location.clone(),
                                                 )]
@@ -331,7 +331,7 @@ impl InterpreterEnvironment {
                                         .get_new_scope_with_values(
                                             &scope,
                                             vec![(
-                                                name.clone(),
+                                                name.to_string(),
                                                 value.clone(),
                                                 self.get_location(&scope, pattern.span),
                                             )],
@@ -370,7 +370,7 @@ impl InterpreterEnvironment {
                     .get_new_scope_with_values(
                         &scope,
                         vec![(
-                            var_name.clone(),
+                            var_name.to_string(),
                             value.clone(),
                             self.get_location(&scope, pattern.span),
                         )],
@@ -453,9 +453,14 @@ impl InterpreterEnvironment {
         let value = self.evaluate(scope, value)?;
 
         for (pattern, conditionals, body) in patterns {
-            if let Some(result) =
-                self.match_pattern(scope, &pattern, &value, path.clone(), &conditionals, *body)
-            {
+            if let Some(result) = self.match_pattern(
+                scope,
+                &pattern,
+                &value,
+                path.clone().into_iter().map(|x| x.to_string()).collect(),
+                &conditionals,
+                *body,
+            ) {
                 match result {
                     Ok(x) => return Ok(x),
                     Err(InterpreterErr::ExpectedFunctions) => continue,

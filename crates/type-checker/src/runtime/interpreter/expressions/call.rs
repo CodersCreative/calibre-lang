@@ -40,7 +40,7 @@ impl CheckerEnvironment {
 
                                 (
                                     Node::new(
-                                        NodeType::Identifier(format!("$-{}", counter)),
+                                        NodeType::Identifier(format!("$-{}", counter).into()),
                                         location.span,
                                     ),
                                     None,
@@ -58,7 +58,7 @@ impl CheckerEnvironment {
                     .filter(|(i, x)| {
                         for arg in arguments.iter() {
                             if let (NodeType::Identifier(y), Some(_)) = (&arg.0.node_type, &arg.1) {
-                                if &x.0 == y {
+                                if x.0 == y.to_string() {
                                     return false;
                                 }
                             }
@@ -76,7 +76,10 @@ impl CheckerEnvironment {
                             .iter()
                             .map(|x| {
                                 (
-                                    Node::new(NodeType::Identifier(x.0.clone()), location.span),
+                                    Node::new(
+                                        NodeType::Identifier(x.0.clone().into()),
+                                        location.span,
+                                    ),
                                     None,
                                 )
                             })

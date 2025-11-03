@@ -69,7 +69,7 @@ impl InterpreterEnvironment {
             }
             if let Some(d) = arguments.iter().find(|x| {
                 if let NodeType::Identifier(key) = &x.0.node_type {
-                    key == k && x.1.is_some()
+                    &key.to_string() == k && x.1.is_some()
                 } else {
                     false
                 }

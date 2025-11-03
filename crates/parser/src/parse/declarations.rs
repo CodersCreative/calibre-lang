@@ -1,6 +1,9 @@
 use crate::{
     Parser, SyntaxErr,
-    ast::{IfComparisonType, LoopType, Node, ParserDataType, VarType, binary::BinaryOperator},
+    ast::{
+        IfComparisonType, LoopType, Node, ParserDataType, ParserInnerType, ParserText, VarType,
+        binary::BinaryOperator,
+    },
     lexer::{Bracket, Span, StopValue},
 };
 use crate::{ast::NodeType, lexer::TokenType};
@@ -101,7 +104,7 @@ impl Parser {
         Node::new(
             NodeType::VariableDeclaration {
                 var_type,
-                identifier: identifier.value,
+                identifier: identifier.clone().into(),
                 data_type,
                 value: Box::new(value),
             },
@@ -145,7 +148,7 @@ impl Parser {
                     {
                         let mut depends = false;
                         if parameters.len() > 0 {
-                            if let ParserDataType::Struct(Some(obj)) = &parameters[0].1 {
+                            if let ParserInnerType::Struct(Some(obj)) = &parameters[0].1.data_type {
                                 if obj == &identifier.value {
                                     depends = true;
                                 }
@@ -180,7 +183,7 @@ impl Parser {
                     } = func.node_type
                     {
                         let mut depends = false;
-                        if let ParserDataType::Struct(Some(obj)) = &parameters.1 {
+                        if let ParserInnerType::Struct(Some(obj)) = &parameters.1.data_type {
                             if obj == &identifier.value {
                                 depends = true;
                             }
@@ -219,7 +222,7 @@ impl Parser {
 
         Node::new(
             NodeType::ImplDeclaration {
-                identifier: identifier.value,
+                identifier: identifier.clone().into(),
                 functions,
             },
             identifier.span,
@@ -254,16 +257,16 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("import")),
         );
 
-        let get_module = |this: &mut Parser| -> Vec<String> {
+        let get_module = |this: &mut Parser| -> Vec<ParserText> {
             let mut module = vec![
                 this.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
-                    .value,
+                    .into(),
             ];
 
             while this.first().token_type == TokenType::Colon {
                 module.push(
                     this.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
-                        .value,
+                        .into(),
                 );
             }
 
@@ -283,13 +286,12 @@ impl Parser {
                 )
                 .into_iter()
                 .map(|x| match x.0.node_type {
-                    NodeType::Identifier(x) => x,
+                    NodeType::Identifier(x) => ParserText::new(x.to_string(), x.span),
                     _ => panic!(),
                 })
                 .collect()
             } else {
-                let _ = self.eat();
-                vec!["*".to_string()]
+                vec![self.eat().into()]
             };
 
             let _ = self.expect_eat(
@@ -314,7 +316,7 @@ impl Parser {
             let _ = self.eat();
             Some(
                 self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
-                    .value,
+                    .into(),
             )
         } else {
             None
@@ -422,8 +424,11 @@ impl Parser {
         let func = Node::new(
             NodeType::MatchDeclaration {
                 parameters: (
-                    String::from("input_value"),
-                    typ.unwrap_or(ParserDataType::Dynamic),
+                    ParserText::new(String::from("input_value"), Span::default()),
+                    typ.unwrap_or(ParserDataType::new(
+                        ParserInnerType::Dynamic,
+                        Span::default(),
+                    )),
                     default,
                 ),
                 body: patterns,
@@ -447,7 +452,7 @@ impl Parser {
             {
                 let identifier = self
                     .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
-                    .value;
+                    .into();
 
                 let _ = self.eat();
                 return LoopType::For(identifier, self.parse_statement());

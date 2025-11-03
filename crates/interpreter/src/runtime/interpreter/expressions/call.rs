@@ -48,7 +48,7 @@ impl InterpreterEnvironment {
 
                                 (
                                     Node::new(
-                                        NodeType::Identifier(format!("$-{}", counter)),
+                                        NodeType::Identifier(format!("$-{}", counter).into()),
                                         location.span,
                                     ),
                                     None,
@@ -66,7 +66,7 @@ impl InterpreterEnvironment {
                     .filter(|(i, x)| {
                         for arg in arguments.iter() {
                             if let (NodeType::Identifier(y), Some(_)) = (&arg.0.node_type, &arg.1) {
-                                if &x.0 == y {
+                                if x.0 == y.to_string() {
                                     return false;
                                 }
                             }
@@ -84,7 +84,10 @@ impl InterpreterEnvironment {
                             .iter()
                             .map(|x| {
                                 (
-                                    Node::new(NodeType::Identifier(x.0.clone()), location.span),
+                                    Node::new(
+                                        NodeType::Identifier(x.0.clone().into()),
+                                        location.span,
+                                    ),
                                     None,
                                 )
                             })
@@ -110,7 +113,7 @@ impl InterpreterEnvironment {
                     let body = FunctionType::Regular(Block(Box::new(Node::new(
                         NodeType::CallExpression(
                             Box::new(Node::new(
-                                NodeType::Identifier(format!("$-{}", counter)),
+                                NodeType::Identifier(format!("$-{}", counter).into()),
                                 location.span,
                             )),
                             arguments,
@@ -200,7 +203,7 @@ impl InterpreterEnvironment {
                     evaluated_arguments.push(if let Some(d) = &arg.1 {
                         if let NodeType::Identifier(name) = &arg.0.node_type {
                             (
-                                RuntimeValue::Str(name.clone()),
+                                RuntimeValue::Str(name.to_string()),
                                 Some(self.evaluate(scope, d.clone())?),
                             )
                         } else {

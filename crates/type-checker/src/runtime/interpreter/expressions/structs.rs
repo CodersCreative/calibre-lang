@@ -57,7 +57,10 @@ impl CheckerEnvironment {
                             &s,
                             Node::new(
                                 NodeType::CallExpression(
-                                    Box::new(Node::new(NodeType::Identifier(value), location.span)),
+                                    Box::new(Node::new(
+                                        NodeType::Identifier(value.into()),
+                                        location.span,
+                                    )),
                                     args.into_iter().map(|x| (x.unwrap(), None)).collect(),
                                 ),
                                 location.span,

@@ -1,5 +1,5 @@
 use calibre_common::environment::{InterpreterFrom, Variable};
-use calibre_parser::ast::{Node, NodeType, ParserDataType, VarType};
+use calibre_parser::ast::{Node, NodeType, ParserInnerType, VarType};
 
 use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
@@ -26,8 +26,8 @@ impl CheckerEnvironment {
         };
 
         let params = vec![(
-            parameters.0.clone(),
-            if parameters.1 == ParserDataType::Dynamic {
+            parameters.0.to_string(),
+            if parameters.1.data_type == ParserInnerType::Dynamic {
                 if let Some(node) = parameters.2.clone() {
                     self.evaluate(scope, *node)?
                 } else {
@@ -67,8 +67,8 @@ impl CheckerEnvironment {
 
         for parameters in parameters.into_iter() {
             params.push((
-                parameters.0.clone(),
-                if parameters.1 == ParserDataType::Dynamic {
+                parameters.0.to_string(),
+                if parameters.1.data_type == ParserInnerType::Dynamic {
                     if let Some(node) = parameters.2.clone() {
                         self.evaluate(scope, node)?
                     } else {

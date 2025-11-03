@@ -45,7 +45,7 @@ impl CheckerEnvironment {
                 let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
                 let _ = self.push_var(
                     &new_scope,
-                    identifier.clone(),
+                    identifier.to_string(),
                     Variable {
                         value: d.map(|x| *x).unwrap_or(RuntimeType::Dynamic),
                         var_type: VarType::Immutable,
@@ -59,7 +59,7 @@ impl CheckerEnvironment {
             } else if let RuntimeType::Range = range {
                 let new_scope = self.get_new_scope(
                     scope,
-                    vec![(identifier.clone(), RuntimeType::Int, None)],
+                    vec![(identifier.to_string(), RuntimeType::Int, None)],
                     vec![(Node::new(NodeType::IntLiteral(1), range_node.span), None)],
                 )?;
                 let _ = self.handle_conditionals(&new_scope, conditionals.clone())?;

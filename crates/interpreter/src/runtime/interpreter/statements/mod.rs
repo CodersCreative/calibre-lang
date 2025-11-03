@@ -41,7 +41,7 @@ impl InterpreterEnvironment {
         };
 
         params.push((
-            parameters.0,
+            parameters.0.to_string(),
             RuntimeType::interpreter_from(self, scope, parameters.1)?,
             default,
         ));
@@ -81,7 +81,7 @@ impl InterpreterEnvironment {
             };
 
             params.push((
-                p.0,
+                p.0.to_string(),
                 RuntimeType::interpreter_from(self, scope, p.1)?,
                 default,
             ));

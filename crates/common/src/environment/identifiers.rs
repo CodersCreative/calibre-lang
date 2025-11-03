@@ -1,7 +1,7 @@
 use calibre_parser::ast::{IfComparisonType, LoopType, Node, NodeType, ObjectType};
 
 pub fn identifiers_used<'a>(node: &'a Node) -> Vec<&'a String> {
-    let used = match &node.node_type {
+    match &node.node_type {
         NodeType::Break
         | NodeType::EmptyLine
         | NodeType::Continue
@@ -238,6 +238,5 @@ pub fn identifiers_used<'a>(node: &'a Node) -> Vec<&'a String> {
 
             amt
         }
-    };
-    used
+    }
 }

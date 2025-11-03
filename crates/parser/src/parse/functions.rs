@@ -1,4 +1,4 @@
-use crate::ast::Node;
+use crate::ast::{Node, ParserText};
 use crate::lexer::{Bracket, Span};
 use crate::{Parser, SyntaxErr};
 use crate::{ast::NodeType, lexer::TokenType};
@@ -37,7 +37,7 @@ impl Parser {
 
         let mut path = vec![(
             Node {
-                node_type: NodeType::Identifier(first.value),
+                node_type: NodeType::Identifier(first.clone().into()),
                 span: first.span,
             },
             false,
@@ -50,7 +50,7 @@ impl Parser {
                 let first = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
                 path.push((
                     Node {
-                        node_type: NodeType::Identifier(first.value),
+                        node_type: NodeType::Identifier(first.clone().into()),
                         span: first.span,
                     },
                     false,
@@ -120,8 +120,14 @@ impl Parser {
                             let data = self.parse_potential_key_value();
                             return Node::new(
                                 NodeType::EnumExpression {
-                                    identifier: identifier.to_string(),
-                                    value: value.to_string(),
+                                    identifier: ParserText::new(
+                                        identifier.to_string(),
+                                        path[0].0.span.clone(),
+                                    ),
+                                    value: ParserText::new(
+                                        value.to_string(),
+                                        path[1].0.span.clone(),
+                                    ),
                                     data: Some(data),
                                 },
                                 Span::new_from_spans(path[0].0.span, path[1].0.span),

@@ -3,11 +3,18 @@ pub mod comparison;
 
 use crate::{
     ast::comparison::BooleanOperation,
-    lexer::{Span, TokenType},
+    lexer::{Span, Token, TokenType},
 };
 use binary::BinaryOperator;
 use comparison::Comparison;
-use std::{cmp::Ordering, collections::HashMap, fmt::Display, str::FromStr, string::ParseError};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    fmt::Display,
+    ops::{Deref, DerefMut},
+    str::FromStr,
+    string::ParseError,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RefMutability {
@@ -53,11 +60,29 @@ impl From<TokenType> for RefMutability {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoopType {
     While(Node),
-    For(String, Node),
+    For(ParserText, Node),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ParserDataType {
+pub struct ParserDataType {
+    pub data_type: ParserInnerType,
+    pub span: Span,
+}
+
+impl ParserDataType {
+    pub fn new(data_type: ParserInnerType, span: Span) -> Self {
+        Self { data_type, span }
+    }
+}
+impl Deref for ParserDataType {
+    type Target = ParserInnerType;
+    fn deref(&self) -> &Self::Target {
+        &self.data_type
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParserInnerType {
     Float,
     Int,
     Dynamic,
@@ -80,6 +105,12 @@ pub enum ParserDataType {
 }
 
 impl Display for ParserDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.data_type)
+    }
+}
+
+impl Display for ParserInnerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Float => write!(f, "float"),
@@ -159,18 +190,18 @@ impl Display for ParserDataType {
     }
 }
 
-impl FromStr for ParserDataType {
+impl FromStr for ParserInnerType {
     type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
-            "int" => ParserDataType::Int,
-            "float" => ParserDataType::Float,
-            "struct" => ParserDataType::Struct(None),
-            "bool" => ParserDataType::Bool,
-            "str" => ParserDataType::Str,
-            "char" => ParserDataType::Char,
-            "dyn" => ParserDataType::Dynamic,
-            _ => ParserDataType::Struct(Some(s.to_string())),
+            "int" => Self::Int,
+            "float" => Self::Float,
+            "struct" => Self::Struct(None),
+            "bool" => Self::Bool,
+            "str" => Self::Str,
+            "char" => Self::Char,
+            "dyn" => Self::Dynamic,
+            _ => Self::Struct(Some(s.to_string())),
         })
     }
 }
@@ -200,7 +231,7 @@ impl Display for VarType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefType {
-    Enum(Vec<(String, Option<ObjectType<ParserDataType>>)>),
+    Enum(Vec<(ParserText, Option<ObjectType<ParserDataType>>)>),
     Struct(ObjectType<ParserDataType>),
     NewType(ParserDataType),
 }
@@ -209,6 +240,56 @@ pub enum TypeDefType {
 pub struct Node {
     pub node_type: NodeType,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParserText {
+    pub text: String,
+    pub span: Span,
+}
+
+impl From<Token> for ParserText {
+    fn from(value: Token) -> Self {
+        Self::new(value.value, value.span)
+    }
+}
+
+impl Deref for ParserText {
+    type Target = String;
+    fn deref(&self) -> &Self::Target {
+        &self.text
+    }
+}
+
+impl DerefMut for ParserText {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.text
+    }
+}
+
+impl ParserText {
+    pub fn new(text: String, span: Span) -> Self {
+        Self { text, span }
+    }
+}
+
+impl From<String> for ParserText {
+    fn from(value: String) -> Self {
+        Self::new(value, Span::default())
+    }
+}
+
+impl FromStr for ParserText {
+    type Err = ParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s.to_string()))
+    }
+}
+
+impl Display for ParserText {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.text)
+    }
 }
 
 impl Node {
@@ -242,21 +323,21 @@ pub enum NodeType {
     },
     VariableDeclaration {
         var_type: VarType,
-        identifier: String,
+        identifier: ParserText,
         value: Box<Node>,
         data_type: Option<ParserDataType>,
     },
     ImplDeclaration {
-        identifier: String,
+        identifier: ParserText,
         functions: Vec<(Node, bool)>,
     },
     TypeDeclaration {
-        identifier: String,
+        identifier: ParserText,
         object: TypeDefType,
     },
     EnumExpression {
-        identifier: String,
-        value: String,
+        identifier: ParserText,
+        value: ParserText,
         data: Option<ObjectType<Option<Node>>>,
     },
     ScopeDeclaration {
@@ -264,13 +345,13 @@ pub enum NodeType {
         is_temp: bool,
     },
     MatchDeclaration {
-        parameters: (String, ParserDataType, Option<Box<Node>>),
+        parameters: (ParserText, ParserDataType, Option<Box<Node>>),
         body: Vec<(Node, Vec<Node>, Box<Node>)>,
         return_type: Option<ParserDataType>,
         is_async: bool,
     },
     FunctionDeclaration {
-        parameters: Vec<(String, ParserDataType, Option<Node>)>,
+        parameters: Vec<(ParserText, ParserDataType, Option<Node>)>,
         body: Box<Node>,
         return_type: Option<ParserDataType>,
         is_async: bool,
@@ -320,8 +401,8 @@ pub enum NodeType {
     Return {
         value: Box<Node>,
     },
-    Identifier(String),
-    StringLiteral(String),
+    Identifier(ParserText),
+    StringLiteral(ParserText),
     ListLiteral(Vec<Node>),
     CharLiteral(char),
     FloatLiteral(f64),
@@ -356,9 +437,9 @@ pub enum NodeType {
         special_delim: bool,
     },
     ImportStatement {
-        module: Vec<String>,
-        alias: Option<String>,
-        values: Vec<String>,
+        module: Vec<ParserText>,
+        alias: Option<ParserText>,
+        values: Vec<ParserText>,
     },
     StructLiteral(ObjectType<Option<Node>>),
 }

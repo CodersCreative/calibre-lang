@@ -24,7 +24,8 @@ impl CheckerEnvironment {
                 let func = self.evaluate(&scope_2, *value)?;
                 let location = self.get_location(scope, function.0.span);
                 let pointer = self.get_object_pointer(scope, &identifier)?;
-                let _ = self.push_function(&pointer, (iden, func, location, function.1))?;
+                let _ =
+                    self.push_function(&pointer, (iden.to_string(), func, location, function.1))?;
                 continue;
             }
 

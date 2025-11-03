@@ -118,7 +118,7 @@ impl CheckerEnvironment {
                             scope,
                             Node::new(
                                 NodeType::EnumExpression {
-                                    identifier: path.remove(0).to_string(),
+                                    identifier: path.remove(0).to_string().into(),
                                     value,
                                     data: None,
                                 },
@@ -133,8 +133,8 @@ impl CheckerEnvironment {
                                     scope,
                                     Node::new(
                                         NodeType::EnumExpression {
-                                            identifier: path[0].clone().to_string(),
-                                            value: value.to_string(),
+                                            identifier: path[0].to_string().into(),
+                                            value: value.to_string().into(),
                                             data: Some(ObjectType::Tuple(
                                                 args.clone()
                                                     .into_iter()
@@ -173,7 +173,7 @@ impl CheckerEnvironment {
                                                         (
                                                             Node::new(
                                                                 NodeType::Identifier(
-                                                                    path[0].to_string(),
+                                                                    path[0].to_string().into(),
                                                                 ),
                                                                 value_node.span,
                                                             ),
@@ -224,8 +224,8 @@ impl CheckerEnvironment {
                             scope,
                             Node::new(
                                 NodeType::EnumExpression {
-                                    identifier: path.remove(0).to_string(),
-                                    value: path.remove(0).to_string(),
+                                    identifier: path.remove(0).to_string().into(),
+                                    value: path.remove(0).to_string().into(),
                                     data: None,
                                 },
                                 exp.span,

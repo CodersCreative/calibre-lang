@@ -2,7 +2,7 @@ use calibre_common::{
     environment::{InterpreterFrom, Type},
     errors::ValueErr,
 };
-use calibre_parser::ast::{ObjectType, ParserDataType};
+use calibre_parser::ast::{ObjectType, ParserDataType, ParserInnerType};
 use std::{collections::HashMap, fmt::Debug};
 
 use crate::runtime::scope::CheckerEnvironment;
@@ -104,19 +104,19 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
         scope: &u64,
         value: ParserDataType,
     ) -> Result<Self, calibre_common::errors::ScopeErr> {
-        Ok(match value {
-            ParserDataType::Float => Self::Float,
-            ParserDataType::Dynamic => Self::Dynamic,
-            ParserDataType::Int => Self::Int,
-            ParserDataType::Bool => Self::Bool,
-            ParserDataType::Str => Self::Str,
-            ParserDataType::Char => Self::Char,
-            ParserDataType::Scope(mut nodes) => {
+        Ok(match value.data_type {
+            ParserInnerType::Float => Self::Float,
+            ParserInnerType::Dynamic => Self::Dynamic,
+            ParserInnerType::Int => Self::Int,
+            ParserInnerType::Bool => Self::Bool,
+            ParserInnerType::Str => Self::Str,
+            ParserInnerType::Char => Self::Char,
+            ParserInnerType::Scope(mut nodes) => {
                 let typ = nodes.remove(nodes.len() - 1);
                 let list = nodes
                     .into_iter()
                     .map(|x| {
-                        let ParserDataType::Struct(Some(x)) = x else {
+                        let ParserInnerType::Struct(Some(x)) = x.data_type else {
                             panic!()
                         };
                         x
@@ -126,21 +126,21 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
 
                 RuntimeType::interpreter_from(env, &scope, typ)?
             }
-            ParserDataType::Tuple(x) => Self::Tuple(
+            ParserInnerType::Tuple(x) => Self::Tuple(
                 x.into_iter()
                     .map(|x| RuntimeType::interpreter_from(env, scope, x).unwrap())
                     .collect(),
             ),
-            ParserDataType::List(x) => Self::List(match x {
+            ParserInnerType::List(x) => Self::List(match x {
                 Some(x) => Some(Box::new(RuntimeType::interpreter_from(env, scope, *x)?)),
                 None => None,
             }),
-            ParserDataType::Ref(x, _) => {
+            ParserInnerType::Ref(x, _) => {
                 Self::Ref(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
             }
-            ParserDataType::Range => Self::Range,
+            ParserInnerType::Range => Self::Range,
 
-            ParserDataType::Struct(x) => {
+            ParserInnerType::Struct(x) => {
                 if let Some(x) = x {
                     let y = env.get_object_pointer(scope, &x)?;
 
@@ -157,7 +157,7 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
                     Self::Struct(None, ObjectType::Tuple(Vec::new()))
                 }
             }
-            ParserDataType::Function {
+            ParserInnerType::Function {
                 return_type,
                 parameters,
                 is_async,
@@ -178,10 +178,10 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
                     .collect(),
                 is_async,
             },
-            ParserDataType::Option(x) => {
+            ParserInnerType::Option(x) => {
                 Self::Option(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
             }
-            ParserDataType::Result(x, y) => Self::Result(
+            ParserInnerType::Result(x, y) => Self::Result(
                 Box::new(RuntimeType::interpreter_from(env, scope, *x)?),
                 Box::new(RuntimeType::interpreter_from(env, scope, *y)?),
             ),

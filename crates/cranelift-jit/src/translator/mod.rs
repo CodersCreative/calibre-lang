@@ -4,7 +4,7 @@ pub mod memory;
 use std::{collections::HashMap, error::Error};
 
 use calibre_parser::ast::binary::BinaryOperator;
-use calibre_parser::ast::{Node, NodeType, ParserDataType, VarType};
+use calibre_parser::ast::{Node, NodeType, ParserDataType, ParserInnerType, VarType};
 use calibre_parser::lexer::StopValue;
 use cranelift::codegen::ir::{GlobalValue, types};
 use cranelift::prelude::*;
@@ -71,12 +71,12 @@ impl Types {
         }
     }
     pub fn get_type_from_parser_type(&self, t: &ParserDataType) -> Type {
-        match t {
-            ParserDataType::Int => types::I64,
-            ParserDataType::Float => types::F64,
-            ParserDataType::Bool => types::I8.as_truthy(),
-            ParserDataType::Char => types::I32,
-            ParserDataType::Str => self.str().clone(),
+        match t.data_type {
+            ParserInnerType::Int => types::I64,
+            ParserInnerType::Float => types::F64,
+            ParserInnerType::Bool => types::I8.as_truthy(),
+            ParserInnerType::Char => types::I32,
+            ParserInnerType::Str => self.str().clone(),
             _ => self.ptr(),
         }
     }
@@ -181,7 +181,8 @@ impl<'a> FunctionTranslator<'a> {
                 value,
                 data_type,
             } => {
-                if let Some((VarType::Constant, _, _)) = self.variables.get(&identifier) {
+                if let Some((VarType::Constant, _, _)) = self.variables.get(&identifier.to_string())
+                {
                     panic!();
                 }
 
@@ -200,8 +201,10 @@ impl<'a> FunctionTranslator<'a> {
                     }
                 }
 
-                self.variables
-                    .insert(identifier, (var_type, value.data_type.clone(), var.clone()));
+                self.variables.insert(
+                    identifier.to_string(),
+                    (var_type, value.data_type.clone(), var.clone()),
+                );
                 self.builder.def_var(var, value.value);
 
                 value
@@ -211,7 +214,8 @@ impl<'a> FunctionTranslator<'a> {
                     todo!()
                 };
 
-                let (var_type, data_type, var) = self.variables.get(&identifier).unwrap().clone();
+                let (var_type, data_type, var) =
+                    self.variables.get(&identifier.to_string()).unwrap().clone();
 
                 let value = self.translate(*value);
 
@@ -297,7 +301,7 @@ impl<'a> FunctionTranslator<'a> {
                 todo!()
             }
             NodeType::CallExpression(caller, args) => {
-                if NodeType::Identifier("tuple".to_string()) == caller.node_type {
+                if NodeType::Identifier("tuple".to_string().into()) == caller.node_type {
                     return self
                         .translate_tuple_expression(args.into_iter().map(|x| x.0).collect());
                 }

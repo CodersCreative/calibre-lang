@@ -75,7 +75,7 @@ impl<'a> FunctionTranslator<'a> {
                         return self.translate_loop_statement(Node::new(
                             NodeType::LoopDeclaration {
                                 loop_type: Box::new(LoopType::For(
-                                    format!("__counter_{}__", rand::random_range(0..100000)),
+                                    format!("__counter_{}__", rand::random_range(0..100000)).into(),
                                     x,
                                 )),
                                 body,
@@ -117,13 +117,13 @@ impl<'a> FunctionTranslator<'a> {
                                 RuntimeType::Int,
                             );
                             self.variables
-                                .insert(var_name.clone(), (VarType::Mutable, *x, member_var))
+                                .insert(var_name.to_string(), (VarType::Mutable, *x, member_var))
                         }
                         RuntimeType::Tuple(x) => None,
                         _ => {
                             compare_value = value;
                             self.variables.insert(
-                                var_name.clone(),
+                                var_name.to_string(),
                                 (VarType::Mutable, RuntimeType::Int, index),
                             )
                         }
@@ -145,7 +145,7 @@ impl<'a> FunctionTranslator<'a> {
                     match compare_value.data_type.clone() {
                         RuntimeType::List(_) => {
                             let member = self.get_array_member(compare_value.clone(), index_val);
-                            if let Some((_, _, var)) = self.variables.get(&var_name) {
+                            if let Some((_, _, var)) = self.variables.get(&var_name.to_string()) {
                                 self.builder.def_var(var.clone(), member.value);
                             }
                         }
@@ -161,7 +161,7 @@ impl<'a> FunctionTranslator<'a> {
                     end_loop!(self, header_block, exit_block);
 
                     if let Some(prev) = prev {
-                        self.variables.insert(var_name, prev);
+                        self.variables.insert(var_name.to_string(), prev);
                     }
                     value
                 }

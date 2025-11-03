@@ -19,7 +19,7 @@ impl InterpreterEnvironment {
         match node.node_type {
             NodeType::FloatLiteral(x) => Ok(RuntimeValue::Float(x as f64)),
             NodeType::IntLiteral(x) => Ok(RuntimeValue::Int(x as i64)),
-            NodeType::StringLiteral(x) => Ok(RuntimeValue::Str(x)),
+            NodeType::StringLiteral(x) => Ok(RuntimeValue::Str(x.to_string())),
             NodeType::CharLiteral(x) => Ok(RuntimeValue::Char(x)),
             NodeType::Try { value } => {
                 let mut value = self.evaluate(scope, *value)?;
@@ -127,7 +127,7 @@ impl InterpreterEnvironment {
                 self.evaluate_variable_declaration(
                     scope,
                     var_type,
-                    identifier,
+                    identifier.to_string(),
                     value,
                     match data_type {
                         Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
@@ -226,7 +226,12 @@ impl InterpreterEnvironment {
                 identifier,
                 value,
                 data,
-            } => self.evaluate_enum_expression(scope, identifier, value, data),
+            } => self.evaluate_enum_expression(
+                scope,
+                identifier.to_string(),
+                value.to_string(),
+                data,
+            ),
             NodeType::LoopDeclaration { loop_type, body } => {
                 self.evaluate_loop_declaration(scope, *loop_type, *body)
             }
@@ -257,7 +262,7 @@ impl InterpreterEnvironment {
                 self.evaluate_variable_declaration(
                     scope,
                     VarType::Constant,
-                    identifier,
+                    identifier.to_string(),
                     value,
                     match data_type {
                         Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
@@ -269,14 +274,19 @@ impl InterpreterEnvironment {
                 module,
                 alias,
                 values,
-            } => self.evaluate_import_statement(scope, module, alias, values),
+            } => self.evaluate_import_statement(
+                scope,
+                module.into_iter().map(|x| x.to_string()).collect(),
+                alias.map(|x| x.to_string()),
+                values.into_iter().map(|x| x.to_string()).collect(),
+            ),
             NodeType::ImplDeclaration {
                 identifier,
                 functions,
-            } => self.evaluate_impl_declaration(scope, identifier, functions),
+            } => self.evaluate_impl_declaration(scope, identifier.to_string(), functions),
             NodeType::TypeDeclaration { identifier, object } => self.evaluate_type_declaration(
                 scope,
-                identifier,
+                identifier.to_string(),
                 calibre_common::environment::Type::<RuntimeType>::interpreter_from(
                     self, scope, object,
                 )?,

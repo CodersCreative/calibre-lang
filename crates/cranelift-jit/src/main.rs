@@ -35,9 +35,7 @@ fn parse(text: String) -> Node {
     let mut parser = Parser::default();
 
     let mut tokenizer = Tokenizer::default();
-    parser
-        .produce_ast(tokenizer.tokenize(text).unwrap())
-        .unwrap()
+    parser.produce_ast(tokenizer.tokenize(text).unwrap())
 }
 
 fn run<I, T: Debug>(input: I) {

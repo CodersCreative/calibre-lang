@@ -117,7 +117,10 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
                 if !values.is_empty() || alias.is_some() {
                     ScopeSearchResult::Failed { counter, scope }
                 } else {
-                    if let Ok(x) = self.get_scope_list(scope, module).clone() {
+                    if let Ok(x) = self
+                        .get_scope_list(scope, module.into_iter().map(|x| x.to_string()).collect())
+                        .clone()
+                    {
                         let mut parser = calibre_parser::Parser::default();
                         let mut tokenizer = Tokenizer::default();
                         let program = parser.produce_ast(

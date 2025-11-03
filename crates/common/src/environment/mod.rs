@@ -79,7 +79,7 @@ impl<U: RuntimeType> InterpreterFrom<TypeDefType> for Type<U> {
                 x.into_iter()
                     .map(|x| {
                         (
-                            x.0,
+                            x.0.to_string(),
                             match x.1 {
                                 Some(x) => {
                                     Some(ObjectType::<U>::interpreter_from(env, scope, x).unwrap())

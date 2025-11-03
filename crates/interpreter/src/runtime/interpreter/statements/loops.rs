@@ -29,7 +29,7 @@ impl InterpreterEnvironment {
                     let location = self.get_location(scope, range_node.span);
                     let _ = self.push_var(
                         &new_scope,
-                        identifier.clone(),
+                        identifier.to_string(),
                         Variable {
                             value: d.clone(),
                             var_type: VarType::Immutable,
@@ -52,7 +52,7 @@ impl InterpreterEnvironment {
                 for i in from..to {
                     let new_scope = self.get_new_scope(
                         scope,
-                        vec![(identifier.clone(), RuntimeType::Int, None)],
+                        vec![(identifier.to_string(), RuntimeType::Int, None)],
                         vec![(Node::new(NodeType::IntLiteral(i), range_node.span), None)],
                     )?;
                     result = self.evaluate(&new_scope, body.clone())?;
@@ -95,7 +95,7 @@ impl InterpreterEnvironment {
                     return self.evaluate_loop_declaration(
                         scope,
                         LoopType::For(
-                            String::from("hidden_index"),
+                            String::from("hidden_index").into(),
                             Node::new(
                                 NodeType::RangeDeclaration {
                                     from: Box::new(Node::new(
@@ -118,7 +118,7 @@ impl InterpreterEnvironment {
                     return self.evaluate_loop_declaration(
                         scope,
                         LoopType::For(
-                            String::from("hidden_index"),
+                            String::from("hidden_index").into(),
                             Node::new(NodeType::IntLiteral(x), condition.span),
                         ),
                         body,
@@ -128,7 +128,7 @@ impl InterpreterEnvironment {
                     return self.evaluate_loop_declaration(
                         scope,
                         LoopType::For(
-                            String::from("hidden_index"),
+                            String::from("hidden_index").into(),
                             Node::new(NodeType::FloatLiteral(x as f64), condition.span),
                         ),
                         body,

@@ -268,7 +268,7 @@ fn file(
         &scope,
         calibre_parser::ast::Node::new_from_type(calibre_parser::ast::NodeType::CallExpression(
             Box::new(calibre_parser::ast::Node::new_from_type(
-                calibre_parser::ast::NodeType::Identifier("main".to_string()),
+                calibre_parser::ast::NodeType::Identifier("main".to_string().into()),
             )),
             args,
         )),

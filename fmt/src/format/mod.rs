@@ -58,8 +58,8 @@ impl Formatter {
             } => {
                 let mut txt = String::from("import ");
 
-                let get_module = |module: &[String]| -> String {
-                    let mut txt = module[0].clone();
+                let get_module = |module: &[ast::ParserText]| -> String {
+                    let mut txt = module[0].to_string();
                     for val in module.iter().skip(1) {
                         txt.push_str(&format!(":{}", &val));
                     }
@@ -70,7 +70,7 @@ impl Formatter {
                     txt.push_str(&get_module(&module));
                     txt.push_str(&format!(" as {}", alias));
                 } else {
-                    if values.len() == 1 && values[0] == "*" {
+                    if values.len() == 1 && &values[0].to_string() == "*" {
                         txt.push_str("*");
                     } else if !values.is_empty() {
                         txt.push_str("(");
@@ -513,15 +513,23 @@ impl Formatter {
             NodeType::TypeDeclaration { identifier, object } => {
                 let mut txt = format!("type {} = ", identifier);
 
-                let fmt_obj = |obj: &ObjectType<ast::ParserDataType>| -> String {
+                let fmt_obj = |this: &mut Self, obj: &ObjectType<ast::ParserDataType>| -> String {
                     match obj {
                         ObjectType::Map(x) => {
-                            let mut txt = String::from("{\n\t");
+                            let mut txt = String::from("{\n");
                             for (key, value) in x {
-                                txt.push_str(&format!("{} : {},\n\t", key, value));
+                                txt.push_str(&handle_comment!(
+                                    this.get_potential_comment(&value.span),
+                                    format!("{} : {},\n", key, value)
+                                ));
                             }
 
-                            let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                            let mut txt = this.fmt_txt_with_tab(
+                                txt.trim_end().trim_end_matches(","),
+                                1,
+                                true,
+                            );
+
                             txt.push_str("\n}");
                             txt
                         }
@@ -530,10 +538,18 @@ impl Formatter {
                             let mut txt = String::from("(");
 
                             for value in x {
-                                txt.push_str(&format!("{}, ", value));
+                                txt.push_str(&handle_comment!(
+                                    this.get_potential_comment(&value.span),
+                                    format!("{}, ", value)
+                                ));
                             }
 
-                            let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                            let mut txt = this.fmt_txt_with_tab(
+                                txt.trim_end().trim_end_matches(","),
+                                1,
+                                false,
+                            );
+
                             txt.push_str(")");
                             txt
                         }
@@ -544,23 +560,23 @@ impl Formatter {
                     ast::TypeDefType::Enum(values) => {
                         txt.push_str("enum {\n");
 
-                        let mut temp = String::new();
-
                         for arm in values {
-                            if let Some(x) = &arm.1 {
-                                temp.push_str(&format!("{}{},\n", arm.0, fmt_obj(x)));
-                            } else {
-                                temp.push_str(&format!("{},\n", arm.0));
-                            }
+                            txt.push_str(&handle_comment!(
+                                self.get_potential_comment(&arm.0.span),
+                                if let Some(x) = &arm.1 {
+                                    format!("{}{},\n", arm.0, fmt_obj(self, x))
+                                } else {
+                                    format!("{},\n", arm.0)
+                                }
+                            ));
                         }
 
-                        txt.push_str(&self.fmt_txt_with_tab(&temp, 1, true));
-                        txt = txt.trim_end().trim_end_matches(",").to_string();
+                        txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
                         txt.push_str("\n}");
                     }
                     ast::TypeDefType::NewType(x) => txt.push_str(&x.to_string()),
                     ast::TypeDefType::Struct(x) => {
-                        txt.push_str(&format!("struct {}", fmt_obj(x)));
+                        txt.push_str(&format!("struct {}", fmt_obj(self, x)));
                     }
                 }
 
@@ -619,7 +635,7 @@ impl Formatter {
     pub fn get_potential_comment(&mut self, span: &lexer::Span) -> Option<String> {
         let mut comments = Vec::new();
         while let Some(first) = self.comments.first() {
-            if first.span.to.line < span.from.line {
+            if first.span.to.line <= span.from.line {
                 comments.push(self.comments.remove(0));
             } else {
                 break;
