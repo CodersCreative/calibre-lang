@@ -586,7 +586,7 @@ impl Formatter {
     }
 
     pub fn fmt_txt_with_tab(&mut self, txt: &str, tab_amt: usize, starting_tab: bool) -> String {
-        let tab = self.fmt_cur_tab(tab_amt);
+        let tab = self.tab.get_tab_from_amt(tab_amt);
         let txt = txt.replace('\n', &format!("\n{}", tab));
         format!("{}{}", if starting_tab { &tab } else { "" }, txt)
     }
@@ -647,14 +647,6 @@ impl Formatter {
         } else {
             None
         }
-    }
-
-    fn fmt_cur_tab(&mut self, tab_amt: usize) -> String {
-        let mut txt = String::new();
-        for _ in 0..tab_amt {
-            txt.push('\t');
-        }
-        txt
     }
 
     fn fmt_struct_literal(&mut self, object_type: &ast::ObjectType<Option<Node>>) -> String {

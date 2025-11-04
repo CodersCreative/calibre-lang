@@ -7,10 +7,8 @@ use std::{error::Error, fs, io::Write, path::PathBuf, process::Command, str::Fro
 
 fn repl(file: Option<&PathBuf>) -> Result<(), Box<dyn Error>> {
     let mut env = InterpreterEnvironment::new();
-    let mut checker = CheckerEnvironment::new();
     let mut tokenizer = Tokenizer::default();
     let mut parser = calibre_parser::Parser::default();
-    let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
     let mut editor = DefaultEditor::new()?;
     let mut logical_history = Vec::new();
@@ -20,9 +18,7 @@ fn repl(file: Option<&PathBuf>) -> Result<(), Box<dyn Error>> {
 
         match perform_repl_line(
             &mut env,
-            &mut checker,
             &scope,
-            &checker_scope,
             &mut parser,
             &mut tokenizer,
             &logical_history,
@@ -45,9 +41,7 @@ fn repl(file: Option<&PathBuf>) -> Result<(), Box<dyn Error>> {
 
                 match perform_repl_line(
                     &mut env,
-                    &mut checker,
                     &scope,
-                    &checker_scope,
                     &mut parser,
                     &mut tokenizer,
                     &logical_history,
@@ -82,9 +76,7 @@ fn repl(file: Option<&PathBuf>) -> Result<(), Box<dyn Error>> {
 
 fn perform_repl_line(
     env: &mut InterpreterEnvironment,
-    checker: &mut CheckerEnvironment,
     scope: &u64,
-    checker_scope: &u64,
     parser: &mut calibre_parser::Parser,
     tokenizer: &mut Tokenizer,
     logical_history: &[String],
@@ -128,30 +120,16 @@ fn perform_repl_line(
 
         for node in program {
             let res = if let Ok(x) = env.evaluate_global(&scope, node.clone()) {
-                let _ = checker.evaluate_global(&checker_scope, node);
                 Ok(x)
             } else {
-                let _ = checker.start_evaluate(&checker_scope, node.clone());
                 env.evaluate(&scope, node)
             };
-
-            let has_errs = !checker.errors.is_empty() || res.is_err();
-            for err in &checker.errors {
-                eprintln!("Line caused the following type checker errors:");
-                eprintln!("{}", err)
-            }
 
             match res {
                 Ok(x) => val = x,
                 Err(e) => {
                     eprintln!("Error found in line : {}", e);
                 }
-            }
-
-            checker.errors.clear();
-            if has_errs {
-                eprintln!("Please Retry.");
-                return None;
             }
         }
         Some(val)
@@ -209,9 +187,7 @@ fn perform_repl_line(
                     }
                     val = perform_repl_line(
                         env,
-                        checker,
                         scope,
-                        checker_scope,
                         parser,
                         tokenizer,
                         logical_history,
@@ -231,12 +207,11 @@ fn perform_repl_line(
 
 fn file(
     path: &PathBuf,
+    use_checker: bool,
     args: Vec<(calibre_parser::ast::Node, Option<calibre_parser::ast::Node>)>,
 ) -> Result<(), Box<dyn Error>> {
     let mut env = InterpreterEnvironment::new();
-    let mut checker = CheckerEnvironment::new();
     let mut parser = calibre_parser::Parser::default();
-    let checker_scope = checker.new_scope_with_stdlib(None, path.clone(), None);
     let scope = env.new_scope_with_stdlib(None, path.clone(), None);
     let mut tokenizer = Tokenizer::default();
     let contents = fs::read_to_string(path)?;
@@ -252,13 +227,18 @@ fn file(
             calibre_type_checker::runtime::interpreter::InterpreterErr::from(parser.errors).into(),
         );
     }
-    let _ = checker.evaluate(&checker_scope, program.clone())?;
 
-    if !checker.errors.is_empty() {
-        eprintln!("Type checker errors:");
+    if use_checker {
+        let mut checker = CheckerEnvironment::new();
+        let checker_scope = checker.new_scope_with_stdlib(None, path.clone(), None);
+        let _ = checker.evaluate(&checker_scope, program.clone())?;
 
-        for err in &checker.errors {
-            eprintln!("{}", err)
+        if !checker.errors.is_empty() {
+            eprintln!("Type checker errors:");
+
+            for err in &checker.errors {
+                eprintln!("{}", err)
+            }
         }
     }
 
@@ -272,7 +252,7 @@ fn file(
             )),
             args,
         )),
-    );
+    )?;
 
     Ok(())
 }
@@ -284,6 +264,8 @@ struct Args {
     path: Option<String>,
     #[arg(short, long)]
     fmt: bool,
+    #[arg(short, long)]
+    check: bool,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -294,7 +276,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Command::new("cal-fmt").arg("-a").arg(&path).output()?;
         }
         let path = PathBuf::from_str(&path)?;
-        file(&path, Vec::new())
+        file(&path, args.check, Vec::new())
     } else {
         repl(None)
     }

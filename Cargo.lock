@@ -185,6 +185,7 @@ name = "cal-lsp"
 version = "0.1.0"
 dependencies = [
  "async-lsp",
+ "cal-fmt",
  "calibre-common",
  "calibre-parser",
  "calibre-type-checker",
