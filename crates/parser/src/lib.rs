@@ -2,6 +2,7 @@ use crate::{
     ast::{Node, NodeType},
     lexer::{Bracket, LexerError, Span, Token, TokenType},
 };
+use miette::Diagnostic;
 use thiserror::Error;
 
 pub mod ast;
@@ -64,12 +65,18 @@ impl From<LexerError> for ParserError {
     }
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum ParserError {
-    #[error("{0}")]
+    #[error(transparent)]
     Lexer(LexerError),
-    #[error("{0}\nFound : {1:?}\nNext : {2:?}")]
-    Syntax(SyntaxErr, Option<Token>, Option<Token>),
+    #[error("{err}")]
+    Syntax {
+        #[source_code]
+        input: String,
+        err: SyntaxErr,
+        #[label("here")]
+        token: Option<(usize, usize)>,
+    },
 }
 
 #[derive(Error, Debug, Clone)]

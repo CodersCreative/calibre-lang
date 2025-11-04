@@ -34,11 +34,23 @@ impl Parser {
     }
 
     fn add_err(&mut self, err: SyntaxErr) {
-        self.errors.push(ParserError::Syntax(
+        let prev = self.prev_token.clone().unwrap().value;
+        let mut input = prev.clone();
+
+        (0..4).into_iter().for_each(|x| {
+            let val = self
+                .tokens
+                .get(x)
+                .map(|x| x.value.clone())
+                .unwrap_or(String::new());
+            input.push_str(&format!(" {}", val));
+        });
+
+        self.errors.push(ParserError::Syntax {
+            input,
             err,
-            self.prev_token.clone(),
-            self.tokens.first().map(|x| x.clone()),
-        ))
+            token: Some((0, prev.len())),
+        })
     }
 
     fn expect_eat(&mut self, t: &TokenType, err: SyntaxErr) -> Token {
