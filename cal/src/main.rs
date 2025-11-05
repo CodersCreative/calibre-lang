@@ -2,15 +2,16 @@ use calibre_interpreter::runtime::{scope::InterpreterEnvironment, values::Runtim
 use calibre_parser::lexer::Tokenizer;
 use calibre_type_checker::runtime::scope::CheckerEnvironment;
 use clap::Parser;
+use miette::{IntoDiagnostic, Result};
 use rustyline::{DefaultEditor, error::ReadlineError};
-use std::{error::Error, fs, io::Write, path::PathBuf, process::Command, str::FromStr};
+use std::{fs, io::Write, path::PathBuf, process::Command, str::FromStr};
 
-fn repl(file: Option<&PathBuf>) -> Result<(), Box<dyn Error>> {
+fn repl(file: Option<&PathBuf>) -> Result<()> {
     let mut env = InterpreterEnvironment::new();
     let mut tokenizer = Tokenizer::default();
     let mut parser = calibre_parser::Parser::default();
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
-    let mut editor = DefaultEditor::new()?;
+    let mut editor = DefaultEditor::new().into_diagnostic()?;
     let mut logical_history = Vec::new();
 
     if let Some(file) = file {
@@ -37,7 +38,7 @@ fn repl(file: Option<&PathBuf>) -> Result<(), Box<dyn Error>> {
         let readline = editor.readline(">> ");
         match readline {
             Ok(line) => {
-                editor.add_history_entry(line.clone())?;
+                editor.add_history_entry(line.clone()).into_diagnostic()?;
 
                 match perform_repl_line(
                     &mut env,
@@ -209,12 +210,12 @@ fn file(
     path: &PathBuf,
     use_checker: bool,
     args: Vec<(calibre_parser::ast::Node, Option<calibre_parser::ast::Node>)>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut env = InterpreterEnvironment::new();
     let mut parser = calibre_parser::Parser::default();
     let scope = env.new_scope_with_stdlib(None, path.clone(), None);
     let mut tokenizer = Tokenizer::default();
-    let contents = fs::read_to_string(path)?;
+    let contents = fs::read_to_string(path).into_diagnostic()?;
     if contents.starts_with("// CLREPL") {
         println!("File is a REPL file switching to REPL.");
         return repl(Some(path));
@@ -242,17 +243,21 @@ fn file(
         }
     }
 
-    let _ = env.evaluate(&scope, program)?;
+    let _ = env.evaluate(&scope, program).into_diagnostic()?;
 
-    let _ = env.evaluate(
-        &scope,
-        calibre_parser::ast::Node::new_from_type(calibre_parser::ast::NodeType::CallExpression(
-            Box::new(calibre_parser::ast::Node::new_from_type(
-                calibre_parser::ast::NodeType::Identifier("main".to_string().into()),
-            )),
-            args,
-        )),
-    )?;
+    let _ = env
+        .evaluate(
+            &scope,
+            calibre_parser::ast::Node::new_from_type(
+                calibre_parser::ast::NodeType::CallExpression(
+                    Box::new(calibre_parser::ast::Node::new_from_type(
+                        calibre_parser::ast::NodeType::Identifier("main".to_string().into()),
+                    )),
+                    args,
+                ),
+            ),
+        )
+        .into_diagnostic()?;
 
     Ok(())
 }
@@ -268,12 +273,16 @@ struct Args {
     check: bool,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     if let Some(path) = args.path {
         if args.fmt {
-            Command::new("cal-fmt").arg("-a").arg(&path).output()?;
+            Command::new("cal-fmt")
+                .arg("-a")
+                .arg(&path)
+                .output()
+                .into_diagnostic()?;
         }
         let path = PathBuf::from_str(&path)?;
         file(&path, args.check, Vec::new())

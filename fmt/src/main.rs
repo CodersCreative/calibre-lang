@@ -1,4 +1,5 @@
-use cal_fmt::Formatter;
+use cal_fmt::{format_all, format_file};
+use calibre_parser::ast::formatter::Formatter;
 use clap::Parser;
 use std::{error::Error, path::PathBuf, str::FromStr};
 
@@ -24,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut formatter = Formatter::default();
 
     if args.all {
-        formatter.format_all(&path)
+        format_all(&mut formatter, &path)
     } else {
         let output = if let Some(x) = args.output {
             PathBuf::from_str(&x)?
@@ -32,6 +33,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             path.clone()
         };
 
-        formatter.format_file(&path, &output)
+        format_file(&mut formatter, &path, &output)
     }
 }

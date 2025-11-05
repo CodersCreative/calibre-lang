@@ -1,9 +1,116 @@
-use calibre_parser::{
-    ast::{self, Node, NodeType, ObjectType},
-    lexer::{self, Span},
+use std::error::Error;
+
+use crate::{
+    Parser,
+    ast::{
+        IfComparisonType, LoopType, Node, NodeType, ObjectType, ParserDataType, ParserText,
+        TypeDefType,
+    },
+    lexer::{Span, Token, TokenType, Tokenizer},
 };
 
-use crate::Formatter;
+pub struct Tab {
+    character: char,
+    amt: usize,
+}
+
+impl Default for Tab {
+    fn default() -> Self {
+        Self::new('\t', 1)
+    }
+}
+
+impl Tab {
+    pub fn new(character: char, amt: usize) -> Self {
+        Self { character, amt }
+    }
+
+    pub fn get_singular_tab(&self) -> String {
+        let mut txt = String::new();
+        for _ in 0..self.amt {
+            txt.push(self.character.clone());
+        }
+        txt
+    }
+
+    pub fn get_tab_from_amt(&self, amt: usize) -> String {
+        let mut txt = String::new();
+        for _ in 0..amt {
+            txt.push_str(&self.get_singular_tab());
+        }
+        txt
+    }
+}
+
+pub struct Formatter {
+    pub comments: Vec<Token>,
+    pub max_width: usize,
+    pub tab: Tab,
+}
+
+impl Default for Formatter {
+    fn default() -> Self {
+        Self {
+            comments: Vec::new(),
+            max_width: 200,
+            tab: Tab::default(),
+        }
+    }
+}
+
+impl Formatter {
+    pub fn start_format(
+        &mut self,
+        text: String,
+        range: Option<Span>,
+    ) -> Result<String, Box<dyn Error>> {
+        let mut tokenizer = Tokenizer::new(true);
+        let mut tokens = tokenizer.tokenize(text)?;
+        if let Some(range) = range {
+            tokens = tokens
+                .into_iter()
+                .filter(|x| x.span.from >= range.from && x.span.to <= range.to)
+                .collect()
+        }
+
+        self.comments = tokens
+            .iter()
+            .filter(|x| x.token_type == TokenType::Comment)
+            .cloned()
+            .collect();
+        let tokens = tokens
+            .into_iter()
+            .filter(|x| x.token_type != TokenType::Comment)
+            .collect();
+
+        let mut parser = Parser::default();
+        let ast = parser.produce_ast(tokens);
+
+        if !parser.errors.is_empty() {
+            return Err(format!("{:?}", parser.errors).into());
+        }
+
+        Ok(self.format(&ast))
+    }
+
+    pub fn get_imports(&self, contents: String) -> Result<Vec<Node>, Box<dyn Error>> {
+        let mut tokenizer = Tokenizer::default();
+        let tokens = tokenizer.tokenize(contents)?;
+        let mut parser = Parser::default();
+        let NodeType::ScopeDeclaration { body, is_temp: _ } = parser.produce_ast(tokens).node_type
+        else {
+            unreachable!()
+        };
+
+        Ok(body
+            .into_iter()
+            .filter(|x| match x.node_type {
+                NodeType::ImportStatement { .. } => true,
+                _ => false,
+            })
+            .collect())
+    }
+}
 
 macro_rules! handle_comment {
     ($comments:expr, $input:expr) => {{
@@ -58,7 +165,7 @@ impl Formatter {
             } => {
                 let mut txt = String::from("import ");
 
-                let get_module = |module: &[ast::ParserText]| -> String {
+                let get_module = |module: &[ParserText]| -> String {
                     let mut txt = module[0].to_string();
                     for val in module.iter().skip(1) {
                         txt.push_str(&format!(":{}", &val));
@@ -342,10 +449,10 @@ impl Formatter {
             } => {
                 let mut txt = String::from("if");
                 match &**comparison {
-                    ast::IfComparisonType::If(x) => {
+                    IfComparisonType::If(x) => {
                         txt.push_str(&format!(" {}", self.format(&x)));
                     }
-                    ast::IfComparisonType::IfLet { value, pattern } => {
+                    IfComparisonType::IfLet { value, pattern } => {
                         txt.push_str(&format!(
                             " let {} {}<- {}",
                             self.format(&pattern.0),
@@ -480,7 +587,10 @@ impl Formatter {
 
                 txt
             }
-            NodeType::ScopeDeclaration { body, is_temp: _ } => {
+            NodeType::ScopeDeclaration {
+                body,
+                is_temp: true,
+            } => {
                 let mut txt = String::from("{");
 
                 if !body.is_empty() {
@@ -500,6 +610,32 @@ impl Formatter {
 
                 txt
             }
+
+            NodeType::ScopeDeclaration {
+                body,
+                is_temp: false,
+            } => {
+                let mut txt = String::new();
+
+                if !body.is_empty() {
+                    let lines = self.get_scope_lines(&body);
+
+                    for line in lines {
+                        txt.push_str(&line);
+                    }
+
+                    txt = self.fmt_txt_with_tab(&txt, 0, false).trim_end().to_string();
+
+                    txt.push_str("\n");
+                }
+
+                while !self.comments.is_empty() {
+                    txt.push_str(&format!("{}\n\n", self.fmt_next_comment().unwrap()));
+                }
+
+                txt.trim_end().trim_end_matches("\n").to_string()
+            }
+
             NodeType::PipeExpression(values) => {
                 let mut txt = self.format(&values[0]);
 
@@ -513,7 +649,7 @@ impl Formatter {
             NodeType::TypeDeclaration { identifier, object } => {
                 let mut txt = format!("type {} = ", identifier);
 
-                let fmt_obj = |this: &mut Self, obj: &ObjectType<ast::ParserDataType>| -> String {
+                let fmt_obj = |this: &mut Self, obj: &ObjectType<ParserDataType>| -> String {
                     match obj {
                         ObjectType::Map(x) => {
                             let mut txt = String::from("{\n");
@@ -557,7 +693,7 @@ impl Formatter {
                 };
 
                 match &object {
-                    ast::TypeDefType::Enum(values) => {
+                    TypeDefType::Enum(values) => {
                         txt.push_str("enum {\n");
 
                         for arm in values {
@@ -574,8 +710,8 @@ impl Formatter {
                         txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
                         txt.push_str("\n}");
                     }
-                    ast::TypeDefType::NewType(x) => txt.push_str(&x.to_string()),
-                    ast::TypeDefType::Struct(x) => {
+                    TypeDefType::NewType(x) => txt.push_str(&x.to_string()),
+                    TypeDefType::Struct(x) => {
                         txt.push_str(&format!("struct {}", fmt_obj(self, x)));
                     }
                 }
@@ -612,7 +748,7 @@ impl Formatter {
         }
     }
 
-    fn fmt_comments(mut comments: Vec<lexer::Token>) -> String {
+    fn fmt_comments(mut comments: Vec<Token>) -> String {
         let comment = comments.remove(0);
 
         if comments.len() > 1 {
@@ -632,7 +768,7 @@ impl Formatter {
         }
     }
 
-    pub fn get_potential_comment(&mut self, span: &lexer::Span) -> Option<String> {
+    pub fn get_potential_comment(&mut self, span: &Span) -> Option<String> {
         let mut comments = Vec::new();
         while let Some(first) = self.comments.first() {
             if first.span.to.line <= span.from.line {
@@ -649,10 +785,10 @@ impl Formatter {
         }
     }
 
-    fn fmt_struct_literal(&mut self, object_type: &ast::ObjectType<Option<Node>>) -> String {
+    fn fmt_struct_literal(&mut self, object_type: &ObjectType<Option<Node>>) -> String {
         let allow_new_line = false;
         match object_type {
-            ast::ObjectType::Map(map) => {
+            ObjectType::Map(map) => {
                 let mut txt = format!("{{{}", if allow_new_line { "\n" } else { "" });
                 for (key, value) in map.iter() {
                     let temp = if let Some(value) = value {
@@ -680,7 +816,7 @@ impl Formatter {
                 txt.push_str(&format!("{}}}", if allow_new_line { "\n" } else { "" }));
                 txt
             }
-            ast::ObjectType::Tuple(lst) => {
+            ObjectType::Tuple(lst) => {
                 let mut txt = String::from("(");
                 for value in lst.iter() {
                     if let Some(value) = value {
@@ -699,10 +835,10 @@ impl Formatter {
         }
     }
 
-    fn fmt_loop_type(&mut self, loop_type: &ast::LoopType) -> String {
+    pub fn fmt_loop_type(&mut self, loop_type: &LoopType) -> String {
         match loop_type {
-            ast::LoopType::While(x) => self.format(x),
-            ast::LoopType::For(id, x) => format!("{} in {}", id, self.format(x)),
+            LoopType::While(x) => self.format(x),
+            LoopType::For(id, x) => format!("{} in {}", id, self.format(x)),
         }
     }
 

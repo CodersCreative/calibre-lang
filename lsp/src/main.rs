@@ -1,7 +1,7 @@
-use cal_fmt::{Formatter, Tab};
 use calibre_common::environment::Location as CLocation;
 use calibre_common::environment::scopes::ScopeSearchResult;
 use calibre_parser::ast::Node;
+use calibre_parser::ast::formatter::{Formatter, Tab};
 use calibre_parser::lexer::{self, Tokenizer};
 use calibre_type_checker::runtime::interpreter::InterpreterErr;
 use calibre_type_checker::runtime::scope::CheckerEnvironment;
@@ -22,7 +22,7 @@ use async_lsp::router::Router;
 use async_lsp::server::LifecycleLayer;
 use async_lsp::tracing::TracingLayer;
 use tower::ServiceBuilder;
-use tracing::{Level, info};
+use tracing::Level;
 
 #[derive(Debug)]
 struct ServerState {

@@ -68,6 +68,7 @@ impl From<LexerError> for ParserError {
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum ParserError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Lexer(LexerError),
     #[error("{err}")]
     Syntax {

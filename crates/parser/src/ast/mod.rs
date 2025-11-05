@@ -1,8 +1,9 @@
 pub mod binary;
 pub mod comparison;
+pub mod formatter;
 
 use crate::{
-    ast::comparison::BooleanOperation,
+    ast::{comparison::BooleanOperation, formatter::Formatter},
     lexer::{Span, Token, TokenType},
 };
 use binary::BinaryOperator;
@@ -10,7 +11,7 @@ use comparison::Comparison;
 use std::{
     cmp::Ordering,
     collections::HashMap,
-    fmt::Display,
+    fmt::{Debug, Display},
     ops::{Deref, DerefMut},
     str::FromStr,
     string::ParseError,
@@ -305,7 +306,7 @@ impl Node {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     Break,
     Continue,
@@ -441,6 +442,31 @@ pub enum NodeType {
         values: Vec<ParserText>,
     },
     StructLiteral(ObjectType<Option<Node>>),
+}
+
+impl Display for NodeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut formatter = Formatter::default();
+        let fake_node = Node {
+            node_type: self.clone(),
+            span: Span::default(),
+        };
+        write!(f, "{}", formatter.format(&fake_node))
+    }
+}
+
+impl Display for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut formatter = Formatter::default();
+        write!(f, "{}", formatter.format(&self))
+    }
+}
+
+impl Display for LoopType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut formatter = Formatter::default();
+        write!(f, "{}", formatter.fmt_loop_type(&self))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

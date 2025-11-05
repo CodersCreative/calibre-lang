@@ -2,11 +2,13 @@ use crate::environment::{RuntimeType, RuntimeValue};
 use calibre_parser::{
     ParserError,
     ast::{LoopType, NodeType, binary::BinaryOperator},
+    lexer::LexerError,
 };
+use miette::Diagnostic;
 use std::num::{ParseFloatError, ParseIntError};
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum ASTError<T: RuntimeValue> {
     #[error("Cannot {2:?} values of {0:?}, {1:?}.")]
     BinaryOperator(T, T, BinaryOperator),
@@ -16,37 +18,45 @@ pub enum ASTError<T: RuntimeValue> {
     ComparisonOperation(T, T),
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum RuntimeErr<T: RuntimeValue, U: RuntimeType> {
+    #[error("{err}")]
+    At {
+        err: Box<Self>,
+        #[source_code]
+        input: String,
+        #[label("here")]
+        span: Option<(usize, usize)>,
+    },
     #[error("{0}")]
     Value(ValueErr<T, U>),
     #[error("{0}")]
     AST(ASTError<T>),
-    #[error("Cannot assign a literal value, {0:?}.")]
+    #[error("Cannot assign a literal value, {0}.")]
     AssignNonVariable(NodeType),
     #[error("Cannot mutably reference a non mutable value, {0:?}.")]
     MutRefNonMut(T),
-    #[error("Cannot mutably reference a non variable, {0:?}.")]
+    #[error("Cannot mutably reference a non variable, {0}.")]
     RefNonVar(NodeType),
-    #[error("Cannot de-reference a non reference, {0:?}.")]
+    #[error("Cannot de-reference a non reference, {0}.")]
     DerefNonRef(NodeType),
-    #[error("Cannot index a value that is not a list, {0:?}.")]
+    #[error("Cannot index a value that is not a list, {0}.")]
     IndexNonList(NodeType),
-    #[error("This AST Node has not been implemented, {0:?}.")]
+    #[error("This AST Node has not been implemented, {0}.")]
     NotImplemented(NodeType),
     #[error("Cannot call non-callable value, {0:?}.")]
     CantCallNonFunc(T),
     #[error("Cannot perform not opertion on {0:?}.")]
     CantPerformNot(T),
-    #[error("Cannot create list comprehension with a while loop, {0:?}.")]
+    #[error("Cannot create list comprehension with a while loop, {0}.")]
     IterWhileLoop(LoopType),
     #[error("Cannot loop through value {0:?}.")]
     UnableToLoop(T),
-    #[error("Expected {0:?} operation.")]
+    #[error("Expected {0} operation.")]
     ExpectedOperation(String),
     #[error("Expected only functions.")]
     ExpectedFunctions,
-    #[error("Index out of bounds for list, {0:?}.")]
+    #[error("Index out of bounds for list, {0}.")]
     InvalidIndex(i64),
     #[error("Default value name not identifier.")]
     InvalidDefaultFuncArg,
@@ -70,7 +80,10 @@ pub enum RuntimeErr<T: RuntimeValue, U: RuntimeType> {
     CantImport(String),
 }
 
-#[derive(Error, Debug, Clone)]
+unsafe impl<T: RuntimeValue, U: RuntimeType> Send for RuntimeErr<T, U> {}
+unsafe impl<T: RuntimeValue, U: RuntimeType> Sync for RuntimeErr<T, U> {}
+
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum ScopeErr {
     #[error("Unable to resolve variable : {0}.")]
     Variable(String),
@@ -86,11 +99,26 @@ pub enum ScopeErr {
     Function(String),
     #[error("Unable to resolve scope : {0}.")]
     Scope(String),
-    #[error("Unable to parse scope : {0:?}.")]
-    Parser(Vec<ParserError>),
+    #[error("Unable to parse scope. ")]
+    #[diagnostic()]
+    Parser {
+        #[source_code]
+        input: String,
+        #[related]
+        errors: Vec<RelatedParserErrors>,
+    },
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Diagnostic)]
+#[error("Invalid Syntax - {err}")]
+#[diagnostic()]
+pub struct RelatedParserErrors {
+    err: String,
+    #[label]
+    span: Option<(usize, usize)>,
+}
+
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum ValueErr<T: RuntimeValue, U: RuntimeType> {
     #[error("Unable to convert: {0:?} -> {1:?}.")]
     Conversion(T, U),
@@ -106,13 +134,59 @@ pub enum ValueErr<T: RuntimeValue, U: RuntimeType> {
 
 impl From<ParserError> for ScopeErr {
     fn from(value: ParserError) -> Self {
-        Self::Parser(vec![value])
+        match value {
+            ParserError::Lexer(x) => match x {
+                LexerError::Unrecognized { .. } => Self::Parser {
+                    input: String::new(),
+                    errors: vec![RelatedParserErrors {
+                        err: x.to_string(),
+                        span: None,
+                    }],
+                },
+            },
+            ParserError::Syntax { input, err, token } => Self::Parser {
+                input: input.clone(),
+                errors: vec![RelatedParserErrors {
+                    err: err.to_string(),
+                    span: token,
+                }],
+            },
+        }
     }
 }
 
 impl From<Vec<ParserError>> for ScopeErr {
     fn from(value: Vec<ParserError>) -> Self {
-        Self::Parser(value)
+        let mut output = String::new();
+        let mut errors = Vec::new();
+
+        for val in value {
+            match val {
+                ParserError::Lexer(x) => match x {
+                    LexerError::Unrecognized { .. } => {
+                        errors.push(RelatedParserErrors {
+                            err: x.to_string(),
+                            span: None,
+                        });
+                    }
+                },
+                ParserError::Syntax { input, err, token } => {
+                    errors.push(RelatedParserErrors {
+                        err: err.to_string(),
+                        span: Some((
+                            output.len() + token.unwrap().0,
+                            output.len() + token.unwrap().1,
+                        )),
+                    });
+                    output.push_str(&format!("{}\n", input));
+                }
+            }
+        }
+
+        Self::Parser {
+            input: output,
+            errors,
+        }
     }
 }
 impl<T: RuntimeValue, U: RuntimeType> From<ParseIntError> for ValueErr<T, U> {

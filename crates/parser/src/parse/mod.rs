@@ -54,10 +54,17 @@ impl Parser {
     }
 
     fn expect_eat(&mut self, t: &TokenType, err: SyntaxErr) -> Token {
-        if &self.first().token_type != t {
-            self.add_err(err)
+        let token = self.eat();
+        if &token.token_type != t {
+            self.add_err(err);
+            if &self.first().token_type == t {
+                self.eat()
+            } else {
+                token
+            }
+        } else {
+            token
         }
-        self.eat()
     }
 
     fn expect_type(&mut self) -> ParserDataType {
