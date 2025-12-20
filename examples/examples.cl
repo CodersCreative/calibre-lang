@@ -1,10 +1,9 @@
-const main = sd fn () => {
+const main = fn () => {
 	print(bmi(52.5, 1.65));
 	print(factorial(5));
-	let x : float = 10;
 };
 
-const bmi = gh fn (mass height : float) -> float => mass / height ** 2;
+const bmi = fn (mass height : float) -> float => mass / height ** 2;
 
 const is_a_trinagle = fn (a b c : float) -> bool => a + b > c && b + c > a && c + a > b;
 

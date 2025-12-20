@@ -4,8 +4,11 @@ use calibre_parser::{
     ast::{LoopType, NodeType, binary::BinaryOperator},
     lexer::LexerError,
 };
-use miette::Diagnostic;
-use std::num::{ParseFloatError, ParseIntError};
+use miette::{Diagnostic, LabeledSpan};
+use std::{
+    fmt::Display,
+    num::{ParseFloatError, ParseIntError},
+};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone, Diagnostic)]
@@ -99,23 +102,38 @@ pub enum ScopeErr {
     Function(String),
     #[error("Unable to resolve scope : {0}.")]
     Scope(String),
-    #[error("Unable to parse scope. ")]
+    #[error("{0}")]
     #[diagnostic()]
-    Parser {
-        #[source_code]
-        input: String,
-        #[related]
-        errors: Vec<RelatedParserErrors>,
-    },
+    Parser(#[from] ParserError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Miette(#[from] ReportWrapper),
 }
 
-#[derive(Error, Debug, Clone, Diagnostic)]
-#[error("Invalid Syntax - {err}")]
-#[diagnostic()]
-pub struct RelatedParserErrors {
-    err: String,
-    #[label]
-    span: Option<(usize, usize)>,
+#[derive(Debug, Error, Diagnostic, Clone)]
+#[error("")]
+pub struct ParserVec(#[label(collection, "related to this")] Vec<LabeledSpan>);
+
+#[derive(Debug, Error, Diagnostic)]
+#[diagnostic(transparent)]
+pub struct ReportWrapper(miette::Report);
+
+impl Display for ReportWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+impl Clone for ReportWrapper {
+    fn clone(&self) -> Self {
+        Self(miette::Report::msg("Cloned"))
+    }
+}
+
+impl From<miette::Report> for ReportWrapper {
+    fn from(value: miette::Report) -> Self {
+        Self(value)
+    }
 }
 
 #[derive(Error, Debug, Clone, Diagnostic)]
@@ -132,61 +150,36 @@ pub enum ValueErr<T: RuntimeValue, U: RuntimeType> {
     ParseFloatError(ParseFloatError),
 }
 
-impl From<ParserError> for ScopeErr {
-    fn from(value: ParserError) -> Self {
-        match value {
-            ParserError::Lexer(x) => match x {
-                LexerError::Unrecognized { .. } => Self::Parser {
-                    input: String::new(),
-                    errors: vec![RelatedParserErrors {
-                        err: x.to_string(),
-                        span: None,
-                    }],
-                },
-            },
-            ParserError::Syntax { input, err, token } => Self::Parser {
-                input: input.clone(),
-                errors: vec![RelatedParserErrors {
-                    err: err.to_string(),
-                    span: token,
-                }],
-            },
-        }
-    }
-}
-
 impl From<Vec<ParserError>> for ScopeErr {
     fn from(value: Vec<ParserError>) -> Self {
         let mut output = String::new();
         let mut errors = Vec::new();
 
+        // return Self::Parser2 { errors: value };
+
         for val in value {
             match val {
                 ParserError::Lexer(x) => match x {
                     LexerError::Unrecognized { .. } => {
-                        errors.push(RelatedParserErrors {
-                            err: x.to_string(),
-                            span: None,
-                        });
+                        errors.push(LabeledSpan::new_with_span(Some(x.to_string()), (0, 1)));
                     }
                 },
-                ParserError::Syntax { input, err, token } => {
-                    errors.push(RelatedParserErrors {
-                        err: err.to_string(),
-                        span: Some((
-                            output.len() + token.unwrap().0,
-                            output.len() + token.unwrap().1,
-                        )),
-                    });
+                ParserError::Syntax {
+                    input,
+                    err,
+                    token,
+                    span,
+                } => {
+                    errors.push(LabeledSpan::new_with_span(
+                        Some(format!("{} at {}", err, span)),
+                        (output.len() + token.unwrap().0, token.unwrap().1),
+                    ));
                     output.push_str(&format!("{}\n", input));
                 }
             }
         }
-
-        Self::Parser {
-            input: output,
-            errors,
-        }
+        let report: miette::Report = ParserVec(errors).into();
+        Self::Miette(ReportWrapper(report.with_source_code(output)))
     }
 }
 impl<T: RuntimeValue, U: RuntimeType> From<ParseIntError> for ValueErr<T, U> {

@@ -3,13 +3,23 @@ use crate::ast::{
     comparison::{BooleanOperation, Comparison},
 };
 use miette::Diagnostic;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 use thiserror::Error;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Span {
     pub from: Position,
     pub to: Position,
+}
+
+impl Display for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({}:{}) -> ({}:{})",
+            self.from.line, self.from.col, self.to.line, self.to.col
+        )
+    }
 }
 
 impl Span {

@@ -34,8 +34,8 @@ impl Parser {
     }
 
     fn add_err(&mut self, err: SyntaxErr) {
-        let prev = self.prev_token.clone().unwrap().value;
-        let mut input = prev.clone();
+        let prev = self.prev_token.clone().unwrap();
+        let mut input = prev.value.clone();
 
         (0..4).into_iter().for_each(|x| {
             let val = self
@@ -49,7 +49,8 @@ impl Parser {
         self.errors.push(ParserError::Syntax {
             input,
             err,
-            token: Some((0, prev.len())),
+            span: prev.span,
+            token: Some((0, prev.value.len() - 1)),
         })
     }
 

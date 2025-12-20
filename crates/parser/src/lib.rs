@@ -70,11 +70,12 @@ pub enum ParserError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Lexer(LexerError),
-    #[error("{err}")]
+    #[error("{err} at {span}")]
     Syntax {
         #[source_code]
         input: String,
         err: SyntaxErr,
+        span: Span,
         #[label("here")]
         token: Option<(usize, usize)>,
     },
