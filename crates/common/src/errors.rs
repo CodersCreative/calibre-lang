@@ -67,11 +67,11 @@ pub enum RuntimeErr<T: RuntimeValue, U: RuntimeType> {
     ExpectedType(T, U),
     #[error("Variable {0:?} has an unexpected type.")]
     UnexpectedType(T),
-    #[error("Node {0:?} has an unexpected type.")]
+    #[error("Node {0} has an unexpected type.")]
     UnexpectedNode(NodeType),
-    #[error("Node {0:?} needs to be used in the global scope.")]
+    #[error("Node {0} needs to be used in the global scope.")]
     UnexpectedNodeInTemp(NodeType),
-    #[error("Node {0:?} can't be used in the global scope.")]
+    #[error("Node {0} can't be used in the global scope.")]
     UnexpectedNodeInGlobal(NodeType),
     #[error("No associated enum item : {1:?} in enum {0:?}")]
     UnexpectedEnumItem(String, String),
@@ -94,7 +94,7 @@ pub enum ScopeErr {
     AssignConstant(String),
     #[error("Unable to shadow immutable variable : {0}.")]
     ShadowConstant(String),
-    #[error("Variable types dont match : {0:?}.")]
+    #[error("Variable types dont match : {0}.")]
     TypeMismatch(String),
     #[error("Unable to resolve object : {0:?}.")]
     Object(String),

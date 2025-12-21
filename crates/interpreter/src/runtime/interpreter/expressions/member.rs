@@ -60,6 +60,84 @@ impl InterpreterEnvironment {
         self.evaluate(&s, node)
     }
 
+    fn handle_call_expr_in_path(
+        &mut self,
+        scope: &u64,
+        path: Vec<MemberPathType>,
+        value_node: Box<Node>,
+        mut args: Vec<(Node, Option<Node>)>,
+    ) -> Result<MembrExprPathRes, InterpreterErr> {
+        println!("{:?}", path);
+        match value_node.node_type {
+            NodeType::Identifier(value) => {
+                return Ok(MembrExprPathRes::Value(
+                    match self.evaluate(
+                        scope,
+                        Node::new(
+                            NodeType::EnumExpression {
+                                identifier: path[0].clone().to_string().into(),
+                                value: value.to_string().into(),
+                                data: Some(ObjectType::Tuple(
+                                    args.clone()
+                                        .into_iter()
+                                        .map(|x| Some(x.0.clone()))
+                                        .collect(),
+                                )),
+                            },
+                            value_node.span,
+                        ),
+                    ) {
+                        Ok(x) => x,
+                        Err(e) => {
+                            if let Ok(pointer) =
+                                self.get_object_pointer(scope, &path[0].to_string())
+                            {
+                                let x = self.get_function(&pointer, &value).map(|x| x.0.clone())?;
+                                self.evaluate_function(scope, x, args)?
+                            } else if let Ok(pointer) =
+                                self.get_var_pointer(scope, &path[0].to_string())
+                            {
+                                let obj = match match self.get_var(&pointer) {
+                                    Ok(x) => x.value.clone(),
+                                    _ => return Err(e),
+                                } {
+                                    RuntimeValue::Struct(p, _) => p.unwrap().clone(),
+                                    RuntimeValue::Enum(p, _, _) => p.clone(),
+                                    _ => return Err(e),
+                                };
+
+                                if let Ok(x) = self.get_function(&obj, &value) {
+                                    if x.2 {
+                                        println!("{:?}", path[0]);
+                                        args.insert(
+                                            0,
+                                            (
+                                                Node::new(
+                                                    NodeType::Identifier(
+                                                        path[0].to_string().into(),
+                                                    ),
+                                                    value_node.span,
+                                                ),
+                                                None,
+                                            ),
+                                        );
+                                    }
+
+                                    self.evaluate_function(scope, x.0.clone(), args)?
+                                } else {
+                                    return Err(e);
+                                }
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    },
+                ));
+            }
+            _ => panic!(),
+        }
+    }
+
     pub fn get_member_expression_path(
         &mut self,
         scope: &u64,
@@ -75,6 +153,21 @@ impl InterpreterEnvironment {
                     }
                     NodeType::IntLiteral(x) => {
                         path.push(MemberPathType::Dot(x.to_string()));
+                    }
+                    NodeType::CallExpression(value_node, args) => {
+                        return self.handle_call_expr_in_path(
+                            scope,
+                            path,
+                            value_node.clone(),
+                            args.clone(),
+                        );
+                    }
+                    NodeType::MemberExpression { path: p } => {
+                        match self.get_member_expression_path(scope, p.to_vec())? {
+                            MembrExprPathRes::Value(x) => return Ok(MembrExprPathRes::Value(x)),
+                            MembrExprPathRes::Path(mut p) => path.append(&mut p),
+                        }
+                        continue;
                     }
                     _ => return Err(InterpreterErr::UnexpectedNode(node.node_type)),
                 }
@@ -128,75 +221,14 @@ impl InterpreterEnvironment {
                             ),
                         )?));
                     }
-                    NodeType::CallExpression(value_node, mut args) => match value_node.node_type {
-                        NodeType::Identifier(value) => {
-                            return Ok(MembrExprPathRes::Value(
-                                match self.evaluate(
-                                    scope,
-                                    Node::new(
-                                        NodeType::EnumExpression {
-                                            identifier: path[0].clone().to_string().into(),
-                                            value: value.to_string().into(),
-                                            data: Some(ObjectType::Tuple(
-                                                args.clone()
-                                                    .into_iter()
-                                                    .map(|x| Some(x.0.clone()))
-                                                    .collect(),
-                                            )),
-                                        },
-                                        value_node.span,
-                                    ),
-                                ) {
-                                    Ok(x) => x,
-                                    Err(e) => {
-                                        if let Ok(pointer) =
-                                            self.get_object_pointer(scope, &path[0].to_string())
-                                        {
-                                            let x = self
-                                                .get_function(&pointer, &value)
-                                                .map(|x| x.0.clone())?;
-                                            self.evaluate_function(scope, x, args)?
-                                        } else if let Ok(pointer) =
-                                            self.get_var_pointer(scope, &path[0].to_string())
-                                        {
-                                            let obj = match match self.get_var(&pointer) {
-                                                Ok(x) => x.value.clone(),
-                                                _ => return Err(e),
-                                            } {
-                                                RuntimeValue::Struct(p, _) => p.unwrap().clone(),
-                                                RuntimeValue::Enum(p, _, _) => p.clone(),
-                                                _ => return Err(e),
-                                            };
-
-                                            if let Ok(x) = self.get_function(&obj, &value) {
-                                                if x.2 {
-                                                    args.insert(
-                                                        0,
-                                                        (
-                                                            Node::new(
-                                                                NodeType::Identifier(
-                                                                    path[0].to_string().into(),
-                                                                ),
-                                                                value_node.span,
-                                                            ),
-                                                            None,
-                                                        ),
-                                                    );
-                                                }
-
-                                                self.evaluate_function(scope, x.0.clone(), args)?
-                                            } else {
-                                                return Err(e);
-                                            }
-                                        } else {
-                                            return Err(e);
-                                        }
-                                    }
-                                },
-                            ));
-                        }
-                        _ => return Err(e),
-                    },
+                    NodeType::CallExpression(value_node, args) => {
+                        return self.handle_call_expr_in_path(
+                            scope,
+                            path,
+                            value_node.clone(),
+                            args.clone(),
+                        );
+                    }
                     _ => return Err(e),
                 },
                 Err(e) => return Err(e),
@@ -249,7 +281,13 @@ impl InterpreterEnvironment {
                 };
 
                 match self.get_member_ref(scope, &path) {
-                    Ok(RuntimeValue::Ref(pointer, _)) => Ok(self.get_var(&pointer)?.value.clone()),
+                    Ok(RuntimeValue::Ref(pointer, _)) => {
+                        let mut value = &self.get_var(&pointer)?.value;
+                        while let RuntimeValue::Ref(pointer, _) = value {
+                            value = &self.get_var(&pointer)?.value;
+                        }
+                        Ok(value.clone())
+                    }
                     Ok(x) => Ok(x),
                     Err(_) if path.len() == 2 => {
                         return self.evaluate(

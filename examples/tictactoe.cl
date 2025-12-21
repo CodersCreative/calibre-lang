@@ -25,8 +25,8 @@ impl Player {
 const get_pos = fn (x y : int) -> int => y * 3 + x;
 
 const get_user_input = fn () -> int => {
-	let mut x : int = unwrap(std.console.input("Enter x position (min = 1, max = 3): "));
-	let mut y : int = unwrap(std.console.input("Enter y position (min = 1, max = 3): "));
+	let mut x : int = unwrap(unwrap(std:console:input("Enter x position (min = 1, max = 3): ")) as int);
+	let mut y : int = unwrap(unwrap(std:console:input("Enter y position (min = 1, max = 3): ")) as int);
 	
 	x -= 1;
 	y -= 1;
@@ -57,6 +57,7 @@ impl Board {
 
 	const is_full = fn (self : &Board) -> bool => {
 		for i in 0..9 => if self.0[i] == Player.None => return false;
+		print("aight");
 		return true;
 	};
 
@@ -145,8 +146,8 @@ impl Board {
 const get_ais = fn () -> <bool, bool> => {
 	let mut ais = tuple(false, false);
 	
-	if trim(std.console.input("Enter 'y' to make Player X (1) an AI: ")) == 'y' => ais.0 = true;
-	if trim(std.console.input("Enter 'y' to make Player O (2) an AI: ")) == 'y' => ais.1 = true;
+	if trim(unwrap(std:console:input("Enter 'y' to make Player X (1) an AI: "))) == 'y' => ais.0 = true;
+	if trim(unwrap(std:console:input("Enter 'y' to make Player O (2) an AI: "))) == 'y' => ais.1 = true;
 	
 	ais;
 };
@@ -156,9 +157,11 @@ const main = fn () => {
 		let ais = get_ais();
 		let both_ais = ais.0 && ais.1;
 		let mut board : Board = Board.default();
+		print("okay");
 		let mut player : Player = Player.X;
 		
 		for !board.is_full() && board.get_winner() == Player.None => {
+			print("okay");
 			// std.console.clear();
 			board.print_board();
 			

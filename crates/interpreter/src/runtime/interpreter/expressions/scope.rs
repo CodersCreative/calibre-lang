@@ -108,7 +108,9 @@ impl InterpreterEnvironment {
                 continue;
             }
 
-            return Err(InterpreterErr::RefNonVar(arguments[0].0.node_type.clone()));
+            if !arguments.is_empty() {
+                return Err(InterpreterErr::RefNonVar(arguments[0].0.node_type.clone()));
+            }
         }
 
         Ok(new_scope)

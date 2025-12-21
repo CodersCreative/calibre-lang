@@ -1,26 +1,26 @@
 const BASIC_CODE: &str = r#"
-   const thirty = fn () -> int => 30;
-   // const main = fn () -> int => if 1 => 10 + 4 else => 30;
-   const main = fn (x : int) -> float =>  {
-    let mut index : float = 1.0;
-    let arr : list<float> = [10.5, 40.8, 50.2];
-    let tpl = tuple(10.0, 90.8);
-    let mut counter : float = 1 as float;
-    for counter < 98.0 => {
-        counter += 1.2 + 1 as float ;
-        index *= counter
+    const thirty = fn () -> int => 30;
+    // const main = fn () -> int => if 1 => 10 + 4 else => 30;
+    const main = fn (x : int) -> float =>  {
+        let mut index : float = 1.0;
+        let arr : list<float> = [10.5, 40.8, 50.2];
+        let tpl : <float, float> = tuple(10.0, 90.8);
+        let mut counter : float = 1 as float;
+        for counter < 98.0 => {
+            counter += 1.2 + 1 as float;
+            index *= counter;
+        }
+        let itm : float = tpl[0];
+
+        for i in 100 => counter += i as float;
+
+        for 100 => counter += 2 as float;
+
+        counter;
     }
-    // let itm : float = tpl[1];
-
-    for i in 100 => counter += i as float;
-
-    for 100 => counter += 2 as float;
-
-    counter
-   }
-   // const main = fn () -> float => 100.8;
-   // const main = fn () -> str => "abcd";
-   const forty = fn () -> int => 40;
+    // const main = fn () -> float => 100.8;
+    // const main = fn () -> str => "abcd";
+    const forty = fn () -> int => 40;
 "#;
 
 use calibre_cranelift_jit::jit::JIT;

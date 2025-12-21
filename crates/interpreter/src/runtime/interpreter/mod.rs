@@ -62,6 +62,10 @@ impl InterpreterEnvironment {
                 } {
                     let value = self.get_var(&pointer)?.value.clone();
 
+                    if let RuntimeValue::Ref(pointer, _) = value {
+                        return Ok(self.get_var(&pointer)?.value.clone());
+                    }
+
                     Ok(value)
                 } else {
                     Err(RuntimeErr::DerefNonRef(value.node_type))

@@ -35,6 +35,9 @@ impl From<ParserDataType> for RuntimeType {
                 None => RuntimeType::Dynamic,
             })),
             ParserInnerType::Struct(Some(x)) => RuntimeType::Named(x),
+            ParserInnerType::Tuple(x) => {
+                RuntimeType::Tuple(x.into_iter().map(|x| x.into()).collect())
+            }
             _ => unimplemented!(),
         }
     }

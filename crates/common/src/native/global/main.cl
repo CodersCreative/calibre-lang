@@ -1,14 +1,14 @@
 const unwrap = fn(val : dyn) -> dyn => {
   *val |> match {
-    Ok(x) => return x,
-    Some(x) => return x,
+    Ok(x) => return *x,
+    Some(x) => return *x,
     _ => panic()
   }
 }
 
 const unwrap_err = fn(val : dyn) -> dyn => {
   *val |> match {
-    Err(x) => return x,
+    Err(x) => return *x,
     _ => panic()
   }
 }

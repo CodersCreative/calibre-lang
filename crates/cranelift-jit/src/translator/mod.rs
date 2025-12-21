@@ -301,7 +301,7 @@ impl<'a> FunctionTranslator<'a> {
                 todo!()
             }
             NodeType::CallExpression(caller, args) => {
-                if NodeType::Identifier("tuple".to_string().into()) == caller.node_type {
+                if "tuple" == &caller.node_type.to_string() {
                     return self
                         .translate_tuple_expression(args.into_iter().map(|x| x.0).collect());
                 }
