@@ -11,12 +11,13 @@ const BASIC_CODE: &str = r#"
             index *= counter;
         }
         let itm : float = tpl[0];
+        let txt = "djsdalk";
 
         for i in 100 => counter += i as float;
 
         for 100 => counter += 2 as float;
 
-        counter;
+        arr[0];
     }
     // const main = fn () -> float => 100.8;
     // const main = fn () -> str => "abcd";

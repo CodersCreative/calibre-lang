@@ -95,8 +95,6 @@ impl<'a> FunctionTranslator<'a> {
         let rhs_addr = self.builder.ins().iadd(rhs, rhs_offset);
 
         let res = if false {
-            // Add complex type comparisons
-            // self.compile_complex_compare(lhs_addr, rhs_addr, sub_ty, hir_op)
             unreachable!()
         } else {
             let lhs_item = self
@@ -116,9 +114,6 @@ impl<'a> FunctionTranslator<'a> {
         };
 
         let idx_plus_one = self.builder.ins().iadd_imm(body_idx, 1);
-
-        // if the check was successful, check the next item of the array, otherwise exit
-        // with false
 
         match operator {
             Comparison::Equal => {
@@ -154,26 +149,28 @@ impl<'a> FunctionTranslator<'a> {
             panic!()
         };
 
-        let lhs = self
-            .builder
-            .ins()
-            .load(self.types.ptr(), MemFlags::trusted(), left.value, 0);
+        let data_ptr = self.builder.ins().load(
+            self.types.ptr(),
+            MemFlags::trusted(),
+            left.value,
+            self.types.ptr().bytes() as i32,
+        );
 
-        let lhs_offset = self
+        let elem_offset = self
             .builder
             .ins()
             .imul_imm(index, left_r_type.stride() as i64);
 
-        let lhs_addr = self.builder.ins().iadd(lhs, lhs_offset);
+        let elem_addr = self.builder.ins().iadd(data_ptr, elem_offset);
 
-        let lhs = self.builder.ins().load(
+        let val = self.builder.ins().load(
             self.types.get_type_from_runtime_type(&left_r_type),
             MemFlags::trusted(),
-            lhs_addr,
+            elem_addr,
             0,
         );
 
-        RuntimeValue::new(lhs, *left_r_type)
+        RuntimeValue::new(val, *left_r_type)
     }
 
     pub fn get_tuple_member(&mut self, left: RuntimeValue, index: usize) -> RuntimeValue {
@@ -181,22 +178,19 @@ impl<'a> FunctionTranslator<'a> {
             panic!()
         };
 
-        let lhs = self
-            .builder
-            .ins()
-            .load(self.types.ptr(), MemFlags::trusted(), left.value, 0);
+        let offset = types[0..index]
+            .iter()
+            .map(|x| x.stride() as i32)
+            .sum::<i32>();
 
-        let lhs = self.builder.ins().load(
+        let val = self.builder.ins().load(
             self.types.get_type_from_runtime_type(&types[index]),
             MemFlags::new().with_aligned(),
-            lhs,
-            types[0..index]
-                .iter()
-                .map(|x| x.stride() as i32)
-                .sum::<i32>(),
+            left.value,
+            offset,
         );
 
-        RuntimeValue::new(lhs, types[index].clone())
+        RuntimeValue::new(val, types[index].clone())
     }
 
     pub fn translate_tuple_expression(&mut self, items: Vec<Node>) -> RuntimeValue {
@@ -245,17 +239,17 @@ impl<'a> FunctionTranslator<'a> {
             .unwrap_or(RuntimeType::Int);
         let stride = element_type.stride();
 
-        let slot = self.builder.create_sized_stack_slot(StackSlotData {
-            kind: StackSlotKind::ExplicitSlot,
-            size: stride * 32,
-            align_shift: element_type.align_shift(),
-        });
-
-        let memory = MemoryLoc::from_stack(slot, 0);
+        let data_size = stride * (items.len() as u32);
+        let data_slot = self.builder.create_sized_stack_slot(StackSlotData::new(
+            StackSlotKind::ExplicitSlot,
+            data_size,
+            element_type.align_shift(),
+        ));
+        let data_memory = MemoryLoc::from_stack(data_slot, 0);
 
         for (i, item) in items.iter().enumerate() {
             let offset = (i as u32) * stride;
-            let _ = memory.with_offset(offset).write_all(
+            let _ = data_memory.with_offset(offset).write_all(
                 Some(item.value),
                 element_type.clone(),
                 self.module,
@@ -263,8 +257,25 @@ impl<'a> FunctionTranslator<'a> {
             );
         }
 
+        let header_size = (self.types.ptr().bytes() * 2) as u32;
+        let header_slot = self.builder.create_sized_stack_slot(StackSlotData::new(
+            StackSlotKind::ExplicitSlot,
+            header_size,
+            0,
+        ));
+        let header_memory = MemoryLoc::from_stack(header_slot, 0);
+
+        let len_val = self
+            .builder
+            .ins()
+            .iconst(self.types.ptr(), items.len() as i64);
+        header_memory.write_val(&mut self.builder, len_val, 0);
+
+        let data_ptr = data_memory.into_value(&mut self.builder, self.types.ptr());
+        header_memory.write_val(&mut self.builder, data_ptr, self.types.ptr().bytes() as i32);
+
         RuntimeValue::new(
-            memory.into_value(&mut self.builder, self.types.ptr()),
+            header_memory.into_value(&mut self.builder, self.types.ptr()),
             RuntimeType::List(Box::new(element_type)),
         )
     }
