@@ -1,14 +1,13 @@
 pub mod translator;
 pub mod values;
 use calibre_parser::ast::{Node, NodeType, ParserDataType, VarType};
+use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::*;
 use cranelift_module::{DataDescription, Linkage, Module};
 use cranelift_object::object::read::{File as ObjectFile, RelocationKind, RelocationTarget};
 use cranelift_object::object::{Object, ObjectSection, ObjectSymbol, SectionKind};
 use cranelift_object::{ObjectBuilder, ObjectModule};
-use libc::{
-    MAP_ANON, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE, mmap, mprotect, size_t,
-};
+use libc::{MAP_ANON, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE, mmap, mprotect, size_t};
 use std::{collections::HashMap, error::Error, ffi::CString, ptr};
 
 use crate::translator::{FunctionTranslator, layout::create_layout};
@@ -41,9 +40,23 @@ impl Compiler {
     pub fn compile(&mut self, program: Node) -> Result<*const u8, Box<dyn Error>> {
         let mut main = None;
 
-        if let NodeType::ScopeDeclaration { body, is_temp: _ } = program.node_type {
+        let mut type_defs: std::collections::HashMap<String, calibre_parser::ast::TypeDefType> =
+            std::collections::HashMap::new();
+        let mut type_uids: std::collections::HashMap<String, u32> =
+            std::collections::HashMap::new();
+        let mut next_uid: u32 = 1;
+
+        if let NodeType::ScopeDeclaration { body, is_temp: _ } = program.node_type.clone() {
+            for node in &body {
+                if let NodeType::TypeDeclaration { identifier, object } = &node.node_type {
+                    type_defs.insert(identifier.to_string(), object.clone());
+                    type_uids.insert(identifier.to_string(), next_uid);
+                    next_uid += 1;
+                }
+            }
+
             for func in body {
-                let val = self.compile_const_fns(func.clone())?;
+                let val = self.compile_const_fns(func.clone(), &type_defs, &type_uids)?;
                 if let NodeType::VariableDeclaration { identifier, .. } = func.node_type {
                     if identifier.to_string() == "main" {
                         main = Some(val);
@@ -55,7 +68,12 @@ impl Compiler {
         Ok(main.unwrap())
     }
 
-    pub fn compile_const_fns(&mut self, node: Node) -> Result<*const u8, Box<dyn Error>> {
+    pub fn compile_const_fns(
+        &mut self,
+        node: Node,
+        type_defs: &std::collections::HashMap<String, calibre_parser::ast::TypeDefType>,
+        type_uids: &std::collections::HashMap<String, u32>,
+    ) -> Result<*const u8, Box<dyn Error>> {
         if let NodeType::VariableDeclaration {
             var_type,
             mut identifier,
@@ -80,7 +98,7 @@ impl Compiler {
             {
                 let mut flag_builder = settings::builder();
                 flag_builder.set("use_colocated_libcalls", "false").unwrap();
-                flag_builder.set("is_pic", "true").unwrap();
+                flag_builder.set("is_pic", "false").unwrap();
                 let isa_builder = cranelift_native::builder().unwrap();
                 let isa = isa_builder
                     .finish(settings::Flags::new(flag_builder))
@@ -105,6 +123,8 @@ impl Compiler {
                     *body,
                     &mut module,
                     &mut ctx,
+                    type_defs,
+                    type_uids,
                 )?;
 
                 let id = module
@@ -136,6 +156,8 @@ impl Compiler {
         node: Node,
         module: &mut ObjectModule,
         ctx: &mut codegen::Context,
+        type_defs: &std::collections::HashMap<String, calibre_parser::ast::TypeDefType>,
+        type_uids: &std::collections::HashMap<String, u32>,
     ) -> Result<(), Box<dyn Error>> {
         let ptr = module.target_config().pointer_type();
         let types = crate::translator::Types::new(ptr);
@@ -154,6 +176,8 @@ impl Compiler {
                 .returns
                 .push(AbiParam::new(types.get_type_from_parser_type(&t)));
         }
+
+        ctx.func.signature.call_conv = CallConv::SystemV;
 
         // Create the builder to build a function.
         let mut builder = FunctionBuilder::new(&mut ctx.func, &mut self.builder_context);
@@ -177,6 +201,8 @@ impl Compiler {
             builder,
             module,
             description: &mut self.data_description,
+            type_defs,
+            type_uids,
             stop: None,
         };
         let value = trans.translate(node);
@@ -194,6 +220,7 @@ impl Compiler {
 
         let mut section_bases: HashMap<usize, usize> = HashMap::new();
 
+        let mut text_sections: Vec<(usize, usize)> = Vec::new();
         for section in file.sections() {
             let kind = section.kind();
             if kind == SectionKind::Text || kind == SectionKind::Data {
@@ -228,7 +255,7 @@ impl Compiler {
                     std::ptr::copy_nonoverlapping(data.as_ptr(), base as *mut u8, size);
 
                     if kind == SectionKind::Text {
-                        mprotect(ptr, size as size_t, PROT_READ | PROT_EXEC);
+                        text_sections.push((base, size));
                     }
 
                     section_bases.insert(section.index().0 as usize, base);
@@ -289,7 +316,7 @@ impl Compiler {
                             return Err("unsupported relative relocation size".into());
                         }
                     }
-                    RelocationKind::Absolute => {
+                    _ => {
                         let addend = reloc.addend();
                         let size_bits = reloc.size();
                         if size_bits == 64 {
@@ -308,8 +335,14 @@ impl Compiler {
                             return Err("unsupported absolute relocation size".into());
                         }
                     }
-                    _ => return Err("unsupported relocation kind".into()),
                 }
+            }
+        }
+
+        for (base, size) in text_sections {
+            unsafe {
+                let ptr = base as *mut libc::c_void;
+                mprotect(ptr, size as size_t, PROT_READ | PROT_EXEC);
             }
         }
 

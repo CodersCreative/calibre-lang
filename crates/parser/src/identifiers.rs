@@ -1,4 +1,4 @@
-use calibre_parser::ast::{IfComparisonType, LoopType, Node, NodeType, ObjectType};
+use crate::ast::{IfComparisonType, LoopType, Node, NodeType, ObjectType};
 
 pub fn identifiers_used<'a>(node: &'a Node) -> Vec<&'a String> {
     match &node.node_type {

@@ -53,6 +53,7 @@ pub enum RuntimeType {
     Dynamic,
     Ref {
         mutable: bool,
+        data_type: Box<RuntimeType>,
     },
     Tuple(Vec<RuntimeType>),
     List(Box<RuntimeType>),
@@ -61,6 +62,7 @@ pub enum RuntimeType {
     Result(Box<RuntimeType>, Box<RuntimeType>),
     Function {
         return_type: Option<Box<RuntimeType>>,
+        captures: Vec<String>,
         parameters: Vec<(RuntimeType, calibre_parser::ast::RefMutability)>,
         is_async: bool,
     },

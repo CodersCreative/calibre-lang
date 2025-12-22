@@ -2,6 +2,7 @@ const BASIC_CODE: &str = r#"
     const thirty = fn () -> int => 30;
     // const main = fn () -> int => if 1 => 10 + 4 else => 30;
     const main = fn (x : int) -> float =>  {
+        let forty = fn () -> float => 40.0;    
         let mut index : float = 1.0;
         let arr : list<float> = [10.5, 40.8, 50.2];
         let tpl : <float, float> = tuple(10.0, 90.8);
@@ -12,6 +13,9 @@ const BASIC_CODE: &str = r#"
         }
         let itm : float = tpl[0];
         let txt = "djsdalk";
+        let smth = {
+    		txt : "hello",
+    	};
 
         for i in 100 => counter += i as float;
 
@@ -21,7 +25,7 @@ const BASIC_CODE: &str = r#"
     }
     // const main = fn () -> float => 100.8;
     // const main = fn () -> str => "abcd";
-    const forty = fn () -> int => 40;
+    
 "#;
 
 use calibre_cranelift::Compiler;

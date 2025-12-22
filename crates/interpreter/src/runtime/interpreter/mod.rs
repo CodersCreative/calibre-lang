@@ -41,8 +41,11 @@ impl InterpreterEnvironment {
             }
             NodeType::DebugExpression { value } => {
                 let val = self.evaluate(scope, *value.clone())?;
-                println!("Debug at span : {:?}", self.current_location);
-                println!("Node : {:?}", value);
+                println!(
+                    "Debug at span : {}",
+                    self.current_location.as_ref().unwrap().span
+                );
+                println!("Node : {}", value);
                 println!("Evaluates to : {}", val.to_string());
                 Ok(val)
             }

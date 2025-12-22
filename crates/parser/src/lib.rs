@@ -6,6 +6,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 pub mod ast;
+pub mod identifiers;
 pub mod lexer;
 pub mod parse;
 

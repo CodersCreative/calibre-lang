@@ -5,11 +5,11 @@ use crate::values::RuntimeType;
 #[derive(Debug)]
 pub(crate) struct TyLayouts {
     /// the pointer bit widths that all these type sizes were calculated with
-    pointer_bit_width: u32,
-    sizes: HashMap<RuntimeType, u32>,
-    alignments: HashMap<RuntimeType, u32>,
-    struct_layouts: HashMap<RuntimeType, StructLayout>,
-    enum_layouts: HashMap<RuntimeType, EnumLayout>,
+    pub pointer_bit_width: u32,
+    pub sizes: HashMap<RuntimeType, u32>,
+    pub alignments: HashMap<RuntimeType, u32>,
+    pub struct_layouts: HashMap<RuntimeType, StructLayout>,
+    pub enum_layouts: HashMap<RuntimeType, EnumLayout>,
 }
 
 static LAYOUTS: Mutex<OnceCell<TyLayouts>> = Mutex::new(OnceCell::new());
@@ -71,7 +71,14 @@ impl GetLayoutInfo for RuntimeType {
     }
 
     fn ensure_layout(&self) {
-        if None == LAYOUTS.lock().unwrap().get().unwrap().sizes.get(self) {
+        if !LAYOUTS
+            .lock()
+            .unwrap()
+            .get()
+            .unwrap()
+            .sizes
+            .contains_key(self)
+        {
             calc_single(self);
         }
     }
@@ -225,14 +232,24 @@ fn calc_single(ty: &RuntimeType) {
         RuntimeType::Bool | RuntimeType::Char => 1, // bools and chars are u8's
         RuntimeType::Str | RuntimeType::Ref { .. } | RuntimeType::Function { .. } => size.min(8),
         RuntimeType::Tuple(types) => {
-            let mut val = 0;
+            let mut val = 1;
             for t in types {
                 val = val.max(t.align())
             }
             val
         }
         RuntimeType::List(ty) => ty.align(),
-        RuntimeType::Struct { .. } => ty.struct_layout().unwrap().align,
+        RuntimeType::Struct { .. } => {
+            LAYOUTS
+                .lock()
+                .unwrap()
+                .get()
+                .unwrap()
+                .struct_layouts
+                .get(ty)
+                .unwrap()
+                .align
+        }
         RuntimeType::Option(t) => t.align(),
         RuntimeType::Result(error, ok) => error.align().max(ok.align()),
         RuntimeType::Dynamic => {

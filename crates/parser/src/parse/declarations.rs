@@ -38,6 +38,11 @@ impl Parser {
     }
 
     pub fn parse_scope_declaration(&mut self) -> Node {
+        if let Some(x) = self.tokens.get(2) {
+            if x.token_type == TokenType::Colon {
+                return self.parse_object_expression();
+            }
+        }
         let open = self.expect_eat(
             &TokenType::Open(Bracket::Curly),
             SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
