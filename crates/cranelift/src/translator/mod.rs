@@ -8,8 +8,8 @@ use calibre_parser::ast::{Node, NodeType, ParserDataType, ParserInnerType, VarTy
 use calibre_parser::lexer::StopValue;
 use cranelift::codegen::ir::{GlobalValue, types};
 use cranelift::prelude::*;
-use cranelift_jit::JITModule;
 use cranelift_module::{DataDescription, Linkage, Module};
+use cranelift_object::ObjectModule;
 
 use crate::values::{RuntimeType, RuntimeValue};
 
@@ -21,7 +21,7 @@ pub struct FunctionTranslator<'a> {
     pub description: &'a mut DataDescription,
     pub builder: FunctionBuilder<'a>,
     pub variables: HashMap<String, (VarType, RuntimeType, Variable)>,
-    pub module: &'a mut JITModule,
+    pub module: &'a mut ObjectModule,
     pub stop: Option<StopValue>,
 }
 
@@ -88,8 +88,6 @@ impl<'a> FunctionTranslator<'a> {
         name: &str,
         contents: Vec<u8>,
     ) -> Result<GlobalValue, Box<dyn Error>> {
-        // The steps here are analogous to `compile`, except that data is much
-        // simpler than functions.
         self.description.define(contents.into_boxed_slice());
         let id = self
             .module
@@ -100,10 +98,6 @@ impl<'a> FunctionTranslator<'a> {
             .define_data(id, &self.description)
             .map_err(|e| e.to_string())?;
         self.description.clear();
-        self.module.finalize_definitions().unwrap();
-        // let (code, size) = self.module.get_finalized_data(id);
-        //
-        // self.builder.in
         Ok(self.module.declare_data_in_func(id, self.builder.func))
     }
 
@@ -191,7 +185,7 @@ impl<'a> FunctionTranslator<'a> {
                     None => self.types.int(),
                 });
 
-                let mut value = self.translate(*value);
+                let value = self.translate(*value);
 
                 if let Some(data_type) = data_type {
                     let data_type = data_type.into();

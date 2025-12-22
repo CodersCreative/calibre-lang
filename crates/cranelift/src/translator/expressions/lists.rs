@@ -2,12 +2,8 @@ use crate::{
     translator::{FunctionTranslator, layout::GetLayoutInfo, memory::MemoryLoc},
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_parser::ast::{Node, NodeType, comparison::Comparison};
-use cranelift::{
-    codegen::ir::{BlockArg, StackSlot},
-    prelude::*,
-};
-use cranelift_module::{Linkage, Module};
+use calibre_parser::ast::{Node, comparison::Comparison};
+use cranelift::{codegen::ir::BlockArg, prelude::*};
 
 impl<'a> FunctionTranslator<'a> {
     pub fn translate_array_compare(
@@ -27,7 +23,7 @@ impl<'a> FunctionTranslator<'a> {
             .builder
             .ins()
             .load(self.types.ptr(), MemFlags::trusted(), left.value, 0);
-        let rhs_len =
+        let _rhs_len =
             self.builder
                 .ins()
                 .load(self.types.ptr(), MemFlags::trusted(), right.value, 0);

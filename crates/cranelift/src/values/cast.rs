@@ -28,8 +28,8 @@ impl RuntimeValue {
                 RuntimeType::Float => self.clone(),
                 _ => todo!(),
             },
-            RuntimeType::List(x) => {
-                if let RuntimeType::List(y) = t {
+            RuntimeType::List(_) => {
+                if let RuntimeType::List(_) = t {
                     return self.clone();
                 }
 

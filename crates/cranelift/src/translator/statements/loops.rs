@@ -119,7 +119,7 @@ impl<'a> FunctionTranslator<'a> {
                             self.variables
                                 .insert(var_name.to_string(), (VarType::Mutable, *x, member_var))
                         }
-                        RuntimeType::Tuple(x) => None,
+                        RuntimeType::Tuple(_) => None,
                         _ => {
                             compare_value = value;
                             self.variables.insert(

@@ -24,12 +24,8 @@ const BASIC_CODE: &str = r#"
     const forty = fn () -> int => 40;
 "#;
 
-use calibre_cranelift_jit::jit::JIT;
-use calibre_parser::{
-    Parser,
-    ast::{Node, NodeType},
-    lexer::Tokenizer,
-};
+use calibre_cranelift::Compiler;
+use calibre_parser::{Parser, ast::Node, lexer::Tokenizer};
 use std::{fmt::Debug, mem};
 
 fn parse(text: String) -> Node {
@@ -41,7 +37,7 @@ fn parse(text: String) -> Node {
 
 fn run<I, T: Debug>(input: I) {
     let program = parse(BASIC_CODE.to_string());
-    let mut jit = JIT::default();
+    let mut jit = Compiler::default();
     let code_ptr = jit.compile(program).unwrap();
     let code_fn = unsafe { mem::transmute::<_, fn(I) -> T>(code_ptr) };
 

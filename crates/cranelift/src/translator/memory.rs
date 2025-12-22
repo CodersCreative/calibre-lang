@@ -1,4 +1,4 @@
-// Code "inpsired" by Capy Lange (https://github.com/capy-language)
+// Code "inpsired" by Capy Lang (https://github.com/capy-language)
 
 use cranelift::{
     codegen::ir::StackSlot,

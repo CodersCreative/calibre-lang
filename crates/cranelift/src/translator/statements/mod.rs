@@ -1,17 +1,7 @@
 pub mod loops;
 
-use crate::{
-    translator::FunctionTranslator,
-    values::{RuntimeType, RuntimeValue},
-};
-use calibre_parser::{
-    ast::{
-        IfComparisonType, LoopType, Node, NodeType, VarType,
-        binary::BinaryOperator,
-        comparison::{self, Comparison},
-    },
-    lexer::StopValue,
-};
+use crate::{translator::FunctionTranslator, values::RuntimeValue};
+use calibre_parser::ast::{IfComparisonType, Node, NodeType};
 use cranelift::{codegen::ir::BlockArg, prelude::*};
 
 impl<'a> FunctionTranslator<'a> {

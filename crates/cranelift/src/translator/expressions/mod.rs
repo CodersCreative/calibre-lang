@@ -3,10 +3,8 @@ use crate::{
     values::{RuntimeType, RuntimeValue},
 };
 pub mod lists;
-use calibre_parser::ast::{
-    NodeType, ParserDataType, binary::BinaryOperator, comparison::Comparison,
-};
-use cranelift::{codegen::ir::BlockArg, prelude::*};
+use calibre_parser::ast::{binary::BinaryOperator, comparison::Comparison};
+use cranelift::prelude::*;
 
 impl<'a> FunctionTranslator<'a> {
     pub fn translate_binary_expression(

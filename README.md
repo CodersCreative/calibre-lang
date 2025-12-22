@@ -13,7 +13,7 @@ Calibre is a modern, statically-typed programming language designed for clarity,
 - **First-Class Functions**: Functions as values, with concise syntax.
 - **Modules & Imports**: Simple module system for code organization.
 - **Interpreted Execution**: Fast iteration with an interpreter backend.
-- **Planned JIT & AOT Compilation**: Cranelift JIT and LLVM static compilation in development.
+- **Planned AOT Compilation**: Cranelift static compilation in development.
 - **Tooling**: Tree-sitter grammar, formatter, and LSP (Language Server Protocol) support planned.
 
 ---
@@ -72,10 +72,9 @@ recursive_language |> match &mut {
 ## Roadmap
 
 - [x] Interpreter backend
-- [ ] Cranelift JIT backend (`crates/cranelift-jit`)
-- [ ] LLVM static compiler (Inkwell)
+- [ ] Cranelift backend (`crates/cranelift`)
 - [x] Tree-sitter grammar (https://github.com/CodersCreative/tree-sitter-calibre)
-- [ ] Formatter
+- [x] Formatter ('fmt')
 - [ ] Language Server Protocol (LSP) (`lsp`)
 - [ ] Package manager
 
@@ -96,6 +95,7 @@ MIT License. See LICENSE for details.
 ## Repository Structure
 
 - `cal/`: Main interpreter frontend
+- `fmt/`: Formatter implementation
 - `crates/`: Core language crates (parser, interpreter, JIT, etc.)
 - `examples/`: Example Calibre programs
 - `lsp/`: Language Server Protocol implementation (in progress)

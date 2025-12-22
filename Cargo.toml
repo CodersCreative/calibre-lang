@@ -5,8 +5,7 @@ members = [
     "lsp",
     "crates/interpreter",
     "crates/parser",
-    "crates/cranelift-jit",
+    "crates/cranelift",
     "crates/type-checker",
-    "crates/common",
-    "crates/mir", "fmt",
+    "crates/common", "fmt",
 ]
