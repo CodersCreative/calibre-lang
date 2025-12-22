@@ -1,5 +1,19 @@
 const BASIC_CODE: &str = r#"
     const thirty = fn () -> int => 30;
+    type Language = enum {
+    	// Enums can have hasmap type data structuress.
+    	FRENCH	{
+    		data : float,
+    		code : string
+    	},
+    	// Enums can have tuple type data structuress.
+    	ENGLISH(int),
+    	SPANISH,
+    	ARABIC(Language, Language)
+    };
+
+    type Id = struct (float);
+    
     // const main = fn () -> int => if 1 => 10 + 4 else => 30;
     const main = fn (x : int) -> float =>  {
         let forty = fn () -> float => 40.0;    
@@ -7,21 +21,24 @@ const BASIC_CODE: &str = r#"
         let arr : list<float> = [10.5, 40.8, 50.2];
         let tpl : <float, float> = tuple(10.0, 90.8);
         let mut counter : float = 1 as float;
+        let french = Language.FRENCH {data : 1.0, code : "fr"};
+        let id = Id (70000.0);
         for counter < 98.0 => {
             counter += 1.2 + 1 as float;
             index *= counter;
         }
-        let itm : float = tpl[0];
+        let itm : float = tpl.0;
         let txt = "djsdalk";
         let smth = {
     		txt : "hello",
+    		flt : 8.0,
     	};
 
         for i in 100 => counter += i as float;
 
         for 100 => counter += 2 as float;
 
-        arr[0];
+        id.0 + smth.flt;
     }
     // const main = fn () -> float => 100.8;
     // const main = fn () -> str => "abcd";

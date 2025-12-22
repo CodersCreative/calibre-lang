@@ -206,93 +206,12 @@ impl<'a> FunctionTranslator<'a> {
                 RuntimeType::Char,
             ),
             NodeType::ListLiteral(items) => self.translate_array_expression(items),
-            NodeType::StructLiteral(obj) => match obj {
-                calibre_parser::ast::ObjectType::Tuple(items) => {
-                    let items: Vec<RuntimeValue> = items
-                        .into_iter()
-                        .map(|x| x.map(|n| self.translate(n)).unwrap())
-                        .collect();
-
-                    let item_runtime_types: Vec<RuntimeType> =
-                        items.iter().map(|x| x.data_type.clone()).collect();
-
-                    let total_size: u32 = item_runtime_types.iter().map(|x| x.stride()).sum();
-                    let slot = self.builder.create_sized_stack_slot(StackSlotData::new(
-                        StackSlotKind::ExplicitSlot,
-                        total_size,
-                        0,
-                    ));
-
-                    let memory = MemoryLoc::from_stack(slot, 0);
-
-                    for (i, item) in items.iter().enumerate() {
-                        let offset = if i <= 0 {
-                            0
-                        } else {
-                            item_runtime_types[0..i]
-                                .iter()
-                                .map(|x| x.stride() as u32)
-                                .sum()
-                        };
-
-                        let _ = memory.with_offset(offset).write_all(
-                            Some(item.value),
-                            item_runtime_types[i].clone(),
-                            self.module,
-                            &mut self.builder,
-                        );
-                    }
-
-                    RuntimeValue::new(
-                        memory.into_value(&mut self.builder, self.types.ptr()),
-                        RuntimeType::Tuple(item_runtime_types),
-                    )
-                }
-                calibre_parser::ast::ObjectType::Map(props) => {
-                    let mut members: Vec<MemberType> = Vec::new();
-                    let mut values: Vec<RuntimeValue> = Vec::new();
-
-                    for (k, v) in props.into_iter() {
-                        let val = if let Some(node) = v {
-                            self.translate(node)
-                        } else {
-                            self.translate(Node::new(NodeType::IntLiteral(0), Default::default()))
-                        };
-                        members.push(MemberType {
-                            name: k,
-                            ty: val.data_type.clone(),
-                        });
-                        values.push(val);
-                    }
-
-                    let member_types: Vec<RuntimeType> =
-                        members.iter().map(|m| m.ty.clone()).collect();
-                    let total_size: u32 = member_types.iter().map(|x| x.stride()).sum();
-
-                    let slot = self.builder.create_sized_stack_slot(StackSlotData::new(
-                        StackSlotKind::ExplicitSlot,
-                        total_size,
-                        0,
-                    ));
-
-                    let memory = MemoryLoc::from_stack(slot, 0);
-
-                    let rt = RuntimeType::Struct { uid: None, members };
-                    let layouts = rt.struct_layout().unwrap();
-                    let offsets = layouts.offsets();
-
-                    for (i, val) in values.iter().enumerate() {
-                        let _ = memory.with_offset(offsets[i]).write_all(
-                            Some(val.value),
-                            member_types[i].clone(),
-                            self.module,
-                            &mut self.builder,
-                        );
-                    }
-
-                    RuntimeValue::new(memory.into_value(&mut self.builder, self.types.ptr()), rt)
-                }
-            },
+            NodeType::StructLiteral(obj) => self.translate_struct_expression(obj),
+            NodeType::EnumExpression {
+                identifier,
+                value,
+                data,
+            } => self.translate_enum_expression(identifier.to_string(), value.to_string(), data),
             NodeType::StringLiteral(txt) => {
                 println!("{txt}");
                 let name = format!("string_literal_{}", rand::random_range(0..100000));
@@ -413,29 +332,39 @@ impl<'a> FunctionTranslator<'a> {
                     return self.translate(first);
                 }
 
-                let indexing = if let Some(last) = path.last() {
-                    last.1
-                } else {
-                    false
-                };
+                let value = self.translate(Node::new(
+                    NodeType::MemberExpression {
+                        path: path[0..(path.len() - 1)].to_vec(),
+                    },
+                    first.span,
+                ));
 
-                if indexing {
-                    let value = self.translate(Node::new(
-                        NodeType::MemberExpression {
-                            path: path[0..(path.len() - 1)].to_vec(),
-                        },
-                        first.span,
-                    ));
-                    if let RuntimeType::List(_) = value.data_type {
+                let is_computed = path[1].1.clone();
+
+                match value.data_type {
+                    RuntimeType::Struct { uid: _, members: _ } => {
+                        if let Some((node, _)) = path.get(1) {
+                            let index = match &node.node_type {
+                                NodeType::IntLiteral(x) => x.to_string(),
+                                NodeType::Identifier(x) if !is_computed => x.to_string(),
+                                NodeType::StringLiteral(x) if is_computed => x.to_string(),
+                                _ => panic!(),
+                            };
+                            return self.get_struct_member(value, index);
+                        }
+                    }
+                    RuntimeType::List(_) if is_computed => {
                         let index = self.translate(path.pop().unwrap().0);
                         return self.get_array_member(value, index.value);
-                    } else if let RuntimeType::Tuple(_) = value.data_type {
-                        if let Some((node, _)) = path.last() {
+                    }
+                    RuntimeType::Tuple(_) if !is_computed => {
+                        if let Some((node, _)) = path.get(1) {
                             if let NodeType::IntLiteral(index) = node.node_type {
                                 return self.get_tuple_member(value, index as usize);
                             }
                         }
                     }
+                    _ => {}
                 }
 
                 todo!()
@@ -543,9 +472,18 @@ impl<'a> FunctionTranslator<'a> {
                 )
             }
             NodeType::CallExpression(caller, args) => {
-                if "tuple" == &caller.node_type.to_string() {
-                    return self
-                        .translate_tuple_expression(args.into_iter().map(|x| x.0).collect());
+                {
+                    let caller_text = caller.node_type.to_string();
+                    if "tuple" == &caller_text {
+                        return self
+                            .translate_tuple_expression(args.into_iter().map(|x| x.0).collect());
+                    }
+
+                    if let Some(_) = self.type_defs.get(&caller_text) {
+                        return self.translate_struct_expression(ObjectType::Tuple(
+                            args.into_iter().map(|x| Some(x.0)).collect(),
+                        ));
+                    }
                 }
 
                 let callee = self.translate(*caller);
@@ -608,202 +546,7 @@ impl<'a> FunctionTranslator<'a> {
             }
             NodeType::IfStatement { .. } => self.translate_if_statement(node),
             NodeType::LoopDeclaration { .. } => self.translate_loop_statement(node),
-            NodeType::EnumExpression {
-                identifier,
-                value,
-                data,
-            } => {
-                let enum_name = identifier.to_string();
 
-                let type_def = self.type_defs.get(&enum_name);
-                if type_def.is_none() {
-                    let slot = self.builder.create_sized_stack_slot(StackSlotData::new(
-                        StackSlotKind::ExplicitSlot,
-                        1,
-                        0,
-                    ));
-                    let memory = MemoryLoc::from_stack(slot, 0);
-                    let zero = self.builder.ins().iconst(types::I8, 0);
-                    memory.write_val(&mut self.builder, zero, 0);
-                    return RuntimeValue::new(
-                        memory.into_value(&mut self.builder, self.types.ptr()),
-                        RuntimeType::Enum { uid: 0 },
-                    );
-                }
-                let td = type_def.unwrap();
-
-                let variants = match td {
-                    TypeDefType::Enum(v) => v,
-                    _ => {
-                        let slot = self.builder.create_sized_stack_slot(StackSlotData::new(
-                            StackSlotKind::ExplicitSlot,
-                            1,
-                            0,
-                        ));
-                        let memory = MemoryLoc::from_stack(slot, 0);
-                        let zero = self.builder.ins().iconst(types::I8, 0);
-                        memory.write_val(&mut self.builder, zero, 0);
-                        return RuntimeValue::new(
-                            memory.into_value(&mut self.builder, self.types.ptr()),
-                            RuntimeType::Enum { uid: 0 },
-                        );
-                    }
-                };
-
-                let mut max_payload_size: u32 = 0;
-                let mut max_align: u32 = 1;
-
-                let mut variant_member_types: Vec<Option<Vec<MemberType>>> = Vec::new();
-                let mut variant_offsets: Vec<Vec<u32>> = Vec::new();
-                let mut variant_sizes: Vec<u32> = Vec::new();
-
-                for (_vname, vdata) in variants.iter() {
-                    match vdata {
-                        None => {
-                            variant_member_types.push(None);
-                            variant_offsets.push(vec![]);
-                            variant_sizes.push(0);
-                        }
-                        Some(ObjectType::Tuple(pars)) => {
-                            let members_rt: Vec<MemberType> = pars
-                                .iter()
-                                .map(|p| MemberType {
-                                    name: String::new(),
-                                    ty: RuntimeType::from(p.clone()),
-                                })
-                                .collect();
-
-                            let rt = RuntimeType::Struct {
-                                uid: None,
-                                members: members_rt.clone(),
-                            };
-                            let struct_layout = rt.struct_layout().unwrap();
-                            let size = rt.size();
-                            let align = rt.align();
-                            max_payload_size = max_payload_size.max(size);
-                            max_align = max_align.max(align);
-                            variant_member_types.push(Some(members_rt));
-                            variant_offsets.push(struct_layout.offsets().to_vec());
-                            variant_sizes.push(size);
-                        }
-                        Some(ObjectType::Map(map)) => {
-                            let mut members: Vec<MemberType> = Vec::new();
-                            for (k, v) in map.iter() {
-                                members.push(MemberType {
-                                    name: k.clone(),
-                                    ty: RuntimeType::from(v.clone()),
-                                });
-                            }
-                            let rt = RuntimeType::Struct {
-                                uid: None,
-                                members: members.clone(),
-                            };
-                            let struct_layout = rt.struct_layout().unwrap();
-                            let size = rt.size();
-                            let align = rt.align();
-                            max_payload_size = max_payload_size.max(size);
-                            max_align = max_align.max(align);
-                            variant_member_types.push(Some(members));
-                            variant_offsets.push(struct_layout.offsets().to_vec());
-                            variant_sizes.push(size);
-                        }
-                    }
-                }
-
-                let enum_size = max_payload_size + 1;
-
-                let slot = self.builder.create_sized_stack_slot(StackSlotData::new(
-                    StackSlotKind::ExplicitSlot,
-                    enum_size,
-                    0,
-                ));
-                let memory = MemoryLoc::from_stack(slot, 0);
-
-                let variant_name = value.to_string();
-                let variant_index = variants
-                    .iter()
-                    .position(|(n, _)| n.to_string() == variant_name)
-                    .unwrap_or(0) as i64;
-
-                if let Some(provided) = data {
-                    match provided {
-                        ObjectType::Tuple(vals) => {
-                            let idx = variant_index as usize;
-                            if let Some(Some(member_types)) = variant_member_types.get(idx) {
-                                let mut runtime_vals: Vec<RuntimeValue> = Vec::new();
-                                for v in vals {
-                                    let rv = if let Some(node) = v {
-                                        self.translate(node)
-                                    } else {
-                                        self.translate(Node::new(
-                                            NodeType::IntLiteral(0),
-                                            Default::default(),
-                                        ))
-                                    };
-                                    runtime_vals.push(rv);
-                                }
-
-                                let offsets = &variant_offsets[idx];
-                                for (i, rv) in runtime_vals.iter().enumerate() {
-                                    let offset = offsets[i];
-                                    let _ = memory.with_offset(offset).write_all(
-                                        Some(rv.value),
-                                        member_types[i].ty.clone(),
-                                        self.module,
-                                        &mut self.builder,
-                                    );
-                                }
-                            }
-                        }
-                        ObjectType::Map(map) => {
-                            let idx = variant_index as usize;
-                            if let Some(Some(member_types)) = variant_member_types.get(idx) {
-                                let mut provided_vals: std::collections::HashMap<
-                                    String,
-                                    RuntimeValue,
-                                > = std::collections::HashMap::new();
-                                for (k, v) in map {
-                                    let rv = if let Some(node) = v {
-                                        self.translate(node)
-                                    } else {
-                                        self.translate(Node::new(
-                                            NodeType::IntLiteral(0),
-                                            Default::default(),
-                                        ))
-                                    };
-                                    provided_vals.insert(k.clone(), rv);
-                                }
-
-                                let offsets = &variant_offsets[idx];
-                                for (i, member) in member_types.iter().enumerate() {
-                                    let offset = offsets[i];
-                                    if let Some(rv) = provided_vals.get(&member.name) {
-                                        let _ = memory.with_offset(offset).write_all(
-                                            Some(rv.value),
-                                            member.ty.clone(),
-                                            self.module,
-                                            &mut self.builder,
-                                        );
-                                    } else {
-                                        panic!("Missing enum property {}", member.name);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let discr_offset = max_payload_size;
-                let discr_val = self.builder.ins().iconst(types::I8, variant_index as i64);
-                memory.write_val(&mut self.builder, discr_val, discr_offset as i32);
-
-                let uid = *self.type_uids.get(&enum_name).unwrap_or(&0u32);
-
-                RuntimeValue::new(
-                    memory.into_value(&mut self.builder, self.types.ptr()),
-                    RuntimeType::Enum { uid },
-                )
-            }
             _ => unimplemented!(),
         }
     }

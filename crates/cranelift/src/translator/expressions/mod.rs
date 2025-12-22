@@ -2,9 +2,11 @@ use crate::{
     translator::FunctionTranslator,
     values::{RuntimeType, RuntimeValue},
 };
-pub mod lists;
 use calibre_parser::ast::{binary::BinaryOperator, comparison::Comparison};
 use cranelift::prelude::*;
+
+pub mod lists;
+pub mod objects;
 
 impl<'a> FunctionTranslator<'a> {
     pub fn translate_binary_expression(

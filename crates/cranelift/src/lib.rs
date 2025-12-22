@@ -56,10 +56,15 @@ impl Compiler {
             }
 
             for func in body {
-                let val = self.compile_const_fns(func.clone(), &type_defs, &type_uids)?;
-                if let NodeType::VariableDeclaration { identifier, .. } = func.node_type {
-                    if identifier.to_string() == "main" {
-                        main = Some(val);
+                if let NodeType::VariableDeclaration {
+                    identifier, value, ..
+                } = func.node_type.clone()
+                {
+                    if let NodeType::FunctionDeclaration { .. } = &value.node_type {
+                        let val = self.compile_const_fns(func.clone(), &type_defs, &type_uids)?;
+                        if identifier.to_string() == "main" {
+                            main = Some(val);
+                        }
                     }
                 }
             }
