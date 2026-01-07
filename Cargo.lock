@@ -920,6 +920,7 @@ version = "0.1.0"
 dependencies = [
  "calibre-parser",
  "miette",
+ "rand",
  "thiserror",
 ]
 

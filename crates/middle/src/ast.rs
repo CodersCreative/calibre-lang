@@ -72,6 +72,10 @@ pub enum MiddleNodeType {
     NotExpression {
         value: Box<MiddleNode>,
     },
+    DebugExpression {
+        pretty_printed_str: String,
+        value: Box<MiddleNode>,
+    },
     NegExpression {
         value: Box<MiddleNode>,
     },
@@ -90,6 +94,7 @@ pub enum MiddleNodeType {
     RangeDeclaration {
         from: Box<MiddleNode>,
         to: Box<MiddleNode>,
+        inclusive: bool,
     },
     LoopDeclaration {
         body: Box<MiddleNode>,
@@ -127,7 +132,6 @@ pub enum MiddleNodeType {
         comparison: Box<MiddleNode>,
         then: Box<MiddleNode>,
         otherwise: Option<Box<MiddleNode>>,
-        special_delim: bool,
     },
     StructLiteral(ObjectType<Option<MiddleNode>>),
 }
