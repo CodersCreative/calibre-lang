@@ -3,9 +3,14 @@ use crate::ast::{
     comparison::{BooleanOperation, Comparison},
 };
 use miette::Diagnostic;
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, path::PathBuf};
 use thiserror::Error;
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Location {
+    pub path: PathBuf,
+    pub span: Span,
+}
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Span {
     pub from: Position,

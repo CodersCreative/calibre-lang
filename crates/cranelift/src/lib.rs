@@ -55,16 +55,31 @@ impl Compiler {
                 }
             }
 
-            for func in body {
+            for var in body {
                 if let NodeType::VariableDeclaration {
-                    identifier, value, ..
-                } = func.node_type.clone()
+                    var_type: VarType::Constant,
+                    identifier,
+                    value,
+                    ..
+                } = var.node_type.clone()
                 {
-                    if let NodeType::FunctionDeclaration { .. } = &value.node_type {
-                        let val = self.compile_const_fns(func.clone(), &type_defs, &type_uids)?;
-                        if identifier.to_string() == "main" {
-                            main = Some(val);
+                    match &value.node_type {
+                        NodeType::FunctionDeclaration { .. } => {
+                            let val = self.compile_const_fn(
+                                if identifier.to_string() == "main" {
+                                    "_start".to_string()
+                                } else {
+                                    identifier.to_string()
+                                },
+                                *value,
+                                &type_defs,
+                                &type_uids,
+                            )?;
+                            if identifier.to_string() == "main" {
+                                main = Some(val);
+                            }
                         }
+                        _ => todo!("Implement constant variables in the global scope"),
                     }
                 }
             }
@@ -73,82 +88,65 @@ impl Compiler {
         Ok(main.unwrap())
     }
 
-    pub fn compile_const_fns(
+    pub fn compile_const_fn(
         &mut self,
-        node: Node,
+        identifier: String,
+        value: Node,
         type_defs: &std::collections::HashMap<String, calibre_parser::ast::TypeDefType>,
         type_uids: &std::collections::HashMap<String, u32>,
     ) -> Result<*const u8, Box<dyn Error>> {
-        if let NodeType::VariableDeclaration {
-            var_type,
-            mut identifier,
-            value,
-            data_type: _,
-        } = node.node_type
+        if let NodeType::FunctionDeclaration {
+            parameters,
+            body,
+            return_type,
+            is_async: _,
+        } = value.node_type
         {
-            if identifier.to_string() == "main" {
-                identifier = "_start".to_string().into();
-            }
-
-            if var_type != VarType::Constant {
-                unimplemented!()
-            }
-
-            if let NodeType::FunctionDeclaration {
-                parameters,
-                body,
-                return_type,
-                is_async: _,
-            } = value.node_type
-            {
-                let mut flag_builder = settings::builder();
-                flag_builder.set("use_colocated_libcalls", "false").unwrap();
-                flag_builder.set("is_pic", "false").unwrap();
-                let isa_builder = cranelift_native::builder().unwrap();
-                let isa = isa_builder
-                    .finish(settings::Flags::new(flag_builder))
-                    .unwrap();
-
-                let builder = ObjectBuilder::new(
-                    isa,
-                    "calibre".to_string(),
-                    cranelift_module::default_libcall_names(),
-                )
+            let mut flag_builder = settings::builder();
+            flag_builder.set("use_colocated_libcalls", "false").unwrap();
+            flag_builder.set("is_pic", "false").unwrap();
+            let isa_builder = cranelift_native::builder().unwrap();
+            let isa = isa_builder
+                .finish(settings::Flags::new(flag_builder))
                 .unwrap();
 
-                let mut module = ObjectModule::new(builder);
-                let mut ctx = module.make_context();
+            let builder = ObjectBuilder::new(
+                isa,
+                "calibre".to_string(),
+                cranelift_module::default_libcall_names(),
+            )
+            .unwrap();
 
-                self.translate(
-                    parameters
-                        .into_iter()
-                        .map(|x| (x.0.to_string(), x.1.clone()))
-                        .collect(),
-                    return_type,
-                    *body,
-                    &mut module,
-                    &mut ctx,
-                    type_defs,
-                    type_uids,
-                )?;
+            let mut module = ObjectModule::new(builder);
+            let mut ctx = module.make_context();
 
-                let id = module
-                    .declare_function(&identifier, Linkage::Export, &ctx.func.signature)
-                    .map_err(|e| e.to_string())?;
+            self.translate(
+                parameters
+                    .into_iter()
+                    .map(|x| (x.0.to_string(), x.1.clone()))
+                    .collect(),
+                return_type,
+                *body,
+                &mut module,
+                &mut ctx,
+                type_defs,
+                type_uids,
+            )?;
 
-                module
-                    .define_function(id, &mut ctx)
-                    .map_err(|e| e.to_string())?;
-                module.clear_context(&mut ctx);
+            let id = module
+                .declare_function(&identifier, Linkage::Export, &ctx.func.signature)
+                .map_err(|e| e.to_string())?;
 
-                let product = module.finish();
-                let obj_bytes = product.emit().map_err(|e| e.to_string())?;
+            module
+                .define_function(id, &mut ctx)
+                .map_err(|e| e.to_string())?;
+            module.clear_context(&mut ctx);
 
-                let addr = unsafe { Self::load_object_and_resolve(&obj_bytes, &identifier)? };
-                Ok(addr as *const u8)
-            } else {
-                todo!()
-            }
+            let product = module.finish();
+            let obj_bytes = product.emit().map_err(|e| e.to_string())?;
+
+            let addr = unsafe { Self::load_object_and_resolve(&obj_bytes, &identifier)? };
+            Ok(addr as *const u8)
         } else {
             todo!()
         }
