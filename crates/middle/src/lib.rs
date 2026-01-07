@@ -16,6 +16,7 @@ use environment::*;
 pub mod ast;
 pub mod environment;
 pub mod errors;
+pub mod identifiers;
 
 impl MiddleEnvironment {
     pub fn evaluate(&mut self, scope: &u64, node: Node) -> Result<MiddleNode, MiddleErr> {
