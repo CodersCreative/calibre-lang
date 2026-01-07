@@ -2,6 +2,7 @@ use crate::{
     translator::{FunctionTranslator, layout::GetLayoutInfo, memory::MemoryLoc},
     values::{MemberType, RuntimeType, RuntimeValue},
 };
+use calibre_mir::ast::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{Node, NodeType, ObjectType, TypeDefType, comparison::Comparison};
 use cranelift::{codegen::ir::BlockArg, prelude::*};
 
@@ -10,9 +11,9 @@ impl<'a> FunctionTranslator<'a> {
         &mut self,
         enum_name: String,
         value: String,
-        data: Option<ObjectType<Option<Node>>>,
+        data: Option<ObjectType<Option<MiddleNode>>>,
     ) -> RuntimeValue {
-        let type_def = self.type_defs.get(&enum_name);
+        let type_def = self.objects.get(&enum_name);
         if type_def.is_none() {
             let slot = self.builder.create_sized_stack_slot(StackSlotData::new(
                 StackSlotKind::ExplicitSlot,
@@ -24,12 +25,12 @@ impl<'a> FunctionTranslator<'a> {
             memory.write_val(&mut self.builder, zero, 0);
             return RuntimeValue::new(
                 memory.into_value(&mut self.builder, self.types.ptr()),
-                RuntimeType::Enum { uid: 0 },
+                RuntimeType::Enum { name: enum_name },
             );
         }
         let td = type_def.unwrap();
 
-        let variants = match td {
+        let variants = match td.object_type.clone() {
             TypeDefType::Enum(v) => v,
             _ => {
                 let slot = self.builder.create_sized_stack_slot(StackSlotData::new(
@@ -42,7 +43,7 @@ impl<'a> FunctionTranslator<'a> {
                 memory.write_val(&mut self.builder, zero, 0);
                 return RuntimeValue::new(
                     memory.into_value(&mut self.builder, self.types.ptr()),
-                    RuntimeType::Enum { uid: 0 },
+                    RuntimeType::Enum { name: enum_name },
                 );
             }
         };
@@ -71,7 +72,7 @@ impl<'a> FunctionTranslator<'a> {
                         .collect();
 
                     let rt = RuntimeType::Struct {
-                        uid: None,
+                        name: None,
                         members: members_rt.clone(),
                     };
                     let struct_layout = rt.struct_layout().unwrap();
@@ -92,7 +93,7 @@ impl<'a> FunctionTranslator<'a> {
                         });
                     }
                     let rt = RuntimeType::Struct {
-                        uid: None,
+                        name: None,
                         members: members.clone(),
                     };
                     let struct_layout = rt.struct_layout().unwrap();
@@ -132,8 +133,8 @@ impl<'a> FunctionTranslator<'a> {
                             let rv = if let Some(node) = v {
                                 self.translate(node)
                             } else {
-                                self.translate(Node::new(
-                                    NodeType::IntLiteral(0),
+                                self.translate(MiddleNode::new(
+                                    MiddleNodeType::IntLiteral(0),
                                     Default::default(),
                                 ))
                             };
@@ -161,8 +162,8 @@ impl<'a> FunctionTranslator<'a> {
                             let rv = if let Some(node) = v {
                                 self.translate(node)
                             } else {
-                                self.translate(Node::new(
-                                    NodeType::IntLiteral(0),
+                                self.translate(MiddleNode::new(
+                                    MiddleNodeType::IntLiteral(0),
                                     Default::default(),
                                 ))
                             };
@@ -192,16 +193,14 @@ impl<'a> FunctionTranslator<'a> {
         let discr_val = self.builder.ins().iconst(types::I8, variant_index as i64);
         memory.write_val(&mut self.builder, discr_val, discr_offset as i32);
 
-        let uid = *self.type_uids.get(&enum_name).unwrap_or(&0u32);
-
         RuntimeValue::new(
             memory.into_value(&mut self.builder, self.types.ptr()),
-            RuntimeType::Enum { uid },
+            RuntimeType::Enum { name: enum_name },
         )
     }
 
     pub fn get_struct_member(&mut self, left: RuntimeValue, index: String) -> RuntimeValue {
-        let RuntimeType::Struct { uid: _, members } = left.data_type.clone() else {
+        let RuntimeType::Struct { members, .. } = left.data_type.clone() else {
             panic!()
         };
 
@@ -223,7 +222,10 @@ impl<'a> FunctionTranslator<'a> {
         RuntimeValue::new(val, members[index].ty.clone())
     }
 
-    pub fn translate_struct_expression(&mut self, obj: ObjectType<Option<Node>>) -> RuntimeValue {
+    pub fn translate_struct_expression(
+        &mut self,
+        obj: ObjectType<Option<MiddleNode>>,
+    ) -> RuntimeValue {
         match obj {
             calibre_parser::ast::ObjectType::Tuple(items) => {
                 let items: Vec<RuntimeValue> = items
@@ -274,7 +276,10 @@ impl<'a> FunctionTranslator<'a> {
                     let val = if let Some(node) = v {
                         self.translate(node)
                     } else {
-                        self.translate(Node::new(NodeType::IntLiteral(0), Default::default()))
+                        self.translate(MiddleNode::new(
+                            MiddleNodeType::IntLiteral(0),
+                            Default::default(),
+                        ))
                     };
                     members.push(MemberType {
                         name: k,
@@ -294,7 +299,10 @@ impl<'a> FunctionTranslator<'a> {
 
                 let memory = MemoryLoc::from_stack(slot, 0);
 
-                let rt = RuntimeType::Struct { uid: None, members };
+                let rt = RuntimeType::Struct {
+                    name: None,
+                    members,
+                };
                 let layouts = rt.struct_layout().unwrap();
                 let offsets = layouts.offsets();
 

@@ -1,5 +1,7 @@
 pub mod translator;
 pub mod values;
+use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_mir::environment::{MiddleEnvironment, MiddleObject};
 use calibre_parser::ast::{Node, NodeType, ParserDataType, VarType};
 use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::*;
@@ -37,26 +39,16 @@ impl Default for Compiler {
 }
 
 impl Compiler {
-    pub fn compile(&mut self, program: Node) -> Result<*const u8, Box<dyn Error>> {
+    pub fn compile(
+        &mut self,
+        program: MiddleNode,
+        env: MiddleEnvironment,
+    ) -> Result<*const u8, Box<dyn Error>> {
         let mut main = None;
 
-        let mut type_defs: std::collections::HashMap<String, calibre_parser::ast::TypeDefType> =
-            std::collections::HashMap::new();
-        let mut type_uids: std::collections::HashMap<String, u32> =
-            std::collections::HashMap::new();
-        let mut next_uid: u32 = 1;
-
-        if let NodeType::ScopeDeclaration { body, is_temp: _ } = program.node_type.clone() {
-            for node in &body {
-                if let NodeType::TypeDeclaration { identifier, object } = &node.node_type {
-                    type_defs.insert(identifier.to_string(), object.clone());
-                    type_uids.insert(identifier.to_string(), next_uid);
-                    next_uid += 1;
-                }
-            }
-
+        if let MiddleNodeType::ScopeDeclaration { body, is_temp: _ } = program.node_type.clone() {
             for var in body {
-                if let NodeType::VariableDeclaration {
+                if let MiddleNodeType::VariableDeclaration {
                     var_type: VarType::Constant,
                     identifier,
                     value,
@@ -64,7 +56,7 @@ impl Compiler {
                 } = var.node_type.clone()
                 {
                     match &value.node_type {
-                        NodeType::FunctionDeclaration { .. } => {
+                        MiddleNodeType::FunctionDeclaration { .. } => {
                             let val = self.compile_const_fn(
                                 if identifier.to_string() == "main" {
                                     "_start".to_string()
@@ -72,8 +64,7 @@ impl Compiler {
                                     identifier.to_string()
                                 },
                                 *value,
-                                &type_defs,
-                                &type_uids,
+                                &env.objects,
                             )?;
                             if identifier.to_string() == "main" {
                                 main = Some(val);
@@ -91,11 +82,10 @@ impl Compiler {
     pub fn compile_const_fn(
         &mut self,
         identifier: String,
-        value: Node,
-        type_defs: &std::collections::HashMap<String, calibre_parser::ast::TypeDefType>,
-        type_uids: &std::collections::HashMap<String, u32>,
+        value: MiddleNode,
+        objects: &std::collections::HashMap<String, MiddleObject>,
     ) -> Result<*const u8, Box<dyn Error>> {
-        if let NodeType::FunctionDeclaration {
+        if let MiddleNodeType::FunctionDeclaration {
             parameters,
             body,
             return_type,
@@ -129,8 +119,7 @@ impl Compiler {
                 *body,
                 &mut module,
                 &mut ctx,
-                type_defs,
-                type_uids,
+                objects,
             )?;
 
             let id = module
@@ -156,11 +145,10 @@ impl Compiler {
         &mut self,
         params: Vec<(String, ParserDataType)>,
         return_type: Option<ParserDataType>,
-        node: Node,
+        node: MiddleNode,
         module: &mut ObjectModule,
         ctx: &mut codegen::Context,
-        type_defs: &std::collections::HashMap<String, calibre_parser::ast::TypeDefType>,
-        type_uids: &std::collections::HashMap<String, u32>,
+        objects: &std::collections::HashMap<String, MiddleObject>,
     ) -> Result<(), Box<dyn Error>> {
         let ptr = module.target_config().pointer_type();
         let types = crate::translator::Types::new(ptr);
@@ -204,8 +192,7 @@ impl Compiler {
             builder,
             module,
             description: &mut self.data_description,
-            type_defs,
-            type_uids,
+            objects,
             stop: None,
         };
         let value = trans.translate(node);

@@ -2,6 +2,7 @@ use crate::{
     translator::{FunctionTranslator, layout::GetLayoutInfo, memory::MemoryLoc},
     values::{RuntimeType, RuntimeValue},
 };
+use calibre_mir::ast::MiddleNode;
 use calibre_parser::ast::{Node, comparison::Comparison};
 use cranelift::{codegen::ir::BlockArg, prelude::*};
 
@@ -189,7 +190,7 @@ impl<'a> FunctionTranslator<'a> {
         RuntimeValue::new(val, types[index].clone())
     }
 
-    pub fn translate_tuple_expression(&mut self, items: Vec<Node>) -> RuntimeValue {
+    pub fn translate_tuple_expression(&mut self, items: Vec<MiddleNode>) -> RuntimeValue {
         let items: Vec<RuntimeValue> = items.into_iter().map(|x| self.translate(x)).collect();
         let item_runtime_types: Vec<RuntimeType> =
             items.iter().map(|x| x.data_type.clone()).collect();
@@ -226,7 +227,7 @@ impl<'a> FunctionTranslator<'a> {
         )
     }
 
-    pub fn translate_array_expression(&mut self, items: Vec<Node>) -> RuntimeValue {
+    pub fn translate_array_expression(&mut self, items: Vec<MiddleNode>) -> RuntimeValue {
         let items: Vec<RuntimeValue> = items.into_iter().map(|x| self.translate(x)).collect();
 
         let element_type = items

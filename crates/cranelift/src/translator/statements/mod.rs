@@ -1,22 +1,20 @@
 pub mod loops;
 
 use crate::{translator::FunctionTranslator, values::RuntimeValue};
+use calibre_mir::ast::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{IfComparisonType, Node, NodeType};
 use cranelift::{codegen::ir::BlockArg, prelude::*};
 
 impl<'a> FunctionTranslator<'a> {
-    pub fn translate_if_statement(&mut self, node: Node) -> RuntimeValue {
-        if let NodeType::IfStatement {
+    pub fn translate_if_statement(&mut self, node: MiddleNode) -> RuntimeValue {
+        if let MiddleNodeType::IfStatement {
             comparison,
             then,
             otherwise,
             ..
         } = node.node_type
         {
-            let IfComparisonType::If(comparison) = *comparison else {
-                panic!()
-            };
-            let condition_value = self.translate(comparison);
+            let condition_value = self.translate(*comparison);
 
             let then_block = self.builder.create_block();
             let else_block = self.builder.create_block();

@@ -67,10 +67,10 @@ pub enum RuntimeType {
         is_async: bool,
     },
     Enum {
-        uid: u32,
+        name: String,
     },
     Struct {
-        uid: Option<u32>,
+        name: Option<String>,
         members: Vec<MemberType>,
     },
     Named(String),

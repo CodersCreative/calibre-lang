@@ -689,7 +689,22 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             },
-            NodeType::CallExpression(caller, args) => Ok(MiddleNode {
+            NodeType::CallExpression(caller, args) => {
+                if let NodeType::Identifier(caller) = &caller.node_type {
+                    if "tuple" == &caller.text {
+                        let mut lst = Vec::new();
+
+                        for arg in args {
+                            lst.push(self.evaluate(scope, arg.0)?);
+                        }
+                        
+                        return Ok(MiddleNode {
+                            node_type: MiddleNodeType::TupleLiteral(lst),
+                            span: node.span,
+                        });
+                    }
+                }
+                Ok(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(Box::new(self.evaluate(scope, *caller)?), {
                     let mut lst = Vec::new();
 
@@ -707,7 +722,7 @@ impl MiddleEnvironment {
                     lst
                 }),
                 span: node.span,
-            }),
+            })},
             NodeType::ImportStatement { module, alias, values } => {
                 let new_scope = if let Some(alias) = alias {
                     if ["super", "root"].contains(&alias.as_str()) {
@@ -730,10 +745,12 @@ impl MiddleEnvironment {
                 } else if !values.is_empty() {
                     self.get_scope_list(*scope, module.iter().map(|x| x.to_string()).collect())?
                 } else {
-                    let _ = self.import_scope_list(*scope, module.into_iter().map(|x| x.to_string()).collect());
-                    return Ok(MiddleNode {
-                        node_type: MiddleNodeType::EmptyLine,
-                        span: node.span,
+                    let (_, n) = self.import_scope_list(*scope, module.into_iter().map(|x| x.to_string()).collect())?;
+                    return Ok(if let Some(x) = n{x} else {
+                        MiddleNode {
+                            node_type: MiddleNodeType::EmptyLine,
+                            span: node.span,
+                        }
                     });
                 };
 

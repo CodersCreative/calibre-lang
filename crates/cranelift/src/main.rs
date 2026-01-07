@@ -46,20 +46,23 @@ const BASIC_CODE: &str = r#"
 "#;
 
 use calibre_cranelift::Compiler;
+use calibre_mir::{ast::MiddleNode, environment::MiddleEnvironment};
 use calibre_parser::{Parser, ast::Node, lexer::Tokenizer};
-use std::{fmt::Debug, mem};
+use std::{fmt::Debug, mem, path::PathBuf, str::FromStr};
 
-fn parse(text: String) -> Node {
+fn parse(text: String) -> (MiddleNode, MiddleEnvironment) {
     let mut parser = Parser::default();
-
     let mut tokenizer = Tokenizer::default();
-    parser.produce_ast(tokenizer.tokenize(text).unwrap())
+    let ast = parser.produce_ast(tokenizer.tokenize(text).unwrap());
+    let mut env = MiddleEnvironment::new();
+    let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
+    (env.evaluate(scope, ast).unwrap(), env)
 }
 
 fn run<I, T: Debug>(input: I) {
     let program = parse(BASIC_CODE.to_string());
     let mut jit = Compiler::default();
-    let code_ptr = jit.compile(program).unwrap();
+    let code_ptr = jit.compile(program.0, program.1).unwrap();
     let code_fn = unsafe { mem::transmute::<_, fn(I) -> T>(code_ptr) };
 
     println!("{:?}", code_fn(input))

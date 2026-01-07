@@ -3,6 +3,8 @@ pub mod memory;
 
 use std::{collections::HashMap, error::Error};
 
+use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_mir::environment::MiddleObject;
 use calibre_parser::ast::binary::BinaryOperator;
 use calibre_parser::ast::{
     Node, NodeType, ObjectType, ParserDataType, ParserInnerType, TypeDefType, VarType,
@@ -27,8 +29,7 @@ pub struct FunctionTranslator<'a> {
     pub builder: FunctionBuilder<'a>,
     pub variables: HashMap<String, (VarType, RuntimeType, Variable)>,
     pub module: &'a mut ObjectModule,
-    pub type_defs: &'a std::collections::HashMap<String, calibre_parser::ast::TypeDefType>,
-    pub type_uids: &'a std::collections::HashMap<String, u32>,
+    pub objects: &'a std::collections::HashMap<String, MiddleObject>,
     pub stop: Option<StopValue>,
 }
 
@@ -116,21 +117,21 @@ impl<'a> FunctionTranslator<'a> {
         )
     }
 
-    pub fn translate(&mut self, node: Node) -> RuntimeValue {
+    pub fn translate(&mut self, node: MiddleNode) -> RuntimeValue {
         match node.node_type {
-            NodeType::Identifier(x) => self.translate_identifier(&x),
-            NodeType::FloatLiteral(x) => {
+            MiddleNodeType::Identifier(x) => self.translate_identifier(&x),
+            MiddleNodeType::FloatLiteral(x) => {
                 RuntimeValue::new(self.builder.ins().f64const(x), RuntimeType::Float)
             }
-            NodeType::IntLiteral(x) => RuntimeValue::new(
+            MiddleNodeType::IntLiteral(x) => RuntimeValue::new(
                 self.builder.ins().iconst(self.types.int(), x as i64),
                 RuntimeType::Int,
             ),
-            NodeType::AsExpression { value, typ } => {
+            MiddleNodeType::AsExpression { value, typ } => {
                 let value = self.translate(*value);
                 value.into_type(self, typ.into())
             }
-            NodeType::RefStatement { mutability, value } => {
+            MiddleNodeType::RefStatement { mutability, value } => {
                 let inner = *value;
                 let rv = self.translate(inner.clone());
 
@@ -163,9 +164,9 @@ impl<'a> FunctionTranslator<'a> {
                     },
                 )
             }
-            NodeType::DerefStatement { value } => {
+            MiddleNodeType::DerefStatement { value } => {
                 match &value.node_type {
-                    NodeType::RefStatement { value: inner, .. } => {
+                    MiddleNodeType::RefStatement { value: inner, .. } => {
                         return self.translate(*inner.clone());
                     }
                     _ => {}
@@ -183,7 +184,7 @@ impl<'a> FunctionTranslator<'a> {
 
                 panic!("Deref non-ref value")
             }
-            NodeType::NotExpression { value } => {
+            MiddleNodeType::NotExpression { value } => {
                 let mut value = self.translate(*value);
                 match value.data_type.clone() {
                     RuntimeType::Int | RuntimeType::Float | RuntimeType::Bool => {
@@ -201,18 +202,18 @@ impl<'a> FunctionTranslator<'a> {
 
                 value
             }
-            NodeType::CharLiteral(c) => RuntimeValue::new(
+            MiddleNodeType::CharLiteral(c) => RuntimeValue::new(
                 self.builder.ins().iconst(types::I32, i64::from(c as u32)),
                 RuntimeType::Char,
             ),
-            NodeType::ListLiteral(items) => self.translate_array_expression(items),
-            NodeType::StructLiteral(obj) => self.translate_struct_expression(obj),
-            NodeType::EnumExpression {
+            MiddleNodeType::ListLiteral(items) => self.translate_array_expression(items),
+            MiddleNodeType::StructLiteral(obj) => self.translate_struct_expression(obj),
+            MiddleNodeType::EnumExpression {
                 identifier,
                 value,
                 data,
             } => self.translate_enum_expression(identifier.to_string(), value.to_string(), data),
-            NodeType::StringLiteral(txt) => {
+            MiddleNodeType::StringLiteral(txt) => {
                 println!("{txt}");
                 let name = format!("string_literal_{}", rand::random_range(0..100000));
                 let id = self
@@ -223,7 +224,7 @@ impl<'a> FunctionTranslator<'a> {
                     RuntimeType::Str,
                 )
             }
-            NodeType::ScopeDeclaration { body, is_temp: _ } => {
+            MiddleNodeType::ScopeDeclaration { body, is_temp: _ } => {
                 let mut value = self.translate_null();
                 for node in body {
                     if let Some(_) = self.stop {
@@ -234,7 +235,7 @@ impl<'a> FunctionTranslator<'a> {
                 }
                 value
             }
-            NodeType::VariableDeclaration {
+            MiddleNodeType::VariableDeclaration {
                 var_type,
                 identifier,
                 value,
@@ -245,19 +246,16 @@ impl<'a> FunctionTranslator<'a> {
                     panic!();
                 }
 
-                let var = self.builder.declare_var(match data_type.clone() {
-                    Some(x) => self.types.get_type_from_parser_type(&x),
-                    None => self.types.int(),
-                });
+                let var = self
+                    .builder
+                    .declare_var(self.types.get_type_from_parser_type(&data_type));
 
                 let value = self.translate(*value);
 
-                if let Some(data_type) = data_type {
-                    let data_type = data_type.into();
-                    if value.data_type != data_type {
-                        panic!()
-                        // value = value.into_type(self, data_type);
-                    }
+                let data_type = data_type.into();
+                if value.data_type != data_type {
+                    panic!()
+                    // value = value.into_type(self, data_type);
                 }
 
                 self.variables.insert(
@@ -268,8 +266,8 @@ impl<'a> FunctionTranslator<'a> {
 
                 value
             }
-            NodeType::AssignmentExpression { identifier, value } => {
-                let NodeType::Identifier(identifier) = identifier.node_type else {
+            MiddleNodeType::AssignmentExpression { identifier, value } => {
+                let MiddleNodeType::Identifier(identifier) = identifier.node_type else {
                     todo!()
                 };
 
@@ -291,24 +289,24 @@ impl<'a> FunctionTranslator<'a> {
 
                 value
             }
-            NodeType::Return { value } => {
+            MiddleNodeType::Return { value } => {
                 let value = self.translate(*value);
                 self.builder.ins().return_(&[value.value.clone()]);
                 value
             }
-            NodeType::Break => {
+            MiddleNodeType::Break => {
                 if self.stop != Some(StopValue::Return) {
                     self.stop = Some(StopValue::Break);
                 }
                 self.translate_null()
             }
-            NodeType::Continue => {
+            MiddleNodeType::Continue => {
                 if self.stop == None {
                     self.stop = Some(StopValue::Continue);
                 }
                 self.translate_null()
             }
-            NodeType::BinaryExpression {
+            MiddleNodeType::BinaryExpression {
                 left,
                 right,
                 operator,
@@ -317,7 +315,7 @@ impl<'a> FunctionTranslator<'a> {
                 let right = self.translate(*right);
                 self.translate_binary_expression(left, right, operator)
             }
-            NodeType::ComparisonExpression {
+            MiddleNodeType::ComparisonExpression {
                 left,
                 right,
                 operator,
@@ -326,14 +324,14 @@ impl<'a> FunctionTranslator<'a> {
                 let right = self.translate(*right);
                 self.translate_comparisson_expression(left, right, operator)
             }
-            NodeType::MemberExpression { mut path } => {
+            MiddleNodeType::MemberExpression { mut path } => {
                 let first = path[0].0.clone();
                 if path.len() == 1 {
                     return self.translate(first);
                 }
 
-                let value = self.translate(Node::new(
-                    NodeType::MemberExpression {
+                let value = self.translate(MiddleNode::new(
+                    MiddleNodeType::MemberExpression {
                         path: path[0..(path.len() - 1)].to_vec(),
                     },
                     first.span,
@@ -342,12 +340,12 @@ impl<'a> FunctionTranslator<'a> {
                 let is_computed = path[1].1.clone();
 
                 match value.data_type {
-                    RuntimeType::Struct { uid: _, members: _ } => {
+                    RuntimeType::Struct { .. } => {
                         if let Some((node, _)) = path.get(1) {
                             let index = match &node.node_type {
-                                NodeType::IntLiteral(x) => x.to_string(),
-                                NodeType::Identifier(x) if !is_computed => x.to_string(),
-                                NodeType::StringLiteral(x) if is_computed => x.to_string(),
+                                MiddleNodeType::IntLiteral(x) => x.to_string(),
+                                MiddleNodeType::Identifier(x) if !is_computed => x.to_string(),
+                                MiddleNodeType::StringLiteral(x) if is_computed => x.to_string(),
                                 _ => panic!(),
                             };
                             return self.get_struct_member(value, index);
@@ -359,7 +357,7 @@ impl<'a> FunctionTranslator<'a> {
                     }
                     RuntimeType::Tuple(_) if !is_computed => {
                         if let Some((node, _)) = path.get(1) {
-                            if let NodeType::IntLiteral(index) = node.node_type {
+                            if let MiddleNodeType::IntLiteral(index) = node.node_type {
                                 return self.get_tuple_member(value, index as usize);
                             }
                         }
@@ -369,7 +367,7 @@ impl<'a> FunctionTranslator<'a> {
 
                 todo!()
             }
-            NodeType::FunctionDeclaration {
+            MiddleNodeType::FunctionDeclaration {
                 parameters,
                 body,
                 return_type,
@@ -377,12 +375,12 @@ impl<'a> FunctionTranslator<'a> {
             } => {
                 let fn_name = format!("anon_fn_{}", rand::random_range(0..100000));
                 let mut fn_ctx = self.module.make_context();
-                let captured_names: Vec<String> =
-                    calibre_parser::identifiers::identifiers_used(&*body)
-                        .into_iter()
-                        .filter(|x| self.variables.contains_key(*x))
-                        .map(|x| x.clone())
-                        .collect();
+                let captured_names: Vec<String> = body
+                    .identifiers_used()
+                    .into_iter()
+                    .filter(|x| self.variables.contains_key(*x))
+                    .map(|x| x.clone())
+                    .collect();
 
                 for (_, (_, rtype, _)) in self
                     .variables
@@ -425,8 +423,7 @@ impl<'a> FunctionTranslator<'a> {
                     builder: fn_builder,
                     module: self.module,
                     description: self.description,
-                    type_defs: self.type_defs,
-                    type_uids: self.type_uids,
+                    objects: self.objects,
                     stop: None,
                 };
 
@@ -471,15 +468,9 @@ impl<'a> FunctionTranslator<'a> {
                     },
                 )
             }
-            NodeType::CallExpression(caller, args) => {
-                {
-                    let caller_text = caller.node_type.to_string();
-                    if "tuple" == &caller_text {
-                        return self
-                            .translate_tuple_expression(args.into_iter().map(|x| x.0).collect());
-                    }
-
-                    if let Some(_) = self.type_defs.get(&caller_text) {
+            MiddleNodeType::CallExpression(caller, args) => {
+                if let MiddleNodeType::Identifier(caller_text) = &caller.node_type {
+                    if let Some(_) = self.objects.get(&caller_text.text) {
                         return self.translate_struct_expression(ObjectType::Tuple(
                             args.into_iter().map(|x| Some(x.0)).collect(),
                         ));
@@ -544,9 +535,8 @@ impl<'a> FunctionTranslator<'a> {
 
                 todo!()
             }
-            NodeType::IfStatement { .. } => self.translate_if_statement(node),
-            NodeType::LoopDeclaration { .. } => self.translate_loop_statement(node),
-
+            MiddleNodeType::IfStatement { .. } => self.translate_if_statement(node),
+            MiddleNodeType::LoopDeclaration { .. } => self.translate_loop_statement(node),
             _ => unimplemented!(),
         }
     }

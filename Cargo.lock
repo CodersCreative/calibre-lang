@@ -218,6 +218,7 @@ dependencies = [
 name = "calibre-cranelift"
 version = "0.1.0"
 dependencies = [
+ "calibre-mir",
  "calibre-parser",
  "cranelift",
  "cranelift-module",
@@ -235,6 +236,16 @@ dependencies = [
  "calibre-parser",
  "rand",
  "rustyline",
+ "thiserror",
+]
+
+[[package]]
+name = "calibre-mir"
+version = "0.1.0"
+dependencies = [
+ "calibre-parser",
+ "miette",
+ "rand",
  "thiserror",
 ]
 
@@ -913,16 +924,6 @@ name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
-
-[[package]]
-name = "middle"
-version = "0.1.0"
-dependencies = [
- "calibre-parser",
- "miette",
- "rand",
- "thiserror",
-]
 
 [[package]]
 name = "miette"

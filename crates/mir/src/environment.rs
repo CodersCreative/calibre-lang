@@ -242,25 +242,32 @@ impl MiddleEnvironment {
         &mut self,
         scope: u64,
         mut list: Vec<String>,
-    ) -> Result<u64, MiddleErr> {
+    ) -> Result<(u64, Option<MiddleNode>), MiddleErr> {
         if list.len() <= 0 {
-            return Ok(scope);
+            return Ok((scope, None));
         }
         let first = list.remove(0);
         let scope = self.import_next_scope(scope, first.as_str())?;
-        self.import_scope_list(scope, list)
+        self.import_scope_list(scope.0, list)
     }
 
-    pub fn import_next_scope(&mut self, scope: u64, key: &str) -> Result<u64, MiddleErr> {
+    pub fn import_next_scope(
+        &mut self,
+        scope: u64,
+        key: &str,
+    ) -> Result<(u64, Option<MiddleNode>), MiddleErr> {
         Ok(match key {
-            "super" => self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
+            "super" => (
+                self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
+                None,
+            ),
             _ => {
                 let current = self.scopes.get(&scope).unwrap().clone();
                 if let Some(x) = current.children.get(key) {
-                    x.clone()
+                    (x.clone(), None)
                 } else {
                     if let Some(s) = self.get_global_scope().children.get(key) {
-                        s.clone()
+                        (s.clone(), None)
                     } else {
                         let scope = self.new_scope_from_parent(current.id, key);
                         let mut parser = Parser::default();
@@ -281,8 +288,7 @@ impl MiddleEnvironment {
                             return Err(parser.errors.into());
                         }
 
-                        let _ = self.evaluate(&scope, program)?;
-                        scope
+                        (scope, Some(self.evaluate(&scope, program)?))
                     }
                 }
             }
