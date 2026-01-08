@@ -209,6 +209,7 @@ dependencies = [
 name = "calibre-common"
 version = "0.1.0"
 dependencies = [
+ "calibre-mir",
  "calibre-parser",
  "miette",
  "thiserror",

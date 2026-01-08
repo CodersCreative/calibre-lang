@@ -1,15 +1,14 @@
-pub mod children;
 pub mod objects;
-pub mod scopes;
 pub mod variables;
 
+use calibre_mir::environment::MiddleEnvironment;
 use calibre_parser::{
     ast::{ObjectType, ParserDataType, TypeDefType, VarType},
-    lexer::Span,
+    lexer::Location,
 };
-use std::{collections::HashMap, fmt::Debug, path::PathBuf};
+use std::{collections::HashMap, fmt::Debug};
 
-use crate::errors::{RuntimeErr, ScopeErr, ValueErr};
+use crate::errors::ScopeErr;
 
 pub trait InterpreterFrom<U>: Sized {
     type Interpreter;
@@ -97,12 +96,6 @@ impl<U: RuntimeType> InterpreterFrom<TypeDefType> for Type<U> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Location {
-    pub path: PathBuf,
-    pub span: Span,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Object<T: RuntimeValue, U: RuntimeType> {
     pub object_type: Type<U>,
@@ -115,16 +108,15 @@ pub struct Object<T: RuntimeValue, U: RuntimeType> {
 pub struct Variable<T> {
     pub value: T,
     pub var_type: VarType,
-    pub location: Option<Location>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Environment<T: RuntimeValue, U: RuntimeType> {
-    pub var_counter: u64,
     pub scope_counter: u64,
     pub scopes: HashMap<u64, Scope>,
-    pub variables: HashMap<u64, Variable<T>>,
-    pub objects: HashMap<u64, Object<T, U>>,
+    pub variables: HashMap<String, Variable<T>>,
+    pub mappings: Vec<String>,
+    pub objects: HashMap<String, Object<T, U>>,
     pub current_location: Option<Location>,
     pub strict_removal: bool,
 }
@@ -132,219 +124,57 @@ pub struct Environment<T: RuntimeValue, U: RuntimeType> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scope {
     pub id: u64,
-    pub counter: u64,
+    pub variables: Vec<String>,
+    pub children: Vec<u64>,
     pub parent: Option<u64>,
-    pub children: HashMap<String, u64>,
-    pub namespace: String,
-    pub path: PathBuf,
-    pub variables: HashMap<String, u64>,
-    pub objects: HashMap<String, u64>,
 }
 
 impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
-    pub fn new(strict_removal: bool) -> Environment<T, U> {
+    pub fn new(strict_removal: bool, middle_env: &MiddleEnvironment) -> Environment<T, U> {
         Environment {
-            var_counter: 0,
             scope_counter: 0,
             scopes: HashMap::new(),
             variables: HashMap::new(),
             objects: HashMap::new(),
             current_location: None,
+            mappings: middle_env
+                .variables
+                .iter()
+                .map(|x| x.0.to_string())
+                .collect(),
             strict_removal,
         }
-    }
-
-    pub fn get_location(&self, scope: &u64, span: Span) -> Option<Location> {
-        Some(Location {
-            path: self.scopes.get(scope).unwrap().path.clone(),
-            span,
-        })
     }
 
     pub fn remove_scope(&mut self, scope: &u64) {
         if !self.strict_removal {
             return;
         }
-        let parent = if let Some(parent) = self.scopes.get(scope).unwrap().parent {
-            if let Some(parent_obj) = self.scopes.get(&parent) {
-                if let Some(name) = parent_obj.children.iter().find(|x| x.1 == scope) {
-                    Some((parent, name.0.clone()))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
 
-        if let Some(parent) = parent {
-            let _ = self
-                .scopes
-                .get_mut(&parent.0)
-                .unwrap()
-                .children
-                .remove(&parent.1);
-        }
+        self.scopes
+            .iter_mut()
+            .for_each(|x| x.1.children.retain(|x| x != scope));
 
         if &(self.scope_counter - 1) == scope {
             self.scope_counter -= 1;
         }
 
-        self.variables.remove(scope);
-        self.objects.remove(scope);
         self.scopes.remove(scope);
     }
 
     pub fn add_scope(&mut self, mut scope: Scope) {
-        let has_parent = if let Some(parent) = &scope.parent {
-            if let Some(parent) = self.scopes.get_mut(&parent) {
-                parent
-                    .children
-                    .insert(scope.namespace.clone(), self.scope_counter);
-            }
-
-            true
-        } else {
-            false
-        };
-
         scope.id = self.scope_counter;
-
-        self.variables.insert(
-            self.var_counter,
-            Variable {
-                value: T::string(String::from(if !has_parent || scope.namespace == "root" {
-                    "__main__"
-                } else {
-                    &scope.namespace
-                })),
-                var_type: VarType::Constant,
-                location: None,
-            },
-        );
-
-        self.variables.insert(
-            self.var_counter + 1,
-            Variable {
-                value: T::string(String::from(scope.path.to_str().unwrap())),
-                var_type: VarType::Constant,
-                location: None,
-            },
-        );
-
-        scope
-            .variables
-            .insert(String::from("__name__"), self.var_counter);
-        scope
-            .variables
-            .insert(String::from("__file__"), self.var_counter + 1);
         self.scopes.insert(scope.id.clone(), scope);
         self.scope_counter += 1;
-        self.var_counter += 2;
     }
 
-    pub fn get_scope_from_path(
-        &self,
-        path: &[String],
-        mut parent: Option<u64>,
-    ) -> Result<u64, RuntimeErr<T, U>> {
-        let mut skip = 0;
-        if let None = parent {
-            parent = Some(
-                self.scopes
-                    .iter()
-                    .find(|(_, v)| v.namespace == path[0])
-                    .map(|x| x.0)
-                    .unwrap()
-                    .clone(),
-            );
-            skip = 1;
-        }
-
-        for name in path.iter().skip(skip) {
-            if let Some(p) = parent {
-                parent = Some(self.get_scope_from_parent(p, name)?);
-            }
-        }
-
-        Ok(parent.unwrap())
-    }
-
-    pub fn get_scope_from_parent(
-        &self,
-        parent: u64,
-        namespace: &str,
-    ) -> Result<u64, RuntimeErr<T, U>> {
-        for (_, child) in self.scopes.get(&parent).unwrap().children.iter() {
-            if let Some(x) = self.scopes.get(&child) {
-                if x.namespace == namespace {
-                    return Ok(x.id);
-                }
-            }
-        }
-        Err(RuntimeErr::Value(ValueErr::Scope(ScopeErr::Scope(
-            namespace.to_string(),
-        ))))
-    }
-
-    pub fn new_scope_from_parent_shallow(&mut self, parent: u64) -> u64 {
-        let path = self.scopes.get(&parent).unwrap().path.clone();
-        self.new_scope(Some(parent), path, None)
-    }
-
-    pub fn new_scope_from_parent(&mut self, parent: u64, namespace: &str) -> u64 {
-        if let Ok(scope) = self.get_scope_from_parent(parent, namespace) {
-            return scope;
-        }
-
-        let path = self.scopes.get(&parent).unwrap().path.clone();
-        let parent_name = path.file_name().unwrap();
-        let folder = path.parent().unwrap().to_path_buf();
-
-        let extra = if parent_name == "main.cl" {
-            String::new()
-        } else {
-            format!(
-                "{}/",
-                parent_name.to_str().unwrap().split(".").nth(0).unwrap()
-            )
-        };
-
-        let mut path1 = folder.clone();
-        path1 = path1.join(format!("{extra}{namespace}.cl"));
-
-        let mut path2 = folder.clone();
-        path2 = path2.join(format!("{extra}{namespace}/main.cl"));
-
-        if path1.exists() {
-            self.new_scope(Some(parent), path1, Some(namespace))
-        } else if path2.exists() {
-            self.new_scope(Some(parent), path2, Some(namespace))
-        } else {
-            panic!("Tried:\n{path1:?}\n{path2:?}")
-        }
-    }
-
-    pub fn new_scope(
-        &mut self,
-        parent: Option<u64>,
-        path: PathBuf,
-        namespace: Option<&str>,
-    ) -> u64 {
+    pub fn new_scope(&mut self, parent: Option<u64>) -> u64 {
         if let Some(parent) = parent {
             let scope = Scope {
                 id: self.scope_counter.clone(),
-                namespace: namespace
-                    .unwrap_or(&self.scope_counter.to_string())
-                    .to_string(),
                 parent: Some(parent),
-                children: HashMap::new(),
-                counter: 0,
-                variables: HashMap::new(),
-                objects: HashMap::new(),
-                path,
+                children: Vec::new(),
+                variables: Vec::new(),
             };
             let _ = self.add_scope(scope);
 

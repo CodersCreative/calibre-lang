@@ -335,7 +335,10 @@ impl<'a> FunctionTranslator<'a> {
             }
             MiddleNodeType::Continue => {
                 let block = self.pop_break_block(false);
+                let next_part = self.builder.create_block();
                 self.builder.ins().jump(block, []);
+                self.builder.switch_to_block(next_part);
+                self.builder.seal_block(next_part);
                 self.translate_null()
             }
             MiddleNodeType::BinaryExpression {

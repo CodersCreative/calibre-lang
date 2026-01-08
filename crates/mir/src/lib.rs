@@ -530,7 +530,7 @@ impl MiddleEnvironment {
                 let _new_scope = if is_temp {
                     self.new_scope_from_parent_shallow(*scope)
                 } else {
-                    scope.clone()
+                    *scope
                 };
 
                 let mut stmts = Vec::new();
@@ -540,7 +540,7 @@ impl MiddleEnvironment {
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::ScopeDeclaration {
-                        body: stmts,
+                        body: stmts.into_iter().filter(|x| x.node_type != MiddleNodeType::EmptyLine).collect(),
                         is_temp,
                     },
                     span: node.span,

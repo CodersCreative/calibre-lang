@@ -18,12 +18,17 @@ pub fn setup<T: RuntimeValue, U: RuntimeType>(env: &mut Environment<T, U>, scope
     vars.append(&mut funcs);
 
     for var in vars {
+        let name = env
+            .mappings
+            .iter()
+            .find(|x| x.split_once(":").unwrap().1 == var.0)
+            .unwrap();
+
         let _ = env.variables.insert(
-            env.var_counter,
+            name.clone(),
             Variable {
                 value: var.1,
                 var_type: VarType::Constant,
-                location: None,
             },
         );
 
@@ -31,8 +36,6 @@ pub fn setup<T: RuntimeValue, U: RuntimeType>(env: &mut Environment<T, U>, scope
             .get_mut(&scope)
             .unwrap()
             .variables
-            .insert(var.0, env.var_counter);
-
-        env.var_counter += 1;
+            .push(name.clone());
     }
 }

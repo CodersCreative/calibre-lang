@@ -5,6 +5,7 @@ use calibre_parser::{
     ast::{Node, NodeType, ParserDataType, ParserInnerType, ParserText, TypeDefType, VarType},
     lexer::{Location, Span, Tokenizer},
 };
+use rand::random_range;
 
 use crate::{ast::MiddleNode, errors::MiddleErr};
 
@@ -56,7 +57,7 @@ pub fn get_disamubiguous_name(
             _ => "const",
         },
         scope,
-        0,
+        random_range(0..100000),
         name.unwrap_or("anon")
     )
 }
@@ -420,7 +421,7 @@ impl MiddleEnvironment {
     }
 
     pub fn resolve_type_from_node(&self, scope: &u64, node: &Node) -> Option<ParserDataType> {
-        match &node.node_type {
+        let typ = match &node.node_type {
             NodeType::Break
             | NodeType::Continue
             | NodeType::EmptyLine
@@ -615,6 +616,12 @@ impl MiddleEnvironment {
                 }
             }
             x => todo!("{:?}", x),
+        };
+
+        if let Some(typ) = typ {
+            Some(self.resolve_data_type(scope, typ))
+        } else {
+            None
         }
     }
 }
