@@ -38,7 +38,10 @@ impl From<ParserDataType> for RuntimeType {
             ParserInnerType::Tuple(x) => {
                 RuntimeType::Tuple(x.into_iter().map(|x| x.into()).collect())
             }
-            _ => unimplemented!(),
+            x => {
+                // eprintln!("Data type not implemented {}", x);
+                RuntimeType::Dynamic
+            }
         }
     }
 }

@@ -182,7 +182,7 @@ impl MiddleEnvironment {
                 let new_name =
                     get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type));
                 let data_type = if let Some(x) = data_type {
-                    x
+                    self.resolve_data_type(scope, x)
                 } else if let Some(x) = self.resolve_type_from_node(scope, &value) {
                     x
                 } else {
@@ -402,7 +402,7 @@ impl MiddleEnvironment {
                                 let mut lst = vec![match *loop_type {
                                     LoopType::While(x) => Node::new_from_type(NodeType::IfStatement {
                                         comparison: Box::new(IfComparisonType::If(
-                                            Node::new_from_type(NodeType::NegExpression {
+                                            Node::new_from_type(NodeType::NotExpression {
                                                 value: Box::new(x),
                                             }),
                                         )),
@@ -642,7 +642,7 @@ impl MiddleEnvironment {
             },
             NodeType::MatchDeclaration { parameters, body, return_type, is_async } => Ok(MiddleNode {
                 node_type: MiddleNodeType::MatchDeclaration {
-                    parameters: (parameters.0, parameters.1, if let Some(x) = parameters.2 {Some(Box::new(self.evaluate(scope, *x)?))} else {None}),
+                    parameters: (parameters.0, self.resolve_data_type(scope, parameters.1), if let Some(x) = parameters.2 {Some(Box::new(self.evaluate(scope, *x)?))} else {None}),
                     body: {
                         // TODO make sure to create a new scope and add variables that are created in the match arms
                         todo!()
@@ -657,10 +657,11 @@ impl MiddleEnvironment {
                 let new_scope = self.new_scope_from_parent_shallow(*scope);
                 for param in parameters {
                     let new_name = get_disamubiguous_name(scope, Some(param.0.trim()), Some(&VarType::Mutable));
+                    let data_type = self.resolve_data_type(scope, param.1);
                     self.variables.insert(
                         new_name.clone(),
                         MiddleVariable {
-                            data_type: param.1.clone(),
+                            data_type: data_type.clone(),
                             var_type: VarType::Mutable,
                             location: self.current_location.clone(),
                         },
@@ -674,7 +675,7 @@ impl MiddleEnvironment {
 
                     params.push((
                         param.0,
-                        param.1,
+                        data_type,
                         if let Some(x) = param.2 {
                             Some(self.evaluate(scope, x)?)
                         }else{
@@ -703,7 +704,24 @@ impl MiddleEnvironment {
                             span: node.span,
                         });
                     }
+
+                    
+                    if let Some(caller) = self.resolve_str(scope, caller) {
+                        if self.objects.contains_key(caller) {
+                            let mut lst = Vec::new();
+
+                            for arg in args {
+                                lst.push(Some(self.evaluate(scope, arg.0)?));
+                            }
+                        
+                            return Ok(MiddleNode {
+                                node_type: MiddleNodeType::StructLiteral(ObjectType::Tuple(lst)),
+                                span: node.span,
+                            });
+                        }
+                    }                    
                 }
+                
                 Ok(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(Box::new(self.evaluate(scope, *caller)?), {
                     let mut lst = Vec::new();

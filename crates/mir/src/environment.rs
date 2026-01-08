@@ -92,6 +92,70 @@ impl MiddleEnvironment {
         }
     }
 
+    pub fn resolve_data_type(&self, scope: &u64, data_type: ParserDataType) -> ParserDataType {
+        match data_type.data_type {
+            ParserInnerType::Tuple(x) => {
+                let mut lst = Vec::new();
+
+                for x in x {
+                    lst.push(self.resolve_data_type(scope, x));
+                }
+
+                ParserDataType {
+                    data_type: ParserInnerType::Tuple(lst),
+                    ..data_type
+                }
+            }
+            ParserInnerType::Struct(x) => ParserDataType {
+                data_type: ParserInnerType::Struct(if let Some(x) = x {
+                    self.resolve_str(scope, &x).map(|x| x.to_string())
+                } else {
+                    None
+                }),
+                ..data_type
+            },
+            ParserInnerType::Ref(d_type, mutability) => ParserDataType {
+                data_type: ParserInnerType::Ref(
+                    Box::new(self.resolve_data_type(scope, *d_type)),
+                    mutability,
+                ),
+                ..data_type
+            },
+            ParserInnerType::List(x) => ParserDataType {
+                data_type: ParserInnerType::List(if let Some(x) = x {
+                    Some(Box::new(self.resolve_data_type(scope, *x)))
+                } else {
+                    None
+                }),
+                ..data_type
+            },
+            ParserInnerType::Option(x) => ParserDataType {
+                data_type: ParserInnerType::Option(Box::new(self.resolve_data_type(scope, *x))),
+                ..data_type
+            },
+            ParserInnerType::Result(x, e) => ParserDataType {
+                data_type: ParserInnerType::Result(
+                    Box::new(self.resolve_data_type(scope, *x)),
+                    Box::new(self.resolve_data_type(scope, *e)),
+                ),
+                ..data_type
+            },
+            ParserInnerType::Scope(x) => {
+                let mut lst = Vec::new();
+
+                for x in x {
+                    lst.push(self.resolve_data_type(scope, x));
+                }
+
+                ParserDataType {
+                    data_type: ParserInnerType::Scope(lst),
+                    ..data_type
+                }
+            }
+            _ => data_type,
+        }
+    }
+
     pub fn resolve_parser_text(&self, scope: &u64, iden: &ParserText) -> Option<ParserText> {
         Some(ParserText {
             text: self.resolve_str(scope, &iden.text)?.to_string(),
@@ -329,6 +393,32 @@ impl MiddleEnvironment {
         todo!()
     }
 
+    pub fn new_scope_with_stdlib<'a>(
+        &'a mut self,
+        parent: Option<u64>,
+        path: PathBuf,
+        namespace: Option<&str>,
+    ) -> u64 {
+        // TODO finish this
+        let scope = 0;
+        let counter = self.scope_counter;
+
+        self.add_scope(MiddleScope {
+            id: 0,
+            namespace: namespace.unwrap_or(&counter.to_string()).to_string(),
+            parent,
+            children: HashMap::new(),
+            path: path.clone(),
+            mappings: HashMap::new(),
+        });
+
+        let std = self.new_scope(Some(scope), path.clone(), Some("std"));
+
+        let root = self.new_scope(Some(scope), path, Some("root"));
+
+        root
+    }
+
     pub fn resolve_type_from_node(&self, scope: &u64, node: &Node) -> Option<ParserDataType> {
         match &node.node_type {
             NodeType::Break
@@ -340,8 +430,11 @@ impl MiddleEnvironment {
             | NodeType::Return { .. }
             | NodeType::ImportStatement { .. }
             | NodeType::AssignmentExpression { .. }
-            | NodeType::StructLiteral(_)
             | NodeType::LoopDeclaration { .. } => None,
+            NodeType::StructLiteral(_) => Some(ParserDataType {
+                data_type: ParserInnerType::Struct(None),
+                span: node.span,
+            }),
             NodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_type_from_node(scope, value)?),
@@ -481,7 +574,47 @@ impl MiddleEnvironment {
                 }) => Some(*x),
                 x => x,
             },
-            _ => todo!(),
+            NodeType::CallExpression(caller, args) => {
+                let mut caller_type = None;
+                if let NodeType::Identifier(caller) = &caller.node_type {
+                    if &caller.text == "tuple" {
+                        let mut lst = Vec::new();
+
+                        for arg in args {
+                            lst.push(self.resolve_type_from_node(scope, &arg.0).unwrap());
+                        }
+                        return Some(ParserDataType {
+                            data_type: ParserInnerType::Tuple(lst),
+                            span: node.span,
+                        });
+                    }
+
+                    if let Some(caller) = self.resolve_str(scope, caller) {
+                        if self.objects.contains_key(caller) {
+                            return Some(ParserDataType {
+                                data_type: ParserInnerType::Struct(Some(caller.to_string())),
+                                span: node.span,
+                            });
+                        } else if let Some(caller) = self.variables.get(caller) {
+                            caller_type = Some(caller.data_type.clone());
+                        }
+                    }
+                }
+
+                let Some(caller_type) = caller_type else {
+                    todo!()
+                };
+
+                match caller_type.data_type {
+                    ParserInnerType::Function {
+                        return_type,
+                        parameters: _,
+                        is_async: _,
+                    } => return_type.clone().map(|x| *x),
+                    _ => todo!(),
+                }
+            }
+            x => todo!("{:?}", x),
         }
     }
 }

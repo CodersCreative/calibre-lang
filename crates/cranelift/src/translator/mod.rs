@@ -15,6 +15,7 @@ use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::*;
 use cranelift_module::{DataDescription, Linkage, Module};
 use cranelift_object::ObjectModule;
+use libc::NEW_TIME;
 
 use crate::translator::layout::GetLayoutInfo;
 use crate::translator::memory::MemoryLoc;
@@ -30,7 +31,31 @@ pub struct FunctionTranslator<'a> {
     pub variables: HashMap<String, (VarType, RuntimeType, Variable)>,
     pub module: &'a mut ObjectModule,
     pub objects: &'a std::collections::HashMap<String, MiddleObject>,
-    pub stop: Option<StopValue>,
+    pub break_stack: Vec<BlockType>,
+}
+
+#[derive(Clone)]
+pub enum BlockType {
+    Break(Block),
+    Continue(Block),
+}
+
+impl BlockType {
+    pub fn is_break(&self) -> bool {
+        match self {
+            Self::Break(_) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Into<Block> for BlockType {
+    fn into(self) -> Block {
+        match self {
+            Self::Break(x) => x,
+            Self::Continue(x) => x,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -92,6 +117,15 @@ impl Types {
 }
 
 impl<'a> FunctionTranslator<'a> {
+    pub fn pop_break_block(&mut self, is_break: bool) -> Block {
+        self.break_stack
+            .iter()
+            .rev()
+            .find(|x| x.is_break() == is_break)
+            .unwrap()
+            .clone()
+            .into()
+    }
     pub fn create_data(
         &mut self,
         name: &str,
@@ -227,11 +261,7 @@ impl<'a> FunctionTranslator<'a> {
             MiddleNodeType::ScopeDeclaration { body, is_temp: _ } => {
                 let mut value = self.translate_null();
                 for node in body {
-                    if let Some(_) = self.stop {
-                        return value;
-                    } else {
-                        value = self.translate(node);
-                    }
+                    value = self.translate(node);
                 }
                 value
             }
@@ -253,8 +283,9 @@ impl<'a> FunctionTranslator<'a> {
                 let value = self.translate(*value);
 
                 let data_type = data_type.into();
-                if value.data_type != data_type {
-                    panic!()
+                if value.data_type != data_type && data_type != RuntimeType::Dynamic {
+                    eprintln!("Type Mismatch {:?} and {:?}", value.data_type, data_type);
+                    //panic!()
                     // value = value.into_type(self, data_type);
                 }
 
@@ -295,15 +326,16 @@ impl<'a> FunctionTranslator<'a> {
                 value
             }
             MiddleNodeType::Break => {
-                if self.stop != Some(StopValue::Return) {
-                    self.stop = Some(StopValue::Break);
-                }
+                let block = self.pop_break_block(true);
+                let next_part = self.builder.create_block();
+                self.builder.ins().jump(block, []);
+                self.builder.switch_to_block(next_part);
+                self.builder.seal_block(next_part);
                 self.translate_null()
             }
             MiddleNodeType::Continue => {
-                if self.stop == None {
-                    self.stop = Some(StopValue::Continue);
-                }
+                let block = self.pop_break_block(false);
+                self.builder.ins().jump(block, []);
                 self.translate_null()
             }
             MiddleNodeType::BinaryExpression {
@@ -424,7 +456,7 @@ impl<'a> FunctionTranslator<'a> {
                     module: self.module,
                     description: self.description,
                     objects: self.objects,
-                    stop: None,
+                    break_stack: Vec::new(),
                 };
 
                 for (i, p) in parameters.into_iter().enumerate() {
@@ -469,14 +501,6 @@ impl<'a> FunctionTranslator<'a> {
                 )
             }
             MiddleNodeType::CallExpression(caller, args) => {
-                if let MiddleNodeType::Identifier(caller_text) = &caller.node_type {
-                    if let Some(_) = self.objects.get(&caller_text.text) {
-                        return self.translate_struct_expression(ObjectType::Tuple(
-                            args.into_iter().map(|x| Some(x.0)).collect(),
-                        ));
-                    }
-                }
-
                 let callee = self.translate(*caller);
 
                 if let RuntimeType::Function {
@@ -535,9 +559,10 @@ impl<'a> FunctionTranslator<'a> {
 
                 todo!()
             }
+            MiddleNodeType::TupleLiteral(x) => self.translate_tuple_expression(x),
             MiddleNodeType::IfStatement { .. } => self.translate_if_statement(node),
             MiddleNodeType::LoopDeclaration { .. } => self.translate_loop_statement(node),
-            _ => unimplemented!(),
+            x => unimplemented!("{:?}", x),
         }
     }
 }

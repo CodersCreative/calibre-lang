@@ -16,7 +16,7 @@ const BASIC_CODE: &str = r#"
     
     // const main = fn () -> int => if 1 => 10 + 4 else => 30;
     const main = fn (x : int) -> float =>  {
-        let forty = fn () -> float => 40.0;    
+        // let forty = fn () -> float => 40.0;    
         let mut index : float = 1.0;
         let arr : list<float> = [10.5, 40.8, 50.2];
         let tpl : <float, float> = tuple(10.0, 90.8);
@@ -34,9 +34,11 @@ const BASIC_CODE: &str = r#"
     		flt : 8.0,
     	};
 
-        for i in 100 => counter += i as float;
+    	let _ = "dshjk";
 
-        for 100 => counter += 2 as float;
+        /*for i in 100 => counter += i as float;
+
+        for 100 => counter += 2 as float;*/
 
         id.0 + smth.flt;
     }
@@ -47,7 +49,7 @@ const BASIC_CODE: &str = r#"
 
 use calibre_cranelift::Compiler;
 use calibre_mir::{ast::MiddleNode, environment::MiddleEnvironment};
-use calibre_parser::{Parser, ast::Node, lexer::Tokenizer};
+use calibre_parser::{Parser, lexer::Tokenizer};
 use std::{fmt::Debug, mem, path::PathBuf, str::FromStr};
 
 fn parse(text: String) -> (MiddleNode, MiddleEnvironment) {
@@ -56,7 +58,7 @@ fn parse(text: String) -> (MiddleNode, MiddleEnvironment) {
     let ast = parser.produce_ast(tokenizer.tokenize(text).unwrap());
     let mut env = MiddleEnvironment::new();
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
-    (env.evaluate(scope, ast).unwrap(), env)
+    (env.evaluate(&scope, ast).unwrap(), env)
 }
 
 fn run<I, T: Debug>(input: I) {

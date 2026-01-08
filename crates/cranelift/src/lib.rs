@@ -66,7 +66,7 @@ impl Compiler {
                                 *value,
                                 &env.objects,
                             )?;
-                            if identifier.to_string() == "main" {
+                            if identifier.to_string().contains(":main") {
                                 main = Some(val);
                             }
                         }
@@ -193,7 +193,7 @@ impl Compiler {
             module,
             description: &mut self.data_description,
             objects,
-            stop: None,
+            break_stack: Vec::new(),
         };
         let value = trans.translate(node);
 
