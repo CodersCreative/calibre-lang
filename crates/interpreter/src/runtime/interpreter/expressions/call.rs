@@ -2,7 +2,9 @@ use calibre_common::{
     environment::{Type, Variable},
     errors::RuntimeErr,
 };
-use calibre_parser::ast::{Node, NodeType, ObjectType, VarType};
+use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_parser::ast::{ObjectType, VarType};
+use rand::random_range;
 
 use crate::runtime::{
     interpreter::InterpreterErr,
@@ -15,7 +17,7 @@ impl InterpreterEnvironment {
         &mut self,
         scope: &u64,
         func: RuntimeValue,
-        mut arguments: Vec<(Node, Option<Node>)>,
+        mut arguments: Vec<(MiddleNode, Option<MiddleNode>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let RuntimeValue::Function {
             parameters,
@@ -31,8 +33,7 @@ impl InterpreterEnvironment {
                         arguments = x
                             .into_iter()
                             .map(|x| {
-                                let counter = self.scopes.get(scope).unwrap().counter;
-                                self.scopes.get_mut(scope).unwrap().counter += 1;
+                                let counter = random_range(0..1000000000);
 
                                 let _ = self
                                     .force_var(
@@ -41,14 +42,13 @@ impl InterpreterEnvironment {
                                         Variable {
                                             value: x,
                                             var_type: VarType::Mutable,
-                                            location: Some(location.clone()),
                                         },
                                     )
                                     .unwrap();
 
                                 (
-                                    Node::new(
-                                        NodeType::Identifier(format!("$-{}", counter).into()),
+                                    MiddleNode::new(
+                                        MiddleNodeType::Identifier(format!("$-{}", counter).into()),
                                         location.span,
                                     ),
                                     None,
@@ -65,7 +65,9 @@ impl InterpreterEnvironment {
                     .enumerate()
                     .filter(|(i, x)| {
                         for arg in arguments.iter() {
-                            if let (NodeType::Identifier(y), Some(_)) = (&arg.0.node_type, &arg.1) {
+                            if let (MiddleNodeType::Identifier(y), Some(_)) =
+                                (&arg.0.node_type, &arg.1)
+                            {
                                 if x.0 == y.to_string() {
                                     return false;
                                 }
@@ -78,14 +80,14 @@ impl InterpreterEnvironment {
                     .collect();
 
                 if params.iter().filter(|x| x.2.is_none()).count() > 0 {
-                    let arguments: Vec<(Node, Option<Node>)> = [
+                    let arguments: Vec<(MiddleNode, Option<MiddleNode>)> = [
                         arguments,
                         params
                             .iter()
                             .map(|x| {
                                 (
-                                    Node::new(
-                                        NodeType::Identifier(x.0.clone().into()),
+                                    MiddleNode::new(
+                                        MiddleNodeType::Identifier(x.0.clone().into()),
                                         location.span,
                                     ),
                                     None,
@@ -95,8 +97,7 @@ impl InterpreterEnvironment {
                     ]
                     .concat();
 
-                    let counter = self.scopes.get(scope).unwrap().counter;
-                    self.scopes.get_mut(scope).unwrap().counter += 1;
+                    let counter = random_range(0..100000000);
 
                     let _ = self
                         .force_var(
@@ -105,15 +106,14 @@ impl InterpreterEnvironment {
                             Variable {
                                 value: func.clone(),
                                 var_type: VarType::Mutable,
-                                location: Some(location.clone()),
                             },
                         )
                         .unwrap();
 
-                    let body = FunctionType::Regular(Block(Box::new(Node::new(
-                        NodeType::CallExpression(
-                            Box::new(Node::new(
-                                NodeType::Identifier(format!("$-{}", counter).into()),
+                    let body = FunctionType::Regular(Block(Box::new(MiddleNode::new(
+                        MiddleNodeType::CallExpression(
+                            Box::new(MiddleNode::new(
+                                MiddleNodeType::Identifier(format!("$-{}", counter).into()),
                                 location.span,
                             )),
                             arguments,
@@ -156,21 +156,22 @@ impl InterpreterEnvironment {
     pub fn evaluate_call_expression(
         &mut self,
         scope: &u64,
-        caller: Node,
-        arguments: Vec<(Node, Option<Node>)>,
+        caller: MiddleNode,
+        arguments: Vec<(MiddleNode, Option<MiddleNode>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::Identifier(object_name) = caller.node_type.clone() {
-            if let Ok(pointer) = self.get_object_pointer(scope, &object_name) {
-                if let Ok(Type::Struct(ObjectType::Tuple(params))) = self.get_object_type(&pointer)
-                {
-                    if arguments.len() == params.len() {
-                        let mut args = Vec::new();
-                        for (_, arg) in arguments.into_iter().enumerate() {
-                            args.push(self.evaluate(scope, arg.0)?);
-                        }
-
-                        return Ok(RuntimeValue::Struct(Some(pointer), ObjectType::Tuple(args)));
+        if let MiddleNodeType::Identifier(object_name) = caller.node_type.clone() {
+            if let Ok(Type::Struct(ObjectType::Tuple(params))) = self.get_object_type(&object_name)
+            {
+                if arguments.len() == params.len() {
+                    let mut args = Vec::new();
+                    for (_, arg) in arguments.into_iter().enumerate() {
+                        args.push(self.evaluate(scope, arg.0)?);
                     }
+
+                    return Ok(RuntimeValue::Struct(
+                        Some(object_name.text),
+                        ObjectType::Tuple(args),
+                    ));
                 }
             }
         }
@@ -201,7 +202,7 @@ impl InterpreterEnvironment {
 
                 for arg in arguments.iter() {
                     evaluated_arguments.push(if let Some(d) = &arg.1 {
-                        if let NodeType::Identifier(name) = &arg.0.node_type {
+                        if let MiddleNodeType::Identifier(name) = &arg.0.node_type {
                             (
                                 RuntimeValue::Str(name.to_string()),
                                 Some(self.evaluate(scope, d.clone())?),

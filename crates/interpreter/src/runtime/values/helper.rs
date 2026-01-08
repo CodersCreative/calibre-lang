@@ -1,13 +1,13 @@
-use calibre_parser::ast::Node;
+use calibre_mir::ast::MiddleNode;
 
 use super::RuntimeValue;
 use std::{cmp::Ordering, collections::HashMap};
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Block(pub Box<Node>);
+pub struct Block(pub Box<MiddleNode>);
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct MatchBlock(pub Vec<(Node, Vec<Node>, Box<Node>)>);
+pub struct MatchBlock(pub Vec<(MiddleNode, Vec<MiddleNode>, Box<MiddleNode>)>);
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Map<T>(pub HashMap<String, T>);

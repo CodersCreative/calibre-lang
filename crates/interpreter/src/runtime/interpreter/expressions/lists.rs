@@ -1,17 +1,16 @@
 use crate::runtime::{
     interpreter::InterpreterErr,
     scope::InterpreterEnvironment,
-    values::{RuntimeType, RuntimeValue},
+    values::RuntimeValue,
 };
-use calibre_common::{environment::Variable, errors::RuntimeErr};
-use calibre_parser::ast::{LoopType, Node, NodeType, VarType};
+use calibre_mir::ast::MiddleNode;
 use std::mem::discriminant;
 
 impl InterpreterEnvironment {
     pub fn evaluate_list_expression(
         &mut self,
         scope: &u64,
-        vals: Vec<Node>,
+        vals: Vec<MiddleNode>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut values = Vec::new();
 
@@ -35,65 +34,6 @@ impl InterpreterEnvironment {
         Ok(RuntimeValue::List {
             data: values,
             data_type: t,
-        })
-    }
-
-    pub fn evaluate_iter_expression(
-        &mut self,
-        scope: &u64,
-        map: Node,
-        loop_type: LoopType,
-        conditionals: Vec<Node>,
-    ) -> Result<RuntimeValue, InterpreterErr> {
-        let mut result = Vec::new();
-
-        if let LoopType::For(identifier, range_node) = loop_type {
-            let mut range = self.evaluate(scope, range_node.clone())?;
-
-            if let RuntimeValue::Ref(pointer, _) = range {
-                range = self.variables.get(&pointer).unwrap().value.clone();
-            }
-
-            let location = self.get_location(scope, range_node.span);
-            if let RuntimeValue::List { data, data_type: _ } = range {
-                for d in data.into_iter() {
-                    let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-                    let _ = self.push_var(
-                        &new_scope,
-                        identifier.to_string(),
-                        Variable {
-                            value: d.clone(),
-                            var_type: VarType::Immutable,
-                            location: location.clone(),
-                        },
-                    );
-
-                    if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                        result.push(self.evaluate(&new_scope, map.clone())?);
-                    }
-
-                    self.remove_scope(&new_scope);
-                }
-            } else if let RuntimeValue::Range(from, to) = range {
-                for i in from..to {
-                    let new_scope = self.get_new_scope(
-                        scope,
-                        vec![(identifier.to_string(), RuntimeType::Int, None)],
-                        vec![(Node::new(NodeType::IntLiteral(i), range_node.span), None)],
-                    )?;
-                    if self.handle_conditionals(&new_scope, conditionals.clone())? {
-                        result.push(self.evaluate(&new_scope, map.clone())?);
-                    }
-                    self.remove_scope(&new_scope);
-                }
-            }
-        } else if let LoopType::While(_) = loop_type {
-            return Err(RuntimeErr::IterWhileLoop(loop_type));
-        }
-
-        Ok(RuntimeValue::List {
-            data: result,
-            data_type: None,
         })
     }
 }

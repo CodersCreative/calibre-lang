@@ -1,5 +1,6 @@
-use calibre_common::environment::{Location, Variable};
-use calibre_parser::ast::{Node, NodeType, RefMutability, VarType};
+use calibre_common::environment::Variable;
+use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_parser::ast::{RefMutability, VarType};
 
 use crate::runtime::{
     interpreter::InterpreterErr,
@@ -11,10 +12,10 @@ impl InterpreterEnvironment {
     pub fn get_new_scope_with_values(
         &mut self,
         scope: &u64,
-        arguments: Vec<(String, RuntimeValue, Option<Location>)>,
+        arguments: Vec<(String, RuntimeValue)>,
     ) -> Result<u64, InterpreterErr> {
-        let new_scope = self.new_scope_from_parent_shallow(scope.clone());
-        for (k, v, location) in arguments {
+        let new_scope = self.new_scope(Some(*scope));
+        for (k, v) in arguments {
             let mutability = if let RuntimeValue::Ref(_, _) = v {
                 RefMutability::MutRef
             } else {
@@ -29,7 +30,6 @@ impl InterpreterEnvironment {
                         RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
                         _ => VarType::Immutable,
                     },
-                    location,
                 },
             )?;
         }
@@ -41,9 +41,9 @@ impl InterpreterEnvironment {
         &mut self,
         scope: &u64,
         parameters: Vec<(String, RuntimeType, Option<RuntimeValue>)>,
-        arguments: Vec<(Node, Option<Node>)>,
+        arguments: Vec<(MiddleNode, Option<MiddleNode>)>,
     ) -> Result<u64, InterpreterErr> {
-        let new_scope = self.new_scope_from_parent_shallow(scope.clone());
+        let new_scope = self.new_scope(Some(*scope));
 
         for (i, (k, v, d)) in parameters.iter().enumerate() {
             let m = match v {
@@ -62,13 +62,12 @@ impl InterpreterEnvironment {
                             RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
                             _ => VarType::Immutable,
                         },
-                        location: self.current_location.clone(),
                     },
                 )?;
                 continue;
             }
             if let Some(d) = arguments.iter().find(|x| {
-                if let NodeType::Identifier(key) = &x.0.node_type {
+                if let MiddleNodeType::Identifier(key) = &x.0.node_type {
                     &key.to_string() == k && x.1.is_some()
                 } else {
                     false
@@ -84,7 +83,6 @@ impl InterpreterEnvironment {
                             RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
                             _ => VarType::Immutable,
                         },
-                        location: self.current_location.clone(),
                     },
                 )?;
 
@@ -101,7 +99,6 @@ impl InterpreterEnvironment {
                             RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
                             _ => VarType::Immutable,
                         },
-                        location: self.current_location.clone(),
                     },
                 )?;
 
@@ -119,11 +116,11 @@ impl InterpreterEnvironment {
     pub fn evaluate_scope(
         &mut self,
         scope: &u64,
-        body: Vec<Node>,
+        body: Vec<MiddleNode>,
         is_temp: bool,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let new_scope = if is_temp {
-            self.get_new_scope(scope, Vec::new(), Vec::new())?
+            self.new_scope(Some(*scope))
         } else {
             scope.clone()
         };

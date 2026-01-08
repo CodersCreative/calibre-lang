@@ -234,6 +234,7 @@ name = "calibre-interpreter"
 version = "0.1.0"
 dependencies = [
  "calibre-common",
+ "calibre-mir",
  "calibre-parser",
  "rand",
  "rustyline",

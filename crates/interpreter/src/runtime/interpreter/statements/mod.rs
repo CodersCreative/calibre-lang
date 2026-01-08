@@ -1,5 +1,6 @@
 use calibre_common::environment::{InterpreterFrom, Variable};
-use calibre_parser::ast::{Node, NodeType, VarType};
+use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_parser::ast::VarType;
 
 use crate::runtime::{
     interpreter::InterpreterErr,
@@ -11,18 +12,16 @@ use crate::runtime::{
 };
 
 pub mod comparisons;
-pub mod import;
 pub mod loops;
 pub mod matching;
-pub mod structs;
 
 impl InterpreterEnvironment {
     pub fn evaluate_match_declaration(
         &mut self,
         scope: &u64,
-        declaration: Node,
+        declaration: MiddleNode,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let NodeType::MatchDeclaration {
+        let MiddleNodeType::MatchDeclaration {
             parameters,
             body,
             return_type,
@@ -60,9 +59,9 @@ impl InterpreterEnvironment {
     pub fn evaluate_function_declaration(
         &mut self,
         scope: &u64,
-        declaration: Node,
+        declaration: MiddleNode,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let NodeType::FunctionDeclaration {
+        let MiddleNodeType::FunctionDeclaration {
             parameters,
             body,
             return_type,
@@ -109,24 +108,16 @@ impl InterpreterEnvironment {
         if let Some(t) = data_type {
             value = match value {
                 RuntimeValue::List { data, data_type } if data.len() <= 0 => {
-                    RuntimeValue::List { data, data_type }.into_type(self, scope, &t)?
+                    RuntimeValue::List { data, data_type }.into_type(self, &t)?
                 }
                 x => x,
             };
-            if !value.is_type(self, scope, &t) {
+            if !value.is_type(self, &t) {
                 return Err(InterpreterErr::ExpectedType(value.clone(), t));
             }
         }
 
-        Ok(self.push_var(
-            scope,
-            identifier,
-            Variable {
-                value,
-                var_type,
-                location: self.current_location.clone(),
-            },
-        )?)
+        Ok(self.push_var(scope, identifier, Variable { value, var_type })?)
     }
 }
 

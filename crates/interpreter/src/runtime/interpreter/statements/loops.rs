@@ -1,141 +1,32 @@
-use calibre_common::{environment::Variable, errors::RuntimeErr};
-use calibre_parser::ast::{LoopType, Node, NodeType, VarType};
+use calibre_mir::ast::MiddleNode;
 
 use crate::runtime::{
     interpreter::InterpreterErr,
     scope::InterpreterEnvironment,
-    values::{RuntimeType, RuntimeValue, helper::StopValue},
+    values::{RuntimeValue, helper::StopValue},
 };
 
 impl InterpreterEnvironment {
     pub fn evaluate_loop_declaration(
         &mut self,
         scope: &u64,
-        loop_type: LoopType,
-        body: Node,
+        body: MiddleNode,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut result = RuntimeValue::Null;
 
-        if let LoopType::For(identifier, range_node) = loop_type {
-            let mut range = self.evaluate(scope, range_node.clone())?;
+        loop {
+            let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+            result = self.evaluate(&new_scope, body.clone())?;
+            self.remove_scope(&new_scope);
 
-            if let RuntimeValue::Ref(pointer, _) = range {
-                range = self.variables.get(&pointer).unwrap().value.clone();
-            }
-
-            if let RuntimeValue::List { data, data_type: _ } = range {
-                for d in data.into_iter() {
-                    let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-                    let location = self.get_location(scope, range_node.span);
-                    let _ = self.push_var(
-                        &new_scope,
-                        identifier.to_string(),
-                        Variable {
-                            value: d.clone(),
-                            var_type: VarType::Immutable,
-                            location,
-                        },
-                    );
-                    result = self.evaluate(&new_scope, body.clone())?;
-                    self.remove_scope(&new_scope);
-
-                    match self.stop {
-                        Some(StopValue::Break) => break,
-                        Some(StopValue::Return) => {
-                            self.stop = Some(StopValue::Return);
-                            break;
-                        }
-                        _ => {}
-                    };
-                }
-            } else if let RuntimeValue::Range(from, to) = range {
-                for i in from..to {
-                    let new_scope = self.get_new_scope(
-                        scope,
-                        vec![(identifier.to_string(), RuntimeType::Int, None)],
-                        vec![(Node::new(NodeType::IntLiteral(i), range_node.span), None)],
-                    )?;
-                    result = self.evaluate(&new_scope, body.clone())?;
-                    self.remove_scope(&new_scope);
-
-                    match self.stop {
-                        Some(StopValue::Break) => break,
-                        Some(StopValue::Return) => {
-                            self.stop = Some(StopValue::Return);
-                            break;
-                        }
-                        _ => {}
-                    };
-                }
-            } else {
-                return Err(RuntimeErr::UnableToLoop(range));
-            }
-        } else if let LoopType::While(condition) = loop_type {
-            match self.evaluate(scope, condition.clone())? {
-                RuntimeValue::Bool(_) => {
-                    while let RuntimeValue::Bool(x) = self.evaluate(scope, condition.clone())? {
-                        if !x {
-                            break;
-                        }
-                        let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
-                        result = self.evaluate(&new_scope, body.clone())?;
-                        self.remove_scope(&new_scope);
-
-                        match self.stop {
-                            Some(StopValue::Break) => break,
-                            Some(StopValue::Return) => {
-                                self.stop = Some(StopValue::Return);
-                                break;
-                            }
-                            _ => {}
-                        };
-                    }
-                }
-                RuntimeValue::Range(from, to) => {
-                    return self.evaluate_loop_declaration(
-                        scope,
-                        LoopType::For(
-                            String::from("hidden_index").into(),
-                            Node::new(
-                                NodeType::RangeDeclaration {
-                                    from: Box::new(Node::new(
-                                        NodeType::IntLiteral(from),
-                                        condition.span,
-                                    )),
-                                    to: Box::new(Node::new(
-                                        NodeType::IntLiteral(to),
-                                        condition.span,
-                                    )),
-                                    inclusive: false,
-                                },
-                                condition.span,
-                            ),
-                        ),
-                        body,
-                    );
-                }
-                RuntimeValue::Int(x) => {
-                    return self.evaluate_loop_declaration(
-                        scope,
-                        LoopType::For(
-                            String::from("hidden_index").into(),
-                            Node::new(NodeType::IntLiteral(x), condition.span),
-                        ),
-                        body,
-                    );
-                }
-                RuntimeValue::Float(x) => {
-                    return self.evaluate_loop_declaration(
-                        scope,
-                        LoopType::For(
-                            String::from("hidden_index").into(),
-                            Node::new(NodeType::FloatLiteral(x as f64), condition.span),
-                        ),
-                        body,
-                    );
+            match self.stop {
+                Some(StopValue::Break) => break,
+                Some(StopValue::Return) => {
+                    self.stop = Some(StopValue::Return);
+                    break;
                 }
                 _ => {}
-            }
+            };
         }
 
         Ok(result)

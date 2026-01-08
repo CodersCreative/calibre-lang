@@ -109,39 +109,20 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
                 Some(x) => Some(Box::new(RuntimeType::interpreter_from(env, scope, *x)?)),
                 None => None,
             }),
-            ParserInnerType::Scope(mut nodes) => {
-                let typ = nodes.remove(nodes.len() - 1);
-                let list = nodes
-                    .into_iter()
-                    .map(|x| {
-                        let ParserInnerType::Struct(Some(x)) = x.data_type else {
-                            panic!()
-                        };
-                        x
-                    })
-                    .collect();
-                let scope = env.get_scope_list(scope.clone(), list)?;
-
-                RuntimeType::interpreter_from(env, &scope, typ)?
-            }
+            ParserInnerType::Scope(_nodes) => unreachable!(),
             ParserInnerType::Range => Self::Range,
-            ParserInnerType::Struct(x) => {
-                if let Some(x) = x {
-                    let y = env.get_object_pointer(scope, &x)?;
-
-                    if let Some(obj) = env.objects.get(&y) {
-                        match &obj.object_type {
-                            Type::Enum(_) => Self::Enum(y),
-                            Type::Struct(_) => Self::Struct(Some(y)),
-                            Type::NewType(x) => x.clone(),
-                        }
-                    } else {
-                        Self::Struct(Some(y))
+            ParserInnerType::Struct(Some(x)) => {
+                if let Some(obj) = env.objects.get(&x) {
+                    match &obj.object_type {
+                        Type::Enum(_) => Self::Enum(x),
+                        Type::Struct(_) => Self::Struct(Some(x)),
+                        Type::NewType(x) => x.clone(),
                     }
                 } else {
-                    Self::Struct(None)
+                    Self::Struct(Some(x))
                 }
             }
+            ParserInnerType::Struct(_) => Self::Struct(None),
             ParserInnerType::Function {
                 return_type,
                 parameters,

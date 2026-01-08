@@ -8,7 +8,7 @@ impl RuntimeValue {
         matches!(self, RuntimeValue::Float(_) | RuntimeValue::Int(_))
     }
 
-    pub fn is_type(&self, env: &InterpreterEnvironment, scope: &u64, t: &RuntimeType) -> bool {
+    pub fn is_type(&self, env: &InterpreterEnvironment, t: &RuntimeType) -> bool {
         if t == &RuntimeType::Dynamic {
             return true;
         }
@@ -38,7 +38,7 @@ impl RuntimeValue {
                     } else {
                         let mut valid = true;
                         for i in 0..data.len() {
-                            if !data[i].is_type(env, scope, &data_types[i]) {
+                            if !data[i].is_type(env, &data_types[i]) {
                                 valid = false;
                                 break;
                             }

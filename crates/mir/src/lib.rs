@@ -640,15 +640,16 @@ impl MiddleEnvironment {
                 span: node.span,
             })
             },
-            NodeType::MatchDeclaration { parameters, body, return_type, is_async } => Ok(MiddleNode {
+            NodeType::MatchDeclaration { parameters, body: _, return_type, is_async } => Ok(MiddleNode {
                 node_type: MiddleNodeType::MatchDeclaration {
                     parameters: (parameters.0, self.resolve_data_type(scope, parameters.1), if let Some(x) = parameters.2 {Some(Box::new(self.evaluate(scope, *x)?))} else {None}),
+                    return_type,
+                    is_async,
                     body: {
                         // TODO make sure to create a new scope and add variables that are created in the match arms
                         todo!()
                     },
-                    return_type,
-                    is_async
+                    
                 },
                 span: node.span,
             }),

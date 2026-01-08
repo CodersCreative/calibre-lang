@@ -413,7 +413,7 @@ impl MiddleEnvironment {
             mappings: HashMap::new(),
         });
 
-        let std = self.new_scope(Some(scope), path.clone(), Some("std"));
+        let _std = self.new_scope(Some(scope), path.clone(), Some("std"));
 
         let root = self.new_scope(Some(scope), path, Some("root"));
 

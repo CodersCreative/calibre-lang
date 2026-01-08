@@ -5,14 +5,15 @@ use calibre_common::{
     environment::Type,
     errors::{ScopeErr, ValueErr},
 };
-use calibre_parser::ast::{Node, ObjectType};
+use calibre_mir::ast::MiddleNode;
+use calibre_parser::ast::ObjectType;
 use std::collections::HashMap;
 
 impl InterpreterEnvironment {
     pub fn evaluate_struct_expression(
         &mut self,
         scope: &u64,
-        props: ObjectType<Option<Node>>,
+        props: ObjectType<Option<MiddleNode>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let ObjectType::Map(props) = props {
             let mut properties = HashMap::new();
@@ -20,8 +21,7 @@ impl InterpreterEnvironment {
                 let value = if let Some(value) = v {
                     self.evaluate(scope, value)?
                 } else {
-                    let pointer = self.get_var_pointer(scope, &k)?;
-                    self.get_var(&pointer)?.value.clone()
+                    self.get_var(&k)?.value.clone()
                 };
 
                 properties.insert(k, value);
@@ -45,11 +45,9 @@ impl InterpreterEnvironment {
         scope: &u64,
         identifier: String,
         value: String,
-        data: Option<ObjectType<Option<Node>>>,
+        data: Option<ObjectType<Option<MiddleNode>>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let pointer = self.get_object_pointer(scope, &identifier)?;
-
-        let enm_class = match self.get_object_type(&pointer) {
+        let enm_class = match self.get_object_type(&identifier) {
             Ok(Type::Enum(x)) => x.clone(),
             Err(e) => return Err(e.into()),
             _ => {
@@ -67,8 +65,7 @@ impl InterpreterEnvironment {
                         let value = if let Some(value) = v {
                             self.evaluate(scope, value)?
                         } else {
-                            let pointer = self.get_var_pointer(scope, &k)?;
-                            self.get_var(&pointer)?.value.clone()
+                            self.get_var(&k)?.value.clone()
                         };
 
                         data_vals.insert(k, value);
@@ -90,7 +87,7 @@ impl InterpreterEnvironment {
                     Some(ObjectType::Map(new_data_vals))
                 };
 
-                return Ok(RuntimeValue::Enum(pointer, i, data));
+                return Ok(RuntimeValue::Enum(identifier, i, data));
             } else if let Some(ObjectType::Tuple(properties)) = &enm.1 {
                 let mut data_vals = Vec::new();
 
@@ -116,9 +113,9 @@ impl InterpreterEnvironment {
                     Some(ObjectType::Tuple(new_data_vals))
                 };
 
-                return Ok(RuntimeValue::Enum(pointer, i, data));
+                return Ok(RuntimeValue::Enum(identifier, i, data));
             }
-            return Ok(RuntimeValue::Enum(pointer, i, None));
+            return Ok(RuntimeValue::Enum(identifier, i, None));
         } else {
             Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
         }

@@ -1,5 +1,6 @@
-use calibre_common::environment::{Location, Type};
-use calibre_parser::ast::{Node, NodeType, ObjectType};
+use calibre_common::environment::Type;
+use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_parser::ast::ObjectType;
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
@@ -10,27 +11,24 @@ impl InterpreterEnvironment {
     fn match_inner_pattern(
         &mut self,
         mut scope: u64,
-        pattern: &Node,
+        pattern: &MiddleNode,
         value: &RuntimeValue,
         mut path: Vec<String>,
     ) -> Option<Result<u64, InterpreterErr>> {
         match pattern.node_type.clone() {
-            NodeType::Identifier(x) if x.trim() == "_" => {
+            MiddleNodeType::Identifier(x) if x.trim() == "_" => {
                 return Some(Ok(scope.clone()));
             }
-            NodeType::ScopeMemberExpression { path: p } => {
-                let (s, node) = self.get_scope_member_scope_path(&scope, p).unwrap();
-
-                return self.match_inner_pattern(s, &node, value, path);
-            }
-            NodeType::MemberExpression { path: p } => {
-                if let (NodeType::Identifier(main), _) = (&p[0].0.node_type, p[0].1) {
-                    if let (NodeType::CallExpression(val, args), _) = (&p[1].0.node_type, p[1].1) {
-                        if let NodeType::Identifier(val) = val.node_type.clone() {
+            MiddleNodeType::MemberExpression { path: p } => {
+                if let (MiddleNodeType::Identifier(main), _) = (&p[0].0.node_type, p[0].1) {
+                    if let (MiddleNodeType::CallExpression(val, args), _) =
+                        (&p[1].0.node_type, p[1].1)
+                    {
+                        if let MiddleNodeType::Identifier(val) = val.node_type.clone() {
                             return self.match_inner_pattern(
                                 scope,
-                                &Node::new(
-                                    NodeType::EnumExpression {
+                                &MiddleNode::new(
+                                    MiddleNodeType::EnumExpression {
                                         identifier: main.clone(),
                                         value: val,
                                         data: Some(ObjectType::Tuple(
@@ -49,27 +47,25 @@ impl InterpreterEnvironment {
                         if let Ok(x) = self.evaluate(&scope, pattern.clone()) {
                             if self.is_equal(&scope, &x, value)
                                 || self.is_value_in(&scope, value, &x)
-                                || x.is_type(self, &scope, &value.into())
+                                || x.is_type(self, &value.into())
                             {
                                 return Some(Ok(scope));
                             }
-                        } else if let Ok(pointer) = self.get_object_pointer(&scope, &main) {
-                            if let Ok(Type::Enum(_)) = self.get_object_type(&pointer) {
-                                if let NodeType::Identifier(val) = &p[1].0.node_type {
-                                    return self.match_inner_pattern(
-                                        scope,
-                                        &Node::new(
-                                            NodeType::EnumExpression {
-                                                identifier: main.clone(),
-                                                value: val.clone(),
-                                                data: None,
-                                            },
-                                            p[0].0.span,
-                                        ),
-                                        value,
-                                        path,
-                                    );
-                                }
+                        } else if let Ok(Type::Enum(_)) = self.get_object_type(&main) {
+                            if let MiddleNodeType::Identifier(val) = &p[1].0.node_type {
+                                return self.match_inner_pattern(
+                                    scope,
+                                    &MiddleNode::new(
+                                        MiddleNodeType::EnumExpression {
+                                            identifier: main.clone(),
+                                            value: val.clone(),
+                                            data: None,
+                                        },
+                                        p[0].0.span,
+                                    ),
+                                    value,
+                                    path,
+                                );
                             }
                         }
                     }
@@ -77,7 +73,7 @@ impl InterpreterEnvironment {
 
                 None
             }
-            NodeType::EnumExpression {
+            MiddleNodeType::EnumExpression {
                 identifier,
                 data,
                 value: enm_value,
@@ -92,9 +88,7 @@ impl InterpreterEnvironment {
                         return None;
                     };
 
-                    if index != val
-                        || self.get_object_pointer(&scope, &identifier).unwrap() != pointer
-                    {
+                    if index != val || identifier.text != pointer {
                         return None;
                     }
 
@@ -111,18 +105,16 @@ impl InterpreterEnvironment {
                     match data {
                         ObjectType::Map(map) => {
                             if let ObjectType::Map(m) = dat {
-                                let values: Vec<(String, RuntimeValue, Option<Location>)> = m
+                                let values: Vec<(String, RuntimeValue)> = m
                                     .into_iter()
                                     .filter(|(k, _)| map.contains_key(k))
                                     .filter_map(|(k, v)| {
                                         let path = [path.clone(), vec![k.clone()]].concat();
                                         match map.get(&k).unwrap() {
                                             Some(node) => match &node.node_type {
-                                                NodeType::Identifier(k) => Some((
-                                                    k.to_string(),
-                                                    v.clone(),
-                                                    self.get_location(&scope, node.span),
-                                                )),
+                                                MiddleNodeType::Identifier(k) => {
+                                                    Some((k.to_string(), v.clone()))
+                                                }
                                                 _ => {
                                                     if let Some(Ok(s)) = self.match_inner_pattern(
                                                         scope,
@@ -138,16 +130,11 @@ impl InterpreterEnvironment {
                                                         Some((
                                                             String::from("__failed__"),
                                                             RuntimeValue::Null,
-                                                            self.get_location(&scope, node.span),
                                                         ))
                                                     }
                                                 }
                                             },
-                                            None => Some((
-                                                k.to_string(),
-                                                v.clone(),
-                                                self.get_location(&scope, pattern.span),
-                                            )),
+                                            None => Some((k.to_string(), v.clone())),
                                         }
                                     })
                                     .collect();
@@ -167,7 +154,7 @@ impl InterpreterEnvironment {
                                     .enumerate()
                                     .map(|(i, x)| match x {
                                         Some(node) => match node.node_type {
-                                            NodeType::Identifier(y) => Some(y.to_string()),
+                                            MiddleNodeType::Identifier(y) => Some(y.to_string()),
                                             _ => {
                                                 let value = self
                                                     .progress_var(&value, &i.to_string())
@@ -201,13 +188,7 @@ impl InterpreterEnvironment {
                                         lst.into_iter()
                                             .enumerate()
                                             .filter(|(i, _)| i < &list.len() && list[*i].is_some())
-                                            .map(|(i, v)| {
-                                                (
-                                                    list[i].clone().unwrap(),
-                                                    v.clone(),
-                                                    self.get_location(&scope, pattern.span),
-                                                )
-                                            })
+                                            .map(|(i, v)| (list[i].clone().unwrap(), v.clone()))
                                             .collect(),
                                     )
                                     .unwrap(),
@@ -216,7 +197,8 @@ impl InterpreterEnvironment {
                                 let list: Vec<String> = list
                                     .into_iter()
                                     .map(|x| {
-                                        let NodeType::Identifier(y) = x.clone().unwrap().node_type
+                                        let MiddleNodeType::Identifier(y) =
+                                            x.clone().unwrap().node_type
                                         else {
                                             panic!()
                                         };
@@ -229,13 +211,7 @@ impl InterpreterEnvironment {
                                         &scope,
                                         map.into_iter()
                                             .filter(|x| list.contains(&x.0))
-                                            .map(|(k, v)| {
-                                                (
-                                                    k.to_string(),
-                                                    v.clone(),
-                                                    self.get_location(&scope, pattern.span),
-                                                )
-                                            })
+                                            .map(|(k, v)| (k.to_string(), v.clone()))
                                             .collect(),
                                     )
                                     .unwrap(),
@@ -253,13 +229,13 @@ impl InterpreterEnvironment {
                     None
                 }
             }
-            NodeType::CallExpression(callee, args) => {
-                if let NodeType::Identifier(variant) = callee.node_type {
+            MiddleNodeType::CallExpression(callee, args) => {
+                if let MiddleNodeType::Identifier(variant) = callee.node_type {
                     match (variant.as_str(), value) {
                         ("Some", RuntimeValue::Option(Some(inner), _)) => {
                             if let Some(arg_pat) = args.get(0) {
                                 path.push("Some".to_string());
-                                match self.match_inner_pattern(scope, &arg_pat.0, inner, path) {
+                                match self.match_inner_pattern(scope, &arg_pat.0, &inner, path) {
                                     Some(Ok(x)) => Some(Ok(x)),
                                     Some(Err(InterpreterErr::ExpectedFunctions)) => None,
                                     Some(Err(e)) => Some(Err(e)),
@@ -284,11 +260,12 @@ impl InterpreterEnvironment {
                                         value.strip_suffix(&pattern)
                                     } {
                                         let vars = if let Some((name, _)) = name {
-                                            if let NodeType::Identifier(name) = &name.node_type {
+                                            if let MiddleNodeType::Identifier(name) =
+                                                &name.node_type
+                                            {
                                                 vec![(
                                                     name.to_string(),
                                                     RuntimeValue::Str(value.to_string()),
-                                                    self.current_location.clone(),
                                                 )]
                                             } else {
                                                 Vec::new()
@@ -314,7 +291,7 @@ impl InterpreterEnvironment {
                         ("Ok", RuntimeValue::Result(Ok(inner), _)) => {
                             path.push("Ok".to_string());
                             if let Some(arg_pat) = args.get(0) {
-                                match self.match_inner_pattern(scope, &arg_pat.0, inner, path) {
+                                match self.match_inner_pattern(scope, &arg_pat.0, &inner, path) {
                                     Some(Ok(x)) => Some(Ok(x)),
                                     Some(Err(InterpreterErr::ExpectedFunctions)) => None,
                                     Some(Err(e)) => Some(Err(e)),
@@ -326,15 +303,11 @@ impl InterpreterEnvironment {
                         }
                         ("Let", _) => {
                             if let Some((name, _)) = args.get(0) {
-                                if let NodeType::Identifier(name) = &name.node_type {
+                                if let MiddleNodeType::Identifier(name) = &name.node_type {
                                     let new_scope = self
                                         .get_new_scope_with_values(
                                             &scope,
-                                            vec![(
-                                                name.to_string(),
-                                                value.clone(),
-                                                self.get_location(&scope, pattern.span),
-                                            )],
+                                            vec![(name.to_string(), value.clone())],
                                         )
                                         .ok()?;
                                     Some(Ok(new_scope.clone()))
@@ -348,7 +321,7 @@ impl InterpreterEnvironment {
                         ("Err", RuntimeValue::Result(Err(inner), _)) => {
                             path.push("Err".to_string());
                             if let Some(arg_pat) = args.get(0) {
-                                match self.match_inner_pattern(scope, &arg_pat.0, inner, path) {
+                                match self.match_inner_pattern(scope, &arg_pat.0, &inner, path) {
                                     Some(Ok(x)) => Some(Ok(x)),
                                     Some(Err(InterpreterErr::ExpectedFunctions)) => None,
                                     Some(Err(e)) => Some(Err(e)),
@@ -365,16 +338,9 @@ impl InterpreterEnvironment {
                     None
                 }
             }
-            NodeType::Identifier(var_name) => {
+            MiddleNodeType::Identifier(var_name) => {
                 let new_scope = self
-                    .get_new_scope_with_values(
-                        &scope,
-                        vec![(
-                            var_name.to_string(),
-                            value.clone(),
-                            self.get_location(&scope, pattern.span),
-                        )],
-                    )
+                    .get_new_scope_with_values(&scope, vec![(var_name.to_string(), value.clone())])
                     .ok()?;
                 Some(Ok(new_scope.clone()))
             }
@@ -382,7 +348,7 @@ impl InterpreterEnvironment {
                 if let Ok(x) = self.evaluate(&scope, pattern.clone()) {
                     if self.is_equal(&scope, &x, value)
                         || self.is_value_in(&scope, value, &x)
-                        || x.is_type(self, &scope, &value.into())
+                        || x.is_type(self, &value.into())
                     {
                         Some(Ok(scope.clone()))
                     } else {
@@ -398,17 +364,17 @@ impl InterpreterEnvironment {
     pub fn match_pattern(
         &mut self,
         scope: &u64,
-        pattern: &Node,
+        pattern: &MiddleNode,
         value: &RuntimeValue,
         path: Vec<String>,
-        conditionals: &[Node],
-        body: Node,
+        conditionals: &[MiddleNode],
+        body: MiddleNode,
     ) -> Option<Result<RuntimeValue, InterpreterErr>> {
         match self.evaluate(scope, pattern.clone()) {
             Ok(x)
                 if (self.is_equal(scope, &x, value)
                     || self.is_value_in(scope, value, &x)
-                    || x.is_type(self, &scope, &value.into()))
+                    || x.is_type(self, &value.into()))
                     && self
                         .handle_conditionals(scope, conditionals.to_vec())
                         .unwrap() =>
@@ -442,11 +408,11 @@ impl InterpreterEnvironment {
     pub fn evaluate_match_function(
         &mut self,
         scope: &u64,
-        value: Node,
-        patterns: Vec<(Node, Vec<Node>, Box<Node>)>,
+        value: MiddleNode,
+        patterns: Vec<(MiddleNode, Vec<MiddleNode>, Box<MiddleNode>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let path = match &value.node_type {
-            NodeType::Identifier(x) => vec![x.clone()],
+            MiddleNodeType::Identifier(x) => vec![x.clone()],
             _ => Vec::new(),
         };
 
@@ -474,7 +440,7 @@ impl InterpreterEnvironment {
     pub fn handle_conditionals(
         &mut self,
         scope: &u64,
-        conditionals: Vec<Node>,
+        conditionals: Vec<MiddleNode>,
     ) -> Result<bool, InterpreterErr> {
         let mut result = true;
 

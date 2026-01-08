@@ -1,10 +1,7 @@
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug, fs, path::PathBuf};
+use std::{cmp::Ordering, fmt::Debug};
 
-use calibre_common::{
-    environment::Scope,
-    utils::{get_globals_path, get_stdlib_path},
-};
-use calibre_parser::{Parser, lexer::Tokenizer};
+use calibre_common::environment::Scope;
+use calibre_parser::Parser;
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
@@ -60,47 +57,24 @@ impl PartialOrd for dyn NativeFunction {
 }
 
 impl InterpreterEnvironment {
-    pub fn new_scope_with_stdlib<'a>(
-        &'a mut self,
-        parent: Option<u64>,
-        path: PathBuf,
-        namespace: Option<&str>,
-    ) -> u64 {
-        let mut parser = Parser::default();
-        let scope = 0;
+    pub fn new_scope_with_stdlib<'a>(&'a mut self, parent: Option<u64>) -> u64 {
+        let _parser = Parser::default();
         let counter = self.scope_counter;
 
         self.add_scope(Scope {
-            id: 0,
-            namespace: namespace.unwrap_or(&counter.to_string()).to_string(),
+            id: counter,
             parent,
-            children: HashMap::new(),
-            counter: 0,
-            path: path.clone(),
-            variables: HashMap::new(),
-            objects: HashMap::new(),
+            children: Vec::new(),
+            variables: Vec::new(),
         });
 
-        calibre_common::native::global::setup(self, &scope);
+        calibre_common::native::global::setup(self, &counter);
 
-        let mut tokenizer = Tokenizer::default();
-        let program = parser.produce_ast(
-            tokenizer
-                .tokenize(fs::read_to_string(&get_globals_path()).unwrap())
-                .unwrap(),
-        );
-
-        if !parser.errors.is_empty() {
-            Err(InterpreterErr::from(parser.errors)).unwrap()
-        }
-
-        let _ = self.evaluate(&scope, program).unwrap();
-
-        let std = self.new_scope(Some(scope), get_stdlib_path(), Some("std"));
+        let std = self.new_scope(Some(counter));
 
         stdlib::setup(self, &std);
 
-        let root = self.new_scope(Some(scope), path, Some("root"));
+        let root = self.new_scope(Some(counter));
 
         root
     }
