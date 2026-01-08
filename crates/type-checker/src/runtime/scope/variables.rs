@@ -6,7 +6,11 @@ use calibre_common::{
 };
 use calibre_parser::ast::{ObjectType, VarType};
 
-use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
+use crate::runtime::{
+    interpreter::{InterpreterErr, expressions::member::MemberPathType},
+    scope::CheckerEnvironment,
+    values::RuntimeType,
+};
 
 impl CheckerEnvironment {
     pub fn force_var(
@@ -14,7 +18,7 @@ impl CheckerEnvironment {
         scope: &u64,
         key: String,
         value: Variable<RuntimeType>,
-    ) -> Result<RuntimeType, ScopeErr<RuntimeType>> {
+    ) -> Result<RuntimeType, ScopeErr> {
         let typ = value.value.clone();
         let counter = self.var_counter.clone();
 
@@ -30,14 +34,14 @@ impl CheckerEnvironment {
         Ok(RuntimeType::Ref(Box::new(typ)))
     }
 
-    fn convert_saveable_into_runtime_var(
+    fn _convert_saveable_into_runtime_var(
         &self,
         value: Variable<RuntimeType>,
     ) -> Variable<RuntimeType> {
         let var_type = value.var_type.clone();
         let location = value.location.clone();
 
-        let mut get_new_list = |list: Vec<RuntimeType>| -> Vec<RuntimeType> {
+        let get_new_list = |list: Vec<RuntimeType>| -> Vec<RuntimeType> {
             let mut new_vec = Vec::new();
 
             for v in list {
@@ -49,7 +53,7 @@ impl CheckerEnvironment {
             new_vec
         };
 
-        let mut get_new_map = |map: HashMap<String, RuntimeType>| -> HashMap<String, RuntimeType> {
+        let get_new_map = |map: HashMap<String, RuntimeType>| -> HashMap<String, RuntimeType> {
             let mut new_map = HashMap::new();
 
             for (k, v) in map {
@@ -66,13 +70,13 @@ impl CheckerEnvironment {
         };
 
         match value.value {
-            RuntimeType::Struct(x, y, ObjectType::Map(map)) => Variable {
-                value: RuntimeType::Struct(x, y, ObjectType::Map(get_new_map(map))),
+            RuntimeType::Struct(x, ObjectType::Map(map)) => Variable {
+                value: RuntimeType::Struct(x, ObjectType::Map(get_new_map(map))),
                 var_type,
                 location,
             },
-            RuntimeType::Struct(x, y, ObjectType::Tuple(vec)) => Variable {
-                value: RuntimeType::Struct(x, y, ObjectType::Tuple(get_new_list(vec))),
+            RuntimeType::Struct(x, ObjectType::Tuple(vec)) => Variable {
+                value: RuntimeType::Struct(x, ObjectType::Tuple(get_new_list(vec))),
                 var_type,
                 location,
             },
@@ -81,13 +85,13 @@ impl CheckerEnvironment {
                 var_type,
                 location,
             },
-            RuntimeType::Enum(x, y, Some(ObjectType::Map(map))) => Variable {
-                value: RuntimeType::Enum(x, y, Some(ObjectType::Map(get_new_map(map)))),
+            RuntimeType::Enum(x, Some(ObjectType::Map(map))) => Variable {
+                value: RuntimeType::Enum(x, Some(ObjectType::Map(get_new_map(map)))),
                 var_type,
                 location,
             },
-            RuntimeType::Enum(x, y, Some(ObjectType::Tuple(vec))) => Variable {
-                value: RuntimeType::Enum(x, y, Some(ObjectType::Tuple(get_new_list(vec)))),
+            RuntimeType::Enum(x, Some(ObjectType::Tuple(vec))) => Variable {
+                value: RuntimeType::Enum(x, Some(ObjectType::Tuple(get_new_list(vec)))),
                 var_type,
                 location,
             },
@@ -102,7 +106,7 @@ impl CheckerEnvironment {
         let var_type = value.var_type.clone();
         let location = value.location.clone();
 
-        let mut get_new_list = |this: &mut Self, list: Vec<RuntimeType>| -> Vec<RuntimeType> {
+        let get_new_list = |_this: &mut Self, list: Vec<RuntimeType>| -> Vec<RuntimeType> {
             let mut new_vec = Vec::new();
 
             for v in list {
@@ -112,7 +116,7 @@ impl CheckerEnvironment {
         };
 
         let get_new_map =
-            |this: &mut Self, map: HashMap<String, RuntimeType>| -> HashMap<String, RuntimeType> {
+            |_this: &mut Self, map: HashMap<String, RuntimeType>| -> HashMap<String, RuntimeType> {
                 let mut new_map = HashMap::new();
 
                 for (k, v) in map {
@@ -123,13 +127,13 @@ impl CheckerEnvironment {
             };
 
         match value.value {
-            RuntimeType::Struct(x, y, ObjectType::Map(map)) => Variable {
-                value: RuntimeType::Struct(x, y, ObjectType::Map(get_new_map(self, map))),
+            RuntimeType::Struct(x, ObjectType::Map(map)) => Variable {
+                value: RuntimeType::Struct(x, ObjectType::Map(get_new_map(self, map))),
                 var_type,
                 location,
             },
-            RuntimeType::Struct(x, y, ObjectType::Tuple(vec)) => Variable {
-                value: RuntimeType::Struct(x, y, ObjectType::Tuple(get_new_list(self, vec))),
+            RuntimeType::Struct(x, ObjectType::Tuple(vec)) => Variable {
+                value: RuntimeType::Struct(x, ObjectType::Tuple(get_new_list(self, vec))),
 
                 var_type,
                 location,
@@ -139,13 +143,13 @@ impl CheckerEnvironment {
                 var_type,
                 location,
             },
-            RuntimeType::Enum(x, y, Some(ObjectType::Map(map))) => Variable {
-                value: RuntimeType::Enum(x, y, Some(ObjectType::Map(get_new_map(self, map)))),
+            RuntimeType::Enum(x, Some(ObjectType::Map(map))) => Variable {
+                value: RuntimeType::Enum(x, Some(ObjectType::Map(get_new_map(self, map)))),
                 var_type,
                 location,
             },
-            RuntimeType::Enum(x, y, Some(ObjectType::Tuple(vec))) => Variable {
-                value: RuntimeType::Enum(x, y, Some(ObjectType::Tuple(get_new_list(self, vec)))),
+            RuntimeType::Enum(x, Some(ObjectType::Tuple(vec))) => Variable {
+                value: RuntimeType::Enum(x, Some(ObjectType::Tuple(get_new_list(self, vec)))),
                 var_type,
                 location,
             },
@@ -158,7 +162,7 @@ impl CheckerEnvironment {
         scope: &u64,
         key: String,
         value: Variable<RuntimeType>,
-    ) -> Result<RuntimeType, ScopeErr<RuntimeType>> {
+    ) -> Result<RuntimeType, ScopeErr> {
         if let Some(var) = self.scopes.get(scope).unwrap().variables.get(&key) {
             if self.variables.get(var).unwrap().var_type == VarType::Constant {
                 return Err(ScopeErr::AssignConstant(key));
@@ -170,9 +174,15 @@ impl CheckerEnvironment {
     pub fn get_member_ref(
         &self,
         scope: &u64,
-        keys: &[String],
+        keys: &[MemberPathType],
     ) -> Result<RuntimeType, InterpreterErr> {
-        let first = self.get_var_ref(scope, keys.get(0).unwrap())?;
+        let first = self.get_var_ref(scope, {
+            let Some(MemberPathType::Dot(first)) = keys.get(0) else {
+                panic!()
+            };
+
+            first
+        })?;
 
         if keys.len() <= 1 {
             return Ok(first);
@@ -184,99 +194,69 @@ impl CheckerEnvironment {
 
         let mut val = *val;
         for key in keys.iter().skip(1) {
-            match val.clone() {
-                RuntimeType::Struct(_, _, ObjectType::Map(map))
-                | RuntimeType::Enum(_, _, Some(ObjectType::Map(map))) => match map.get(key) {
+            match (val.clone(), key) {
+                (RuntimeType::Struct(_, ObjectType::Map(map)), _) => {
+                    match map.get(&key.to_string()) {
+                        Some(RuntimeType::Ref(p)) => val = *p.clone(),
+                        Some(x) => val = x.clone(),
+                        _ => break,
+                    }
+                }
+                (RuntimeType::Enum(_, Some(ObjectType::Map(map))), MemberPathType::Dot(key)) => {
+                    match map.get(key) {
+                        Some(RuntimeType::Ref(p)) => val = *p.clone(),
+                        Some(x) => val = x.clone(),
+                        _ => break,
+                    }
+                }
+
+                (RuntimeType::Struct(_, ObjectType::Tuple(data)), _) => {
+                    match data.get(key.to_string().parse::<usize>().unwrap()) {
+                        Some(RuntimeType::Ref(p)) => val = *p.clone(),
+                        Some(x) => val = x.clone(),
+                        _ => break,
+                    }
+                }
+
+                (
+                    RuntimeType::Enum(_, Some(ObjectType::Tuple(data))) | RuntimeType::Tuple(data),
+                    MemberPathType::Dot(key),
+                ) => match data.get(key.parse::<usize>().unwrap()) {
                     Some(RuntimeType::Ref(p)) => val = *p.clone(),
                     Some(x) => val = x.clone(),
                     _ => break,
                 },
-                RuntimeType::Struct(_, _, ObjectType::Tuple(data))
-                | RuntimeType::Enum(_, _, Some(ObjectType::Tuple(data)))
-                | RuntimeType::Tuple(data) => match data.get(key.parse::<usize>().unwrap()) {
-                    Some(RuntimeType::Ref(p)) => val = *p.clone(),
-                    Some(x) => val = x.clone(),
-                    _ => break,
-                },
-                RuntimeType::List(x) => match *x {
-                    Some(x) => val = x.clone(),
+                (RuntimeType::List(x), MemberPathType::Computed(_)) => match x {
+                    Some(x) => val = *x.clone(),
                     None => val = RuntimeType::Dynamic,
                 },
-                RuntimeType::Result(x, _) if key == "Err" => val = *x,
-                RuntimeType::Result(_, x) if key == "Ok" => val = *x,
-                RuntimeType::Option(x) if key == "Some" => val = *x,
-                RuntimeType::Ref(x) => val = *x.clone(),
+                (RuntimeType::Result(x, _), _) if key.to_string() == "Err" => val = *x,
+                (RuntimeType::Result(_, x), _) if key.to_string() == "Ok" => val = *x,
+                (RuntimeType::Option(x), _) if key.to_string() == "Some" => val = *x,
+                (RuntimeType::Ref(x), _) => val = *x.clone(),
                 _ => unimplemented!(),
             }
         }
         Ok(RuntimeType::Ref(Box::new(val)))
     }
 
-    pub fn get_var_ref(
-        &self,
-        scope: &u64,
-        key: &str,
-    ) -> Result<RuntimeType, ScopeErr<RuntimeType>> {
-        if let Some(pointer) = self
-            .scopes
-            .get(scope)
-            .unwrap()
-            .variables
-            .get(key)
-            .map(|x| x.clone())
-        {
-            let typ = (&self.variables.get(&pointer).unwrap().value).clone();
+    pub fn get_var_ref(&self, scope: &u64, key: &str) -> Result<RuntimeType, ScopeErr> {
+        let pointer = self.get_var_pointer(scope, key)?;
+        if let Some(typ) = self.variables.get(&pointer).map(|x| x.value.clone()) {
             Ok(RuntimeType::Ref(Box::new(typ)))
-        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
-            self.get_var_ref(&scope, key)
         } else {
-            Err(ScopeErr::Variable(key.to_string()))
+            Err(ScopeErr::Variable(pointer.to_string()))
         }
     }
 
-    pub fn get_var<'a>(
-        &'a self,
-        scope: &u64,
-        key: &str,
-    ) -> Result<&'a Variable<RuntimeType>, ScopeErr<RuntimeType>> {
-        if let Some(pointer) = self
-            .scopes
-            .get(scope)
-            .unwrap()
-            .variables
-            .get(key)
-            .map(|x| x.clone())
-        {
-            Ok(self.variables.get(&pointer).unwrap())
-        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
-            self.get_var(&scope, key)
-        } else {
-            Err(ScopeErr::Variable(key.to_string()))
-        }
-    }
-
-    pub fn update_var<F>(
-        &mut self,
-        scope: &u64,
-        key: &str,
-        mut f: F,
-    ) -> Result<(), ScopeErr<RuntimeType>>
+    pub fn update_var<F>(&mut self, pointer: &u64, mut f: F) -> Result<(), ScopeErr>
     where
         F: FnMut(&mut Variable<RuntimeType>),
     {
-        if let Some(pointer) = self
-            .scopes
-            .get(scope)
-            .unwrap()
-            .variables
-            .get(key)
-            .map(|x| x.clone())
-        {
-            Ok(f(self.variables.get_mut(&pointer).unwrap()))
-        } else if let Some(scope) = self.scopes.get(scope).unwrap().parent {
-            self.update_var(&scope, key, f)
+        if let Some(value) = self.variables.get_mut(pointer) {
+            Ok(f(value))
         } else {
-            Err(ScopeErr::Variable(key.to_string()))
+            Err(ScopeErr::Variable(pointer.to_string()))
         }
     }
 
@@ -311,7 +291,7 @@ impl CheckerEnvironment {
                     self.variables.insert(pointer, new_var);
                     Ok(RuntimeType::Ref(Box::new(typ)))
                 } else {
-                    Err(ScopeErr::TypeMismatch(var.value.clone(), value.clone()).into())
+                    Err(ScopeErr::TypeMismatch(key.to_string()).into())
                 }
             } else {
                 Err(ScopeErr::Variable(key.to_string()).into())

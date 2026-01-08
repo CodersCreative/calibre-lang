@@ -53,6 +53,22 @@ impl NativeFunction for OkFn {
     }
 }
 
+pub struct TupleFn();
+
+impl NativeFunction for TupleFn {
+    fn run(
+        &self,
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
+        args: &[(RuntimeValue, Option<RuntimeValue>)],
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        let mut tple = Vec::new();
+        for arg in args {
+            tple.push(arg.0.clone());
+        }
+        Ok(RuntimeValue::Tuple(tple))
+    }
+}
 pub struct SomeFn();
 
 impl NativeFunction for SomeFn {
@@ -73,54 +89,16 @@ impl NativeFunction for SomeFn {
     }
 }
 
-pub struct Range();
+pub struct PanicFn();
 
-impl NativeFunction for Range {
+impl NativeFunction for PanicFn {
     fn run(
         &self,
-        env: &mut InterpreterEnvironment,
-        scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
+        _args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if args.len() <= 1 {
-            let RuntimeValue::Int(amt) = args[0].0 else {
-                panic!()
-            };
-
-            Ok(RuntimeValue::Range(0, amt as i64))
-        } else if args.len() == 2 {
-            let RuntimeValue::Int(start) = args[0].0 else {
-                panic!()
-            };
-
-            let RuntimeValue::Int(stop) = args[1].0 else {
-                panic!()
-            };
-
-            Ok(RuntimeValue::Range(start as i64, stop as i64))
-        } else if args.len() == 3 {
-            let RuntimeValue::Int(start) = args[0].0 else {
-                panic!()
-            };
-
-            let RuntimeValue::Int(stop) = args[1].0 else {
-                panic!()
-            };
-
-            let RuntimeValue::Int(step) = args[2].0 else {
-                panic!()
-            };
-
-            Ok(RuntimeValue::List {
-                data: (start..stop)
-                    .step_by(step as usize)
-                    .map(|x| RuntimeValue::Int(x))
-                    .collect(),
-                data_type: Box::new(Some(RuntimeType::Int)),
-            })
-        } else {
-            Ok(RuntimeValue::Null)
-        }
+        panic!();
     }
 }
 
@@ -129,8 +107,8 @@ pub struct Len();
 impl NativeFunction for Len {
     fn run(
         &self,
-        env: &mut InterpreterEnvironment,
-        scope: &u64,
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Some((x, _)) = args.get(0) {
@@ -145,13 +123,14 @@ impl NativeFunction for Len {
         }
     }
 }
+
 pub struct Trim();
 
 impl NativeFunction for Trim {
     fn run(
         &self,
-        env: &mut InterpreterEnvironment,
-        scope: &u64,
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Some((x, _)) = args.get(0) {

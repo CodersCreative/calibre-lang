@@ -10,13 +10,13 @@ use crate::runtime::{
     values::{RuntimeType, helper::StopValue},
 };
 use calibre_common::environment::Environment;
-use calibre_parser::{Parser, lexer::Tokenizer};
+use calibre_parser::{Parser, ParserError, lexer::Tokenizer};
 
 #[derive(Debug, Clone)]
 pub struct CheckerEnvironment {
     pub env: Environment<RuntimeType, RuntimeType>,
     pub stop: Option<StopValue>,
-    pub errors: Vec<Result<RuntimeType, InterpreterErr>>,
+    pub errors: Vec<InterpreterErr>,
 }
 
 impl PartialEq for CheckerEnvironment {
@@ -38,49 +38,68 @@ impl CheckerEnvironment {
         }
     }
 
-    pub fn import_scope_list(
+    pub fn add_err(&mut self, err: InterpreterErr) {
+        self.errors.push(err);
+    }
+
+    pub fn add_parser_errors(&mut self, errors: Vec<ParserError>) {
+        if !errors.is_empty() {
+            self.add_err(errors.into());
+        }
+    }
+
+    pub fn unwrap_type<E: Into<InterpreterErr>>(
         &mut self,
-        scope: u64,
-        mut list: Vec<String>,
-    ) -> Result<u64, InterpreterErr> {
+        val: Result<RuntimeType, E>,
+    ) -> RuntimeType {
+        match val {
+            Ok(x) => x,
+            Err(e) => {
+                self.add_err(e.into());
+                RuntimeType::Dynamic
+            }
+        }
+    }
+
+    pub fn import_scope_list(&mut self, scope: u64, mut list: Vec<String>) -> u64 {
         if list.len() <= 0 {
-            return Ok(scope);
+            return scope;
         }
         let first = list.remove(0);
-        let scope = self.import_next_scope(scope, first.as_str())?;
+        let scope = self.import_next_scope(scope, first.as_str());
         self.import_scope_list(scope, list)
     }
 
-    pub fn import_next_scope(&mut self, scope: u64, key: &str) -> Result<u64, InterpreterErr> {
+    pub fn import_next_scope(&mut self, scope: u64, key: &str) -> u64 {
         match key {
-            "super" => Ok(self.scopes.get(&scope).unwrap().parent.clone().unwrap()),
+            "super" => self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
             _ => {
                 let current = self.scopes.get(&scope).unwrap().clone();
                 if let Some(x) = current.children.get(key) {
-                    Ok(x.clone())
+                    x.clone()
                 } else {
                     if let Some(s) = self.get_global_scope().children.get(key) {
-                        Ok(s.clone())
+                        s.clone()
                     } else {
                         let scope = self.new_scope_from_parent(current.id, key);
                         let mut parser = Parser::default();
 
                         let mut tokenizer = Tokenizer::default();
-                        let program = parser
-                            .produce_ast(
-                                tokenizer
-                                    .tokenize(
-                                        fs::read_to_string(
-                                            self.scopes.get(&scope).unwrap().path.clone(),
-                                        )
-                                        .unwrap(),
+                        let program = parser.produce_ast(
+                            tokenizer
+                                .tokenize(
+                                    fs::read_to_string(
+                                        self.scopes.get(&scope).unwrap().path.clone(),
                                     )
                                     .unwrap(),
-                            )
-                            .unwrap();
+                                )
+                                .unwrap(),
+                        );
 
-                        let _ = self.evaluate(&scope, program)?;
-                        Ok(scope)
+                        self.add_parser_errors(parser.errors);
+
+                        let _ = self.start_evaluate(&scope, program);
+                        scope
                     }
                 }
             }

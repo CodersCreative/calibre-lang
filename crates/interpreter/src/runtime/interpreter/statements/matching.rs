@@ -1,10 +1,8 @@
 use calibre_common::environment::{Location, Type};
-use calibre_parser::ast::{Node, NodeType, ObjectType, RefMutability, VarType};
+use calibre_parser::ast::{Node, NodeType, ObjectType};
 
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::InterpreterEnvironment,
-    values::{RuntimeType, RuntimeValue},
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
 use std::panic;
 
@@ -20,12 +18,13 @@ impl InterpreterEnvironment {
             NodeType::Identifier(x) if x.trim() == "_" => {
                 return Some(Ok(scope.clone()));
             }
+            NodeType::ScopeMemberExpression { path: p } => {
+                let (s, node) = self.get_scope_member_scope_path(&scope, p).unwrap();
+
+                return self.match_inner_pattern(s, &node, value, path);
+            }
             NodeType::MemberExpression { path: p } => {
                 if let (NodeType::Identifier(main), _) = (&p[0].0.node_type, p[0].1) {
-                    if let Ok(scope) = self.get_next_scope(scope, main) {
-                        return self.match_inner_pattern(scope, &p[1].0, value, path);
-                    }
-
                     if let (NodeType::CallExpression(val, args), _) = (&p[1].0.node_type, p[1].1) {
                         if let NodeType::Identifier(val) = val.node_type.clone() {
                             return self.match_inner_pattern(
@@ -54,21 +53,23 @@ impl InterpreterEnvironment {
                             {
                                 return Some(Ok(scope));
                             }
-                        } else if let Ok(Type::Enum(_)) = self.get_object_type(&scope, &main) {
-                            if let NodeType::Identifier(val) = &p[1].0.node_type {
-                                return self.match_inner_pattern(
-                                    scope,
-                                    &Node::new(
-                                        NodeType::EnumExpression {
-                                            identifier: main.clone(),
-                                            value: val.to_string(),
-                                            data: None,
-                                        },
-                                        p[0].0.span,
-                                    ),
-                                    value,
-                                    path,
-                                );
+                        } else if let Ok(pointer) = self.get_object_pointer(&scope, &main) {
+                            if let Ok(Type::Enum(_)) = self.get_object_type(&pointer) {
+                                if let NodeType::Identifier(val) = &p[1].0.node_type {
+                                    return self.match_inner_pattern(
+                                        scope,
+                                        &Node::new(
+                                            NodeType::EnumExpression {
+                                                identifier: main.clone(),
+                                                value: val.clone(),
+                                                data: None,
+                                            },
+                                            p[0].0.span,
+                                        ),
+                                        value,
+                                        path,
+                                    );
+                                }
                             }
                         }
                     }
@@ -81,16 +82,19 @@ impl InterpreterEnvironment {
                 data,
                 value: enm_value,
             } => {
-                if let RuntimeValue::Enum(obj_scope, iden, val, dat) = value.clone() {
-                    let Type::Enum(enm) = self.get_object_type(&scope, &iden).unwrap() else {
+                if let RuntimeValue::Enum(pointer, val, dat) = value.clone() {
+                    let Ok(Type::Enum(enm)) = self.get_object_type(&pointer).map(|x| x.clone())
+                    else {
                         return None;
                     };
 
-                    let Some(index) = enm.iter().position(|x| x.0 == enm_value) else {
+                    let Some(index) = enm.iter().position(|x| x.0 == enm_value.to_string()) else {
                         return None;
                     };
 
-                    if index != val || identifier != iden {
+                    if index != val
+                        || self.get_object_pointer(&scope, &identifier).unwrap() != pointer
+                    {
                         return None;
                     }
 
@@ -163,7 +167,7 @@ impl InterpreterEnvironment {
                                     .enumerate()
                                     .map(|(i, x)| match x {
                                         Some(node) => match node.node_type {
-                                            NodeType::Identifier(y) => Some(y.clone()),
+                                            NodeType::Identifier(y) => Some(y.to_string()),
                                             _ => {
                                                 let value = self
                                                     .progress_var(&value, &i.to_string())
@@ -216,7 +220,7 @@ impl InterpreterEnvironment {
                                         else {
                                             panic!()
                                         };
-                                        y
+                                        y.to_string()
                                     })
                                     .collect();
 
@@ -271,7 +275,7 @@ impl InterpreterEnvironment {
                             if let (Some(pattern), name) = (args.get(0), args.get(1)) {
                                 if let Ok(pattern) = self.evaluate(&scope, pattern.0.clone()) {
                                     let RuntimeValue::Str(pattern) = pattern else {
-                                        panic!()
+                                        return None;
                                     };
 
                                     if let Some(value) = if part == "Prefix" {
@@ -282,7 +286,7 @@ impl InterpreterEnvironment {
                                         let vars = if let Some((name, _)) = name {
                                             if let NodeType::Identifier(name) = &name.node_type {
                                                 vec![(
-                                                    name.clone(),
+                                                    name.to_string(),
                                                     RuntimeValue::Str(value.to_string()),
                                                     self.current_location.clone(),
                                                 )]
@@ -327,7 +331,7 @@ impl InterpreterEnvironment {
                                         .get_new_scope_with_values(
                                             &scope,
                                             vec![(
-                                                name.clone(),
+                                                name.to_string(),
                                                 value.clone(),
                                                 self.get_location(&scope, pattern.span),
                                             )],
@@ -366,7 +370,7 @@ impl InterpreterEnvironment {
                     .get_new_scope_with_values(
                         &scope,
                         vec![(
-                            var_name.clone(),
+                            var_name.to_string(),
                             value.clone(),
                             self.get_location(&scope, pattern.span),
                         )],
@@ -449,9 +453,14 @@ impl InterpreterEnvironment {
         let value = self.evaluate(scope, value)?;
 
         for (pattern, conditionals, body) in patterns {
-            if let Some(result) =
-                self.match_pattern(scope, &pattern, &value, path.clone(), &conditionals, *body)
-            {
+            if let Some(result) = self.match_pattern(
+                scope,
+                &pattern,
+                &value,
+                path.clone().into_iter().map(|x| x.to_string()).collect(),
+                &conditionals,
+                *body,
+            ) {
                 match result {
                     Ok(x) => return Ok(x),
                     Err(InterpreterErr::ExpectedFunctions) => continue,

@@ -1,17 +1,10 @@
-use calibre_parser::Parser;
-use std::fs;
-
 use crate::{
     environment::{Environment, RuntimeType, RuntimeValue, Scope},
-    errors::{RuntimeErr, ScopeErr},
+    errors::ScopeErr,
 };
 
 impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
-    pub fn get_scope_list(
-        &mut self,
-        scope: u64,
-        mut list: Vec<String>,
-    ) -> Result<u64, ScopeErr<T>> {
+    pub fn get_scope_list(&self, scope: u64, mut list: Vec<String>) -> Result<u64, ScopeErr> {
         if list.len() <= 0 {
             return Ok(scope);
         }
@@ -20,7 +13,7 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         self.get_scope_list(scope, list)
     }
 
-    pub fn get_next_scope(&mut self, scope: u64, key: &str) -> Result<u64, ScopeErr<T>> {
+    pub fn get_next_scope(&self, scope: u64, key: &str) -> Result<u64, ScopeErr> {
         Ok(match key {
             "super" => self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
             _ => {

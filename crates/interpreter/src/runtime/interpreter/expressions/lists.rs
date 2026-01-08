@@ -3,25 +3,11 @@ use crate::runtime::{
     scope::InterpreterEnvironment,
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_common::environment::Variable;
+use calibre_common::{environment::Variable, errors::RuntimeErr};
 use calibre_parser::ast::{LoopType, Node, NodeType, VarType};
 use std::mem::discriminant;
 
 impl InterpreterEnvironment {
-    pub fn evaluate_tuple_expression(
-        &mut self,
-        scope: &u64,
-        vals: Vec<Node>,
-    ) -> Result<RuntimeValue, InterpreterErr> {
-        let mut values = Vec::new();
-
-        for val in vals.iter() {
-            values.push(self.evaluate(scope, val.clone())?);
-        }
-
-        Ok(RuntimeValue::Tuple(values))
-    }
-
     pub fn evaluate_list_expression(
         &mut self,
         scope: &u64,
@@ -38,7 +24,7 @@ impl InterpreterEnvironment {
             let filtered: Vec<&RuntimeValue> =
                 values.iter().filter(|x| discriminant(*x) == t).collect();
             if values.len() == filtered.len() {
-                Some((&values[0]).into())
+                Some(Box::new((&values[0]).into()))
             } else {
                 None
             }
@@ -48,7 +34,7 @@ impl InterpreterEnvironment {
 
         Ok(RuntimeValue::List {
             data: values,
-            data_type: Box::new(t),
+            data_type: t,
         })
     }
 
@@ -74,7 +60,7 @@ impl InterpreterEnvironment {
                     let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
                     let _ = self.push_var(
                         &new_scope,
-                        identifier.clone(),
+                        identifier.to_string(),
                         Variable {
                             value: d.clone(),
                             var_type: VarType::Immutable,
@@ -92,7 +78,7 @@ impl InterpreterEnvironment {
                 for i in from..to {
                     let new_scope = self.get_new_scope(
                         scope,
-                        vec![(identifier.clone(), RuntimeType::Int, None)],
+                        vec![(identifier.to_string(), RuntimeType::Int, None)],
                         vec![(Node::new(NodeType::IntLiteral(i), range_node.span), None)],
                     )?;
                     if self.handle_conditionals(&new_scope, conditionals.clone())? {
@@ -102,12 +88,12 @@ impl InterpreterEnvironment {
                 }
             }
         } else if let LoopType::While(_) = loop_type {
-            panic!()
+            return Err(RuntimeErr::IterWhileLoop(loop_type));
         }
 
         Ok(RuntimeValue::List {
             data: result,
-            data_type: Box::new(None),
+            data_type: None,
         })
     }
 }

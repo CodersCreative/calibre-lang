@@ -11,3 +11,4 @@ calibre-parser = {path = "../crates/parser"}
 calibre-type-checker = {path = "../crates/type-checker"}
 calibre-common = {path = "../crates/common"}
 calibre-interpreter = {path = "../crates/interpreter"}
+miette = { version = "7.6.0", features = ["fancy"] }

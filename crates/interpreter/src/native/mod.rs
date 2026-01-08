@@ -84,13 +84,15 @@ impl InterpreterEnvironment {
         calibre_common::native::global::setup(self, &scope);
 
         let mut tokenizer = Tokenizer::default();
-        let program = parser
-            .produce_ast(
-                tokenizer
-                    .tokenize(fs::read_to_string(&get_globals_path()).unwrap())
-                    .unwrap(),
-            )
-            .unwrap();
+        let program = parser.produce_ast(
+            tokenizer
+                .tokenize(fs::read_to_string(&get_globals_path()).unwrap())
+                .unwrap(),
+        );
+
+        if !parser.errors.is_empty() {
+            Err(InterpreterErr::from(parser.errors)).unwrap()
+        }
 
         let _ = self.evaluate(&scope, program).unwrap();
 

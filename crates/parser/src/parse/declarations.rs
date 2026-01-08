@@ -1,7 +1,7 @@
 use crate::{
-    Parser, ParserError, SyntaxErr,
+    Parser, SyntaxErr,
     ast::{
-        IfComparisonType, LoopType, Node, ParserDataType, RefMutability, VarType,
+        IfComparisonType, LoopType, Node, ParserDataType, ParserInnerType, ParserText, VarType,
         binary::BinaryOperator,
     },
     lexer::{Bracket, Span, StopValue},
@@ -9,7 +9,7 @@ use crate::{
 use crate::{ast::NodeType, lexer::TokenType};
 
 impl Parser {
-    pub fn parse_statement(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_statement(&mut self) -> Node {
         match &self.first().token_type {
             TokenType::Let | TokenType::Const => self.parse_variable_declaration(),
             TokenType::Func => self.parse_function_declaration(),
@@ -20,11 +20,11 @@ impl Parser {
                 StopValue::Return => self.parse_return_declaration(),
                 StopValue::Break => {
                     let val = self.eat();
-                    Ok(Node::new(NodeType::Break, val.span))
+                    Node::new(NodeType::Break, val.span)
                 }
                 StopValue::Continue => {
                     let val = self.eat();
-                    Ok(Node::new(NodeType::Continue, val.span))
+                    Node::new(NodeType::Continue, val.span)
                 }
             },
             TokenType::Trait => self.parse_if_statement(),
@@ -37,34 +37,45 @@ impl Parser {
         }
     }
 
-    pub fn parse_scope_declaration(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_scope_declaration(&mut self) -> Node {
+        if let Some(x) = self.tokens.get(2) {
+            if x.token_type == TokenType::Colon {
+                return self.parse_object_expression();
+            }
+        }
         let open = self.expect_eat(
             &TokenType::Open(Bracket::Curly),
             SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
-        )?;
+        );
 
         let mut body: Vec<Node> = Vec::new();
 
         while ![TokenType::EOF, TokenType::Close(Bracket::Curly)].contains(&self.first().token_type)
         {
-            body.push(self.parse_statement()?);
+            body.push(self.parse_statement());
+            let _ = self.parse_delimited();
         }
+
+        let body: Vec<Node> = body
+            .into_iter()
+            .filter(|x| x.node_type != NodeType::EmptyLine)
+            .collect();
 
         let close = self.expect_eat(
             &TokenType::Close(Bracket::Curly),
             SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
-        )?;
+        );
 
-        Ok(Node::new(
+        Node::new(
             NodeType::ScopeDeclaration {
                 body,
                 is_temp: true,
             },
             Span::new_from_spans(open.span, close.span),
-        ))
+        )
     }
 
-    pub fn parse_variable_declaration(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_variable_declaration(&mut self) -> Node {
         let var_type = match self.eat().token_type {
             TokenType::Const => VarType::Constant,
             TokenType::Let => {
@@ -75,48 +86,57 @@ impl Parser {
                     VarType::Immutable
                 }
             }
-            _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
+            _ => {
+                self.add_err(SyntaxErr::UnexpectedToken);
+                VarType::Constant
+            }
         };
 
-        let identifier = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedName)?;
+        let identifier = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedName);
 
         let data_type = match self.first().token_type {
             TokenType::Colon => {
                 let _ = self.eat();
-                self.parse_type()?
+                self.parse_type()
             }
             _ => None,
         };
 
-        let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='))?;
-        Ok(Node::new(
+        let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
+
+        let value = self.parse_statement();
+
+        Node::new(
             NodeType::VariableDeclaration {
                 var_type,
-                identifier: identifier.value,
+                identifier: identifier.clone().into(),
                 data_type,
-                value: Box::new(self.parse_statement()?),
+                value: Box::new(value),
             },
             identifier.span,
-        ))
+        )
     }
 
-    pub fn parse_impl_declaration(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_impl_declaration(&mut self) -> Node {
         let _ = self.expect_eat(
             &TokenType::Impl,
             SyntaxErr::ExpectedKeyword(String::from("impl")),
-        )?;
+        );
 
-        let identifier = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?;
+        let identifier = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
 
         let mut functions = Vec::new();
 
         let _ = self.expect_eat(
             &TokenType::Open(Bracket::Curly),
             SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
-        )?;
+        );
 
-        while self.first().token_type == TokenType::Const {
-            let decl = self.parse_variable_declaration()?;
+        while self.first().token_type != TokenType::Close(Bracket::Curly) {
+            let decl = self.parse_variable_declaration();
+
+            let _ = self.parse_delimited();
+
             match decl.node_type {
                 NodeType::VariableDeclaration {
                     var_type: VarType::Constant,
@@ -133,7 +153,7 @@ impl Parser {
                     {
                         let mut depends = false;
                         if parameters.len() > 0 {
-                            if let ParserDataType::Struct(Some(obj)) = &parameters[0].1 {
+                            if let ParserInnerType::Struct(Some(obj)) = &parameters[0].1.data_type {
                                 if obj == &identifier.value {
                                     depends = true;
                                 }
@@ -168,7 +188,7 @@ impl Parser {
                     } = func.node_type
                     {
                         let mut depends = false;
-                        if let ParserDataType::Struct(Some(obj)) = &parameters.1 {
+                        if let ParserInnerType::Struct(Some(obj)) = &parameters.1.data_type {
                             if obj == &identifier.value {
                                 depends = true;
                             }
@@ -196,7 +216,7 @@ impl Parser {
                         ));
                     }
                 }
-                _ => return Err(self.get_err(SyntaxErr::ExpectedFunctions)),
+                _ => self.add_err(SyntaxErr::ExpectedFunctions),
             }
         }
 
@@ -205,56 +225,57 @@ impl Parser {
             SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
         );
 
-        Ok(Node::new(
+        Node::new(
             NodeType::ImplDeclaration {
-                identifier: identifier.value,
+                identifier: identifier.clone().into(),
                 functions,
             },
             identifier.span,
-        ))
+        )
     }
-    pub fn parse_try_expression(&mut self) -> Result<Node, ParserError> {
+
+    pub fn parse_try_expression(&mut self) -> Node {
         if self.first().token_type == TokenType::Try {
             let open = self.expect_eat(
                 &TokenType::Try,
                 SyntaxErr::ExpectedKeyword(String::from("try")),
-            )?;
+            );
 
-            let val = self.parse_statement()?;
+            let val = self.parse_statement();
 
             let span = Span::new_from_spans(open.span, val.span);
 
-            Ok(Node::new(
+            Node::new(
                 NodeType::Try {
                     value: Box::new(val),
                 },
                 span,
-            ))
+            )
         } else {
             self.parse_range_expression()
         }
     }
 
-    pub fn parse_import_declaration(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_import_declaration(&mut self) -> Node {
         let open = self.expect_eat(
             &TokenType::Import,
             SyntaxErr::ExpectedKeyword(String::from("import")),
-        )?;
+        );
 
-        let get_module = |this: &mut Parser| -> Result<Vec<String>, ParserError> {
+        let get_module = |this: &mut Parser| -> Vec<ParserText> {
             let mut module = vec![
-                this.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
-                    .value,
+                this.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
+                    .into(),
             ];
 
-            while this.first().token_type == TokenType::FullStop {
+            while this.first().token_type == TokenType::Colon {
                 module.push(
-                    this.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
-                        .value,
+                    this.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
+                        .into(),
                 );
             }
 
-            Ok(module)
+            module
         };
 
         if [
@@ -267,78 +288,77 @@ impl Parser {
                 self.parse_arguments(
                     TokenType::Open(Bracket::Paren),
                     TokenType::Close(Bracket::Paren),
-                )?
+                )
                 .into_iter()
                 .map(|x| match x.0.node_type {
-                    NodeType::Identifier(x) => x,
+                    NodeType::Identifier(x) => ParserText::new(x.to_string(), x.span),
                     _ => panic!(),
                 })
                 .collect()
             } else {
-                let _ = self.eat();
-                vec!["*".to_string()]
+                vec![self.eat().into()]
             };
 
             let _ = self.expect_eat(
                 &TokenType::From,
                 SyntaxErr::ExpectedKeyword(String::from("from")),
-            )?;
+            );
 
-            let module = get_module(self)?;
-            return Ok(Node::new(
+            let module = get_module(self);
+            return Node::new(
                 NodeType::ImportStatement {
                     module,
                     alias: None,
                     values,
                 },
                 open.span,
-            ));
+            );
         }
 
-        let module = get_module(self)?;
+        let module = get_module(self);
 
         let alias = if self.first().token_type == TokenType::As {
             let _ = self.eat();
             Some(
-                self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
-                    .value,
+                self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
+                    .into(),
             )
         } else {
             None
         };
 
-        Ok(Node::new(
+        Node::new(
             NodeType::ImportStatement {
                 module,
                 alias,
                 values: Vec::new(),
             },
             open.span,
-        ))
+        )
     }
 
-    pub fn parse_return_declaration(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_return_declaration(&mut self) -> Node {
         let open = self.expect_eat(
             &TokenType::Stop(StopValue::Return),
             SyntaxErr::ExpectedKeyword(String::from("return")),
-        )?;
+        );
 
-        let val = self.parse_statement()?;
+        let val = self.parse_statement();
 
         let span = Span::new_from_spans(open.span, val.span);
-        Ok(Node::new(
+        Node::new(
             NodeType::Return {
                 value: Box::new(val),
             },
             span,
-        ))
+        )
     }
 
-    pub fn parse_match_declaration(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_match_declaration(&mut self) -> Node {
         let open = self.expect_eat(
             &TokenType::Match,
             SyntaxErr::ExpectedKeyword(String::from("match")),
-        )?;
+        );
 
         let is_async = self.first().token_type == TokenType::Async;
 
@@ -347,14 +367,14 @@ impl Parser {
         };
 
         let typ = if self.first().token_type != TokenType::Open(Bracket::Curly) {
-            self.parse_type()?
+            self.parse_type()
         } else {
             None
         };
 
         let default = if self.first().token_type == TokenType::Equals {
             let _ = self.eat();
-            Some(Box::new(self.parse_statement()?))
+            Some(Box::new(self.parse_statement()))
         } else {
             None
         };
@@ -365,32 +385,32 @@ impl Parser {
             let _ = self.expect_eat(
                 &TokenType::Arrow,
                 SyntaxErr::ExpectedKeyword(String::from("->")),
-            )?;
-            self.parse_type()?
+            );
+            self.parse_type()
         };
 
         let _ = self.expect_eat(
             &TokenType::Open(Bracket::Curly),
             SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
-        )?;
+        );
 
         let mut patterns = Vec::new();
 
         while self.first().token_type != TokenType::Close(Bracket::Curly) {
-            let mut values = vec![self.parse_statement()?];
+            let mut values = vec![self.parse_statement()];
             let mut conditions = Vec::new();
 
             while self.first().token_type == TokenType::Or {
                 let _ = self.eat();
-                values.push(self.parse_statement()?);
+                values.push(self.parse_statement());
             }
 
             while self.first().token_type == TokenType::If {
                 let _ = self.eat();
-                conditions.push(self.parse_statement()?);
+                conditions.push(self.parse_statement());
             }
 
-            let body = Box::new(self.parse_block()?);
+            let body = Box::new(self.parse_block());
 
             for value in values {
                 patterns.push((value, conditions.clone(), body.clone()));
@@ -404,13 +424,16 @@ impl Parser {
         let close = self.expect_eat(
             &TokenType::Close(Bracket::Curly),
             SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
-        )?;
+        );
 
         let func = Node::new(
             NodeType::MatchDeclaration {
                 parameters: (
-                    String::from("input_value"),
-                    typ.unwrap_or(ParserDataType::Dynamic),
+                    ParserText::new(String::from("input_value"), Span::default()),
+                    typ.unwrap_or(ParserDataType::new(
+                        ParserInnerType::Dynamic,
+                        Span::default(),
+                    )),
                     default,
                 ),
                 body: patterns,
@@ -423,57 +446,57 @@ impl Parser {
         if self.first().token_type == TokenType::Open(Bracket::Paren) {
             self.parse_call_expression(func)
         } else {
-            Ok(func)
+            func
         }
     }
 
-    pub fn get_loop_type(&mut self) -> Result<LoopType, ParserError> {
-        Ok(
+    pub fn get_loop_type(&mut self) -> LoopType {
+        if let Some(in_token) = self.nth(1) {
             if self.first().token_type == TokenType::Identifier
-                && self.nth(1).token_type == TokenType::In
+                && in_token.token_type == TokenType::In
             {
                 let identifier = self
-                    .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)?
-                    .value;
+                    .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
+                    .into();
 
                 let _ = self.eat();
-                LoopType::For(identifier, self.parse_statement()?)
-            } else {
-                let task = self.parse_statement()?;
-                LoopType::While(task)
-            },
-        )
+                return LoopType::For(identifier, self.parse_statement());
+            }
+        }
+
+        let task = self.parse_statement();
+        LoopType::While(task)
     }
 
-    pub fn parse_loop_declaration(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_loop_declaration(&mut self) -> Node {
         let open = self.expect_eat(
             &TokenType::For,
             SyntaxErr::ExpectedKeyword(String::from("for")),
-        )?;
-        let typ = self.get_loop_type()?;
-        let block = self.parse_block()?;
+        );
+        let typ = self.get_loop_type();
+        let block = self.parse_block();
 
         let span = Span::new_from_spans(open.span, block.span);
 
-        Ok(Node::new(
+        Node::new(
             NodeType::LoopDeclaration {
                 loop_type: Box::new(typ),
                 body: Box::new(block),
             },
             span,
-        ))
+        )
     }
 
-    pub fn parse_function_declaration(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_function_declaration(&mut self) -> Node {
         let open = self.expect_eat(
             &TokenType::Func,
             SyntaxErr::ExpectedKeyword(String::from("fn")),
-        )?;
+        );
 
         let parameters = self.parse_key_type_list_ordered_with_ref(
             TokenType::Open(Bracket::Paren),
             TokenType::Close(Bracket::Paren),
-        )?;
+        );
 
         let is_async = self.first().token_type == TokenType::Async;
 
@@ -487,11 +510,11 @@ impl Parser {
             let _ = self.expect_eat(
                 &TokenType::Arrow,
                 SyntaxErr::ExpectedKeyword(String::from("->")),
-            )?;
-            self.parse_type()?
+            );
+            self.parse_type()
         };
 
-        let block = self.parse_block()?;
+        let block = self.parse_block();
 
         let span = Span::new_from_spans(open.span, block.span);
         let func = Node::new(
@@ -507,15 +530,15 @@ impl Parser {
         if self.first().token_type == TokenType::Open(Bracket::Paren) {
             self.parse_call_expression(func)
         } else {
-            Ok(func)
+            func
         }
     }
 
-    pub fn parse_block(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_block(&mut self) -> Node {
         let _ = self.expect_eat(
             &TokenType::FatArrow,
             SyntaxErr::ExpectedToken(TokenType::FatArrow),
-        )?;
+        );
 
         if self.first().token_type != TokenType::Open(Bracket::Curly) {
             self.parse_statement()
@@ -524,50 +547,57 @@ impl Parser {
         }
     }
 
-    pub fn parse_if_statement(&mut self) -> Result<Node, ParserError> {
+    pub fn parse_if_statement(&mut self) -> Node {
         let open = self.expect_eat(
             &TokenType::If,
             SyntaxErr::ExpectedKeyword(String::from("if")),
-        )?;
+        );
 
         let comparison = if self.first().token_type == TokenType::Let {
             let _ = self.eat();
-            let mut values = vec![self.parse_statement()?];
+            let mut values = vec![self.parse_statement()];
             let mut conditions = Vec::new();
 
             while self.first().token_type == TokenType::Or {
                 let _ = self.eat();
-                values.push(self.parse_statement()?);
+                values.push(self.parse_statement());
             }
 
             while self.first().token_type == TokenType::If {
                 let _ = self.eat();
-                conditions.push(self.parse_statement()?);
+                conditions.push(self.parse_statement());
             }
 
             let _ = self.expect_eat(
                 &TokenType::LeftArrow,
                 SyntaxErr::ExpectedKeyword(String::from("<-")),
-            )?;
+            );
 
-            let value = self.parse_statement()?;
+            let value = self.parse_statement();
             IfComparisonType::IfLet {
                 value: value.clone(),
                 pattern: (value, conditions.clone()),
             }
         } else {
-            IfComparisonType::If(self.parse_statement()?)
+            IfComparisonType::If(self.parse_statement())
         };
 
-        let then = Box::new(self.parse_block()?);
+        let then = Box::new(self.parse_block());
+        let mut special_delim = false;
 
         let otherwise = if self.first().token_type == TokenType::Else {
             let _ = self.eat();
             if self.first().token_type == TokenType::If {
-                Some(Box::new(self.parse_if_statement()?))
+                Some(Box::new(self.parse_if_statement()))
             } else {
-                Some(Box::new(self.parse_block()?))
+                Some(Box::new(self.parse_block()))
             }
+        } else if self.first().token_type == TokenType::EOL
+            && self.second().token_type == TokenType::Else
+        {
+            let _ = self.eat();
+            special_delim = true;
+            None
         } else {
             None
         };
@@ -580,14 +610,15 @@ impl Parser {
             },
         );
 
-        Ok(Node::new(
+        Node::new(
             NodeType::IfStatement {
                 comparison: Box::new(comparison),
                 then,
                 otherwise,
+                special_delim,
             },
             span,
-        ))
+        )
     }
 }
 

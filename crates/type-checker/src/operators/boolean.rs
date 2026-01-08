@@ -4,7 +4,7 @@ use calibre_parser::ast::comparison::BooleanOperation;
 use crate::runtime::values::RuntimeType;
 
 pub fn handle(
-    op: &BooleanOperation,
+    _op: &BooleanOperation,
     left: &RuntimeType,
     right: &RuntimeType,
 ) -> Result<RuntimeType, ASTError<RuntimeType>> {

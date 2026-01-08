@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug, fs, path::PathBuf};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use calibre_common::{
     environment::Scope,
@@ -34,15 +34,15 @@ impl CheckerEnvironment {
 
         calibre_common::native::global::setup(self, &scope);
         let mut tokenizer = Tokenizer::default();
-        let program = parser
-            .produce_ast(
-                tokenizer
-                    .tokenize(fs::read_to_string(&get_globals_path()).unwrap())
-                    .unwrap(),
-            )
-            .unwrap();
+        let program = parser.produce_ast(
+            tokenizer
+                .tokenize(fs::read_to_string(&get_globals_path()).unwrap())
+                .unwrap(),
+        );
 
-        let _ = self.evaluate(&scope, program).unwrap();
+        self.add_parser_errors(parser.errors);
+
+        let _ = self.start_evaluate(&scope, program);
 
         let std = self.new_scope(Some(scope), get_stdlib_path(), Some("std"));
 

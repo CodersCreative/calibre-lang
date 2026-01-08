@@ -1,7 +1,8 @@
 use crate::{
     ast::{Node, NodeType},
-    lexer::{Bracket, LexerError, Span, Token, TokenType, Tokenizer},
+    lexer::{Bracket, LexerError, Span, Token, TokenType},
 };
+use miette::Diagnostic;
 use thiserror::Error;
 
 pub mod ast;
@@ -11,6 +12,8 @@ pub mod parse;
 #[derive(Debug, Default)]
 pub struct Parser {
     tokens: Vec<Token>,
+    pub errors: Vec<ParserError>,
+    prev_token: Option<Token>,
 }
 
 impl Parser {
@@ -21,13 +24,21 @@ impl Parser {
             true
         }
     }
-    pub fn produce_ast(&mut self, tokens: Vec<Token>) -> Result<Node, ParserError> {
+    pub fn produce_ast(&mut self, tokens: Vec<Token>) -> Node {
+        self.errors.clear();
         self.tokens = tokens;
+        self.prev_token = None;
         let mut body = Vec::new();
 
         while !self.is_eof() {
-            body.push(self.parse_statement()?)
+            body.push(self.parse_statement());
+            self.parse_delimited();
         }
+
+        let body: Vec<Node> = body
+            .into_iter()
+            .filter(|x| x.node_type != NodeType::EmptyLine)
+            .collect();
 
         let span = if body.len() > 0 {
             Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span)
@@ -38,13 +49,13 @@ impl Parser {
             )
         };
 
-        Ok(Node::new(
+        Node::new(
             NodeType::ScopeDeclaration {
                 body,
                 is_temp: false,
             },
             span,
-        ))
+        )
     }
 }
 
@@ -54,15 +65,23 @@ impl From<LexerError> for ParserError {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum ParserError {
-    #[error("{0}")]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     Lexer(LexerError),
-    #[error("{0}\nFound : {1:?}\nNext : {2:?}")]
-    Syntax(SyntaxErr, Token, Token, Token, Token),
+    #[error("{err} at {span}")]
+    Syntax {
+        #[source_code]
+        input: String,
+        err: SyntaxErr,
+        span: Span,
+        #[label("here")]
+        token: Option<(usize, usize)>,
+    },
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum SyntaxErr {
     #[error("Expected opening bracket, {0:?}.")]
     ExpectedOpeningBracket(Bracket),
@@ -86,6 +105,8 @@ pub enum SyntaxErr {
     ExpectedFunctions,
     #[error("Cant use while loop with iterators syntax.")]
     UnexpectedWhileLoop,
+    #[error("Unexpectedly found EOF")]
+    UnexpectedEOF,
     #[error("Constants cannot be null.")]
     NullConstant,
     #[error("Cannot use self outside of an implementation block.")]

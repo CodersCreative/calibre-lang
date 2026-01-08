@@ -1,7 +1,5 @@
 use crate::runtime::{
-    interpreter::InterpreterErr,
-    scope::InterpreterEnvironment,
-    values::{RuntimeType, RuntimeValue},
+    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
 use calibre_parser::ast::{IfComparisonType, Node, NodeType};
 
@@ -72,9 +70,14 @@ impl InterpreterEnvironment {
 
                 let value = self.evaluate(scope, value.clone())?;
 
-                if let Some(result) =
-                    self.match_pattern(scope, &pattern.0, &value, path.clone(), &pattern.1, then)
-                {
+                if let Some(result) = self.match_pattern(
+                    scope,
+                    &pattern.0,
+                    &value,
+                    path.clone().into_iter().map(|x| x.to_string()).collect(),
+                    &pattern.1,
+                    then,
+                ) {
                     match result {
                         Ok(x) => return Ok(x),
                         Err(InterpreterErr::ExpectedFunctions) => {}

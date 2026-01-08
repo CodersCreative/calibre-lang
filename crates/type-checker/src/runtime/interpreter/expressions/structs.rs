@@ -19,17 +19,14 @@ impl CheckerEnvironment {
                 let value = if let Some(value) = v {
                     self.evaluate(scope, value)?.clone()
                 } else {
-                    self.get_var(scope, &k)?.value.clone()
+                    let pointer = self.get_var_pointer(scope, &k)?;
+                    self.get_var(&pointer)?.value.clone()
                 };
 
                 properties.insert(k, value);
             }
 
-            return Ok(RuntimeType::Struct(
-                *scope,
-                None,
-                ObjectType::Map(properties),
-            ));
+            return Ok(RuntimeType::Struct(None, ObjectType::Map(properties)));
         } else if let ObjectType::Tuple(props) = props {
             let mut properties = Vec::new();
             for v in props {
@@ -37,11 +34,7 @@ impl CheckerEnvironment {
                     properties.push(self.evaluate(scope, value)?.clone());
                 }
             }
-            return Ok(RuntimeType::Struct(
-                *scope,
-                None,
-                ObjectType::Tuple(properties),
-            ));
+            return Ok(RuntimeType::Struct(None, ObjectType::Tuple(properties)));
         }
         Ok(RuntimeType::Null)
     }
@@ -53,7 +46,8 @@ impl CheckerEnvironment {
         value: String,
         data: Option<ObjectType<Option<Node>>>,
     ) -> Result<RuntimeType, InterpreterErr> {
-        let enm_class = match self.get_object_type(&scope, &identifier) {
+        let pointer = self.get_object_pointer(scope, &identifier)?;
+        let enm_class = match self.get_object_type(&pointer) {
             Ok(Type::Enum(x)) => x.clone(),
             _ => {
                 if let Some(ObjectType::Tuple(args)) = data {
@@ -63,7 +57,10 @@ impl CheckerEnvironment {
                             &s,
                             Node::new(
                                 NodeType::CallExpression(
-                                    Box::new(Node::new(NodeType::Identifier(value), location.span)),
+                                    Box::new(Node::new(
+                                        NodeType::Identifier(value.into()),
+                                        location.span,
+                                    )),
                                     args.into_iter().map(|x| (x.unwrap(), None)).collect(),
                                 ),
                                 location.span,
@@ -78,7 +75,7 @@ impl CheckerEnvironment {
             }
         };
 
-        if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
+        if let Some((_, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
             if let Some(ObjectType::Map(properties)) = &enm.1 {
                 let mut data_vals = HashMap::new();
                 if let Some(ObjectType::Map(data)) = data {
@@ -86,7 +83,8 @@ impl CheckerEnvironment {
                         let value = if let Some(value) = v {
                             self.evaluate(scope, value)?.clone()
                         } else {
-                            self.get_var(scope, &k)?.value.clone()
+                            let pointer = self.get_var_pointer(scope, &k)?;
+                            self.get_var(&pointer)?.value.clone()
                         };
 
                         data_vals.insert(k, value);
@@ -109,7 +107,7 @@ impl CheckerEnvironment {
                     Some(ObjectType::Map(new_data_vals))
                 };
 
-                return Ok(RuntimeType::Enum(*scope, identifier, data));
+                return Ok(RuntimeType::Enum(pointer, data));
             } else if let Some(ObjectType::Tuple(properties)) = &enm.1 {
                 let mut data_vals = Vec::new();
 
@@ -122,12 +120,9 @@ impl CheckerEnvironment {
                 }
 
                 let mut new_data_vals = Vec::new();
-                for (i, property) in properties.into_iter().enumerate() {
+                for (i, _property) in properties.into_iter().enumerate() {
                     if data_vals.len() <= 0 {
-                        return Err(InterpreterErr::OutOfBounds(
-                            String::from("Tuple Object Type"),
-                            i as i16,
-                        ));
+                        return Err(InterpreterErr::InvalidIndex(i as i64));
                     }
                     new_data_vals.push(data_vals.remove(0));
                 }
@@ -138,9 +133,9 @@ impl CheckerEnvironment {
                     Some(ObjectType::Tuple(new_data_vals))
                 };
 
-                return Ok(RuntimeType::Enum(*scope, identifier, data));
+                return Ok(RuntimeType::Enum(pointer, data));
             }
-            return Ok(RuntimeType::Enum(*scope, identifier, None));
+            return Ok(RuntimeType::Enum(pointer, None));
         } else {
             Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
         }
@@ -153,7 +148,6 @@ mod tests {
     use calibre_parser::ast::TypeDefType;
 
     use super::*;
-    use crate::runtime::values::RuntimeValue;
     use std::collections::HashMap;
     use std::path::PathBuf;
     use std::str::FromStr;

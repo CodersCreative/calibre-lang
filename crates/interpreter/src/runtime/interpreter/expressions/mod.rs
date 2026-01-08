@@ -23,16 +23,27 @@ impl InterpreterEnvironment {
         scope: &u64,
         identifier: &str,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        Ok(self.get_var(scope, identifier)?.value.clone())
+        let pointer = self.get_var_pointer(scope, identifier)?;
+        Ok(self.get_var(&pointer)?.value.clone())
     }
 
     pub fn evaluate_not<'a>(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         value: RuntimeValue,
     ) -> Result<RuntimeValue, InterpreterErr> {
         match value {
             RuntimeValue::Bool(x) => Ok(RuntimeValue::Bool(!x)),
+            _ => Err(InterpreterErr::CantPerformNot(value)),
+        }
+    }
+
+    pub fn evaluate_neg<'a>(
+        &mut self,
+        _scope: &u64,
+        value: RuntimeValue,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        match value {
             RuntimeValue::Int(x) => Ok(RuntimeValue::Int(-x)),
             RuntimeValue::Float(x) => Ok(RuntimeValue::Float(-x)),
             RuntimeValue::Range(f, t) => Ok(RuntimeValue::Range(t, f)),
@@ -43,7 +54,7 @@ impl InterpreterEnvironment {
                 data.reverse();
                 Ok(RuntimeValue::List { data, data_type })
             }
-            _ => Err(InterpreterErr::UnexpectedType(value)),
+            _ => Err(InterpreterErr::CantPerformNot(value)),
         }
     }
 
@@ -77,7 +88,7 @@ impl InterpreterEnvironment {
 
     pub fn evaluate_range_expression(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         from: RuntimeValue,
         to: RuntimeValue,
         inclusive: bool,
@@ -88,12 +99,10 @@ impl InterpreterEnvironment {
 
                 Ok(RuntimeValue::Range(from, to))
             } else {
-                unimplemented!();
-                // Err(InterpreterErr::NotImplemented(to))
+                Err(InterpreterErr::UnexpectedType(to))
             }
         } else {
-            unimplemented!();
-            // Err(InterpreterErr::NotImplemented(from))
+            Err(InterpreterErr::UnexpectedType(from))
         }
     }
 
@@ -135,7 +144,7 @@ impl InterpreterEnvironment {
 
     pub fn evaluate_boolean_expression(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         left: RuntimeValue,
         right: RuntimeValue,
         operator: BooleanOperation,
@@ -150,14 +159,8 @@ impl InterpreterEnvironment {
         data_type: RuntimeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
         match data_type {
-            RuntimeType::Struct(_, Some(x)) if &x == "number" => {
-                Ok(RuntimeValue::Bool(value.is_number()))
-            }
-            _ => Ok(RuntimeValue::Bool(value.is_type(
-                self,
-                scope,
-                &data_type.into(),
-            ))),
+            RuntimeType::Struct(Some(x)) if x == 0 => Ok(RuntimeValue::Bool(value.is_number())),
+            _ => Ok(RuntimeValue::Bool(value.is_type(self, scope, &data_type))),
         }
     }
 
@@ -177,36 +180,40 @@ impl InterpreterEnvironment {
         identifier: Node,
         value: RuntimeValue,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let NodeType::DerefStatement { value: node } = identifier.node_type {
-            if let RuntimeValue::Ref(pointer, _) = match node.node_type.clone() {
-                NodeType::Identifier(x) => self.get_var_ref(scope, &x)?,
-                NodeType::MemberExpression { path } => {
-                    let MembrExprPathRes::Path(path) =
-                        self.get_member_expression_path(scope, path)?
-                    else {
-                        return Err(InterpreterErr::RefNonVar(node.node_type));
-                    };
+        match identifier.node_type {
+            NodeType::DerefStatement { value: node } => {
+                if let RuntimeValue::Ref(pointer, _) = match node.node_type.clone() {
+                    NodeType::Identifier(x) => self.get_var_ref(scope, &x)?,
+                    NodeType::MemberExpression { path } => {
+                        let MembrExprPathRes::Path(path) =
+                            self.get_member_expression_path(scope, path)?
+                        else {
+                            return Err(InterpreterErr::RefNonVar(node.node_type));
+                        };
 
-                    self.get_member_ref(scope, &path)?
+                        self.get_member_ref(scope, &path)?
+                    }
+                    _ => return Err(InterpreterErr::RefNonVar(node.node_type)),
+                } {
+                    let _ = self.assign_var_from_ref_pointer(&pointer, value)?;
+                    Ok(RuntimeValue::Null)
+                } else {
+                    Err(InterpreterErr::AssignNonVariable(node.node_type))
                 }
-                _ => return Err(InterpreterErr::RefNonVar(node.node_type)),
-            } {
-                Ok(self.assign_var_from_ref_pointer(&pointer, value)?)
-            } else {
-                panic!()
             }
-        } else if let NodeType::Identifier(identifier) = identifier.node_type {
-            let _ = self.assign_var(scope, &identifier, value.clone())?;
-            return Ok(value);
-        } else if let NodeType::MemberExpression { .. } = identifier.node_type {
-            let _ = self.assign_member_expression(scope, identifier, value.clone())?;
-            return Ok(value);
-        } else {
-            panic!();
-            Err(InterpreterErr::AssignNonVariable(identifier.node_type))
+            NodeType::Identifier(identifier) => {
+                let _ = self.assign_var(scope, &identifier, value.clone())?;
+                Ok(RuntimeValue::Null)
+            }
+            NodeType::MemberExpression { .. } | NodeType::ScopeMemberExpression { .. } => {
+                let _ = self.assign_member_expression(scope, identifier, value.clone())?;
+                Ok(RuntimeValue::Null)
+            }
+            _ => Err(InterpreterErr::AssignNonVariable(identifier.node_type)),
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use calibre_parser::ast::VarType;

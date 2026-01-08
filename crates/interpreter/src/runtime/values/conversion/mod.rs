@@ -9,7 +9,6 @@ use std::{collections::HashMap, mem::discriminant};
 
 pub mod check;
 pub mod numbers;
-pub mod similar;
 
 impl RuntimeValue {
     pub fn into_type(
@@ -57,12 +56,12 @@ impl RuntimeValue {
         let list_case = || {
             if let RuntimeType::List(x) = t.clone() {
                 Ok(RuntimeValue::List {
-                    data: vec![if let Some(x) = &*x {
+                    data: vec![if let Some(x) = x.clone() {
                         self.into_type(env, scope, &x)?
                     } else {
                         self.clone()
                     }],
-                    data_type: x,
+                    data_type: x.clone(),
                 })
             } else {
                 return Err(ValueErr::Conversion(self.clone(), t.clone()));
@@ -111,7 +110,7 @@ impl RuntimeValue {
                         .into_iter()
                         .map(|x| RuntimeValue::Int(x as i64))
                         .collect(),
-                    data_type: Box::new(Some(RuntimeType::Int)),
+                    data_type: Some(Box::new(RuntimeType::Int)),
                 }),
                 RuntimeType::Result(_, _) => result_case(),
                 RuntimeType::Option(_) => option_case(),
@@ -122,10 +121,10 @@ impl RuntimeValue {
                 RuntimeType::Float => Ok(RuntimeValue::Float(x.parse()?)),
                 RuntimeType::Str => Ok(self.clone()),
                 RuntimeType::Char => Ok(RuntimeValue::Char(x.chars().nth(0).unwrap_or(' '))),
-                RuntimeType::List(typ) if **typ == Some(RuntimeType::Char) => {
+                RuntimeType::List(Some(typ)) if **typ == RuntimeType::Char => {
                     Ok(RuntimeValue::List {
                         data: x.chars().map(|c| RuntimeValue::Char(c)).collect(),
-                        data_type: Box::new(Some(RuntimeType::Char)),
+                        data_type: Some(Box::new(RuntimeType::Char)),
                     })
                 }
                 RuntimeType::List(_) => list_case(),
@@ -138,26 +137,26 @@ impl RuntimeValue {
             RuntimeValue::Char(x) => {
                 RuntimeValue::into_type(&RuntimeValue::Str(x.clone().to_string()), env, scope, t)
             }
-            RuntimeValue::Enum(o, x, _, z) => match t.clone() {
-                RuntimeType::Struct(w, None) => {
+            RuntimeValue::Enum(o, _, z) => match t.clone() {
+                RuntimeType::Struct(None) => {
                     if let Some(z) = z {
-                        Ok(RuntimeValue::Struct(w, None, z.clone()))
+                        Ok(RuntimeValue::Struct(None, z.clone()))
                     } else {
                         panic_type()
                     }
                 }
-                RuntimeType::Struct(w, Some(y)) => {
+                RuntimeType::Struct(Some(y)) => {
                     if let Some(z) = z {
-                        match RuntimeValue::Struct(w, None, z.clone()).into_type(env, scope, t) {
+                        match RuntimeValue::Struct(None, z.clone()).into_type(env, scope, t) {
                             Ok(x) => Ok(x),
-                            Err(_) => self.into_type(env, scope, &RuntimeType::Enum(*o, y)),
+                            Err(_) => self.into_type(env, scope, &RuntimeType::Enum(y)),
                         }
                     } else {
-                        self.into_type(env, scope, &RuntimeType::Enum(*o, y))
+                        self.into_type(env, scope, &RuntimeType::Enum(y))
                     }
                 }
-                RuntimeType::Enum(_, y) => {
-                    if x == &y {
+                RuntimeType::Enum(y) => {
+                    if o == &y {
                         Ok(self.clone())
                     } else {
                         panic_type()
@@ -171,17 +170,17 @@ impl RuntimeValue {
                 RuntimeType::Option(_) => option_case(),
                 _ => panic_type(),
             },
-            RuntimeValue::Struct(o, _, ObjectType::Tuple(x)) => match t {
-                RuntimeType::Struct(_, None) => Ok(self.clone()),
+            RuntimeValue::Struct(_o, ObjectType::Tuple(x)) => match t {
+                RuntimeType::Struct(None) => Ok(self.clone()),
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Result(_, _) => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 RuntimeType::Range => panic_type(),
-                RuntimeType::Struct(_, Some(identifier)) => {
-                    let Ok(Type::Struct(ObjectType::Tuple(properties))) =
-                        env.get_object_type(o, &identifier)
+                RuntimeType::Struct(Some(t_o)) => {
+                    let Some(Type::Struct(ObjectType::Tuple(properties))) =
+                        env.objects.get(t_o).map(|x| &x.object_type)
                     else {
                         return panic_type();
                     };
@@ -196,8 +195,7 @@ impl RuntimeValue {
                     }
 
                     Ok(RuntimeValue::Struct(
-                        *o,
-                        Some(identifier.to_string()),
+                        Some(t_o.clone()),
                         ObjectType::Tuple(new_values),
                     ))
                 }
@@ -209,17 +207,16 @@ impl RuntimeValue {
                 },
                 _ => panic_type(),
             },
-            RuntimeValue::Struct(_, _, ObjectType::Map(x)) => match t {
-                RuntimeType::Struct(_, None) => Ok(self.clone()),
+            RuntimeValue::Struct(_o, ObjectType::Map(x)) => match t {
+                RuntimeType::Struct(None) => Ok(self.clone()),
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
                 RuntimeType::Result(_, _) => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 RuntimeType::Range => panic_type(),
-                RuntimeType::Struct(w, Some(identifier)) => {
-                    let Type::Struct(ObjectType::Map(properties)) =
-                        env.get_object_type(w, &identifier)?
+                RuntimeType::Struct(Some(t_o)) => {
+                    let Ok(Type::Struct(ObjectType::Map(properties))) = env.get_object_type(t_o)
                     else {
                         return panic_type();
                     };
@@ -237,8 +234,7 @@ impl RuntimeValue {
                     }
 
                     Ok(RuntimeValue::Struct(
-                        *w,
-                        Some(identifier.to_string()),
+                        Some(*t_o),
                         ObjectType::Map(new_values),
                     ))
                 }
@@ -263,9 +259,9 @@ impl RuntimeValue {
                         return panic_type();
                     };
 
-                    if let Some(x) = &**return_type {
+                    if let Some(x) = return_type {
                         if let Some(y) = val_type {
-                            if x != y {
+                            if **x != *y {
                                 return panic_type();
                             }
                         } else {
@@ -284,19 +280,17 @@ impl RuntimeValue {
                 _ => panic_type(),
             },
             RuntimeValue::List { data, data_type } => {
-                match t {
+                let t = match t {
                     RuntimeType::Result(_, _) => return result_case(),
                     RuntimeType::Option(_) => return option_case(),
-                    _ => {}
-                }
-                if let Some(RuntimeType::Struct(o, x)) = *data_type.clone() {
-                    if let RuntimeType::Struct(w, y) = t {
-                        if &x == y && w == &o {
-                            return Ok(RuntimeValue::Struct(
-                                *w,
-                                x,
-                                ObjectType::Tuple(data.to_vec()),
-                            ));
+                    RuntimeType::List(Some(x)) => *x.clone(),
+                    RuntimeType::List(None) => return Ok(self.clone()),
+                    _ => return panic_type(),
+                };
+                if let Some(RuntimeType::Struct(o)) = data_type.clone().map(|x| *x) {
+                    if let RuntimeType::Struct(w) = t {
+                        if w == o {
+                            return Ok(RuntimeValue::Struct(w, ObjectType::Tuple(data.to_vec())));
                         }
                     }
                 }
@@ -308,7 +302,7 @@ impl RuntimeValue {
                     Ok(if data.len() == filtered.len() {
                         RuntimeValue::List {
                             data: data.clone(),
-                            data_type: Box::new(Some(t.clone())),
+                            data_type: Some(Box::new(t.clone())),
                         }
                     } else {
                         let mut dta = Vec::new();
@@ -317,13 +311,13 @@ impl RuntimeValue {
                         }
                         RuntimeValue::List {
                             data: dta,
-                            data_type: Box::new(Some(t.clone())),
+                            data_type: Some(Box::new(t.clone())),
                         }
                     })
                 } else {
                     Ok(RuntimeValue::List {
                         data: Vec::new(),
-                        data_type: Box::new(Some(t.clone())),
+                        data_type: Some(Box::new(t.clone())),
                     })
                 }
             }
@@ -346,7 +340,7 @@ impl RuntimeValue {
             RuntimeValue::Option(x, typ) => {
                 if let Some(x) = x {
                     x.into_type(env, scope, t)
-                } else if t == typ {
+                } else if t == &RuntimeType::Option(Box::new(typ.clone())) {
                     Ok(RuntimeValue::Option(x.clone(), t.clone()))
                 } else {
                     match x {

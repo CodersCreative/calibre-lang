@@ -2,11 +2,11 @@ use crate::{
     translator::FunctionTranslator,
     values::{RuntimeType, RuntimeValue},
 };
+use calibre_parser::ast::{binary::BinaryOperator, comparison::Comparison};
+use cranelift::prelude::*;
+
 pub mod lists;
-use calibre_parser::ast::{
-    NodeType, ParserDataType, binary::BinaryOperator, comparison::Comparison,
-};
-use cranelift::{codegen::ir::BlockArg, prelude::*};
+pub mod objects;
 
 impl<'a> FunctionTranslator<'a> {
     pub fn translate_binary_expression(
@@ -156,7 +156,7 @@ impl<'a> FunctionTranslator<'a> {
         let variable = self
             .variables
             .get(identifier)
-            .expect("variable not defined");
+            .expect(&format!("variable {} not defined", identifier));
         RuntimeValue::new(self.builder.use_var(variable.2), variable.1.clone())
     }
 }

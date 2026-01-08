@@ -22,13 +22,11 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         let mut parser = calibre_parser::Parser::default();
 
         let mut tokenizer = Tokenizer::default();
-        let program = parser
-            .produce_ast(
-                tokenizer
-                    .tokenize(fs::read_to_string(path).unwrap())
-                    .unwrap(),
-            )
-            .unwrap();
+        let program = parser.produce_ast(
+            tokenizer
+                .tokenize(fs::read_to_string(path).unwrap())
+                .unwrap(),
+        );
 
         self.find_checker_scope_at_recursive(root, root + 1, program, target)
     }
@@ -37,7 +35,7 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         &mut self,
         scope: u64,
         counter: u64,
-        mut node: Node,
+        node: Node,
         target: Location,
     ) -> ScopeSearchResult {
         if node.span.from >= target.span.from {
@@ -119,21 +117,20 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
                 if !values.is_empty() || alias.is_some() {
                     ScopeSearchResult::Failed { counter, scope }
                 } else {
-                    if let Ok(x) = self.get_scope_list(scope, module).clone() {
+                    if let Ok(x) = self
+                        .get_scope_list(scope, module.into_iter().map(|x| x.to_string()).collect())
+                        .clone()
+                    {
                         let mut parser = calibre_parser::Parser::default();
                         let mut tokenizer = Tokenizer::default();
-                        let program = parser
-                            .produce_ast(
-                                tokenizer
-                                    .tokenize(
-                                        fs::read_to_string(
-                                            self.scopes.get(&x).unwrap().path.clone(),
-                                        )
+                        let program = parser.produce_ast(
+                            tokenizer
+                                .tokenize(
+                                    fs::read_to_string(self.scopes.get(&x).unwrap().path.clone())
                                         .unwrap(),
-                                    )
-                                    .unwrap(),
-                            )
-                            .unwrap();
+                                )
+                                .unwrap(),
+                        );
                         match self.find_checker_scope_at_recursive(
                             scope + 1,
                             counter + 1,

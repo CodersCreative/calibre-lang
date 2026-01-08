@@ -1,4 +1,5 @@
-pub mod utils;
 pub mod environment;
-pub mod native;
 pub mod errors;
+pub mod native;
+pub mod testing;
+pub mod utils;

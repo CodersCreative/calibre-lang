@@ -1,5 +1,5 @@
-use calibre_common::environment::Variable;
-use calibre_parser::ast::{Node, NodeType, ParserDataType, VarType};
+use calibre_common::environment::{InterpreterFrom, Variable};
+use calibre_parser::ast::{Node, NodeType, ParserInnerType, VarType};
 
 use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
@@ -26,24 +26,24 @@ impl CheckerEnvironment {
         };
 
         let params = vec![(
-            parameters.0.clone(),
-            if parameters.1 == ParserDataType::Dynamic {
+            parameters.0.to_string(),
+            if parameters.1.data_type == ParserInnerType::Dynamic {
                 if let Some(node) = parameters.2.clone() {
                     self.evaluate(scope, *node)?
                 } else {
                     RuntimeType::Dynamic
                 }
             } else {
-                RuntimeType::from(parameters.1)
+                RuntimeType::interpreter_from(self, scope, parameters.1)?
             },
             parameters.2.is_some(),
         )];
 
         Ok(RuntimeType::Function {
-            return_type: Box::new(match return_type {
-                Some(x) => Some(RuntimeType::from(x)),
+            return_type: match return_type {
+                Some(x) => Some(Box::new(RuntimeType::interpreter_from(self, scope, x)?)),
                 None => None,
-            }),
+            },
             parameters: params,
             is_async,
         })
@@ -56,7 +56,7 @@ impl CheckerEnvironment {
     ) -> Result<RuntimeType, InterpreterErr> {
         let NodeType::FunctionDeclaration {
             parameters,
-            body,
+            body: _,
             return_type,
             is_async,
         } = declaration.node_type
@@ -67,25 +67,25 @@ impl CheckerEnvironment {
 
         for parameters in parameters.into_iter() {
             params.push((
-                parameters.0.clone(),
-                if parameters.1 == ParserDataType::Dynamic {
+                parameters.0.to_string(),
+                if parameters.1.data_type == ParserInnerType::Dynamic {
                     if let Some(node) = parameters.2.clone() {
                         self.evaluate(scope, node)?
                     } else {
                         RuntimeType::Dynamic
                     }
                 } else {
-                    RuntimeType::from(parameters.1)
+                    RuntimeType::interpreter_from(self, scope, parameters.1)?
                 },
                 parameters.2.is_some(),
             ));
         }
 
         Ok(RuntimeType::Function {
-            return_type: Box::new(match return_type {
-                Some(x) => Some(RuntimeType::from(x)),
+            return_type: match return_type {
+                Some(x) => Some(Box::new(RuntimeType::interpreter_from(self, scope, x)?)),
                 None => None,
-            }),
+            },
             parameters: params,
             is_async,
         })
@@ -96,12 +96,19 @@ impl CheckerEnvironment {
         scope: &u64,
         var_type: VarType,
         identifier: String,
-        value: RuntimeType,
+        mut value: RuntimeType,
         data_type: Option<RuntimeType>,
     ) -> Result<RuntimeType, InterpreterErr> {
         if let Some(t) = data_type {
-            if !value.is_type(&RuntimeType::from(t)) {
-                // println!("{:?}", self.current_location)
+            value = match value {
+                RuntimeType::List(None) => RuntimeType::List(None).into_type(self, scope, &t)?,
+                x => x,
+            };
+            if !value.is_type(&RuntimeType::from(t.clone())) {
+                self.add_err(InterpreterErr::ExpectedType(
+                    value.clone(),
+                    RuntimeType::from(t),
+                ));
             }
         }
 

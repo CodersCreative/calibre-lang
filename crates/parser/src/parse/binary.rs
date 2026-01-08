@@ -1,18 +1,18 @@
 use crate::ast::Node;
 use crate::lexer::Span;
-use crate::{Parser, ParserError, SyntaxErr};
+use crate::{Parser, SyntaxErr};
 use crate::{
     ast::{NodeType, binary::BinaryOperator},
     lexer::TokenType,
 };
 
 impl Parser {
-    pub fn parse_pipe_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = vec![self.parse_object_expression()?];
+    pub fn parse_pipe_expression(&mut self) -> Node {
+        let mut left = vec![self.parse_object_expression()];
 
         while let TokenType::Pipe = self.first().token_type.clone() {
             let _ = self.eat();
-            let value = self.parse_statement()?;
+            let value = self.parse_statement();
             if let NodeType::PipeExpression(mut x) = value.node_type {
                 left.append(&mut x);
             } else {
@@ -23,17 +23,17 @@ impl Parser {
         if left.len() > 1 {
             let first = left[0].span.clone();
             let last = left.last().unwrap().span.clone();
-            Ok(Node::new(
+            Node::new(
                 NodeType::PipeExpression(left),
                 Span::new_from_spans(first, last),
-            ))
+            )
         } else {
-            Ok(left.remove(0))
+            left.remove(0)
         }
     }
 
-    pub fn parse_as_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = self.parse_call_member_expression()?;
+    pub fn parse_as_expression(&mut self) -> Node {
+        let mut left = self.parse_call_member_expression();
 
         while let TokenType::As = self.first().token_type.clone() {
             let token = self.eat();
@@ -41,17 +41,17 @@ impl Parser {
             left = Node::new(
                 NodeType::AsExpression {
                     value: Box::new(left),
-                    typ: self.parse_type()?.unwrap(),
+                    typ: self.expect_type(),
                 },
                 token.span,
             );
         }
 
-        Ok(left)
+        left
     }
 
-    pub fn parse_is_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = self.parse_bitwise_expression()?;
+    pub fn parse_is_expression(&mut self) -> Node {
+        let mut left = self.parse_bitwise_expression();
 
         while let TokenType::Is = self.first().token_type.clone() {
             let token = self.eat();
@@ -59,17 +59,17 @@ impl Parser {
             left = Node::new(
                 NodeType::IsDeclaration {
                     value: Box::new(left),
-                    data_type: self.parse_type()?.unwrap(),
+                    data_type: self.expect_type(),
                 },
                 token.span,
             )
         }
 
-        Ok(left)
+        left
     }
 
-    pub fn parse_in_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = self.parse_is_expression()?;
+    pub fn parse_in_expression(&mut self) -> Node {
+        let mut left = self.parse_is_expression();
 
         while let TokenType::In = self.first().token_type.clone() {
             let token = self.eat();
@@ -77,17 +77,17 @@ impl Parser {
             left = Node::new(
                 NodeType::InDeclaration {
                     identifier: Box::new(left),
-                    expression: Box::new(self.parse_statement()?),
+                    expression: Box::new(self.parse_statement()),
                 },
                 token.span,
             )
         }
 
-        Ok(left)
+        left
     }
 
-    pub fn parse_range_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = self.parse_boolean_expression()?;
+    pub fn parse_range_expression(&mut self) -> Node {
+        let mut left = self.parse_boolean_expression();
 
         if let TokenType::Range = self.first().token_type.clone() {
             let token = self.eat();
@@ -102,18 +102,18 @@ impl Parser {
             left = Node::new(
                 NodeType::RangeDeclaration {
                     from: Box::new(left),
-                    to: Box::new(self.parse_boolean_expression()?),
+                    to: Box::new(self.parse_boolean_expression()),
                     inclusive,
                 },
                 token.span,
             )
         }
 
-        Ok(left)
+        left
     }
 
-    pub fn parse_additive_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = self.parse_multiplicative_expression()?;
+    pub fn parse_additive_expression(&mut self) -> Node {
+        let mut left = self.parse_multiplicative_expression();
 
         while let TokenType::BinaryOperator(op) = self.first().token_type.clone() {
             if [BinaryOperator::Add, BinaryOperator::Sub].contains(&op) {
@@ -122,7 +122,7 @@ impl Parser {
                 left = Node::new(
                     NodeType::BinaryExpression {
                         left: Box::new(left),
-                        right: Box::new(self.parse_multiplicative_expression()?),
+                        right: Box::new(self.parse_multiplicative_expression()),
                         operator: op,
                     },
                     token.span,
@@ -132,11 +132,11 @@ impl Parser {
             }
         }
 
-        Ok(left)
+        left
     }
 
-    pub fn parse_multiplicative_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = self.parse_power_expression()?;
+    pub fn parse_multiplicative_expression(&mut self) -> Node {
+        let mut left = self.parse_power_expression();
         while let TokenType::BinaryOperator(op) = self.first().token_type.clone() {
             if [
                 BinaryOperator::Mul,
@@ -150,7 +150,7 @@ impl Parser {
                 left = Node::new(
                     NodeType::BinaryExpression {
                         left: Box::new(left),
-                        right: Box::new(self.parse_power_expression()?),
+                        right: Box::new(self.parse_power_expression()),
                         operator: op,
                     },
                     token.span,
@@ -160,11 +160,11 @@ impl Parser {
             }
         }
 
-        Ok(left)
+        left
     }
 
-    pub fn parse_bitwise_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = self.parse_shift_expression()?;
+    pub fn parse_bitwise_expression(&mut self) -> Node {
+        let mut left = self.parse_shift_expression();
         while [
             TokenType::Ref,
             TokenType::Or,
@@ -177,44 +177,62 @@ impl Parser {
             left = Node::new(
                 NodeType::BinaryExpression {
                     left: Box::new(left),
-                    right: Box::new(self.parse_shift_expression()?),
+                    right: Box::new(self.parse_shift_expression()),
                     operator: match op.token_type {
                         TokenType::Ref => BinaryOperator::BitAnd,
                         TokenType::Or => BinaryOperator::BitOr,
                         TokenType::BinaryOperator(x) => x,
-                        _ => return Err(self.get_err(SyntaxErr::UnexpectedToken)),
+                        _ => {
+                            self.add_err(SyntaxErr::UnexpectedToken);
+                            BinaryOperator::BitAnd
+                        }
                     },
                 },
                 op.span,
             );
         }
 
-        Ok(left)
+        left
     }
-    pub fn parse_shift_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = self.parse_additive_expression()?;
-        while let TokenType::BinaryOperator(op) = self.first().token_type.clone() {
-            if [BinaryOperator::Shl, BinaryOperator::Shr].contains(&op) {
-                let token = self.eat();
+    pub fn parse_shift_expression(&mut self) -> Node {
+        let mut left = self.parse_additive_expression();
+        while [
+            (
+                TokenType::Comparison(crate::ast::comparison::Comparison::Greater),
+                TokenType::Comparison(crate::ast::comparison::Comparison::Greater),
+            ),
+            (
+                TokenType::Comparison(crate::ast::comparison::Comparison::Lesser),
+                TokenType::Comparison(crate::ast::comparison::Comparison::Lesser),
+            ),
+        ]
+        .contains(&(
+            self.first().token_type.clone(),
+            self.second().token_type.clone(),
+        )) {
+            let token = self.eat();
+            let _ = self.eat();
 
-                left = Node::new(
-                    NodeType::BinaryExpression {
-                        left: Box::new(left),
-                        right: Box::new(self.parse_additive_expression()?),
-                        operator: op,
+            left = Node::new(
+                NodeType::BinaryExpression {
+                    left: Box::new(left),
+                    right: Box::new(self.parse_additive_expression()),
+                    operator: match token.token_type {
+                        TokenType::Comparison(crate::ast::comparison::Comparison::Greater) => {
+                            BinaryOperator::Shr
+                        }
+                        _ => BinaryOperator::Shl,
                     },
-                    token.span,
-                );
-            } else {
-                break;
-            }
+                },
+                token.span,
+            );
         }
 
-        Ok(left)
+        left
     }
 
-    pub fn parse_power_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = self.parse_as_expression()?;
+    pub fn parse_power_expression(&mut self) -> Node {
+        let mut left = self.parse_as_expression();
 
         while let TokenType::BinaryOperator(BinaryOperator::Pow) = self.first().token_type.clone() {
             let token = self.eat();
@@ -222,50 +240,64 @@ impl Parser {
             left = Node::new(
                 NodeType::BinaryExpression {
                     left: Box::new(left),
-                    right: Box::new(self.parse_as_expression()?),
+                    right: Box::new(self.parse_as_expression()),
                     operator: BinaryOperator::Pow,
                 },
                 token.span,
             );
         }
 
-        Ok(left)
+        left
     }
 
-    pub fn parse_comparison_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = self.parse_in_expression()?;
-        while let TokenType::Comparison(comparison) = self.first().token_type.clone() {
+    pub fn parse_comparison_expression(&mut self) -> Node {
+        let mut left = self.parse_in_expression();
+        while let TokenType::Comparison(mut comparison) = self.first().token_type.clone() {
             let token = self.eat();
+
+            if self.first().token_type == TokenType::Equals {
+                match comparison {
+                    crate::ast::comparison::Comparison::Greater => {
+                        let _ = self.eat();
+                        comparison = crate::ast::comparison::Comparison::GreaterEqual;
+                    }
+                    crate::ast::comparison::Comparison::Lesser => {
+                        let _ = self.eat();
+                        comparison = crate::ast::comparison::Comparison::LesserEqual;
+                    }
+                    _ => {}
+                }
+            }
 
             left = Node::new(
                 NodeType::ComparisonExpression {
                     left: Box::new(left),
-                    right: Box::new(self.parse_in_expression()?),
+                    right: Box::new(self.parse_in_expression()),
                     operator: comparison,
                 },
                 token.span,
             );
         }
 
-        Ok(left)
+        left
     }
 
-    pub fn parse_boolean_expression(&mut self) -> Result<Node, ParserError> {
-        let mut left = self.parse_comparison_expression()?;
-        while let TokenType::Boolean(comparison) = self.first().token_type.clone() {
+    pub fn parse_boolean_expression(&mut self) -> Node {
+        let mut left = self.parse_comparison_expression();
+        while let TokenType::Boolean(operator) = self.first().token_type.clone() {
             let token = self.eat();
 
             left = Node::new(
                 NodeType::BooleanExpression {
                     left: Box::new(left),
-                    right: Box::new(self.parse_comparison_expression()?),
-                    operator: comparison,
+                    right: Box::new(self.parse_comparison_expression()),
+                    operator,
                 },
                 token.span,
             );
         }
 
-        Ok(left)
+        left
     }
 }
 

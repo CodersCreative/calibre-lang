@@ -1,8 +1,7 @@
-use core::panic;
-
 use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
+use calibre_common::errors::ASTError;
 use calibre_parser::ast::comparison::Comparison;
 
 impl InterpreterEnvironment {
@@ -34,26 +33,20 @@ fn value_handle<T: PartialEq + PartialOrd>(op: &Comparison, left: T, right: T) -
 
 pub fn handle(
     op: &Comparison,
-    env: &InterpreterEnvironment,
-    scope: &u64,
+    _env: &InterpreterEnvironment,
+    _scope: &u64,
     left: RuntimeValue,
     right: RuntimeValue,
 ) -> Result<RuntimeValue, InterpreterErr> {
-    let (left, right) = if left == RuntimeValue::Null || right == RuntimeValue::Null {
-        (left, right)
-    } else {
-        left.clone().make_similar(env, scope, right)?
-    };
-
-    Ok(RuntimeValue::Bool(match left {
+    match left {
         RuntimeValue::Int(x) => match right {
-            RuntimeValue::Int(y) => value_handle(op, x, y),
-            _ => panic!(),
+            RuntimeValue::Int(y) => Ok(RuntimeValue::Bool(value_handle(op, x, y))),
+            _ => Err(ASTError::ComparisonOperation(left, right).into()),
         },
         RuntimeValue::Float(x) => match right {
-            RuntimeValue::Float(y) => value_handle(op, x, y),
-            _ => panic!(),
+            RuntimeValue::Float(y) => Ok(RuntimeValue::Bool(value_handle(op, x, y))),
+            _ => Err(ASTError::ComparisonOperation(left, right).into()),
         },
-        _ => value_handle(op, left, right),
-    }))
+        _ => Ok(RuntimeValue::Bool(value_handle(op, left, right))),
+    }
 }

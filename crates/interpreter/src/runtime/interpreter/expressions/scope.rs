@@ -69,7 +69,7 @@ impl InterpreterEnvironment {
             }
             if let Some(d) = arguments.iter().find(|x| {
                 if let NodeType::Identifier(key) = &x.0.node_type {
-                    key == k && x.1.is_some()
+                    &key.to_string() == k && x.1.is_some()
                 } else {
                     false
                 }
@@ -108,7 +108,9 @@ impl InterpreterEnvironment {
                 continue;
             }
 
-            return Err(InterpreterErr::RefNonVar(arguments[0].0.node_type.clone()));
+            if !arguments.is_empty() {
+                return Err(InterpreterErr::RefNonVar(arguments[0].0.node_type.clone()));
+            }
         }
 
         Ok(new_scope)
@@ -128,9 +130,10 @@ impl InterpreterEnvironment {
 
         let mut result: RuntimeValue = RuntimeValue::Null;
         for statement in body.into_iter() {
-            match self.stop {
+            result = match self.stop {
                 Some(_) if is_temp => return Ok(result),
-                _ => result = self.evaluate(&new_scope, statement)?,
+                _ if !is_temp => self.evaluate_global(&new_scope, statement)?,
+                _ => self.evaluate(&new_scope, statement)?,
             }
         }
 

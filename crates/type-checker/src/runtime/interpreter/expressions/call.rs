@@ -1,5 +1,5 @@
 use calibre_common::environment::{Type, Variable};
-use calibre_parser::ast::{Node, NodeType, ObjectType, RefMutability, VarType};
+use calibre_parser::ast::{Node, NodeType, ObjectType, VarType};
 
 use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
@@ -40,7 +40,7 @@ impl CheckerEnvironment {
 
                                 (
                                     Node::new(
-                                        NodeType::Identifier(format!("$-{}", counter)),
+                                        NodeType::Identifier(format!("$-{}", counter).into()),
                                         location.span,
                                     ),
                                     None,
@@ -58,7 +58,7 @@ impl CheckerEnvironment {
                     .filter(|(i, x)| {
                         for arg in arguments.iter() {
                             if let (NodeType::Identifier(y), Some(_)) = (&arg.0.node_type, &arg.1) {
-                                if &x.0 == y {
+                                if x.0 == y.to_string() {
                                     return false;
                                 }
                             }
@@ -70,13 +70,16 @@ impl CheckerEnvironment {
                     .collect();
 
                 if params.iter().filter(|x| !x.2).count() > 0 {
-                    let arguments: Vec<(Node, Option<Node>)> = [
+                    let _arguments: Vec<(Node, Option<Node>)> = [
                         arguments,
                         params
                             .iter()
                             .map(|x| {
                                 (
-                                    Node::new(NodeType::Identifier(x.0.clone()), location.span),
+                                    Node::new(
+                                        NodeType::Identifier(x.0.clone().into()),
+                                        location.span,
+                                    ),
                                     None,
                                 )
                             })
@@ -107,8 +110,8 @@ impl CheckerEnvironment {
                 }
             }
 
-            Ok(match *return_type.clone() {
-                Some(x) => x,
+            Ok(match return_type.clone() {
+                Some(x) => *x,
                 _ => RuntimeType::Null,
             })
         } else {
@@ -123,20 +126,17 @@ impl CheckerEnvironment {
         arguments: Vec<(Node, Option<Node>)>,
     ) -> Result<RuntimeType, InterpreterErr> {
         if let NodeType::Identifier(object_name) = caller.node_type.clone() {
-            if let Ok(Type::Struct(ObjectType::Tuple(params))) =
-                self.get_object_type(scope, &object_name)
-            {
-                if arguments.len() == params.len() {
-                    let mut args = Vec::new();
-                    for (i, arg) in arguments.into_iter().enumerate() {
-                        args.push(self.evaluate(scope, arg.0)?);
-                    }
+            if let Ok(pointer) = self.get_object_pointer(scope, &object_name) {
+                if let Ok(Type::Struct(ObjectType::Tuple(params))) = self.get_object_type(&pointer)
+                {
+                    if arguments.len() == params.len() {
+                        let mut args = Vec::new();
+                        for arg in arguments.into_iter() {
+                            args.push(self.evaluate(scope, arg.0)?);
+                        }
 
-                    return Ok(RuntimeType::Struct(
-                        scope.clone(),
-                        Some(object_name),
-                        ObjectType::Tuple(args),
-                    ));
+                        return Ok(RuntimeType::Struct(Some(pointer), ObjectType::Tuple(args)));
+                    }
                 }
             }
         }
@@ -150,8 +150,8 @@ impl CheckerEnvironment {
             RuntimeType::List(x) if arguments.len() == 1 => {
                 match self.evaluate(scope, arguments[0].0.clone())? {
                     RuntimeType::Int if arguments.len() == 1 => {
-                        return Ok(match *x.clone() {
-                            Some(x) => x,
+                        return Ok(match x.clone() {
+                            Some(x) => *x,
                             None => RuntimeType::Dynamic,
                         });
                     }

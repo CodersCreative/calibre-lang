@@ -1,5 +1,5 @@
 use calibre_common::environment::Variable;
-use calibre_parser::ast::{LoopType, Node, NodeType, RefMutability, VarType};
+use calibre_parser::ast::{LoopType, Node, NodeType, VarType};
 
 use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
@@ -19,10 +19,10 @@ impl CheckerEnvironment {
                 let location = self.get_location(scope, range_node.span);
                 let _ = self.push_var(
                     &new_scope,
-                    identifier.clone(),
+                    identifier.to_string(),
                     Variable {
-                        value: match *x {
-                            Some(x) => x,
+                        value: match x {
+                            Some(x) => *x,
                             _ => RuntimeType::Dynamic,
                         },
                         var_type: VarType::Immutable,
@@ -34,7 +34,7 @@ impl CheckerEnvironment {
             } else if let RuntimeType::Range = range {
                 let new_scope = self.get_new_scope(
                     scope,
-                    vec![(identifier.clone(), RuntimeType::Int, None)],
+                    vec![(identifier.to_string(), RuntimeType::Int, None)],
                     vec![(Node::new(NodeType::IntLiteral(0), range_node.span), None)],
                 )?;
                 result = self.evaluate(&new_scope, body.clone())?;
@@ -52,7 +52,7 @@ impl CheckerEnvironment {
                     return self.evaluate_loop_declaration(
                         scope,
                         LoopType::For(
-                            String::from("hidden_index"),
+                            String::from("hidden_index").into(),
                             Node::new(
                                 NodeType::RangeDeclaration {
                                     from: Box::new(filler_int.clone()),
@@ -68,14 +68,14 @@ impl CheckerEnvironment {
                 RuntimeType::Int => {
                     return self.evaluate_loop_declaration(
                         scope,
-                        LoopType::For(String::from("hidden_index"), filler_int),
+                        LoopType::For(String::from("hidden_index").into(), filler_int),
                         body,
                     );
                 }
                 RuntimeType::Float => {
                     return self.evaluate_loop_declaration(
                         scope,
-                        LoopType::For(String::from("hidden_index"), filler_int),
+                        LoopType::For(String::from("hidden_index").into(), filler_int),
                         body,
                     );
                 }

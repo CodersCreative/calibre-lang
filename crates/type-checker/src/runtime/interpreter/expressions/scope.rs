@@ -1,11 +1,7 @@
 use calibre_common::environment::{Location, Variable};
 use calibre_parser::ast::{Node, NodeType, RefMutability, VarType};
 
-use crate::runtime::{
-    interpreter::{InterpreterErr, expressions::member::MembrExprPathRes},
-    scope::CheckerEnvironment,
-    values::RuntimeType,
-};
+use crate::runtime::{interpreter::InterpreterErr, scope::CheckerEnvironment, values::RuntimeType};
 
 impl CheckerEnvironment {
     pub fn get_new_scope_with_values(
@@ -70,7 +66,7 @@ impl CheckerEnvironment {
             }
             if let Some(d) = arguments.iter().find(|x| {
                 if let NodeType::Identifier(key) = &x.0.node_type {
-                    key == k && x.1.is_some()
+                    &key.to_string() == k && x.1.is_some()
                 } else {
                     false
                 }
@@ -129,10 +125,13 @@ impl CheckerEnvironment {
 
         let mut result: RuntimeType = RuntimeType::Null;
         for statement in body.into_iter() {
-            match self.stop {
+            let val = match self.stop {
                 Some(_) if is_temp => return Ok(result),
-                _ => result = self.evaluate(&new_scope, statement)?,
-            }
+                _ if !is_temp => self.evaluate_global(&new_scope, statement),
+                _ => self.evaluate(&new_scope, statement),
+            };
+
+            result = self.unwrap_type(val);
         }
 
         if is_temp {

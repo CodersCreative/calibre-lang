@@ -2,30 +2,60 @@ use calibre_interpreter::runtime::{scope::InterpreterEnvironment, values::Runtim
 use calibre_parser::lexer::Tokenizer;
 use calibre_type_checker::runtime::scope::CheckerEnvironment;
 use clap::Parser;
+use miette::{IntoDiagnostic, Result};
 use rustyline::{DefaultEditor, error::ReadlineError};
-use std::{error::Error, fs, path::PathBuf, str::FromStr};
+use std::{fs, io::Write, path::PathBuf, process::Command, str::FromStr};
 
-fn repl() -> Result<(), Box<dyn Error>> {
+fn repl(file: Option<&PathBuf>) -> Result<()> {
     let mut env = InterpreterEnvironment::new();
-    let mut checker = CheckerEnvironment::new();
+    let mut tokenizer = Tokenizer::default();
     let mut parser = calibre_parser::Parser::default();
-    let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
     let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl")?, None);
-    let mut editor = DefaultEditor::new()?;
+    let mut editor = DefaultEditor::new().into_diagnostic()?;
+    let mut logical_history = Vec::new();
+
+    if let Some(file) = file {
+        logical_history.push(format!("LOAD {}", file.to_str().unwrap()));
+
+        match perform_repl_line(
+            &mut env,
+            &scope,
+            &mut parser,
+            &mut tokenizer,
+            &logical_history,
+            logical_history.last().unwrap().clone(),
+        ) {
+            None => {}
+            Some(RuntimeValue::Null) | Some(RuntimeValue::Ref(_, _)) => {}
+            Some(val) => {
+                println!("{}", val.to_string());
+            }
+        }
+        println!("Successfully Loaded : {}", file.to_str().unwrap());
+    }
+
     loop {
         let readline = editor.readline(">> ");
         match readline {
             Ok(line) => {
-                let mut tokenizer = Tokenizer::default();
-                let program = parser
-                    .produce_ast(tokenizer.tokenize(line).unwrap())
-                    .unwrap();
-                let _ = checker.evaluate(&checker_scope, program.clone())?;
-                let val = env.evaluate(&scope, program)?;
+                editor.add_history_entry(line.clone()).into_diagnostic()?;
 
-                if val != RuntimeValue::Null {
-                    println!("{}", val.to_string());
+                match perform_repl_line(
+                    &mut env,
+                    &scope,
+                    &mut parser,
+                    &mut tokenizer,
+                    &logical_history,
+                    line.clone(),
+                ) {
+                    None => continue,
+                    Some(RuntimeValue::Null) | Some(RuntimeValue::Ref(_, _)) => {}
+                    Some(val) => {
+                        println!("{}", val.to_string());
+                    }
                 }
+
+                logical_history.push(line);
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
@@ -45,18 +75,189 @@ fn repl() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn file(path: &str) -> Result<(), Box<dyn Error>> {
+fn perform_repl_line(
+    env: &mut InterpreterEnvironment,
+    scope: &u64,
+    parser: &mut calibre_parser::Parser,
+    tokenizer: &mut Tokenizer,
+    logical_history: &[String],
+    line: String,
+) -> Option<RuntimeValue> {
+    let mut perform_line = |line: String| -> Option<RuntimeValue> {
+        let tokens: Vec<calibre_parser::lexer::Token> = match tokenizer.tokenize(line) {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("Unable to parse input due to : {:?}.\nPlease Retry.", e);
+                return None;
+            }
+        }
+        .into_iter()
+        .filter(|x| x.token_type != calibre_parser::lexer::TokenType::Comment)
+        .collect();
+
+        if tokens.is_empty() {
+            return Some(RuntimeValue::Null);
+        }
+
+        let program = parser.produce_ast(tokens);
+
+        if !parser.errors.is_empty() {
+            eprintln!(
+                "Unable to parse input due to : {:?}.\nPlease Retry.",
+                parser.errors
+            );
+            return None;
+        }
+        let calibre_parser::ast::NodeType::ScopeDeclaration {
+            body: program,
+            is_temp: _,
+        } = program.node_type
+        else {
+            eprintln!("Unexpected node after parsing");
+            return None;
+        };
+
+        let mut val = RuntimeValue::Null;
+
+        for node in program {
+            let res = if let Ok(x) = env.evaluate_global(&scope, node.clone()) {
+                Ok(x)
+            } else {
+                env.evaluate(&scope, node)
+            };
+
+            match res {
+                Ok(x) => val = x,
+                Err(e) => {
+                    eprintln!("Error found in line : {}", e);
+                }
+            }
+        }
+        Some(val)
+    };
+    if let Some(x) = line.split_whitespace().nth(0) {
+        match x.trim() {
+            "SAVE" => {
+                let path = line.split_whitespace().nth(1).unwrap_or("repl.cl");
+
+                let mut file = match fs::File::create(&path) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        eprintln!("Error Saving : {e}");
+                        return None;
+                    }
+                };
+                let mut txt = String::from("// CLREPL\n");
+
+                for line in logical_history.iter() {
+                    txt.push_str(&format!("\n{line}"));
+                }
+
+                let _ = match file.write_all(txt.as_bytes()) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        eprintln!("Error Saving : {e}");
+                        return None;
+                    }
+                };
+
+                return Some(RuntimeValue::Null);
+            }
+            "LOAD" => {
+                let contents =
+                    match fs::read_to_string(line.split_whitespace().nth(1).unwrap_or("repl.cl")) {
+                        Ok(x) => x,
+                        Err(e) => {
+                            eprintln!("Error Loading : {e}");
+                            return None;
+                        }
+                    };
+                let mut val = RuntimeValue::Null;
+                for line2 in contents.lines().skip(2) {
+                    if let Some(x) = line2.split_whitespace().nth(0) {
+                        match x.trim() {
+                            "SAVE" => continue,
+                            "LOAD"
+                                if line2.split_whitespace().nth(1)
+                                    == line.split_whitespace().nth(1) =>
+                            {
+                                continue;
+                            }
+                            _ => {}
+                        }
+                    }
+                    val = perform_repl_line(
+                        env,
+                        scope,
+                        parser,
+                        tokenizer,
+                        logical_history,
+                        line2.to_string(),
+                    )
+                    .unwrap_or(RuntimeValue::Null);
+                }
+
+                return Some(val);
+            }
+            _ => {}
+        }
+    }
+
+    perform_line(line)
+}
+
+fn file(
+    path: &PathBuf,
+    use_checker: bool,
+    args: Vec<(calibre_parser::ast::Node, Option<calibre_parser::ast::Node>)>,
+) -> Result<()> {
     let mut env = InterpreterEnvironment::new();
-    let mut checker = CheckerEnvironment::new();
     let mut parser = calibre_parser::Parser::default();
-    let checker_scope = checker.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
-    let scope = env.new_scope_with_stdlib(None, PathBuf::from_str(path)?, None);
+    let scope = env.new_scope_with_stdlib(None, path.clone(), None);
     let mut tokenizer = Tokenizer::default();
-    let program = parser
-        .produce_ast(tokenizer.tokenize(fs::read_to_string(path)?).unwrap())
-        .unwrap();
-    let _ = checker.evaluate(&checker_scope, program.clone())?;
-    let _ = env.evaluate(&scope, program)?;
+    let contents = fs::read_to_string(path).into_diagnostic()?;
+    if contents.starts_with("// CLREPL") {
+        println!("File is a REPL file switching to REPL.");
+        return repl(Some(path));
+    }
+
+    let program = parser.produce_ast(tokenizer.tokenize(contents)?);
+
+    if !parser.errors.is_empty() {
+        return Err(
+            calibre_type_checker::runtime::interpreter::InterpreterErr::from(parser.errors).into(),
+        );
+    }
+
+    if use_checker {
+        let mut checker = CheckerEnvironment::new();
+        let checker_scope = checker.new_scope_with_stdlib(None, path.clone(), None);
+        let _ = checker.evaluate(&checker_scope, program.clone())?;
+
+        if !checker.errors.is_empty() {
+            eprintln!("Type checker errors:");
+
+            for err in &checker.errors {
+                eprintln!("{}", err)
+            }
+        }
+    }
+
+    let _ = env.evaluate(&scope, program).into_diagnostic()?;
+
+    let _ = env
+        .evaluate(
+            &scope,
+            calibre_parser::ast::Node::new_from_type(
+                calibre_parser::ast::NodeType::CallExpression(
+                    Box::new(calibre_parser::ast::Node::new_from_type(
+                        calibre_parser::ast::NodeType::Identifier("main".to_string().into()),
+                    )),
+                    args,
+                ),
+            ),
+        )
+        .into_diagnostic()?;
 
     Ok(())
 }
@@ -64,16 +265,28 @@ fn file(path: &str) -> Result<(), Box<dyn Error>> {
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long)]
+    #[arg(index(1))]
     path: Option<String>,
+    #[arg(short, long)]
+    fmt: bool,
+    #[arg(short, long)]
+    check: bool,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     if let Some(path) = args.path {
-        file(&path)
+        if args.fmt {
+            Command::new("cal-fmt")
+                .arg("-a")
+                .arg(&path)
+                .output()
+                .into_diagnostic()?;
+        }
+        let path = PathBuf::from_str(&path)?;
+        file(&path, args.check, Vec::new())
     } else {
-        repl()
+        repl(None)
     }
 }

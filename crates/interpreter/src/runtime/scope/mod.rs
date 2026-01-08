@@ -18,13 +18,6 @@ pub struct InterpreterEnvironment {
     pub stop: Option<StopValue>,
 }
 
-// impl Into<&Environment<RuntimeValue, RuntimeType>> for &InterpreterEnvironment {
-//     fn into(self) -> &Environment<RuntimeValue, RuntimeType> {
-//         &self.env
-//     }
-// }
-//
-//
 impl InterpreterEnvironment {
     pub fn new() -> Self {
         Self {
@@ -61,18 +54,20 @@ impl InterpreterEnvironment {
                         let mut parser = Parser::default();
 
                         let mut tokenizer = Tokenizer::default();
-                        let program = parser
-                            .produce_ast(
-                                tokenizer
-                                    .tokenize(
-                                        fs::read_to_string(
-                                            self.scopes.get(&scope).unwrap().path.clone(),
-                                        )
-                                        .unwrap(),
+                        let program = parser.produce_ast(
+                            tokenizer
+                                .tokenize(
+                                    fs::read_to_string(
+                                        self.scopes.get(&scope).unwrap().path.clone(),
                                     )
                                     .unwrap(),
-                            )
-                            .unwrap();
+                                )
+                                .unwrap(),
+                        );
+
+                        if !parser.errors.is_empty() {
+                            return Err(parser.errors.into());
+                        }
 
                         let _ = self.evaluate(&scope, program)?;
                         scope

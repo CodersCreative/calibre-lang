@@ -4,8 +4,8 @@ use calibre_parser::ast::binary::BinaryOperator;
 
 pub fn handle(
     op: &BinaryOperator,
-    env: &CheckerEnvironment,
-    scope: &u64,
+    _env: &CheckerEnvironment,
+    _scope: &u64,
     left: RuntimeType,
     right: RuntimeType,
 ) -> Result<RuntimeType, InterpreterErr> {
@@ -57,7 +57,7 @@ pub fn handle(
             | (RuntimeType::Int, RuntimeType::Bool)
             | (RuntimeType::Bool, RuntimeType::Bool) => Ok(RuntimeType::Int),
             (RuntimeType::List(x), y) => {
-                if let Some(z) = *x.clone() {
+                if let Some(z) = x.clone() {
                     if !z.is_type(&y) {
                         left.panic_operator(&right, op).map_err(|e| e.into())
                     } else {
@@ -79,7 +79,7 @@ pub fn handle(
             | (RuntimeType::Int, RuntimeType::Bool)
             | (RuntimeType::Bool, RuntimeType::Bool) => Ok(RuntimeType::Int),
             (y, RuntimeType::List(x)) => {
-                if let Some(z) = *x.clone() {
+                if let Some(z) = x.clone() {
                     if !z.is_type(&y) {
                         left.panic_operator(&right, op).map_err(|e| e.into())
                     } else {
@@ -95,7 +95,6 @@ pub fn handle(
             }
             _ => left.panic_operator(&right, op).map_err(|e| e.into()),
         },
-        _ => unimplemented!(),
     }
 }
 

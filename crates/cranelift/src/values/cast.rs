@@ -28,16 +28,12 @@ impl RuntimeValue {
                 RuntimeType::Float => self.clone(),
                 _ => todo!(),
             },
-            RuntimeType::List(x) => {
-                if let Some(_x) = *x {
-                    if let RuntimeType::List(y) = t {
-                        if let Some(y) = *y {
-                            return self.clone();
-                        }
-                    }
+            RuntimeType::List(_) => {
+                if let RuntimeType::List(_) = t {
+                    return self.clone();
                 }
 
-                todo!()
+                unimplemented!()
             }
             RuntimeType::Str => {
                 println!("{:?}", t);
@@ -61,31 +57,21 @@ impl RuntimeValue {
                 RuntimeType::Bool => (self.clone(), other.clone()),
                 RuntimeType::Int => (self.into_type(ctx, RuntimeType::Int), other.clone()),
                 RuntimeType::Char => (self.into_type(ctx, RuntimeType::Char), other.clone()),
-                RuntimeType::Float => {
-                    (self.into_type(ctx, RuntimeType::Float), other.clone())
-                }
+                RuntimeType::Float => (self.into_type(ctx, RuntimeType::Float), other.clone()),
                 _ => todo!(),
             },
             RuntimeType::Int => match other.data_type.clone() {
                 RuntimeType::Bool => (self.clone(), other.into_type(ctx, RuntimeType::Int)),
                 RuntimeType::Char => (self.clone(), other.into_type(ctx, RuntimeType::Int)),
-                RuntimeType::Int => (
-                    self.clone(),
-                    other.clone(),
-                ),
-                RuntimeType::Float => {
-                    (self.into_type(ctx, RuntimeType::Float), other.clone())
-                }
+                RuntimeType::Int => (self.clone(), other.clone()),
+                RuntimeType::Float => (self.into_type(ctx, RuntimeType::Float), other.clone()),
                 _ => todo!("{other:?}"),
             },
             RuntimeType::Float => match other.data_type.clone() {
-                RuntimeType::Int
-                | RuntimeType::Bool
-                | RuntimeType::Char => (self.clone(), other.into_type(ctx, RuntimeType::Float)),
-                RuntimeType::Float => (
-                    self.clone(),
-                    other.clone(),
-                ),
+                RuntimeType::Int | RuntimeType::Bool | RuntimeType::Char => {
+                    (self.clone(), other.into_type(ctx, RuntimeType::Float))
+                }
+                RuntimeType::Float => (self.clone(), other.clone()),
                 _ => todo!(),
             },
             RuntimeType::List(_) => (self.clone(), other.clone()),

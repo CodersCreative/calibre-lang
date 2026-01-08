@@ -1,5 +1,8 @@
-use calibre_common::{environment::Type, errors::ValueErr};
-use calibre_parser::ast::{ObjectType, ParserDataType};
+use calibre_common::{
+    environment::{InterpreterFrom, Type},
+    errors::ValueErr,
+};
+use calibre_parser::ast::{ObjectType, ParserDataType, ParserInnerType};
 use std::{collections::HashMap, fmt::Debug};
 
 use crate::runtime::scope::CheckerEnvironment;
@@ -15,17 +18,17 @@ pub enum RuntimeType {
     Str,
     Char,
     Tuple(Vec<RuntimeType>),
-    List(Box<Option<RuntimeType>>),
+    List(Option<Box<RuntimeType>>),
     Range,
     Option(Box<RuntimeType>),
     Result(Box<RuntimeType>, Box<RuntimeType>),
     Function {
-        return_type: Box<Option<RuntimeType>>,
+        return_type: Option<Box<RuntimeType>>,
         parameters: Vec<(String, RuntimeType, bool)>,
         is_async: bool,
     },
-    Enum(u64, String, Option<ObjectType<RuntimeType>>),
-    Struct(u64, Option<String>, ObjectType<RuntimeType>),
+    Enum(u64, Option<ObjectType<RuntimeType>>),
+    Struct(Option<u64>, ObjectType<RuntimeType>),
     Ref(Box<RuntimeType>),
     Null,
     NativeFunction(Box<RuntimeType>),
@@ -68,7 +71,8 @@ impl calibre_common::environment::RuntimeValue for RuntimeType {
             ),
             ("some", RuntimeType::Option(Box::new(RuntimeType::Dynamic))),
             ("len", RuntimeType::Int),
-            ("range", RuntimeType::Range),
+            ("panic", RuntimeType::Null),
+            ("tuple", RuntimeType::Dynamic),
             ("trim", RuntimeType::Str),
             ("console.out", RuntimeType::Null),
             ("console.input", RuntimeType::Str),
@@ -92,46 +96,96 @@ impl calibre_common::environment::RuntimeValue for RuntimeType {
         map
     }
 }
-impl From<ParserDataType> for RuntimeType {
-    fn from(value: ParserDataType) -> Self {
-        match value {
-            ParserDataType::Float => Self::Float,
-            ParserDataType::Dynamic => Self::Dynamic,
-            ParserDataType::Int => Self::Int,
-            ParserDataType::Bool => Self::Bool,
-            ParserDataType::Str => Self::Str,
-            ParserDataType::Char => Self::Char,
-            ParserDataType::Tuple(x) => {
-                Self::Tuple(x.into_iter().map(|x| RuntimeType::from(x)).collect())
+
+impl InterpreterFrom<ParserDataType> for RuntimeType {
+    type Interpreter = CheckerEnvironment;
+    fn interpreter_from(
+        env: &Self::Interpreter,
+        scope: &u64,
+        value: ParserDataType,
+    ) -> Result<Self, calibre_common::errors::ScopeErr> {
+        Ok(match value.data_type {
+            ParserInnerType::Float => Self::Float,
+            ParserInnerType::Dynamic => Self::Dynamic,
+            ParserInnerType::Int => Self::Int,
+            ParserInnerType::Bool => Self::Bool,
+            ParserInnerType::Str => Self::Str,
+            ParserInnerType::Char => Self::Char,
+            ParserInnerType::Scope(mut nodes) => {
+                let typ = nodes.remove(nodes.len() - 1);
+                let list = nodes
+                    .into_iter()
+                    .map(|x| {
+                        let ParserInnerType::Struct(Some(x)) = x.data_type else {
+                            panic!()
+                        };
+                        x
+                    })
+                    .collect();
+                let scope = env.get_scope_list(scope.clone(), list)?;
+
+                RuntimeType::interpreter_from(env, &scope, typ)?
             }
-            ParserDataType::List(x) => Self::List(Box::new(match *x {
-                Some(x) => Some(RuntimeType::from(x)),
+            ParserInnerType::Tuple(x) => Self::Tuple(
+                x.into_iter()
+                    .map(|x| RuntimeType::interpreter_from(env, scope, x).unwrap())
+                    .collect(),
+            ),
+            ParserInnerType::List(x) => Self::List(match x {
+                Some(x) => Some(Box::new(RuntimeType::interpreter_from(env, scope, *x)?)),
                 None => None,
-            })),
-            ParserDataType::Ref(x, _) => Self::Ref(Box::new(RuntimeType::from(*x))),
-            ParserDataType::Range => Self::Range,
-            ParserDataType::Struct(x) => Self::Struct(0, x, ObjectType::Tuple(Vec::new())),
-            ParserDataType::Function {
+            }),
+            ParserInnerType::Ref(x, _) => {
+                Self::Ref(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
+            }
+            ParserInnerType::Range => Self::Range,
+
+            ParserInnerType::Struct(x) => {
+                if let Some(x) = x {
+                    let y = env.get_object_pointer(scope, &x)?;
+
+                    if let Some(obj) = env.objects.get(&y) {
+                        match &obj.object_type {
+                            Type::Enum(_) => Self::Enum(y, None),
+                            Type::Struct(_) => Self::Struct(Some(y), ObjectType::Tuple(Vec::new())),
+                            Type::NewType(x) => x.clone(),
+                        }
+                    } else {
+                        Self::Struct(Some(y), ObjectType::Tuple(Vec::new()))
+                    }
+                } else {
+                    Self::Struct(None, ObjectType::Tuple(Vec::new()))
+                }
+            }
+            ParserInnerType::Function {
                 return_type,
                 parameters,
                 is_async,
             } => Self::Function {
-                return_type: Box::new(match *return_type {
-                    Some(x) => Some(RuntimeType::from(x)),
+                return_type: match return_type {
+                    Some(x) => Some(Box::new(RuntimeType::interpreter_from(env, scope, *x)?)),
                     None => None,
-                }),
+                },
                 parameters: parameters
                     .into_iter()
-                    .map(|x| (String::new(), RuntimeType::from(x), false))
+                    .map(|x| {
+                        (
+                            String::new(),
+                            RuntimeType::interpreter_from(env, scope, x).unwrap(),
+                            false,
+                        )
+                    })
                     .collect(),
                 is_async,
             },
-            ParserDataType::Option(x) => Self::Option(Box::new(RuntimeType::from(*x))),
-            ParserDataType::Result(x, y) => Self::Result(
-                Box::new(RuntimeType::from(*x)),
-                Box::new(RuntimeType::from(*y)),
+            ParserInnerType::Option(x) => {
+                Self::Option(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
+            }
+            ParserInnerType::Result(x, y) => Self::Result(
+                Box::new(RuntimeType::interpreter_from(env, scope, *x)?),
+                Box::new(RuntimeType::interpreter_from(env, scope, *y)?),
             ),
-        }
+        })
     }
 }
 
@@ -178,7 +232,7 @@ impl RuntimeType {
 
         let list_case = || -> Result<RuntimeType, ValueErr<RuntimeType, RuntimeType>> {
             if let RuntimeType::List(x) = t.clone() {
-                if let Some(x) = *x {
+                if let Some(x) = x {
                     if let Ok(_) = self.into_type(env, scope, &x) {
                         return Ok(t.clone());
                     } else {
@@ -200,12 +254,16 @@ impl RuntimeType {
             (RuntimeType::Int, RuntimeType::Range)
             | (RuntimeType::Range, RuntimeType::Int)
             | (RuntimeType::Float, RuntimeType::Range)
-            | (RuntimeType::Range, RuntimeType::Float) => Ok(t.clone()),
-            (RuntimeType::Int, RuntimeType::Str)
+            | (RuntimeType::Range, RuntimeType::Float)
+            | (RuntimeType::Int, RuntimeType::Str)
+            | (RuntimeType::Bool, RuntimeType::Int)
+            | (RuntimeType::Int, RuntimeType::Bool)
+            | (RuntimeType::Bool, RuntimeType::Float)
+            | (RuntimeType::Float, RuntimeType::Bool)
             | (RuntimeType::Str, RuntimeType::Int)
             | (RuntimeType::Float, RuntimeType::Str)
-            | (RuntimeType::Str, RuntimeType::Float) => Ok(t.clone()),
-            (RuntimeType::Int, RuntimeType::Char)
+            | (RuntimeType::Str, RuntimeType::Float)
+            | (RuntimeType::Int, RuntimeType::Char)
             | (RuntimeType::Char, RuntimeType::Int)
             | (RuntimeType::Float, RuntimeType::Char)
             | (RuntimeType::Char, RuntimeType::Float) => Ok(t.clone()),
@@ -225,9 +283,9 @@ impl RuntimeType {
                     return panic_type();
                 };
 
-                if let Some(x) = &*return_type {
-                    if let Some(y) = *val_type {
-                        if !y.is_type(x) {
+                if let Some(x) = return_type {
+                    if let Some(y) = val_type {
+                        if !y.is_type(&*x) {
                             return panic_type();
                         }
                     } else {
@@ -241,13 +299,12 @@ impl RuntimeType {
 
                 Ok(self.clone())
             }
-            (RuntimeType::Struct(_, _, _), RuntimeType::Struct(_, None, _)) => Ok(self.clone()),
+            (RuntimeType::Struct(_, _), RuntimeType::Struct(None, _)) => Ok(self.clone()),
             (
-                RuntimeType::Struct(o, _, ObjectType::Tuple(x)),
-                RuntimeType::Struct(_, Some(identifier), _),
+                RuntimeType::Struct(Some(_o), ObjectType::Tuple(x)),
+                RuntimeType::Struct(Some(t_o), _),
             ) => {
-                let Ok(Type::Struct(ObjectType::Tuple(properties))) =
-                    env.get_object_type(&o, &identifier)
+                let Ok(Type::Struct(ObjectType::Tuple(properties))) = env.get_object_type(&t_o)
                 else {
                     return panic_type();
                 };
@@ -262,18 +319,15 @@ impl RuntimeType {
                 }
 
                 Ok(RuntimeType::Struct(
-                    o,
-                    Some(identifier.to_string()),
+                    Some(t_o),
                     ObjectType::Tuple(new_values),
                 ))
             }
             (
-                RuntimeType::Struct(o, _, ObjectType::Map(x)),
-                RuntimeType::Struct(_, Some(identifier), _),
+                RuntimeType::Struct(Some(_o), ObjectType::Map(x)),
+                RuntimeType::Struct(Some(t_o), _),
             ) => {
-                let Type::Struct(ObjectType::Map(properties)) =
-                    env.get_object_type(&o, &identifier)?
-                else {
+                let Type::Struct(ObjectType::Map(properties)) = env.get_object_type(&t_o)? else {
                     return panic_type();
                 };
                 let mut new_values = HashMap::new();
@@ -287,23 +341,19 @@ impl RuntimeType {
                     }
                 }
 
-                Ok(RuntimeType::Struct(
-                    o,
-                    Some(identifier.to_string()),
-                    ObjectType::Map(new_values),
-                ))
+                Ok(RuntimeType::Struct(Some(t_o), ObjectType::Map(new_values)))
             }
-            (RuntimeType::Enum(_, _, Some(z)), RuntimeType::Struct(w, None, _)) => {
-                Ok(RuntimeType::Struct(w, None, z.clone()))
+            (RuntimeType::Enum(_, Some(z)), RuntimeType::Struct(None, _)) => {
+                Ok(RuntimeType::Struct(None, z.clone()))
             }
-            (RuntimeType::Enum(_, _, Some(z)), RuntimeType::Struct(w, Some(_), _)) => {
-                match RuntimeType::Struct(w, None, z.clone()).into_type(env, scope, t) {
+            (RuntimeType::Enum(_, Some(z)), RuntimeType::Struct(Some(_), _)) => {
+                match RuntimeType::Struct(None, z.clone()).into_type(env, scope, t) {
                     Ok(x) => Ok(x),
                     Err(_) => panic_type(),
                 }
             }
-            (RuntimeType::Enum(_, x, _), RuntimeType::Enum(_, y, _)) if x == y => Ok(t.clone()),
-            (RuntimeType::List(_), t) => Ok(RuntimeType::List(Box::new(Some(t)))),
+            (RuntimeType::Enum(x, _), RuntimeType::Enum(y, _)) if x == y => Ok(t.clone()),
+            (RuntimeType::List(_), t) => Ok(RuntimeType::List(Some(Box::new(t)))),
             (RuntimeType::Option(x), t) => {
                 if let Ok(_) = x.into_type(env, scope, &t) {
                     Ok(t)
@@ -331,10 +381,6 @@ impl RuntimeType {
 
     pub fn is_type(&self, other: &RuntimeType) -> bool {
         if self == &RuntimeType::Dynamic || other == &RuntimeType::Dynamic {
-            true
-        } else if self == &RuntimeType::Int && other == &RuntimeType::Float
-            || self == &RuntimeType::Float && other == &RuntimeType::Int
-        {
             true
         } else {
             self == other

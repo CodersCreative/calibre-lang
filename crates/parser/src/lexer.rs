@@ -2,13 +2,29 @@ use crate::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperation, Comparison},
 };
-use std::{collections::HashMap, path::PathBuf};
+use miette::Diagnostic;
+use std::{collections::HashMap, fmt::Display, path::PathBuf};
 use thiserror::Error;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Location {
+    pub path: PathBuf,
+    pub span: Span,
+}
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Span {
     pub from: Position,
     pub to: Position,
+}
+
+impl Display for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({}:{}) -> ({}:{})",
+            self.from.line, self.from.col, self.to.line, self.to.col
+        )
+    }
 }
 
 impl Span {
@@ -24,7 +40,7 @@ impl Span {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Position {
     pub line: u32,
     pub col: u32,
@@ -32,17 +48,22 @@ pub struct Position {
 
 pub struct Tokenizer {
     pub include_comments: bool,
+    lines: Vec<String>,
     line: u32,
     col: u32,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum LexerError {
-    #[error("Unrecognized character '{0}'")]
-    Unrecognized(char),
-
-    #[error("Can only use short hand assignment with similar operators e.g. x++ or x--")]
-    BinaryOperatorShortHand,
+    #[error("Unrecognized character : '{ch}'")]
+    #[diagnostic(code(lexer::unrecognized))]
+    Unrecognized {
+        #[source_code]
+        line: String,
+        #[label("here")]
+        span: (usize, usize),
+        ch: char,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -63,16 +84,19 @@ pub enum TokenType {
     Float,
     Integer,
     String,
+    Char,
     Identifier,
     Equals,
     Open(Bracket),
     Close(Bracket),
     Colon,
+    Comment,
     Comma,
     Comparison(Comparison),
     Boolean(BooleanOperation),
     BinaryOperator(BinaryOperator),
     BinaryAssign(BinaryOperator),
+    BooleanAssign(BooleanOperation),
     Stop(StopValue),
     Not,
     Ref,
@@ -112,6 +136,7 @@ pub enum TokenType {
     Import,
     Type,
     WhiteSpace,
+    Debug,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
@@ -125,6 +150,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("fn"), TokenType::Func),
         (String::from("else"), TokenType::Else),
         (String::from("list"), TokenType::List),
+        (String::from("debug"), TokenType::Debug),
         (String::from("return"), TokenType::Stop(StopValue::Return)),
         (String::from("in"), TokenType::In),
         (String::from("break"), TokenType::Stop(StopValue::Break)),
@@ -157,43 +183,43 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
         (String::from("=>"), TokenType::FatArrow),
         (String::from(".."), TokenType::Range),
         (
-            String::from("**="),
-            TokenType::BinaryAssign(BinaryOperator::Pow),
-        ),
-        (
-            String::from("&="),
-            TokenType::BinaryOperator(BinaryOperator::BitAnd),
-        ),
-        (
-            String::from("|="),
-            TokenType::BinaryOperator(BinaryOperator::BitOr),
-        ),
-        (
             String::from("**"),
             TokenType::BinaryOperator(BinaryOperator::Pow),
         ),
         (
-            String::from("<<"),
-            TokenType::BinaryOperator(BinaryOperator::Shl),
+            String::from("**="),
+            TokenType::BinaryAssign(BinaryOperator::Pow),
         ),
         (
-            String::from(">>"),
-            TokenType::BinaryOperator(BinaryOperator::Shr),
+            String::from("<<="),
+            TokenType::BinaryAssign(BinaryOperator::Shl),
+        ),
+        (
+            String::from(">>="),
+            TokenType::BinaryAssign(BinaryOperator::Shr),
+        ),
+        (
+            String::from("&="),
+            TokenType::BinaryAssign(BinaryOperator::BitAnd),
+        ),
+        (
+            String::from("&&="),
+            TokenType::BooleanAssign(BooleanOperation::And),
+        ),
+        (
+            String::from("||="),
+            TokenType::BooleanAssign(BooleanOperation::Or),
         ),
         (
             String::from("&&"),
             TokenType::Boolean(BooleanOperation::And),
         ),
         (String::from("||"), TokenType::Boolean(BooleanOperation::Or)),
+        (
+            String::from("|="),
+            TokenType::BinaryAssign(BinaryOperator::BitOr),
+        ),
         (String::from("&mut"), TokenType::RefMut),
-        (
-            String::from(">="),
-            TokenType::Comparison(Comparison::GreaterEqual),
-        ),
-        (
-            String::from("<="),
-            TokenType::Comparison(Comparison::LesserEqual),
-        ),
         (String::from("=="), TokenType::Comparison(Comparison::Equal)),
         (
             String::from("!="),
@@ -212,6 +238,7 @@ pub struct Token {
 impl Default for Tokenizer {
     fn default() -> Self {
         Self {
+            lines: Vec::new(),
             include_comments: false,
             line: 1,
             col: 1,
@@ -222,6 +249,7 @@ impl Default for Tokenizer {
 impl Tokenizer {
     pub fn new(include_comments: bool) -> Self {
         Self {
+            lines: Vec::new(),
             include_comments,
             line: 1,
             col: 1,
@@ -257,11 +285,21 @@ impl Tokenizer {
             self.col += 1;
         }
     }
+
+    fn get_unrecognized(&self, ch: char) -> LexerError {
+        LexerError::Unrecognized {
+            line: self.lines.get(self.line as usize - 1).unwrap().clone(),
+            span: (self.col as usize, 1),
+            ch,
+        }
+    }
+
     pub fn tokenize(&mut self, txt: String) -> Result<Vec<Token>, LexerError> {
         let mut tokens: Vec<Token> = Vec::new();
         let mut buffer: Vec<char> = txt.chars().collect();
         self.line = 1;
         self.col = 1;
+        self.lines = txt.split('\n').map(|x| x.to_string()).collect();
 
         while buffer.len() > 0 {
             let first = buffer.first().unwrap();
@@ -289,20 +327,43 @@ impl Tokenizer {
                     '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(
                         BinaryOperator::from_symbol(&c.to_string()).unwrap(),
                     )),
-                    ';' => Some(TokenType::WhiteSpace),
+                    ';' => Some(TokenType::EOL),
                     _ if c.is_whitespace() => Some(TokenType::WhiteSpace),
                     _ => None,
                 }
             };
 
             let token = match get_token(*first) {
-                Some(t) => {
-                    self.increment_line_col(first);
+                Some(t) => match t {
+                    TokenType::WhiteSpace => {
+                        self.increment_line_col(first);
+                        let _ = buffer.remove(0);
+                        Some(self.new_token(t, ";"))
+                    }
+                    t => {
+                        self.increment_line_col(first);
 
-                    Some(self.new_token(t, buffer.remove(0).to_string().trim()))
-                }
+                        Some(self.new_token(t, buffer.remove(0).to_string().trim()))
+                    }
+                },
                 _ => {
-                    if first == &'"' {
+                    if first == &'\'' {
+                        let mut txt = String::new();
+
+                        let c = buffer.remove(0);
+                        self.increment_line_col(&c);
+
+                        while buffer[0] != '\'' {
+                            let c = buffer.remove(0);
+                            self.increment_line_col(&c);
+                            txt.push(c);
+                        }
+
+                        let c = buffer.remove(0);
+                        self.increment_line_col(&c);
+
+                        Some(self.new_token(TokenType::Char, &txt))
+                    } else if first == &'"' {
                         let mut txt = String::new();
 
                         let c = buffer.remove(0);
@@ -339,10 +400,17 @@ impl Tokenizer {
                         } else {
                             Some(self.new_token(TokenType::Float, number.trim()))
                         }
-                    } else if first.is_alphabetic() || first == &'_' {
+                    } else if first.is_alphabetic()
+                        || first == &'_'
+                        || first.to_uppercase().to_string().trim()
+                            != first.to_lowercase().to_string().trim()
+                    {
                         let mut txt = String::new();
                         while buffer.len() > 0
-                            && (buffer[0].is_alphanumeric() || buffer[0] == '_')
+                            && (buffer[0].is_alphanumeric()
+                                || buffer[0] == '_'
+                                || buffer[0].to_uppercase().to_string().trim()
+                                    != buffer[0].to_lowercase().to_string().trim())
                             && !buffer[0].is_whitespace()
                         {
                             let char = buffer.remove(0);
@@ -356,7 +424,7 @@ impl Tokenizer {
                             Some(self.new_token(TokenType::Identifier, txt.trim()))
                         }
                     } else {
-                        return Err(LexerError::Unrecognized(*first));
+                        return Err(self.get_unrecognized(*first));
                     }
                 }
             };
@@ -368,6 +436,7 @@ impl Tokenizer {
                         let mut first = '/';
                         let mut second = '*';
 
+                        let mut txt = String::new();
                         let can_continue = |f: char, s: char, short: bool| -> bool {
                             if short {
                                 s != '\n'
@@ -380,7 +449,11 @@ impl Tokenizer {
                             first = second;
                             second = buffer.remove(0);
                             self.increment_line_col(&second);
+                            txt.push(second);
                         }
+
+                        txt = txt.trim_end().trim_end_matches("*/").trim().to_string();
+                        tokens.push(self.new_token(TokenType::Comment, &txt));
 
                         continue;
                     }
@@ -427,10 +500,19 @@ impl Tokenizer {
 
         tokens.push(self.new_token(TokenType::EOF, "EndOfFile"));
 
-        Ok(tokens
-            .into_iter()
-            .filter(|x| x.token_type != TokenType::WhiteSpace)
-            .collect())
+        if !self.include_comments {
+            Ok(tokens
+                .into_iter()
+                .filter(|x| {
+                    x.token_type != TokenType::Comment && x.token_type != TokenType::WhiteSpace
+                })
+                .collect())
+        } else {
+            Ok(tokens
+                .into_iter()
+                .filter(|x| x.token_type != TokenType::WhiteSpace)
+                .collect())
+        }
     }
 }
 

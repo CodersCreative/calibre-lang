@@ -1,8 +1,5 @@
-use calibre_common::{
-    environment::{Location, RuntimeValue},
-    errors::RuntimeErr,
-};
-use calibre_parser::ast::{Node, NodeType};
+use calibre_common::{environment::InterpreterFrom, errors::RuntimeErr};
+use calibre_parser::ast::{Node, NodeType, VarType};
 
 use crate::runtime::{
     interpreter::expressions::member::MembrExprPathRes, scope::CheckerEnvironment,
@@ -15,6 +12,11 @@ pub mod statements;
 pub type InterpreterErr = RuntimeErr<RuntimeType, RuntimeType>;
 
 impl CheckerEnvironment {
+    pub fn start_evaluate(&mut self, scope: &u64, node: Node) -> RuntimeType {
+        let val = self.evaluate(scope, node);
+        self.unwrap_type(val)
+    }
+
     pub fn evaluate(&mut self, scope: &u64, node: Node) -> Result<RuntimeType, InterpreterErr> {
         self.current_location = self.get_location(scope, node.span);
 
@@ -25,6 +27,7 @@ impl CheckerEnvironment {
             NodeType::CharLiteral(_) => Ok(RuntimeType::Char),
             NodeType::Try { value } => self.evaluate(scope, *value),
             NodeType::Return { value } => self.evaluate(scope, *value),
+            NodeType::DebugExpression { value } => self.evaluate(scope, *value),
             NodeType::Break => Ok(RuntimeType::Null),
             NodeType::Continue => Ok(RuntimeType::Null),
             NodeType::BinaryExpression {
@@ -38,7 +41,6 @@ impl CheckerEnvironment {
             NodeType::Identifier(x) => self.evaluate_identifier(scope, &x),
             NodeType::StructLiteral(obj) => self.evaluate_struct_expression(scope, obj),
             NodeType::ListLiteral(vals) => self.evaluate_list_expression(scope, vals),
-            NodeType::TupleLiteral(vals) => self.evaluate_tuple_expression(scope, vals),
             NodeType::CallExpression(caller, args) => {
                 self.evaluate_call_expression(scope, *caller, args)
             }
@@ -61,7 +63,10 @@ impl CheckerEnvironment {
                     panic!()
                 }
             }
-            NodeType::RefStatement { mutability, value } => {
+            NodeType::RefStatement {
+                mutability: _,
+                value,
+            } => {
                 let value = match value.node_type.clone() {
                     NodeType::Identifier(x) => self.get_var_ref(scope, &x)?,
                     NodeType::MemberExpression { path } => {
@@ -89,10 +94,10 @@ impl CheckerEnvironment {
                 self.evaluate_variable_declaration(
                     scope,
                     var_type,
-                    identifier,
+                    identifier.to_string(),
                     value,
                     match data_type {
-                        Some(x) => Some(x.into()),
+                        Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
                         None => None,
                     },
                 )
@@ -105,7 +110,10 @@ impl CheckerEnvironment {
                 let (from, to) = (self.evaluate(scope, *from)?, self.evaluate(scope, *to)?);
                 self.evaluate_range_expression(scope, from, to, inclusive)
             }
-            NodeType::IsDeclaration { value, data_type } => Ok(RuntimeType::Bool),
+            NodeType::IsDeclaration {
+                value: _,
+                data_type: _,
+            } => Ok(RuntimeType::Bool),
             NodeType::AssignmentExpression { identifier, value } => {
                 let value = self.evaluate(scope, *value)?;
                 self.evaluate_assignment_expression(scope, *identifier, value)
@@ -131,6 +139,7 @@ impl CheckerEnvironment {
                 comparison,
                 then,
                 otherwise,
+                ..
             } => self.evaluate_if_statement(
                 scope,
                 *comparison,
@@ -140,11 +149,6 @@ impl CheckerEnvironment {
                     None => None,
                 },
             ),
-            NodeType::ImportStatement {
-                module,
-                alias,
-                values,
-            } => self.evaluate_import_statement(scope, module, alias, values),
             NodeType::MatchDeclaration { .. } => self.evaluate_match_declaration(scope, node),
             NodeType::InDeclaration {
                 identifier,
@@ -158,29 +162,30 @@ impl CheckerEnvironment {
             }
             NodeType::AsExpression { value, typ } => {
                 let value = self.evaluate(scope, *value)?;
-                self.evaluate_as_expression(scope, value, typ.into())
+                self.evaluate_as_expression(
+                    scope,
+                    value,
+                    RuntimeType::interpreter_from(self, scope, typ)?,
+                )
             }
             NodeType::MemberExpression { .. } => self.evaluate_member_expression(scope, node),
-            NodeType::ImplDeclaration {
-                identifier,
-                functions,
-            } => self.evaluate_impl_declaration(scope, identifier, functions),
             NodeType::ScopeDeclaration { body, is_temp } => {
                 self.evaluate_scope(scope, body, is_temp)
             }
-            NodeType::NotExpression { value } => {
-                let value = self.evaluate(scope, *value)?;
-                self.evaluate_not(scope, value)
-            }
-            NodeType::TypeDeclaration { identifier, object } => {
-                self.evaluate_type_declaration(scope, identifier, object.into())
-            }
+            NodeType::NotExpression { value }
+            | NodeType::NegExpression { value }
+            | NodeType::ParenExpression { value } => self.evaluate(scope, *value),
             NodeType::PipeExpression(nodes) => self.evaluate_pipe_expression(scope, nodes),
             NodeType::EnumExpression {
                 identifier,
                 value,
                 data,
-            } => self.evaluate_enum_expression(scope, identifier, value, data),
+            } => self.evaluate_enum_expression(
+                scope,
+                identifier.to_string(),
+                value.to_string(),
+                data,
+            ),
             NodeType::LoopDeclaration { loop_type, body } => {
                 self.evaluate_loop_declaration(scope, *loop_type, *body)
             }
@@ -189,6 +194,59 @@ impl CheckerEnvironment {
                 loop_type,
                 conditionals,
             } => self.evaluate_iter_expression(scope, *map, *loop_type, conditionals),
+
+            _ => Err(InterpreterErr::UnexpectedNodeInTemp(node.node_type)),
+        }
+    }
+
+    pub fn evaluate_global(
+        &mut self,
+        scope: &u64,
+        node: Node,
+    ) -> Result<RuntimeType, InterpreterErr> {
+        self.current_location = self.get_location(scope, node.span);
+
+        match node.node_type {
+            NodeType::VariableDeclaration {
+                var_type: VarType::Constant,
+                identifier,
+                value,
+                data_type,
+            } => {
+                let value = self.evaluate(scope, *value)?;
+                self.evaluate_variable_declaration(
+                    scope,
+                    VarType::Constant,
+                    identifier.to_string(),
+                    value,
+                    match data_type {
+                        Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
+                        None => None,
+                    },
+                )
+            }
+            NodeType::ImportStatement {
+                module,
+                alias,
+                values,
+            } => self.evaluate_import_statement(
+                scope,
+                module.into_iter().map(|x| x.to_string()).collect(),
+                alias.map(|x| x.to_string()),
+                values.into_iter().map(|x| x.to_string()).collect(),
+            ),
+            NodeType::ImplDeclaration {
+                identifier,
+                functions,
+            } => self.evaluate_impl_declaration(scope, identifier.to_string(), functions),
+            NodeType::TypeDeclaration { identifier, object } => self.evaluate_type_declaration(
+                scope,
+                identifier.to_string(),
+                calibre_common::environment::Type::<RuntimeType>::interpreter_from(
+                    self, scope, object,
+                )?,
+            ),
+            _ => Err(InterpreterErr::UnexpectedNodeInGlobal(node.node_type)),
         }
     }
 }
