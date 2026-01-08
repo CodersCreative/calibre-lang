@@ -22,7 +22,8 @@ pub fn setup<T: RuntimeValue, U: RuntimeType>(env: &mut Environment<T, U>, scope
             .mappings
             .iter()
             .find(|x| x.split_once(":").unwrap().1 == var.0)
-            .unwrap();
+            .map(|x| x.to_string())
+            .unwrap_or(var.0);
 
         let _ = env.variables.insert(
             name.clone(),

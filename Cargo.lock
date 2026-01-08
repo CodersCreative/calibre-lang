@@ -174,8 +174,8 @@ version = "0.1.0"
 dependencies = [
  "calibre-common",
  "calibre-interpreter",
+ "calibre-mir",
  "calibre-parser",
- "calibre-type-checker",
  "clap",
  "miette",
  "rand",

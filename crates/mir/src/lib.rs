@@ -24,7 +24,7 @@ impl MiddleEnvironment {
 
         match node.node_type {
             NodeType::Identifier(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::Identifier(self.resolve_parser_text(scope, &x).unwrap()),
+                node_type: MiddleNodeType::Identifier(self.resolve_parser_text(scope, &x).unwrap_or(x)),
                 span: node.span,
             }),
             NodeType::IntLiteral(x) => Ok(MiddleNode {

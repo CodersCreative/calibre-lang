@@ -1,4 +1,3 @@
-
 use crate::runtime::scope::InterpreterEnvironment;
 use crate::runtime::values::RuntimeValue;
 use calibre_common::environment::{RuntimeValue as Value, Variable};
@@ -34,8 +33,8 @@ pub fn setup_scope(
             .mappings
             .iter()
             .find(|x| x.split_once(":").unwrap().1 == var.0)
-            .unwrap()
-            .clone();
+            .map(|x| x.to_string())
+            .unwrap_or(var.0);
 
         let _ = env.variables.insert(
             name.clone(),

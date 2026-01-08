@@ -74,6 +74,16 @@ impl MiddleEnvironment {
         }
     }
 
+    pub fn new_and_evaluate(
+        node: Node,
+        path: PathBuf,
+    ) -> Result<(Self, u64, MiddleNode), MiddleErr> {
+        let mut env = Self::new();
+        let scope = env.new_scope_with_stdlib(None, path, None);
+        let res = env.evaluate(&scope, node);
+        res.map(|x| (env, scope, x))
+    }
+
     pub fn get_location(&self, scope: &u64, span: Span) -> Option<Location> {
         Some(Location {
             path: self.scopes.get(scope).unwrap().path.clone(),

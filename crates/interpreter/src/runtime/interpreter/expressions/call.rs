@@ -26,7 +26,6 @@ impl InterpreterEnvironment {
             is_async,
         } = &func
         {
-            let location = self.current_location.clone().unwrap();
             if arguments.len() == 1 && parameters.len() > 1 {
                 if let Ok(x) = self.evaluate(scope, arguments[0].0.clone()) {
                     if let RuntimeValue::Tuple(x) = x {
@@ -47,10 +46,9 @@ impl InterpreterEnvironment {
                                     .unwrap();
 
                                 (
-                                    MiddleNode::new(
-                                        MiddleNodeType::Identifier(format!("$-{}", counter).into()),
-                                        location.span,
-                                    ),
+                                    MiddleNode::new_from_type(MiddleNodeType::Identifier(
+                                        format!("$-{}", counter).into(),
+                                    )),
                                     None,
                                 )
                             })
@@ -86,10 +84,9 @@ impl InterpreterEnvironment {
                             .iter()
                             .map(|x| {
                                 (
-                                    MiddleNode::new(
-                                        MiddleNodeType::Identifier(x.0.clone().into()),
-                                        location.span,
-                                    ),
+                                    MiddleNode::new_from_type(MiddleNodeType::Identifier(
+                                        x.0.clone().into(),
+                                    )),
                                     None,
                                 )
                             })
@@ -110,15 +107,13 @@ impl InterpreterEnvironment {
                         )
                         .unwrap();
 
-                    let body = FunctionType::Regular(Block(Box::new(MiddleNode::new(
+                    let body = FunctionType::Regular(Block(Box::new(MiddleNode::new_from_type(
                         MiddleNodeType::CallExpression(
-                            Box::new(MiddleNode::new(
-                                MiddleNodeType::Identifier(format!("$-{}", counter).into()),
-                                location.span,
-                            )),
+                            Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
+                                format!("$-{}", counter).into(),
+                            ))),
                             arguments,
                         ),
-                        location.span,
                     ))));
 
                     return Ok(RuntimeValue::Function {

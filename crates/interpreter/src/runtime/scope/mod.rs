@@ -1,10 +1,16 @@
 pub mod variables;
 
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    path::PathBuf,
+};
 
-use crate::runtime::values::{RuntimeType, RuntimeValue, helper::StopValue};
+use crate::runtime::{
+    interpreter::InterpreterErr,
+    values::{RuntimeType, RuntimeValue, helper::StopValue},
+};
 use calibre_common::environment::Environment;
-use calibre_mir::environment::MiddleEnvironment;
+use calibre_mir::{ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InterpreterEnvironment {
@@ -18,6 +24,16 @@ impl InterpreterEnvironment {
             env: Environment::new(true, env),
             stop: None,
         }
+    }
+
+    pub fn new_and_evaluate(
+        node: MiddleNode,
+        env: &MiddleEnvironment,
+    ) -> Result<(Self, u64, RuntimeValue), InterpreterErr> {
+        let mut env = Self::new(env);
+        let scope = env.new_scope_with_stdlib(None);
+        let res = env.evaluate(&scope, node);
+        res.map(|x| (env, scope, x))
     }
 }
 impl Deref for InterpreterEnvironment {
