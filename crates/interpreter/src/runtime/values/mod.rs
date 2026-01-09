@@ -26,13 +26,15 @@ pub enum RuntimeType {
     Option(Box<RuntimeType>),
     Result(Box<RuntimeType>, Box<RuntimeType>),
     Function {
-        return_type: Option<Box<RuntimeType>>,
+        return_type: Box<RuntimeType>,
         parameters: Vec<RuntimeType>,
         is_async: bool,
     },
     Enum(String),
     Struct(Option<String>),
     Ref(Box<RuntimeType>),
+    Null,
+    NativeFn(Box<RuntimeType>),
 }
 
 impl calibre_common::environment::RuntimeType for RuntimeType {}
@@ -50,6 +52,10 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
             (String::from("INT_MIN"), RuntimeValue::Int(i64::MIN)),
             (String::from("true"), RuntimeValue::Bool(true)),
             (String::from("false"), RuntimeValue::Bool(false)),
+            (
+                String::from("none"),
+                RuntimeValue::Option(None, RuntimeType::Option(Box::new(RuntimeType::Dynamic))),
+            ),
         ])
     }
 
@@ -94,6 +100,10 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
         value: ParserDataType,
     ) -> Result<Self, ScopeErr> {
         Ok(match value.data_type {
+            ParserInnerType::Null => Self::Null,
+            ParserInnerType::NativeFunction(x) => {
+                Self::NativeFn(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
+            }
             ParserInnerType::Float => Self::Float,
             ParserInnerType::Dynamic => Self::Dynamic,
             ParserInnerType::Int => Self::Int,
@@ -128,10 +138,7 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
                 parameters,
                 is_async,
             } => Self::Function {
-                return_type: match return_type {
-                    Some(x) => Some(Box::new(RuntimeType::interpreter_from(env, scope, *x)?)),
-                    None => None,
-                },
+                return_type: Box::new(RuntimeType::interpreter_from(env, scope, *return_type)?),
                 parameters: parameters
                     .into_iter()
                     .map(|x| RuntimeType::interpreter_from(env, scope, x).unwrap())
@@ -155,7 +162,6 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
 impl Into<RuntimeType> for &RuntimeValue {
     fn into(self) -> RuntimeType {
         match self {
-            RuntimeValue::Null => RuntimeType::Dynamic,
             RuntimeValue::Float(_) => RuntimeType::Float,
             RuntimeValue::Int(_) => RuntimeType::Int,
             RuntimeValue::Ref(_, x) => x.clone(),
@@ -177,14 +183,14 @@ impl Into<RuntimeType> for &RuntimeValue {
                 is_async,
                 ..
             } => RuntimeType::Function {
-                return_type: match return_type {
-                    Some(x) => Some(Box::new(x.clone())),
-                    None => None,
-                },
+                return_type: Box::new(return_type.clone()),
                 parameters: parameters.iter().map(|x| x.1.clone()).collect(),
                 is_async: *is_async,
             },
-            RuntimeValue::NativeFunction(_) => RuntimeType::Dynamic,
+            RuntimeValue::NativeFunction(x) => {
+                RuntimeType::NativeFn(Box::new(RuntimeType::Dynamic))
+            }
+            RuntimeValue::Null => RuntimeType::Null,
         }
     }
 }
@@ -211,7 +217,7 @@ pub enum RuntimeValue {
     Function {
         parameters: Vec<(String, RuntimeType, Option<RuntimeValue>)>,
         body: FunctionType,
-        return_type: Option<RuntimeType>,
+        return_type: RuntimeType,
         is_async: bool,
     },
     NativeFunction(Rc<dyn NativeFunction>),

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap};
 
 use calibre_parser::{
     ast::{
@@ -13,6 +13,7 @@ use crate::{
     errors::MiddleErr,
 };
 use environment::*;
+pub mod native;
 pub mod ast;
 pub mod environment;
 pub mod errors;
@@ -24,7 +25,11 @@ impl MiddleEnvironment {
 
         match node.node_type {
             NodeType::Identifier(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::Identifier(self.resolve_parser_text(scope, &x).unwrap_or(x)),
+                node_type: MiddleNodeType::Identifier(if let Some(x) = self.resolve_parser_text(scope, &x){
+                    x
+                }else {
+                    return Err(MiddleErr::Variable(x.text));
+                }),
                 span: node.span,
             }),
             NodeType::IntLiteral(x) => Ok(MiddleNode {
@@ -113,7 +118,7 @@ impl MiddleEnvironment {
                                         ),
                                         None,
                                     ),
-                                    return_type: self.resolve_type_from_node(scope, &then),
+                                    return_type: self.resolve_type_from_node(scope, &then).unwrap_or(ParserDataType::from(ParserInnerType::Null)),
                                     body: vec![
                                         (pattern.0, pattern.1, then),
                                         (
@@ -191,7 +196,6 @@ impl MiddleEnvironment {
                         span: identifier.span,
                     }
                 };
-                let value = self.evaluate(scope, *value)?;
 
                 self.variables.insert(
                     new_name.clone(),
@@ -207,6 +211,9 @@ impl MiddleEnvironment {
                     .unwrap()
                     .mappings
                     .insert(identifier.text, new_name.clone());
+
+
+                let value = self.evaluate(scope, *value)?;
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::VariableDeclaration {
@@ -380,9 +387,9 @@ impl MiddleEnvironment {
                                     ),
                                 ],
                                 return_type:  match self.resolve_type_from_node(scope, &value) {
-                                    Some(ParserDataType { data_type: ParserInnerType::Result(x, _), span: _ }) | Some(ParserDataType { data_type: ParserInnerType::Option(x), span: _ }) => Some(*x),
-                                    Some(x) => Some(x),
-                                    _ => None
+                                    Some(ParserDataType { data_type: ParserInnerType::Result(x, _), span: _ }) | Some(ParserDataType { data_type: ParserInnerType::Option(x), span: _ }) => *x,
+                                    Some(x) => x,
+                                    _ => ParserDataType::from(ParserInnerType::Null),
                                 },
                                 is_async: false,
                             },
@@ -527,16 +534,45 @@ impl MiddleEnvironment {
                 })
             }
             NodeType::ScopeDeclaration { body, is_temp } => {
-                let _new_scope = if is_temp {
-                    self.new_scope_from_parent_shallow(*scope)
-                } else {
-                    *scope
-                };
-
                 let mut stmts = Vec::new();
-                for statement in body.into_iter() {
-                    stmts.push(self.evaluate(scope, statement)?);
+
+                if is_temp {
+                    let scope = self.new_scope_from_parent_shallow(*scope);
+
+                    for statement in body.into_iter() {
+                        stmts.push(self.evaluate(&scope, statement)?);
+                    }                    
+                } else {
+                    let mut errored = Vec::new();
+
+                    for statement in body.into_iter() {
+                        if let Ok(x) = self.evaluate(scope, statement.clone()) {
+                            stmts.push(x);
+                        }else {
+                            errored.push(statement);
+                        }
+                    }
+
+                    let mut last_len = 0;
+                    while !errored.is_empty() && last_len != errored.len() {
+                        last_len = errored.len();
+
+                        for elem in errored.clone() {
+                            if let Ok(x) = self.evaluate(scope, elem.clone()) {
+                                stmts.push(x);
+                                errored.retain(|x| x != &elem);
+                            }   
+                        }
+                    }
+
+                    if !errored.is_empty() {
+                        let _ = self.evaluate(scope, errored[0].clone())?;
+                    }
                 }
+
+                
+                
+                
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::ScopeDeclaration {
@@ -675,7 +711,7 @@ impl MiddleEnvironment {
                         .insert(param.0.text.clone(), new_name.clone());
 
                     params.push((
-                        param.0,
+                        ParserText::from(new_name),
                         data_type,
                         if let Some(x) = param.2 {
                             Some(self.evaluate(scope, x)?)
@@ -687,7 +723,7 @@ impl MiddleEnvironment {
 
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::FunctionDeclaration { parameters: params, body: Box::new(self.evaluate(scope, *body)?), return_type, is_async },
+                    node_type: MiddleNodeType::FunctionDeclaration { parameters: params, body: Box::new(self.evaluate(&new_scope, *body)?), return_type, is_async },
                     span: node.span,
                 })
             },

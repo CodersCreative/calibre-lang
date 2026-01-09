@@ -21,16 +21,7 @@ impl CheckerEnvironment {
         let scope = 0;
         let counter = self.scope_counter;
 
-        self.add_scope(Scope {
-            id: 0,
-            namespace: namespace.unwrap_or(&counter.to_string()).to_string(),
-            parent,
-            children: HashMap::new(),
-            counter: 0,
-            path: path.clone(),
-            variables: HashMap::new(),
-            objects: HashMap::new(),
-        });
+        self.add_scope(Scope { id: 0, parent });
 
         calibre_common::native::global::setup(self, &scope);
         let mut tokenizer = Tokenizer::default();

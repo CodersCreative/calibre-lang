@@ -299,14 +299,14 @@ impl Parser {
                 TokenType::Open(Bracket::Paren),
                 TokenType::Close(Bracket::Paren),
             );
-            let mut ret = None;
+            let mut ret = ParserDataType::from(ParserInnerType::Null);
 
             if self.first().token_type == TokenType::Arrow {
                 let _ = self.eat();
-                ret = Some(Box::new(self.expect_type()));
+                ret = self.expect_type();
             }
 
-            let close = if let Some(ret) = &ret {
+            let close = if ret.data_type != ParserInnerType::Null {
                 ret.span.clone()
             } else if let Some(arg) = args.last() {
                 arg.span.clone()
@@ -316,7 +316,7 @@ impl Parser {
 
             Some(ParserDataType::new(
                 ParserInnerType::Function {
-                    return_type: ret,
+                    return_type: Box::new(ret),
                     parameters: args,
                     is_async,
                 },

@@ -7,6 +7,7 @@ use thiserror::Error;
 
 pub mod ast;
 pub mod lexer;
+pub mod native;
 pub mod parse;
 
 #[derive(Debug, Default)]

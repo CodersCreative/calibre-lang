@@ -24,6 +24,8 @@ pub enum MiddleErr {
     CantImport(String),
     #[error("Unable to find scope : {0:?}")]
     Scope(String),
+    #[error("Unable to find variable : {0:?}")]
+    Variable(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Miette(#[from] ReportWrapper),

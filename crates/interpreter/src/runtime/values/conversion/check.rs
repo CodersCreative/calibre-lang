@@ -68,14 +68,8 @@ impl RuntimeValue {
                         return false;
                     };
 
-                    if let Some(x) = return_type {
-                        if let Some(y) = val_type {
-                            if **x != *y {
-                                return false;
-                            }
-                        } else {
-                            return false;
-                        }
+                    if **return_type != *val_type {
+                        return false;
                     }
 
                     if val_parameters.len() != parameters.len() {

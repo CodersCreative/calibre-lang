@@ -56,13 +56,13 @@ pub enum MiddleNodeType {
     MatchDeclaration {
         parameters: (ParserText, ParserDataType, Option<Box<MiddleNode>>),
         body: Vec<(MiddleNode, Vec<MiddleNode>, Box<MiddleNode>)>,
-        return_type: Option<ParserDataType>,
+        return_type: ParserDataType,
         is_async: bool,
     },
     FunctionDeclaration {
         parameters: Vec<(ParserText, ParserDataType, Option<MiddleNode>)>,
         body: Box<MiddleNode>,
-        return_type: Option<ParserDataType>,
+        return_type: ParserDataType,
         is_async: bool,
     },
     AssignmentExpression {

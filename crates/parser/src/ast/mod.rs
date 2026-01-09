@@ -70,6 +70,15 @@ pub struct ParserDataType {
     pub span: Span,
 }
 
+impl From<ParserInnerType> for ParserDataType {
+    fn from(value: ParserInnerType) -> Self {
+        Self {
+            data_type: value,
+            span: Span::default(),
+        }
+    }
+}
+
 impl ParserDataType {
     pub fn new(data_type: ParserInnerType, span: Span) -> Self {
         Self { data_type, span }
@@ -87,6 +96,7 @@ pub enum ParserInnerType {
     Float,
     Int,
     Dynamic,
+    Null,
     Bool,
     Str,
     Char,
@@ -97,12 +107,13 @@ pub enum ParserInnerType {
     Option(Box<ParserDataType>),
     Result(Box<ParserDataType>, Box<ParserDataType>),
     Function {
-        return_type: Option<Box<ParserDataType>>,
+        return_type: Box<ParserDataType>,
         parameters: Vec<ParserDataType>,
         is_async: bool,
     },
     Ref(Box<ParserDataType>, RefMutability),
     Struct(Option<String>),
+    NativeFunction(Box<ParserDataType>),
 }
 
 impl Display for ParserDataType {
@@ -116,6 +127,7 @@ impl Display for ParserInnerType {
         match self {
             Self::Float => write!(f, "float"),
             Self::Int => write!(f, "int"),
+            Self::Null => write!(f, "null"),
             Self::Dynamic => write!(f, "dyn"),
             Self::Bool => write!(f, "bool"),
             Self::Str => write!(f, "str"),
@@ -126,6 +138,7 @@ impl Display for ParserInnerType {
             }
             Self::Result(x, y) => write!(f, "{}!{}", x, y),
             Self::Option(x) => write!(f, "{}?", x),
+            Self::NativeFunction(x) => write!(f, "native -> {}", x),
             Self::Struct(x) => match x {
                 Some(x) => write!(f, "{}", x),
                 None => write!(f, "struct"),
@@ -181,8 +194,8 @@ impl Display for ParserInnerType {
 
                 txt.push_str(")");
 
-                if let Some(typ) = return_type {
-                    txt.push_str(&format!(" -> {}", typ));
+                if return_type.data_type != ParserInnerType::Null {
+                    txt.push_str(&format!(" -> {}", return_type));
                 }
 
                 write!(f, "{}", txt)
@@ -202,6 +215,7 @@ impl FromStr for ParserInnerType {
             "str" => Self::Str,
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
+            "null" => Self::Null,
             _ => Self::Struct(Some(s.to_string())),
         })
     }
@@ -347,13 +361,13 @@ pub enum NodeType {
     MatchDeclaration {
         parameters: (ParserText, ParserDataType, Option<Box<Node>>),
         body: Vec<(Node, Vec<Node>, Box<Node>)>,
-        return_type: Option<ParserDataType>,
+        return_type: ParserDataType,
         is_async: bool,
     },
     FunctionDeclaration {
         parameters: Vec<(ParserText, ParserDataType, Option<Node>)>,
         body: Box<Node>,
-        return_type: Option<ParserDataType>,
+        return_type: ParserDataType,
         is_async: bool,
     },
     AssignmentExpression {

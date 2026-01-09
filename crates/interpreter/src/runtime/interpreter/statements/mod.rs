@@ -48,10 +48,7 @@ impl InterpreterEnvironment {
         Ok(RuntimeValue::Function {
             parameters: params,
             body: FunctionType::Match(MatchBlock(body)),
-            return_type: match return_type {
-                Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
-                None => None,
-            },
+            return_type: RuntimeType::interpreter_from(self, scope, return_type)?,
             is_async,
         })
     }
@@ -89,10 +86,7 @@ impl InterpreterEnvironment {
         Ok(RuntimeValue::Function {
             parameters: params,
             body: FunctionType::Regular(Block(body)),
-            return_type: match return_type {
-                Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
-                None => None,
-            },
+            return_type: RuntimeType::interpreter_from(self, scope, return_type)?,
             is_async,
         })
     }

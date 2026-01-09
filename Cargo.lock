@@ -246,6 +246,7 @@ name = "calibre-mir"
 version = "0.1.0"
 dependencies = [
  "calibre-parser",
+ "calibre-std",
  "miette",
  "rand",
  "thiserror",
@@ -258,6 +259,10 @@ dependencies = [
  "miette",
  "thiserror",
 ]
+
+[[package]]
+name = "calibre-std"
+version = "0.1.0"
 
 [[package]]
 name = "calibre-type-checker"

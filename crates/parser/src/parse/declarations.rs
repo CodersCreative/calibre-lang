@@ -380,13 +380,14 @@ impl Parser {
         };
 
         let return_type = if self.first().token_type == TokenType::Open(Bracket::Curly) {
-            None
+            ParserDataType::from(ParserInnerType::Null)
         } else {
             let _ = self.expect_eat(
                 &TokenType::Arrow,
                 SyntaxErr::ExpectedKeyword(String::from("->")),
             );
             self.parse_type()
+                .unwrap_or(ParserDataType::from(ParserInnerType::Null))
         };
 
         let _ = self.expect_eat(
@@ -505,13 +506,14 @@ impl Parser {
         }
 
         let return_type = if self.first().token_type == TokenType::FatArrow {
-            None
+            ParserDataType::from(ParserInnerType::Null)
         } else {
             let _ = self.expect_eat(
                 &TokenType::Arrow,
                 SyntaxErr::ExpectedKeyword(String::from("->")),
             );
             self.parse_type()
+                .unwrap_or(ParserDataType::from(ParserInnerType::Null))
         };
 
         let block = self.parse_block();

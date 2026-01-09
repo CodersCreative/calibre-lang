@@ -255,14 +255,8 @@ impl RuntimeValue {
                         return panic_type();
                     };
 
-                    if let Some(x) = return_type {
-                        if let Some(y) = val_type {
-                            if **x != *y {
-                                return panic_type();
-                            }
-                        } else {
-                            return panic_type();
-                        }
+                    if **return_type != *val_type {
+                        return panic_type();
                     }
 
                     if val_parameters.len() != parameters.len() {

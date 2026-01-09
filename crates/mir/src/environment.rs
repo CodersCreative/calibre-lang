@@ -5,6 +5,7 @@ use calibre_parser::{
     ast::{Node, NodeType, ParserDataType, ParserInnerType, ParserText, TypeDefType, VarType},
     lexer::{Location, Span, Tokenizer},
 };
+use calibre_std::{get_globals_path, get_stdlib_path};
 use rand::random_range;
 
 use crate::{ast::MiddleNode, errors::MiddleErr};
@@ -404,32 +405,6 @@ impl MiddleEnvironment {
         todo!()
     }
 
-    pub fn new_scope_with_stdlib<'a>(
-        &'a mut self,
-        parent: Option<u64>,
-        path: PathBuf,
-        namespace: Option<&str>,
-    ) -> u64 {
-        // TODO finish this
-        let scope = 0;
-        let counter = self.scope_counter;
-
-        self.add_scope(MiddleScope {
-            id: 0,
-            namespace: namespace.unwrap_or(&counter.to_string()).to_string(),
-            parent,
-            children: HashMap::new(),
-            path: path.clone(),
-            mappings: HashMap::new(),
-        });
-
-        let _std = self.new_scope(Some(scope), path.clone(), Some("std"));
-
-        let root = self.new_scope(Some(scope), path, Some("root"));
-
-        root
-    }
-
     pub fn resolve_type_from_node(&self, scope: &u64, node: &Node) -> Option<ParserDataType> {
         let typ = match &node.node_type {
             NodeType::Break
@@ -496,12 +471,7 @@ impl MiddleEnvironment {
                 is_async,
             } => Some(ParserDataType {
                 data_type: ParserInnerType::Function {
-                    return_type: if let Some(x) = return_type {
-                        Some(Box::new(x.clone()))
-                    } else {
-                        self.resolve_type_from_node(scope, body)
-                            .map(|x| Box::new(x.clone()))
-                    },
+                    return_type: Box::new(return_type.clone()),
                     parameters: parameters.iter().map(|x| x.1.clone()).collect(),
                     is_async: *is_async,
                 },
@@ -514,12 +484,7 @@ impl MiddleEnvironment {
                 is_async,
             } => Some(ParserDataType {
                 data_type: ParserInnerType::Function {
-                    return_type: if let Some(x) = return_type {
-                        Some(Box::new(x.clone()))
-                    } else {
-                        // TODO get type
-                        None
-                    },
+                    return_type: Box::new(return_type.clone()),
                     parameters: vec![parameters.1.clone()],
                     is_async: *is_async,
                 },
@@ -586,6 +551,7 @@ impl MiddleEnvironment {
                 x => x,
             },
             NodeType::CallExpression(caller, args) => {
+                println!("{:?}", caller);
                 let mut caller_type = None;
                 if let NodeType::Identifier(caller) = &caller.node_type {
                     if &caller.text == "tuple" {
@@ -621,9 +587,19 @@ impl MiddleEnvironment {
                         return_type,
                         parameters: _,
                         is_async: _,
-                    } => return_type.clone().map(|x| *x),
+                    } => Some(*return_type.clone()),
+                    ParserInnerType::NativeFunction(x) => Some(*x),
                     _ => todo!(),
                 }
+            }
+            NodeType::Identifier(x) => {
+                if let Some(iden) = self.resolve_parser_text(scope, &x) {
+                    if let Some(x) = self.variables.get(&iden.text) {
+                        return Some(x.data_type.clone());
+                    }
+                }
+
+                None
             }
             x => todo!("{:?}", x),
         };

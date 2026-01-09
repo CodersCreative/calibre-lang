@@ -3,8 +3,8 @@ use std::error::Error;
 use crate::{
     Parser,
     ast::{
-        IfComparisonType, LoopType, Node, NodeType, ObjectType, ParserDataType, ParserText,
-        TypeDefType,
+        IfComparisonType, LoopType, Node, NodeType, ObjectType, ParserDataType, ParserInnerType,
+        ParserText, TypeDefType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -426,8 +426,8 @@ impl Formatter {
                 let mut txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
 
-                if let Some(typ) = return_type {
-                    txt.push_str(&format!(" -> {}", typ));
+                if return_type.data_type != ParserInnerType::Null {
+                    txt.push_str(&format!(" -> {}", return_type));
                 }
 
                 txt.push_str(&format!(" => {}", self.format(&*body)));
@@ -494,8 +494,8 @@ impl Formatter {
                     txt.push_str(&format!(" = {}", self.format(&*default)));
                 }
 
-                if let Some(typ) = return_type {
-                    txt.push_str(&format!(" -> {}", typ));
+                if return_type.data_type != ParserInnerType::Null {
+                    txt.push_str(&format!(" -> {}", return_type));
                 }
 
                 txt.push_str(" {\n");
