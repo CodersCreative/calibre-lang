@@ -601,6 +601,10 @@ impl MiddleEnvironment {
 
                 None
             }
+            NodeType::MemberExpression { path: _ } => {
+                // TODO resolve the type
+                Some(ParserDataType::from(ParserInnerType::Dynamic))
+            }
             x => todo!("{:?}", x),
         };
 

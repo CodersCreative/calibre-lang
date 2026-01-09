@@ -97,6 +97,7 @@ pub enum MiddleNodeType {
         inclusive: bool,
     },
     LoopDeclaration {
+        state: Option<Box<MiddleNode>>,
         body: Box<MiddleNode>,
     },
     Return {

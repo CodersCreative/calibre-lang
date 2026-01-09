@@ -69,7 +69,10 @@ impl<'a> FunctionTranslator<'a> {
     }
 
     pub fn translate_loop_statement(&mut self, node: MiddleNode) -> RuntimeValue {
-        if let MiddleNodeType::LoopDeclaration { body } = node.node_type {
+        if let MiddleNodeType::LoopDeclaration { body, state } = node.node_type {
+            if let Some(state) = state {
+                let _ = self.translate(*state);
+            }
             let (header_block, body_block, exit_block) = pre_loop!(self);
             self.break_stack
                 .push(BlockType::Continue(header_block.clone()));

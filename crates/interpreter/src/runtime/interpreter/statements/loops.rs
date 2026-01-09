@@ -10,12 +10,17 @@ impl InterpreterEnvironment {
     pub fn evaluate_loop_declaration(
         &mut self,
         scope: &u64,
+        state: Option<MiddleNode>,
         body: MiddleNode,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut result = RuntimeValue::Null;
+        let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
+
+        if let Some(state) = state {
+            let _ = self.evaluate(scope, state)?;
+        }
 
         loop {
-            let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
             result = self.evaluate(&new_scope, body.clone())?;
             self.remove_scope(&new_scope);
 

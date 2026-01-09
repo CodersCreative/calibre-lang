@@ -115,7 +115,10 @@ impl NativeFunction for Len {
             Ok(RuntimeValue::Int(match x {
                 RuntimeValue::List { data, data_type: _ } => data.len() as i64,
                 RuntimeValue::Tuple(data) => data.len() as i64,
+                RuntimeValue::Range(_, x) => *x,
                 RuntimeValue::Str(x) => x.len() as i64,
+                RuntimeValue::Int(x) => *x,
+                RuntimeValue::Float(x) => *x as i64,
                 _ => return Err(InterpreterErr::UnexpectedType(x.clone())),
             }))
         } else {

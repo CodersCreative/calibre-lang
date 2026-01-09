@@ -218,8 +218,8 @@ impl InterpreterEnvironment {
                 value.to_string(),
                 data,
             ),
-            MiddleNodeType::LoopDeclaration { body } => {
-                self.evaluate_loop_declaration(scope, *body)
+            MiddleNodeType::LoopDeclaration { body, state } => {
+                self.evaluate_loop_declaration(scope, state.map(|x| *x), *body)
             }
             _ => Err(InterpreterErr::UnexpectedNodeInTemp(node.node_type)),
         }

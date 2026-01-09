@@ -150,7 +150,7 @@ impl MiddleNode {
 
                 amt
             }
-            MiddleNodeType::LoopDeclaration { body } => body.identifiers_used(),
+            MiddleNodeType::LoopDeclaration { body, .. } => body.identifiers_used(),
             MiddleNodeType::IfStatement {
                 comparison,
                 then,
