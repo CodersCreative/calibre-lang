@@ -38,11 +38,6 @@ impl Parser {
     }
 
     pub fn parse_scope_declaration(&mut self) -> Node {
-        if let Some(x) = self.tokens.get(2) {
-            if x.token_type == TokenType::Colon {
-                return self.parse_object_expression();
-            }
-        }
         let open = self.expect_eat(
             &TokenType::Open(Bracket::Curly),
             SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
@@ -153,7 +148,7 @@ impl Parser {
                     {
                         let mut depends = false;
                         if parameters.len() > 0 {
-                            if let ParserInnerType::Struct(Some(obj)) = &parameters[0].1.data_type {
+                            if let ParserInnerType::Struct(obj) = &parameters[0].1.data_type {
                                 if obj == &identifier.value {
                                     depends = true;
                                 }
@@ -188,7 +183,7 @@ impl Parser {
                     } = func.node_type
                     {
                         let mut depends = false;
-                        if let ParserInnerType::Struct(Some(obj)) = &parameters.1.data_type {
+                        if let ParserInnerType::Struct(obj) = &parameters.1.data_type {
                             if obj == &identifier.value {
                                 depends = true;
                             }

@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use calibre_parser::{
     ast::{
-        ObjectType, ParserDataType, ParserText, RefMutability, VarType,
+        ObjectMap, ParserDataType, ParserText, RefMutability, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperation, Comparison},
     },
@@ -47,7 +49,7 @@ pub enum MiddleNodeType {
     EnumExpression {
         identifier: ParserText,
         value: ParserText,
-        data: Option<ObjectType<Option<MiddleNode>>>,
+        data: Option<ObjectMap<MiddleNode>>,
     },
     ScopeDeclaration {
         body: Vec<MiddleNode>,
@@ -106,7 +108,6 @@ pub enum MiddleNodeType {
     Identifier(ParserText),
     StringLiteral(ParserText),
     ListLiteral(Vec<MiddleNode>),
-    TupleLiteral(Vec<MiddleNode>),
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(i64),
@@ -129,10 +130,13 @@ pub enum MiddleNodeType {
         right: Box<MiddleNode>,
         operator: BooleanOperation,
     },
+    AggregateExpression {
+        identifier: Option<ParserText>,
+        value: ObjectMap<MiddleNode>,
+    },
     IfStatement {
         comparison: Box<MiddleNode>,
         then: Box<MiddleNode>,
         otherwise: Option<Box<MiddleNode>>,
     },
-    StructLiteral(ObjectType<Option<MiddleNode>>),
 }

@@ -2,7 +2,7 @@ use crate::environment::{RuntimeType, RuntimeValue};
 use calibre_mir::ast::MiddleNodeType;
 use calibre_parser::{
     ParserError,
-    ast::{LoopType, NodeType, binary::BinaryOperator},
+    ast::{LoopType, binary::BinaryOperator},
     lexer::LexerError,
 };
 use miette::{Diagnostic, LabeledSpan};

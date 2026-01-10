@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use calibre_parser::{
     ast::{
-        IfComparisonType, LoopType, Node, NodeType, ObjectType, ParserDataType, ParserInnerType,
-        ParserText, VarType, binary::BinaryOperator,
+        IfComparisonType, LoopType, Node, NodeType, ObjectMap, ObjectType, ParserDataType,
+        ParserInnerType, ParserText, VarType, binary::BinaryOperator,
     },
     lexer::Span,
 };
@@ -235,7 +235,7 @@ impl MiddleEnvironment {
                 self.objects.insert(
                     new_name.clone(),
                     MiddleObject {
-                        object_type: object,
+                        object_type: object.into(),
                         functions: HashMap::new(),
                         traits: Vec::new(),
                         location: self.current_location.clone(),
@@ -633,40 +633,36 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::StructLiteral(data) =>  Ok(MiddleNode {
-                node_type: MiddleNodeType::StructLiteral(
-                    match data {
+            NodeType::StructLiteral { identifier, value } =>  Ok(MiddleNode {
+                node_type: MiddleNodeType::AggregateExpression{
+                    identifier : Some(self.resolve_parser_text(scope, &identifier).unwrap()),
+                    value : ObjectMap(match value {
                         ObjectType::Map(x) => {
                             let mut map = HashMap::new();
 
                             for itm in x {
                                 map.insert(
                                     itm.0,
-                                    if let Some(x) = itm.1 {
-                                        Some(self.evaluate(scope, x)?)
-                                    } else {
-                                        None
-                                    },
+                                    self.evaluate(scope, itm.1)?,
                                 );
                             }
 
-                            ObjectType::Map(map)
+                            map
                         }
                         ObjectType::Tuple(x) => {
-                            let mut map = Vec::new();
+                            let mut map = HashMap::new();
 
-                            for itm in x {
-                                map.push(if let Some(x) = itm {
-                                    Some(self.evaluate(scope, x)?)
-                                } else {
-                                    None
-                                });
+                            for itm in x.into_iter().enumerate() {
+                                map.insert(
+                                    itm.0.to_string(),
+                                    self.evaluate(scope, itm.1)?
+                                );
                             }
 
-                            ObjectType::Tuple(map)
+                            map
                         }
-                    }
-                ),
+                    })
+                },
                 span: node.span,
             }),
             NodeType::EnumExpression {
@@ -687,36 +683,28 @@ impl MiddleEnvironment {
                                 for itm in x {
                                     map.insert(
                                         itm.0,
-                                        if let Some(x) = itm.1 {
-                                            Some(self.evaluate(scope, x)?)
-                                        } else {
-                                            None
-                                        },
+                                        self.evaluate(scope, itm.1)?,
                                     );
                                 }
 
-                                Some(ObjectType::Map(map))
+                                Some(map.into())
                             }
                             ObjectType::Tuple(data) => {
-                                let mut map = Vec::new();
+                                let mut map = HashMap::new();
 
-                                for itm in data {
-                                    map.push(if let Some(x) = itm {
-                                        Some(self.evaluate(scope, x)?)
-                                    } else {
-                                        None
-                                    });
+                                for (i, itm) in data.into_iter().enumerate() {
+                                    map.insert(i.to_string(),self.evaluate(scope, itm)?);
                                 }
 
                                 if let Some(x) = self.variables.get(&identifier.to_string()) {
                                     // TODO deal with references
                                     let mut args = vec![(MiddleNode::new_from_type(MiddleNodeType::Identifier(identifier)), None)];
-                                    args.append(&mut map.into_iter().map(|x| (x.unwrap(), None)).collect());
+                                    args.append(&mut map.into_iter().map(|x| (x.1, None)).collect());
                                     return Ok(MiddleNode::new_from_type(MiddleNodeType::CallExpression(Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(ParserText::from(x.data_type.to_string())))), args)));
                                 }else if self.objects.contains_key(&identifier.to_string()) {
-                                    return Ok(MiddleNode::new_from_type(MiddleNodeType::CallExpression(Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(identifier))), map.into_iter().map(|x| (x.unwrap(), None)).collect())));
+                                    return Ok(MiddleNode::new_from_type(MiddleNodeType::CallExpression(Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(identifier))), map.into_iter().map(|x| (x.1, None)).collect())));
                                 }else {
-                                    Some(ObjectType::Tuple(map))
+                                    Some(map.into())
                                 }
                             }
                         }
@@ -780,26 +768,28 @@ impl MiddleEnvironment {
             NodeType::CallExpression(caller, args) => {
                 if let NodeType::Identifier(caller) = &caller.node_type {
                     if "tuple" == &caller.text {
-                        let mut lst = Vec::new();
+                        let mut map = HashMap::new();
 
-                        for arg in args {
-                            lst.push(self.evaluate(scope, arg.0)?);
+                        for (i, arg) in args.into_iter().enumerate() {
+                            map.insert(i.to_string(), self.evaluate(scope, arg.0)?);
                         }
+
                         return Ok(MiddleNode {
-                            node_type: MiddleNodeType::TupleLiteral(lst),
+                            node_type: MiddleNodeType::AggregateExpression {identifier: None, value: map.into() },
                             span: node.span,
                         });
                     }
 
-                    if let Some(caller) = self.resolve_str(scope, caller) {
-                        if self.objects.contains_key(caller) {
-                            let mut lst = Vec::new();
+                    if let Some(caller) = self.resolve_str(scope, caller).map(|x| x.clone()) {
+                        if self.objects.contains_key(&caller) {
+                            let mut map = HashMap::new();
 
-                            for arg in args {
-                                lst.push(Some(self.evaluate(scope, arg.0)?));
+                            for (i, arg) in args.into_iter().enumerate() {
+                                map.insert(i.to_string(), self.evaluate(scope, arg.0)?);
                             }
+
                             return Ok(MiddleNode {
-                                node_type: MiddleNodeType::StructLiteral(ObjectType::Tuple(lst)),
+                                node_type: MiddleNodeType::AggregateExpression {identifier: Some(ParserText::from(caller)), value: map.into() },
                                 span: node.span,
                             });
                         }

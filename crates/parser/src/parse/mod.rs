@@ -324,21 +324,20 @@ impl Parser {
             ))
         } else if t.token_type == TokenType::List {
             let open = self.eat();
-            let mut close = open.clone();
-            let t = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
-                let _ = self.eat();
-                let t = Some(Box::new(self.expect_type()));
-                close = self.expect_eat(
-                    &TokenType::Comparison(Comparison::Greater),
-                    SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
-                );
-                t
-            } else {
-                None
-            };
+            let _ = self.expect_eat(
+                &TokenType::Comparison(Comparison::Lesser),
+                SyntaxErr::ExpectedChar('<'),
+            );
+
+            let t = self.expect_type();
+
+            let close = self.expect_eat(
+                &TokenType::Comparison(Comparison::Greater),
+                SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
+            );
 
             Some(ParserDataType::new(
-                ParserInnerType::List(t),
+                ParserInnerType::List(Box::new(t)),
                 Span::new_from_spans(open.span, close.span),
             ))
         } else {

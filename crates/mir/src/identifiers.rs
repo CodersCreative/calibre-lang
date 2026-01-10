@@ -87,8 +87,7 @@ impl MiddleNode {
                 amt
             }
             MiddleNodeType::ScopeDeclaration { body, is_temp: _ }
-            | MiddleNodeType::ListLiteral(body)
-            | MiddleNodeType::TupleLiteral(body) => {
+            | MiddleNodeType::ListLiteral(body) => {
                 let mut amt = Vec::new();
 
                 for n in body {
@@ -100,13 +99,16 @@ impl MiddleNode {
             MiddleNodeType::EnumExpression {
                 identifier: _,
                 value: _,
-                data: Some(ObjectType::Tuple(data)),
+                data: Some(value),
             }
-            | MiddleNodeType::StructLiteral(ObjectType::Tuple(data)) => {
+            | MiddleNodeType::AggregateExpression {
+                identifier: _,
+                value,
+            } => {
                 let mut amt = Vec::new();
 
-                for n in data.iter().flatten() {
-                    amt.append(&mut n.identifiers_used());
+                for n in value.iter() {
+                    amt.append(&mut n.1.identifiers_used());
                 }
 
                 amt
@@ -115,25 +117,6 @@ impl MiddleNode {
                 2 | 3 => path.first().unwrap().0.identifiers_used(),
                 _ => todo!(),
             },
-
-            MiddleNodeType::EnumExpression {
-                identifier: _,
-                value: _,
-                data: Some(ObjectType::Map(data)),
-            }
-            | MiddleNodeType::StructLiteral(ObjectType::Map(data)) => {
-                let mut amt = Vec::new();
-
-                for n in data {
-                    if let Some(n) = n.1 {
-                        amt.append(&mut n.identifiers_used());
-                    } else {
-                        amt.push(n.0);
-                    }
-                }
-
-                amt
-            }
             MiddleNodeType::FunctionDeclaration {
                 parameters,
                 body,

@@ -332,7 +332,9 @@ impl Formatter {
 
                 txt
             }
-            NodeType::StructLiteral(x) => self.fmt_struct_literal(&x),
+            NodeType::StructLiteral { identifier, value } => {
+                format!("{}{}", identifier, self.fmt_struct_literal(&value))
+            }
             NodeType::EnumExpression {
                 identifier,
                 value,
@@ -785,14 +787,28 @@ impl Formatter {
         }
     }
 
-    fn fmt_struct_literal(&mut self, object_type: &ObjectType<Option<Node>>) -> String {
+    fn fmt_struct_literal(&mut self, object_type: &ObjectType<Node>) -> String {
         let allow_new_line = false;
         match object_type {
             ObjectType::Map(map) => {
                 let mut txt = format!("{{{}", if allow_new_line { "\n" } else { "" });
                 for (key, value) in map.iter() {
-                    let temp = if let Some(value) = value {
-                        handle_comment!(
+                    let mut temp = None;
+
+                    if let NodeType::Identifier(x) = &value.node_type {
+                        if &x.text == key {
+                            temp = Some({
+                                let span = Span::default();
+                                handle_comment!(
+                                    self.get_potential_comment(&span),
+                                    format!("{},{}", key, if allow_new_line { "\n" } else { " " })
+                                )
+                            });
+                        }
+                    }
+
+                    if temp.is_none() {
+                        temp = Some(handle_comment!(
                             self.get_potential_comment(&value.span),
                             format!(
                                 "{} : {},{}",
@@ -800,16 +816,10 @@ impl Formatter {
                                 self.format(value),
                                 if allow_new_line { "\n" } else { " " }
                             )
-                        )
-                    } else {
-                        let span = Span::default();
-                        handle_comment!(
-                            self.get_potential_comment(&span),
-                            format!("{},{}", key, if allow_new_line { "\n" } else { " " })
-                        )
-                    };
+                        ));
+                    }
 
-                    txt.push_str(&self.fmt_txt_with_tab(&temp, 1, false));
+                    txt.push_str(&self.fmt_txt_with_tab(&temp.unwrap(), 1, false));
                 }
 
                 let mut txt = txt.trim_end().trim_end_matches(",").to_string();
@@ -819,13 +829,11 @@ impl Formatter {
             ObjectType::Tuple(lst) => {
                 let mut txt = String::from("(");
                 for value in lst.iter() {
-                    if let Some(value) = value {
-                        let temp = handle_comment!(
-                            self.get_potential_comment(&value.span),
-                            self.format(value)
-                        );
-                        txt.push_str(&self.fmt_txt_with_tab(&format!("{}, ", temp), 1, false));
-                    }
+                    let temp = handle_comment!(
+                        self.get_potential_comment(&value.span),
+                        self.format(value)
+                    );
+                    txt.push_str(&self.fmt_txt_with_tab(&format!("{}, ", temp), 1, false));
                 }
 
                 let mut txt = txt.trim_end().trim_end_matches(",").to_string();

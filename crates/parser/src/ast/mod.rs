@@ -5,6 +5,7 @@ pub mod formatter;
 use crate::{
     ast::{comparison::BooleanOperation, formatter::Formatter},
     lexer::{Span, Token, TokenType},
+    parse::r#type,
 };
 use binary::BinaryOperator;
 use comparison::Comparison;
@@ -101,7 +102,7 @@ pub enum ParserInnerType {
     Str,
     Char,
     Tuple(Vec<ParserDataType>),
-    List(Option<Box<ParserDataType>>),
+    List(Box<ParserDataType>),
     Scope(Vec<ParserDataType>),
     Range,
     Option(Box<ParserDataType>),
@@ -112,7 +113,7 @@ pub enum ParserInnerType {
         is_async: bool,
     },
     Ref(Box<ParserDataType>, RefMutability),
-    Struct(Option<String>),
+    Struct(String),
     NativeFunction(Box<ParserDataType>),
 }
 
@@ -139,14 +140,8 @@ impl Display for ParserInnerType {
             Self::Result(x, y) => write!(f, "{}!{}", x, y),
             Self::Option(x) => write!(f, "{}?", x),
             Self::NativeFunction(x) => write!(f, "native -> {}", x),
-            Self::Struct(x) => match x {
-                Some(x) => write!(f, "{}", x),
-                None => write!(f, "struct"),
-            },
-            Self::List(x) => match x {
-                Some(x) => write!(f, "list<{}>", x),
-                None => write!(f, "list"),
-            },
+            Self::Struct(x) => write!(f, "{}", x),
+            Self::List(x) => write!(f, "list<{}>", x),
             Self::Tuple(types) => {
                 let mut txt = format!(
                     "<{}",
@@ -210,13 +205,12 @@ impl FromStr for ParserInnerType {
         Ok(match s {
             "int" => Self::Int,
             "float" => Self::Float,
-            "struct" => Self::Struct(None),
             "bool" => Self::Bool,
             "str" => Self::Str,
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
             "null" => Self::Null,
-            _ => Self::Struct(Some(s.to_string())),
+            _ => Self::Struct(s.to_string()),
         })
     }
 }
@@ -225,6 +219,50 @@ impl FromStr for ParserInnerType {
 pub enum ObjectType<T> {
     Map(HashMap<String, T>),
     Tuple(Vec<T>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectMap<T>(pub HashMap<String, T>);
+
+impl<T> From<HashMap<String, T>> for ObjectMap<T> {
+    fn from(value: HashMap<String, T>) -> Self {
+        Self(value)
+    }
+}
+
+impl<T> From<Vec<T>> for ObjectMap<T> {
+    fn from(value: Vec<T>) -> Self {
+        let mut map = HashMap::new();
+
+        for (i, v) in value.into_iter().enumerate() {
+            map.insert(i.to_string(), v);
+        }
+
+        Self(map)
+    }
+}
+
+impl<T> From<ObjectType<T>> for ObjectMap<T> {
+    fn from(value: ObjectType<T>) -> Self {
+        match value {
+            ObjectType::Map(x) => Self(x),
+            ObjectType::Tuple(x) => x.into(),
+        }
+    }
+}
+
+impl<T> Deref for ObjectMap<T> {
+    type Target = HashMap<String, T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for ObjectMap<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -352,7 +390,7 @@ pub enum NodeType {
     EnumExpression {
         identifier: ParserText,
         value: ParserText,
-        data: Option<ObjectType<Option<Node>>>,
+        data: Option<ObjectType<Node>>,
     },
     ScopeDeclaration {
         body: Vec<Node>,
@@ -455,7 +493,10 @@ pub enum NodeType {
         alias: Option<ParserText>,
         values: Vec<ParserText>,
     },
-    StructLiteral(ObjectType<Option<Node>>),
+    StructLiteral {
+        identifier: ParserText,
+        value: ObjectType<Node>,
+    },
 }
 
 impl Display for NodeType {
@@ -528,12 +569,57 @@ impl<T: PartialEq + ToString> ToString for ObjectType<T> {
 
                 txt
             }
-            ObjectType::Tuple(data) => print_list(data, '(', ')'),
+            ObjectType::Tuple(data) => {
+                let lst: Vec<&T> = data.iter().collect();
+                print_list(&lst, '(', ')')
+            }
         }
     }
 }
 
-fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {
+impl<T: PartialEq> PartialOrd for ObjectMap<T> {
+    fn gt(&self, _other: &Self) -> bool {
+        false
+    }
+
+    fn lt(&self, _other: &Self) -> bool {
+        false
+    }
+
+    fn ge(&self, _other: &Self) -> bool {
+        true
+    }
+
+    fn le(&self, _other: &Self) -> bool {
+        true
+    }
+
+    fn partial_cmp(&self, _other: &Self) -> Option<std::cmp::Ordering> {
+        Some(Ordering::Equal)
+    }
+}
+
+impl<T: PartialEq + ToString> ToString for ObjectMap<T> {
+    fn to_string(&self) -> String {
+        if !self.0.is_empty() {
+            if self.0.get("0").is_some() {
+                let lst: Vec<&T> = self.0.iter().map(|x| x.1).collect();
+                return print_list(&lst, '(', ')');
+            }
+        }
+        let mut txt = String::from("{");
+        for (k, v) in self.0.iter() {
+            txt.push_str(&format!("{k} : {}, ", v.to_string()));
+        }
+
+        let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+        txt.push_str("}");
+
+        txt
+    }
+}
+
+fn print_list<T: ToString>(data: &[&T], open: char, close: char) -> String {
     let mut txt = String::from(open);
 
     for val in data.iter() {

@@ -2,17 +2,40 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use calibre_parser::{
     Parser,
-    ast::{Node, NodeType, ParserDataType, ParserInnerType, ParserText, TypeDefType, VarType},
+    ast::{
+        Node, NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
+        TypeDefType, VarType,
+    },
     lexer::{Location, Span, Tokenizer},
 };
-use calibre_std::{get_globals_path, get_stdlib_path};
 use rand::random_range;
 
 use crate::{ast::MiddleNode, errors::MiddleErr};
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum MiddleTypeDefType {
+    Enum(Vec<(ParserText, Option<ObjectMap<ParserDataType>>)>),
+    Struct(ObjectMap<ParserDataType>),
+    NewType(ParserDataType),
+}
+
+impl From<TypeDefType> for MiddleTypeDefType {
+    fn from(value: TypeDefType) -> Self {
+        match value {
+            TypeDefType::Enum(x) => Self::Enum(
+                x.into_iter()
+                    .map(|variant| (variant.0, variant.1.map(|x| x.into())))
+                    .collect(),
+            ),
+            TypeDefType::Struct(x) => Self::Struct(x.into()),
+            TypeDefType::NewType(x) => Self::NewType(x),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct MiddleObject {
-    pub object_type: TypeDefType,
+    pub object_type: MiddleTypeDefType,
     pub functions: HashMap<String, (MiddleNode, Option<Location>, bool)>,
     pub traits: Vec<String>,
     pub location: Option<Location>,
@@ -119,11 +142,9 @@ impl MiddleEnvironment {
                 }
             }
             ParserInnerType::Struct(x) => ParserDataType {
-                data_type: ParserInnerType::Struct(if let Some(x) = x {
-                    self.resolve_str(scope, &x).map(|x| x.to_string())
-                } else {
-                    None
-                }),
+                data_type: ParserInnerType::Struct(
+                    self.resolve_str(scope, &x).map(|x| x.to_string()).unwrap(),
+                ),
                 ..data_type
             },
             ParserInnerType::Ref(d_type, mutability) => ParserDataType {
@@ -134,11 +155,7 @@ impl MiddleEnvironment {
                 ..data_type
             },
             ParserInnerType::List(x) => ParserDataType {
-                data_type: ParserInnerType::List(if let Some(x) = x {
-                    Some(Box::new(self.resolve_data_type(scope, *x)))
-                } else {
-                    None
-                }),
+                data_type: ParserInnerType::List(Box::new(self.resolve_data_type(scope, *x))),
                 ..data_type
             },
             ParserInnerType::Option(x) => ParserDataType {
@@ -417,10 +434,6 @@ impl MiddleEnvironment {
             | NodeType::ImportStatement { .. }
             | NodeType::AssignmentExpression { .. }
             | NodeType::LoopDeclaration { .. } => None,
-            NodeType::StructLiteral(_) => Some(ParserDataType {
-                data_type: ParserInnerType::Struct(None),
-                span: node.span,
-            }),
             NodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_type_from_node(scope, value)?),
@@ -461,7 +474,9 @@ impl MiddleEnvironment {
                 value: _,
                 data: _,
             } => Some(ParserDataType {
-                data_type: ParserInnerType::Struct(Some(identifier.text.clone())),
+                data_type: ParserInnerType::Struct(
+                    self.resolve_parser_text(scope, &identifier).unwrap().text,
+                ),
                 span: identifier.span,
             }),
             NodeType::FunctionDeclaration {
@@ -501,7 +516,9 @@ impl MiddleEnvironment {
             NodeType::BinaryExpression { left, .. } => self.resolve_type_from_node(scope, left),
             NodeType::ListLiteral(x) => Some(ParserDataType {
                 data_type: ParserInnerType::List(
-                    self.resolve_type_from_node(scope, x.first()?).map(Box::new),
+                    self.resolve_type_from_node(scope, x.first()?)
+                        .map(Box::new)
+                        .unwrap(),
                 ),
                 span: node.span,
             }),
@@ -511,7 +528,9 @@ impl MiddleEnvironment {
                 conditionals: _,
             } => Some(ParserDataType {
                 data_type: ParserInnerType::List(
-                    self.resolve_type_from_node(scope, map).map(Box::new),
+                    self.resolve_type_from_node(scope, map)
+                        .map(Box::new)
+                        .unwrap(),
                 ),
                 span: node.span,
             }),
@@ -569,7 +588,7 @@ impl MiddleEnvironment {
                     if let Some(caller) = self.resolve_str(scope, caller) {
                         if self.objects.contains_key(caller) {
                             return Some(ParserDataType {
-                                data_type: ParserInnerType::Struct(Some(caller.to_string())),
+                                data_type: ParserInnerType::Struct(caller.to_string()),
                                 span: node.span,
                             });
                         } else if let Some(caller) = self.variables.get(caller) {

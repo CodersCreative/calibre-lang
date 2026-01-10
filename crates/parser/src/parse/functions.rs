@@ -139,6 +139,24 @@ impl Parser {
             }
         }
 
+        if path.len() == 1 {
+            if let NodeType::Identifier(identifier) = &path[0].0.node_type {
+                if self.first().token_type == TokenType::Open(Bracket::Curly) {
+                    let data = self.parse_potential_key_value();
+                    return Node::new(
+                        NodeType::StructLiteral {
+                            identifier: ParserText::new(
+                                identifier.to_string(),
+                                path[0].0.span.clone(),
+                            ),
+                            value: data,
+                        },
+                        Span::new_from_spans(path[0].0.span, path[1].0.span),
+                    );
+                }
+            }
+        }
+
         if path.len() <= 1 {
             path.remove(0).0
         } else {

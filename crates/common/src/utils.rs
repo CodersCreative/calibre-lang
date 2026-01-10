@@ -1,4 +1,4 @@
-use std::{error::Error, path::PathBuf, str::FromStr};
+use std::error::Error;
 
 pub const SYMBOLS: [char; 5] = ['^', '/', '*', '+', '-'];
 pub const DIGITS: [char; 11] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.'];

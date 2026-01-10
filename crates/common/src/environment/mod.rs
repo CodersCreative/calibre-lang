@@ -1,9 +1,9 @@
 pub mod objects;
 pub mod variables;
 
-use calibre_mir::environment::MiddleEnvironment;
+use calibre_mir::environment::{MiddleEnvironment, MiddleTypeDefType};
 use calibre_parser::{
-    ast::{ObjectType, ParserDataType, TypeDefType, VarType},
+    ast::{ObjectMap, ParserDataType, VarType},
     lexer::Location,
 };
 use std::{collections::HashMap, fmt::Debug};
@@ -32,55 +32,42 @@ pub trait RuntimeValue: PartialEq + Clone + Debug {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type<U: RuntimeType> {
-    Enum(Vec<(String, Option<ObjectType<U>>)>),
-    Struct(ObjectType<U>),
+    Enum(Vec<(String, Option<ObjectMap<U>>)>),
+    Struct(ObjectMap<U>),
     NewType(U),
 }
 
-impl<U: RuntimeType> InterpreterFrom<ObjectType<ParserDataType>> for ObjectType<U> {
+impl<U: RuntimeType> InterpreterFrom<ObjectMap<ParserDataType>> for ObjectMap<U> {
     type Interpreter = U::Interpreter;
     fn interpreter_from(
         env: &Self::Interpreter,
         scope: &u64,
-        value: ObjectType<ParserDataType>,
+        value: ObjectMap<ParserDataType>,
     ) -> Result<Self, ScopeErr> {
-        match value {
-            ObjectType::Tuple(x) => {
-                let mut vec: Vec<U> = Vec::new();
-
-                for v in x {
-                    vec.push(U::interpreter_from(env, scope, v)?);
-                }
-
-                Ok(ObjectType::Tuple(vec))
-            }
-            ObjectType::Map(x) => {
-                let mut map: HashMap<String, U> = HashMap::new();
-                for (k, v) in x {
-                    map.insert(k, U::interpreter_from(env, scope, v)?);
-                }
-                Ok(ObjectType::Map(map))
-            }
+        let mut map: HashMap<String, U> = HashMap::new();
+        for (k, v) in value.0 {
+            map.insert(k, U::interpreter_from(env, scope, v)?);
         }
+        Ok(ObjectMap(map))
     }
 }
 
-impl<U: RuntimeType> InterpreterFrom<TypeDefType> for Type<U> {
+impl<U: RuntimeType> InterpreterFrom<MiddleTypeDefType> for Type<U> {
     type Interpreter = U::Interpreter;
     fn interpreter_from(
         env: &Self::Interpreter,
         scope: &u64,
-        value: TypeDefType,
+        value: MiddleTypeDefType,
     ) -> Result<Self, ScopeErr> {
         Ok(match value {
-            TypeDefType::Enum(x) => Type::Enum(
+            MiddleTypeDefType::Enum(x) => Type::Enum(
                 x.into_iter()
                     .map(|x| {
                         (
                             x.0.to_string(),
                             match x.1 {
                                 Some(x) => {
-                                    Some(ObjectType::<U>::interpreter_from(env, scope, x).unwrap())
+                                    Some(ObjectMap::<U>::interpreter_from(env, scope, x).unwrap())
                                 }
                                 None => None,
                             },
@@ -88,10 +75,10 @@ impl<U: RuntimeType> InterpreterFrom<TypeDefType> for Type<U> {
                     })
                     .collect(),
             ),
-            TypeDefType::Struct(x) => {
-                Type::Struct(ObjectType::<U>::interpreter_from(env, scope, x)?)
+            MiddleTypeDefType::Struct(x) => {
+                Type::Struct(ObjectMap::<U>::interpreter_from(env, scope, x)?)
             }
-            TypeDefType::NewType(x) => Type::NewType(U::interpreter_from(env, scope, x)?),
+            MiddleTypeDefType::NewType(x) => Type::NewType(U::interpreter_from(env, scope, x)?),
         })
     }
 }

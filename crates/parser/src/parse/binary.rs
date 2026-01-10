@@ -8,7 +8,7 @@ use crate::{
 
 impl Parser {
     pub fn parse_pipe_expression(&mut self) -> Node {
-        let mut left = vec![self.parse_object_expression()];
+        let mut left = vec![self.parse_try_expression()];
 
         while let TokenType::Pipe = self.first().token_type.clone() {
             let _ = self.eat();

@@ -1,6 +1,6 @@
 use crate::{
     Parser, SyntaxErr,
-    ast::{Node, ObjectType, RefMutability},
+    ast::{Node, ObjectType, ParserText, RefMutability},
     lexer::{Bracket, Span, StopValue},
 };
 use crate::{
@@ -153,16 +153,15 @@ impl Parser {
         }
     }
 
-    pub fn parse_potential_key_value(&mut self) -> ObjectType<Option<Node>> {
+    pub fn parse_potential_key_value(&mut self) -> ObjectType<Node> {
         match self.first().token_type {
             TokenType::Open(Bracket::Curly) => {
                 let _ = self.eat();
                 let mut properties = HashMap::new();
                 while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Curly)
                 {
-                    let key = self
-                        .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
-                        .value;
+                    let key =
+                        self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
 
                     if [TokenType::Comma, TokenType::Close(Bracket::Curly)]
                         .contains(&self.first().token_type)
@@ -171,13 +170,19 @@ impl Parser {
                             let _ = self.eat();
                         }
 
-                        properties.insert(key, None);
+                        properties.insert(
+                            key.value.clone(),
+                            Node::new(
+                                NodeType::Identifier(ParserText::new(key.value, key.span)),
+                                key.span,
+                            ),
+                        );
                         continue;
                     }
 
                     let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-                    properties.insert(key, Some(self.parse_statement()));
+                    properties.insert(key.value, self.parse_statement());
 
                     if self.first().token_type != TokenType::Close(Bracket::Curly) {
                         let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
@@ -197,7 +202,7 @@ impl Parser {
                 let mut tuple = Vec::new();
                 while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Paren)
                 {
-                    tuple.push(Some(self.parse_statement()));
+                    tuple.push(self.parse_statement());
                     if self.first().token_type != TokenType::Close(Bracket::Paren) {
                         let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
                     }
@@ -211,7 +216,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_object_expression(&mut self) -> Node {
+    /*pub fn parse_object_expression(&mut self) -> Node {
         if self.first().token_type != TokenType::Open(Bracket::Curly) {
             return self.parse_try_expression();
         }
@@ -222,7 +227,7 @@ impl Parser {
             NodeType::StructLiteral(self.parse_potential_key_value()),
             open.span,
         )
-    }
+    }*/
 
     pub fn parse_assignment_expression(&mut self) -> Node {
         let mut left: Node = self.parse_pipe_expression();

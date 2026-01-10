@@ -5,7 +5,7 @@ use crate::{
 };
 use calibre_common::environment::{InterpreterFrom, Type};
 use calibre_common::errors::ScopeErr;
-use calibre_parser::ast::{ObjectType, ParserDataType, ParserInnerType};
+use calibre_parser::ast::{ObjectMap, ObjectType, ParserDataType, ParserInnerType};
 use helper::Block;
 use std::{collections::HashMap, f64::consts::PI, fmt::Debug, rc::Rc};
 
@@ -31,7 +31,7 @@ pub enum RuntimeType {
         is_async: bool,
     },
     Enum(String),
-    Struct(Option<String>),
+    Aggregate(Option<String>),
     Ref(Box<RuntimeType>),
     Null,
     NativeFn(Box<RuntimeType>),
@@ -204,9 +204,8 @@ pub enum RuntimeValue {
     Bool(bool),
     Str(String),
     Char(char),
-    Struct(Option<String>, ObjectType<RuntimeValue>),
-    Enum(String, usize, Option<ObjectType<RuntimeValue>>),
-    Tuple(Vec<RuntimeValue>),
+    Aggregate(Option<String>, ObjectMap<RuntimeValue>),
+    Enum(String, usize, Option<ObjectMap<RuntimeValue>>),
     Ref(String, RuntimeType),
     List {
         data: Vec<RuntimeValue>,
@@ -252,10 +251,9 @@ impl ToString for RuntimeValue {
             Self::Range(from, to) => format!("{}..{}", from, to),
             Self::Ref(_, ty) => format!("link -> {:?}", ty),
             Self::Bool(x) => x.to_string(),
-            Self::Struct(x, y) => format!("{y:?} = {x:?}"),
+            Self::Aggregate(x, y) => format!("{y:?} = {x:?}"),
             Self::NativeFunction(_) => format!("native function"),
             Self::List { data, data_type: _ } => print_list(data, '[', ']'),
-            Self::Tuple(data) => print_list(data, '(', ')'),
             Self::Option(x, _) => format!("{:?}", x),
             Self::Result(x, _) => format!("{:?}", x),
             Self::Str(x) => x.to_string(),
