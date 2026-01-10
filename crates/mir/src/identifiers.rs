@@ -149,24 +149,6 @@ impl MiddleNode {
 
                 amt
             }
-            MiddleNodeType::MatchDeclaration {
-                parameters,
-                body,
-                return_type: _,
-                is_async: _,
-            } => {
-                let mut amt = Vec::new();
-
-                for pattern in body {
-                    amt.append(&mut pattern.2.identifiers_used())
-                }
-
-                if let Some(n) = &parameters.2 {
-                    amt.append(&mut n.identifiers_used());
-                }
-
-                amt
-            }
         }
     }
 }

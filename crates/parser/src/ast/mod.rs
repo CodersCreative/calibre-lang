@@ -63,6 +63,7 @@ impl From<TokenType> for RefMutability {
 pub enum LoopType {
     While(Node),
     For(ParserText, Node),
+    Loop,
 }
 
 #[derive(Debug, Clone, PartialEq)]

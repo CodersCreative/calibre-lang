@@ -404,6 +404,16 @@ impl MiddleEnvironment {
             NodeType::LoopDeclaration { loop_type, body } => {
                 let scope = self.new_scope_from_parent_shallow(*scope);
                 match *loop_type {
+                LoopType::Loop => Ok(MiddleNode {
+                    node_type: MiddleNodeType::LoopDeclaration {
+                        state: None,
+                        body: Box::new(self.evaluate(
+                            &scope,
+                            *body,
+                        )?),
+                    },
+                    span: node.span,
+                }),
                 LoopType::While(condition) => Ok(MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration {
                         state: None,
@@ -715,18 +725,15 @@ impl MiddleEnvironment {
                 span: node.span,
             })
             },
-            NodeType::MatchDeclaration { parameters, body: _, return_type, is_async } => Ok(MiddleNode {
-                node_type: MiddleNodeType::MatchDeclaration {
-                    parameters: (parameters.0, self.resolve_data_type(scope, parameters.1), if let Some(x) = parameters.2 {Some(Box::new(self.evaluate(scope, *x)?))} else {None}),
+            NodeType::MatchDeclaration { parameters, body: _, return_type, is_async } => self.evaluate(scope, Node::new_from_type(NodeType::FunctionDeclaration{
+                    parameters: vec![(parameters.0, parameters.1, parameters.2.map(|x| *x))],
                     return_type,
                     is_async,
                     body: {
-                        // TODO make sure to create a new scope and add variables that are created in the match arms
+                        // TODO create & use a discriminant function + scalar replacement of aggregates to enable for the breaking down of a match fn into a series of ifs
                         todo!()
                     },
-                },
-                span: node.span,
-            }),
+                })),
             NodeType::FunctionDeclaration { parameters, body, return_type, is_async } => {
                 let mut params = Vec::with_capacity(parameters.len());
                 let new_scope = self.new_scope_from_parent_shallow(*scope);

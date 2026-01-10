@@ -55,12 +55,6 @@ pub enum MiddleNodeType {
         body: Vec<MiddleNode>,
         is_temp: bool,
     },
-    MatchDeclaration {
-        parameters: (ParserText, ParserDataType, Option<Box<MiddleNode>>),
-        body: Vec<(MiddleNode, Vec<MiddleNode>, Box<MiddleNode>)>,
-        return_type: ParserDataType,
-        is_async: bool,
-    },
     FunctionDeclaration {
         parameters: Vec<(ParserText, ParserDataType, Option<MiddleNode>)>,
         body: Box<MiddleNode>,

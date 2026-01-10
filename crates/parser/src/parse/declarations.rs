@@ -469,7 +469,12 @@ impl Parser {
             &TokenType::For,
             SyntaxErr::ExpectedKeyword(String::from("for")),
         );
-        let typ = self.get_loop_type();
+
+        let typ = if self.first().token_type == TokenType::FatArrow {
+            LoopType::Loop
+        } else {
+            self.get_loop_type()
+        };
         let block = self.parse_block();
 
         let span = Span::new_from_spans(open.span, block.span);

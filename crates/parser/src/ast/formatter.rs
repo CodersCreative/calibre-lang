@@ -847,6 +847,7 @@ impl Formatter {
         match loop_type {
             LoopType::While(x) => self.format(x),
             LoopType::For(id, x) => format!("{} in {}", id, self.format(x)),
+            LoopType::Loop => String::new(),
         }
     }
 
