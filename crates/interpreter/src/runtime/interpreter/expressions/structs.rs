@@ -5,7 +5,7 @@ use calibre_common::{
     environment::Type,
     errors::{ScopeErr, ValueErr},
 };
-use calibre_mir::ast::MiddleNode;
+use calibre_mir::{ast::MiddleNode, environment::MiddleTypeDefType};
 use calibre_parser::ast::{ObjectMap, ObjectType};
 use std::collections::HashMap;
 
@@ -34,7 +34,7 @@ impl InterpreterEnvironment {
         data: Option<ObjectMap<MiddleNode>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let enm_class = match self.get_object_type(&identifier) {
-            Ok(Type::Enum(x)) => x.clone(),
+            Ok(MiddleTypeDefType::Enum(x)) => x.clone(),
             Err(e) => return Err(e.into()),
             _ => {
                 return Err(InterpreterErr::Value(ValueErr::Scope(ScopeErr::Object(
@@ -43,7 +43,7 @@ impl InterpreterEnvironment {
             }
         };
 
-        if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
+        if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0.text == &value) {
             if let Some(ObjectMap(properties)) = &enm.1 {
                 let mut data_vals = HashMap::new();
                 if let Some(ObjectMap(data)) = data {

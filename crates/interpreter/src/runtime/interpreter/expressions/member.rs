@@ -37,7 +37,6 @@ impl InterpreterEnvironment {
         value_node: Box<MiddleNode>,
         mut args: Vec<(MiddleNode, Option<MiddleNode>)>,
     ) -> Result<MembrExprPathRes, InterpreterErr> {
-        println!("{:?}", path);
         match value_node.node_type {
             MiddleNodeType::Identifier(value) => {
                 return Ok(MembrExprPathRes::Value(
@@ -64,7 +63,8 @@ impl InterpreterEnvironment {
                                 .get_function(&path[0].to_string(), &value)
                                 .map(|x| x.0.clone())
                             {
-                                self.evaluate_function(scope, x, args)?
+                                let func = self.evaluate(scope, x)?;
+                                self.evaluate_function(scope, func, args)?
                             } else {
                                 let obj = match match self.get_var(&path[0].to_string()) {
                                     Ok(x) => x.value.clone(),
@@ -92,7 +92,8 @@ impl InterpreterEnvironment {
                                         );
                                     }
 
-                                    self.evaluate_function(scope, x.0.clone(), args)?
+                                    let func = self.evaluate(scope, x.0.clone())?;
+                                    self.evaluate_function(scope, func, args)?
                                 } else {
                                     return Err(e);
                                 }

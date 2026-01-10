@@ -1,12 +1,12 @@
 pub mod objects;
 pub mod variables;
 
-use calibre_mir::environment::{MiddleEnvironment, MiddleTypeDefType};
+use calibre_mir::environment::{MiddleEnvironment, MiddleObject, MiddleTypeDefType};
 use calibre_parser::{
     ast::{ObjectMap, ParserDataType, VarType},
     lexer::Location,
 };
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
 
 use crate::errors::ScopeErr;
 
@@ -103,8 +103,9 @@ pub struct Environment<T: RuntimeValue, U: RuntimeType> {
     pub scopes: HashMap<u64, Scope>,
     pub variables: HashMap<String, Variable<T>>,
     pub mappings: Vec<String>,
-    pub objects: HashMap<String, Object<T, U>>,
+    pub objects: HashMap<String, MiddleObject>,
     pub current_location: Option<Location>,
+    pub runtime_type: PhantomData<U>,
     pub strict_removal: bool,
 }
 
@@ -122,13 +123,14 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
             scope_counter: 0,
             scopes: HashMap::new(),
             variables: HashMap::new(),
-            objects: HashMap::new(),
+            objects: middle_env.objects.clone(),
             current_location: None,
             mappings: middle_env
                 .variables
                 .iter()
                 .map(|x| x.0.to_string())
                 .collect(),
+            runtime_type: PhantomData,
             strict_removal,
         }
     }

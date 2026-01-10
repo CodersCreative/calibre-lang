@@ -1,12 +1,19 @@
-use calibre_parser::lexer::Location;
+use calibre_mir::{
+    ast::MiddleNode,
+    environment::{MiddleObject, MiddleTypeDefType},
+};
+use calibre_parser::{ast::TypeDefType, lexer::Location};
 
 use crate::{
-    environment::{Environment, Object, RuntimeType, RuntimeValue, Type},
+    environment::{Environment, InterpreterFrom, Object, RuntimeType, RuntimeValue, Type},
     errors::ScopeErr,
 };
 
 impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
-    pub fn get_object_type<'a>(&'a self, object_name: &str) -> Result<&'a Type<U>, ScopeErr> {
+    pub fn get_object_type<'a>(
+        &'a self,
+        object_name: &str,
+    ) -> Result<&'a MiddleTypeDefType, ScopeErr> {
         if let Some(x) = self.objects.get(object_name) {
             Ok(&x.object_type)
         } else {
@@ -14,7 +21,7 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         }
     }
 
-    pub fn get_object(&self, object_name: &str) -> Result<&Object<T, U>, ScopeErr> {
+    pub fn get_object(&self, object_name: &str) -> Result<&MiddleObject, ScopeErr> {
         if let Some(x) = self.objects.get(object_name) {
             Ok(x)
         } else {
@@ -26,7 +33,7 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
         &'a self,
         object_name: &str,
         name: &str,
-    ) -> Result<&'a (T, Option<Location>, bool), ScopeErr> {
+    ) -> Result<&'a (MiddleNode, Option<Location>, bool), ScopeErr> {
         if let Some(f) = &self.objects.get(object_name).unwrap().functions.get(name) {
             Ok(f)
         } else {

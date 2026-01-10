@@ -2,7 +2,11 @@ use crate::runtime::{
     scope::InterpreterEnvironment,
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_common::{environment::Type, errors::ValueErr};
+use calibre_common::{
+    environment::{InterpreterFrom, Type},
+    errors::ValueErr,
+};
+use calibre_mir::environment::MiddleTypeDefType;
 use calibre_parser::ast::{ObjectMap, ObjectType};
 use numbers::NumberValue;
 use std::{collections::HashMap, mem::discriminant};
@@ -169,7 +173,7 @@ impl RuntimeValue {
                 RuntimeType::Option(_) => option_case(),
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Struct(t_o) => {
-                    let Some(Type::Struct(ObjectMap(properties))) =
+                    let Some(MiddleTypeDefType::Struct(ObjectMap(properties))) =
                         env.objects.get(t_o).map(|x| &x.object_type)
                     else {
                         return panic_type();
@@ -178,7 +182,13 @@ impl RuntimeValue {
 
                     for (i, property) in properties.iter() {
                         if let Some(val) = map.0.get(i) {
-                            new_values.insert(i.to_string(), val.into_type(env, &property)?);
+                            new_values.insert(
+                                i.to_string(),
+                                val.into_type(
+                                    env,
+                                    &RuntimeType::interpreter_from(env, &0, property.clone())?,
+                                )?,
+                            );
                         } else {
                             return panic_type();
                         }

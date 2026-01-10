@@ -62,6 +62,39 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             NodeType::MemberExpression { mut path } => {
+                if path.is_empty() {
+                    return Ok(MiddleNode {
+                        node_type: MiddleNodeType::EmptyLine,
+                        span: node.span,
+                    });
+                }
+                
+                if let NodeType::Identifier(x) = &path[0].0.node_type {
+                    if let Some(Some(object)) = self.resolve_str(scope, x).map(|x| self.objects.get(x)) {
+                        match object.object_type {
+                            MiddleTypeDefType::Enum(_) if path.len() == 2 => {
+                                match &path[1].0.node_type {
+                                    NodeType::Identifier(y) => return self.evaluate(scope, Node::new_from_type(NodeType::EnumExpression { identifier: ParserText::from(x.to_string()), value: ParserText::from(y.to_string()), data: None })),
+                                    NodeType::CallExpression(caller, args) => {
+                                        let mut map = Vec::new();
+
+                                        for  value in args.iter() {
+                                            map.push(value.0.clone());
+                                        }
+                                        
+                                        match &caller.node_type {
+                                            NodeType::Identifier(y) => return self.evaluate(scope, Node::new_from_type(NodeType::EnumExpression { identifier: ParserText::from(x.to_string()), value: ParserText::from(y.to_string()), data: Some(ObjectType::Tuple(map)) })),
+                                            _ => {}
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                                
+                            },
+                            _ => {}
+                        }
+                    }
+                }
                 let first = path.remove(0);
                 let mut list = vec![(self.evaluate(scope, first.0)?, first.1)];
 
@@ -715,8 +748,6 @@ impl MiddleEnvironment {
                                     let mut args = vec![(MiddleNode::new_from_type(MiddleNodeType::Identifier(identifier)), None)];
                                     args.append(&mut map.into_iter().map(|x| (x.1, None)).collect());
                                     return Ok(MiddleNode::new_from_type(MiddleNodeType::CallExpression(Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(ParserText::from(x.data_type.to_string())))), args)));
-                                }else if self.objects.contains_key(&identifier.to_string()) {
-                                    return Ok(MiddleNode::new_from_type(MiddleNodeType::CallExpression(Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(identifier))), map.into_iter().map(|x| (x.1, None)).collect())));
                                 }else {
                                     Some(map.into())
                                 }

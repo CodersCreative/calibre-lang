@@ -122,10 +122,14 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
             ParserInnerType::Range => Self::Range,
             ParserInnerType::Struct(x) => {
                 if let Some(obj) = env.objects.get(&x) {
-                    match &obj.object_type {
+                    match Type::<RuntimeType>::interpreter_from(
+                        env,
+                        scope,
+                        obj.object_type.clone(),
+                    )? {
                         Type::Enum(_) => Self::Enum(x),
                         Type::Struct(_) => Self::Struct(x),
-                        Type::NewType(x) => x.clone(),
+                        Type::NewType(x) => x,
                     }
                 } else {
                     Self::Struct(x)

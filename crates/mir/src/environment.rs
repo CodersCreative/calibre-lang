@@ -197,7 +197,7 @@ impl MiddleEnvironment {
     pub fn add_scope(&mut self, mut scope: MiddleScope) {
         scope.id = self.scope_counter;
 
-        let name_name = get_disamubiguous_name(&scope.id, Some("__file__"), None);
+        let name_name = get_disamubiguous_name(&scope.id, Some("__name__"), None);
         self.variables.insert(
             name_name.clone(),
             MiddleVariable {
@@ -258,7 +258,7 @@ impl MiddleEnvironment {
                 }
             }
         }
-        panic!()
+        Err(MiddleErr::Scope(namespace.to_string()))
     }
 
     pub fn new_scope_from_parent_shallow(&mut self, parent: u64) -> u64 {
@@ -318,6 +318,13 @@ impl MiddleEnvironment {
             };
             let _ = self.add_scope(scope);
 
+            self.scopes.get_mut(&parent).unwrap().children.insert(
+                namespace
+                    .map(String::from)
+                    .unwrap_or((self.scope_counter - 1).to_string()),
+                self.scope_counter - 1,
+            );
+
             self.scope_counter - 1
         } else {
             todo!()
@@ -338,12 +345,13 @@ impl MiddleEnvironment {
         scope: u64,
         mut list: Vec<String>,
     ) -> Result<(u64, Option<MiddleNode>), MiddleErr> {
-        if list.len() <= 0 {
-            return Ok((scope, None));
-        }
         let first = list.remove(0);
-        let scope = self.import_next_scope(scope, first.as_str())?;
-        self.import_scope_list(scope.0, list)
+        let scope = self.import_next_scope(scope, first.as_str());
+        if list.is_empty() {
+            scope
+        } else {
+            self.import_scope_list(scope?.0, list)
+        }
     }
 
     pub fn import_next_scope(
