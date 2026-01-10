@@ -362,12 +362,14 @@ impl Formatter {
                 )
             }
             NodeType::IterExpression {
+                data_type,
                 map,
                 loop_type,
                 conditionals,
             } => {
                 let mut txt = format!(
-                    "[{} for {}",
+                    "list<{}>[{} for {}",
+                    data_type,
                     self.format(&*map),
                     self.fmt_loop_type(&*loop_type)
                 );
@@ -572,9 +574,10 @@ impl Formatter {
             }
             NodeType::CharLiteral(x) => format!("'{}'", x),
             NodeType::StringLiteral(x) => format!("\"{}\"", x),
-            NodeType::ListLiteral(values) => {
+            NodeType::ListLiteral(data_type, values) => {
                 let mut txt = format!(
-                    "[{}",
+                    "list<{}>[{}",
+                    data_type,
                     values
                         .get(0)
                         .map(|x| self.format(&*x))

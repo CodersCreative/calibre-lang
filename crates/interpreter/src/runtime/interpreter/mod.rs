@@ -104,8 +104,12 @@ impl InterpreterEnvironment {
                 self.evaluate_binary_expression(scope, left, right, operator)
             }
             MiddleNodeType::Identifier(x) => self.evaluate_identifier(&x),
-            MiddleNodeType::StructLiteral(obj) => self.evaluate_struct_expression(scope, obj),
-            MiddleNodeType::ListLiteral(vals) => self.evaluate_list_expression(scope, vals),
+            MiddleNodeType::AggregateExpression { identifier, value } => {
+                self.evaluate_aggregate_expression(scope, identifier.map(|x| x.text), value)
+            }
+            MiddleNodeType::ListLiteral(typ, vals) => {
+                self.evaluate_list_expression(scope, typ, vals)
+            }
             MiddleNodeType::CallExpression(caller, args) => {
                 self.evaluate_call_expression(scope, *caller, args)
             }
@@ -177,7 +181,6 @@ impl InterpreterEnvironment {
                     None => None,
                 },
             ),
-            MiddleNodeType::MatchDeclaration { .. } => self.evaluate_match_declaration(scope, node),
             MiddleNodeType::InDeclaration {
                 identifier,
                 expression,
@@ -248,5 +251,21 @@ impl InterpreterEnvironment {
             }
             _ => Err(InterpreterErr::UnexpectedNodeInGlobal(node.node_type)),
         }
+    }
+
+    pub fn handle_conditionals(
+        &mut self,
+        scope: &u64,
+        conditionals: Vec<MiddleNode>,
+    ) -> Result<bool, InterpreterErr> {
+        let mut result = true;
+
+        for condition in conditionals.into_iter() {
+            if let RuntimeValue::Bool(value) = self.evaluate(scope, condition)? {
+                result = result && value;
+            }
+        }
+
+        Ok(result)
     }
 }

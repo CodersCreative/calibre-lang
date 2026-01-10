@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display};
 
 use calibre_mir::ast::{MiddleNode, MiddleNodeType};
-use calibre_parser::ast::ObjectType;
+use calibre_parser::ast::{ObjectMap, ObjectType};
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
@@ -47,12 +47,13 @@ impl InterpreterEnvironment {
                             MiddleNodeType::EnumExpression {
                                 identifier: path[0].clone().to_string().into(),
                                 value: value.to_string().into(),
-                                data: Some(ObjectType::Tuple(
+                                data: Some(
                                     args.clone()
                                         .into_iter()
-                                        .map(|x| Some(x.0.clone()))
-                                        .collect(),
-                                )),
+                                        .map(|x| x.0.clone())
+                                        .collect::<Vec<_>>()
+                                        .into(),
+                                ),
                             },
                             value_node.span,
                         ),
@@ -69,7 +70,7 @@ impl InterpreterEnvironment {
                                     Ok(x) => x.value.clone(),
                                     _ => return Err(e),
                                 } {
-                                    RuntimeValue::Struct(p, _) => p.unwrap().clone(),
+                                    RuntimeValue::Aggregate(Some(p), _) => p.clone(),
                                     RuntimeValue::Enum(p, _, _) => p.clone(),
                                     _ => return Err(e),
                                 };

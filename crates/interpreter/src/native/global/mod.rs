@@ -66,9 +66,10 @@ impl NativeFunction for TupleFn {
         for arg in args {
             tple.push(arg.0.clone());
         }
-        Ok(RuntimeValue::Tuple(tple))
+        Ok(RuntimeValue::Aggregate(None, tple.into()))
     }
 }
+
 pub struct SomeFn();
 
 impl NativeFunction for SomeFn {
@@ -114,7 +115,7 @@ impl NativeFunction for Len {
         if let Some((x, _)) = args.get(0) {
             Ok(RuntimeValue::Int(match x {
                 RuntimeValue::List { data, data_type: _ } => data.len() as i64,
-                RuntimeValue::Tuple(data) => data.len() as i64,
+                RuntimeValue::Aggregate(_, data) => data.len() as i64,
                 RuntimeValue::Range(_, x) => *x,
                 RuntimeValue::Str(x) => x.len() as i64,
                 RuntimeValue::Int(x) => *x,

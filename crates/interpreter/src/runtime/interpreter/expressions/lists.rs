@@ -1,15 +1,18 @@
 use crate::runtime::{
     interpreter::InterpreterErr,
     scope::InterpreterEnvironment,
-    values::RuntimeValue,
+    values::{RuntimeType, RuntimeValue},
 };
+use calibre_common::environment::InterpreterFrom;
 use calibre_mir::ast::MiddleNode;
+use calibre_parser::ast::ParserDataType;
 use std::mem::discriminant;
 
 impl InterpreterEnvironment {
     pub fn evaluate_list_expression(
         &mut self,
         scope: &u64,
+        data_type: ParserDataType,
         vals: Vec<MiddleNode>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut values = Vec::new();
@@ -18,22 +21,9 @@ impl InterpreterEnvironment {
             values.push(self.evaluate(scope, val.clone())?);
         }
 
-        let t = if values.len() > 0 {
-            let t = discriminant(&values[0]);
-            let filtered: Vec<&RuntimeValue> =
-                values.iter().filter(|x| discriminant(*x) == t).collect();
-            if values.len() == filtered.len() {
-                Some(Box::new((&values[0]).into()))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
         Ok(RuntimeValue::List {
             data: values,
-            data_type: t,
+            data_type: Box::new(RuntimeType::interpreter_from(self, scope, data_type)?),
         })
     }
 }

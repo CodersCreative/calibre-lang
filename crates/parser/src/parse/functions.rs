@@ -151,7 +151,7 @@ impl Parser {
                             ),
                             value: data,
                         },
-                        Span::new_from_spans(path[0].0.span, path[1].0.span),
+                        path[0].0.span,
                     );
                 }
             }

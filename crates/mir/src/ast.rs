@@ -101,7 +101,7 @@ pub enum MiddleNodeType {
     },
     Identifier(ParserText),
     StringLiteral(ParserText),
-    ListLiteral(Vec<MiddleNode>),
+    ListLiteral(ParserDataType, Vec<MiddleNode>),
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(i64),

@@ -9,7 +9,7 @@ use rand::random_range;
 use crate::runtime::{
     interpreter::InterpreterErr,
     scope::InterpreterEnvironment,
-    values::{FunctionType, RuntimeType, RuntimeValue, helper::Block},
+    values::{RuntimeType, RuntimeValue, helper::Block},
 };
 
 impl InterpreterEnvironment {
@@ -28,31 +28,31 @@ impl InterpreterEnvironment {
         {
             if arguments.len() == 1 && parameters.len() > 1 {
                 if let Ok(x) = self.evaluate(scope, arguments[0].0.clone()) {
-                    if let RuntimeValue::Tuple(x) = x {
-                        arguments = x
-                            .into_iter()
-                            .map(|x| {
-                                let counter = random_range(0..1000000000);
+                    if let RuntimeValue::Aggregate(None, x) = x {
+                        arguments =
+                            x.0.into_iter()
+                                .map(|x| {
+                                    let counter = random_range(0..1000000000);
 
-                                let _ = self
-                                    .force_var(
-                                        &scope,
-                                        format!("$-{}", counter),
-                                        Variable {
-                                            value: x,
-                                            var_type: VarType::Mutable,
-                                        },
+                                    let _ = self
+                                        .force_var(
+                                            &scope,
+                                            format!("$-{}", counter),
+                                            Variable {
+                                                value: x.1,
+                                                var_type: VarType::Mutable,
+                                            },
+                                        )
+                                        .unwrap();
+
+                                    (
+                                        MiddleNode::new_from_type(MiddleNodeType::Identifier(
+                                            format!("$-{}", counter).into(),
+                                        )),
+                                        None,
                                     )
-                                    .unwrap();
-
-                                (
-                                    MiddleNode::new_from_type(MiddleNodeType::Identifier(
-                                        format!("$-{}", counter).into(),
-                                    )),
-                                    None,
-                                )
-                            })
-                            .collect();
+                                })
+                                .collect();
                     }
                 }
             };
@@ -107,14 +107,14 @@ impl InterpreterEnvironment {
                         )
                         .unwrap();
 
-                    let body = FunctionType::Regular(Block(Box::new(MiddleNode::new_from_type(
+                    let body = Block(Box::new(MiddleNode::new_from_type(
                         MiddleNodeType::CallExpression(
                             Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
                                 format!("$-{}", counter).into(),
                             ))),
                             arguments,
                         ),
-                    ))));
+                    )));
 
                     return Ok(RuntimeValue::Function {
                         parameters: params,
@@ -125,24 +125,13 @@ impl InterpreterEnvironment {
                 }
             }
 
-            match body {
-                FunctionType::Regular(body) => {
-                    let new_scope = self.get_new_scope(scope, parameters.to_vec(), arguments)?;
-                    let result = self.evaluate(&new_scope, *body.0.clone())?;
-                    self.stop = None;
+            let new_scope = self.get_new_scope(scope, parameters.to_vec(), arguments)?;
+            let result = self.evaluate(&new_scope, *body.0.clone())?;
+            self.stop = None;
 
-                    self.remove_scope(&new_scope);
+            self.remove_scope(&new_scope);
 
-                    Ok(result)
-                }
-                FunctionType::Match(body) => {
-                    return self.evaluate_match_function(
-                        scope,
-                        arguments[0].0.clone(),
-                        body.0.clone(),
-                    );
-                }
-            }
+            Ok(result)
         } else {
             unreachable!()
         }
@@ -154,43 +143,11 @@ impl InterpreterEnvironment {
         caller: MiddleNode,
         arguments: Vec<(MiddleNode, Option<MiddleNode>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let MiddleNodeType::Identifier(object_name) = caller.node_type.clone() {
-            if let Ok(Type::Struct(ObjectType::Tuple(params))) = self.get_object_type(&object_name)
-            {
-                if arguments.len() == params.len() {
-                    let mut args = Vec::new();
-                    for (_, arg) in arguments.into_iter().enumerate() {
-                        args.push(self.evaluate(scope, arg.0)?);
-                    }
-
-                    return Ok(RuntimeValue::Struct(
-                        Some(object_name.text),
-                        ObjectType::Tuple(args),
-                    ));
-                }
-            }
-        }
-
         let func = self.evaluate(scope, caller.clone())?;
 
         match func {
             RuntimeValue::Function { .. } => {
                 return self.evaluate_function(scope, func, arguments);
-            }
-            RuntimeValue::List { data, .. } if arguments.len() == 1 => {
-                match self.evaluate(scope, arguments[0].0.clone())? {
-                    RuntimeValue::Int(i) if arguments.len() == 1 => {
-                        return match data.get(i as usize) {
-                            Some(x) => Ok(x.clone()),
-                            None => Err(RuntimeErr::InvalidIndex(i)),
-                        };
-                    }
-                    _ => {
-                        return Err(InterpreterErr::IndexNonList(
-                            arguments[0].0.node_type.clone(),
-                        ));
-                    }
-                }
             }
             RuntimeValue::NativeFunction(_) => {
                 let mut evaluated_arguments = Vec::new();

@@ -126,9 +126,10 @@ impl RuntimeValue {
         _scope: &u64,
     ) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
         match rhs {
-            Self::Tuple(mut data) => {
-                data.push(self);
-                Ok(Self::Tuple(data))
+            Self::Aggregate(None, mut data) => {
+                let key = data.len().to_string();
+                data.insert(key, self);
+                Ok(Self::Aggregate(None, data))
             }
             Self::List {
                 mut data,
@@ -153,9 +154,10 @@ impl RuntimeValue {
         _scope: &u64,
     ) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
         match self {
-            Self::Tuple(mut data) => {
-                data.push(rhs);
-                Ok(Self::Tuple(data))
+            Self::Aggregate(None, mut data) => {
+                let key = data.len().to_string();
+                data.insert(key, rhs);
+                Ok(Self::Aggregate(None, data))
             }
             Self::List {
                 mut data,

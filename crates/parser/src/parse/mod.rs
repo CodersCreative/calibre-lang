@@ -423,9 +423,26 @@ impl Parser {
         value
     }
 
-    pub fn parse_list_expression(&mut self) -> Node {
+    pub fn parse_list_iter_expression(&mut self) -> Node {
         let mut values = Vec::new();
-        let open = self.eat();
+        let open = self.expect_eat(&TokenType::List, SyntaxErr::ExpectedType);
+
+        let _ = self.expect_eat(
+            &TokenType::Comparison(Comparison::Lesser),
+            SyntaxErr::ExpectedChar('<'),
+        );
+
+        let t = self.expect_type();
+
+        let _ = self.expect_eat(
+            &TokenType::Comparison(Comparison::Greater),
+            SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
+        );
+
+        let _ = self.expect_eat(
+            &TokenType::Open(Bracket::Square),
+            SyntaxErr::ExpectedOpeningBracket(Bracket::Square),
+        );
 
         while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Square) {
             values.push(self.parse_statement());
@@ -451,6 +468,7 @@ impl Parser {
 
                 return Node::new(
                     NodeType::IterExpression {
+                        data_type: t,
                         map: Box::new(values[0].clone()),
                         loop_type: Box::new(loop_type),
                         conditionals,
@@ -468,7 +486,7 @@ impl Parser {
         );
 
         Node::new(
-            NodeType::ListLiteral(values),
+            NodeType::ListLiteral(t, values),
             Span::new_from_spans(open.span, close.span),
         )
     }

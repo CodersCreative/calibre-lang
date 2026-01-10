@@ -17,10 +17,7 @@ impl RuntimeValue {
             RuntimeValue::Ref(_, x) => x == t,
             RuntimeValue::Null => false,
             RuntimeValue::NativeFunction(_) => false,
-            RuntimeValue::Struct(x, _) => match t {
-                RuntimeType::Struct(y) => x == y,
-                _ => false,
-            },
+
             RuntimeValue::Option(d, x) => d.is_none() || x == t,
             RuntimeValue::Result(d, x) => {
                 if x == t {
@@ -31,16 +28,24 @@ impl RuntimeValue {
                     false
                 }
             }
-            RuntimeValue::Tuple(data) => match t {
+            RuntimeValue::Aggregate(Some(x), _) => match t {
+                RuntimeType::Struct(y) => x == y,
+                _ => false,
+            },
+            RuntimeValue::Aggregate(None, data) => match t {
                 RuntimeType::Tuple(data_types) => {
                     if data.len() != data_types.len() {
                         false
                     } else {
                         let mut valid = true;
                         for i in 0..data.len() {
-                            if !data[i].is_type(env, &data_types[i]) {
-                                valid = false;
-                                break;
+                            if let Some(x) = data.get(&i.to_string()) {
+                                if !x.is_type(env, &data_types[i]) {
+                                    valid = false;
+                                    break;
+                                }
+                            } else {
+                                return false;
                             }
                         }
                         valid
@@ -50,7 +55,7 @@ impl RuntimeValue {
             },
             RuntimeValue::Enum(x, _, _) => match t {
                 RuntimeType::Enum(y) => x == y,
-                RuntimeType::Struct(y) => Some(x) == y.as_ref(),
+                RuntimeType::Struct(y) => x == y,
                 _ => false,
             },
             RuntimeValue::Function {

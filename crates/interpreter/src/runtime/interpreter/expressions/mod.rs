@@ -121,7 +121,7 @@ impl InterpreterEnvironment {
         data_type: RuntimeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
         match data_type {
-            RuntimeType::Struct(Some(x)) if &x == "__number__" => {
+            RuntimeType::Struct(x) if &x == "__number__" => {
                 Ok(RuntimeValue::Bool(value.is_number()))
             }
             _ => Ok(RuntimeValue::Bool(value.is_type(self, &data_type))),

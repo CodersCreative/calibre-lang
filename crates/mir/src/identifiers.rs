@@ -87,7 +87,7 @@ impl MiddleNode {
                 amt
             }
             MiddleNodeType::ScopeDeclaration { body, is_temp: _ }
-            | MiddleNodeType::ListLiteral(body) => {
+            | MiddleNodeType::ListLiteral(_, body) => {
                 let mut amt = Vec::new();
 
                 for n in body {

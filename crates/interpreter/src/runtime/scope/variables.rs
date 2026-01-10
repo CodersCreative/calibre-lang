@@ -1,5 +1,5 @@
 use calibre_common::{environment::Variable, errors::ScopeErr};
-use calibre_parser::ast::{ObjectType, VarType};
+use calibre_parser::ast::{ObjectMap, ObjectType, VarType};
 
 use crate::runtime::{
     interpreter::{InterpreterErr, expressions::member::MemberPathType},
@@ -76,18 +76,11 @@ impl InterpreterEnvironment {
 
         fn unwrap_runtime_value(env: &InterpreterEnvironment, value: RuntimeValue) -> RuntimeValue {
             match value {
-                RuntimeValue::Struct(x, ObjectType::Map(map)) => {
-                    RuntimeValue::Struct(x, ObjectType::Map(unwrap_map(env, map)))
+                RuntimeValue::Aggregate(x, ObjectMap(map)) => {
+                    RuntimeValue::Aggregate(x, ObjectMap(unwrap_map(env, map)))
                 }
-                RuntimeValue::Struct(x, ObjectType::Tuple(vec)) => {
-                    RuntimeValue::Struct(x, ObjectType::Tuple(unwrap_list(env, vec)))
-                }
-                RuntimeValue::Tuple(vec) => RuntimeValue::Tuple(unwrap_list(env, vec)),
-                RuntimeValue::Enum(x, y, Some(ObjectType::Map(map))) => {
-                    RuntimeValue::Enum(x, y, Some(ObjectType::Map(unwrap_map(env, map))))
-                }
-                RuntimeValue::Enum(x, y, Some(ObjectType::Tuple(vec))) => {
-                    RuntimeValue::Enum(x, y, Some(ObjectType::Tuple(unwrap_list(env, vec))))
+                RuntimeValue::Enum(x, y, Some(ObjectMap(map))) => {
+                    RuntimeValue::Enum(x, y, Some(ObjectMap(unwrap_map(env, map))))
                 }
                 RuntimeValue::Option(Some(data), typ) => {
                     RuntimeValue::Option(Some(Box::new(unwrap_singular(env, *data))), typ)
@@ -179,20 +172,12 @@ impl InterpreterEnvironment {
         };
 
         match value.value {
-            RuntimeValue::Struct(x, ObjectType::Map(map)) => Variable {
-                value: RuntimeValue::Struct(x, ObjectType::Map(get_new_map(self, map))),
+            RuntimeValue::Aggregate(x, ObjectMap(map)) => Variable {
+                value: RuntimeValue::Aggregate(x, ObjectMap(get_new_map(self, map))),
                 var_type,
             },
-            RuntimeValue::Struct(x, ObjectType::Tuple(vec)) => Variable {
-                value: RuntimeValue::Struct(x, ObjectType::Tuple(get_new_list(self, vec))),
-                var_type,
-            },
-            RuntimeValue::Tuple(vec) => Variable {
-                value: RuntimeValue::Tuple(get_new_list(self, vec)),
-                var_type,
-            },
-            RuntimeValue::Enum(x, y, Some(ObjectType::Map(map))) => Variable {
-                value: RuntimeValue::Enum(x, y, Some(ObjectType::Map(get_new_map(self, map)))),
+            RuntimeValue::Enum(x, y, Some(ObjectMap(map))) => Variable {
+                value: RuntimeValue::Enum(x, y, Some(ObjectMap(get_new_map(self, map)))),
                 var_type,
             },
             RuntimeValue::Option(Some(data), typ) => Variable {
@@ -205,10 +190,6 @@ impl InterpreterEnvironment {
             },
             RuntimeValue::Result(Err(data), typ) => Variable {
                 value: RuntimeValue::Result(Err(Box::new(get_singular(self, *data))), typ),
-                var_type,
-            },
-            RuntimeValue::Enum(x, y, Some(ObjectType::Tuple(vec))) => Variable {
-                value: RuntimeValue::Enum(x, y, Some(ObjectType::Tuple(get_new_list(self, vec)))),
                 var_type,
             },
             RuntimeValue::List { data, data_type } => Variable {
@@ -299,26 +280,16 @@ impl InterpreterEnvironment {
 
         for key in keys.iter().skip(1) {
             match (&self.variables.get(&pointer).unwrap().value, key) {
-                (RuntimeValue::Struct(_, ObjectType::Map(map)), _) => {
+                (RuntimeValue::Aggregate(_, ObjectMap(map)), _) => {
                     match map.get(&key.to_string()) {
                         Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
                         _ => break,
                     }
                 }
-                (
-                    RuntimeValue::Enum(_, _, Some(ObjectType::Map(map))),
-                    MemberPathType::Dot(key),
-                ) => match map.get(key) {
-                    Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
-                    _ => break,
-                },
-                (RuntimeValue::Struct(_, ObjectType::Tuple(data)), _) => {
-                    match data.get(key.to_string().parse::<usize>().unwrap()) {
+                (RuntimeValue::Enum(_, _, Some(ObjectMap(map))), MemberPathType::Dot(key)) => {
+                    match map.get(key) {
                         Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
-                        x => {
-                            println!("why {x:?}");
-                            break;
-                        }
+                        _ => break,
                     }
                 }
                 (RuntimeValue::List { data, data_type: _ }, MemberPathType::Computed(key)) => {
@@ -330,17 +301,7 @@ impl InterpreterEnvironment {
                         }
                     }
                 }
-                (
-                    RuntimeValue::Enum(_, _, Some(ObjectType::Tuple(data)))
-                    | RuntimeValue::Tuple(data),
-                    MemberPathType::Dot(key),
-                ) => match data.get(key.parse::<usize>().unwrap()) {
-                    Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
-                    x => {
-                        println!("why {x:?}");
-                        break;
-                    }
-                },
+
                 (
                     RuntimeValue::Option(Some(data), _)
                     | RuntimeValue::Result(Ok(data), _)
@@ -368,18 +329,17 @@ impl InterpreterEnvironment {
             RuntimeValue::Ref(pointer, _) => {
                 self.progress_var(&self.variables.get(pointer).unwrap().value, key)
             }
-            RuntimeValue::Struct(_, ObjectType::Map(map))
-            | RuntimeValue::Enum(_, _, Some(ObjectType::Map(map))) => match map.get(key) {
+            RuntimeValue::Aggregate(_, ObjectMap(map))
+            | RuntimeValue::Enum(_, _, Some(ObjectMap(map))) => match map.get(key) {
                 Some(x) => Ok(x.clone()),
                 _ => panic!(),
             },
-            RuntimeValue::List { data, data_type: _ }
-            | RuntimeValue::Struct(_, ObjectType::Tuple(data))
-            | RuntimeValue::Enum(_, _, Some(ObjectType::Tuple(data)))
-            | RuntimeValue::Tuple(data) => match data.get(key.parse::<usize>().unwrap()) {
-                Some(x) => Ok(x.clone()),
-                _ => panic!(),
-            },
+            RuntimeValue::List { data, data_type: _ } => {
+                match data.get(key.parse::<usize>().unwrap()) {
+                    Some(x) => Ok(x.clone()),
+                    _ => panic!(),
+                }
+            }
             RuntimeValue::Option(Some(data), _)
             | RuntimeValue::Result(Ok(data), _)
             | RuntimeValue::Result(Err(data), _) => Ok(*data.clone()),

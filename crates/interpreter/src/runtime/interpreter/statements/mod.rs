@@ -6,53 +6,15 @@ use crate::runtime::{
     interpreter::InterpreterErr,
     scope::InterpreterEnvironment,
     values::{
-        FunctionType, RuntimeType, RuntimeValue,
+        RuntimeType, RuntimeValue,
         helper::{Block, MatchBlock},
     },
 };
 
 pub mod comparisons;
 pub mod loops;
-pub mod matching;
 
 impl InterpreterEnvironment {
-    pub fn evaluate_match_declaration(
-        &mut self,
-        scope: &u64,
-        declaration: MiddleNode,
-    ) -> Result<RuntimeValue, InterpreterErr> {
-        let MiddleNodeType::MatchDeclaration {
-            parameters,
-            body,
-            return_type,
-            is_async,
-        } = declaration.node_type
-        else {
-            unreachable!()
-        };
-
-        let mut params = Vec::new();
-
-        let default = if let Some(node) = parameters.2 {
-            Some(self.evaluate(scope, *node)?)
-        } else {
-            None
-        };
-
-        params.push((
-            parameters.0.to_string(),
-            RuntimeType::interpreter_from(self, scope, parameters.1)?,
-            default,
-        ));
-
-        Ok(RuntimeValue::Function {
-            parameters: params,
-            body: FunctionType::Match(MatchBlock(body)),
-            return_type: RuntimeType::interpreter_from(self, scope, return_type)?,
-            is_async,
-        })
-    }
-
     pub fn evaluate_function_declaration(
         &mut self,
         scope: &u64,
@@ -85,7 +47,7 @@ impl InterpreterEnvironment {
 
         Ok(RuntimeValue::Function {
             parameters: params,
-            body: FunctionType::Regular(Block(body)),
+            body: Block(body),
             return_type: RuntimeType::interpreter_from(self, scope, return_type)?,
             is_async,
         })

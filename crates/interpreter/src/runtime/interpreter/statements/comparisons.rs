@@ -2,11 +2,27 @@ use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
 use calibre_mir::ast::MiddleNode;
+use calibre_parser::ast::ObjectMap;
 
 impl InterpreterEnvironment {
     fn value_in_list(&self, scope: &u64, value: &RuntimeValue, list: &[RuntimeValue]) -> bool {
         for val in list {
             if self.is_equal(scope, value, val) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn value_in_map(
+        &self,
+        scope: &u64,
+        value: &RuntimeValue,
+        map: &ObjectMap<RuntimeValue>,
+    ) -> bool {
+        for val in map.0.iter() {
+            if self.is_equal(scope, value, val.1) {
                 return true;
             }
         }
@@ -22,7 +38,7 @@ impl InterpreterEnvironment {
                 _ => false,
             },
             RuntimeValue::List { data, .. } => self.value_in_list(scope, value, data),
-            RuntimeValue::Tuple(data) => self.value_in_list(scope, value, data),
+            RuntimeValue::Aggregate(_, map) => self.value_in_map(scope, value, map),
             RuntimeValue::Range(from, to) => {
                 let num: f64 = match value {
                     RuntimeValue::Range(x, y) => (*x as f64 + *y as f64) / 2.0,

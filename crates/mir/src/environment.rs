@@ -143,7 +143,9 @@ impl MiddleEnvironment {
             }
             ParserInnerType::Struct(x) => ParserDataType {
                 data_type: ParserInnerType::Struct(
-                    self.resolve_str(scope, &x).map(|x| x.to_string()).unwrap(),
+                    self.resolve_str(scope, &x)
+                        .map(|x| x.to_string())
+                        .unwrap_or(x),
                 ),
                 ..data_type
             },
@@ -469,19 +471,14 @@ impl MiddleEnvironment {
                     self.resolve_type_from_node(scope, then)
                 }
             }
-            NodeType::EnumExpression {
-                identifier,
-                value: _,
-                data: _,
-            } => Some(ParserDataType {
-                data_type: ParserInnerType::Struct(
-                    self.resolve_parser_text(scope, &identifier).unwrap().text,
-                ),
+            NodeType::EnumExpression { identifier, .. }
+            | NodeType::StructLiteral { identifier, .. } => Some(ParserDataType {
+                data_type: ParserInnerType::Struct(identifier.text.clone()),
                 span: identifier.span,
             }),
             NodeType::FunctionDeclaration {
                 parameters,
-                body,
+                body: _,
                 return_type,
                 is_async,
             } => Some(ParserDataType {
@@ -514,26 +511,13 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             NodeType::BinaryExpression { left, .. } => self.resolve_type_from_node(scope, left),
-            NodeType::ListLiteral(x) => Some(ParserDataType {
-                data_type: ParserInnerType::List(
-                    self.resolve_type_from_node(scope, x.first()?)
-                        .map(Box::new)
-                        .unwrap(),
-                ),
-                span: node.span,
-            }),
-            NodeType::IterExpression {
-                map,
-                loop_type: _,
-                conditionals: _,
-            } => Some(ParserDataType {
-                data_type: ParserInnerType::List(
-                    self.resolve_type_from_node(scope, map)
-                        .map(Box::new)
-                        .unwrap(),
-                ),
-                span: node.span,
-            }),
+
+            NodeType::IterExpression { data_type, .. } | NodeType::ListLiteral(data_type, _) => {
+                Some(ParserDataType {
+                    data_type: ParserInnerType::List(Box::new(data_type.clone())),
+                    span: node.span,
+                })
+            }
             NodeType::NegExpression { value } | NodeType::DebugExpression { value } => {
                 self.resolve_type_from_node(scope, value)
             }

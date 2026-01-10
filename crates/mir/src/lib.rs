@@ -187,6 +187,7 @@ impl MiddleEnvironment {
             } => {
                 let new_name =
                     get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type));
+
                 let data_type = if let Some(x) = data_type {
                     self.resolve_data_type(scope, x)
                 } else if let Some(x) = self.resolve_type_from_node(scope, &value) {
@@ -332,7 +333,8 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::ListLiteral(x) => {
+            NodeType::ListLiteral(typ, x) => {
+                let typ = self.resolve_data_type(scope, typ);
                 let mut lst = Vec::new();
 
                 for item in x {
@@ -340,7 +342,7 @@ impl MiddleEnvironment {
                 }
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::ListLiteral(lst),
+                    node_type: MiddleNodeType::ListLiteral(typ, lst),
                     span: node.span,
                 })
             }
@@ -501,6 +503,7 @@ impl MiddleEnvironment {
                 }),
             }},
             NodeType::IterExpression {
+                data_type,
                 map,
                 loop_type,
                 conditionals,
@@ -513,6 +516,7 @@ impl MiddleEnvironment {
                                 var_type: VarType::Mutable,
                                 identifier: ParserText::from(String::from("anon_iter_list")),
                                 value: Box::new(Node::new_from_type(NodeType::ListLiteral(
+                                    data_type,
                                     Vec::new(),
                                 ))),
                                 data_type: self.resolve_type_from_node(scope, &map),

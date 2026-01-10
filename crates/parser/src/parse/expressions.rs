@@ -12,6 +12,7 @@ use std::collections::HashMap;
 impl Parser {
     pub fn parse_primary_expression(&mut self) -> Node {
         match &self.first().token_type {
+            TokenType::List => self.parse_list_iter_expression(),
             TokenType::Identifier => {
                 let val = self.eat();
                 Node::new(NodeType::Identifier(val.clone().into()), val.span)
@@ -55,7 +56,6 @@ impl Parser {
                 )
             }
             TokenType::Open(Bracket::Paren) => self.parse_paren_expression(),
-            TokenType::Open(Bracket::Square) => self.parse_list_expression(),
             TokenType::BinaryOperator(BinaryOperator::Sub) => {
                 let open = self.eat();
                 let val = self.parse_statement();

@@ -21,7 +21,7 @@ pub enum RuntimeType {
     Str,
     Char,
     Tuple(Vec<RuntimeType>),
-    List(Option<Box<RuntimeType>>),
+    List(Box<RuntimeType>),
     Range,
     Option(Box<RuntimeType>),
     Result(Box<RuntimeType>, Box<RuntimeType>),
@@ -31,7 +31,7 @@ pub enum RuntimeType {
         is_async: bool,
     },
     Enum(String),
-    Aggregate(Option<String>),
+    Struct(String),
     Ref(Box<RuntimeType>),
     Null,
     NativeFn(Box<RuntimeType>),
@@ -115,24 +115,22 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
                     .map(|x| RuntimeType::interpreter_from(env, scope, x).unwrap())
                     .collect(),
             ),
-            ParserInnerType::List(x) => Self::List(match x {
-                Some(x) => Some(Box::new(RuntimeType::interpreter_from(env, scope, *x)?)),
-                None => None,
-            }),
+            ParserInnerType::List(x) => {
+                Self::List(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
+            }
             ParserInnerType::Scope(_nodes) => unreachable!(),
             ParserInnerType::Range => Self::Range,
-            ParserInnerType::Struct(Some(x)) => {
+            ParserInnerType::Struct(x) => {
                 if let Some(obj) = env.objects.get(&x) {
                     match &obj.object_type {
                         Type::Enum(_) => Self::Enum(x),
-                        Type::Struct(_) => Self::Struct(Some(x)),
+                        Type::Struct(_) => Self::Struct(x),
                         Type::NewType(x) => x.clone(),
                     }
                 } else {
-                    Self::Struct(Some(x))
+                    Self::Struct(x)
                 }
             }
-            ParserInnerType::Struct(_) => Self::Struct(None),
             ParserInnerType::Function {
                 return_type,
                 parameters,
@@ -166,15 +164,15 @@ impl Into<RuntimeType> for &RuntimeValue {
             RuntimeValue::Int(_) => RuntimeType::Int,
             RuntimeValue::Ref(_, x) => x.clone(),
             RuntimeValue::Enum(y, _, _) => RuntimeType::Enum(y.clone()),
-            RuntimeValue::Struct(y, _) => RuntimeType::Struct(y.clone()),
             RuntimeValue::Bool(_) => RuntimeType::Bool,
             RuntimeValue::Option(_, x) => x.clone(),
             RuntimeValue::Result(_, x) => x.clone(),
             RuntimeValue::Str(_) => RuntimeType::Str,
             RuntimeValue::Char(_) => RuntimeType::Char,
             RuntimeValue::Range(_, _) => RuntimeType::Range,
-            RuntimeValue::Tuple(data) => {
-                RuntimeType::Tuple(data.into_iter().map(|x| x.into()).collect())
+            RuntimeValue::Aggregate(Some(x), _) => RuntimeType::Struct(x.to_string()),
+            RuntimeValue::Aggregate(None, data) => {
+                RuntimeType::Tuple(data.0.iter().map(|x| (x.1).into()).collect())
             }
             RuntimeValue::List { data_type, .. } => RuntimeType::List(data_type.clone()),
             RuntimeValue::Function {
@@ -209,23 +207,17 @@ pub enum RuntimeValue {
     Ref(String, RuntimeType),
     List {
         data: Vec<RuntimeValue>,
-        data_type: Option<Box<RuntimeType>>,
+        data_type: Box<RuntimeType>,
     },
     Option(Option<Box<RuntimeValue>>, RuntimeType),
     Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>, RuntimeType),
     Function {
         parameters: Vec<(String, RuntimeType, Option<RuntimeValue>)>,
-        body: FunctionType,
+        body: Block,
         return_type: RuntimeType,
         is_async: bool,
     },
     NativeFunction(Rc<dyn NativeFunction>),
-}
-
-#[derive(Clone, PartialEq, PartialOrd, Debug)]
-pub enum FunctionType {
-    Regular(Block),
-    Match(MatchBlock),
 }
 
 fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {

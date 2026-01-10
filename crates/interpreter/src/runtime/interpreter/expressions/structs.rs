@@ -6,38 +6,24 @@ use calibre_common::{
     errors::{ScopeErr, ValueErr},
 };
 use calibre_mir::ast::MiddleNode;
-use calibre_parser::ast::ObjectType;
+use calibre_parser::ast::{ObjectMap, ObjectType};
 use std::collections::HashMap;
 
 impl InterpreterEnvironment {
-    pub fn evaluate_struct_expression(
+    pub fn evaluate_aggregate_expression(
         &mut self,
         scope: &u64,
-        props: ObjectType<Option<MiddleNode>>,
+        identifier: Option<String>,
+        props: ObjectMap<MiddleNode>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let ObjectType::Map(props) = props {
-            let mut properties = HashMap::new();
-            for (k, v) in props {
-                let value = if let Some(value) = v {
-                    self.evaluate(scope, value)?
-                } else {
-                    self.get_var(&k)?.value.clone()
-                };
+        let mut properties = HashMap::new();
+        for (k, value) in props.0 {
+            let value = self.evaluate(scope, value)?;
 
-                properties.insert(k, value);
-            }
-
-            return Ok(RuntimeValue::Struct(None, ObjectType::Map(properties)));
-        } else if let ObjectType::Tuple(props) = props {
-            let mut properties = Vec::new();
-            for v in props {
-                if let Some(value) = v {
-                    properties.push(self.evaluate(scope, value)?);
-                }
-            }
-            return Ok(RuntimeValue::Struct(None, ObjectType::Tuple(properties)));
+            properties.insert(k.to_string(), value);
         }
-        Ok(RuntimeValue::Null)
+
+        Ok(RuntimeValue::Aggregate(identifier, ObjectMap(properties)))
     }
 
     pub fn evaluate_enum_expression(
@@ -45,7 +31,7 @@ impl InterpreterEnvironment {
         scope: &u64,
         identifier: String,
         value: String,
-        data: Option<ObjectType<Option<MiddleNode>>>,
+        data: Option<ObjectMap<MiddleNode>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let enm_class = match self.get_object_type(&identifier) {
             Ok(Type::Enum(x)) => x.clone(),
@@ -58,15 +44,11 @@ impl InterpreterEnvironment {
         };
 
         if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0 == &value) {
-            if let Some(ObjectType::Map(properties)) = &enm.1 {
+            if let Some(ObjectMap(properties)) = &enm.1 {
                 let mut data_vals = HashMap::new();
-                if let Some(ObjectType::Map(data)) = data {
-                    for (k, v) in data {
-                        let value = if let Some(value) = v {
-                            self.evaluate(scope, value)?
-                        } else {
-                            self.get_var(&k)?.value.clone()
-                        };
+                if let Some(ObjectMap(data)) = data {
+                    for (k, value) in data {
+                        let value = self.evaluate(scope, value)?;
 
                         data_vals.insert(k, value);
                     }
@@ -84,37 +66,12 @@ impl InterpreterEnvironment {
                 let data = if new_data_vals.is_empty() {
                     None
                 } else {
-                    Some(ObjectType::Map(new_data_vals))
-                };
-
-                return Ok(RuntimeValue::Enum(identifier, i, data));
-            } else if let Some(ObjectType::Tuple(properties)) = &enm.1 {
-                let mut data_vals = Vec::new();
-
-                if let Some(ObjectType::Tuple(data)) = data {
-                    for v in data {
-                        if let Some(value) = v {
-                            data_vals.push(self.evaluate(scope, value)?);
-                        };
-                    }
-                }
-
-                let mut new_data_vals = Vec::new();
-                for (i, _property) in properties.into_iter().enumerate() {
-                    if data_vals.len() <= 0 {
-                        return Err(InterpreterErr::InvalidIndex(i as i64));
-                    }
-                    new_data_vals.push(data_vals.remove(0));
-                }
-
-                let data = if new_data_vals.is_empty() {
-                    None
-                } else {
-                    Some(ObjectType::Tuple(new_data_vals))
+                    Some(ObjectMap(new_data_vals))
                 };
 
                 return Ok(RuntimeValue::Enum(identifier, i, data));
             }
+
             return Ok(RuntimeValue::Enum(identifier, i, None));
         } else {
             Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
