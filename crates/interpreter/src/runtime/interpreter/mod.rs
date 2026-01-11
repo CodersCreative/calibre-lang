@@ -81,7 +81,11 @@ impl InterpreterEnvironment {
             }
             MiddleNodeType::Return { value } => {
                 self.stop = Some(StopValue::Return);
-                self.evaluate(scope, *value)
+                if let Some(value) = value {
+                    self.evaluate(scope, *value)
+                } else {
+                    Ok(RuntimeValue::Null)
+                }
             }
             MiddleNodeType::Break => {
                 if self.stop != Some(StopValue::Return) {

@@ -95,7 +95,7 @@ pub enum MiddleNodeType {
         body: Box<MiddleNode>,
     },
     Return {
-        value: Box<MiddleNode>,
+        value: Option<Box<MiddleNode>>,
     },
     Identifier(ParserText),
     StringLiteral(ParserText),

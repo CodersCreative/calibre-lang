@@ -58,7 +58,6 @@ impl InterpreterEnvironment {
                         match self.get_function(&obj, &value) {
                             Ok(x) => {
                                 if x.2 {
-                                    println!("{:?}", path[0]);
                                     args.insert(
                                         0,
                                         (

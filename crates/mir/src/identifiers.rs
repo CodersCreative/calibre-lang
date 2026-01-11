@@ -15,7 +15,8 @@ impl MiddleNode {
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::IntLiteral(_)
-            | MiddleNodeType::FloatLiteral(_) => Vec::new(),
+            | MiddleNodeType::FloatLiteral(_)
+            | MiddleNodeType::Return { value: None } => Vec::new(),
             MiddleNodeType::Identifier(x) => vec![x],
             MiddleNodeType::RefStatement {
                 mutability: _,
@@ -39,7 +40,7 @@ impl MiddleNode {
                 pretty_printed_str: _,
                 value,
             }
-            | MiddleNodeType::Return { value }
+            | MiddleNodeType::Return { value: Some(value) }
             | MiddleNodeType::EnumExpression {
                 data: Some(value), ..
             } => value.identifiers_used(),

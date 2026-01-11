@@ -405,6 +405,12 @@ impl MatchArmType {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct TryCatch {
+    pub name: Option<ParserText>,
+    pub body: Box<Node>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     Break,
     Continue,
@@ -496,9 +502,10 @@ pub enum NodeType {
     },
     Try {
         value: Box<Node>,
+        catch: Option<TryCatch>,
     },
     Return {
-        value: Box<Node>,
+        value: Option<Box<Node>>,
     },
     Identifier(ParserText),
     StringLiteral(ParserText),

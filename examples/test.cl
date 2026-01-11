@@ -17,6 +17,12 @@ const main = fn () => {
 	let mut correct = -10;
 	let mut other = -10;
 
+	let hello = try ok("Yesssss") : hello => {
+		print("Nooooo");
+	};
+
+	print(hello);
+
 	(false) ? (8 == 9) ? correct : other : other = 0;
 
 	print(correct);

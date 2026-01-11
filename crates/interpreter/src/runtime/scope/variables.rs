@@ -291,7 +291,6 @@ impl InterpreterEnvironment {
                     match data.get(key.parse::<usize>().unwrap()) {
                         Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
                         x => {
-                            println!("why {x:?}");
                             break;
                         }
                     }

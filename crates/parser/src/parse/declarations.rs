@@ -2,7 +2,7 @@ use crate::{
     Parser, SyntaxErr,
     ast::{
         IfComparisonType, LoopType, MatchArmType, Node, ParserDataType, ParserInnerType,
-        ParserText, VarType, binary::BinaryOperator,
+        ParserText, TryCatch, VarType, binary::BinaryOperator,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -222,11 +222,41 @@ impl Parser {
 
             let val = self.parse_statement();
 
-            let span = Span::new_from_spans(open.span, val.span);
+            let mut span = Span::new_from_spans(open.span, val.span);
+
+            let catch = if self.first().token_type == TokenType::Colon
+                || self.first().token_type == TokenType::FatArrow
+            {
+                let name = if self.first().token_type == TokenType::Colon {
+                    let _ = self.eat();
+
+                    let name =
+                        self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+
+                    Some(ParserText {
+                        text: name.value,
+                        span: name.span,
+                    })
+                } else {
+                    None
+                };
+
+                let block = self.parse_block();
+
+                span = Span::new_from_spans(span, block.span);
+
+                Some(TryCatch {
+                    name,
+                    body: Box::new(block),
+                })
+            } else {
+                None
+            };
 
             Node::new(
                 NodeType::Try {
                     value: Box::new(val),
+                    catch,
                 },
                 span,
             )
@@ -322,15 +352,16 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("return")),
         );
 
-        let val = self.parse_statement();
+        let mut span = open.span;
 
-        let span = Span::new_from_spans(open.span, val.span);
-        Node::new(
-            NodeType::Return {
-                value: Box::new(val),
-            },
-            span,
-        )
+        let val = if self.first().token_type == TokenType::EOL {
+            None
+        } else {
+            let val = self.parse_statement();
+            span = Span::new_from_spans(span, val.span);
+            Some(Box::new(val))
+        };
+        Node::new(NodeType::Return { value: val }, span)
     }
 
     pub fn parse_match_arm_start(&mut self, parse_name: bool) -> MatchArmType {

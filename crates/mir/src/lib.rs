@@ -182,7 +182,11 @@ impl MiddleEnvironment {
             }),
             NodeType::Return { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::Return {
-                    value: Box::new(self.evaluate(scope, *value)?),
+                    value: if let Some(value) = value {
+                        Some(Box::new(self.evaluate(scope, *value)?))
+                    } else {
+                        None
+                    },
                 },
                 span: node.span,
             }),
@@ -376,57 +380,96 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::Try { value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::CallExpression(
-                    Box::new(self.evaluate(
-                        scope,
-                        Node {
-                            node_type: NodeType::MatchDeclaration {
-                                parameters: (
-                                    ParserText::new(
-                                        String::from("input_value"),
-                                        Span::default(),
-                                    ),
-                                    self.resolve_type_from_node(scope, &value).unwrap_or(
-                                        ParserDataType::new(
-                                            ParserInnerType::Dynamic,
+            NodeType::Try { value, catch } => {
+                let resolved_type = self.resolve_type_from_node(scope, &value);
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::CallExpression(
+                        Box::new(self.evaluate(
+                            scope,
+                            Node {
+                                node_type: NodeType::MatchDeclaration {
+                                    parameters: (
+                                        ParserText::new(
+                                            String::from("input_value"),
                                             Span::default(),
                                         ),
+                                        self.resolve_type_from_node(scope, &value).unwrap_or(
+                                            ParserDataType::new(
+                                                ParserInnerType::Dynamic,
+                                                Span::default(),
+                                            ),
+                                        ),
+                                        None,
                                     ),
-                                    None,
-                                ),
-                                body: vec![
-                                    (
-                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Ok")), name: Some(ParserText::from(String::from("anon_ok_value"))) },
-                                        Vec::new(),
-                                        Box::new(Node {
-                                            node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value"))),
-                                            span: Span::default(),
-                                        }),
-                                    ),
-                                    (
-                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")), name: Some(ParserText::from(String::from("anon_err_value"))) },
-                                        Vec::new(),
-                                        Box::new(Node {
-                                            node_type: NodeType::Return { value: Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("err"))))), vec![(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")))), None)]))) },
-                                            span: Span::default(),
-                                        }),
-                                    ),
-                                ],
-                                return_type:  match self.resolve_type_from_node(scope, &value) {
-                                    Some(ParserDataType { data_type: ParserInnerType::Result { ok: x, err: _ }, span: _ }) | Some(ParserDataType { data_type: ParserInnerType::Option(x), span: _ }) => *x,
-                                    Some(x) => x,
-                                    _ => ParserDataType::from(ParserInnerType::Null),
+                                    body: match resolved_type {
+                                        Some(ParserDataType { data_type: ParserInnerType::Option(_), span: _ }) => vec![
+                                            (
+                                                MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Some")), name: Some(ParserText::from(String::from("anon_ok_value"))) },
+                                                Vec::new(),
+                                                Box::new(Node {
+                                                    node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value"))),
+                                                    span: Span::default(),
+                                                }),
+                                            ),
+                                            if let Some(catch) = catch {
+                                                (
+                                                    MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")), name: catch.name },
+                                                    Vec::new(),
+                                                    catch.body,
+                                                )
+                                            }else {
+                                                (
+                                                    MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")), name: None },
+                                                    Vec::new(),
+                                                    Box::new(Node {
+                                                        node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("none"))))), Vec::new())))) },
+                                                        span: Span::default(),
+                                                    }),
+                                                )
+                                            },
+                                        ],
+                                        _ => vec![
+                                            (
+                                                MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Ok")), name: Some(ParserText::from(String::from("anon_ok_value"))) },
+                                                Vec::new(),
+                                                Box::new(Node {
+                                                    node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value"))),
+                                                    span: Span::default(),
+                                                }),
+                                            ),
+                                            if let Some(catch) = catch {
+                                                (
+                                                    MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")), name: catch.name },
+                                                    Vec::new(),
+                                                    catch.body,
+                                                )
+                                            }else {
+                                                (
+                                                    MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")), name: Some(ParserText::from(String::from("anon_err_value"))) },
+                                                    Vec::new(),
+                                                    Box::new(Node {
+                                                        node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("err"))))), vec![(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")))), None)])))) },
+                                                        span: Span::default(),
+                                                    }),
+                                                )
+                                            },
+                                        ]
+                                    },
+                                    return_type: match resolved_type {
+                                        Some(ParserDataType { data_type: ParserInnerType::Result { ok: x, err: _ }, span: _ }) | Some(ParserDataType { data_type: ParserInnerType::Option(x), span: _ }) => *x,
+                                        Some(x) => x,
+                                        _ => ParserDataType::from(ParserInnerType::Null),
+                                    },
+                                    is_async: false,
                                 },
-                                is_async: false,
+                                span: node.span,
                             },
-                            span: node.span,
-                        },
-                    )?),
-                    vec![(self.evaluate(scope, *value)?, None)],
-                ),
-                span: node.span,
-            }),
+                        )?),
+                        vec![(self.evaluate(scope, *value)?, None)],
+                    ),
+                    span: node.span,
+                })
+            },
             NodeType::LoopDeclaration { loop_type, body } => {
                 let scope = self.new_scope_from_parent_shallow(*scope);
                 match *loop_type {
@@ -781,7 +824,7 @@ impl MiddleEnvironment {
                             
                         for pattern in body {
                             let main = if pattern.1.is_empty() {
-                                Node::new_from_type(NodeType::Return { value: pattern.2 })
+                                Node::new_from_type(NodeType::Return { value: Some(pattern.2) })
                             }else {
                                 todo!()  
                             };

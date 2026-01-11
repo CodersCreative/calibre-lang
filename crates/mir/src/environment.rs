@@ -568,7 +568,7 @@ impl MiddleEnvironment {
                 data_type: ParserInnerType::Float,
                 span: node.span,
             }),
-            NodeType::Try { value } => match self.resolve_type_from_node(scope, value) {
+            NodeType::Try { value, .. } => match self.resolve_type_from_node(scope, value) {
                 Some(ParserDataType {
                     data_type: ParserInnerType::Result { ok: x, err: _ },
                     ..
@@ -580,7 +580,6 @@ impl MiddleEnvironment {
                 x => x,
             },
             NodeType::CallExpression(caller, args) => {
-                println!("{:?}", caller);
                 let mut caller_type = None;
                 if let NodeType::Identifier(caller) = &caller.node_type {
                     if &caller.text == "tuple" {

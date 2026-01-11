@@ -268,9 +268,21 @@ impl Formatter {
             }
             NodeType::NegExpression { value } => format!("-{}", self.format(&*value)),
             NodeType::NotExpression { value } => format!("!{}", self.format(&*value)),
-            NodeType::Try { value } => format!("try {{{}}}", self.format(&*value)),
+            NodeType::Try { value, catch } => {
+                let mut txt = format!("try {}", self.format(&*value));
+                if let Some(catch) = catch {
+                    if let Some(name) = &catch.name {
+                        txt.push_str(&format!(" : {}", name));
+                    }
+
+                    txt.push_str(&format!(" => {}", self.format(&catch.body)));
+                }
+
+                txt
+            }
             NodeType::DebugExpression { value } => format!("debug {{{}}}", self.format(&*value)),
-            NodeType::Return { value } => format!("return {}", self.format(&*value)),
+            NodeType::Return { value: Some(value) } => format!("return {}", self.format(&*value)),
+            NodeType::Return { value: _ } => String::from("return"),
             NodeType::AssignmentExpression { identifier, value } => match value.node_type.clone() {
                 NodeType::BinaryExpression {
                     left,

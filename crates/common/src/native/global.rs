@@ -4,7 +4,15 @@ use crate::environment::{Environment, RuntimeType, RuntimeValue, Variable};
 
 pub fn setup<T: RuntimeValue, U: RuntimeType>(env: &mut Environment<T, U>, scope: &u64) {
     let funcs: Vec<&str> = vec![
-        "ok", "err", "some", "trim", "print", "len", "panic", "tuple",
+        "ok",
+        "err",
+        "some",
+        "trim",
+        "print",
+        "len",
+        "panic",
+        "tuple",
+        "discriminant",
     ];
 
     let map = T::natives();
