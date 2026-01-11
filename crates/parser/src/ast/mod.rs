@@ -5,7 +5,6 @@ pub mod formatter;
 use crate::{
     ast::{comparison::BooleanOperation, formatter::Formatter},
     lexer::{Span, Token, TokenType},
-    parse::r#type,
 };
 use binary::BinaryOperator;
 use comparison::Comparison;
@@ -273,6 +272,19 @@ pub enum VarType {
     Constant,
 }
 
+impl VarType {
+    pub fn print_only_ends(&self) -> String {
+        format!(
+            "{}",
+            match self {
+                Self::Mutable => "mut",
+                Self::Immutable => "let",
+                Self::Constant => "const",
+            }
+        )
+    }
+}
+
 impl Display for VarType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -360,6 +372,32 @@ impl Node {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum MatchArmType {
+    Enum {
+        value: ParserText,
+        var_type: VarType,
+        name: Option<ParserText>,
+    },
+    Let {
+        var_type: VarType,
+        name: ParserText,
+    },
+    Value(Node),
+    Wildcard(Span),
+}
+
+impl MatchArmType {
+    pub fn span(&self) -> &Span {
+        match self {
+            Self::Enum { value, .. } => &value.span,
+            Self::Let { var_type: _, name } => &name.span,
+            Self::Value(x) => &x.span,
+            Self::Wildcard(x) => &x,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     Break,
     Continue,
@@ -399,7 +437,7 @@ pub enum NodeType {
     },
     MatchDeclaration {
         parameters: (ParserText, ParserDataType, Option<Box<Node>>),
-        body: Vec<(Node, Vec<Node>, Box<Node>)>,
+        body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
         return_type: ParserDataType,
         is_async: bool,
     },
@@ -530,7 +568,7 @@ impl Display for LoopType {
 pub enum IfComparisonType {
     IfLet {
         value: Node,
-        pattern: (Node, Vec<Node>),
+        pattern: (Vec<MatchArmType>, Vec<Node>),
     },
     If(Node),
 }

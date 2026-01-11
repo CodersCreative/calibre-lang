@@ -1,6 +1,10 @@
 use std::fmt::Display;
 
-use calibre_parser::{ParserError, ast::NodeType, lexer::LexerError};
+use calibre_parser::{
+    ParserError,
+    ast::{NodeType, ParserDataType},
+    lexer::LexerError,
+};
 use miette::{Diagnostic, LabeledSpan};
 use thiserror::Error;
 
@@ -28,6 +32,10 @@ pub enum MiddleErr {
     Variable(String),
     #[error("Unable to find object : {0:?}")]
     Object(String),
+    #[error("Enum Variant does not exist : {0:?}")]
+    EnumVariant(String),
+    #[error("Cannot perform enum style pattern matching on type : {0}")]
+    CantMatch(ParserDataType),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Miette(#[from] ReportWrapper),

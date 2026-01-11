@@ -156,13 +156,12 @@ impl NativeFunction for DiscriminantFn {
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if let Some((x, _)) = args.get(0) {
-            Ok(RuntimeValue::Int(
-                if let RuntimeValue::Enum(_, index, _) = x {
-                    *index as i64
-                } else {
-                    0
-                },
-            ))
+            Ok(RuntimeValue::Int(match x {
+                RuntimeValue::Enum(_, index, _) => *index as i64,
+                RuntimeValue::Option(Some(_), _) | RuntimeValue::Result(Ok(_), _) => 0 as i64,
+                RuntimeValue::Option(None, _) | RuntimeValue::Result(Err(_), _) => 1,
+                _ => 0,
+            }))
         } else {
             Ok(RuntimeValue::Null)
         }

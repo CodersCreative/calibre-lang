@@ -3,8 +3,8 @@ use std::error::Error;
 use crate::{
     Parser,
     ast::{
-        IfComparisonType, LoopType, Node, NodeType, ObjectType, ParserDataType, ParserInnerType,
-        ParserText, TypeDefType,
+        IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, ParserDataType,
+        ParserInnerType, ParserText, RefMutability, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -452,15 +452,36 @@ impl Formatter {
                 let mut txt = String::from("if");
                 match &**comparison {
                     IfComparisonType::If(x) => {
-                        txt.push_str(&format!(" {}", self.format(&x)));
+                        txt.push_str(&format!(" {}", self.format(x)));
                     }
                     IfComparisonType::IfLet { value, pattern } => {
-                        txt.push_str(&format!(
-                            " let {} {}<- {}",
-                            self.format(&pattern.0),
-                            format!("{} ", self.fmt_conditionals(&pattern.1)),
-                            self.format(&value)
-                        ));
+                        txt.push_str(" let ");
+                        txt.push_str(&self.fmt_match_arm(&pattern.0[0], false));
+                        for node in pattern.0.iter().skip(1) {
+                            txt.push_str(&format!(" | {}", self.fmt_match_arm(node, false)));
+                        }
+
+                        match &pattern.0[0] {
+                            MatchArmType::Enum {
+                                value: _,
+                                var_type: VarType::Immutable,
+                                name: Some(name),
+                            } => txt.push_str(&format!(" : {}", name)),
+                            MatchArmType::Enum {
+                                value: _,
+                                var_type,
+                                name: Some(name),
+                            } => {
+                                txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name))
+                            }
+                            _ => {}
+                        }
+
+                        if !pattern.1.is_empty() {
+                            txt.push_str(&format!(" {}", self.fmt_conditionals(&pattern.1)));
+                        };
+
+                        txt.push_str(&format!(" <- {}", self.format(value)));
                     }
                 }
 
@@ -514,11 +535,28 @@ impl Formatter {
                 }
 
                 for arm in adjusted_body {
-                    let temp = handle_comment!(self.get_potential_comment(&arm[0].0.span), {
-                        let mut txt = self.format(&arm[0].0);
+                    let temp = handle_comment!(self.get_potential_comment(&arm[0].0.span()), {
+                        let mut txt = self.fmt_match_arm(&arm[0].0, false);
                         for node in arm.iter().skip(1) {
-                            txt.push_str(&format!(" | {}", self.format(&node.0)));
+                            txt.push_str(&format!(" | {}", self.fmt_match_arm(&node.0, false)));
                         }
+
+                        match &arm[0].0 {
+                            MatchArmType::Enum {
+                                value: _,
+                                var_type: VarType::Immutable,
+                                name: Some(name),
+                            } => txt.push_str(&format!(" : {}", name)),
+                            MatchArmType::Enum {
+                                value: _,
+                                var_type,
+                                name: Some(name),
+                            } => {
+                                txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name))
+                            }
+                            _ => {}
+                        }
+
                         format!(
                             "{}{} => {}",
                             txt,
@@ -843,7 +881,24 @@ impl Formatter {
             }
         }
     }
-
+    pub fn fmt_match_arm(&mut self, arm: &MatchArmType, write_name: bool) -> String {
+        match arm {
+            MatchArmType::Enum {
+                value,
+                var_type: VarType::Immutable,
+                name: Some(name),
+            } if write_name => format!(".{} : {}", value, name),
+            MatchArmType::Enum {
+                value,
+                var_type,
+                name: Some(name),
+            } if write_name => format!(".{} : {} {}", value, var_type.print_only_ends(), name),
+            MatchArmType::Let { var_type, name } => format!("{} {}", var_type, name),
+            MatchArmType::Enum { value, .. } => format!(".{}", value),
+            MatchArmType::Value(x) => self.format(x),
+            MatchArmType::Wildcard(_) => String::from("_"),
+        }
+    }
     pub fn fmt_loop_type(&mut self, loop_type: &LoopType) -> String {
         match loop_type {
             LoopType::While(x) => self.format(x),

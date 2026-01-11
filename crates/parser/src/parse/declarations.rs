@@ -1,8 +1,10 @@
+use std::collections::hash_map::ValuesMut;
+
 use crate::{
     Parser, SyntaxErr,
     ast::{
-        IfComparisonType, LoopType, Node, ParserDataType, ParserInnerType, ParserText, VarType,
-        binary::BinaryOperator,
+        IfComparisonType, LoopType, MatchArmType, Node, ParserDataType, ParserInnerType,
+        ParserText, VarType, binary::BinaryOperator,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -349,6 +351,75 @@ impl Parser {
         )
     }
 
+    pub fn parse_match_arm_start(&mut self, parse_name: bool) -> MatchArmType {
+        match self.first().token_type {
+            TokenType::FullStop => {
+                let _ = self.eat();
+
+                let variant =
+                    self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+
+                let name = if self.first().token_type == TokenType::Colon && parse_name {
+                    let _ = self.eat();
+                    let typ = self.parse_match_var_type();
+                    let name =
+                        self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                    (
+                        typ,
+                        Some(ParserText {
+                            text: name.value,
+                            span: name.span,
+                        }),
+                    )
+                } else {
+                    (VarType::Immutable, None)
+                };
+
+                MatchArmType::Enum {
+                    value: ParserText {
+                        text: variant.value,
+                        span: variant.span,
+                    },
+                    var_type: name.0,
+                    name: name.1,
+                }
+            }
+            TokenType::Let | TokenType::Const => {
+                let var_type = match self.eat().token_type {
+                    TokenType::Const => VarType::Constant,
+                    TokenType::Let => {
+                        if let TokenType::Mut = self.first().token_type {
+                            let _ = self.eat();
+                            VarType::Mutable
+                        } else {
+                            VarType::Immutable
+                        }
+                    }
+                    _ => {
+                        self.add_err(SyntaxErr::UnexpectedToken);
+                        VarType::Constant
+                    }
+                };
+
+                let name = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+
+                MatchArmType::Let {
+                    var_type,
+                    name: ParserText {
+                        text: name.value,
+                        span: name.span,
+                    },
+                }
+            }
+            _ if &self.first().value == "_" => {
+                let all = self.eat();
+
+                MatchArmType::Wildcard(all.span)
+            }
+            _ => MatchArmType::Value(self.parse_statement()),
+        }
+    }
+
     pub fn parse_match_declaration(&mut self) -> Node {
         let open = self.expect_eat(
             &TokenType::Match,
@@ -393,12 +464,33 @@ impl Parser {
         let mut patterns = Vec::new();
 
         while self.first().token_type != TokenType::Close(Bracket::Curly) {
-            let mut values = vec![self.parse_statement()];
+            let mut values = vec![self.parse_match_arm_start(false)];
             let mut conditions = Vec::new();
 
             while self.first().token_type == TokenType::Or {
                 let _ = self.eat();
-                values.push(self.parse_statement());
+                values.push(self.parse_match_arm_start(false));
+            }
+
+            if self.first().token_type == TokenType::Colon {
+                let _ = self.eat();
+                let typ = self.parse_match_var_type();
+                let n = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                for val in values.iter_mut() {
+                    match val {
+                        MatchArmType::Enum {
+                            value: _,
+                            var_type: typ,
+                            name,
+                        } => {
+                            *name = Some(ParserText {
+                                text: n.value.clone(),
+                                span: n.span,
+                            })
+                        }
+                        _ => self.add_err(SyntaxErr::ExpectedIdentifier),
+                    }
+                }
             }
 
             while self.first().token_type == TokenType::If {
@@ -549,6 +641,19 @@ impl Parser {
         }
     }
 
+    pub fn parse_match_var_type(&mut self) -> VarType {
+        let typ = match &self.first().token_type {
+            TokenType::Mut => VarType::Mutable,
+            TokenType::Const => VarType::Constant,
+            TokenType::Let => VarType::Immutable,
+            _ => return VarType::Immutable,
+        };
+
+        let _ = self.eat();
+
+        typ
+    }
+
     pub fn parse_if_statement(&mut self) -> Node {
         let open = self.expect_eat(
             &TokenType::If,
@@ -557,12 +662,33 @@ impl Parser {
 
         let comparison = if self.first().token_type == TokenType::Let {
             let _ = self.eat();
-            let mut values = vec![self.parse_statement()];
+            let mut values = vec![self.parse_match_arm_start(false)];
             let mut conditions = Vec::new();
 
             while self.first().token_type == TokenType::Or {
                 let _ = self.eat();
-                values.push(self.parse_statement());
+                values.push(self.parse_match_arm_start(false));
+            }
+
+            if self.first().token_type == TokenType::Colon {
+                let _ = self.eat();
+                let typ = self.parse_match_var_type();
+                let n = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                for val in values.iter_mut() {
+                    match val {
+                        MatchArmType::Enum {
+                            value: _,
+                            var_type: typ,
+                            name,
+                        } => {
+                            *name = Some(ParserText {
+                                text: n.value.clone(),
+                                span: n.span,
+                            })
+                        }
+                        _ => self.add_err(SyntaxErr::ExpectedIdentifier),
+                    }
+                }
             }
 
             while self.first().token_type == TokenType::If {
@@ -578,7 +704,7 @@ impl Parser {
             let value = self.parse_statement();
             IfComparisonType::IfLet {
                 value: value.clone(),
-                pattern: (value, conditions.clone()),
+                pattern: (values, conditions.clone()),
             }
         } else {
             IfComparisonType::If(self.parse_statement())

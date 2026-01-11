@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use calibre_parser::{
     ast::{
-        IfComparisonType, LoopType, Node, NodeType, ObjectMap, ObjectType, ParserDataType,
-        ParserInnerType, ParserText, VarType, binary::BinaryOperator,
+        IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText, RefMutability, VarType, binary::BinaryOperator, comparison::Comparison
     },
     lexer::Span,
 };
@@ -141,23 +140,20 @@ impl MiddleEnvironment {
                                         None,
                                     ),
                                     return_type: self.resolve_type_from_node(scope, &then).unwrap_or(ParserDataType::from(ParserInnerType::Null)),
-                                    body: vec![
-                                        (pattern.0, pattern.1, then),
-                                        (
-                                            Node {
-                                                node_type: NodeType::Identifier(ParserText::new(
-                                                    String::from("_"),
-                                                    Span::default(),
-                                                )),
-                                                span: Span::default(),
-                                            },
+                                    body: {
+                                        let mut lst : Vec<(calibre_parser::ast::MatchArmType, Vec<Node>, Box<Node>)> = pattern.0.clone().into_iter().map(|x| (x, pattern.1.clone(), then.clone())).collect();
+                                        
+                                        lst.push((
+                                            MatchArmType::Wildcard(Span::default()),
                                             Vec::new(),
                                             otherwise.unwrap_or(Box::new(Node {
                                                 node_type: NodeType::EmptyLine,
                                                 span: Span::default(),
                                             })),
-                                        ),
-                                    ],
+                                        ));
+
+                                        lst
+                                    },
                                     is_async: false,
                                 },
                                 span: node.span,
@@ -388,10 +384,7 @@ impl MiddleEnvironment {
                                 ),
                                 body: vec![
                                     (
-                                        Node {
-                                            node_type: NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("Ok"))))), vec![(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_ok_value")))), None)]),
-                                            span: Span::default(),
-                                        },
+                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Ok")), name: Some(ParserText::from(String::from("anon_ok_value"))) },
                                         Vec::new(),
                                         Box::new(Node {
                                             node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value"))),
@@ -399,10 +392,7 @@ impl MiddleEnvironment {
                                         }),
                                     ),
                                     (
-                                        Node {
-                                            node_type: NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("Err"))))), vec![(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")))), None)]),
-                                            span: Span::default(),
-                                        },
+                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")), name: Some(ParserText::from(String::from("anon_err_value"))) },
                                         Vec::new(),
                                         Box::new(Node {
                                             node_type: NodeType::Return { value: Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("err"))))), vec![(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")))), None)]))) },
@@ -723,13 +713,121 @@ impl MiddleEnvironment {
                 span: node.span,
             })
             },
-            NodeType::MatchDeclaration { parameters, body: _, return_type, is_async } => self.evaluate(scope, Node::new_from_type(NodeType::FunctionDeclaration{
-                    parameters: vec![(parameters.0, parameters.1, parameters.2.map(|x| *x))],
+            NodeType::MatchDeclaration { parameters, body, return_type, is_async } => self.evaluate(scope, Node::new_from_type(NodeType::FunctionDeclaration{
+                    parameters: vec![(parameters.0.clone(), parameters.1.clone(), parameters.2.map(|x| *x))],
                     return_type,
                     is_async,
                     body: {
-                        // TODO create & use a discriminant function + scalar replacement of aggregates to enable for the breaking down of a match fn into a series of ifs
-                        todo!()
+                        let mut lst = Vec::new();
+                        let resolved_data_type = self.resolve_data_type(scope, parameters.1.clone()).data_type;
+                        let mut reference = None;
+                        let enum_object = if let Some(x) = self.objects.get(resolved_data_type.to_string().replace("mut ", "").replace("&", "").trim()) {
+                            match (resolved_data_type.to_string().contains("mut "), resolved_data_type.to_string().contains("&")) {
+                                (true, true) => reference = Some(RefMutability::MutRef),
+                                (true, false) => reference = Some(RefMutability::MutValue),
+                                (false, true) => reference = Some(RefMutability::Ref),
+                                (false, false) => reference = Some(RefMutability::Value),
+                            }
+                            match &x.object_type {
+                                MiddleTypeDefType::Enum(x) => Some(x),
+                                _ => None
+                            }
+                        }else{
+                            None
+                        };
+                            
+                        for pattern in body {
+                            let main = if pattern.1.is_empty() {
+                                Node::new_from_type(NodeType::Return { value: pattern.2 })
+                            }else {
+                                todo!()  
+                            };
+                            
+                            match pattern.0 {
+                                MatchArmType::Wildcard(_) => lst.push(main),
+                                MatchArmType::Value(x) => lst.push(Node::new_from_type(NodeType::IfStatement {
+                                    comparison: Box::new(IfComparisonType::If(Node::new_from_type(NodeType::ComparisonExpression { left: Box::new(Node::new_from_type(NodeType::Identifier(parameters.0.clone()))), right: Box::new(x), operator: Comparison::Equal }))),
+                                    then: Box::new(main),
+                                    otherwise: None,
+                                    special_delim: true
+                                })),
+                                MatchArmType::Let { var_type, name } => {
+                                    lst.push(Node::new_from_type(NodeType::ScopeDeclaration {
+                                        body: vec![
+                                            Node::new_from_type(NodeType::VariableDeclaration {
+                                                var_type,
+                                                identifier: name,
+                                                value: Box::new(Node::new_from_type(NodeType::Identifier(parameters.0.clone()))),
+                                                data_type: Some(parameters.1.clone())
+                                            }),
+                                            main,
+                                        ],
+                                        is_temp: true
+                                    }));
+                                }
+                                MatchArmType::Enum { value, var_type, name }  => {
+                                    let index : i64 = match value.text.trim() {
+                                        _ if enum_object.is_some() => {
+                                            let Some(object) = enum_object else {return Err(MiddleErr::CantMatch(parameters.1));};
+                                            let Some(index) = object.iter().position(|x| x.0.text == value.text) else {return Err(MiddleErr::EnumVariant(value.text));};
+                                            index as i64
+                                        }
+                                        "Ok" => 0,
+                                        "Err" => 1,
+                                        "Some" => 0,
+                                        "None" => 1,
+                                        _ => return Err(MiddleErr::CantMatch(parameters.1)),  
+                                    };
+
+                                    lst.push(Node::new_from_type(NodeType::IfStatement {
+                                        comparison: Box::new(IfComparisonType::If(Node::new_from_type(NodeType::ComparisonExpression {
+                                            left: Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("discriminant"))))), vec![(Node::new_from_type(NodeType::Identifier(parameters.0.clone())), None)]))),
+                                            right: Box::new(Node::new_from_type(NodeType::IntLiteral(index))),
+                                            operator: Comparison::Equal
+                                        }))),
+                                        then: {Box::new(if let Some(name) = name {
+                                            Node::new_from_type(NodeType::ScopeDeclaration {
+                                                body: vec![
+                                                    Node::new_from_type(NodeType::VariableDeclaration {
+                                                        var_type,
+                                                        identifier: name,
+                                                        value: if reference.is_some() && reference != Some(RefMutability::Value) {
+                                                            Box::new(Node::new_from_type(NodeType::RefStatement {
+                                                                mutability: reference.clone().unwrap(),
+                                                                value: Box::new(Node::new_from_type(NodeType::MemberExpression {
+                                                                    path: vec![
+                                                                        (Node::new_from_type(NodeType::Identifier(parameters.0.clone())), false),
+                                                                        (Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("next")))), false)
+                                                                    ]
+                                                                }))
+                                                            }))
+                                                        }else{
+                                                            Box::new(Node::new_from_type(NodeType::MemberExpression {
+                                                                path: vec![
+                                                                    (Node::new_from_type(NodeType::Identifier(parameters.0.clone())), false),
+                                                                    (Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("next")))), false)
+                                                                ]
+                                                            }))
+                                                        },
+                                                        data_type: None
+                                                    }),
+                                                    main,
+                                                ],
+                                                is_temp: true
+                                            })}else{
+                                              main  
+                                            })
+                                        },
+                                        otherwise: None,
+                                        special_delim: true
+                                    }));
+                                }
+                                
+                            }    
+                        }
+
+                        
+                        Box::new(Node::new_from_type(NodeType::ScopeDeclaration { body: lst, is_temp: true }))
                     },
                 })),
             NodeType::FunctionDeclaration { parameters, body, return_type, is_async } => {
