@@ -4,7 +4,7 @@ const main = fn () => {
 	let smth = SmthType{
 		txt : "tyui",
 	};
-	let mut d = list<list<int>>[list<int>[2, 0, 4], list<int>[1, 9, 3], list<int>[4, 7, 9], list<int>[9, 0, 1]];
+	let mut d = list[list[2, 0, 4], list[1, 9, 3], list[4, 7, 9], list[9, 0, 1]];
 	let lst = list<int>[2, 0, 4];
 
 	let mtchfn = match str -> int{
@@ -17,7 +17,7 @@ const main = fn () => {
 	let mut correct = -10;
 	let mut other = -10;
 
-	(false) ? correct : other = 0;
+	(false) ? (8 == 9) ? correct : other : other = 0;
 
 	print(correct);
 	print(other);

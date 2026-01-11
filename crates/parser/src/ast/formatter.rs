@@ -374,12 +374,20 @@ impl Formatter {
                 loop_type,
                 conditionals,
             } => {
-                let mut txt = format!(
-                    "list<{}>[{} for {}",
-                    data_type,
-                    self.format(&*map),
-                    self.fmt_loop_type(&*loop_type)
-                );
+                let mut txt = if let Some(data_type) = data_type {
+                    format!(
+                        "list<{}>[{} for {}",
+                        data_type,
+                        self.format(&*map),
+                        self.fmt_loop_type(&*loop_type)
+                    )
+                } else {
+                    format!(
+                        "list[{} for {}",
+                        self.format(&*map),
+                        self.fmt_loop_type(&*loop_type)
+                    )
+                };
 
                 if !conditionals.is_empty() {
                     txt.push_str(&format!(" {}", self.fmt_conditionals(&conditionals)));
@@ -620,14 +628,24 @@ impl Formatter {
             NodeType::CharLiteral(x) => format!("'{}'", x),
             NodeType::StringLiteral(x) => format!("\"{}\"", x),
             NodeType::ListLiteral(data_type, values) => {
-                let mut txt = format!(
-                    "list<{}>[{}",
-                    data_type,
-                    values
-                        .get(0)
-                        .map(|x| self.format(&*x))
-                        .unwrap_or(String::new())
-                );
+                let mut txt = if let Some(data_type) = data_type {
+                    format!(
+                        "list<{}>[{}",
+                        data_type,
+                        values
+                            .get(0)
+                            .map(|x| self.format(&*x))
+                            .unwrap_or(String::new())
+                    )
+                } else {
+                    format!(
+                        "list[{}",
+                        values
+                            .get(0)
+                            .map(|x| self.format(&*x))
+                            .unwrap_or(String::new())
+                    )
+                };
 
                 for value in values.iter().skip(1) {
                     txt.push_str(&format!(", {}", self.format(value)));

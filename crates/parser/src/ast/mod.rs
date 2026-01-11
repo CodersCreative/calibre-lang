@@ -485,7 +485,7 @@ pub enum NodeType {
         inclusive: bool,
     },
     IterExpression {
-        data_type: ParserDataType,
+        data_type: Option<ParserDataType>,
         map: Box<Node>,
         loop_type: Box<LoopType>,
         conditionals: Vec<Node>,
@@ -502,7 +502,7 @@ pub enum NodeType {
     },
     Identifier(ParserText),
     StringLiteral(ParserText),
-    ListLiteral(ParserDataType, Vec<Node>),
+    ListLiteral(Option<ParserDataType>, Vec<Node>),
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(i64),

@@ -519,13 +519,31 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             NodeType::BinaryExpression { left, .. } => self.resolve_type_from_node(scope, left),
-
-            NodeType::IterExpression { data_type, .. } | NodeType::ListLiteral(data_type, _) => {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::List(Box::new(data_type.clone())),
-                    span: node.span,
-                })
+            NodeType::IterExpression {
+                data_type: Some(data_type),
+                ..
             }
+            | NodeType::ListLiteral(Some(data_type), _) => Some(ParserDataType {
+                data_type: ParserInnerType::List(Box::new(data_type.clone())),
+                span: node.span,
+            }),
+            NodeType::IterExpression {
+                data_type: None,
+                map,
+                ..
+            } => Some(ParserDataType {
+                data_type: ParserInnerType::List(Box::new(
+                    self.resolve_type_from_node(scope, map)?,
+                )),
+                span: node.span,
+            }),
+            NodeType::ListLiteral(_, x) if x.is_empty() => None,
+            NodeType::ListLiteral(None, block) => Some(ParserDataType {
+                data_type: ParserInnerType::List(Box::new(
+                    self.resolve_type_from_node(scope, &block[0])?,
+                )),
+                span: node.span,
+            }),
             NodeType::NegExpression { value } | NodeType::DebugExpression { value } => {
                 self.resolve_type_from_node(scope, value)
             }

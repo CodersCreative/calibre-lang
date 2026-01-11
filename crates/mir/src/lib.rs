@@ -355,7 +355,16 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             NodeType::ListLiteral(typ, x) => {
-                let typ = self.resolve_data_type(scope, typ);
+                let typ = if let Some(typ) = typ {
+                    self.resolve_data_type(scope, typ)
+                } else if x.is_empty() {
+                    panic!()
+                } else if let Some(typ) = self.resolve_type_from_node(scope, &x[0]) {
+                    typ
+                } else {
+                    panic!()
+                };
+                
                 let mut lst = Vec::new();
 
                 for item in x {

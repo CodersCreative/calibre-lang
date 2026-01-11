@@ -443,17 +443,22 @@ impl Parser {
         let mut values = Vec::new();
         let open = self.expect_eat(&TokenType::List, SyntaxErr::ExpectedType);
 
-        let _ = self.expect_eat(
-            &TokenType::Comparison(Comparison::Lesser),
-            SyntaxErr::ExpectedChar('<'),
-        );
+        let t = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
+            let _ = self.expect_eat(
+                &TokenType::Comparison(Comparison::Lesser),
+                SyntaxErr::ExpectedChar('<'),
+            );
 
-        let t = self.expect_type();
+            let t = self.expect_type();
 
-        let _ = self.expect_eat(
-            &TokenType::Comparison(Comparison::Greater),
-            SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
-        );
+            let _ = self.expect_eat(
+                &TokenType::Comparison(Comparison::Greater),
+                SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
+            );
+            Some(t)
+        } else {
+            None
+        };
 
         let _ = self.expect_eat(
             &TokenType::Open(Bracket::Square),
