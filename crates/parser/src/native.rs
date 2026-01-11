@@ -52,6 +52,7 @@ impl ParserDataType {
             ("panic", ParserInnerType::Null),
             ("tuple", ParserInnerType::Dynamic),
             ("trim", ParserInnerType::Str),
+            ("discriminant", ParserInnerType::Int),
             ("console.out", ParserInnerType::Null),
             ("console.input", ParserInnerType::Str),
             ("console.err", ParserInnerType::Null),

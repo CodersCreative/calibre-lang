@@ -75,18 +75,6 @@ impl MiddleEnvironment {
                             MiddleTypeDefType::Enum(_) if path.len() == 2 => {
                                 match &path[1].0.node_type {
                                     NodeType::Identifier(y) => return self.evaluate(scope, Node::new_from_type(NodeType::EnumExpression { identifier: ParserText::from(x.to_string()), value: ParserText::from(y.to_string()), data: None })),
-                                    NodeType::CallExpression(caller, args) => {
-                                        let mut map = Vec::new();
-
-                                        for  value in args.iter() {
-                                            map.push(value.0.clone());
-                                        }
-                                        
-                                        match &caller.node_type {
-                                            NodeType::Identifier(y) => return self.evaluate(scope, Node::new_from_type(NodeType::EnumExpression { identifier: ParserText::from(x.to_string()), value: ParserText::from(y.to_string()), data: Some(ObjectType::Tuple(map)) })),
-                                            _ => {}
-                                        }
-                                    }
                                     _ => {}
                                 }
                                 
@@ -717,42 +705,17 @@ impl MiddleEnvironment {
                 value,
                 data,
             } => {
-                let identifier = self.resolve_parser_text(scope, &identifier).unwrap();
+                let identifier = if let Some(x) = self.resolve_parser_text(scope, &identifier) {
+                    x
+                }else {
+                    return Err(MiddleErr::Object(identifier.text))
+                };
                 Ok(MiddleNode {
                 node_type: MiddleNodeType::EnumExpression {
                     identifier: identifier.clone(),
                     value,
                     data: if let Some(data) = data {
-                        match data {
-                            ObjectType::Map(x) => {
-                                let mut map = HashMap::new();
-
-                                for itm in x {
-                                    map.insert(
-                                        itm.0,
-                                        self.evaluate(scope, itm.1)?,
-                                    );
-                                }
-
-                                Some(map.into())
-                            }
-                            ObjectType::Tuple(data) => {
-                                let mut map = HashMap::new();
-
-                                for (i, itm) in data.into_iter().enumerate() {
-                                    map.insert(i.to_string(),self.evaluate(scope, itm)?);
-                                }
-
-                                if let Some(x) = self.variables.get(&identifier.to_string()) {
-                                    // TODO deal with references
-                                    let mut args = vec![(MiddleNode::new_from_type(MiddleNodeType::Identifier(identifier)), None)];
-                                    args.append(&mut map.into_iter().map(|x| (x.1, None)).collect());
-                                    return Ok(MiddleNode::new_from_type(MiddleNodeType::CallExpression(Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(ParserText::from(x.data_type.to_string())))), args)));
-                                }else {
-                                    Some(map.into())
-                                }
-                            }
-                        }
+                        Some(Box::new(self.evaluate(scope, *data)?))
                     } else {
                         None
                     },

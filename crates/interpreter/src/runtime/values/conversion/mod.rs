@@ -2,10 +2,7 @@ use crate::runtime::{
     scope::InterpreterEnvironment,
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_common::{
-    environment::{InterpreterFrom, Type},
-    errors::ValueErr,
-};
+use calibre_common::{environment::InterpreterFrom, errors::ValueErr};
 use calibre_mir::environment::MiddleTypeDefType;
 use calibre_parser::ast::{ObjectMap, ObjectType};
 use numbers::NumberValue;
@@ -123,11 +120,10 @@ impl RuntimeValue {
             RuntimeValue::Enum(o, _, z) => match t.clone() {
                 RuntimeType::Struct(y) => {
                     if let Some(z) = z {
-                        // Improve this alot
-                        match RuntimeValue::Aggregate(Some(y.clone()), z.clone()).into_type(env, t)
-                        {
-                            Ok(x) => Ok(x),
-                            Err(_) => self.into_type(env, &RuntimeType::Enum(y)),
+                        if z.is_type(env, &t) {
+                            Ok(*z.clone())
+                        } else {
+                            panic_type()
                         }
                     } else {
                         self.into_type(env, &RuntimeType::Enum(y))

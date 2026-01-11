@@ -5,7 +5,7 @@ use calibre_mir::{
 use calibre_parser::{ast::TypeDefType, lexer::Location};
 
 use crate::{
-    environment::{Environment, InterpreterFrom, Object, RuntimeType, RuntimeValue, Type},
+    environment::{Environment, InterpreterFrom, RuntimeType, RuntimeValue},
     errors::ScopeErr,
 };
 

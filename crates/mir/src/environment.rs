@@ -3,8 +3,8 @@ use std::{collections::HashMap, fs, path::PathBuf};
 use calibre_parser::{
     Parser,
     ast::{
-        Node, NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
-        TypeDefType, VarType,
+        Node, NodeType, ObjectMap, ParserDataType, ParserInnerType, ParserText, TypeDefType,
+        VarType,
     },
     lexer::{Location, Span, Tokenizer},
 };
@@ -14,7 +14,7 @@ use crate::{ast::MiddleNode, errors::MiddleErr};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MiddleTypeDefType {
-    Enum(Vec<(ParserText, Option<ObjectMap<ParserDataType>>)>),
+    Enum(Vec<(ParserText, Option<ParserDataType>)>),
     Struct(ObjectMap<ParserDataType>),
     NewType(ParserDataType),
 }

@@ -79,8 +79,8 @@ impl InterpreterEnvironment {
                 RuntimeValue::Aggregate(x, ObjectMap(map)) => {
                     RuntimeValue::Aggregate(x, ObjectMap(unwrap_map(env, map)))
                 }
-                RuntimeValue::Enum(x, y, Some(ObjectMap(map))) => {
-                    RuntimeValue::Enum(x, y, Some(ObjectMap(unwrap_map(env, map))))
+                RuntimeValue::Enum(x, y, Some(data)) => {
+                    RuntimeValue::Enum(x, y, Some(Box::new(unwrap_singular(env, *data))))
                 }
                 RuntimeValue::Option(Some(data), typ) => {
                     RuntimeValue::Option(Some(Box::new(unwrap_singular(env, *data))), typ)
@@ -176,8 +176,8 @@ impl InterpreterEnvironment {
                 value: RuntimeValue::Aggregate(x, ObjectMap(get_new_map(self, map))),
                 var_type,
             },
-            RuntimeValue::Enum(x, y, Some(ObjectMap(map))) => Variable {
-                value: RuntimeValue::Enum(x, y, Some(ObjectMap(get_new_map(self, map)))),
+            RuntimeValue::Enum(x, y, Some(data)) => Variable {
+                value: RuntimeValue::Enum(x, y, Some(Box::new(get_singular(self, *data)))),
                 var_type,
             },
             RuntimeValue::Option(Some(data), typ) => Variable {
@@ -286,12 +286,7 @@ impl InterpreterEnvironment {
                         _ => break,
                     }
                 }
-                (RuntimeValue::Enum(_, _, Some(ObjectMap(map))), MemberPathType::Dot(key)) => {
-                    match map.get(key) {
-                        Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
-                        _ => break,
-                    }
-                }
+
                 (RuntimeValue::List { data, data_type: _ }, MemberPathType::Computed(key)) => {
                     match data.get(key.parse::<usize>().unwrap()) {
                         Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
@@ -303,7 +298,8 @@ impl InterpreterEnvironment {
                 }
 
                 (
-                    RuntimeValue::Option(Some(data), _)
+                    RuntimeValue::Enum(_, _, Some(data))
+                    | RuntimeValue::Option(Some(data), _)
                     | RuntimeValue::Result(Ok(data), _)
                     | RuntimeValue::Result(Err(data), _),
                     _,
@@ -329,8 +325,7 @@ impl InterpreterEnvironment {
             RuntimeValue::Ref(pointer, _) => {
                 self.progress_var(&self.variables.get(pointer).unwrap().value, key)
             }
-            RuntimeValue::Aggregate(_, ObjectMap(map))
-            | RuntimeValue::Enum(_, _, Some(ObjectMap(map))) => match map.get(key) {
+            RuntimeValue::Aggregate(_, ObjectMap(map)) => match map.get(key) {
                 Some(x) => Ok(x.clone()),
                 _ => panic!(),
             },
@@ -340,7 +335,8 @@ impl InterpreterEnvironment {
                     _ => panic!(),
                 }
             }
-            RuntimeValue::Option(Some(data), _)
+            RuntimeValue::Enum(_, _, Some(data))
+            | RuntimeValue::Option(Some(data), _)
             | RuntimeValue::Result(Ok(data), _)
             | RuntimeValue::Result(Err(data), _) => Ok(*data.clone()),
             _ => panic!(),

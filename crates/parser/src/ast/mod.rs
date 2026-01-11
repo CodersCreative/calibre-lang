@@ -160,7 +160,7 @@ impl Display for ParserInnerType {
                 let mut txt = values[0].to_string();
 
                 for typ in values.iter().skip(1) {
-                    txt.push_str(&format!(":{}", typ));
+                    txt.push_str(&format!("::{}", typ));
                 }
 
                 write!(f, "{}", txt)
@@ -285,7 +285,7 @@ impl Display for VarType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefType {
-    Enum(Vec<(ParserText, Option<ObjectType<ParserDataType>>)>),
+    Enum(Vec<(ParserText, Option<ParserDataType>)>),
     Struct(ObjectType<ParserDataType>),
     NewType(ParserDataType),
 }
@@ -391,7 +391,7 @@ pub enum NodeType {
     EnumExpression {
         identifier: ParserText,
         value: ParserText,
-        data: Option<ObjectType<Node>>,
+        data: Option<Box<Node>>,
     },
     ScopeDeclaration {
         body: Vec<Node>,

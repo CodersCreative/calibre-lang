@@ -26,6 +26,8 @@ pub enum MiddleErr {
     Scope(String),
     #[error("Unable to find variable : {0:?}")]
     Variable(String),
+    #[error("Unable to find object : {0:?}")]
+    Object(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Miette(#[from] ReportWrapper),

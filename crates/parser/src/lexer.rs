@@ -90,6 +90,7 @@ pub enum TokenType {
     Open(Bracket),
     Close(Bracket),
     Colon,
+    DoubleColon,
     Comment,
     Comma,
     Comparison(Comparison),
@@ -182,6 +183,7 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
         (String::from("<-"), TokenType::LeftArrow),
         (String::from("=>"), TokenType::FatArrow),
         (String::from(".."), TokenType::Range),
+        (String::from("::"), TokenType::DoubleColon),
         (
             String::from("**"),
             TokenType::BinaryOperator(BinaryOperator::Pow),

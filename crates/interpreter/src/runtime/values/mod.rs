@@ -3,8 +3,9 @@ use crate::{
     native::{self, NativeFunction},
     runtime::values::helper::MatchBlock,
 };
-use calibre_common::environment::{InterpreterFrom, Type};
+use calibre_common::environment::InterpreterFrom;
 use calibre_common::errors::ScopeErr;
+use calibre_mir::environment::MiddleTypeDefType;
 use calibre_parser::ast::{ObjectMap, ObjectType, ParserDataType, ParserInnerType};
 use helper::Block;
 use std::{collections::HashMap, f64::consts::PI, fmt::Debug, rc::Rc};
@@ -67,6 +68,7 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
             ("some", Rc::new(native::global::SomeFn())),
             ("len", Rc::new(native::global::Len())),
             ("trim", Rc::new(native::global::Trim())),
+            ("discriminant", Rc::new(native::global::DiscriminantFn())),
             ("tuple", Rc::new(native::global::TupleFn())),
             ("panic", Rc::new(native::global::PanicFn())),
             ("console.out", Rc::new(native::stdlib::console::Out())),
@@ -122,14 +124,12 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
             ParserInnerType::Range => Self::Range,
             ParserInnerType::Struct(x) => {
                 if let Some(obj) = env.objects.get(&x) {
-                    match Type::<RuntimeType>::interpreter_from(
-                        env,
-                        scope,
-                        obj.object_type.clone(),
-                    )? {
-                        Type::Enum(_) => Self::Enum(x),
-                        Type::Struct(_) => Self::Struct(x),
-                        Type::NewType(x) => x,
+                    match &obj.object_type {
+                        MiddleTypeDefType::Enum(_) => Self::Enum(x),
+                        MiddleTypeDefType::Struct(_) => Self::Struct(x),
+                        MiddleTypeDefType::NewType(x) => {
+                            RuntimeType::interpreter_from(env, scope, x.clone()).unwrap()
+                        }
                     }
                 } else {
                     Self::Struct(x)
@@ -207,7 +207,7 @@ pub enum RuntimeValue {
     Str(String),
     Char(char),
     Aggregate(Option<String>, ObjectMap<RuntimeValue>),
-    Enum(String, usize, Option<ObjectMap<RuntimeValue>>),
+    Enum(String, usize, Option<Box<RuntimeValue>>),
     Ref(String, RuntimeType),
     List {
         data: Vec<RuntimeValue>,

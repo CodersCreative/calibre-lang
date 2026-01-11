@@ -77,7 +77,7 @@ impl Parser {
         let mut path: Vec<Node> = vec![self.parse_member_expression()];
 
         if let NodeType::Identifier(_) = path[0].node_type {
-            while self.first().token_type == TokenType::Colon {
+            while self.first().token_type == TokenType::DoubleColon {
                 let _ = self.eat();
                 path.push(self.parse_member_expression());
             }
@@ -116,8 +116,9 @@ impl Parser {
             if let NodeType::Identifier(identifier) = &path[0].0.node_type {
                 match &path[1].0.node_type {
                     NodeType::Identifier(value) => {
-                        if self.first().token_type == TokenType::Open(Bracket::Curly) {
-                            let data = self.parse_potential_key_value();
+                        if self.first().token_type == TokenType::Colon {
+                            let _ = self.eat();
+                            let data = self.parse_statement();
                             return Node::new(
                                 NodeType::EnumExpression {
                                     identifier: ParserText::new(
@@ -128,7 +129,7 @@ impl Parser {
                                         value.to_string(),
                                         path[1].0.span.clone(),
                                     ),
-                                    data: Some(data),
+                                    data: Some(Box::new(data)),
                                 },
                                 Span::new_from_spans(path[0].0.span, path[1].0.span),
                             );

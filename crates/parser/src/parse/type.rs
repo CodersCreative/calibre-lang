@@ -56,10 +56,9 @@ impl Parser {
         while self.first().token_type == TokenType::Identifier {
             let option = self.eat().into();
 
-            if self.first().token_type == TokenType::Open(Bracket::Curly)
-                || self.first().token_type == TokenType::Open(Bracket::Paren)
-            {
-                options.push((option, Some(self.parse_key_type_list_object_val())));
+            if self.first().token_type == TokenType::Colon {
+                let _ = self.eat();
+                options.push((option, Some(self.expect_type())));
             } else {
                 options.push((option, None));
             }

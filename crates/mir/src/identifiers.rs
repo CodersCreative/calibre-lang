@@ -39,7 +39,10 @@ impl MiddleNode {
                 pretty_printed_str: _,
                 value,
             }
-            | MiddleNodeType::Return { value } => value.identifiers_used(),
+            | MiddleNodeType::Return { value }
+            | MiddleNodeType::EnumExpression {
+                data: Some(value), ..
+            } => value.identifiers_used(),
             MiddleNodeType::BinaryExpression {
                 left,
                 right,
@@ -96,12 +99,7 @@ impl MiddleNode {
 
                 amt
             }
-            MiddleNodeType::EnumExpression {
-                identifier: _,
-                value: _,
-                data: Some(value),
-            }
-            | MiddleNodeType::AggregateExpression {
+            MiddleNodeType::AggregateExpression {
                 identifier: _,
                 value,
             } => {

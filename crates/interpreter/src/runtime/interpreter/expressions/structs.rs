@@ -1,8 +1,10 @@
 use crate::runtime::{
-    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
+    interpreter::InterpreterErr,
+    scope::InterpreterEnvironment,
+    values::{RuntimeType, RuntimeValue},
 };
 use calibre_common::{
-    environment::Type,
+    environment::InterpreterFrom,
     errors::{ScopeErr, ValueErr},
 };
 use calibre_mir::{ast::MiddleNode, environment::MiddleTypeDefType};
@@ -31,7 +33,7 @@ impl InterpreterEnvironment {
         scope: &u64,
         identifier: String,
         value: String,
-        data: Option<ObjectMap<MiddleNode>>,
+        data: Option<Box<MiddleNode>>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let enm_class = match self.get_object_type(&identifier) {
             Ok(MiddleTypeDefType::Enum(x)) => x.clone(),
@@ -44,38 +46,22 @@ impl InterpreterEnvironment {
         };
 
         if let Some((i, enm)) = enm_class.iter().enumerate().find(|x| &x.1.0.text == &value) {
-            if let Some(ObjectMap(properties)) = &enm.1 {
-                let mut data_vals = HashMap::new();
-                if let Some(ObjectMap(data)) = data {
-                    for (k, value) in data {
-                        let value = self.evaluate(scope, value)?;
-
-                        data_vals.insert(k, value);
-                    }
+            if let (Some(value), Some(typ)) = (data, &enm.1) {
+                let value = self.evaluate(scope, *value)?;
+                if value.is_type(
+                    self,
+                    &RuntimeType::interpreter_from(self, scope, typ.clone())?,
+                ) {
+                    return Ok(RuntimeValue::Enum(identifier, i, Some(Box::new(value))));
                 }
-
-                let mut new_data_vals = HashMap::new();
-                for property in properties {
-                    if let Some(val) = data_vals.remove(property.0) {
-                        new_data_vals.insert(property.0.clone(), val);
-                    } else {
-                        return Err(InterpreterErr::PropertyNotFound(property.0.to_string()));
-                    }
-                }
-
-                let data = if new_data_vals.is_empty() {
-                    None
-                } else {
-                    Some(ObjectMap(new_data_vals))
-                };
-
-                return Ok(RuntimeValue::Enum(identifier, i, data));
             }
 
-            return Ok(RuntimeValue::Enum(identifier, i, None));
-        } else {
-            Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
+            if enm.1.is_none() {
+                return Ok(RuntimeValue::Enum(identifier, i, None));
+            }
         }
+
+        Err(InterpreterErr::UnexpectedEnumItem(identifier, value))
     }
 }
 

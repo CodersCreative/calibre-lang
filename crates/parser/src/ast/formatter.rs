@@ -338,16 +338,14 @@ impl Formatter {
             NodeType::EnumExpression {
                 identifier,
                 value,
-                data,
+                data: Some(data),
             } => {
-                format!(
-                    "{}.{}{}",
-                    identifier,
-                    value,
-                    data.clone()
-                        .map(|x| self.fmt_struct_literal(&x))
-                        .unwrap_or_default()
-                )
+                format!("{}.{} : {}", identifier, value, data)
+            }
+            NodeType::EnumExpression {
+                identifier, value, ..
+            } => {
+                format!("{}.{}", identifier, value)
             }
             NodeType::RangeDeclaration {
                 from,
@@ -705,7 +703,7 @@ impl Formatter {
                             txt.push_str(&handle_comment!(
                                 self.get_potential_comment(&arm.0.span),
                                 if let Some(x) = &arm.1 {
-                                    format!("{}{},\n", arm.0, fmt_obj(self, x))
+                                    format!("{} : {},\n", arm.0, x)
                                 } else {
                                     format!("{},\n", arm.0)
                                 }

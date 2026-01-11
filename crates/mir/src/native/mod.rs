@@ -51,7 +51,15 @@ impl MiddleEnvironment {
 
     pub fn setup_global(&mut self, scope: &u64) {
         let funcs: Vec<&str> = vec![
-            "ok", "err", "some", "trim", "print", "len", "panic", "tuple",
+            "ok",
+            "err",
+            "some",
+            "trim",
+            "print",
+            "len",
+            "panic",
+            "tuple",
+            "discriminant",
         ];
 
         let map = ParserDataType::natives();

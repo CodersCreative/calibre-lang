@@ -30,13 +30,6 @@ pub trait RuntimeValue: PartialEq + Clone + Debug {
     fn constants() -> HashMap<String, Self>;
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Type<U: RuntimeType> {
-    Enum(Vec<(String, Option<ObjectMap<U>>)>),
-    Struct(ObjectMap<U>),
-    NewType(U),
-}
-
 impl<U: RuntimeType> InterpreterFrom<ObjectMap<ParserDataType>> for ObjectMap<U> {
     type Interpreter = U::Interpreter;
     fn interpreter_from(
@@ -50,45 +43,6 @@ impl<U: RuntimeType> InterpreterFrom<ObjectMap<ParserDataType>> for ObjectMap<U>
         }
         Ok(ObjectMap(map))
     }
-}
-
-impl<U: RuntimeType> InterpreterFrom<MiddleTypeDefType> for Type<U> {
-    type Interpreter = U::Interpreter;
-    fn interpreter_from(
-        env: &Self::Interpreter,
-        scope: &u64,
-        value: MiddleTypeDefType,
-    ) -> Result<Self, ScopeErr> {
-        Ok(match value {
-            MiddleTypeDefType::Enum(x) => Type::Enum(
-                x.into_iter()
-                    .map(|x| {
-                        (
-                            x.0.to_string(),
-                            match x.1 {
-                                Some(x) => {
-                                    Some(ObjectMap::<U>::interpreter_from(env, scope, x).unwrap())
-                                }
-                                None => None,
-                            },
-                        )
-                    })
-                    .collect(),
-            ),
-            MiddleTypeDefType::Struct(x) => {
-                Type::Struct(ObjectMap::<U>::interpreter_from(env, scope, x)?)
-            }
-            MiddleTypeDefType::NewType(x) => Type::NewType(U::interpreter_from(env, scope, x)?),
-        })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Object<T: RuntimeValue, U: RuntimeType> {
-    pub object_type: Type<U>,
-    pub functions: HashMap<String, (T, Option<Location>, bool)>,
-    pub traits: Vec<String>,
-    pub location: Option<Location>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

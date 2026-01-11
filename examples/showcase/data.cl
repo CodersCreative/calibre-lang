@@ -1,14 +1,17 @@
 // Enums declaration
+
+type FrenchData = struct {
+	data : int,
+	code : int,
+}
+
 type Language = enum {
 	// Enums can have hasmap type data structuress.
-	FRENCH	{
-		data : int,
-		code : int
-	},
+	FRENCH : FrenchData,
 	// Enums can have tuple type data structuress.
-	ENGLISH(int),
+	ENGLISH : int,
 	SPANISH,
-	ARABIC(Language, Language)
+	ARABIC : <Language, Language>,
 };
 
 // Struct declaration

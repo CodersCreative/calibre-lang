@@ -351,7 +351,7 @@ impl Parser {
                     if let ParserInnerType::Struct(_) = x.data_type {
                         path.push(x);
 
-                        while self.first().token_type == TokenType::Colon {
+                        while self.first().token_type == TokenType::DoubleColon {
                             let value = self.eat();
                             close = value.span;
 

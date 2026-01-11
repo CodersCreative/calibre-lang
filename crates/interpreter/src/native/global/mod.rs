@@ -145,3 +145,26 @@ impl NativeFunction for Trim {
         }
     }
 }
+
+pub struct DiscriminantFn();
+
+impl NativeFunction for DiscriminantFn {
+    fn run(
+        &self,
+        _env: &mut InterpreterEnvironment,
+        _scope: &u64,
+        args: &[(RuntimeValue, Option<RuntimeValue>)],
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        if let Some((x, _)) = args.get(0) {
+            Ok(RuntimeValue::Int(
+                if let RuntimeValue::Enum(_, index, _) = x {
+                    *index as i64
+                } else {
+                    0
+                },
+            ))
+        } else {
+            Ok(RuntimeValue::Null)
+        }
+    }
+}

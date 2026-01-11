@@ -40,64 +40,44 @@ impl InterpreterEnvironment {
         match value_node.node_type {
             MiddleNodeType::Identifier(value) => {
                 return Ok(MembrExprPathRes::Value(
-                    match self.evaluate(
-                        scope,
-                        MiddleNode::new(
-                            MiddleNodeType::EnumExpression {
-                                identifier: path[0].clone().to_string().into(),
-                                value: value.to_string().into(),
-                                data: Some(
-                                    args.clone()
-                                        .into_iter()
-                                        .map(|x| x.0.clone())
-                                        .collect::<Vec<_>>()
-                                        .into(),
-                                ),
-                            },
-                            value_node.span,
-                        ),
-                    ) {
-                        Ok(x) => x,
-                        Err(e) => {
-                            if let Ok(x) = self
-                                .get_function(&path[0].to_string(), &value)
-                                .map(|x| x.0.clone())
-                            {
-                                let func = self.evaluate(scope, x)?;
-                                self.evaluate_function(scope, func, args)?
-                            } else {
-                                let obj = match match self.get_var(&path[0].to_string()) {
-                                    Ok(x) => x.value.clone(),
-                                    _ => return Err(e),
-                                } {
-                                    RuntimeValue::Aggregate(Some(p), _) => p.clone(),
-                                    RuntimeValue::Enum(p, _, _) => p.clone(),
-                                    _ => return Err(e),
-                                };
+                    if let Ok(x) = self
+                        .get_function(&path[0].to_string(), &value)
+                        .map(|x| x.0.clone())
+                    {
+                        let func = self.evaluate(scope, x)?;
+                        self.evaluate_function(scope, func, args)?
+                    } else {
+                        let obj = match match self.get_var(&path[0].to_string()) {
+                            Ok(x) => x.value.clone(),
+                            Err(e) => return Err(e.into()),
+                        } {
+                            RuntimeValue::Aggregate(Some(p), _) => p.clone(),
+                            RuntimeValue::Enum(p, _, _) => p.clone(),
+                            _ => unreachable!(),
+                        };
 
-                                if let Ok(x) = self.get_function(&obj, &value) {
-                                    if x.2 {
-                                        println!("{:?}", path[0]);
-                                        args.insert(
-                                            0,
-                                            (
-                                                MiddleNode::new(
-                                                    MiddleNodeType::Identifier(
-                                                        path[0].to_string().into(),
-                                                    ),
-                                                    value_node.span,
+                        match self.get_function(&obj, &value) {
+                            Ok(x) => {
+                                if x.2 {
+                                    println!("{:?}", path[0]);
+                                    args.insert(
+                                        0,
+                                        (
+                                            MiddleNode::new(
+                                                MiddleNodeType::Identifier(
+                                                    path[0].to_string().into(),
                                                 ),
-                                                None,
+                                                value_node.span,
                                             ),
-                                        );
-                                    }
-
-                                    let func = self.evaluate(scope, x.0.clone())?;
-                                    self.evaluate_function(scope, func, args)?
-                                } else {
-                                    return Err(e);
+                                            None,
+                                        ),
+                                    );
                                 }
+
+                                let func = self.evaluate(scope, x.0.clone())?;
+                                self.evaluate_function(scope, func, args)?
                             }
+                            Err(e) => return Err(e.into()),
                         }
                     },
                 ));

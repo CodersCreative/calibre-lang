@@ -49,7 +49,7 @@ pub enum MiddleNodeType {
     EnumExpression {
         identifier: ParserText,
         value: ParserText,
-        data: Option<ObjectMap<MiddleNode>>,
+        data: Option<Box<MiddleNode>>,
     },
     ScopeDeclaration {
         body: Vec<MiddleNode>,
