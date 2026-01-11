@@ -164,11 +164,11 @@ impl MiddleEnvironment {
                 data_type: ParserInnerType::Option(Box::new(self.resolve_data_type(scope, *x))),
                 ..data_type
             },
-            ParserInnerType::Result(x, e) => ParserDataType {
-                data_type: ParserInnerType::Result(
-                    Box::new(self.resolve_data_type(scope, *x)),
-                    Box::new(self.resolve_data_type(scope, *e)),
-                ),
+            ParserInnerType::Result { ok, err } => ParserDataType {
+                data_type: ParserInnerType::Result {
+                    err: Box::new(self.resolve_data_type(scope, *err)),
+                    ok: Box::new(self.resolve_data_type(scope, *ok)),
+                },
                 ..data_type
             },
             ParserInnerType::Scope(x) => {
@@ -552,7 +552,7 @@ impl MiddleEnvironment {
             }),
             NodeType::Try { value } => match self.resolve_type_from_node(scope, value) {
                 Some(ParserDataType {
-                    data_type: ParserInnerType::Result(x, _),
+                    data_type: ParserInnerType::Result { ok: x, err: _ },
                     ..
                 })
                 | Some(ParserDataType {

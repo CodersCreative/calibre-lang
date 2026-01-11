@@ -63,12 +63,18 @@ impl InterpreterEnvironment {
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(match value.into_type(self, &data_type) {
             Ok(x) => RuntimeValue::Result(
-                Ok(Box::new(x.clone())),
-                RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new((&x).into())),
+                Ok(Box::new(x)),
+                RuntimeType::Result {
+                    err: Box::new(RuntimeType::Str),
+                    ok: Box::new(data_type),
+                },
             ),
             Err(e) => RuntimeValue::Result(
                 Err(Box::new(RuntimeValue::Str(String::from(e.to_string())))),
-                RuntimeType::Result(Box::new(RuntimeType::Str), Box::new(RuntimeType::Dynamic)),
+                RuntimeType::Result {
+                    err: Box::new(RuntimeType::Str),
+                    ok: Box::new(data_type),
+                },
             ),
         })
     }

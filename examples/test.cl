@@ -13,6 +13,14 @@ const main = fn () => {
 	};
 
 	print(mtchfn("he"));
+
+	let mut correct = -10;
+	let mut other = -10;
+
+	(false) ? correct : other = 0;
+
+	print(correct);
+	print(other);
 	// for i in 0..5 => print(i);
 	print("Ho");
 	// debug {d[0][0]};

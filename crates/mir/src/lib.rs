@@ -103,6 +103,10 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
+            NodeType::Ternary { comparison, then, otherwise } => self.evaluate(scope, Node {
+                node_type: NodeType::IfStatement { comparison: Box::new(IfComparisonType::If(*comparison)), then, otherwise: Some(otherwise), special_delim: true },
+                span: node.span
+            }),
             NodeType::IfStatement {
                 comparison,
                 then,
@@ -401,7 +405,7 @@ impl MiddleEnvironment {
                                     ),
                                 ],
                                 return_type:  match self.resolve_type_from_node(scope, &value) {
-                                    Some(ParserDataType { data_type: ParserInnerType::Result(x, _), span: _ }) | Some(ParserDataType { data_type: ParserInnerType::Option(x), span: _ }) => *x,
+                                    Some(ParserDataType { data_type: ParserInnerType::Result { ok: x, err: _ }, span: _ }) | Some(ParserDataType { data_type: ParserInnerType::Option(x), span: _ }) => *x,
                                     Some(x) => x,
                                     _ => ParserDataType::from(ParserInnerType::Null),
                                 },
@@ -596,13 +600,26 @@ impl MiddleEnvironment {
                     span: node.span,
                 },
             ),
-            NodeType::AssignmentExpression { identifier, value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::AssignmentExpression {
-                    identifier: Box::new(self.evaluate(scope, *identifier)?),
-                    value: Box::new(self.evaluate(scope, *value)?),
-                },
-                span: node.span,
-            }),
+            NodeType::AssignmentExpression { identifier, value } => {
+                match identifier.node_type.clone().unwrap() {
+                    NodeType::Ternary { comparison, then, otherwise } => self.evaluate(scope, Node {
+                        node_type: NodeType::IfStatement {
+                            comparison : Box::new(IfComparisonType::If(*comparison)),
+                            then: Box::new(Node::new_from_type(NodeType::AssignmentExpression { identifier: then, value: value.clone() })),
+                            otherwise: Some(Box::new(Node::new_from_type(NodeType::AssignmentExpression { identifier: otherwise, value }))),
+                            special_delim: false
+                        },
+                        span: node.span
+                    }),
+                    _ => Ok(MiddleNode {
+                        node_type: MiddleNodeType::AssignmentExpression {
+                            identifier: Box::new(self.evaluate(scope, *identifier)?),
+                            value: Box::new(self.evaluate(scope, *value)?),
+                        },
+                        span: node.span,
+                    })
+                }
+            },
             NodeType::ImplDeclaration {
                 identifier,
                 functions,

@@ -1,5 +1,5 @@
-use crate::runtime::scope::InterpreterEnvironment;
 use crate::native::{self, NativeFunction};
+use crate::runtime::scope::InterpreterEnvironment;
 use calibre_common::environment::InterpreterFrom;
 use calibre_common::errors::ScopeErr;
 use calibre_mir::environment::MiddleTypeDefType;
@@ -22,7 +22,10 @@ pub enum RuntimeType {
     List(Box<RuntimeType>),
     Range,
     Option(Box<RuntimeType>),
-    Result(Box<RuntimeType>, Box<RuntimeType>),
+    Result {
+        ok: Box<RuntimeType>,
+        err: Box<RuntimeType>,
+    },
     Function {
         return_type: Box<RuntimeType>,
         parameters: Vec<RuntimeType>,
@@ -147,10 +150,10 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
             ParserInnerType::Option(x) => {
                 Self::Option(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
             }
-            ParserInnerType::Result(x, y) => Self::Result(
-                Box::new(RuntimeType::interpreter_from(env, scope, *x)?),
-                Box::new(RuntimeType::interpreter_from(env, scope, *y)?),
-            ),
+            ParserInnerType::Result { ok, err } => Self::Result {
+                ok: Box::new(RuntimeType::interpreter_from(env, scope, *ok)?),
+                err: Box::new(RuntimeType::interpreter_from(env, scope, *err)?),
+            },
             ParserInnerType::Ref(x, _) => {
                 Self::Ref(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
             }

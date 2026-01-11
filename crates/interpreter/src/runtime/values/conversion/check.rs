@@ -22,8 +22,8 @@ impl RuntimeValue {
             RuntimeValue::Result(d, x) => {
                 if x == t {
                     true
-                } else if let RuntimeType::Result(x, y) = x {
-                    if d.is_ok() { &**x == t } else { &**y == t }
+                } else if let RuntimeType::Result { ok, err } = x {
+                    if d.is_ok() { &**ok == t } else { &**err == t }
                 } else {
                     false
                 }

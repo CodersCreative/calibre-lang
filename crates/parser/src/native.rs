@@ -32,17 +32,17 @@ impl ParserDataType {
             ("print", ParserInnerType::Null),
             (
                 "ok",
-                ParserInnerType::Result(
-                    Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
-                    Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
-                ),
+                ParserInnerType::Result {
+                    err: Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
+                    ok: Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
+                },
             ),
             (
                 "err",
-                ParserInnerType::Result(
-                    Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
-                    Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
-                ),
+                ParserInnerType::Result {
+                    err: Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
+                    ok: Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
+                },
             ),
             (
                 "some",

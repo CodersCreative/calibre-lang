@@ -110,7 +110,10 @@ pub enum ParserInnerType {
     Scope(Vec<ParserDataType>),
     Range,
     Option(Box<ParserDataType>),
-    Result(Box<ParserDataType>, Box<ParserDataType>),
+    Result {
+        ok: Box<ParserDataType>,
+        err: Box<ParserDataType>,
+    },
     Function {
         return_type: Box<ParserDataType>,
         parameters: Vec<ParserDataType>,
@@ -141,7 +144,7 @@ impl Display for ParserInnerType {
             Self::Ref(typ, mutability) => {
                 write!(f, "{}", mutability.fmt_with_val(&typ.to_string()))
             }
-            Self::Result(x, y) => write!(f, "{}!{}", x, y),
+            Self::Result { err, ok } => write!(f, "{}!{}", err, ok),
             Self::Option(x) => write!(f, "{}?", x),
             Self::NativeFunction(x) => write!(f, "native -> {}", x),
             Self::Struct(x) => write!(f, "{}", x),
@@ -532,6 +535,11 @@ pub enum NodeType {
         otherwise: Option<Box<Node>>,
         special_delim: bool,
     },
+    Ternary {
+        comparison: Box<Node>,
+        then: Box<Node>,
+        otherwise: Box<Node>,
+    },
     ImportStatement {
         module: Vec<ParserText>,
         alias: Option<ParserText>,
@@ -541,6 +549,19 @@ pub enum NodeType {
         identifier: ParserText,
         value: ObjectType<Node>,
     },
+}
+
+impl NodeType {
+    pub fn unwrap(self) -> NodeType {
+        match self {
+            NodeType::ParenExpression { value } => value.node_type.unwrap(),
+            NodeType::ScopeDeclaration {
+                mut body,
+                is_temp: false,
+            } if body.len() == 1 => body.remove(0).node_type.unwrap(),
+            _ => self,
+        }
+    }
 }
 
 impl Display for NodeType {

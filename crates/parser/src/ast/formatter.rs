@@ -198,7 +198,16 @@ impl Formatter {
 
                 txt
             }
-
+            NodeType::Ternary {
+                comparison,
+                then,
+                otherwise,
+            } => format!(
+                "({}) ? {} : {}",
+                self.format(&*comparison),
+                self.format(&*then),
+                self.format(&*otherwise)
+            ),
             NodeType::BooleanExpression {
                 left,
                 right,

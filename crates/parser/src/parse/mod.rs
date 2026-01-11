@@ -253,10 +253,10 @@ impl Parser {
             let not = self.eat();
             let typ = self.expect_type();
             return Some(ParserDataType::new(
-                ParserInnerType::Result(
-                    Box::new(ParserDataType::new(ParserInnerType::Dynamic, not.span)),
-                    Box::new(typ.clone()),
-                ),
+                ParserInnerType::Result {
+                    err: Box::new(ParserDataType::new(ParserInnerType::Dynamic, not.span)),
+                    ok: Box::new(typ.clone()),
+                },
                 Span::new_from_spans(not.span, typ.span),
             ));
         }
@@ -391,7 +391,10 @@ impl Parser {
             let t = self.parse_type()?;
 
             typ = Some(ParserDataType::new(
-                ParserInnerType::Result(Box::new(typ.clone()?), Box::new(t.clone())),
+                ParserInnerType::Result {
+                    err: Box::new(typ.clone()?),
+                    ok: Box::new(t.clone()),
+                },
                 Span::new_from_spans(typ?.span, t.span),
             ));
         }
@@ -400,7 +403,7 @@ impl Parser {
     }
 
     pub fn parse_paren_expression(&mut self) -> Node {
-        let _ = self.expect_eat(
+        let open = self.expect_eat(
             &TokenType::Open(Bracket::Paren),
             SyntaxErr::ExpectedOpeningBracket(Bracket::Paren),
         );
@@ -408,19 +411,32 @@ impl Parser {
         let value = self.parse_statement();
         let span = value.span.clone();
 
-        let value = Node::new(
-            NodeType::ParenExpression {
-                value: Box::new(value),
-            },
-            span,
-        );
-
         let _ = self.expect_eat(
             &TokenType::Close(Bracket::Paren),
             SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
         );
 
-        value
+        if self.first().token_type == TokenType::Question {
+            let _ = self.eat();
+            let then = self.parse_pipe_expression();
+            let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
+            let otherwise = self.parse_pipe_expression();
+            Node {
+                span: Span::new_from_spans(open.span, otherwise.span),
+                node_type: NodeType::Ternary {
+                    comparison: Box::new(value),
+                    then: Box::new(then),
+                    otherwise: Box::new(otherwise),
+                },
+            }
+        } else {
+            Node::new(
+                NodeType::ParenExpression {
+                    value: Box::new(value),
+                },
+                span,
+            )
+        }
     }
 
     pub fn parse_list_iter_expression(&mut self) -> Node {

@@ -19,12 +19,18 @@ impl NativeFunction for ErrFn {
         Ok(if let Some(x) = args.get(0) {
             RuntimeValue::Result(
                 Err(Box::new(x.0.clone())),
-                RuntimeType::Result(Box::new((&x.0).into()), Box::new(RuntimeType::Dynamic)),
+                RuntimeType::Result {
+                    err: Box::new((&x.0).into()),
+                    ok: Box::new(RuntimeType::Dynamic),
+                },
             )
         } else {
             RuntimeValue::Result(
                 Err(Box::new(RuntimeValue::Str(String::from("Add parameter")))),
-                RuntimeType::Result(Box::new(RuntimeType::Str), Box::new(RuntimeType::Dynamic)),
+                RuntimeType::Result {
+                    err: Box::new(RuntimeType::Str),
+                    ok: Box::new(RuntimeType::Dynamic),
+                },
             )
         })
     }
@@ -42,12 +48,18 @@ impl NativeFunction for OkFn {
         Ok(if let Some(x) = args.get(0) {
             RuntimeValue::Result(
                 Ok(Box::new(x.0.clone())),
-                RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new((&x.0).into())),
+                RuntimeType::Result {
+                    err: Box::new(RuntimeType::Dynamic),
+                    ok: Box::new((&x.0).into()),
+                },
             )
         } else {
             RuntimeValue::Result(
                 Err(Box::new(RuntimeValue::Str(String::from("Add parameter")))),
-                RuntimeType::Result(Box::new(RuntimeType::Str), Box::new(RuntimeType::Dynamic)),
+                RuntimeType::Result {
+                    err: Box::new(RuntimeType::Str),
+                    ok: Box::new(RuntimeType::Dynamic),
+                },
             )
         })
     }

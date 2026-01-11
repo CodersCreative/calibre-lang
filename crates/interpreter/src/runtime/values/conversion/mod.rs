@@ -26,16 +26,16 @@ impl RuntimeValue {
         };
 
         let result_case = || {
-            if let RuntimeType::Result(x, y) = t.clone() {
-                if self.is_type(env, &*x) || self.is_type(env, &*y) {
+            if let RuntimeType::Result { ok, err } = t.clone() {
+                if self.is_type(env, &*ok) || self.is_type(env, &*err) {
                     return Ok(RuntimeValue::Result(Ok(Box::new(self.clone())), t.clone()));
                 }
 
-                if let Ok(data) = self.into_type(env, &*x) {
+                if let Ok(data) = self.into_type(env, &*ok) {
                     return Ok(RuntimeValue::Result(Ok(Box::new(data)), t.clone()));
                 } else {
                     return Ok(RuntimeValue::Result(
-                        Ok(Box::new(self.into_type(env, &*y)?)),
+                        Err(Box::new(self.into_type(env, &*err)?)),
                         t.clone(),
                     ));
                 }
@@ -73,7 +73,7 @@ impl RuntimeValue {
                     RuntimeType::Str => Ok(RuntimeValue::Str($val.to_string())),
                     RuntimeType::Range => Ok(RuntimeValue::Range(0, $val.as_i64())),
                     RuntimeType::List(_) => list_case(),
-                    RuntimeType::Result(_, _) => result_case(),
+                    RuntimeType::Result { .. } => result_case(),
                     RuntimeType::Option(_) => option_case(),
                     _ => panic_type(),
                 }
@@ -94,7 +94,7 @@ impl RuntimeValue {
                         .collect(),
                     data_type: Box::new(RuntimeType::Int),
                 }),
-                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Result { .. } => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 _ => panic_type(),
             },
@@ -108,7 +108,7 @@ impl RuntimeValue {
                     data_type: Box::new(RuntimeType::Char),
                 }),
                 RuntimeType::List(_) => list_case(),
-                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Result { .. } => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 _ => panic_type(),
             },
@@ -140,7 +140,7 @@ impl RuntimeValue {
                 RuntimeType::Char => panic_type(),
                 RuntimeType::Range => panic_type(),
                 RuntimeType::List(_) => list_case(),
-                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Result { .. } => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 _ => panic_type(),
             },
@@ -165,7 +165,7 @@ impl RuntimeValue {
                 RuntimeType::Str => Ok(RuntimeValue::Str(self.to_string())),
                 RuntimeType::Char => panic_type(),
                 RuntimeType::List(_) => list_case(),
-                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Result { .. } => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 RuntimeType::Range => panic_type(),
                 RuntimeType::Struct(t_o) => {
@@ -197,7 +197,7 @@ impl RuntimeValue {
                 }
                 RuntimeType::Function { .. } => match t {
                     RuntimeType::List(_) => list_case(),
-                    RuntimeType::Result(_, _) => result_case(),
+                    RuntimeType::Result { .. } => result_case(),
                     RuntimeType::Option(_) => option_case(),
                     _ => panic_type(),
                 },
@@ -228,13 +228,13 @@ impl RuntimeValue {
 
                     Ok(self.clone())
                 }
-                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Result { .. } => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 _ => panic_type(),
             },
             RuntimeValue::List { data, data_type } => {
                 let t = match t {
-                    RuntimeType::Result(_, _) => return result_case(),
+                    RuntimeType::Result { .. } => return result_case(),
                     RuntimeType::Option(_) => return option_case(),
                     RuntimeType::List(x) => *x.clone(),
                     _ => return panic_type(),
@@ -306,7 +306,7 @@ impl RuntimeValue {
             RuntimeValue::Bool(x) => match t {
                 RuntimeType::Bool => Ok(RuntimeValue::Bool(*x)),
                 RuntimeType::List(_) => list_case(),
-                RuntimeType::Result(_, _) => result_case(),
+                RuntimeType::Result { .. } => result_case(),
                 RuntimeType::Option(_) => option_case(),
                 _ => RuntimeValue::Int(if *x { 1 } else { 0 }).into_type(env, t),
             },

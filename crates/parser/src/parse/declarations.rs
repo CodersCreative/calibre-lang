@@ -1,5 +1,3 @@
-use std::collections::hash_map::ValuesMut;
-
 use crate::{
     Parser, SyntaxErr,
     ast::{
@@ -14,27 +12,11 @@ impl Parser {
     pub fn parse_statement(&mut self) -> Node {
         match &self.first().token_type {
             TokenType::Let | TokenType::Const => self.parse_variable_declaration(),
-            TokenType::Func => self.parse_function_declaration(),
-            TokenType::If => self.parse_if_statement(),
-            TokenType::Try => self.parse_try_expression(),
-            TokenType::Match => self.parse_match_declaration(),
-            TokenType::Stop(x) => match x {
-                StopValue::Return => self.parse_return_declaration(),
-                StopValue::Break => {
-                    let val = self.eat();
-                    Node::new(NodeType::Break, val.span)
-                }
-                StopValue::Continue => {
-                    let val = self.eat();
-                    Node::new(NodeType::Continue, val.span)
-                }
-            },
             TokenType::Trait => self.parse_if_statement(),
             TokenType::Impl => self.parse_impl_declaration(),
             TokenType::Import => self.parse_import_declaration(),
             TokenType::Type => self.parse_type_decaration(),
             TokenType::For => self.parse_loop_declaration(),
-            TokenType::Open(Bracket::Curly) => self.parse_scope_declaration(),
             _ => self.parse_assignment_expression(),
         }
     }
