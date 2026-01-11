@@ -467,6 +467,23 @@ impl MiddleEnvironment {
                     },
                     span: node.span,
                 }),
+                LoopType::Let { value, pattern } => Ok(MiddleNode {
+                    node_type: MiddleNodeType::LoopDeclaration {
+                        state: None,
+                        body: Box::new(self.evaluate(
+                            &scope,
+                            Node::new_from_type(NodeType::IfStatement {
+                                comparison: Box::new(IfComparisonType::IfLet { value, pattern }),
+                                then: body,
+                                otherwise: Some(Box::new(Node::new_from_type(
+                                    NodeType::Break,
+                                ))),
+                                special_delim: true,
+                            }),
+                        )?),
+                    },
+                    span: node.span,
+                }),                
                 LoopType::For(name, range) => Ok(MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration {
                         state: Some(Box::new(self.evaluate(&scope, Node::new_from_type(NodeType::VariableDeclaration { var_type: VarType::Mutable, identifier: ParserText::from("anon_loop_index".to_string()), value: Box::new(Node::new_from_type(NodeType::IntLiteral(0))), data_type: Some(ParserDataType::from(ParserInnerType::Int)) }))?)),

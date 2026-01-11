@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use calibre_parser::{
     ast::{
         ObjectMap, ParserDataType, ParserText, RefMutability, VarType,

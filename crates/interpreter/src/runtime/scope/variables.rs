@@ -1,5 +1,5 @@
 use calibre_common::{environment::Variable, errors::ScopeErr};
-use calibre_parser::ast::{ObjectMap, ObjectType, VarType};
+use calibre_parser::ast::{ObjectMap, VarType};
 
 use crate::runtime::{
     interpreter::{InterpreterErr, expressions::member::MemberPathType},

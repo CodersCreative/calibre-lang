@@ -7,7 +7,7 @@ use crate::runtime::{
     scope::InterpreterEnvironment,
     values::{
         RuntimeType, RuntimeValue,
-        helper::{Block, MatchBlock},
+        helper::Block,
     },
 };
 

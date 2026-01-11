@@ -12,7 +12,6 @@ use calibre_parser::ast::{
     comparison::{BooleanOperation, Comparison},
 };
 pub mod call;
-pub mod lists;
 pub mod member;
 pub mod scope;
 pub mod structs;

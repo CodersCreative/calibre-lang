@@ -60,6 +60,10 @@ impl From<TokenType> for RefMutability {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoopType {
+    Let {
+        value: Node,
+        pattern: (Vec<MatchArmType>, Vec<Node>),
+    },
     While(Node),
     For(ParserText, Node),
     Loop,

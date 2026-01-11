@@ -1,4 +1,4 @@
-use calibre_interpreter::runtime::{scope::InterpreterEnvironment, values::RuntimeValue};
+use calibre_interpreter::runtime::scope::InterpreterEnvironment;
 use calibre_mir::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
@@ -6,12 +6,11 @@ use calibre_mir::{
 use calibre_parser::lexer::Tokenizer;
 use clap::Parser;
 use miette::{IntoDiagnostic, Result};
-use rustyline::{DefaultEditor, error::ReadlineError};
-use std::{fs, io::Write, path::PathBuf, process::Command, str::FromStr};
+use std::{fs, path::PathBuf, process::Command, str::FromStr};
 
 fn file(
     path: &PathBuf,
-    use_checker: bool,
+    _use_checker: bool,
     args: Vec<(MiddleNode, Option<MiddleNode>)>,
 ) -> Result<()> {
     let mut parser = calibre_parser::Parser::default();
@@ -26,7 +25,7 @@ fn file(
         );
     }
 
-    let mut middle_result = MiddleEnvironment::new_and_evaluate(program, path.clone())?;
+    let middle_result = MiddleEnvironment::new_and_evaluate(program, path.clone())?;
 
     /*if use_checker {
         let mut checker = CheckerEnvironment::new();

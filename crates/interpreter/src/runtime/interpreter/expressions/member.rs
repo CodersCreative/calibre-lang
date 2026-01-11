@@ -1,7 +1,6 @@
 use std::fmt::{Debug, Display};
 
 use calibre_mir::ast::{MiddleNode, MiddleNodeType};
-use calibre_parser::ast::{ObjectMap, ObjectType};
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,

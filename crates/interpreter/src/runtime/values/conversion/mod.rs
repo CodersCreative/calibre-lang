@@ -4,7 +4,7 @@ use crate::runtime::{
 };
 use calibre_common::{environment::InterpreterFrom, errors::ValueErr};
 use calibre_mir::environment::MiddleTypeDefType;
-use calibre_parser::ast::{ObjectMap, ObjectType};
+use calibre_parser::ast::ObjectMap;
 use numbers::NumberValue;
 use std::{collections::HashMap, mem::discriminant};
 

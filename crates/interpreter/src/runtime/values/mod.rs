@@ -1,12 +1,9 @@
 use crate::runtime::scope::InterpreterEnvironment;
-use crate::{
-    native::{self, NativeFunction},
-    runtime::values::helper::MatchBlock,
-};
+use crate::native::{self, NativeFunction};
 use calibre_common::environment::InterpreterFrom;
 use calibre_common::errors::ScopeErr;
 use calibre_mir::environment::MiddleTypeDefType;
-use calibre_parser::ast::{ObjectMap, ObjectType, ParserDataType, ParserInnerType};
+use calibre_parser::ast::{ObjectMap, ParserDataType, ParserInnerType};
 use helper::Block;
 use std::{collections::HashMap, f64::consts::PI, fmt::Debug, rc::Rc};
 
@@ -189,7 +186,7 @@ impl Into<RuntimeType> for &RuntimeValue {
                 parameters: parameters.iter().map(|x| x.1.clone()).collect(),
                 is_async: *is_async,
             },
-            RuntimeValue::NativeFunction(x) => {
+            RuntimeValue::NativeFunction(_x) => {
                 RuntimeType::NativeFn(Box::new(RuntimeType::Dynamic))
             }
             RuntimeValue::Null => RuntimeType::Null,

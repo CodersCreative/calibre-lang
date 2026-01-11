@@ -539,6 +539,15 @@ impl Parser {
     }
 
     pub fn get_loop_type(&mut self) -> LoopType {
+        if self.first().token_type == TokenType::Let {
+            let expr = self.parse_let_pattern();
+
+            return LoopType::Let {
+                value: expr.0,
+                pattern: (expr.1, expr.2),
+            };
+        }
+
         if let Some(in_token) = self.nth(1) {
             if self.first().token_type == TokenType::Identifier
                 && in_token.token_type == TokenType::In
@@ -654,6 +663,53 @@ impl Parser {
         typ
     }
 
+    pub fn parse_let_pattern(&mut self) -> (Node, Vec<MatchArmType>, Vec<Node>) {
+        let _ = self.expect_eat(&TokenType::Let, SyntaxErr::ExpectedToken(TokenType::Let));
+
+        let mut values = vec![self.parse_match_arm_start(false)];
+        let mut conditions = Vec::new();
+
+        while self.first().token_type == TokenType::Or {
+            let _ = self.eat();
+            values.push(self.parse_match_arm_start(false));
+        }
+
+        if self.first().token_type == TokenType::Colon {
+            let _ = self.eat();
+            let typ = self.parse_match_var_type();
+            let n = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+            for val in values.iter_mut() {
+                match val {
+                    MatchArmType::Enum {
+                        value: _,
+                        var_type: typ,
+                        name,
+                    } => {
+                        *name = Some(ParserText {
+                            text: n.value.clone(),
+                            span: n.span,
+                        })
+                    }
+                    _ => self.add_err(SyntaxErr::ExpectedIdentifier),
+                }
+            }
+        }
+
+        while self.first().token_type == TokenType::If {
+            let _ = self.eat();
+            conditions.push(self.parse_statement());
+        }
+
+        let _ = self.expect_eat(
+            &TokenType::LeftArrow,
+            SyntaxErr::ExpectedKeyword(String::from("<-")),
+        );
+
+        let value = self.parse_statement();
+
+        (value, values, conditions)
+    }
+
     pub fn parse_if_statement(&mut self) -> Node {
         let open = self.expect_eat(
             &TokenType::If,
@@ -661,50 +717,11 @@ impl Parser {
         );
 
         let comparison = if self.first().token_type == TokenType::Let {
-            let _ = self.eat();
-            let mut values = vec![self.parse_match_arm_start(false)];
-            let mut conditions = Vec::new();
+            let expr = self.parse_let_pattern();
 
-            while self.first().token_type == TokenType::Or {
-                let _ = self.eat();
-                values.push(self.parse_match_arm_start(false));
-            }
-
-            if self.first().token_type == TokenType::Colon {
-                let _ = self.eat();
-                let typ = self.parse_match_var_type();
-                let n = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
-                for val in values.iter_mut() {
-                    match val {
-                        MatchArmType::Enum {
-                            value: _,
-                            var_type: typ,
-                            name,
-                        } => {
-                            *name = Some(ParserText {
-                                text: n.value.clone(),
-                                span: n.span,
-                            })
-                        }
-                        _ => self.add_err(SyntaxErr::ExpectedIdentifier),
-                    }
-                }
-            }
-
-            while self.first().token_type == TokenType::If {
-                let _ = self.eat();
-                conditions.push(self.parse_statement());
-            }
-
-            let _ = self.expect_eat(
-                &TokenType::LeftArrow,
-                SyntaxErr::ExpectedKeyword(String::from("<-")),
-            );
-
-            let value = self.parse_statement();
             IfComparisonType::IfLet {
-                value: value.clone(),
-                pattern: (values, conditions.clone()),
+                value: expr.0,
+                pattern: (expr.1, expr.2),
             }
         } else {
             IfComparisonType::If(self.parse_statement())

@@ -903,6 +903,34 @@ impl Formatter {
         match loop_type {
             LoopType::While(x) => self.format(x),
             LoopType::For(id, x) => format!("{} in {}", id, self.format(x)),
+            LoopType::Let { value, pattern } => {
+                let mut txt = String::from("let ");
+                txt.push_str(&self.fmt_match_arm(&pattern.0[0], false));
+                for node in pattern.0.iter().skip(1) {
+                    txt.push_str(&format!(" | {}", self.fmt_match_arm(node, false)));
+                }
+
+                match &pattern.0[0] {
+                    MatchArmType::Enum {
+                        value: _,
+                        var_type: VarType::Immutable,
+                        name: Some(name),
+                    } => txt.push_str(&format!(" : {}", name)),
+                    MatchArmType::Enum {
+                        value: _,
+                        var_type,
+                        name: Some(name),
+                    } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
+                    _ => {}
+                }
+
+                if !pattern.1.is_empty() {
+                    txt.push_str(&format!(" {}", self.fmt_conditionals(&pattern.1)));
+                };
+
+                txt.push_str(&format!(" <- {}", self.format(value)));
+                txt
+            }
             LoopType::Loop => String::new(),
         }
     }

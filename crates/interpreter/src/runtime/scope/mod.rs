@@ -1,16 +1,13 @@
 pub mod variables;
 
-use std::{
-    ops::{Deref, DerefMut},
-    path::PathBuf,
-};
+use std::ops::{Deref, DerefMut};
 
 use crate::runtime::{
     interpreter::InterpreterErr,
     values::{RuntimeType, RuntimeValue, helper::StopValue},
 };
 use calibre_common::environment::Environment;
-use calibre_mir::{ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr};
+use calibre_mir::{ast::MiddleNode, environment::MiddleEnvironment};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InterpreterEnvironment {
