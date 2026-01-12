@@ -8,7 +8,7 @@ use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{
         LoopType, Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
-        RefMutability, comparison::Comparison,
+        PotentialDollarIdentifier, RefMutability, comparison::Comparison,
     },
     lexer::{Bracket, Span, Token, TokenType},
 };
@@ -81,7 +81,7 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<(ParserText, ParserDataType, Option<Node>)> {
+    ) -> Vec<(PotentialDollarIdentifier, ParserDataType, Option<Node>)> {
         let mut properties = Vec::new();
         let mut defaulted = false;
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
@@ -90,10 +90,7 @@ impl Parser {
             let mut keys = Vec::new();
 
             while self.first().token_type == TokenType::Identifier {
-                keys.push(
-                    self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)
-                        .into(),
-                );
+                keys.push(self.expect_potential_dollar_ident());
             }
 
             let typ = if self.first().token_type == TokenType::Colon {

@@ -1,6 +1,6 @@
 use crate::{
     Parser, SyntaxErr,
-    ast::{Node, ObjectType, ParserText, RefMutability},
+    ast::{Node, ObjectType, ParserText, PotentialDollarIdentifier, RefMutability},
     lexer::{Bracket, Span, StopValue},
 };
 use crate::{
@@ -17,7 +17,10 @@ impl Parser {
             TokenType::List => self.parse_list_iter_expression(),
             TokenType::Identifier => {
                 let val = self.eat();
-                Node::new(NodeType::Identifier(val.clone().into()), val.span)
+                Node::new(
+                    NodeType::Identifier(PotentialDollarIdentifier::Identifier(val.clone().into())),
+                    val.span,
+                )
             }
             TokenType::Float => {
                 let val = self.eat();
@@ -71,27 +74,7 @@ impl Parser {
                 )
             }
             TokenType::Comp => self.parse_comp(),
-            TokenType::Dollar => {
-                let open = self.eat();
-                if self.first().token_type == TokenType::Identifier {
-                    let ident = self.eat();
-                    Node::new(
-                        NodeType::DollarIdentifier(ParserText {
-                            text: ident.value,
-                            span: ident.span,
-                        }),
-                        Span::new_from_spans(open.span, ident.span),
-                    )
-                } else {
-                    Node::new(
-                        NodeType::Identifier(ParserText {
-                            text: open.value,
-                            span: open.span,
-                        }),
-                        open.span,
-                    )
-                }
-            }
+            TokenType::Dollar => self.expect_potential_dollar_ident().into(),
             TokenType::Not => {
                 let open = self.eat();
                 let val = self.parse_statement();
@@ -211,6 +194,38 @@ impl Parser {
         }
     }
 
+    pub fn expect_potential_dollar_ident(&mut self) -> PotentialDollarIdentifier {
+        if self.first().token_type == TokenType::Dollar {
+            let open = self.eat();
+            if self.first().token_type == TokenType::Identifier {
+                let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                PotentialDollarIdentifier::DollarIdentifier(ident.into())
+            } else {
+                PotentialDollarIdentifier::Identifier(open.into())
+            }
+        } else {
+            let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+            PotentialDollarIdentifier::Identifier(ident.into())
+        }
+    }
+
+    pub fn parse_potential_dollar_ident(&mut self) -> Option<PotentialDollarIdentifier> {
+        if self.first().token_type == TokenType::Dollar {
+            let open = self.eat();
+            if self.first().token_type == TokenType::Identifier {
+                let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                Some(PotentialDollarIdentifier::DollarIdentifier(ident.into()))
+            } else {
+                Some(PotentialDollarIdentifier::Identifier(open.into()))
+            }
+        } else if self.first().token_type == TokenType::Identifier {
+            let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+            Some(PotentialDollarIdentifier::Identifier(ident.into()))
+        } else {
+            None
+        }
+    }
+
     pub fn parse_potential_key_value(&mut self) -> ObjectType<Node> {
         match self.first().token_type {
             TokenType::Open(Bracket::Curly) => {
@@ -218,8 +233,7 @@ impl Parser {
                 let mut properties = HashMap::new();
                 while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Curly)
                 {
-                    let key =
-                        self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                    let key = self.expect_potential_dollar_ident();
 
                     if [TokenType::Comma, TokenType::Close(Bracket::Curly)]
                         .contains(&self.first().token_type)
@@ -229,18 +243,15 @@ impl Parser {
                         }
 
                         properties.insert(
-                            key.value.clone(),
-                            Node::new(
-                                NodeType::Identifier(ParserText::new(key.value, key.span)),
-                                key.span,
-                            ),
+                            key.to_string(),
+                            Node::new(NodeType::Identifier(key.clone()), *key.span()),
                         );
                         continue;
                     }
 
                     let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-                    properties.insert(key.value, self.parse_statement());
+                    properties.insert(key.to_string(), self.parse_statement());
 
                     if self.first().token_type != TokenType::Close(Bracket::Curly) {
                         let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));

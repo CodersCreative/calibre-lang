@@ -20,7 +20,7 @@ impl Parser {
             };
         }
 
-        let identifier = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+        let identifier = self.expect_potential_dollar_ident();
 
         let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
 
@@ -42,10 +42,10 @@ impl Parser {
 
         Node::new(
             NodeType::TypeDeclaration {
-                identifier: identifier.clone().into(),
+                identifier: identifier.clone(),
                 object,
             },
-            identifier.span,
+            *identifier.span(),
         )
     }
 
@@ -62,9 +62,7 @@ impl Parser {
 
         let mut options = Vec::new();
 
-        while self.first().token_type == TokenType::Identifier {
-            let option = self.eat().into();
-
+        while let Some(option) = self.parse_potential_dollar_ident() {
             if self.first().token_type == TokenType::Colon {
                 let _ = self.eat();
                 options.push((option, Some(self.expect_type())));

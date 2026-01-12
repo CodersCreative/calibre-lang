@@ -65,7 +65,7 @@ pub enum LoopType {
         pattern: (Vec<MatchArmType>, Vec<Node>),
     },
     While(Node),
-    For(ParserText, Node),
+    For(PotentialDollarIdentifier, Node),
     Loop,
 }
 
@@ -306,7 +306,7 @@ impl Display for VarType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefType {
-    Enum(Vec<(ParserText, Option<ParserDataType>)>),
+    Enum(Vec<(PotentialDollarIdentifier, Option<ParserDataType>)>),
     Struct(ObjectType<ParserDataType>),
     NewType(ParserDataType),
 }
@@ -332,6 +332,30 @@ impl From<Token> for ParserText {
 pub enum PotentialDollarIdentifier {
     DollarIdentifier(ParserText),
     Identifier(ParserText),
+}
+
+impl Into<Node> for PotentialDollarIdentifier {
+    fn into(self) -> Node {
+        Node {
+            span: *self.span(),
+            node_type: NodeType::Identifier(self),
+        }
+    }
+}
+
+impl From<ParserText> for PotentialDollarIdentifier {
+    fn from(value: ParserText) -> Self {
+        Self::Identifier(value)
+    }
+}
+
+impl PotentialDollarIdentifier {
+    pub fn span(&self) -> &Span {
+        match self {
+            Self::Identifier(x) => &x.span,
+            Self::DollarIdentifier(x) => &x.span,
+        }
+    }
 }
 
 impl Display for PotentialDollarIdentifier {
@@ -397,13 +421,13 @@ impl Node {
 #[derive(Clone, Debug, PartialEq)]
 pub enum MatchArmType {
     Enum {
-        value: ParserText,
+        value: PotentialDollarIdentifier,
         var_type: VarType,
-        name: Option<ParserText>,
+        name: Option<PotentialDollarIdentifier>,
     },
     Let {
         var_type: VarType,
-        name: ParserText,
+        name: PotentialDollarIdentifier,
     },
     Value(Node),
     Wildcard(Span),
@@ -412,8 +436,8 @@ pub enum MatchArmType {
 impl MatchArmType {
     pub fn span(&self) -> &Span {
         match self {
-            Self::Enum { value, .. } => &value.span,
-            Self::Let { var_type: _, name } => &name.span,
+            Self::Enum { value, .. } => value.span(),
+            Self::Let { var_type: _, name } => name.span(),
             Self::Value(x) => &x.span,
             Self::Wildcard(x) => &x,
         }
@@ -422,14 +446,14 @@ impl MatchArmType {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TryCatch {
-    pub name: Option<ParserText>,
+    pub name: Option<PotentialDollarIdentifier>,
     pub body: Box<Node>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NamedScope {
-    pub name: ParserText,
-    pub args: Vec<(ParserText, Node)>,
+    pub name: PotentialDollarIdentifier,
+    pub args: Vec<(PotentialDollarIdentifier, Node)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -445,7 +469,7 @@ pub enum NodeType {
         stage: usize,
         body: Box<Node>,
     },
-    DollarIdentifier(ParserText),
+    Identifier(PotentialDollarIdentifier),
     DataType {
         data_type: ParserDataType,
     },
@@ -457,21 +481,21 @@ pub enum NodeType {
     },
     VariableDeclaration {
         var_type: VarType,
-        identifier: ParserText,
+        identifier: PotentialDollarIdentifier,
         value: Box<Node>,
         data_type: Option<ParserDataType>,
     },
     ImplDeclaration {
-        identifier: ParserText,
-        functions: Vec<(Node, bool)>,
+        identifier: PotentialDollarIdentifier,
+        functions: Vec<Node>,
     },
     TypeDeclaration {
-        identifier: ParserText,
+        identifier: PotentialDollarIdentifier,
         object: TypeDefType,
     },
     EnumExpression {
-        identifier: ParserText,
-        value: ParserText,
+        identifier: PotentialDollarIdentifier,
+        value: PotentialDollarIdentifier,
         data: Option<Box<Node>>,
     },
     ScopeDeclaration {
@@ -482,13 +506,13 @@ pub enum NodeType {
         define: bool,
     },
     MatchDeclaration {
-        parameters: (ParserText, ParserDataType, Option<Box<Node>>),
+        parameters: (PotentialDollarIdentifier, ParserDataType, Option<Box<Node>>),
         body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
         return_type: ParserDataType,
         is_async: bool,
     },
     FunctionDeclaration {
-        parameters: Vec<(ParserText, ParserDataType, Option<Node>)>,
+        parameters: Vec<(PotentialDollarIdentifier, ParserDataType, Option<Node>)>,
         body: Box<Node>,
         return_type: ParserDataType,
         is_async: bool,
@@ -540,7 +564,6 @@ pub enum NodeType {
     Return {
         value: Option<Box<Node>>,
     },
-    Identifier(ParserText),
     StringLiteral(ParserText),
     ListLiteral(Option<ParserDataType>, Vec<Node>),
     CharLiteral(char),
@@ -581,12 +604,12 @@ pub enum NodeType {
         otherwise: Box<Node>,
     },
     ImportStatement {
-        module: Vec<ParserText>,
-        alias: Option<ParserText>,
-        values: Vec<ParserText>,
+        module: Vec<PotentialDollarIdentifier>,
+        alias: Option<PotentialDollarIdentifier>,
+        values: Vec<PotentialDollarIdentifier>,
     },
     StructLiteral {
-        identifier: ParserText,
+        identifier: PotentialDollarIdentifier,
         value: ObjectType<Node>,
     },
 }

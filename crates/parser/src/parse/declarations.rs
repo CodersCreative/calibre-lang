@@ -2,8 +2,8 @@ use crate::{
     Parser, SyntaxErr,
     ast::{
         IfComparisonType, LoopType, MatchArmType, NamedScope, Node, ParserDataType,
-        ParserInnerType, ParserText, TryCatch, VarType, binary::BinaryOperator,
-        comparison::Comparison,
+        ParserInnerType, ParserText, PotentialDollarIdentifier, TryCatch, VarType,
+        binary::BinaryOperator, comparison::Comparison,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -31,7 +31,7 @@ impl Parser {
 
         let named = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
             let _ = self.eat();
-            let name = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+            let name = self.expect_potential_dollar_ident();
             let _ = self.expect_eat(
                 &TokenType::Comparison(Comparison::Greater),
                 SyntaxErr::ExpectedChar('>'),
@@ -46,7 +46,7 @@ impl Parser {
 
             while self.first().token_type != TokenType::Close(Bracket::Square) {
                 let _ = self.expect_eat(&TokenType::Dollar, SyntaxErr::ExpectedChar('$'));
-                let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                let ident = self.expect_potential_dollar_ident();
                 let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
                 let value = self.parse_statement();
 
@@ -54,25 +54,13 @@ impl Parser {
                     let _ = self.eat();
                 }
 
-                args.push((
-                    ParserText {
-                        text: ident.value,
-                        span: ident.span,
-                    },
-                    value,
-                ));
+                args.push((ident, value));
             }
             let _ = self.expect_eat(
                 &TokenType::Close(Bracket::Square),
                 SyntaxErr::ExpectedClosingBracket(Bracket::Square),
             );
-            Some(NamedScope {
-                name: ParserText {
-                    text: name.value,
-                    span: name.span,
-                },
-                args,
-            })
+            Some(NamedScope { name, args })
         } else {
             None
         };
@@ -162,7 +150,7 @@ impl Parser {
             }
         };
 
-        let identifier = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedName);
+        let identifier = self.expect_potential_dollar_ident();
 
         let data_type = match self.first().token_type {
             TokenType::Colon => {
@@ -183,7 +171,7 @@ impl Parser {
                 data_type,
                 value: Box::new(value),
             },
-            identifier.span,
+            *identifier.span(),
         )
     }
 
@@ -193,7 +181,7 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("impl")),
         );
 
-        let identifier = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+        let identifier = self.expect_potential_dollar_ident();
 
         let mut functions = Vec::new();
 
@@ -207,84 +195,12 @@ impl Parser {
 
             let _ = self.parse_delimited();
 
-            match decl.node_type {
+            match &decl.node_type {
                 NodeType::VariableDeclaration {
                     var_type: VarType::Constant,
-                    identifier: name,
-                    value: func,
-                    data_type,
+                    ..
                 } => {
-                    if let NodeType::FunctionDeclaration {
-                        parameters,
-                        body,
-                        return_type,
-                        is_async,
-                    } = func.node_type
-                    {
-                        let mut depends = false;
-                        if parameters.len() > 0 {
-                            if let ParserInnerType::Struct(obj) = &parameters[0].1.data_type {
-                                if obj == &identifier.value {
-                                    depends = true;
-                                }
-                            }
-                        }
-
-                        functions.push((
-                            Node::new(
-                                NodeType::VariableDeclaration {
-                                    var_type: VarType::Constant,
-                                    identifier: name,
-                                    value: Box::new(Node::new(
-                                        NodeType::FunctionDeclaration {
-                                            parameters,
-                                            body,
-                                            return_type,
-                                            is_async,
-                                        },
-                                        func.span,
-                                    )),
-                                    data_type,
-                                },
-                                decl.span,
-                            ),
-                            depends,
-                        ));
-                    } else if let NodeType::MatchDeclaration {
-                        parameters,
-                        body,
-                        return_type,
-                        is_async,
-                    } = func.node_type
-                    {
-                        let mut depends = false;
-                        if let ParserInnerType::Struct(obj) = &parameters.1.data_type {
-                            if obj == &identifier.value {
-                                depends = true;
-                            }
-                        }
-
-                        functions.push((
-                            Node::new(
-                                NodeType::VariableDeclaration {
-                                    var_type: VarType::Constant,
-                                    identifier: name,
-                                    value: Box::new(Node::new(
-                                        NodeType::MatchDeclaration {
-                                            parameters,
-                                            body,
-                                            return_type,
-                                            is_async,
-                                        },
-                                        func.span,
-                                    )),
-                                    data_type,
-                                },
-                                decl.span,
-                            ),
-                            depends,
-                        ));
-                    }
+                    functions.push(decl);
                 }
                 _ => self.add_err(SyntaxErr::ExpectedFunctions),
             }
@@ -300,7 +216,7 @@ impl Parser {
                 identifier: identifier.clone().into(),
                 functions,
             },
-            identifier.span,
+            *identifier.span(),
         )
     }
 
@@ -321,13 +237,7 @@ impl Parser {
                 let name = if self.first().token_type == TokenType::Colon {
                     let _ = self.eat();
 
-                    let name =
-                        self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
-
-                    Some(ParserText {
-                        text: name.value,
-                        span: name.span,
-                    })
+                    Some(self.expect_potential_dollar_ident())
                 } else {
                     None
                 };
@@ -362,17 +272,11 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("import")),
         );
 
-        let get_module = |this: &mut Parser| -> Vec<ParserText> {
-            let mut module = vec![
-                this.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
-                    .into(),
-            ];
+        let get_module = |this: &mut Parser| -> Vec<PotentialDollarIdentifier> {
+            let mut module = vec![this.expect_potential_dollar_ident()];
 
             while this.first().token_type == TokenType::Colon {
-                module.push(
-                    this.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
-                        .into(),
-                );
+                module.push(this.expect_potential_dollar_ident());
             }
 
             module
@@ -391,12 +295,12 @@ impl Parser {
                 )
                 .into_iter()
                 .map(|x| match x.0.node_type {
-                    NodeType::Identifier(x) => ParserText::new(x.to_string(), x.span),
+                    NodeType::Identifier(x) => x,
                     _ => panic!(),
                 })
                 .collect()
             } else {
-                vec![self.eat().into()]
+                vec![self.expect_potential_dollar_ident()]
             };
 
             let _ = self.expect_eat(
@@ -419,10 +323,7 @@ impl Parser {
 
         let alias = if self.first().token_type == TokenType::As {
             let _ = self.eat();
-            Some(
-                self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
-                    .into(),
-            )
+            Some(self.expect_potential_dollar_ident())
         } else {
             None
         };
@@ -460,30 +361,19 @@ impl Parser {
             TokenType::FullStop => {
                 let _ = self.eat();
 
-                let variant =
-                    self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                let variant = self.expect_potential_dollar_ident();
 
                 let name = if self.first().token_type == TokenType::Colon && parse_name {
                     let _ = self.eat();
                     let typ = self.parse_match_var_type();
-                    let name =
-                        self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
-                    (
-                        typ,
-                        Some(ParserText {
-                            text: name.value,
-                            span: name.span,
-                        }),
-                    )
+                    let name = self.expect_potential_dollar_ident();
+                    (typ, Some(name))
                 } else {
                     (VarType::Immutable, None)
                 };
 
                 MatchArmType::Enum {
-                    value: ParserText {
-                        text: variant.value,
-                        span: variant.span,
-                    },
+                    value: variant,
                     var_type: name.0,
                     name: name.1,
                 }
@@ -505,15 +395,9 @@ impl Parser {
                     }
                 };
 
-                let name = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                let name = self.expect_potential_dollar_ident();
 
-                MatchArmType::Let {
-                    var_type,
-                    name: ParserText {
-                        text: name.value,
-                        span: name.span,
-                    },
-                }
+                MatchArmType::Let { var_type, name }
             }
             _ if &self.first().value == "_" => {
                 let all = self.eat();
@@ -579,19 +463,14 @@ impl Parser {
             if self.first().token_type == TokenType::Colon {
                 let _ = self.eat();
                 let typ = self.parse_match_var_type();
-                let n = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                let n = self.expect_potential_dollar_ident();
                 for val in values.iter_mut() {
                     match val {
                         MatchArmType::Enum {
                             value: _,
                             var_type: typ,
                             name,
-                        } => {
-                            *name = Some(ParserText {
-                                text: n.value.clone(),
-                                span: n.span,
-                            })
-                        }
+                        } => *name = Some(n.clone()),
                         _ => self.add_err(SyntaxErr::ExpectedIdentifier),
                     }
                 }
@@ -621,7 +500,7 @@ impl Parser {
         let func = Node::new(
             NodeType::MatchDeclaration {
                 parameters: (
-                    ParserText::new(String::from("input_value"), Span::default()),
+                    ParserText::new(String::from("input_value"), Span::default()).into(),
                     typ.unwrap_or(ParserDataType::new(
                         ParserInnerType::Dynamic,
                         Span::default(),
@@ -656,9 +535,7 @@ impl Parser {
             if self.first().token_type == TokenType::Identifier
                 && in_token.token_type == TokenType::In
             {
-                let identifier = self
-                    .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
-                    .into();
+                let identifier = self.expect_potential_dollar_ident();
 
                 let _ = self.eat();
                 return LoopType::For(identifier, self.parse_statement());
@@ -768,19 +645,14 @@ impl Parser {
         if self.first().token_type == TokenType::Colon {
             let _ = self.eat();
             let typ = self.parse_match_var_type();
-            let n = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+            let n = self.expect_potential_dollar_ident();
             for val in values.iter_mut() {
                 match val {
                     MatchArmType::Enum {
                         value: _,
                         var_type: typ,
                         name,
-                    } => {
-                        *name = Some(ParserText {
-                            text: n.value.clone(),
-                            span: n.span,
-                        })
-                    }
+                    } => *name = Some(n.clone()),
                     _ => self.add_err(SyntaxErr::ExpectedIdentifier),
                 }
             }

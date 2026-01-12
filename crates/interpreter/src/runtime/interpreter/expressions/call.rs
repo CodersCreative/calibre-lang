@@ -142,6 +142,10 @@ impl InterpreterEnvironment {
     ) -> Result<RuntimeValue, InterpreterErr> {
         let func = self.evaluate(scope, caller.clone())?;
 
+        let func = match func {
+            RuntimeValue::Ref(x, _) => self.get_var(&x)?.value.clone(),
+            x => x,
+        };
         match func {
             RuntimeValue::Function { .. } => {
                 return self.evaluate_function(scope, func, arguments);

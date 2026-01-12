@@ -33,12 +33,12 @@ impl Parser {
     }
 
     pub fn parse_purely_member(&mut self) -> Node {
-        let first = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+        let first = self.expect_potential_dollar_ident();
 
         let mut path = vec![(
             Node {
-                node_type: NodeType::Identifier(first.clone().into()),
-                span: first.span,
+                node_type: NodeType::Identifier(first.clone()),
+                span: *first.span(),
             },
             false,
         )];
@@ -47,11 +47,11 @@ impl Parser {
             || self.first().token_type == TokenType::Open(Bracket::Square)
         {
             if self.eat().token_type == TokenType::FullStop {
-                let first = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                let first = self.expect_potential_dollar_ident();
                 path.push((
                     Node {
-                        node_type: NodeType::Identifier(first.clone().into()),
-                        span: first.span,
+                        node_type: NodeType::Identifier(first.clone()),
+                        span: *first.span(),
                     },
                     false,
                 ));
@@ -121,14 +121,8 @@ impl Parser {
                             let data = self.parse_statement();
                             return Node::new(
                                 NodeType::EnumExpression {
-                                    identifier: ParserText::new(
-                                        identifier.to_string(),
-                                        path[0].0.span.clone(),
-                                    ),
-                                    value: ParserText::new(
-                                        value.to_string(),
-                                        path[1].0.span.clone(),
-                                    ),
+                                    identifier: identifier.clone(),
+                                    value: value.clone(),
                                     data: Some(Box::new(data)),
                                 },
                                 Span::new_from_spans(path[0].0.span, path[1].0.span),
@@ -146,10 +140,7 @@ impl Parser {
                     let data = self.parse_potential_key_value();
                     return Node::new(
                         NodeType::StructLiteral {
-                            identifier: ParserText::new(
-                                identifier.to_string(),
-                                path[0].0.span.clone(),
-                            ),
+                            identifier: identifier.clone(),
                             value: data,
                         },
                         path[0].0.span,

@@ -4,7 +4,7 @@ use crate::{
     Parser,
     ast::{
         IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, ParserDataType,
-        ParserInnerType, ParserText, TypeDefType, VarType,
+        ParserInnerType, ParserText, PotentialDollarIdentifier, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -147,7 +147,7 @@ impl Formatter {
             } => {
                 let mut txt = String::from("import ");
 
-                let get_module = |module: &[ParserText]| -> String {
+                let get_module = |module: &[PotentialDollarIdentifier]| -> String {
                     let mut txt = module[0].to_string();
                     for val in module.iter().skip(1) {
                         txt.push_str(&format!(":{}", &val));
@@ -233,8 +233,8 @@ impl Formatter {
                 if !functions.is_empty() {
                     for func in functions {
                         let temp = handle_comment!(
-                            self.get_potential_comment(&func.0.span),
-                            self.format(&func.0)
+                            self.get_potential_comment(&func.span),
+                            self.format(&func)
                         );
                         txt.push_str(&format!("\n{};\n", self.fmt_txt_with_tab(&temp, 1, true)));
                     }
@@ -644,7 +644,6 @@ impl Formatter {
 
                 txt
             }
-            NodeType::DollarIdentifier(x) => format!("${}", x),
             NodeType::DataType { data_type } => format!("type : {}", data_type),
             NodeType::Comp { stage, body } => format!("comp, {} {}", stage, self.format(&body)),
             NodeType::ScopeDeclaration {
@@ -785,7 +784,7 @@ impl Formatter {
 
                         for arm in values {
                             txt.push_str(&handle_comment!(
-                                self.get_potential_comment(&arm.0.span),
+                                self.get_potential_comment(arm.0.span()),
                                 if let Some(x) = &arm.1 {
                                     format!("{} : {},\n", arm.0, x)
                                 } else {
@@ -881,7 +880,7 @@ impl Formatter {
                     let mut temp = None;
 
                     if let NodeType::Identifier(x) = &value.node_type {
-                        if &x.text == key {
+                        if &x.to_string() == key {
                             temp = Some({
                                 let span = Span::default();
                                 handle_comment!(

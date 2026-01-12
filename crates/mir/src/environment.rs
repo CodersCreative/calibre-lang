@@ -4,8 +4,8 @@ use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Parser,
     ast::{
-        NamedScope, Node, NodeType, ObjectMap, ParserDataType, ParserInnerType, ParserText,
-        TypeDefType, VarType,
+        Node, NodeType, ObjectMap, ParserDataType, ParserInnerType, ParserText,
+        PotentialDollarIdentifier, TypeDefType, VarType,
     },
     lexer::{Location, Span, Tokenizer},
 };
@@ -18,20 +18,6 @@ pub enum MiddleTypeDefType {
     Enum(Vec<(ParserText, Option<ParserDataType>)>),
     Struct(ObjectMap<ParserDataType>),
     NewType(ParserDataType),
-}
-
-impl From<TypeDefType> for MiddleTypeDefType {
-    fn from(value: TypeDefType) -> Self {
-        match value {
-            TypeDefType::Enum(x) => Self::Enum(
-                x.into_iter()
-                    .map(|variant| (variant.0, variant.1.map(|x| x.into())))
-                    .collect(),
-            ),
-            TypeDefType::Struct(x) => Self::Struct(x.into()),
-            TypeDefType::NewType(x) => Self::NewType(x),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -110,6 +96,28 @@ impl MiddleEnvironment {
         }
     }
 
+    pub fn type_def_type_into(&self, scope: &u64, value: TypeDefType) -> MiddleTypeDefType {
+        match value {
+            TypeDefType::Enum(x) => MiddleTypeDefType::Enum({
+                let mut lst = Vec::new();
+
+                for (k, v) in x {
+                    lst.push((
+                        self.resolve_dollar_ident_only(scope, &k).unwrap(),
+                        if let Some(v) = v {
+                            Some(self.resolve_data_type(scope, v))
+                        } else {
+                            None
+                        },
+                    ));
+                }
+                lst
+            }),
+            TypeDefType::Struct(x) => MiddleTypeDefType::Struct(x.into()),
+            TypeDefType::NewType(x) => MiddleTypeDefType::NewType(x),
+        }
+    }
+
     pub fn new_and_evaluate(
         node: Node,
         path: PathBuf,
@@ -163,6 +171,53 @@ impl MiddleEnvironment {
         }
     }
 
+    pub fn resolve_parser_text(&self, scope: &u64, iden: &ParserText) -> Option<ParserText> {
+        Some(ParserText {
+            text: self.resolve_str(scope, &iden.text)?.to_string(),
+            span: iden.span,
+        })
+    }
+
+    pub fn resolve_potential_dollar_ident(
+        &self,
+        scope: &u64,
+        iden: &PotentialDollarIdentifier,
+    ) -> Option<ParserText> {
+        match iden {
+            PotentialDollarIdentifier::Identifier(x) => self.resolve_parser_text(scope, x),
+            PotentialDollarIdentifier::DollarIdentifier(x) => {
+                if let Some(text) = self
+                    .resolve_macro_arg(scope, x)
+                    .map(|x| match &x.node_type {
+                        MiddleNodeType::Identifier(x) => Some(x.clone()),
+                        _ => None,
+                    })
+                    .flatten()
+                {
+                    Some(self.resolve_parser_text(scope, &text).unwrap_or(text))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    pub fn resolve_dollar_ident_only(
+        &self,
+        scope: &u64,
+        iden: &PotentialDollarIdentifier,
+    ) -> Option<ParserText> {
+        match iden {
+            PotentialDollarIdentifier::Identifier(x) => Some(x.clone()),
+            PotentialDollarIdentifier::DollarIdentifier(x) => self
+                .resolve_macro_arg(scope, x)
+                .map(|x| match &x.node_type {
+                    MiddleNodeType::Identifier(x) => Some(x.clone()),
+                    _ => None,
+                })
+                .flatten(),
+        }
+    }
     pub fn resolve_data_type(&self, scope: &u64, data_type: ParserDataType) -> ParserDataType {
         match data_type.data_type {
             ParserInnerType::Tuple(x) => {
@@ -230,13 +285,6 @@ impl MiddleEnvironment {
             }
             _ => data_type,
         }
-    }
-
-    pub fn resolve_parser_text(&self, scope: &u64, iden: &ParserText) -> Option<ParserText> {
-        Some(ParserText {
-            text: self.resolve_str(scope, &iden.text)?.to_string(),
-            span: iden.span,
-        })
     }
 
     pub fn add_scope(&mut self, mut scope: MiddleScope) {
@@ -506,8 +554,8 @@ impl MiddleEnvironment {
             NodeType::ScopeDeclaration {
                 named: Some(named), ..
             } => {
-                // TODO resolve type of named scope.
-                todo!()
+                let name = self.resolve_dollar_ident_only(scope, &named.name)?;
+                self.resolve_type_from_node(scope, self.resolve_macro(scope, &name)?.body.last()?)
             }
             NodeType::IfStatement {
                 comparison: _,
@@ -535,8 +583,11 @@ impl MiddleEnvironment {
             }
             NodeType::EnumExpression { identifier, .. }
             | NodeType::StructLiteral { identifier, .. } => Some(ParserDataType {
-                data_type: ParserInnerType::Struct(identifier.text.clone()),
-                span: identifier.span,
+                span: *identifier.span(),
+                data_type: ParserInnerType::Struct(
+                    self.resolve_potential_dollar_ident(scope, &identifier)?
+                        .to_string(),
+                ),
             }),
             NodeType::FunctionDeclaration {
                 parameters,
@@ -636,7 +687,7 @@ impl MiddleEnvironment {
             NodeType::CallExpression(caller, args) => {
                 let mut caller_type = None;
                 if let NodeType::Identifier(caller) = &caller.node_type {
-                    if &caller.text == "tuple" {
+                    if &caller.to_string() == "tuple" {
                         let mut lst = Vec::new();
 
                         for arg in args {
@@ -648,13 +699,13 @@ impl MiddleEnvironment {
                         });
                     }
 
-                    if let Some(caller) = self.resolve_str(scope, caller) {
-                        if self.objects.contains_key(caller) {
+                    if let Some(caller) = self.resolve_potential_dollar_ident(scope, caller) {
+                        if self.objects.contains_key(&caller.text) {
                             return Some(ParserDataType {
                                 data_type: ParserInnerType::Struct(caller.to_string()),
                                 span: node.span,
                             });
-                        } else if let Some(caller) = self.variables.get(caller) {
+                        } else if let Some(caller) = self.variables.get(&caller.text) {
                             caller_type = Some(caller.data_type.clone());
                         }
                     }
@@ -675,7 +726,7 @@ impl MiddleEnvironment {
                 }
             }
             NodeType::Identifier(x) => {
-                if let Some(iden) = self.resolve_parser_text(scope, &x) {
+                if let Some(iden) = self.resolve_potential_dollar_ident(scope, &x) {
                     if let Some(x) = self.variables.get(&iden.text) {
                         return Some(x.data_type.clone());
                     }
