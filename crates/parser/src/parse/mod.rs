@@ -248,22 +248,26 @@ impl Parser {
 
     pub fn parse_type(&mut self) -> Option<ParserDataType> {
         let t = self.first().clone();
+        let mutability = RefMutability::from(t.token_type.clone());
 
-        if self.first().token_type == TokenType::Not {
+        let mut typ = if t.token_type == TokenType::Not {
             let not = self.eat();
             let typ = self.expect_type();
-            return Some(ParserDataType::new(
+            Some(ParserDataType::new(
                 ParserInnerType::Result {
                     err: Box::new(ParserDataType::new(ParserInnerType::Dynamic, not.span)),
                     ok: Box::new(typ.clone()),
                 },
                 Span::new_from_spans(not.span, typ.span),
-            ));
-        }
-
-        let mutability = RefMutability::from(t.token_type.clone());
-
-        let mut typ = if mutability != RefMutability::Value {
+            ))
+        } else if t.token_type == TokenType::Dollar {
+            let open = self.eat();
+            let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+            Some(ParserDataType::new(
+                ParserInnerType::DollarIdentifier(ident.value),
+                Span::new_from_spans(open.span, ident.span),
+            ))
+        } else if mutability != RefMutability::Value {
             let mutability_token = self.eat();
             let typ = self.expect_type();
             Some(ParserDataType::new(

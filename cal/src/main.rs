@@ -1,3 +1,4 @@
+use calibre_comptime::ComptimeEnvironment;
 use calibre_interpreter::runtime::scope::InterpreterEnvironment;
 use calibre_mir::environment::MiddleEnvironment;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
@@ -23,7 +24,8 @@ fn file(
         );
     }
 
-    let middle_result = MiddleEnvironment::new_and_evaluate(program, path.clone())?;
+    let mut middle_result = MiddleEnvironment::new_and_evaluate(program, path.clone())?;
+    middle_result.2 = ComptimeEnvironment::new_and_evaluate(middle_result.2, &middle_result.0)?;
 
     /*if use_checker {
         let mut checker = CheckerEnvironment::new();

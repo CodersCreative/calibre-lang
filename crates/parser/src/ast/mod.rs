@@ -109,6 +109,7 @@ pub enum ParserInnerType {
     List(Box<ParserDataType>),
     Scope(Vec<ParserDataType>),
     Range,
+    DollarIdentifier(String),
     Option(Box<ParserDataType>),
     Result {
         ok: Box<ParserDataType>,
@@ -141,6 +142,7 @@ impl Display for ParserInnerType {
             Self::Str => write!(f, "str"),
             Self::Char => write!(f, "char"),
             Self::Range => write!(f, "range"),
+            Self::DollarIdentifier(x) => write!(f, "${}", x),
             Self::Ref(typ, mutability) => {
                 write!(f, "{}", mutability.fmt_with_val(&typ.to_string()))
             }
@@ -324,6 +326,20 @@ pub struct ParserText {
 impl From<Token> for ParserText {
     fn from(value: Token) -> Self {
         Self::new(value.value, value.span)
+    }
+}
+#[derive(Debug, Clone, PartialEq)]
+pub enum PotentialDollarIdentifier {
+    DollarIdentifier(ParserText),
+    Identifier(ParserText),
+}
+
+impl Display for PotentialDollarIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Identifier(x) => write!(f, "{}", x),
+            Self::DollarIdentifier(x) => write!(f, "${}", x),
+        }
     }
 }
 

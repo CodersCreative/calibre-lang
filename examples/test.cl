@@ -14,6 +14,18 @@ const main = fn () => {
 
 	print(mtchfn("he"));
 
+	let => <add_scope>[$first = 9.0, $second = 11.0, $t = type : float] {
+		let sum : $t = comp => $first + $second;
+		print("add_scope: ");
+		print(sum);	
+	};
+
+	=> <add_scope>[];
+
+	=> <add_scope>[$first = 5.0];	
+
+	=> <add_scope>[$first = 30, $second = 70, $t = type : int];
+
 	let mut correct = -10;
 	let mut other = -10;
 

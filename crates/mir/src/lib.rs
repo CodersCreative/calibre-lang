@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Index};
 
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
@@ -31,8 +31,7 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             NodeType::DollarIdentifier(x) => {
-                // Allow for expr from scopes to be inserted
-                todo!()  
+                Ok(self.resolve_macro_arg(scope, &x.text).unwrap().clone())
             },
             NodeType::Comp { stage, body } => Ok(MiddleNode {
                 node_type: MiddleNodeType::Comp { stage, body : Box::new(self.evaluate(scope, *body)?) },
@@ -721,21 +720,76 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::ScopeDeclaration { body, named, is_temp, create_new_scope, define }  => {
+            NodeType::ScopeDeclaration { mut body, named, is_temp, create_new_scope, define }  => {
                 let mut stmts = Vec::new();
 
-                if let Some(body) = body {
-                    if is_temp {
-                        let scope = self.new_scope_from_parent_shallow(*scope);
+                let create_new_scope = create_new_scope || named.is_some();
 
+                let new_scope = if create_new_scope && !define {    
+                    self.new_scope_from_parent_shallow(*scope)
+                }else{
+                    *scope
+                };
+
+                if let (Some(named), Some(body)) = (named.clone(), body.clone()) {
+                    let args = {
+                        let mut lst = Vec::new();
+
+                        for arg in named.args {
+                            lst.push((arg.0.text, self.evaluate(scope, arg.1)?));
+                        }
+                        lst
+                    };
+
+                    let scope_macro = ScopeMacro {
+                        name: named.name.text.clone(),
+                        args: args.clone(),
+                        body,
+                        create_new_scope
+                    };
+
+                    self.scopes.get_mut(scope).unwrap().macros.insert(named.name.text, scope_macro);
+                        
+                    if define {
+                        return Ok(MiddleNode {
+                            node_type: MiddleNodeType::EmptyLine,
+                            span: node.span,
+                        });
+                    }else {
+                        for arg in args {
+                            self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg.0, arg.1);
+                        }
+                    }
+                }else if let Some(named) = named {
+                    let named_len = named.args.len();
+
+                    for arg in named.args {
+                        let value = self.evaluate(scope, arg.1)?;
+                        self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg.0.text, value);
+                    }
+
+                    let scope_macro_args : Vec<(String, MiddleNode)>= {
+                        let scope_macro = self.resolve_macro(scope, &named.name.text).unwrap();
+                        body = Some(scope_macro.body.clone());
+                        scope_macro.args[named_len..scope_macro.args.len()].to_vec()
+                    };
+                    
+                    
+                    for arg in scope_macro_args {
+                        self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg.0, arg.1);                        
+                    }
+                }
+
+                if let Some(body) = body {
+                    if !is_temp {
                         for statement in body.into_iter() {
-                            stmts.push(self.evaluate(&scope, statement)?);
+                            stmts.push(self.evaluate(&new_scope, statement)?);
                         }
                     } else {
                         let mut errored = Vec::new();
 
                         for statement in body.into_iter() {
-                            if let Ok(x) = self.evaluate(scope, statement.clone()) {
+                            if let Ok(x) = self.evaluate(&new_scope, statement.clone()) {
                                 stmts.push(x);
                             }else {
                                 errored.push(statement);
@@ -747,7 +801,7 @@ impl MiddleEnvironment {
                             last_len = errored.len();
 
                             for elem in errored.clone() {
-                                if let Ok(x) = self.evaluate(scope, elem.clone()) {
+                                if let Ok(x) = self.evaluate(&new_scope, elem.clone()) {
                                     stmts.push(x);
                                     errored.retain(|x| x != &elem);
                                 }
@@ -755,7 +809,7 @@ impl MiddleEnvironment {
                         }
 
                         if !errored.is_empty() {
-                            let _ = self.evaluate(scope, errored[0].clone())?;
+                            let _ = self.evaluate(&new_scope, errored[0].clone())?;
                         }
                     }
                 }

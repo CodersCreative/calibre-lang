@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, path::PathBuf};
 
-use calibre_mir_ty::MiddleNode;
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Parser,
     ast::{
@@ -55,8 +55,17 @@ pub struct MiddleEnvironment {
     pub scopes: HashMap<u64, MiddleScope>,
     pub variables: HashMap<String, MiddleVariable>,
     pub resolved_variables: Vec<String>,
+
     pub objects: HashMap<String, MiddleObject>,
     pub current_location: Option<Location>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScopeMacro {
+    pub name: String,
+    pub args: Vec<(String, MiddleNode)>,
+    pub body: Vec<Node>,
+    pub create_new_scope: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -64,6 +73,8 @@ pub struct MiddleScope {
     pub id: u64,
     pub parent: Option<u64>,
     pub mappings: HashMap<String, String>,
+    pub macros: HashMap<String, ScopeMacro>,
+    pub macro_args: HashMap<String, MiddleNode>,
     pub children: HashMap<String, u64>,
     pub namespace: String,
     pub path: PathBuf,
@@ -128,6 +139,30 @@ impl MiddleEnvironment {
         }
     }
 
+    pub fn resolve_macro_arg(&self, scope: &u64, iden: &str) -> Option<&MiddleNode> {
+        let scope = self.scopes.get(scope)?;
+
+        if let Some(x) = scope.macro_args.get(iden) {
+            Some(x)
+        } else if let Some(parent) = scope.parent.as_ref() {
+            self.resolve_macro_arg(parent, iden)
+        } else {
+            None
+        }
+    }
+
+    pub fn resolve_macro(&self, scope: &u64, iden: &str) -> Option<&ScopeMacro> {
+        let scope = self.scopes.get(scope)?;
+
+        if let Some(x) = scope.macros.get(iden) {
+            Some(x)
+        } else if let Some(parent) = scope.parent.as_ref() {
+            self.resolve_macro(parent, iden)
+        } else {
+            None
+        }
+    }
+
     pub fn resolve_data_type(&self, scope: &u64, data_type: ParserDataType) -> ParserDataType {
         match data_type.data_type {
             ParserInnerType::Tuple(x) => {
@@ -183,6 +218,15 @@ impl MiddleEnvironment {
                     data_type: ParserInnerType::Scope(lst),
                     ..data_type
                 }
+            }
+            ParserInnerType::DollarIdentifier(x) => {
+                let MiddleNodeType::DataType { data_type } =
+                    &self.resolve_macro_arg(scope, &x).unwrap().node_type
+                else {
+                    unimplemented!()
+                };
+
+                data_type.clone()
             }
             _ => data_type,
         }
@@ -308,6 +352,8 @@ impl MiddleEnvironment {
     ) -> u64 {
         if let Some(parent) = parent {
             let scope = MiddleScope {
+                macros: HashMap::new(),
+                macro_args: HashMap::new(),
                 id: self.scope_counter,
                 namespace: namespace
                     .unwrap_or(&self.scope_counter.to_string())

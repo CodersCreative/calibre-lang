@@ -98,8 +98,10 @@ impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
             .iter_mut()
             .for_each(|x| x.1.children.retain(|x| x != scope));
 
-        if &(self.scope_counter - 1) == scope {
-            self.scope_counter -= 1;
+        if self.scope_counter > 0 {
+            if &(self.scope_counter - 1) == scope {
+                self.scope_counter -= 1;
+            }
         }
 
         self.scopes.remove(scope);

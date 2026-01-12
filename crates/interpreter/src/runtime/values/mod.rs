@@ -103,7 +103,7 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
         value: ParserDataType,
     ) -> Result<Self, ScopeErr> {
         Ok(match value.data_type {
-            ParserInnerType::Null => Self::Null,
+            ParserInnerType::Null | ParserInnerType::DollarIdentifier(_) => Self::Null,
             ParserInnerType::NativeFunction(x) => {
                 Self::NativeFn(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
             }

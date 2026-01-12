@@ -22,6 +22,8 @@ impl MiddleEnvironment {
 
         self.add_scope(MiddleScope {
             id: 0,
+            macros: HashMap::new(),
+            macro_args: HashMap::new(),
             namespace: namespace.unwrap_or(&counter.to_string()).to_string(),
             parent,
             children: HashMap::new(),
