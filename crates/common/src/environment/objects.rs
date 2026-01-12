@@ -1,7 +1,5 @@
-use calibre_mir::{
-    ast::MiddleNode,
-    environment::{MiddleObject, MiddleTypeDefType},
-};
+use calibre_mir::environment::{MiddleObject, MiddleTypeDefType};
+use calibre_mir_ty::MiddleNode;
 use calibre_parser::{ast::TypeDefType, lexer::Location};
 
 use crate::{

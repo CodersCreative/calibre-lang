@@ -87,6 +87,7 @@ pub enum TokenType {
     Char,
     Identifier,
     Equals,
+    Dollar,
     Open(Bracket),
     Close(Bracket),
     Colon,
@@ -317,7 +318,7 @@ impl Tokenizer {
                     ']' => Some(TokenType::Close(Bracket::Square)),
                     ',' => Some(TokenType::Comma),
                     '&' => Some(TokenType::Ref),
-                    '$' => Some(TokenType::Identifier),
+                    '$' => Some(TokenType::Dollar),
                     '?' => Some(TokenType::Question),
                     '<' | '>' => Some(TokenType::Comparison(
                         Comparison::from_operator(&c.to_string()).unwrap(),

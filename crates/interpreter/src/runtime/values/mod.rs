@@ -35,6 +35,7 @@ pub enum RuntimeType {
     Struct(String),
     Ref(Box<RuntimeType>),
     Null,
+    Type,
     NativeFn(Box<RuntimeType>),
 }
 
@@ -164,6 +165,7 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
 impl Into<RuntimeType> for &RuntimeValue {
     fn into(self) -> RuntimeType {
         match self {
+            RuntimeValue::Type(_) => RuntimeType::Type,
             RuntimeValue::Float(_) => RuntimeType::Float,
             RuntimeValue::Int(_) => RuntimeType::Int,
             RuntimeValue::Ref(_, x) => x.clone(),
@@ -201,6 +203,7 @@ impl Into<RuntimeType> for &RuntimeValue {
 pub enum RuntimeValue {
     Null,
     Float(f64),
+    Type(ParserDataType),
     Int(i64),
     Range(i64, i64),
     Bool(bool),
@@ -254,6 +257,7 @@ impl ToString for RuntimeValue {
             Self::Result(x, _) => format!("{:?}", x),
             Self::Str(x) => x.to_string(),
             Self::Char(x) => x.to_string(),
+            Self::Type(x) => format!("Type {}", x),
             Self::Function {
                 parameters,
                 body: _,

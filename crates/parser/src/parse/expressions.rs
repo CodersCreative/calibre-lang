@@ -57,7 +57,7 @@ impl Parser {
                     val.span,
                 )
             }
-            TokenType::Open(Bracket::Curly) => self.parse_scope_declaration(),
+            TokenType::FatArrow => self.parse_scope_declaration(false),
             TokenType::Open(Bracket::Paren) => self.parse_paren_expression(),
             TokenType::BinaryOperator(BinaryOperator::Sub) => {
                 let open = self.eat();

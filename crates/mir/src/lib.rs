@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     ast::{
         IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText, RefMutability, VarType, binary::BinaryOperator, comparison::Comparison
@@ -8,15 +9,12 @@ use calibre_parser::{
 };
 
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
     errors::MiddleErr,
 };
 use environment::*;
 
-pub mod ast;
 pub mod environment;
 pub mod errors;
-pub mod identifiers;
 pub mod native;
 
 impl MiddleEnvironment {
@@ -30,6 +28,18 @@ impl MiddleEnvironment {
                 }else {
                     return Err(MiddleErr::Variable(x.text));
                 }),
+                span: node.span,
+            }),
+            NodeType::DollarIdentifier(x) => {
+                // Allow for expr from scopes to be inserted
+                todo!()  
+            },
+            NodeType::Comp { stage, body } => Ok(MiddleNode {
+                node_type: MiddleNodeType::Comp { stage, body : Box::new(self.evaluate(scope, *body)?) },
+                span: node.span,
+            }),
+            NodeType::DataType { data_type } => Ok(MiddleNode {
+                node_type: MiddleNodeType::DataType { data_type },
                 span: node.span,
             }),
             NodeType::IntLiteral(x) => Ok(MiddleNode {
@@ -511,13 +521,16 @@ impl MiddleEnvironment {
                                         }];
 
                                     match body.node_type {
-                                        NodeType::ScopeDeclaration { mut body, is_temp: _ } => lst.append(&mut body),
+                                        NodeType::ScopeDeclaration { body : Some(mut body), .. } => lst.append(&mut body),
                                         _ => lst.push(*body),
                                     }
 
-                                    lst
+                                    Some(lst)
                                 },
                                 is_temp: true,
+                                create_new_scope: true,
+                                define : false,
+                                named: None,
                             }),
                         )?),
                     },
@@ -573,13 +586,16 @@ impl MiddleEnvironment {
                                     ];
 
                                     match body.node_type {
-                                        NodeType::ScopeDeclaration { mut body, is_temp: _ } => lst.append(&mut body),
+                                        NodeType::ScopeDeclaration { body : Some(mut body), .. } => lst.append(&mut body),
                                         _ => lst.push(*body),
                                     }
 
-                                    lst
+                                    Some(lst)
                                 },
                                 is_temp: true,
+                                create_new_scope: true,
+                                define : false,
+                                named: None,
                             }),
                         )?),
                     },
@@ -595,7 +611,7 @@ impl MiddleEnvironment {
                 scope,
                 Node {
                     node_type: NodeType::ScopeDeclaration {
-                        body: vec![
+                        body: Some(vec![
                             Node::new_from_type(NodeType::VariableDeclaration {
                                 var_type: VarType::Mutable,
                                 identifier: ParserText::from(String::from("anon_iter_list")),
@@ -641,12 +657,18 @@ impl MiddleEnvironment {
                                             },
                                         ));
 
-                                        lst
+                                        Some(lst)
                                     },
+                                    create_new_scope: true,
+                                    define : false,
+                                    named: None,
                                     is_temp: true,
                                 })),
                             }),
-                        ],
+                        ]),
+                        create_new_scope: true,
+                        define : false,
+                        named: None,
                         is_temp: true,
                     },
                     span: node.span,
@@ -699,40 +721,42 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::ScopeDeclaration { body, is_temp } => {
+            NodeType::ScopeDeclaration { body, named, is_temp, create_new_scope, define }  => {
                 let mut stmts = Vec::new();
 
-                if is_temp {
-                    let scope = self.new_scope_from_parent_shallow(*scope);
+                if let Some(body) = body {
+                    if is_temp {
+                        let scope = self.new_scope_from_parent_shallow(*scope);
 
-                    for statement in body.into_iter() {
-                        stmts.push(self.evaluate(&scope, statement)?);
-                    }
-                } else {
-                    let mut errored = Vec::new();
-
-                    for statement in body.into_iter() {
-                        if let Ok(x) = self.evaluate(scope, statement.clone()) {
-                            stmts.push(x);
-                        }else {
-                            errored.push(statement);
+                        for statement in body.into_iter() {
+                            stmts.push(self.evaluate(&scope, statement)?);
                         }
-                    }
+                    } else {
+                        let mut errored = Vec::new();
 
-                    let mut last_len = 0;
-                    while !errored.is_empty() && last_len != errored.len() {
-                        last_len = errored.len();
-
-                        for elem in errored.clone() {
-                            if let Ok(x) = self.evaluate(scope, elem.clone()) {
+                        for statement in body.into_iter() {
+                            if let Ok(x) = self.evaluate(scope, statement.clone()) {
                                 stmts.push(x);
-                                errored.retain(|x| x != &elem);
+                            }else {
+                                errored.push(statement);
                             }
                         }
-                    }
 
-                    if !errored.is_empty() {
-                        let _ = self.evaluate(scope, errored[0].clone())?;
+                        let mut last_len = 0;
+                        while !errored.is_empty() && last_len != errored.len() {
+                            last_len = errored.len();
+
+                            for elem in errored.clone() {
+                                if let Ok(x) = self.evaluate(scope, elem.clone()) {
+                                    stmts.push(x);
+                                    errored.retain(|x| x != &elem);
+                                }
+                            }
+                        }
+
+                        if !errored.is_empty() {
+                            let _ = self.evaluate(scope, errored[0].clone())?;
+                        }
                     }
                 }
 
@@ -740,6 +764,7 @@ impl MiddleEnvironment {
                     node_type: MiddleNodeType::ScopeDeclaration {
                         body: stmts.into_iter().filter(|x| x.node_type != MiddleNodeType::EmptyLine).collect(),
                         is_temp,
+                        create_new_scope,
                     },
                     span: node.span,
                 })
@@ -839,7 +864,7 @@ impl MiddleEnvironment {
                                 })),
                                 MatchArmType::Let { var_type, name } => {
                                     lst.push(Node::new_from_type(NodeType::ScopeDeclaration {
-                                        body: vec![
+                                        body: Some(vec![
                                             Node::new_from_type(NodeType::VariableDeclaration {
                                                 var_type,
                                                 identifier: name,
@@ -847,7 +872,10 @@ impl MiddleEnvironment {
                                                 data_type: Some(parameters.1.clone())
                                             }),
                                             main,
-                                        ],
+                                        ]),
+                                        create_new_scope: true,
+                                        define : false,
+                                        named: None,
                                         is_temp: true
                                     }));
                                 }
@@ -873,7 +901,7 @@ impl MiddleEnvironment {
                                         }))),
                                         then: {Box::new(if let Some(name) = name {
                                             Node::new_from_type(NodeType::ScopeDeclaration {
-                                                body: vec![
+                                                body: Some(vec![
                                                     Node::new_from_type(NodeType::VariableDeclaration {
                                                         var_type,
                                                         identifier: name,
@@ -898,8 +926,11 @@ impl MiddleEnvironment {
                                                         data_type: None
                                                     }),
                                                     main,
-                                                ],
-                                                is_temp: true
+                                                ]),
+                                                is_temp: true,
+                                                create_new_scope: false,
+                                                named: None,
+                                                define: false
                                             })}else{
                                               main  
                                             })
@@ -913,7 +944,7 @@ impl MiddleEnvironment {
                         }
 
                         
-                        Box::new(Node::new_from_type(NodeType::ScopeDeclaration { body: lst, is_temp: true }))
+                        Box::new(Node::new_from_type(NodeType::ScopeDeclaration { body: Some(lst), is_temp: true, create_new_scope: true, define: false, named: None }))
                     },
                 })),
             NodeType::FunctionDeclaration { parameters, body, return_type, is_async } => {

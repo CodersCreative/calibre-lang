@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 
 use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,

@@ -1,5 +1,4 @@
-use crate::ast::{MiddleNode, MiddleNodeType};
-use calibre_parser::ast::ObjectType;
+use crate::{MiddleNode, MiddleNodeType};
 
 impl MiddleNode {
     pub fn identifiers_used(&self) -> Vec<&String> {
@@ -16,6 +15,8 @@ impl MiddleNode {
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::IntLiteral(_)
             | MiddleNodeType::FloatLiteral(_)
+            | MiddleNodeType::Comp { .. }
+            | MiddleNodeType::DataType { .. }
             | MiddleNodeType::Return { value: None } => Vec::new(),
             MiddleNodeType::Identifier(x) => vec![x],
             MiddleNodeType::RefStatement {
@@ -90,7 +91,7 @@ impl MiddleNode {
 
                 amt
             }
-            MiddleNodeType::ScopeDeclaration { body, is_temp: _ }
+            MiddleNodeType::ScopeDeclaration { body, .. }
             | MiddleNodeType::ListLiteral(_, body) => {
                 let mut amt = Vec::new();
 

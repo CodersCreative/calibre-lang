@@ -5,7 +5,7 @@ use crate::runtime::{
 };
 use calibre_common::environment::InterpreterFrom;
 use calibre_common::errors::RuntimeErr;
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::VarType;
 
 pub mod expressions;
@@ -204,9 +204,11 @@ impl InterpreterEnvironment {
                 )
             }
             MiddleNodeType::MemberExpression { .. } => self.evaluate_member_expression(scope, node),
-            MiddleNodeType::ScopeDeclaration { body, is_temp } => {
-                self.evaluate_scope(scope, body, is_temp)
-            }
+            MiddleNodeType::ScopeDeclaration {
+                body,
+                is_temp,
+                create_new_scope,
+            } => self.evaluate_scope(scope, body, is_temp, create_new_scope),
             MiddleNodeType::NegExpression { value } => {
                 let value = self.evaluate(scope, *value)?;
                 self.evaluate_neg(scope, value)
@@ -228,6 +230,8 @@ impl InterpreterEnvironment {
             MiddleNodeType::LoopDeclaration { body, state } => {
                 self.evaluate_loop_declaration(scope, state.map(|x| *x), *body)
             }
+            MiddleNodeType::DataType { data_type } => Ok(RuntimeValue::Type(data_type)),
+            MiddleNodeType::EmptyLine => Ok(RuntimeValue::Null),
             _ => Err(InterpreterErr::UnexpectedNodeInTemp(node.node_type)),
         }
     }
@@ -256,7 +260,8 @@ impl InterpreterEnvironment {
             MiddleNodeType::ScopeDeclaration {
                 body,
                 is_temp: false,
-            } => self.evaluate_scope(scope, body, false),
+                create_new_scope: false,
+            } => self.evaluate_scope(scope, body, false, false),
             _ => Err(InterpreterErr::UnexpectedNodeInGlobal(node.node_type)),
         }
     }

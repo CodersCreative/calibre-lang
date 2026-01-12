@@ -7,7 +7,8 @@ use calibre_common::{
     environment::InterpreterFrom,
     errors::{ScopeErr, ValueErr},
 };
-use calibre_mir::{ast::MiddleNode, environment::MiddleTypeDefType};
+use calibre_mir::environment::MiddleTypeDefType;
+use calibre_mir_ty::MiddleNode;
 use calibre_parser::ast::{ObjectMap, ParserDataType};
 use std::collections::HashMap;
 

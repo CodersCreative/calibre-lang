@@ -1,8 +1,6 @@
 use calibre_interpreter::runtime::scope::InterpreterEnvironment;
-use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType},
-    environment::MiddleEnvironment,
-};
+use calibre_mir::environment::MiddleEnvironment;
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::lexer::Tokenizer;
 use clap::Parser;
 use miette::{IntoDiagnostic, Result};

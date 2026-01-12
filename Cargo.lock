@@ -175,6 +175,7 @@ dependencies = [
  "calibre-common",
  "calibre-interpreter",
  "calibre-mir",
+ "calibre-mir-ty",
  "calibre-parser",
  "clap",
  "miette",
@@ -210,6 +211,7 @@ name = "calibre-common"
 version = "0.1.0"
 dependencies = [
  "calibre-mir",
+ "calibre-mir-ty",
  "calibre-parser",
  "miette",
  "thiserror",
@@ -235,6 +237,7 @@ version = "0.1.0"
 dependencies = [
  "calibre-common",
  "calibre-mir",
+ "calibre-mir-ty",
  "calibre-parser",
  "rand",
  "rustyline",
@@ -245,11 +248,19 @@ dependencies = [
 name = "calibre-mir"
 version = "0.1.0"
 dependencies = [
+ "calibre-mir-ty",
  "calibre-parser",
  "calibre-std",
  "miette",
  "rand",
  "thiserror",
+]
+
+[[package]]
+name = "calibre-mir-ty"
+version = "0.1.0"
+dependencies = [
+ "calibre-parser",
 ]
 
 [[package]]
@@ -339,6 +350,10 @@ name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
+
+[[package]]
+name = "comptime"
+version = "0.1.0"
 
 [[package]]
 name = "cranelift"

@@ -1,4 +1,4 @@
-use calibre_mir::ast::MiddleNode;
+use calibre_mir_ty::MiddleNode;
 
 use super::RuntimeValue;
 use std::{cmp::Ordering, collections::HashMap};

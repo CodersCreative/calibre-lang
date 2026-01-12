@@ -6,7 +6,7 @@ use crate::{
         values::{RuntimeType, RuntimeValue},
     },
 };
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperation, Comparison},

@@ -1,5 +1,5 @@
 use calibre_common::{environment::Variable, errors::RuntimeErr};
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::VarType;
 use rand::random_range;
 

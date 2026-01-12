@@ -1,7 +1,7 @@
 use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
-use calibre_mir::ast::MiddleNode;
+use calibre_mir_ty::MiddleNode;
 use calibre_parser::ast::ObjectMap;
 
 impl InterpreterEnvironment {

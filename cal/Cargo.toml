@@ -12,4 +12,5 @@ calibre-parser = {path = "../crates/parser"}
 calibre-common = {path = "../crates/common"}
 calibre-interpreter = {path = "../crates/interpreter"}
 calibre-mir = {path = "../crates/mir"}
+calibre-mir-ty = {path = "../crates/mir-ty"}
 miette = { version = "7.6.0", features = ["fancy"] }

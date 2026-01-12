@@ -6,6 +6,7 @@ use calibre_parser::{
     },
     lexer::Span,
 };
+pub mod identifiers;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleNode {
@@ -51,6 +52,7 @@ pub enum MiddleNodeType {
     },
     ScopeDeclaration {
         body: Vec<MiddleNode>,
+        create_new_scope: bool,
         is_temp: bool,
     },
     FunctionDeclaration {
@@ -66,9 +68,16 @@ pub enum MiddleNodeType {
     NotExpression {
         value: Box<MiddleNode>,
     },
+    Comp {
+        stage: usize,
+        body: Box<MiddleNode>,
+    },
     DebugExpression {
         pretty_printed_str: String,
         value: Box<MiddleNode>,
+    },
+    DataType {
+        data_type: ParserDataType,
     },
     NegExpression {
         value: Box<MiddleNode>,

@@ -1,5 +1,5 @@
 use calibre_common::environment::{InterpreterFrom, Variable};
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::VarType;
 
 use crate::runtime::{

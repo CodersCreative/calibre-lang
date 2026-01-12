@@ -4,7 +4,7 @@ use crate::{
     Parser,
     ast::{
         IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, ParserDataType,
-        ParserInnerType, ParserText, RefMutability, TypeDefType, VarType,
+        ParserInnerType, ParserText, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -91,24 +91,6 @@ impl Formatter {
         }
 
         Ok(self.format(&ast))
-    }
-
-    pub fn get_imports(&self, contents: String) -> Result<Vec<Node>, Box<dyn Error>> {
-        let mut tokenizer = Tokenizer::default();
-        let tokens = tokenizer.tokenize(contents)?;
-        let mut parser = Parser::default();
-        let NodeType::ScopeDeclaration { body, is_temp: _ } = parser.produce_ast(tokens).node_type
-        else {
-            unreachable!()
-        };
-
-        Ok(body
-            .into_iter()
-            .filter(|x| match x.node_type {
-                NodeType::ImportStatement { .. } => true,
-                _ => false,
-            })
-            .collect())
     }
 }
 
@@ -275,7 +257,7 @@ impl Formatter {
                         txt.push_str(&format!(" : {}", name));
                     }
 
-                    txt.push_str(&format!(" => {}", self.format(&catch.body)));
+                    txt.push_str(&self.format(&catch.body));
                 }
 
                 txt
@@ -461,7 +443,7 @@ impl Formatter {
                     txt.push_str(&format!(" -> {}", return_type));
                 }
 
-                txt.push_str(&format!(" => {}", self.format(&*body)));
+                txt.push_str(&self.format(&*body));
 
                 txt
             }
@@ -514,15 +496,10 @@ impl Formatter {
                     }
                 }
 
-                txt.push_str(&format!(" => {}", self.format(&then)));
+                txt.push_str(&format!(" {}", self.format(&then)));
 
                 if let Some(otherwise) = otherwise {
-                    let otherwise = self.format(&*otherwise);
-                    if otherwise.trim().starts_with("if") {
-                        txt.push_str(&format!(" else {}", otherwise));
-                    } else {
-                        txt.push_str(&format!(" else => {}", otherwise));
-                    }
+                    txt.push_str(&format!(" else {}", self.format(&*otherwise)));
                 } else if *special_delim {
                     txt.push_str(";");
                 }
@@ -587,7 +564,7 @@ impl Formatter {
                         }
 
                         format!(
-                            "{}{} => {}",
+                            "{}{} {}",
                             txt,
                             if arm[0].1.is_empty() {
                                 String::new()
@@ -667,35 +644,65 @@ impl Formatter {
 
                 txt
             }
+            NodeType::DollarIdentifier(x) => format!("${}", x),
+            NodeType::DataType { data_type } => data_type.to_string(),
+            NodeType::Comp { stage, body } => format!("comp, {} {}", stage, self.format(&body)),
             NodeType::ScopeDeclaration {
                 body,
                 is_temp: true,
+                create_new_scope,
+                named,
+                define,
             } => {
-                let mut txt = String::from("{");
+                let mut txt = if *define {
+                    String::from("let =>")
+                } else {
+                    String::from("=>")
+                };
 
-                if !body.is_empty() {
-                    txt.push_str("\n");
-                    let lines = self.get_scope_lines(&body);
-
-                    for line in lines {
-                        txt.push_str(&line);
+                if let Some(named) = named {
+                    txt.push_str(&format!(" <{}> [ ", named.name));
+                    for arg in &named.args {
+                        txt.push_str(&format!("{} = {}, ", &arg.0, self.format(&arg.1)));
                     }
-
-                    txt = self.fmt_txt_with_tab(&txt, 1, false).trim_end().to_string();
-
-                    txt.push_str("\n");
+                    txt = txt.trim_end().trim_end_matches(",").to_string();
+                    txt.push_str("]");
                 }
 
-                txt.push_str("}");
+                if let Some(body) = &body {
+                    if body.is_empty() || *create_new_scope {
+                        txt.push_str(" {");
+                        if !body.is_empty() {
+                            txt.push_str("\n");
+                        }
+                    }
+
+                    if !body.is_empty() && *create_new_scope {
+                        let lines = self.get_scope_lines(&body);
+
+                        for line in lines {
+                            txt.push_str(&line);
+                        }
+
+                        txt = self.fmt_txt_with_tab(&txt, 1, false).trim_end().to_string();
+                    } else if !body.is_empty() {
+                        txt.push_str(&format!(" {};\n", self.format(&body[0])));
+                    }
+
+                    if body.is_empty() || *create_new_scope {
+                        if !body.is_empty() {
+                            txt.push_str("\n");
+                        }
+                        txt.push_str("}");
+                    }
+                }
 
                 txt
             }
 
-            NodeType::ScopeDeclaration {
-                body,
-                is_temp: false,
-            } => {
+            NodeType::ScopeDeclaration { body, .. } => {
                 let mut txt = String::new();
+                let Some(body) = body else { unreachable!() };
 
                 if !body.is_empty() {
                     let lines = self.get_scope_lines(&body);

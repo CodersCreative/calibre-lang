@@ -1,5 +1,5 @@
 use crate::environment::{RuntimeType, RuntimeValue};
-use calibre_mir::ast::MiddleNodeType;
+use calibre_mir_ty::MiddleNodeType;
 use calibre_parser::{
     ParserError,
     ast::{LoopType, binary::BinaryOperator},

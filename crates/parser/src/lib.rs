@@ -52,8 +52,11 @@ impl Parser {
 
         Node::new(
             NodeType::ScopeDeclaration {
-                body,
+                body: Some(body),
                 is_temp: false,
+                define: false,
+                named: None,
+                create_new_scope: false,
             },
             span,
         )

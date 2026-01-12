@@ -1,16 +1,17 @@
 use std::{collections::HashMap, fs, path::PathBuf};
 
+use calibre_mir_ty::MiddleNode;
 use calibre_parser::{
     Parser,
     ast::{
-        Node, NodeType, ObjectMap, ParserDataType, ParserInnerType, ParserText, TypeDefType,
-        VarType,
+        NamedScope, Node, NodeType, ObjectMap, ParserDataType, ParserInnerType, ParserText,
+        TypeDefType, VarType,
     },
     lexer::{Location, Span, Tokenizer},
 };
 use rand::random_range;
 
-use crate::{ast::MiddleNode, errors::MiddleErr};
+use crate::errors::MiddleErr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MiddleTypeDefType {
@@ -443,7 +444,8 @@ impl MiddleEnvironment {
             | NodeType::Return { .. }
             | NodeType::ImportStatement { .. }
             | NodeType::AssignmentExpression { .. }
-            | NodeType::LoopDeclaration { .. } => None,
+            | NodeType::LoopDeclaration { .. }
+            | NodeType::ScopeDeclaration { define: true, .. } => None,
             NodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_type_from_node(scope, value)?),
@@ -452,8 +454,14 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             NodeType::ParenExpression { value } => self.resolve_type_from_node(scope, value),
-            NodeType::ScopeDeclaration { body, is_temp: _ } => {
-                self.resolve_type_from_node(scope, body.last()?)
+            NodeType::ScopeDeclaration {
+                body: Some(body), ..
+            } => self.resolve_type_from_node(scope, body.last()?),
+            NodeType::ScopeDeclaration {
+                named: Some(named), ..
+            } => {
+                // TODO resolve type of named scope.
+                todo!()
             }
             NodeType::IfStatement {
                 comparison: _,

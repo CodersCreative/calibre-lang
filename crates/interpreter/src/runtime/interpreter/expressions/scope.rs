@@ -1,5 +1,5 @@
 use calibre_common::environment::Variable;
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{RefMutability, VarType};
 
 use crate::runtime::{
@@ -118,8 +118,9 @@ impl InterpreterEnvironment {
         scope: &u64,
         body: Vec<MiddleNode>,
         is_temp: bool,
+        create_new_scope: bool,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let new_scope = if is_temp {
+        let new_scope = if is_temp && create_new_scope {
             self.new_scope(Some(*scope))
         } else {
             scope.clone()

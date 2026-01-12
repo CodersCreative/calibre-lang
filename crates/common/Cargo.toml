@@ -6,5 +6,6 @@ edition = "2024"
 [dependencies]
 thiserror = "2.0.12"
 calibre-parser = {path = "../parser"}
+calibre-mir-ty = {path = "../mir-ty"}
 calibre-mir = {path = "../mir"}
 miette = "7.6.0"

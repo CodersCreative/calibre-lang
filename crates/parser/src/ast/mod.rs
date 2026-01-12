@@ -69,7 +69,7 @@ pub enum LoopType {
     Loop,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ParserDataType {
     pub data_type: ParserInnerType,
     pub span: Span,
@@ -96,7 +96,7 @@ impl Deref for ParserDataType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ParserInnerType {
     Float,
     Int,
@@ -411,6 +411,12 @@ pub struct TryCatch {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct NamedScope {
+    pub name: ParserText,
+    pub args: Vec<(ParserText, Node)>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     Break,
     Continue,
@@ -418,6 +424,14 @@ pub enum NodeType {
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
+    },
+    Comp {
+        stage: usize,
+        body: Box<Node>,
+    },
+    DollarIdentifier(ParserText),
+    DataType {
+        data_type: ParserDataType,
     },
     DerefStatement {
         value: Box<Node>,
@@ -445,8 +459,11 @@ pub enum NodeType {
         data: Option<Box<Node>>,
     },
     ScopeDeclaration {
-        body: Vec<Node>,
+        body: Option<Vec<Node>>,
+        named: Option<NamedScope>,
         is_temp: bool,
+        create_new_scope: bool,
+        define: bool,
     },
     MatchDeclaration {
         parameters: (ParserText, ParserDataType, Option<Box<Node>>),
@@ -563,8 +580,9 @@ impl NodeType {
         match self {
             NodeType::ParenExpression { value } => value.node_type.unwrap(),
             NodeType::ScopeDeclaration {
-                mut body,
-                is_temp: false,
+                body: Some(mut body),
+                create_new_scope: false,
+                ..
             } if body.len() == 1 => body.remove(0).node_type.unwrap(),
             _ => self,
         }

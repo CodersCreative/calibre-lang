@@ -1,8 +1,9 @@
 use crate::{
     Parser, SyntaxErr,
     ast::{
-        IfComparisonType, LoopType, MatchArmType, Node, ParserDataType, ParserInnerType,
-        ParserText, TryCatch, VarType, binary::BinaryOperator,
+        IfComparisonType, LoopType, MatchArmType, NamedScope, Node, ParserDataType,
+        ParserInnerType, ParserText, TryCatch, VarType, binary::BinaryOperator,
+        comparison::Comparison,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -21,37 +22,123 @@ impl Parser {
         }
     }
 
-    pub fn parse_scope_declaration(&mut self) -> Node {
+    pub fn parse_scope_declaration(&mut self, define: bool) -> Node {
         let open = self.expect_eat(
-            &TokenType::Open(Bracket::Curly),
-            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
+            &TokenType::FatArrow,
+            SyntaxErr::ExpectedKeyword(String::from("=>")),
         );
 
-        let mut body: Vec<Node> = Vec::new();
+        let named = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
+            let _ = self.eat();
+            let name = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+            let _ = self.expect_eat(
+                &TokenType::Comparison(Comparison::Greater),
+                SyntaxErr::ExpectedChar('>'),
+            );
 
-        while ![TokenType::EOF, TokenType::Close(Bracket::Curly)].contains(&self.first().token_type)
-        {
-            body.push(self.parse_statement());
-            let _ = self.parse_delimited();
+            let _ = self.expect_eat(
+                &TokenType::Open(Bracket::Square),
+                SyntaxErr::ExpectedOpeningBracket(Bracket::Square),
+            );
+
+            let mut args = Vec::new();
+
+            while self.first().token_type != TokenType::Close(Bracket::Square) {
+                let _ = self.expect_eat(&TokenType::Dollar, SyntaxErr::ExpectedChar('$'));
+                let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
+                let value = self.parse_statement();
+
+                if self.first().token_type == TokenType::Comma {
+                    let _ = self.eat();
+                }
+
+                args.push((
+                    ParserText {
+                        text: ident.value,
+                        span: ident.span,
+                    },
+                    value,
+                ));
+            }
+            let _ = self.expect_eat(
+                &TokenType::Close(Bracket::Square),
+                SyntaxErr::ExpectedClosingBracket(Bracket::Square),
+            );
+            Some(NamedScope {
+                name: ParserText {
+                    text: name.value,
+                    span: name.span,
+                },
+                args,
+            })
+        } else {
+            None
+        };
+
+        if self.first().token_type == TokenType::EOL {
+            let close = self.eat();
+
+            Node::new(
+                NodeType::ScopeDeclaration {
+                    body: None,
+                    is_temp: true,
+                    create_new_scope: true,
+                    define,
+                    named,
+                },
+                Span::new_from_spans(open.span, close.span),
+            )
+        } else if self.first().token_type == TokenType::Open(Bracket::Curly) {
+            let open = self.expect_eat(
+                &TokenType::Open(Bracket::Curly),
+                SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
+            );
+
+            let mut body: Vec<Node> = Vec::new();
+
+            while ![TokenType::EOF, TokenType::Close(Bracket::Curly)]
+                .contains(&self.first().token_type)
+            {
+                body.push(self.parse_statement());
+                let _ = self.parse_delimited();
+            }
+
+            let body: Vec<Node> = body
+                .into_iter()
+                .filter(|x| x.node_type != NodeType::EmptyLine)
+                .collect();
+
+            let close = self.expect_eat(
+                &TokenType::Close(Bracket::Curly),
+                SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
+            );
+
+            Node::new(
+                NodeType::ScopeDeclaration {
+                    body: Some(body),
+                    is_temp: true,
+                    create_new_scope: true,
+                    define,
+                    named,
+                },
+                Span::new_from_spans(open.span, close.span),
+            )
+        } else {
+            let body = vec![self.parse_statement()];
+            let close = body.last().unwrap().span.clone();
+
+            Node::new(
+                NodeType::ScopeDeclaration {
+                    body: Some(body),
+                    is_temp: true,
+                    create_new_scope: false,
+                    define,
+                    named,
+                },
+                Span::new_from_spans(open.span, close),
+            )
         }
-
-        let body: Vec<Node> = body
-            .into_iter()
-            .filter(|x| x.node_type != NodeType::EmptyLine)
-            .collect();
-
-        let close = self.expect_eat(
-            &TokenType::Close(Bracket::Curly),
-            SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
-        );
-
-        Node::new(
-            NodeType::ScopeDeclaration {
-                body,
-                is_temp: true,
-            },
-            Span::new_from_spans(open.span, close.span),
-        )
     }
 
     pub fn parse_variable_declaration(&mut self) -> Node {
@@ -62,6 +149,9 @@ impl Parser {
                     let _ = self.eat();
                     VarType::Mutable
                 } else {
+                    if self.first().token_type == TokenType::FatArrow {
+                        return self.parse_scope_declaration(true);
+                    }
                     VarType::Immutable
                 }
             }
@@ -241,7 +331,7 @@ impl Parser {
                     None
                 };
 
-                let block = self.parse_block();
+                let block = self.parse_scope_declaration(false);
 
                 span = Span::new_from_spans(span, block.span);
 
@@ -511,7 +601,7 @@ impl Parser {
                 conditions.push(self.parse_statement());
             }
 
-            let body = Box::new(self.parse_block());
+            let body = Box::new(self.parse_scope_declaration(false));
 
             for value in values {
                 patterns.push((value, conditions.clone(), body.clone()));
@@ -589,7 +679,7 @@ impl Parser {
         } else {
             self.get_loop_type()
         };
-        let block = self.parse_block();
+        let block = self.parse_scope_declaration(false);
 
         let span = Span::new_from_spans(open.span, block.span);
 
@@ -630,7 +720,7 @@ impl Parser {
                 .unwrap_or(ParserDataType::from(ParserInnerType::Null))
         };
 
-        let block = self.parse_block();
+        let block = self.parse_scope_declaration(false);
 
         let span = Span::new_from_spans(open.span, block.span);
         let func = Node::new(
@@ -647,19 +737,6 @@ impl Parser {
             self.parse_call_expression(func)
         } else {
             func
-        }
-    }
-
-    pub fn parse_block(&mut self) -> Node {
-        let _ = self.expect_eat(
-            &TokenType::FatArrow,
-            SyntaxErr::ExpectedToken(TokenType::FatArrow),
-        );
-
-        if self.first().token_type != TokenType::Open(Bracket::Curly) {
-            self.parse_statement()
-        } else {
-            self.parse_scope_declaration()
         }
     }
 
@@ -740,7 +817,7 @@ impl Parser {
             IfComparisonType::If(self.parse_statement())
         };
 
-        let then = Box::new(self.parse_block());
+        let then = Box::new(self.parse_scope_declaration(false));
         let mut special_delim = false;
 
         let otherwise = if self.first().token_type == TokenType::Else {
@@ -748,7 +825,7 @@ impl Parser {
             if self.first().token_type == TokenType::If {
                 Some(Box::new(self.parse_if_statement()))
             } else {
-                Some(Box::new(self.parse_block()))
+                Some(Box::new(self.parse_scope_declaration(false)))
             }
         } else if self.first().token_type == TokenType::EOL
             && self.second().token_type == TokenType::Else
