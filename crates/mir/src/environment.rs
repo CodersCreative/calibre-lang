@@ -49,7 +49,7 @@ pub struct MiddleEnvironment {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScopeMacro {
     pub name: String,
-    pub args: Vec<(String, MiddleNode)>,
+    pub args: Vec<(PotentialDollarIdentifier, Node)>,
     pub body: Vec<Node>,
     pub create_new_scope: bool,
 }

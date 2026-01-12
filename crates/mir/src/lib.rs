@@ -28,8 +28,8 @@ impl MiddleEnvironment {
                 }else if let PotentialDollarIdentifier::DollarIdentifier(x) = x{
                     return Ok(self.resolve_macro_arg(scope, &x).unwrap().clone());
                 }else {
-                    x.to_string().into()
-                    //return Err(MiddleErr::Variable(x.to_string()));                    
+                    // x.to_string().into()
+                    return Err(MiddleErr::Variable(x.to_string()));                    
                 }),
                 span: node.span,
             }),
@@ -709,9 +709,6 @@ impl MiddleEnvironment {
                     {
                         let func = self.evaluate(scope, *value)?;
                         let location = self.get_location(scope, function.span);
-
-                        // TODO resolve this
-                        //
                         let mut dependant = false;
 
                         if let MiddleNodeType::FunctionDeclaration { parameters, .. } = &func.node_type {
@@ -750,22 +747,13 @@ impl MiddleEnvironment {
                     *scope
                 };
 
+
                 if let (Some(named), Some(body)) = (named.clone(), body.clone()) {
-                    let args = {
-                        let mut lst = Vec::new();
-
-                        for arg in named.args {
-                            let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();
-                            lst.push((arg_text.text, self.evaluate(scope, arg.1)?));
-                        }
-                        lst
-                    };
-
                     let name = self.resolve_dollar_ident_only(scope, &named.name).unwrap().text;
 
                     let scope_macro = ScopeMacro {
                         name: name.clone(),
-                        args: args.clone(),
+                        args: named.args.clone(),
                         body,
                         create_new_scope
                     };
@@ -778,6 +766,15 @@ impl MiddleEnvironment {
                             span: node.span,
                         });
                     }else {
+                        let args = {
+                            let mut lst = Vec::new();
+
+                            for arg in named.args {
+                                let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();
+                                lst.push((arg_text.text, self.evaluate(scope, arg.1)?));
+                            }
+                            lst
+                        };
                         for arg in args {
                             self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg.0, arg.1);
                         }
@@ -793,7 +790,7 @@ impl MiddleEnvironment {
                         self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg_text.text, value);
                     }
 
-                    let scope_macro_args : Vec<(String, MiddleNode)>= {
+                    let scope_macro_args : Vec<(PotentialDollarIdentifier, Node)>= {
                         let scope_macro = self.resolve_macro(scope, &name).unwrap();
                         body = Some(scope_macro.body.clone());
                         scope_macro.args.clone()
@@ -801,15 +798,17 @@ impl MiddleEnvironment {
                     
                     
                     for arg in scope_macro_args {
-                        if !added.contains(&arg.0) {
-                            added.push(arg.0.clone());
-                            self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg.0, arg.1);
+                        let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();                        
+                        if !added.contains(&arg_text) {
+                            added.push(arg_text.text.clone());
+                            let value = self.evaluate(scope, arg.1)?;
+                            self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg_text.text, value);
                         }                
                     }
                 }
 
                 if let Some(body) = body {
-                    if !is_temp {
+                    if is_temp {
                         for statement in body.into_iter() {
                             stmts.push(self.evaluate(&new_scope, statement)?);
                         }
