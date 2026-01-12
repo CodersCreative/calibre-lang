@@ -8,6 +8,7 @@ use calibre_parser::ast::ObjectMap;
 use numbers::NumberValue;
 use std::{collections::HashMap, mem::discriminant};
 
+pub mod ast;
 pub mod check;
 pub mod numbers;
 

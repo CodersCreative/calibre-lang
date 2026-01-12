@@ -70,6 +70,28 @@ impl Parser {
                     span,
                 )
             }
+            TokenType::Comp => self.parse_comp(),
+            TokenType::Dollar => {
+                let open = self.eat();
+                if self.first().token_type == TokenType::Identifier {
+                    let ident = self.eat();
+                    Node::new(
+                        NodeType::DollarIdentifier(ParserText {
+                            text: ident.value,
+                            span: ident.span,
+                        }),
+                        Span::new_from_spans(open.span, ident.span),
+                    )
+                } else {
+                    Node::new(
+                        NodeType::Identifier(ParserText {
+                            text: open.value,
+                            span: open.span,
+                        }),
+                        open.span,
+                    )
+                }
+            }
             TokenType::Not => {
                 let open = self.eat();
                 let val = self.parse_statement();
@@ -103,6 +125,15 @@ impl Parser {
                     },
                     Span::new_from_spans(open.span, close.span),
                 )
+            }
+            TokenType::Type => {
+                let open = self.eat();
+                let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
+                let data_type = self.expect_type();
+                Node {
+                    span: Span::new_from_spans(open.span, data_type.span),
+                    node_type: NodeType::DataType { data_type },
+                }
             }
             TokenType::BinaryOperator(BinaryOperator::Pow) => {
                 let open = self.eat();
@@ -153,6 +184,30 @@ impl Parser {
                 self.add_err(SyntaxErr::UnexpectedToken);
                 Node::new(NodeType::EmptyLine, self.eat().span)
             }
+        }
+    }
+
+    pub fn parse_comp(&mut self) -> Node {
+        let open = self.expect_eat(
+            &TokenType::Comp,
+            SyntaxErr::ExpectedKeyword(String::from("comp")),
+        );
+
+        let stage: usize = if self.first().token_type == TokenType::Comma {
+            let _ = self.eat();
+            self.eat().value.parse().unwrap_or(0)
+        } else {
+            0
+        };
+
+        let value = self.parse_scope_declaration(false);
+
+        Node {
+            span: Span::new_from_spans(open.span, value.span),
+            node_type: NodeType::Comp {
+                stage,
+                body: Box::new(value),
+            },
         }
     }
 

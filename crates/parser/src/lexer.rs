@@ -131,6 +131,7 @@ pub enum TokenType {
     FullStop,
     EOL,
     EOF,
+    Comp,
     Struct,
     Else,
     Pipe,
@@ -174,6 +175,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("import"), TokenType::Import),
         (String::from("from"), TokenType::From),
         (String::from("type"), TokenType::Type),
+        (String::from("comp"), TokenType::Comp),
     ])
 }
 

@@ -17,11 +17,25 @@ pub trait NativeFunction {
         scope: &u64,
         args: &[(RuntimeValue, Option<RuntimeValue>)],
     ) -> Result<RuntimeValue, InterpreterErr>;
+
+    fn name(&self) -> String;
+
+    fn get_resolved_name(&self, env: &InterpreterEnvironment) -> String {
+        let name = self.name();
+        let name = env
+            .mappings
+            .iter()
+            .find(|x| x.split_once(":").unwrap().1 == name)
+            .map(|x| x.to_string())
+            .unwrap_or(name);
+
+        name
+    }
 }
 
 impl Debug for dyn NativeFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Native Function")
+        f.write_str(&self.name())
     }
 }
 

@@ -10,6 +10,10 @@ use crate::{
 pub struct ErrFn();
 
 impl NativeFunction for ErrFn {
+    fn name(&self) -> String {
+        String::from("err")
+    }
+
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -39,6 +43,9 @@ impl NativeFunction for ErrFn {
 pub struct OkFn();
 
 impl NativeFunction for OkFn {
+    fn name(&self) -> String {
+        String::from("ok")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -68,6 +75,9 @@ impl NativeFunction for OkFn {
 pub struct TupleFn();
 
 impl NativeFunction for TupleFn {
+    fn name(&self) -> String {
+        String::from("tuple")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -85,6 +95,9 @@ impl NativeFunction for TupleFn {
 pub struct SomeFn();
 
 impl NativeFunction for SomeFn {
+    fn name(&self) -> String {
+        String::from("some")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -105,6 +118,9 @@ impl NativeFunction for SomeFn {
 pub struct PanicFn();
 
 impl NativeFunction for PanicFn {
+    fn name(&self) -> String {
+        String::from("panic")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -118,6 +134,9 @@ impl NativeFunction for PanicFn {
 pub struct Len();
 
 impl NativeFunction for Len {
+    fn name(&self) -> String {
+        String::from("len")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -143,6 +162,9 @@ impl NativeFunction for Len {
 pub struct Trim();
 
 impl NativeFunction for Trim {
+    fn name(&self) -> String {
+        String::from("trim")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -161,6 +183,9 @@ impl NativeFunction for Trim {
 pub struct DiscriminantFn();
 
 impl NativeFunction for DiscriminantFn {
+    fn name(&self) -> String {
+        String::from("discriminant")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,

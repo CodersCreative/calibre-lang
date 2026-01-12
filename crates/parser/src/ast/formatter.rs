@@ -645,7 +645,7 @@ impl Formatter {
                 txt
             }
             NodeType::DollarIdentifier(x) => format!("${}", x),
-            NodeType::DataType { data_type } => data_type.to_string(),
+            NodeType::DataType { data_type } => format!("type : {}", data_type),
             NodeType::Comp { stage, body } => format!("comp, {} {}", stage, self.format(&body)),
             NodeType::ScopeDeclaration {
                 body,

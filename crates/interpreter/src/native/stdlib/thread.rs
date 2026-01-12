@@ -10,6 +10,9 @@ use std::{
 pub struct Wait();
 
 impl NativeFunction for Wait {
+    fn name(&self) -> String {
+        String::from("wait")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,

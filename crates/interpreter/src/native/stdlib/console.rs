@@ -11,6 +11,9 @@ use rustyline::DefaultEditor;
 pub struct Out();
 
 impl NativeFunction for Out {
+    fn name(&self) -> String {
+        String::from("out")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -36,6 +39,9 @@ impl NativeFunction for Out {
 pub struct ErrFn();
 
 impl NativeFunction for ErrFn {
+    fn name(&self) -> String {
+        String::from("err")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -61,6 +67,9 @@ impl NativeFunction for ErrFn {
 pub struct Input();
 
 impl NativeFunction for Input {
+    fn name(&self) -> String {
+        String::from("input")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -87,6 +96,9 @@ impl NativeFunction for Input {
 pub struct Clear();
 
 impl NativeFunction for Clear {
+    fn name(&self) -> String {
+        String::from("clear")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,

@@ -13,6 +13,7 @@ impl Parser {
     pub fn parse_statement(&mut self) -> Node {
         match &self.first().token_type {
             TokenType::Let | TokenType::Const => self.parse_variable_declaration(),
+            TokenType::Comp => self.parse_comp(),
             TokenType::Trait => self.parse_if_statement(),
             TokenType::Impl => self.parse_impl_declaration(),
             TokenType::Import => self.parse_import_declaration(),

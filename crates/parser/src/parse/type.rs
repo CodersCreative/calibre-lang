@@ -1,15 +1,24 @@
 use crate::{
     Parser, SyntaxErr,
     ast::{Node, NodeType, ObjectType, TypeDefType},
-    lexer::{Bracket, TokenType},
+    lexer::{Bracket, Span, TokenType},
 };
 
 impl Parser {
     pub fn parse_type_decaration(&mut self) -> Node {
-        let _ = self.expect_eat(
+        let open = self.expect_eat(
             &TokenType::Type,
             SyntaxErr::ExpectedKeyword(String::from("type")),
         );
+
+        if self.first().token_type == TokenType::Colon {
+            let _ = self.eat();
+            let data_type = self.expect_type();
+            return Node {
+                span: Span::new_from_spans(open.span, data_type.span),
+                node_type: NodeType::DataType { data_type },
+            };
+        }
 
         let identifier = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
 
