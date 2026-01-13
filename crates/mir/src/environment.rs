@@ -250,6 +250,26 @@ impl MiddleEnvironment {
                 ),
                 ..data_type
             },
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+                is_async,
+            } => ParserDataType {
+                data_type: ParserInnerType::Function {
+                    return_type: Box::new(self.resolve_data_type(scope, *return_type)),
+                    parameters: {
+                        let mut params = Vec::new();
+
+                        for param in parameters {
+                            params.push(self.resolve_data_type(scope, param));
+                        }
+
+                        params
+                    },
+                    is_async,
+                },
+                ..data_type
+            },
             ParserInnerType::Ref(d_type, mutability) => ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_data_type(scope, *d_type)),
@@ -291,7 +311,7 @@ impl MiddleEnvironment {
                     unimplemented!()
                 };
 
-                data_type.clone()
+                self.resolve_data_type(scope, data_type.clone())
             }
             _ => data_type,
         }

@@ -748,8 +748,6 @@ impl MiddleEnvironment {
             }
             NodeType::ScopeDeclaration { mut body, named, is_temp, create_new_scope, define }  => {
                 let mut stmts = Vec::new();
-                let og_create_new_scope = create_new_scope;
-                let create_new_scope = create_new_scope || named.is_some();
 
                 let new_scope = if create_new_scope && !define {    
                     self.new_scope_from_parent_shallow(*scope)
@@ -757,8 +755,8 @@ impl MiddleEnvironment {
                     *scope
                 };
 
-
-                if let (Some(named), Some(body)) = (named.clone(), body.clone()) {
+                if let (Some(named), false) = (named.clone(), body.clone().unwrap_or_default().is_empty()) {
+                    let body = body.clone().unwrap();
                     let name = self.resolve_dollar_ident_only(scope, &named.name).unwrap().text;
 
                     let scope_macro = ScopeMacro {
@@ -842,7 +840,7 @@ impl MiddleEnvironment {
                     }
                 }
 
-                if &new_scope != scope && !og_create_new_scope {
+                if &new_scope != scope && !create_new_scope {
                     let (mappings, macros) = {
                         let scope = self.scopes.get(&new_scope).unwrap();
                         (scope.mappings.clone(), scope.macros.clone())
@@ -861,7 +859,7 @@ impl MiddleEnvironment {
                     node_type: MiddleNodeType::ScopeDeclaration {
                         body: stmts.into_iter().filter(|x| x.node_type != MiddleNodeType::EmptyLine).collect(),
                         is_temp,
-                        create_new_scope: og_create_new_scope,
+                        create_new_scope,
                     },
                     span: node.span,
                 })
@@ -1077,6 +1075,8 @@ impl MiddleEnvironment {
                         }
                     ));
                 }
+
+                let return_type = self.resolve_data_type(scope, return_type);
 
 
                 Ok(MiddleNode {

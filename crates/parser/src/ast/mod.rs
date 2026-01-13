@@ -457,6 +457,21 @@ pub struct NamedScope {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum CompStage {
+    Wildcard,
+    Specific(usize),
+}
+
+impl Display for CompStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Specific(x) => write!(f, "{}", x),
+            Self::Wildcard => write!(f, "_"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     Break,
     Continue,
@@ -466,7 +481,7 @@ pub enum NodeType {
         value: Box<Node>,
     },
     Comp {
-        stage: usize,
+        stage: CompStage,
         body: Box<Node>,
     },
     Identifier(PotentialDollarIdentifier),

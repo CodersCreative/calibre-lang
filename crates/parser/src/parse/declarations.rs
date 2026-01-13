@@ -84,6 +84,13 @@ impl Parser {
                 SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
             );
 
+            let create_new_scope = if self.first().token_type == TokenType::Open(Bracket::Curly) {
+                let _ = self.eat();
+                false
+            } else {
+                true
+            };
+
             let mut body: Vec<Node> = Vec::new();
 
             while ![TokenType::EOF, TokenType::Close(Bracket::Curly)]
@@ -103,11 +110,20 @@ impl Parser {
                 SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
             );
 
+            let close = if !create_new_scope {
+                self.expect_eat(
+                    &TokenType::Close(Bracket::Curly),
+                    SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
+                )
+            } else {
+                close
+            };
+
             Node::new(
                 NodeType::ScopeDeclaration {
                     body: Some(body),
                     is_temp: true,
-                    create_new_scope: true,
+                    create_new_scope,
                     define,
                     named,
                 },

@@ -18,7 +18,14 @@ pub struct InterpreterEnvironment {
 impl InterpreterEnvironment {
     pub fn new(env: &MiddleEnvironment) -> Self {
         Self {
-            env: Environment::new(true, env),
+            env: Environment::new(false, env),
+            stop: None,
+        }
+    }
+
+    pub fn new_with_strict(env: &MiddleEnvironment, strict_removal: bool) -> Self {
+        Self {
+            env: Environment::new(strict_removal, env),
             stop: None,
         }
     }

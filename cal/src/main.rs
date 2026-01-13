@@ -25,8 +25,10 @@ fn file(
     }
 
     let mut middle_result = MiddleEnvironment::new_and_evaluate(program, path.clone())?;
-    println!("Starting int");
+    println!("Starting comptime...");
     middle_result.2 = ComptimeEnvironment::new_and_evaluate(middle_result.2, &middle_result.0)?;
+    // println!("{}", middle_result.2);
+    println!("Starting interpreter...");
 
     /*if use_checker {
         let mut checker = CheckerEnvironment::new();

@@ -120,7 +120,7 @@ impl InterpreterEnvironment {
         is_temp: bool,
         create_new_scope: bool,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let new_scope = if is_temp && create_new_scope {
+        let new_scope = if create_new_scope {
             self.new_scope(Some(*scope))
         } else {
             scope.clone()
@@ -135,7 +135,7 @@ impl InterpreterEnvironment {
             }
         }
 
-        if is_temp {
+        if create_new_scope {
             self.remove_scope(&new_scope);
         }
 

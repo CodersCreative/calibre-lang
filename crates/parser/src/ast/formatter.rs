@@ -4,7 +4,7 @@ use crate::{
     Parser,
     ast::{
         IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, ParserDataType,
-        ParserInnerType, ParserText, PotentialDollarIdentifier, TypeDefType, VarType,
+        ParserInnerType, PotentialDollarIdentifier, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -449,7 +449,7 @@ impl Formatter {
             }
             NodeType::LoopDeclaration { loop_type, body } => {
                 format!(
-                    "for {} => {}",
+                    "for {} {}",
                     self.fmt_loop_type(&*loop_type),
                     self.format(&*body)
                 )
@@ -672,6 +672,9 @@ impl Formatter {
                     if body.is_empty() || *create_new_scope {
                         txt.push_str(" {");
                         if !body.is_empty() {
+                            if body.len() > 1 && *create_new_scope {
+                                txt.push_str("{");
+                            }
                             txt.push_str("\n");
                         }
                     }
@@ -685,12 +688,15 @@ impl Formatter {
 
                         txt = self.fmt_txt_with_tab(&txt, 1, false).trim_end().to_string();
                     } else if !body.is_empty() {
-                        txt.push_str(&format!(" {};\n", self.format(&body[0])));
+                        txt.push_str(&self.format(&body[0]));
                     }
 
                     if body.is_empty() || *create_new_scope {
                         if !body.is_empty() {
                             txt.push_str("\n");
+                            if body.len() > 1 && *create_new_scope {
+                                txt.push_str("}");
+                            }
                         }
                         txt.push_str("}");
                     }

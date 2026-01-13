@@ -2,21 +2,23 @@ use calibre_common::environment::InterpreterFrom;
 use calibre_interpreter::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment};
 use calibre_mir::environment::MiddleEnvironment;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
-use calibre_parser::ast::ObjectMap;
+use calibre_parser::ast::{CompStage, ObjectMap};
 use std::collections::HashMap;
 
 pub struct ComptimeEnvironment {
     pub changed_this_stage: usize,
+    pub scope: u64,
     pub interpreter: InterpreterEnvironment,
 }
 
 impl ComptimeEnvironment {
     pub fn new(env: &MiddleEnvironment) -> Self {
         let mut interpreter = InterpreterEnvironment::new(env);
-        interpreter.new_scope_with_stdlib(None);
+        let scope = interpreter.new_scope_with_stdlib(None);
 
         Self {
             changed_this_stage: 0,
+            scope,
             interpreter,
         }
     }
@@ -274,10 +276,25 @@ impl ComptimeEnvironment {
                         None
                     },
                 },
-                MiddleNodeType::Comp { stage: s, body } if stage >= s => {
+                MiddleNodeType::Comp {
+                    stage: CompStage::Specific(s),
+                    body,
+                } if stage >= s => {
                     self.changed_this_stage += 1;
-                    let result = self.interpreter.evaluate(&0, *body)?;
+                    let scope = self.scope.clone();
+                    let result = self.interpreter.evaluate(&scope, *body)?;
                     MiddleNodeType::interpreter_from(&self.interpreter, &0, result)?
+                }
+                MiddleNodeType::Comp {
+                    stage: CompStage::Wildcard,
+                    body,
+                } if stage <= 0 => {
+                    let scope = self.scope.clone();
+                    let _ = self.interpreter.evaluate(&scope, *body.clone());
+                    MiddleNodeType::Comp {
+                        stage: CompStage::Wildcard,
+                        body: body,
+                    }
                 }
                 MiddleNodeType::StringLiteral(_)
                 | MiddleNodeType::EnumExpression { .. }

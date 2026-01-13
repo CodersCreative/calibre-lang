@@ -6,7 +6,7 @@ use crate::runtime::{
 use calibre_common::environment::InterpreterFrom;
 use calibre_common::errors::RuntimeErr;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
-use calibre_parser::ast::VarType;
+use calibre_parser::ast::{CompStage, VarType};
 
 pub mod expressions;
 pub mod statements;
@@ -231,6 +231,10 @@ impl InterpreterEnvironment {
                 self.evaluate_loop_declaration(scope, state.map(|x| *x), *body)
             }
             MiddleNodeType::DataType { data_type } => Ok(RuntimeValue::Type(data_type)),
+            MiddleNodeType::Comp {
+                stage: CompStage::Wildcard,
+                body,
+            } => self.evaluate(scope, *body),
             MiddleNodeType::EmptyLine => Ok(RuntimeValue::Null),
             _ => Err(InterpreterErr::UnexpectedNodeInTemp(node.node_type)),
         }
@@ -242,6 +246,15 @@ impl InterpreterEnvironment {
         node: MiddleNode,
     ) -> Result<RuntimeValue, InterpreterErr> {
         match node.node_type {
+            MiddleNodeType::Comp {
+                stage: CompStage::Wildcard,
+                body,
+            } => self.evaluate_global(scope, *body),
+            MiddleNodeType::ScopeDeclaration {
+                body,
+                is_temp,
+                create_new_scope,
+            } => self.evaluate_scope(scope, body, is_temp, create_new_scope),
             MiddleNodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier,

@@ -1,14 +1,14 @@
 type SmthType = struct {txt : str}
 
-let => <mult_scope>[$ident = adder_int, $t = type : int] {
+let => <mult_scope>[$ident = adder_int, $t = type : int] {{
 	const $ident = fn (first, second : $t) -> $t => {
 		print("multiplyer");
 		return first * second;
 	}
-}
+}}
 
-const adder_int = => <mult_scope>[];
-const adder_float = => <mult_scope>[$ident = adder_float,$t = type : float];
+=> <mult_scope>[] {{}};
+=> <mult_scope>[$ident = adder_float,$t = type : float] {{}};
 
 const main = fn () => {
 	print(adder_float(90, 10.6));

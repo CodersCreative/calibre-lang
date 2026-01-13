@@ -1,6 +1,6 @@
 use crate::{
     Parser, SyntaxErr,
-    ast::{Node, ObjectType, ParserText, PotentialDollarIdentifier, RefMutability},
+    ast::{CompStage, Node, ObjectType, ParserText, PotentialDollarIdentifier, RefMutability},
     lexer::{Bracket, Span, StopValue},
 };
 use crate::{
@@ -176,11 +176,17 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("comp")),
         );
 
-        let stage: usize = if self.first().token_type == TokenType::Comma {
+        let stage = if self.first().token_type == TokenType::Comma {
             let _ = self.eat();
-            self.eat().value.parse().unwrap_or(0)
+            let value = self.eat();
+
+            if &value.value == "_" {
+                CompStage::Wildcard
+            } else {
+                CompStage::Specific(value.value.parse().unwrap_or(0))
+            }
         } else {
-            0
+            CompStage::Specific(0)
         };
 
         let value = self.parse_scope_declaration(false);
