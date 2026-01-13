@@ -303,18 +303,11 @@ impl Formatter {
 
                 txt
             }
-            NodeType::AsExpression { value, typ } => {
-                format!("{} as {}", self.format(&*value), typ)
+            NodeType::AsExpression { value, data_type } => {
+                format!("{} as {}", self.format(&*value), data_type)
             }
-            NodeType::InDeclaration {
-                identifier,
-                expression,
-            } => {
-                format!(
-                    "{} in {}",
-                    self.format(&*identifier),
-                    self.format(&*expression)
-                )
+            NodeType::InDeclaration { identifier, value } => {
+                format!("{} in {}", self.format(&*identifier), self.format(&*value))
             }
             NodeType::IsDeclaration { value, data_type } => {
                 format!("{} is {}", self.format(&*value), data_type)

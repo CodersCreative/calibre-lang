@@ -32,7 +32,10 @@ impl MiddleNode {
             }
             | MiddleNodeType::NotExpression { value }
             | MiddleNodeType::NegExpression { value }
-            | MiddleNodeType::AsExpression { value, typ: _ }
+            | MiddleNodeType::AsExpression {
+                value,
+                data_type: _,
+            }
             | MiddleNodeType::IsDeclaration {
                 value,
                 data_type: _,
@@ -66,7 +69,7 @@ impl MiddleNode {
             }
             | MiddleNodeType::InDeclaration {
                 identifier: left,
-                expression: right,
+                value: right,
             }
             | MiddleNodeType::RangeDeclaration {
                 from: left,

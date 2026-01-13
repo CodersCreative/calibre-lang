@@ -154,17 +154,16 @@ impl ComptimeEnvironment {
                 MiddleNodeType::NegExpression { value } => MiddleNodeType::NegExpression {
                     value: Box::new(self.evaluate(*value, stage)?),
                 },
-                MiddleNodeType::AsExpression { value, typ } => MiddleNodeType::AsExpression {
+                MiddleNodeType::AsExpression { value, data_type } => MiddleNodeType::AsExpression {
                     value: Box::new(self.evaluate(*value, stage)?),
-                    typ,
+                    data_type,
                 },
-                MiddleNodeType::InDeclaration {
-                    identifier,
-                    expression,
-                } => MiddleNodeType::InDeclaration {
-                    identifier: Box::new(self.evaluate(*identifier, stage)?),
-                    expression: Box::new(self.evaluate(*expression, stage)?),
-                },
+                MiddleNodeType::InDeclaration { identifier, value } => {
+                    MiddleNodeType::InDeclaration {
+                        identifier: Box::new(self.evaluate(*identifier, stage)?),
+                        value: Box::new(self.evaluate(*value, stage)?),
+                    }
+                }
                 MiddleNodeType::AggregateExpression { identifier, value } => {
                     MiddleNodeType::AggregateExpression {
                         identifier,

@@ -41,7 +41,7 @@ impl Parser {
             left = Node::new(
                 NodeType::AsExpression {
                     value: Box::new(left),
-                    typ: self.expect_type(),
+                    data_type: self.expect_type(),
                 },
                 token.span,
             );
@@ -77,7 +77,7 @@ impl Parser {
             left = Node::new(
                 NodeType::InDeclaration {
                     identifier: Box::new(left),
-                    expression: Box::new(self.parse_statement()),
+                    value: Box::new(self.parse_statement()),
                 },
                 token.span,
             )

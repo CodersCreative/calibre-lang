@@ -7,8 +7,8 @@ let => <mult_scope>[$ident = adder_int, $t = type : int] {{
 	}
 }}
 
-=> <mult_scope>[] {{}};
-=> <mult_scope>[$ident = adder_float,$t = type : float] {{}};
+=> <mult_scope>[];
+=> <mult_scope>[$ident = adder_float, $t = type : float];
 
 const main = fn () => {
 	print(adder_float(90, 10.6));
@@ -33,9 +33,12 @@ const main = fn () => {
 
 	=> <add_scope>[];
 
-	=> <add_scope>[$first = 5.0];	
+	=> <add_scope>[$first = (5.0 / 99.0)];	
 
-	=> <add_scope>[$first = 30, $second = 70, $t = type : int];
+
+	// Now it doesn't create a new scope overriding the default implementation
+	=> <add_scope>[$first = 30, $second = 70, $t = type : int]{{}};
+	print(sum + 10);
 
 	let mut correct = -10;
 	let mut other = -10;

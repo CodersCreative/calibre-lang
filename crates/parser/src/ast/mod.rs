@@ -547,11 +547,11 @@ pub enum NodeType {
     },
     AsExpression {
         value: Box<Node>,
-        typ: ParserDataType,
+        data_type: ParserDataType,
     },
     InDeclaration {
         identifier: Box<Node>,
-        expression: Box<Node>,
+        value: Box<Node>,
     },
     IsDeclaration {
         value: Box<Node>,

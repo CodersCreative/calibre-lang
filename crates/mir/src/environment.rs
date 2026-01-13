@@ -113,8 +113,17 @@ impl MiddleEnvironment {
                 }
                 lst
             }),
-            TypeDefType::Struct(x) => MiddleTypeDefType::Struct(x.into()),
-            TypeDefType::NewType(x) => MiddleTypeDefType::NewType(x),
+            TypeDefType::Struct(x) => MiddleTypeDefType::Struct({
+                let data: ObjectMap<ParserDataType> = x.into();
+                let mut map = HashMap::new();
+
+                for (k, v) in data.0 {
+                    map.insert(k, self.resolve_data_type(scope, v));
+                }
+
+                ObjectMap(map)
+            }),
+            TypeDefType::NewType(x) => MiddleTypeDefType::NewType(self.resolve_data_type(scope, x)),
         }
     }
 
@@ -682,7 +691,10 @@ impl MiddleEnvironment {
             NodeType::NegExpression { value } | NodeType::DebugExpression { value } => {
                 self.resolve_type_from_node(scope, value)
             }
-            NodeType::AsExpression { value: _, typ } => Some(typ.clone()),
+            NodeType::AsExpression {
+                value: _,
+                data_type,
+            } => Some(data_type.clone()),
             NodeType::RangeDeclaration { .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Range,
                 span: node.span,

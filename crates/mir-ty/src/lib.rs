@@ -90,11 +90,11 @@ pub enum MiddleNodeType {
     },
     AsExpression {
         value: Box<MiddleNode>,
-        typ: ParserDataType,
+        data_type: ParserDataType,
     },
     InDeclaration {
         identifier: Box<MiddleNode>,
-        expression: Box<MiddleNode>,
+        value: Box<MiddleNode>,
     },
     IsDeclaration {
         value: Box<MiddleNode>,
@@ -260,7 +260,7 @@ impl Into<NodeType> for MiddleNodeType {
                 value: Box::new((*value).into()),
             },
             Self::DebugExpression {
-                pretty_printed_str,
+                pretty_printed_str: _,
                 value,
             } => NodeType::DebugExpression {
                 value: Box::new((*value).into()),
@@ -269,9 +269,9 @@ impl Into<NodeType> for MiddleNodeType {
             Self::NegExpression { value } => NodeType::NotExpression {
                 value: Box::new((*value).into()),
             },
-            Self::AsExpression { value, typ } => NodeType::AsExpression {
+            Self::AsExpression { value, data_type } => NodeType::AsExpression {
                 value: Box::new((*value).into()),
-                typ,
+                data_type,
             },
             Self::IfStatement {
                 comparison,
@@ -287,12 +287,9 @@ impl Into<NodeType> for MiddleNodeType {
                 },
                 special_delim: false,
             },
-            Self::InDeclaration {
-                identifier,
-                expression,
-            } => NodeType::InDeclaration {
+            Self::InDeclaration { identifier, value } => NodeType::InDeclaration {
                 identifier: Box::new((*identifier).into()),
-                expression: Box::new((*expression).into()),
+                value: Box::new((*value).into()),
             },
             Self::IsDeclaration { value, data_type } => NodeType::IsDeclaration {
                 value: Box::new((*value).into()),

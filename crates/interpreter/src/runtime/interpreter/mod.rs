@@ -185,22 +185,19 @@ impl InterpreterEnvironment {
                     None => None,
                 },
             ),
-            MiddleNodeType::InDeclaration {
-                identifier,
-                expression,
-            } => {
-                let (identifier, expression) = (
+            MiddleNodeType::InDeclaration { identifier, value } => {
+                let (identifier, value) = (
                     self.evaluate(scope, *identifier)?,
-                    self.evaluate(scope, *expression)?,
+                    self.evaluate(scope, *value)?,
                 );
-                self.evaluate_in_statement(scope, identifier, expression)
+                self.evaluate_in_statement(scope, identifier, value)
             }
-            MiddleNodeType::AsExpression { value, typ } => {
+            MiddleNodeType::AsExpression { value, data_type } => {
                 let value = self.evaluate(scope, *value)?;
                 self.evaluate_as_expression(
                     scope,
                     value,
-                    RuntimeType::interpreter_from(self, scope, typ)?,
+                    RuntimeType::interpreter_from(self, scope, data_type)?,
                 )
             }
             MiddleNodeType::MemberExpression { .. } => self.evaluate_member_expression(scope, node),
