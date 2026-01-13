@@ -15,7 +15,7 @@ const main = fn () => {
 	let smth = SmthType{
 		txt : "tyui",
 	};
-	let mut d = list[list[2, 0, 4], list[1, 9, 3], list[4, 7, 9], list[9, 0, 1]];
+	let mut d = comp, 0 => list[list[2, 0, 4], list[1, 9, 3], list[4, 7, 9], list[9, 0, 1]];
 	let lst = list<int>[2, 0, 4];
 
 	let mtchfn = match str -> int{

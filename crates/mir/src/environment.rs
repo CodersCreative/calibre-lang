@@ -60,7 +60,7 @@ pub struct MiddleScope {
     pub parent: Option<u64>,
     pub mappings: HashMap<String, String>,
     pub macros: HashMap<String, ScopeMacro>,
-    pub macro_args: HashMap<String, MiddleNode>,
+    pub macro_args: HashMap<String, Node>,
     pub children: HashMap<String, u64>,
     pub namespace: String,
     pub path: PathBuf,
@@ -147,7 +147,7 @@ impl MiddleEnvironment {
         }
     }
 
-    pub fn resolve_macro_arg(&self, scope: &u64, iden: &str) -> Option<&MiddleNode> {
+    pub fn resolve_macro_arg(&self, scope: &u64, iden: &str) -> Option<&Node> {
         let scope = self.scopes.get(scope)?;
 
         if let Some(x) = scope.macro_args.get(iden) {
@@ -189,12 +189,17 @@ impl MiddleEnvironment {
                 if let Some(text) = self
                     .resolve_macro_arg(scope, x)
                     .map(|x| match &x.node_type {
-                        MiddleNodeType::Identifier(x) => Some(x.clone()),
+                        NodeType::Identifier(PotentialDollarIdentifier::DollarIdentifier(x)) => {
+                            Some(x.clone())
+                        }
+                        NodeType::Identifier(PotentialDollarIdentifier::Identifier(x)) => {
+                            Some(x.clone())
+                        }
                         _ => None,
                     })
                     .flatten()
                 {
-                    Some(self.resolve_parser_text(scope, &text).unwrap_or(text))
+                    self.resolve_parser_text(scope, &text)
                 } else {
                     None
                 }
@@ -212,7 +217,12 @@ impl MiddleEnvironment {
             PotentialDollarIdentifier::DollarIdentifier(x) => self
                 .resolve_macro_arg(scope, x)
                 .map(|x| match &x.node_type {
-                    MiddleNodeType::Identifier(x) => Some(x.clone()),
+                    NodeType::Identifier(PotentialDollarIdentifier::DollarIdentifier(x)) => {
+                        Some(x.clone())
+                    }
+                    NodeType::Identifier(PotentialDollarIdentifier::Identifier(x)) => {
+                        Some(x.clone())
+                    }
                     _ => None,
                 })
                 .flatten(),
@@ -275,7 +285,7 @@ impl MiddleEnvironment {
                 }
             }
             ParserInnerType::DollarIdentifier(x) => {
-                let MiddleNodeType::DataType { data_type } =
+                let NodeType::DataType { data_type } =
                     &self.resolve_macro_arg(scope, &x).unwrap().node_type
                 else {
                     unimplemented!()
@@ -738,6 +748,7 @@ impl MiddleEnvironment {
                 // TODO resolve the type
                 Some(ParserDataType::from(ParserInnerType::Dynamic))
             }
+            NodeType::Comp { stage: _, body } => self.resolve_type_from_node(scope, &body),
             x => todo!("{:?}", x),
         };
 

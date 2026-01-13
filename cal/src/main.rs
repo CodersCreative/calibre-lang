@@ -25,6 +25,7 @@ fn file(
     }
 
     let mut middle_result = MiddleEnvironment::new_and_evaluate(program, path.clone())?;
+    println!("Starting int");
     middle_result.2 = ComptimeEnvironment::new_and_evaluate(middle_result.2, &middle_result.0)?;
 
     /*if use_checker {

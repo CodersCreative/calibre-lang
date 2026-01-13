@@ -26,7 +26,8 @@ impl MiddleEnvironment {
                 node_type: MiddleNodeType::Identifier(if let Some(x) = self.resolve_potential_dollar_ident(scope, &x){
                     x
                 }else if let PotentialDollarIdentifier::DollarIdentifier(x) = x{
-                    return Ok(self.resolve_macro_arg(scope, &x).unwrap().clone());
+                    let val = self.resolve_macro_arg(scope, &x).unwrap().clone();
+                    return self.evaluate(scope, val);
                 }else {
                     // x.to_string().into()
                     return Err(MiddleErr::Variable(x.to_string()));                    
@@ -617,10 +618,16 @@ impl MiddleEnvironment {
                                 var_type: VarType::Mutable,
                                 identifier: ParserText::from(String::from("anon_iter_list")).into(),
                                 value: Box::new(Node::new_from_type(NodeType::ListLiteral(
-                                    data_type,
+                                    data_type.clone(),
                                     Vec::new(),
                                 ))),
-                                data_type: self.resolve_type_from_node(scope, &map),
+                                data_type: if let Some(typ) = data_type {
+                                    Some(ParserDataType::from(ParserInnerType::List(Box::new(typ))))                                    
+                                }else if let Some(typ) = self.resolve_type_from_node(scope, &map){
+                                    Some(ParserDataType::from(ParserInnerType::List(Box::new(typ))))
+                                }else{
+                                    None
+                                },
                             }),
                             Node::new_from_type(NodeType::LoopDeclaration {
                                 loop_type,
@@ -666,6 +673,9 @@ impl MiddleEnvironment {
                                     is_temp: true,
                                 })),
                             }),
+                            Node::new_from_type(NodeType::Identifier(ParserText::from(
+                                String::from("anon_iter_list"),
+                            ).into())),
                         ]),
                         create_new_scope: true,
                         define : false,
@@ -766,17 +776,10 @@ impl MiddleEnvironment {
                             span: node.span,
                         });
                     }else {
-                        let args = {
-                            let mut lst = Vec::new();
-
-                            for arg in named.args {
-                                let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();
-                                lst.push((arg_text.text, self.evaluate(scope, arg.1)?));
-                            }
-                            lst
-                        };
-                        for arg in args {
-                            self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg.0, arg.1);
+                        
+                        for arg in named.args.clone() {
+                            let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();                            
+                            self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg_text.text, arg.1);
                         }
                     }
                 }else if let Some(named) = named {
@@ -786,8 +789,7 @@ impl MiddleEnvironment {
                     for arg in named.args {
                         let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();
                         added.push(arg_text.text.clone());
-                        let value = self.evaluate(scope, arg.1)?;
-                        self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg_text.text, value);
+                        self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg_text.text, arg.1);
                     }
 
                     let scope_macro_args : Vec<(PotentialDollarIdentifier, Node)>= {
@@ -801,8 +803,7 @@ impl MiddleEnvironment {
                         let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();                        
                         if !added.contains(&arg_text) {
                             added.push(arg_text.text.clone());
-                            let value = self.evaluate(scope, arg.1)?;
-                            self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg_text.text, value);
+                            self.scopes.get_mut(&new_scope).unwrap().macro_args.insert(arg_text.text, arg.1);
                         }                
                     }
                 }

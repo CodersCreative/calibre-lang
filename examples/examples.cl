@@ -1,6 +1,7 @@
 const main = fn () => {
 	print(bmi(52.5, 1.65));
 	print(factorial(5));
+	print(lock(3, 4,6));
 };
 
 const bmi = fn (mass height : float) -> float => mass / height ** 2;
@@ -15,3 +16,5 @@ const heron = fn (a b c : float) -> float => {
 const area_of_triangle = fn (a b c : float) -> float? => if is_a_trinagle(a, b, c) => return heron(a, b, c) else => none;
 
 const factorial = fn (x : int) -> int => if x <= 1 => return 1 else => x * factorial(x - 1);
+
+const lock = fn(c d e:  int) -> bool => if c*d> e => true else => false ;

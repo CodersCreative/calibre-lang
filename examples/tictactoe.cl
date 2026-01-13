@@ -5,7 +5,7 @@ type Player = enum {
 };
 
 impl Player {
-	const default = fn () -> Player => return Player.None;
+	const default = fn () -> Player => Player.None;
 
 	const get_opposite = match &Player -> Player {
 		Player.X => Player.O,
@@ -37,7 +37,7 @@ const get_user_input = fn () -> int => {
 type Board = struct (list<Player>);
 
 impl Board {
-	const default = fn () -> Board => Board([Player.None for _ in 0..9]);
+	const default = fn () -> Board => Board(list[Player.None for _ in 0..9]);
 
 	const print_board = fn (self : &Board) => {
 		print("|---|---|---|");
@@ -57,7 +57,6 @@ impl Board {
 
 	const is_full = fn (self : &Board) -> bool => {
 		for i in 0..9 => if self.0[i] == Player.None => return false;
-		print("aight");
 		return true;
 	};
 

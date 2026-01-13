@@ -12,9 +12,12 @@ pub struct ComptimeEnvironment {
 
 impl ComptimeEnvironment {
     pub fn new(env: &MiddleEnvironment) -> Self {
+        let mut interpreter = InterpreterEnvironment::new(env);
+        interpreter.new_scope_with_stdlib(None);
+
         Self {
             changed_this_stage: 0,
-            interpreter: InterpreterEnvironment::new(env),
+            interpreter,
         }
     }
 
