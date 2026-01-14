@@ -24,14 +24,6 @@ pub enum ASTError<T: RuntimeValue> {
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum RuntimeErr<T: RuntimeValue, U: RuntimeType> {
-    #[error("{err}")]
-    At {
-        err: Box<Self>,
-        #[source_code]
-        input: String,
-        #[label("here")]
-        span: Option<(usize, usize)>,
-    },
     #[error("{0}")]
     Value(ValueErr<T, U>),
     #[error("{0}")]

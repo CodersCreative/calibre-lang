@@ -1,6 +1,6 @@
 use crate::{
     Parser, SyntaxErr,
-    ast::{CompStage, Node, ObjectType, ParserText, PotentialDollarIdentifier, RefMutability},
+    ast::{CompStage, Node, ObjectType, PotentialDollarIdentifier, RefMutability},
     lexer::{Bracket, Span, StopValue},
 };
 use crate::{

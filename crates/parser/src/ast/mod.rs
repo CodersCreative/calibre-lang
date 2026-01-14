@@ -642,7 +642,6 @@ pub enum NodeType {
         comparison: Box<IfComparisonType>,
         then: Box<Node>,
         otherwise: Option<Box<Node>>,
-        special_delim: bool,
     },
     Ternary {
         comparison: Box<Node>,

@@ -2,7 +2,7 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use calibre_parser::{
     Parser,
-    ast::{ParserDataType, ParserInnerType, VarType},
+    ast::{ParserDataType, VarType},
     lexer::Tokenizer,
 };
 use calibre_std::{get_globals_path, get_stdlib_path};

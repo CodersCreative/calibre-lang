@@ -478,13 +478,13 @@ impl Parser {
 
             if self.first().token_type == TokenType::Colon {
                 let _ = self.eat();
-                let typ = self.parse_match_var_type();
+                let _typ = self.parse_match_var_type();
                 let n = self.expect_potential_dollar_ident();
                 for val in values.iter_mut() {
                     match val {
                         MatchArmType::Enum {
                             value: _,
-                            var_type: typ,
+                            var_type: _typ,
                             name,
                         } => *name = Some(n.clone()),
                         _ => self.add_err(SyntaxErr::ExpectedIdentifier),
@@ -659,13 +659,13 @@ impl Parser {
 
         if self.first().token_type == TokenType::Colon {
             let _ = self.eat();
-            let typ = self.parse_match_var_type();
+            let _typ = self.parse_match_var_type();
             let n = self.expect_potential_dollar_ident();
             for val in values.iter_mut() {
                 match val {
                     MatchArmType::Enum {
                         value: _,
-                        var_type: typ,
+                        var_type: _typ,
                         name,
                     } => *name = Some(n.clone()),
                     _ => self.add_err(SyntaxErr::ExpectedIdentifier),
@@ -706,7 +706,6 @@ impl Parser {
         };
 
         let then = Box::new(self.parse_scope_declaration(false));
-        let mut special_delim = false;
 
         let otherwise = if self.first().token_type == TokenType::Else {
             let _ = self.eat();
@@ -715,12 +714,6 @@ impl Parser {
             } else {
                 Some(Box::new(self.parse_scope_declaration(false)))
             }
-        } else if self.first().token_type == TokenType::EOL
-            && self.second().token_type == TokenType::Else
-        {
-            let _ = self.eat();
-            special_delim = true;
-            None
         } else {
             None
         };
@@ -738,7 +731,6 @@ impl Parser {
                 comparison: Box::new(comparison),
                 then,
                 otherwise,
-                special_delim,
             },
             span,
         )

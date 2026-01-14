@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, btree_map::IntoValues},
-    fmt::Display,
-};
+use std::{collections::HashMap, fmt::Display};
 
 use calibre_parser::{
     ast::{
@@ -287,7 +284,6 @@ impl Into<NodeType> for MiddleNodeType {
                 } else {
                     None
                 },
-                special_delim: false,
             },
             Self::InDeclaration { identifier, value } => NodeType::InDeclaration {
                 identifier: Box::new((*identifier).into()),

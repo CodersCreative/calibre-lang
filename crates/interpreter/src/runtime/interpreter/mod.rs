@@ -267,11 +267,6 @@ impl InterpreterEnvironment {
                     Some(RuntimeType::interpreter_from(self, scope, data_type)?),
                 )
             }
-            MiddleNodeType::ScopeDeclaration {
-                body,
-                is_temp: false,
-                create_new_scope: false,
-            } => self.evaluate_scope(scope, body, false, false),
             _ => Err(InterpreterErr::UnexpectedNodeInGlobal(node.node_type)),
         }
     }

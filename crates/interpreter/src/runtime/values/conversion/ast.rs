@@ -179,8 +179,8 @@ impl InterpreterFrom<RuntimeType> for ParserInnerType {
             RuntimeType::Bool => ParserInnerType::Bool,
             RuntimeType::Str => ParserInnerType::Str,
             RuntimeType::Char => ParserInnerType::Char,
-            RuntimeType::Tuple(x) => {
-                let mut lst = Vec::new();
+            RuntimeType::Tuple(_x) => {
+                let lst = Vec::new();
 
                 ParserInnerType::Tuple(lst)
             }

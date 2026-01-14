@@ -1,9 +1,9 @@
 use calibre_mir::environment::{MiddleObject, MiddleTypeDefType};
 use calibre_mir_ty::MiddleNode;
-use calibre_parser::{ast::TypeDefType, lexer::Location};
+use calibre_parser::lexer::Location;
 
 use crate::{
-    environment::{Environment, InterpreterFrom, RuntimeType, RuntimeValue},
+    environment::{Environment, RuntimeType, RuntimeValue},
     errors::ScopeErr,
 };
 

@@ -200,7 +200,6 @@ dependencies = [
  "cal-fmt",
  "calibre-common",
  "calibre-parser",
- "calibre-type-checker",
  "tokio",
  "tower",
  "tracing",
@@ -286,15 +285,6 @@ dependencies = [
 [[package]]
 name = "calibre-std"
 version = "0.1.0"
-
-[[package]]
-name = "calibre-type-checker"
-version = "0.1.0"
-dependencies = [
- "calibre-common",
- "calibre-parser",
- "thiserror",
-]
 
 [[package]]
 name = "cfg-if"

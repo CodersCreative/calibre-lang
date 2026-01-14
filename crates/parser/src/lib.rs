@@ -69,6 +69,7 @@ impl From<LexerError> for ParserError {
     }
 }
 
+#[allow(unused_assignments)]
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum ParserError {
     #[error(transparent)]

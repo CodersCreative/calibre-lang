@@ -3,8 +3,8 @@ use std::error::Error;
 use crate::{
     Parser,
     ast::{
-        IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, ParserDataType,
-        ParserInnerType, PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
+        IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, ParserInnerType,
+        PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -459,7 +459,6 @@ impl Formatter {
                 comparison,
                 then,
                 otherwise,
-                special_delim,
             } => {
                 let mut txt = String::from("if");
                 match &**comparison {
@@ -501,8 +500,6 @@ impl Formatter {
 
                 if let Some(otherwise) = otherwise {
                     txt.push_str(&format!(" else {}", self.format(&*otherwise)));
-                } else if *special_delim {
-                    txt.push_str(";");
                 }
 
                 txt

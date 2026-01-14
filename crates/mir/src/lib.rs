@@ -143,7 +143,6 @@ impl MiddleEnvironment {
                         comparison: Box::new(IfComparisonType::If(*comparison)),
                         then,
                         otherwise: Some(otherwise),
-                        special_delim: true,
                     },
                     span: node.span,
                 },
@@ -152,7 +151,6 @@ impl MiddleEnvironment {
                 comparison,
                 then,
                 otherwise,
-                special_delim: _,
             } => match *comparison {
                 IfComparisonType::If(x) => Ok(MiddleNode {
                     node_type: MiddleNodeType::IfStatement {
@@ -576,7 +574,6 @@ impl MiddleEnvironment {
                                         )),
                                         then: Box::new(Node::new_from_type(NodeType::Break)),
                                         otherwise: None,
-                                        special_delim: true,
                                     }),
                                 }];
 
@@ -620,7 +617,6 @@ impl MiddleEnvironment {
                                     }),
                                     then: body,
                                     otherwise: Some(Box::new(Node::new_from_type(NodeType::Break))),
-                                    special_delim: true,
                                 }),
                             )?),
                         },
@@ -656,7 +652,6 @@ impl MiddleEnvironment {
                                                 otherwise: Some(Box::new(Node::new_from_type(
                                                     NodeType::Break,
                                                 ))),
-                                                special_delim: false,
                                             })
                                     ];
 
@@ -725,7 +720,6 @@ impl MiddleEnvironment {
                                                         NodeType::Continue,
                                                     )),
                                                     otherwise: None,
-                                                    special_delim: true,
                                                 }));
                                             }
 
@@ -788,7 +782,6 @@ impl MiddleEnvironment {
                                         value,
                                     },
                                 ))),
-                                special_delim: false,
                             },
                             span: node.span,
                         },
@@ -1105,7 +1098,6 @@ impl MiddleEnvironment {
                                         comparison: Box::new(IfComparisonType::If(Node::new_from_type(NodeType::ComparisonExpression { left: Box::new(Node::new_from_type(NodeType::Identifier(parameters.0.clone()))), right: Box::new(x), operator: Comparison::Equal }))),
                                         then: Box::new(main),
                                         otherwise: None,
-                                        special_delim: true
                                     })),
                                     MatchArmType::Let { var_type, name } => {
                                         lst.push(Node::new_from_type(NodeType::ScopeDeclaration {
@@ -1182,7 +1174,6 @@ impl MiddleEnvironment {
                                                 })
                                             },
                                             otherwise: None,
-                                            special_delim: true
                                         }));
                                     }
                                 }

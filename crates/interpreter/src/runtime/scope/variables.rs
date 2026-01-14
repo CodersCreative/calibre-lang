@@ -290,7 +290,7 @@ impl InterpreterEnvironment {
                 (RuntimeValue::List { data, data_type: _ }, MemberPathType::Computed(key)) => {
                     match data.get(key.parse::<usize>().unwrap()) {
                         Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
-                        x => {
+                        _x => {
                             break;
                         }
                     }

@@ -1,4 +1,4 @@
-use crate::ast::{Node, ParserText};
+use crate::ast::Node;
 use crate::lexer::{Bracket, Span};
 use crate::{Parser, SyntaxErr};
 use crate::{ast::NodeType, lexer::TokenType};

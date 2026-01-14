@@ -20,6 +20,7 @@ impl InterpreterEnvironment {
         state: Option<MiddleNode>,
         body: MiddleNode,
     ) -> Result<RuntimeValue, InterpreterErr> {
+        #[allow(unused)]
         let mut result = RuntimeValue::Null;
         let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
 

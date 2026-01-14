@@ -439,6 +439,30 @@ impl MiddleEnvironment {
         self.new_scope(Some(parent), path, None)
     }
 
+    pub fn new_build_scope_from_parent(&mut self, parent: u64, namespace: &str) -> Option<u64> {
+        let path = self.scopes.get(&parent).unwrap().path.clone();
+        let parent_name = path.file_name().unwrap();
+        let folder = path.parent().unwrap().to_path_buf();
+
+        let extra = if parent_name == "main.cl" || parent_name == "mod.cl" {
+            String::new()
+        } else {
+            format!(
+                "{}/",
+                parent_name.to_str().unwrap().split(".").nth(0).unwrap()
+            )
+        };
+
+        let mut path1 = folder.clone();
+        path1 = path1.join(format!("{extra}{namespace}/build.cl"));
+
+        if path1.exists() {
+            Some(self.new_scope(Some(parent), path1, Some(namespace)))
+        } else {
+            None
+        }
+    }
+
     pub fn new_scope_from_parent(&mut self, parent: u64, namespace: &str) -> u64 {
         if let Ok(scope) = self.get_scope_from_parent(parent, namespace) {
             return scope;
@@ -448,7 +472,7 @@ impl MiddleEnvironment {
         let parent_name = path.file_name().unwrap();
         let folder = path.parent().unwrap().to_path_buf();
 
-        let extra = if parent_name == "main.cl" {
+        let extra = if parent_name == "main.cl" || parent_name == "mod.cl" {
             String::new()
         } else {
             format!(
@@ -463,12 +487,17 @@ impl MiddleEnvironment {
         let mut path2 = folder.clone();
         path2 = path2.join(format!("{extra}{namespace}/main.cl"));
 
+        let mut path3 = folder.clone();
+        path3 = path3.join(format!("{extra}{namespace}/mod.cl"));
+
         if path1.exists() {
             self.new_scope(Some(parent), path1, Some(namespace))
         } else if path2.exists() {
             self.new_scope(Some(parent), path2, Some(namespace))
+        } else if path3.exists() {
+            self.new_scope(Some(parent), path3, Some(namespace))
         } else {
-            panic!("Tried:\n{path1:?}\n{path2:?}")
+            panic!("Tried:\n{path1:?}\n{path2:?}\n{path3:?}")
         }
     }
 
@@ -547,10 +576,46 @@ impl MiddleEnvironment {
                     if let Some(s) = self.get_global_scope().children.get(key) {
                         (s.clone(), None)
                     } else {
-                        let scope = self.new_scope_from_parent(current.id, key);
                         let mut parser = Parser::default();
-
                         let mut tokenizer = Tokenizer::default();
+
+                        let build_node = if let Some(scope) =
+                            self.new_build_scope_from_parent(current.id, key)
+                        {
+                            let program = parser.produce_ast(
+                                tokenizer
+                                    .tokenize(
+                                        fs::read_to_string(
+                                            self.scopes.get(&scope).unwrap().path.clone(),
+                                        )
+                                        .unwrap(),
+                                    )
+                                    .unwrap(),
+                            );
+
+                            if !parser.errors.is_empty() {
+                                return Err(parser.errors.into());
+                            }
+
+                            let program = match program.node_type {
+                                NodeType::ScopeDeclaration { body, .. } => Node {
+                                    node_type: NodeType::ScopeDeclaration {
+                                        body,
+                                        named: None,
+                                        is_temp: false,
+                                        create_new_scope: false,
+                                        define: false,
+                                    },
+                                    ..program
+                                },
+                                _ => program,
+                            };
+                            Some(self.evaluate(&scope, program)?)
+                        } else {
+                            None
+                        };
+
+                        let scope = self.new_scope_from_parent(current.id, key);
                         let program = parser.produce_ast(
                             tokenizer
                                 .tokenize(
@@ -566,7 +631,38 @@ impl MiddleEnvironment {
                             return Err(parser.errors.into());
                         }
 
-                        (scope, Some(self.evaluate(&scope, program)?))
+                        let node = self.evaluate(&scope, program)?;
+
+                        let node = match (node.node_type.clone(), build_node) {
+                            (
+                                MiddleNodeType::ScopeDeclaration {
+                                    mut body,
+                                    create_new_scope,
+                                    is_temp,
+                                },
+                                Some(build_node),
+                            ) => MiddleNode {
+                                node_type: MiddleNodeType::ScopeDeclaration {
+                                    body: {
+                                        body.insert(0, build_node);
+                                        body
+                                    },
+                                    create_new_scope,
+                                    is_temp,
+                                },
+                                ..node
+                            },
+                            (_, Some(build_node)) => {
+                                MiddleNode::new_from_type(MiddleNodeType::ScopeDeclaration {
+                                    body: vec![node, build_node],
+                                    create_new_scope: false,
+                                    is_temp: false,
+                                })
+                            }
+                            _ => node,
+                        };
+
+                        (scope, Some(node))
                     }
                 }
             }
@@ -642,7 +738,6 @@ impl MiddleEnvironment {
                 comparison: _,
                 then,
                 otherwise,
-                special_delim: _,
             } => {
                 if let Some(otherwise) = otherwise {
                     let otherwise =

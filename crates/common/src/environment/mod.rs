@@ -1,7 +1,7 @@
 pub mod objects;
 pub mod variables;
 
-use calibre_mir::environment::{MiddleEnvironment, MiddleObject, MiddleTypeDefType};
+use calibre_mir::environment::{MiddleEnvironment, MiddleObject};
 use calibre_parser::{
     ast::{ObjectMap, ParserDataType, VarType},
     lexer::Location,
