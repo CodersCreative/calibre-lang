@@ -171,7 +171,7 @@ impl Parser {
         let data_type = match self.first().token_type {
             TokenType::Colon => {
                 let _ = self.eat();
-                self.parse_type()
+                self.parse_potential_new_type()
             }
             _ => None,
         };
@@ -437,7 +437,7 @@ impl Parser {
         };
 
         let typ = if self.first().token_type != TokenType::Open(Bracket::Curly) {
-            self.parse_type()
+            self.parse_potential_new_type()
         } else {
             None
         };
@@ -450,14 +450,14 @@ impl Parser {
         };
 
         let return_type = if self.first().token_type == TokenType::Open(Bracket::Curly) {
-            ParserDataType::from(ParserInnerType::Null)
+            ParserDataType::from(ParserInnerType::Null).into()
         } else {
             let _ = self.expect_eat(
                 &TokenType::Arrow,
                 SyntaxErr::ExpectedKeyword(String::from("->")),
             );
-            self.parse_type()
-                .unwrap_or(ParserDataType::from(ParserInnerType::Null))
+            self.parse_potential_new_type()
+                .unwrap_or(ParserDataType::from(ParserInnerType::Null).into())
         };
 
         let _ = self.expect_eat(
@@ -517,10 +517,9 @@ impl Parser {
             NodeType::MatchDeclaration {
                 parameters: (
                     ParserText::new(String::from("input_value"), Span::default()).into(),
-                    typ.unwrap_or(ParserDataType::new(
-                        ParserInnerType::Dynamic,
-                        Span::default(),
-                    )),
+                    typ.unwrap_or(
+                        ParserDataType::new(ParserInnerType::Dynamic, Span::default()).into(),
+                    ),
                     default,
                 ),
                 body: patterns,
@@ -604,14 +603,14 @@ impl Parser {
         }
 
         let return_type = if self.first().token_type == TokenType::FatArrow {
-            ParserDataType::from(ParserInnerType::Null)
+            ParserDataType::from(ParserInnerType::Null).into()
         } else {
             let _ = self.expect_eat(
                 &TokenType::Arrow,
                 SyntaxErr::ExpectedKeyword(String::from("->")),
             );
-            self.parse_type()
-                .unwrap_or(ParserDataType::from(ParserInnerType::Null))
+            self.parse_potential_new_type()
+                .unwrap_or(ParserDataType::from(ParserInnerType::Null).into())
         };
 
         let block = self.parse_scope_declaration(false);

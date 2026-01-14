@@ -125,6 +125,33 @@ pub enum ParserInnerType {
     NativeFunction(Box<ParserDataType>),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum PotentialNewType {
+    NewType {
+        identifier: PotentialDollarIdentifier,
+        type_def: TypeDefType,
+    },
+    DataType(ParserDataType),
+}
+
+impl PotentialNewType {
+    pub fn span(&self) -> &Span {
+        match self {
+            Self::NewType {
+                identifier,
+                type_def: _,
+            } => identifier.span(),
+            Self::DataType(x) => &x.span,
+        }
+    }
+}
+
+impl From<ParserDataType> for PotentialNewType {
+    fn from(value: ParserDataType) -> Self {
+        Self::DataType(value)
+    }
+}
+
 impl Display for ParserDataType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.data_type)
@@ -224,7 +251,7 @@ impl FromStr for ParserInnerType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObjectType<T> {
     Map(HashMap<String, T>),
     Tuple(Vec<T>),
@@ -306,9 +333,9 @@ impl Display for VarType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefType {
-    Enum(Vec<(PotentialDollarIdentifier, Option<ParserDataType>)>),
-    Struct(ObjectType<ParserDataType>),
-    NewType(ParserDataType),
+    Enum(Vec<(PotentialDollarIdentifier, Option<PotentialNewType>)>),
+    Struct(ObjectType<PotentialNewType>),
+    NewType(Box<PotentialNewType>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -317,7 +344,7 @@ pub struct Node {
     pub span: Span,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ParserText {
     pub text: String,
     pub span: Span,
@@ -328,7 +355,7 @@ impl From<Token> for ParserText {
         Self::new(value.value, value.span)
     }
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PotentialDollarIdentifier {
     DollarIdentifier(ParserText),
     Identifier(ParserText),
@@ -486,7 +513,7 @@ pub enum NodeType {
     },
     Identifier(PotentialDollarIdentifier),
     DataType {
-        data_type: ParserDataType,
+        data_type: PotentialNewType,
     },
     DerefStatement {
         value: Box<Node>,
@@ -498,7 +525,7 @@ pub enum NodeType {
         var_type: VarType,
         identifier: PotentialDollarIdentifier,
         value: Box<Node>,
-        data_type: Option<ParserDataType>,
+        data_type: Option<PotentialNewType>,
     },
     ImplDeclaration {
         identifier: PotentialDollarIdentifier,
@@ -521,15 +548,19 @@ pub enum NodeType {
         define: bool,
     },
     MatchDeclaration {
-        parameters: (PotentialDollarIdentifier, ParserDataType, Option<Box<Node>>),
+        parameters: (
+            PotentialDollarIdentifier,
+            PotentialNewType,
+            Option<Box<Node>>,
+        ),
         body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
-        return_type: ParserDataType,
+        return_type: PotentialNewType,
         is_async: bool,
     },
     FunctionDeclaration {
-        parameters: Vec<(PotentialDollarIdentifier, ParserDataType, Option<Node>)>,
+        parameters: Vec<(PotentialDollarIdentifier, PotentialNewType, Option<Node>)>,
         body: Box<Node>,
-        return_type: ParserDataType,
+        return_type: PotentialNewType,
         is_async: bool,
     },
     AssignmentExpression {
@@ -547,7 +578,7 @@ pub enum NodeType {
     },
     AsExpression {
         value: Box<Node>,
-        data_type: ParserDataType,
+        data_type: PotentialNewType,
     },
     InDeclaration {
         identifier: Box<Node>,
@@ -555,7 +586,7 @@ pub enum NodeType {
     },
     IsDeclaration {
         value: Box<Node>,
-        data_type: ParserDataType,
+        data_type: PotentialNewType,
     },
     RangeDeclaration {
         from: Box<Node>,
@@ -563,7 +594,7 @@ pub enum NodeType {
         inclusive: bool,
     },
     IterExpression {
-        data_type: Option<ParserDataType>,
+        data_type: Option<PotentialNewType>,
         map: Box<Node>,
         loop_type: Box<LoopType>,
         conditionals: Vec<Node>,
@@ -580,7 +611,7 @@ pub enum NodeType {
         value: Option<Box<Node>>,
     },
     StringLiteral(ParserText),
-    ListLiteral(Option<ParserDataType>, Vec<Node>),
+    ListLiteral(Option<PotentialNewType>, Vec<Node>),
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(i64),

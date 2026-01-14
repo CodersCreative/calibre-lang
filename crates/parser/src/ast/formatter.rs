@@ -4,7 +4,7 @@ use crate::{
     Parser,
     ast::{
         IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, ParserDataType,
-        ParserInnerType, PotentialDollarIdentifier, TypeDefType, VarType,
+        ParserInnerType, PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -296,7 +296,7 @@ impl Formatter {
             } => {
                 let mut txt = format!("{} {}", var_type, identifier);
                 if let Some(typ) = data_type {
-                    txt.push_str(&format!(" : {}", typ));
+                    txt.push_str(&format!(" : {}", self.fmt_potential_new_type(typ)));
                 }
 
                 txt.push_str(&format!(" = {}", self.format(&*value)));
@@ -304,13 +304,21 @@ impl Formatter {
                 txt
             }
             NodeType::AsExpression { value, data_type } => {
-                format!("{} as {}", self.format(&*value), data_type)
+                format!(
+                    "{} as {}",
+                    self.format(&*value),
+                    self.fmt_potential_new_type(data_type)
+                )
             }
             NodeType::InDeclaration { identifier, value } => {
                 format!("{} in {}", self.format(&*identifier), self.format(&*value))
             }
             NodeType::IsDeclaration { value, data_type } => {
-                format!("{} is {}", self.format(&*value), data_type)
+                format!(
+                    "{} is {}",
+                    self.format(&*value),
+                    self.fmt_potential_new_type(data_type)
+                )
             }
             NodeType::CallExpression(callee, args) => {
                 let mut txt = format!("{}(", self.format(&*callee));
@@ -364,7 +372,7 @@ impl Formatter {
                 let mut txt = if let Some(data_type) = data_type {
                     format!(
                         "list<{}>[{} for {}",
-                        data_type,
+                        self.fmt_potential_new_type(data_type),
                         self.format(&*map),
                         self.fmt_loop_type(&*loop_type)
                     )
@@ -420,7 +428,7 @@ impl Formatter {
 
                     let last = params.last().unwrap();
 
-                    txt.push_str(&format!(": {}", last.1));
+                    txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
 
                     if let Some(default) = &last.2 {
                         txt.push_str(&format!(" = {}", self.format(&default)));
@@ -432,8 +440,8 @@ impl Formatter {
                 let mut txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
 
-                if return_type.data_type != ParserInnerType::Null {
-                    txt.push_str(&format!(" -> {}", return_type));
+                if return_type != &PotentialNewType::DataType(ParserInnerType::Null.into()) {
+                    txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
                 }
 
                 txt.push_str(&self.format(&*body));
@@ -510,14 +518,14 @@ impl Formatter {
                     txt.push_str(" async");
                 }
 
-                txt.push_str(&format!(" {}", parameters.1));
+                txt.push_str(&format!(" {}", self.fmt_potential_new_type(&parameters.1)));
 
                 if let Some(default) = &parameters.2 {
                     txt.push_str(&format!(" = {}", self.format(&*default)));
                 }
 
-                if return_type.data_type != ParserInnerType::Null {
-                    txt.push_str(&format!(" -> {}", return_type));
+                if return_type != &PotentialNewType::DataType(ParserInnerType::Null.into()) {
+                    txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
                 }
 
                 txt.push_str(" {\n");
@@ -613,7 +621,7 @@ impl Formatter {
                 let mut txt = if let Some(data_type) = data_type {
                     format!(
                         "list<{}>[{}",
-                        data_type,
+                        self.fmt_potential_new_type(&data_type),
                         values
                             .get(0)
                             .map(|x| self.format(&*x))
@@ -637,7 +645,9 @@ impl Formatter {
 
                 txt
             }
-            NodeType::DataType { data_type } => format!("type : {}", data_type),
+            NodeType::DataType { data_type } => {
+                format!("type : {}", self.fmt_potential_new_type(data_type))
+            }
             NodeType::Comp { stage, body } => format!("comp, {} {}", stage, self.format(&body)),
             NodeType::ScopeDeclaration {
                 body,
@@ -732,76 +742,7 @@ impl Formatter {
             }
             NodeType::ParenExpression { value } => format!("({})", self.format(&*value)),
             NodeType::TypeDeclaration { identifier, object } => {
-                let mut txt = format!("type {} = ", identifier);
-
-                let fmt_obj = |this: &mut Self, obj: &ObjectType<ParserDataType>| -> String {
-                    match obj {
-                        ObjectType::Map(x) => {
-                            let mut txt = String::from("{\n");
-                            for (key, value) in x {
-                                txt.push_str(&handle_comment!(
-                                    this.get_potential_comment(&value.span),
-                                    format!("{} : {},\n", key, value)
-                                ));
-                            }
-
-                            let mut txt = this.fmt_txt_with_tab(
-                                txt.trim_end().trim_end_matches(","),
-                                1,
-                                true,
-                            );
-
-                            txt.push_str("\n}");
-                            txt
-                        }
-
-                        ObjectType::Tuple(x) => {
-                            let mut txt = String::from("(");
-
-                            for value in x {
-                                txt.push_str(&handle_comment!(
-                                    this.get_potential_comment(&value.span),
-                                    format!("{}, ", value)
-                                ));
-                            }
-
-                            let mut txt = this.fmt_txt_with_tab(
-                                txt.trim_end().trim_end_matches(","),
-                                1,
-                                false,
-                            );
-
-                            txt.push_str(")");
-                            txt
-                        }
-                    }
-                };
-
-                match &object {
-                    TypeDefType::Enum(values) => {
-                        txt.push_str("enum {\n");
-
-                        for arm in values {
-                            txt.push_str(&handle_comment!(
-                                self.get_potential_comment(arm.0.span()),
-                                if let Some(x) = &arm.1 {
-                                    format!("{} : {},\n", arm.0, x)
-                                } else {
-                                    format!("{},\n", arm.0)
-                                }
-                            ));
-                        }
-
-                        txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
-                        txt.push_str("\n}");
-                    }
-                    TypeDefType::NewType(x) => txt.push_str(&x.to_string()),
-                    TypeDefType::Struct(x) => {
-                        txt.push_str(&format!("struct {}", fmt_obj(self, x)));
-                    }
-                }
-
-                txt
+                format!("type {} = {}", identifier, self.fmt_type_def_type(&object))
             }
         }
     }
@@ -867,6 +808,85 @@ impl Formatter {
             Some(Formatter::fmt_comments(comments))
         } else {
             None
+        }
+    }
+
+    fn fmt_new_type_obj(&mut self, obj: &ObjectType<PotentialNewType>) -> String {
+        match obj {
+            ObjectType::Map(x) => {
+                let mut txt = String::from("{\n");
+                for (key, value) in x {
+                    txt.push_str(&handle_comment!(
+                        self.get_potential_comment(value.span()),
+                        format!("{} : {},\n", key, self.fmt_potential_new_type(value))
+                    ));
+                }
+
+                let mut txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, true);
+
+                txt.push_str("\n}");
+                txt
+            }
+
+            ObjectType::Tuple(x) => {
+                let mut txt = String::from("(");
+
+                for value in x {
+                    txt.push_str(&handle_comment!(
+                        self.get_potential_comment(value.span()),
+                        format!("{}, ", self.fmt_potential_new_type(value))
+                    ));
+                }
+
+                let mut txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
+
+                txt.push_str(")");
+                txt
+            }
+        }
+    }
+
+    fn fmt_type_def_type(&mut self, type_def: &TypeDefType) -> String {
+        let mut txt = String::new();
+        match type_def {
+            TypeDefType::Enum(values) => {
+                txt.push_str("enum {\n");
+
+                for arm in values {
+                    txt.push_str(&handle_comment!(
+                        self.get_potential_comment(arm.0.span()),
+                        if let Some(x) = &arm.1 {
+                            format!("{} : {},\n", arm.0, self.fmt_potential_new_type(x))
+                        } else {
+                            format!("{},\n", arm.0)
+                        }
+                    ));
+                }
+
+                txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
+                txt.push_str("\n}");
+            }
+            TypeDefType::NewType(x) => txt.push_str(&self.fmt_potential_new_type(&x)),
+            TypeDefType::Struct(x) => {
+                txt.push_str(&format!("struct {}", self.fmt_new_type_obj(&x)));
+            }
+        }
+        txt
+    }
+
+    fn fmt_potential_new_type(&mut self, data_type: &PotentialNewType) -> String {
+        match data_type {
+            PotentialNewType::DataType(x) => x.to_string(),
+            PotentialNewType::NewType {
+                identifier,
+                type_def,
+            } => {
+                format!(
+                    "type {} = {}",
+                    identifier,
+                    self.fmt_type_def_type(&type_def)
+                )
+            }
         }
     }
 

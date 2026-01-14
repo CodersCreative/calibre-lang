@@ -1,4 +1,8 @@
-type SmthType = struct {txt : str}
+type SmthType = struct {
+	txt : type Smth = struct {
+		txt : int,		
+	},
+}
 
 let => <mult_scope>[$ident = adder_int, $t = type : int] {{
 	const $ident = fn (first, second : $t) -> $t => {
@@ -13,7 +17,9 @@ let => <mult_scope>[$ident = adder_int, $t = type : int] {{
 const main = fn () => {
 	print(adder_float(90, 10.6));
 	let smth = SmthType{
-		txt : "tyui",
+		txt : Smth {
+			txt : "tyui",
+		},
 	};
 	let mut d = comp, 0 => list[list[2, 0, 4], list[1, 9, 3], list[4, 7, 9], list[9, 0, 1]];
 	let lst = list<int>[2, 0, 4];

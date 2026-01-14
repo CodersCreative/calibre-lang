@@ -5,6 +5,27 @@ use crate::{
 };
 
 impl Parser {
+    pub fn parse_type_def_type(&mut self) -> TypeDefType {
+        match &self.first().token_type {
+            TokenType::Enum => self.parse_enum_declaration(),
+            TokenType::Struct => self.parse_struct_declaration(),
+            _ => {
+                if let Some(t) = self.parse_type() {
+                    TypeDefType::NewType(Box::new(t.into()))
+                } else {
+                    self.add_err(SyntaxErr::ExpectedType);
+                    TypeDefType::NewType(Box::new(
+                        crate::ast::ParserDataType::new(
+                            crate::ast::ParserInnerType::Dynamic,
+                            self.first().span,
+                        )
+                        .into(),
+                    ))
+                }
+            }
+        }
+    }
+
     pub fn parse_type_decaration(&mut self) -> Node {
         let open = self.expect_eat(
             &TokenType::Type,
@@ -13,9 +34,9 @@ impl Parser {
 
         if self.first().token_type == TokenType::Colon {
             let _ = self.eat();
-            let data_type = self.expect_type();
+            let data_type = self.expect_potential_new_type();
             return Node {
-                span: Span::new_from_spans(open.span, data_type.span),
+                span: Span::new_from_spans(open.span, *data_type.span()),
                 node_type: NodeType::DataType { data_type },
             };
         }
@@ -24,21 +45,7 @@ impl Parser {
 
         let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
 
-        let object = match &self.first().token_type {
-            TokenType::Enum => self.parse_enum_declaration(),
-            TokenType::Struct => self.parse_struct_declaration(),
-            _ => {
-                if let Some(t) = self.parse_type() {
-                    TypeDefType::NewType(t)
-                } else {
-                    self.add_err(SyntaxErr::ExpectedType);
-                    TypeDefType::NewType(crate::ast::ParserDataType::new(
-                        crate::ast::ParserInnerType::Dynamic,
-                        self.first().span,
-                    ))
-                }
-            }
-        };
+        let object = self.parse_type_def_type();
 
         Node::new(
             NodeType::TypeDeclaration {
@@ -65,7 +72,7 @@ impl Parser {
         while let Some(option) = self.parse_potential_dollar_ident() {
             if self.first().token_type == TokenType::Colon {
                 let _ = self.eat();
-                options.push((option, Some(self.expect_type())));
+                options.push((option, Some(self.expect_potential_new_type())));
             } else {
                 options.push((option, None));
             }

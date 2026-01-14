@@ -192,7 +192,7 @@ impl Into<NodeType> for MiddleNodeType {
                 var_type,
                 identifier: identifier.into(),
                 value: Box::new((*value).into()),
-                data_type: Some(data_type),
+                data_type: Some(data_type.into()),
             },
             Self::EnumExpression {
                 identifier,
@@ -238,7 +238,7 @@ impl Into<NodeType> for MiddleNodeType {
                     for param in parameters {
                         lst.push((
                             param.0.into(),
-                            param.1,
+                            param.1.into(),
                             if let Some(x) = param.2 {
                                 Some(x.into())
                             } else {
@@ -249,7 +249,7 @@ impl Into<NodeType> for MiddleNodeType {
                     lst
                 },
                 body: Box::new((*body).into()),
-                return_type,
+                return_type: return_type.into(),
                 is_async,
             },
             Self::AssignmentExpression { identifier, value } => NodeType::AssignmentExpression {
@@ -265,13 +265,15 @@ impl Into<NodeType> for MiddleNodeType {
             } => NodeType::DebugExpression {
                 value: Box::new((*value).into()),
             },
-            Self::DataType { data_type } => NodeType::DataType { data_type },
+            Self::DataType { data_type } => NodeType::DataType {
+                data_type: data_type.into(),
+            },
             Self::NegExpression { value } => NodeType::NotExpression {
                 value: Box::new((*value).into()),
             },
             Self::AsExpression { value, data_type } => NodeType::AsExpression {
                 value: Box::new((*value).into()),
-                data_type,
+                data_type: data_type.into(),
             },
             Self::IfStatement {
                 comparison,
@@ -293,7 +295,7 @@ impl Into<NodeType> for MiddleNodeType {
             },
             Self::IsDeclaration { value, data_type } => NodeType::IsDeclaration {
                 value: Box::new((*value).into()),
-                data_type,
+                data_type: data_type.into(),
             },
             Self::RangeDeclaration {
                 from,
@@ -330,7 +332,7 @@ impl Into<NodeType> for MiddleNodeType {
             Self::Return { value: None } => NodeType::Return { value: None },
             Self::Identifier(x) => NodeType::Identifier(x.into()),
             Self::StringLiteral(x) => NodeType::StringLiteral(x),
-            Self::ListLiteral(typ, data) => NodeType::ListLiteral(Some(typ), {
+            Self::ListLiteral(typ, data) => NodeType::ListLiteral(Some(typ.into()), {
                 let mut lst = Vec::new();
 
                 for node in data {

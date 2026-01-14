@@ -8,7 +8,7 @@ use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{
         LoopType, Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, RefMutability, comparison::Comparison,
+        PotentialDollarIdentifier, PotentialNewType, RefMutability, comparison::Comparison,
     },
     lexer::{Bracket, Span, Token, TokenType},
 };
@@ -68,6 +68,31 @@ impl Parser {
         }
     }
 
+    fn parse_potential_new_type(&mut self) -> Option<PotentialNewType> {
+        if self.first().token_type == TokenType::Type {
+            let _ = self.eat();
+            let identifier = self.expect_potential_dollar_ident();
+            let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
+            Some(PotentialNewType::NewType {
+                identifier,
+                type_def: self.parse_type_def_type(),
+            })
+        } else if let Some(x) = self.parse_type() {
+            Some(x.into())
+        } else {
+            None
+        }
+    }
+
+    fn expect_potential_new_type(&mut self) -> PotentialNewType {
+        if let Some(x) = self.parse_potential_new_type() {
+            x
+        } else {
+            self.add_err(SyntaxErr::ExpectedType);
+            ParserDataType::new(ParserInnerType::Dynamic, self.first().span.clone()).into()
+        }
+    }
+
     fn expect_type(&mut self) -> ParserDataType {
         if let Some(x) = self.parse_type() {
             x
@@ -81,7 +106,7 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<(PotentialDollarIdentifier, ParserDataType, Option<Node>)> {
+    ) -> Vec<(PotentialDollarIdentifier, PotentialNewType, Option<Node>)> {
         let mut properties = Vec::new();
         let mut defaulted = false;
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
@@ -96,9 +121,9 @@ impl Parser {
             let typ = if self.first().token_type == TokenType::Colon {
                 let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-                self.expect_type()
+                self.expect_potential_new_type()
             } else {
-                ParserDataType::new(ParserInnerType::Dynamic, self.first().span.clone())
+                ParserDataType::new(ParserInnerType::Dynamic, self.first().span.clone()).into()
             };
 
             let default = if defaulted || self.first().token_type == TokenType::Equals {
@@ -123,64 +148,11 @@ impl Parser {
         properties
     }
 
-    fn parse_key_type_list_object_val(&mut self) -> ObjectType<ParserDataType> {
-        let mut tuple = Vec::new();
-        let mut properties = HashMap::new();
-
-        let (is_tuple, _, close_token) = match self.eat().token_type {
-            TokenType::Open(Bracket::Curly) => (
-                false,
-                TokenType::Open(Bracket::Curly),
-                TokenType::Close(Bracket::Curly),
-            ),
-            TokenType::Open(Bracket::Paren) => (
-                true,
-                TokenType::Open(Bracket::Paren),
-                TokenType::Close(Bracket::Paren),
-            ),
-            _ => {
-                self.add_err(SyntaxErr::ExpectedOpeningBracket(Bracket::Curly));
-
-                (
-                    true,
-                    TokenType::Open(Bracket::Paren),
-                    TokenType::Close(Bracket::Paren),
-                )
-            }
-        };
-
-        while !self.is_eof() && self.first().token_type != close_token {
-            if is_tuple {
-                tuple.push(self.expect_type());
-            } else {
-                let key = self
-                    .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)
-                    .value;
-
-                let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
-
-                properties.insert(key, self.expect_type());
-            }
-
-            if self.first().token_type != close_token {
-                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
-            }
-        }
-
-        let _ = self.expect_eat(&close_token, SyntaxErr::ExpectedToken(close_token.clone()));
-
-        if is_tuple {
-            ObjectType::Tuple(tuple)
-        } else {
-            ObjectType::Map(properties)
-        }
-    }
-
     fn parse_key_type_list(
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> HashMap<String, ParserDataType> {
+    ) -> HashMap<String, PotentialNewType> {
         let mut properties = HashMap::new();
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
@@ -191,7 +163,7 @@ impl Parser {
 
             let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-            properties.insert(key, self.expect_type());
+            properties.insert(key, self.expect_potential_new_type());
 
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
@@ -207,12 +179,12 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<ParserDataType> {
+    ) -> Vec<PotentialNewType> {
         let mut properties = Vec::new();
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         while !self.is_eof() && self.first().token_type != close_token {
-            properties.push(self.expect_type());
+            properties.push(self.expect_potential_new_type());
 
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
@@ -281,12 +253,23 @@ impl Parser {
                 self.first().span.clone()
             } else {
                 Span::new_from_spans(
-                    types.first().unwrap().span.clone(),
-                    types.last().unwrap().span.clone(),
+                    types.first().unwrap().span().clone(),
+                    types.last().unwrap().span().clone(),
                 )
             };
 
-            Some(ParserDataType::new(ParserInnerType::Tuple(types), span))
+            Some(ParserDataType::new(
+                ParserInnerType::Tuple(
+                    types
+                        .into_iter()
+                        .map(|x| match x {
+                            PotentialNewType::DataType(x) => x,
+                            PotentialNewType::NewType { .. } => panic!(),
+                        })
+                        .collect(),
+                ),
+                span,
+            ))
         } else if t.token_type == TokenType::Func {
             let open = self.eat();
             let is_async = if self.first().token_type == TokenType::Async {
@@ -296,10 +279,17 @@ impl Parser {
                 false
             };
 
-            let args = self.parse_type_list(
-                TokenType::Open(Bracket::Paren),
-                TokenType::Close(Bracket::Paren),
-            );
+            let args: Vec<ParserDataType> = self
+                .parse_type_list(
+                    TokenType::Open(Bracket::Paren),
+                    TokenType::Close(Bracket::Paren),
+                )
+                .into_iter()
+                .map(|x| match x {
+                    PotentialNewType::DataType(x) => x,
+                    _ => panic!(),
+                })
+                .collect();
             let mut ret = ParserDataType::from(ParserInnerType::Null);
 
             if self.first().token_type == TokenType::Arrow {
@@ -450,7 +440,7 @@ impl Parser {
                 SyntaxErr::ExpectedChar('<'),
             );
 
-            let t = self.expect_type();
+            let t = self.expect_potential_new_type();
 
             let _ = self.expect_eat(
                 &TokenType::Comparison(Comparison::Greater),

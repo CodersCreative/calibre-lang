@@ -112,9 +112,9 @@ impl Parser {
             TokenType::Type => {
                 let open = self.eat();
                 let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
-                let data_type = self.expect_type();
+                let data_type = self.expect_potential_new_type();
                 Node {
-                    span: Span::new_from_spans(open.span, data_type.span),
+                    span: Span::new_from_spans(open.span, *data_type.span()),
                     node_type: NodeType::DataType { data_type },
                 }
             }
