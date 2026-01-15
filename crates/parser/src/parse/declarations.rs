@@ -23,6 +23,101 @@ impl Parser {
         }
     }
 
+    pub fn expect_named_scope(&mut self) -> NamedScope {
+        let _ = self.expect_eat(
+            &TokenType::Comparison(Comparison::Lesser),
+            SyntaxErr::ExpectedChar('<'),
+        );
+        let name = self.expect_potential_dollar_ident();
+        let _ = self.expect_eat(
+            &TokenType::Comparison(Comparison::Greater),
+            SyntaxErr::ExpectedChar('>'),
+        );
+
+        let _ = self.expect_eat(
+            &TokenType::Open(Bracket::Square),
+            SyntaxErr::ExpectedOpeningBracket(Bracket::Square),
+        );
+
+        let mut args = Vec::new();
+
+        while self.first().token_type != TokenType::Close(Bracket::Square) {
+            let _ = self.expect_eat(&TokenType::Dollar, SyntaxErr::ExpectedChar('$'));
+            let ident = self.expect_potential_dollar_ident();
+            let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
+            let value = self.parse_statement();
+
+            if self.first().token_type == TokenType::Comma {
+                let _ = self.eat();
+            }
+
+            args.push((ident, value));
+        }
+        let _ = self.expect_eat(
+            &TokenType::Close(Bracket::Square),
+            SyntaxErr::ExpectedClosingBracket(Bracket::Square),
+        );
+        NamedScope { name, args }
+    }
+
+    pub fn parse_scope_alias(&mut self) -> Node {
+        let open = self.expect_eat(
+            &TokenType::Comparison(Comparison::Lesser),
+            SyntaxErr::ExpectedChar('<'),
+        );
+        let identifier = self.expect_potential_dollar_ident();
+        let close = self.expect_eat(
+            &TokenType::Comparison(Comparison::Greater),
+            SyntaxErr::ExpectedChar('>'),
+        );
+
+        let _ = self.expect_eat(
+            &TokenType::FatArrow,
+            SyntaxErr::ExpectedKeyword(String::from("=>")),
+        );
+
+        let value = self.expect_named_scope();
+
+        let create_new_scope = if self.first().token_type == TokenType::Open(Bracket::Curly) {
+            let _ = self.expect_eat(
+                &TokenType::Open(Bracket::Curly),
+                SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
+            );
+
+            let create_new_scope = if self.first().token_type == TokenType::Open(Bracket::Curly) {
+                let _ = self.eat();
+                false
+            } else {
+                true
+            };
+
+            let _ = self.expect_eat(
+                &TokenType::Close(Bracket::Curly),
+                SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
+            );
+
+            if !create_new_scope {
+                self.expect_eat(
+                    &TokenType::Close(Bracket::Curly),
+                    SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
+                );
+            }
+
+            Some(create_new_scope)
+        } else {
+            None
+        };
+
+        Node {
+            node_type: NodeType::ScopeAlias {
+                identifier,
+                value,
+                create_new_scope,
+            },
+            span: Span::new_from_spans(open.span, close.span),
+        }
+    }
+
     pub fn parse_scope_declaration(&mut self, define: bool) -> Node {
         let open = self.expect_eat(
             &TokenType::FatArrow,
@@ -30,37 +125,7 @@ impl Parser {
         );
 
         let named = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
-            let _ = self.eat();
-            let name = self.expect_potential_dollar_ident();
-            let _ = self.expect_eat(
-                &TokenType::Comparison(Comparison::Greater),
-                SyntaxErr::ExpectedChar('>'),
-            );
-
-            let _ = self.expect_eat(
-                &TokenType::Open(Bracket::Square),
-                SyntaxErr::ExpectedOpeningBracket(Bracket::Square),
-            );
-
-            let mut args = Vec::new();
-
-            while self.first().token_type != TokenType::Close(Bracket::Square) {
-                let _ = self.expect_eat(&TokenType::Dollar, SyntaxErr::ExpectedChar('$'));
-                let ident = self.expect_potential_dollar_ident();
-                let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
-                let value = self.parse_statement();
-
-                if self.first().token_type == TokenType::Comma {
-                    let _ = self.eat();
-                }
-
-                args.push((ident, value));
-            }
-            let _ = self.expect_eat(
-                &TokenType::Close(Bracket::Square),
-                SyntaxErr::ExpectedClosingBracket(Bracket::Square),
-            );
-            Some(NamedScope { name, args })
+            Some(self.expect_named_scope())
         } else {
             None
         };
@@ -72,7 +137,7 @@ impl Parser {
                 NodeType::ScopeDeclaration {
                     body: None,
                     is_temp: true,
-                    create_new_scope: true,
+                    create_new_scope: None,
                     define,
                     named,
                 },
@@ -123,7 +188,7 @@ impl Parser {
                 NodeType::ScopeDeclaration {
                     body: Some(body),
                     is_temp: true,
-                    create_new_scope,
+                    create_new_scope: Some(create_new_scope),
                     define,
                     named,
                 },
@@ -137,7 +202,7 @@ impl Parser {
                 NodeType::ScopeDeclaration {
                     body: Some(body),
                     is_temp: true,
-                    create_new_scope: false,
+                    create_new_scope: Some(false),
                     define,
                     named,
                 },
@@ -156,6 +221,8 @@ impl Parser {
                 } else {
                     if self.first().token_type == TokenType::FatArrow {
                         return self.parse_scope_declaration(true);
+                    } else if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
+                        return self.parse_scope_alias();
                     }
                     VarType::Immutable
                 }

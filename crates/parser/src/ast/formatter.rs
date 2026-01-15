@@ -646,6 +646,29 @@ impl Formatter {
                 format!("type : {}", self.fmt_potential_new_type(data_type))
             }
             NodeType::Comp { stage, body } => format!("comp, {} {}", stage, self.format(&body)),
+            NodeType::ScopeAlias {
+                identifier,
+                value,
+                create_new_scope,
+            } => {
+                let mut txt = format!("let {} => <{}> [ ", identifier, value.name);
+
+                for arg in &value.args {
+                    txt.push_str(&format!("{} = {}, ", &arg.0, self.format(&arg.1)));
+                }
+                txt = txt.trim_end().trim_end_matches(",").to_string();
+                txt.push(']');
+
+                if let Some(new_scope) = create_new_scope {
+                    if *new_scope {
+                        txt.push_str("{}");
+                    } else {
+                        txt.push_str("{{}}");
+                    }
+                }
+
+                txt
+            }
             NodeType::ScopeDeclaration {
                 body,
                 is_temp: true,
@@ -669,17 +692,18 @@ impl Formatter {
                 }
 
                 if let Some(body) = &body {
-                    if body.is_empty() || *create_new_scope {
+                    let create_new_scope = create_new_scope.clone().unwrap();
+                    if body.is_empty() || create_new_scope {
                         txt.push_str(" {");
                         if !body.is_empty() {
-                            if body.len() > 1 && *create_new_scope {
+                            if body.len() > 1 && create_new_scope {
                                 txt.push_str("{");
                             }
                             txt.push_str("\n");
                         }
                     }
 
-                    if !body.is_empty() && *create_new_scope {
+                    if !body.is_empty() && create_new_scope {
                         let lines = self.get_scope_lines(&body);
 
                         for line in lines {
@@ -691,10 +715,10 @@ impl Formatter {
                         txt.push_str(&self.format(&body[0]));
                     }
 
-                    if body.is_empty() || *create_new_scope {
+                    if body.is_empty() || create_new_scope {
                         if !body.is_empty() {
                             txt.push_str("\n");
-                            if body.len() > 1 && *create_new_scope {
+                            if body.len() > 1 && create_new_scope {
                                 txt.push_str("}");
                             }
                         }

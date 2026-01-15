@@ -56,7 +56,7 @@ impl Parser {
                 is_temp: false,
                 define: false,
                 named: None,
-                create_new_scope: false,
+                create_new_scope: Some(false),
             },
             span,
         )

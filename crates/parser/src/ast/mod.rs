@@ -540,11 +540,16 @@ pub enum NodeType {
         value: PotentialDollarIdentifier,
         data: Option<Box<Node>>,
     },
+    ScopeAlias {
+        identifier: PotentialDollarIdentifier,
+        value: NamedScope,
+        create_new_scope: Option<bool>,
+    },
     ScopeDeclaration {
         body: Option<Vec<Node>>,
         named: Option<NamedScope>,
         is_temp: bool,
-        create_new_scope: bool,
+        create_new_scope: Option<bool>,
         define: bool,
     },
     MatchDeclaration {
@@ -665,7 +670,7 @@ impl NodeType {
             NodeType::ParenExpression { value } => value.node_type.unwrap(),
             NodeType::ScopeDeclaration {
                 body: Some(mut body),
-                create_new_scope: false,
+                create_new_scope: Some(false),
                 ..
             } if body.len() == 1 => body.remove(0).node_type.unwrap(),
             _ => self,

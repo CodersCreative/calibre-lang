@@ -596,7 +596,7 @@ impl MiddleEnvironment {
                                     Node::new_from_type(NodeType::ScopeDeclaration {
                                         body,
                                         is_temp: true,
-                                        create_new_scope: true,
+                                        create_new_scope: Some(true),
                                         define: false,
                                         named: None,
                                     }),
@@ -663,7 +663,7 @@ impl MiddleEnvironment {
                                     Some(lst)
                                 },
                                 is_temp: true,
-                                create_new_scope: true,
+                                create_new_scope: Some(true),
                                 define : false,
                                 named: None,
                             }),
@@ -740,7 +740,7 @@ impl MiddleEnvironment {
 
                                             Some(lst)
                                         },
-                                        create_new_scope: true,
+                                        create_new_scope: Some(true),
                                         define : false,
                                         named: None,
                                         is_temp: true,
@@ -750,7 +750,7 @@ impl MiddleEnvironment {
                                     String::from("anon_iter_list"),
                                 ).into())),
                             ]),
-                            create_new_scope: true,
+                            create_new_scope: Some(true),
                             define : false,
                             named: None,
                             is_temp: true,
@@ -841,6 +841,57 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
+            NodeType::ScopeAlias {
+                identifier,
+                value,
+                create_new_scope,
+            } => {
+                let identifer = self
+                    .resolve_dollar_ident_only(scope, &identifier)
+                    .unwrap()
+                    .text;
+                let name = self
+                    .resolve_dollar_ident_only(scope, &value.name)
+                    .unwrap()
+                    .text;
+
+                let scope_macro = self.resolve_macro(scope, &name).unwrap().clone();
+                let mut args = Vec::new();
+
+                let mut added = Vec::new();
+
+                for arg in value.args {
+                    let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();
+                    added.push(arg_text.text.clone());
+                    args.push(arg);
+                }
+
+                for arg in scope_macro.args {
+                    let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();
+                    if !added.contains(&arg_text) {
+                        added.push(arg_text.text.clone());
+                        args.push(arg);
+                    }
+                }
+
+                let scope_macro = ScopeMacro {
+                    name: name.clone(),
+                    args,
+                    create_new_scope: create_new_scope.unwrap_or(scope_macro.create_new_scope),
+                    ..scope_macro
+                };
+
+                self.scopes
+                    .get_mut(scope)
+                    .unwrap()
+                    .macros
+                    .insert(identifer, scope_macro);
+
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::EmptyLine,
+                    span: node.span,
+                })
+            }
             NodeType::ScopeDeclaration {
                 mut body,
                 named,
@@ -849,8 +900,8 @@ impl MiddleEnvironment {
                 define,
             } => {
                 let mut stmts = Vec::new();
-                let mut og_create_new_scope = create_new_scope;
-                let create_new_scope = create_new_scope || named.is_some();
+                let mut og_create_new_scope = create_new_scope.clone();
+                let create_new_scope = create_new_scope.unwrap_or(true) || named.is_some();
 
                 let new_scope = if create_new_scope && !define {
                     self.new_scope_from_parent_shallow(*scope)
@@ -871,7 +922,7 @@ impl MiddleEnvironment {
                         name: name.clone(),
                         args: named.args.clone(),
                         body,
-                        create_new_scope: og_create_new_scope,
+                        create_new_scope: og_create_new_scope.unwrap(),
                     };
 
                     self.scopes
@@ -904,8 +955,8 @@ impl MiddleEnvironment {
 
                     let scope_macro_args: Vec<(PotentialDollarIdentifier, Node)> = {
                         let scope_macro = self.resolve_macro(scope, &name).unwrap();
-                        if body.is_none() {
-                            og_create_new_scope = scope_macro.create_new_scope;
+                        if og_create_new_scope.is_none() {
+                            og_create_new_scope = Some(scope_macro.create_new_scope);
                         }
                         body = Some(scope_macro.body.clone());
                         scope_macro.args.clone()
@@ -968,7 +1019,7 @@ impl MiddleEnvironment {
                     }
                 }
 
-                if &new_scope != scope && !og_create_new_scope {
+                if &new_scope != scope && !og_create_new_scope.clone().unwrap() {
                     let (mappings, macros) = {
                         let scope = self.scopes.get(&new_scope).unwrap();
                         (scope.mappings.clone(), scope.macros.clone())
@@ -998,7 +1049,7 @@ impl MiddleEnvironment {
                             .filter(|x| x.node_type != MiddleNodeType::EmptyLine)
                             .collect(),
                         is_temp,
-                        create_new_scope: og_create_new_scope,
+                        create_new_scope: og_create_new_scope.unwrap(),
                     },
                     span: node.span,
                 })
@@ -1110,7 +1161,7 @@ impl MiddleEnvironment {
                                                 }),
                                                 main,
                                             ]),
-                                            create_new_scope: true,
+                                            create_new_scope: Some(true),
                                             define : false,
                                             named: None,
                                             is_temp: true
@@ -1166,7 +1217,7 @@ impl MiddleEnvironment {
                                                         main,
                                                     ]),
                                                     is_temp: true,
-                                                    create_new_scope: false,
+                                                    create_new_scope: Some(false),
                                                     named: None,
                                                     define: false
                                                 })}else{
@@ -1178,7 +1229,7 @@ impl MiddleEnvironment {
                                     }
                                 }
                             }
-                            Box::new(Node::new_from_type(NodeType::ScopeDeclaration { body: Some(lst), is_temp: true, create_new_scope: true, define: false, named: None }))
+                            Box::new(Node::new_from_type(NodeType::ScopeDeclaration { body: Some(lst), is_temp: true, create_new_scope: Some(true), define: false, named: None }))
                         },
                     })
                 )

@@ -2,6 +2,11 @@ type SmthType = struct {
 	txt : type Smth = struct {
 		txt : int,		
 	},
+
+	// Potential operator overload system based on ruby
+	/*<overload> "+" (self, value : int) -> int {
+		return self.txt.txt + value;
+	}*/
 }
 
 let => <mult_scope>[$ident = adder_int, $t = type : int] {{
@@ -11,8 +16,11 @@ let => <mult_scope>[$ident = adder_int, $t = type : int] {{
 	}
 }}
 
+let <float_mult_scope> => <mult_scope>[$ident = adder_float, $t = type:float];
+
 => <mult_scope>[];
-=> <mult_scope>[$ident = adder_float, $t = type : float];
+=> <float_mult_scope>[];
+=> <float_mult_scope>[$ident = adder_flt];
 
 const main = fn () => {
 	print(adder_float(90, 10.6));

@@ -220,7 +220,7 @@ impl Into<NodeType> for MiddleNodeType {
                 },
                 named: None,
                 is_temp,
-                create_new_scope,
+                create_new_scope: Some(create_new_scope),
                 define: false,
             },
             Self::FunctionDeclaration {
@@ -319,7 +319,7 @@ impl Into<NodeType> for MiddleNodeType {
                 },
                 named: None,
                 is_temp: true,
-                create_new_scope: false,
+                create_new_scope: Some(false),
                 define: false,
             },
             Self::Return { value: Some(value) } => NodeType::Return {

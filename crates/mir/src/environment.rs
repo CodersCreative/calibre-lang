@@ -603,7 +603,7 @@ impl MiddleEnvironment {
                                         body,
                                         named: None,
                                         is_temp: false,
-                                        create_new_scope: false,
+                                        create_new_scope: Some(false),
                                         define: false,
                                     },
                                     ..program
@@ -635,11 +635,7 @@ impl MiddleEnvironment {
 
                         let node = match (node.node_type.clone(), build_node) {
                             (
-                                MiddleNodeType::ScopeDeclaration {
-                                    mut body,
-                                    create_new_scope,
-                                    is_temp,
-                                },
+                                MiddleNodeType::ScopeDeclaration { mut body, .. },
                                 Some(build_node),
                             ) => MiddleNode {
                                 node_type: MiddleNodeType::ScopeDeclaration {
@@ -647,8 +643,8 @@ impl MiddleEnvironment {
                                         body.insert(0, build_node);
                                         body
                                     },
-                                    create_new_scope,
-                                    is_temp,
+                                    create_new_scope: true,
+                                    is_temp: false,
                                 },
                                 ..node
                             },
