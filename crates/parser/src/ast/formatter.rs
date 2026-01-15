@@ -92,6 +92,26 @@ impl Formatter {
 
         Ok(self.format(&ast))
     }
+
+    pub fn get_imports(&self, contents: String) -> Result<Vec<Node>, Box<dyn Error>> {
+        let mut tokenizer = Tokenizer::default();
+        let tokens = tokenizer.tokenize(contents)?;
+        let mut parser = Parser::default();
+        let NodeType::ScopeDeclaration {
+            body: Some(body), ..
+        } = parser.produce_ast(tokens).node_type
+        else {
+            unreachable!()
+        };
+
+        Ok(body
+            .into_iter()
+            .filter(|x| match x.node_type {
+                NodeType::ImportStatement { .. } => true,
+                _ => false,
+            })
+            .collect())
+    }
 }
 
 macro_rules! handle_comment {
@@ -257,7 +277,7 @@ impl Formatter {
                         txt.push_str(&format!(" : {}", name));
                     }
 
-                    txt.push_str(&self.format(&catch.body));
+                    txt.push_str(&format!(" {}", self.format(&catch.body)));
                 }
 
                 txt
@@ -282,11 +302,11 @@ impl Formatter {
                     operator,
                 } if left.node_type == identifier.node_type => format!(
                     "{} {}= {}",
-                    self.format(&*identifier),
+                    self.format(identifier),
                     operator,
-                    self.format(&*right)
+                    self.format(&right)
                 ),
-                _ => format!("{} = {}", self.format(&*identifier), self.format(&*value)),
+                _ => format!("{} = {}", self.format(identifier), self.format(value)),
             },
             NodeType::VariableDeclaration {
                 var_type,
@@ -299,33 +319,33 @@ impl Formatter {
                     txt.push_str(&format!(" : {}", self.fmt_potential_new_type(typ)));
                 }
 
-                txt.push_str(&format!(" = {}", self.format(&*value)));
+                txt.push_str(&format!(" = {}", self.format(value)));
 
                 txt
             }
             NodeType::AsExpression { value, data_type } => {
                 format!(
                     "{} as {}",
-                    self.format(&*value),
+                    self.format(value),
                     self.fmt_potential_new_type(data_type)
                 )
             }
             NodeType::InDeclaration { identifier, value } => {
-                format!("{} in {}", self.format(&*identifier), self.format(&*value))
+                format!("{} in {}", self.format(identifier), self.format(value))
             }
             NodeType::IsDeclaration { value, data_type } => {
                 format!(
                     "{} is {}",
-                    self.format(&*value),
+                    self.format(value),
                     self.fmt_potential_new_type(data_type)
                 )
             }
             NodeType::CallExpression(callee, args) => {
-                let mut txt = format!("{}(", self.format(&*callee));
+                let mut txt = format!("{}(", self.format(callee));
 
                 for arg in args {
                     if let Some(x) = &arg.1 {
-                        txt.push_str(&format!("{} = {}, ", self.format(&arg.0), self.format(&x)));
+                        txt.push_str(&format!("{} = {}, ", self.format(&arg.0), self.format(x)));
                     } else {
                         txt.push_str(&format!("{}, ", self.format(&arg.0)));
                     }
@@ -337,7 +357,7 @@ impl Formatter {
                 txt
             }
             NodeType::StructLiteral { identifier, value } => {
-                format!("{}{}", identifier, self.fmt_struct_literal(&value))
+                format!("{}{}", identifier, self.fmt_struct_literal(value))
             }
             NodeType::EnumExpression {
                 identifier,
@@ -358,9 +378,9 @@ impl Formatter {
             } => {
                 format!(
                     "{}..{}{}",
-                    self.format(&*from),
+                    self.format(from),
                     if *inclusive { "=" } else { "" },
-                    self.format(&*to)
+                    self.format(to)
                 )
             }
             NodeType::IterExpression {
@@ -373,19 +393,19 @@ impl Formatter {
                     format!(
                         "list<{}>[{} for {}",
                         self.fmt_potential_new_type(data_type),
-                        self.format(&*map),
-                        self.fmt_loop_type(&*loop_type)
+                        self.format(map),
+                        self.fmt_loop_type(loop_type)
                     )
                 } else {
                     format!(
                         "list[{} for {}",
-                        self.format(&*map),
-                        self.fmt_loop_type(&*loop_type)
+                        self.format(map),
+                        self.fmt_loop_type(loop_type)
                     )
                 };
 
                 if !conditionals.is_empty() {
-                    txt.push_str(&format!(" {}", self.fmt_conditionals(&conditionals)));
+                    txt.push_str(&format!(" {}", self.fmt_conditionals(conditionals)));
                 }
 
                 txt.push(']');
@@ -408,7 +428,7 @@ impl Formatter {
                 txt.push_str(" (");
 
                 let mut adjusted_params = parameters
-                    .get(0)
+                    .first()
                     .map(|x| vec![vec![x]])
                     .unwrap_or(Vec::new());
 
@@ -431,7 +451,7 @@ impl Formatter {
                     txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
 
                     if let Some(default) = &last.2 {
-                        txt.push_str(&format!(" = {}", self.format(&default)));
+                        txt.push_str(&format!(" = {}", self.format(default)));
                     }
 
                     txt.push_str(", ");
@@ -444,15 +464,15 @@ impl Formatter {
                     txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
                 }
 
-                txt.push_str(&self.format(&*body));
+                txt.push_str(&format!(" {}", self.format(body)));
 
                 txt
             }
             NodeType::LoopDeclaration { loop_type, body } => {
                 format!(
                     "for {} {}",
-                    self.fmt_loop_type(&*loop_type),
-                    self.format(&*body)
+                    self.fmt_loop_type(loop_type),
+                    self.format(body)
                 )
             }
             NodeType::IfStatement {
@@ -651,10 +671,10 @@ impl Formatter {
                 value,
                 create_new_scope,
             } => {
-                let mut txt = format!("let {} => <{}> [ ", identifier, value.name);
+                let mut txt = format!("let @{} => @{} [", identifier, value.name);
 
                 for arg in &value.args {
-                    txt.push_str(&format!("{} = {}, ", &arg.0, self.format(&arg.1)));
+                    txt.push_str(&format!("${} = {}, ", &arg.0, self.format(&arg.1)));
                 }
                 txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(']');
@@ -683,46 +703,60 @@ impl Formatter {
                 };
 
                 if let Some(named) = named {
-                    txt.push_str(&format!(" <{}> [ ", named.name));
+                    txt.push_str(&format!(" @{} [", named.name));
                     for arg in &named.args {
-                        txt.push_str(&format!("{} = {}, ", &arg.0, self.format(&arg.1)));
+                        txt.push_str(&format!("${} = {}, ", &arg.0, self.format(&arg.1)));
                     }
                     txt = txt.trim_end().trim_end_matches(",").to_string();
                     txt.push_str("]");
                 }
 
+                let mut empty_body = false;
+
                 if let Some(body) = &body {
-                    let create_new_scope = create_new_scope.clone().unwrap();
-                    if body.is_empty() || create_new_scope {
-                        txt.push_str(" {");
-                        if !body.is_empty() {
-                            if body.len() > 1 && create_new_scope {
+                    if !body.is_empty() {
+                        let create_new_scope = create_new_scope.clone().unwrap();
+                        if body.len() > 1 || create_new_scope {
+                            txt.push_str(" {");
+                            if !create_new_scope {
                                 txt.push_str("{");
                             }
                             txt.push_str("\n");
                         }
-                    }
 
-                    if !body.is_empty() && create_new_scope {
-                        let lines = self.get_scope_lines(&body);
+                        if body.len() > 1 || create_new_scope {
+                            let lines = self.get_scope_lines(&body);
 
-                        for line in lines {
-                            txt.push_str(&line);
+                            for line in lines {
+                                txt.push_str(&line);
+                            }
+
+                            txt = self.fmt_txt_with_tab(&txt, 1, false).trim_end().to_string();
+                        } else {
+                            txt.push_str(&format!(" {}", self.format(&body[0])));
                         }
 
-                        txt = self.fmt_txt_with_tab(&txt, 1, false).trim_end().to_string();
-                    } else if !body.is_empty() {
-                        txt.push_str(&self.format(&body[0]));
-                    }
-
-                    if body.is_empty() || create_new_scope {
-                        if !body.is_empty() {
+                        if body.len() > 1 || create_new_scope {
                             txt.push_str("\n");
-                            if body.len() > 1 && create_new_scope {
+                            if !create_new_scope {
                                 txt.push_str("}");
                             }
+                            txt.push_str("}");
                         }
-                        txt.push_str("}");
+                    } else {
+                        empty_body = true;
+                    }
+                } else {
+                    empty_body = true;
+                }
+
+                if empty_body {
+                    if let Some(create_new_scope) = create_new_scope {
+                        if *create_new_scope {
+                            txt.push_str(" {}");
+                        } else {
+                            txt.push_str(" {{}}");
+                        }
                     }
                 }
 

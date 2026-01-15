@@ -24,15 +24,9 @@ impl Parser {
     }
 
     pub fn expect_named_scope(&mut self) -> NamedScope {
-        let _ = self.expect_eat(
-            &TokenType::Comparison(Comparison::Lesser),
-            SyntaxErr::ExpectedChar('<'),
-        );
+        let _ = self.expect_eat(&TokenType::At, SyntaxErr::ExpectedChar('@'));
+
         let name = self.expect_potential_dollar_ident();
-        let _ = self.expect_eat(
-            &TokenType::Comparison(Comparison::Greater),
-            SyntaxErr::ExpectedChar('>'),
-        );
 
         let _ = self.expect_eat(
             &TokenType::Open(Bracket::Square),
@@ -61,15 +55,9 @@ impl Parser {
     }
 
     pub fn parse_scope_alias(&mut self) -> Node {
-        let open = self.expect_eat(
-            &TokenType::Comparison(Comparison::Lesser),
-            SyntaxErr::ExpectedChar('<'),
-        );
+        let open = self.expect_eat(&TokenType::At, SyntaxErr::ExpectedChar('@'));
         let identifier = self.expect_potential_dollar_ident();
-        let close = self.expect_eat(
-            &TokenType::Comparison(Comparison::Greater),
-            SyntaxErr::ExpectedChar('>'),
-        );
+        let close = *identifier.span();
 
         let _ = self.expect_eat(
             &TokenType::FatArrow,
@@ -114,7 +102,7 @@ impl Parser {
                 value,
                 create_new_scope,
             },
-            span: Span::new_from_spans(open.span, close.span),
+            span: Span::new_from_spans(open.span, close),
         }
     }
 
@@ -124,7 +112,7 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("=>")),
         );
 
-        let named = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
+        let named = if self.first().token_type == TokenType::At {
             Some(self.expect_named_scope())
         } else {
             None
@@ -221,7 +209,7 @@ impl Parser {
                 } else {
                     if self.first().token_type == TokenType::FatArrow {
                         return self.parse_scope_declaration(true);
-                    } else if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
+                    } else if self.first().token_type == TokenType::At {
                         return self.parse_scope_alias();
                     }
                     VarType::Immutable
