@@ -2,12 +2,11 @@ type SmthType = struct {
 	txt : type Smth = struct {
 		txt : int
 	}
-
-	// Potential operator overload system based on ruby
-	/*@overload "+" (self, value : int) -> int {
+} @overload {
+	fn "+" (self, value : int) -> int => {
 		return self.txt.txt + value;
-	}*/
-};
+	}
+}
 
 let => @mult_scope [$ident = adder_int, $t = type : int] const $ident = fn (first : dyn, second : $t) -> $t => {
 	print("multiplyer");

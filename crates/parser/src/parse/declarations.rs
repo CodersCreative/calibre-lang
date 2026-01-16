@@ -646,16 +646,16 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("fn")),
         );
 
-        let parameters = self.parse_key_type_list_ordered_with_ref(
-            TokenType::Open(Bracket::Paren),
-            TokenType::Close(Bracket::Paren),
-        );
-
         let is_async = self.first().token_type == TokenType::Async;
 
         if is_async {
             let _ = self.eat();
         }
+
+        let parameters = self.parse_key_type_list_ordered_with_ref(
+            TokenType::Open(Bracket::Paren),
+            TokenType::Close(Bracket::Paren),
+        );
 
         let return_type = if self.first().token_type == TokenType::FatArrow {
             ParserDataType::from(ParserInnerType::Null).into()

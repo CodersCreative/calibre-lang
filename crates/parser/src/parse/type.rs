@@ -1,6 +1,6 @@
 use crate::{
     Parser, SyntaxErr,
-    ast::{Node, NodeType, ObjectType, TypeDefType},
+    ast::{Node, NodeType, ObjectType, Overload, ParserDataType, ParserInnerType, TypeDefType},
     lexer::{Bracket, Span, TokenType},
 };
 
@@ -26,6 +26,75 @@ impl Parser {
         }
     }
 
+    pub fn parse_overloads(&mut self) -> Vec<Overload> {
+        if self.first().token_type != TokenType::Overload {
+            return Vec::new();
+        }
+
+        let _ = self.expect_eat(
+            &TokenType::Overload,
+            SyntaxErr::ExpectedKeyword(String::from("@overload")),
+        );
+
+        let _ = self.expect_eat(
+            &TokenType::Open(Bracket::Curly),
+            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
+        );
+
+        let mut overloads = Vec::new();
+
+        while self.first().token_type == TokenType::Func {
+            let open = self.expect_eat(
+                &TokenType::Func,
+                SyntaxErr::ExpectedKeyword(String::from("fn")),
+            );
+
+            let is_async = self.first().token_type == TokenType::Async;
+
+            if is_async {
+                let _ = self.eat();
+            }
+
+            let operator = self.expect_eat(
+                &TokenType::String,
+                SyntaxErr::ExpectedToken(TokenType::String),
+            );
+
+            let parameters = self.parse_key_type_list_ordered_with_ref(
+                TokenType::Open(Bracket::Paren),
+                TokenType::Close(Bracket::Paren),
+            );
+
+            let return_type = if self.first().token_type == TokenType::FatArrow {
+                ParserDataType::from(ParserInnerType::Null).into()
+            } else {
+                let _ = self.expect_eat(
+                    &TokenType::Arrow,
+                    SyntaxErr::ExpectedKeyword(String::from("->")),
+                );
+                self.parse_potential_new_type()
+                    .unwrap_or(ParserDataType::from(ParserInnerType::Null).into())
+            };
+
+            let block = self.parse_scope_declaration(false);
+
+            overloads.push(Overload {
+                operator: operator.into(),
+                parameters: parameters.into_iter().map(|x| (x.0, x.1)).collect(),
+                return_type,
+                body: Box::new(block),
+                is_async,
+            });
+        }
+
+        let _ = self.expect_eat(
+            &TokenType::Close(Bracket::Curly),
+            SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
+        );
+
+        overloads
+    }
+
     pub fn parse_type_decaration(&mut self) -> Node {
         let open = self.expect_eat(
             &TokenType::Type,
@@ -47,10 +116,13 @@ impl Parser {
 
         let object = self.parse_type_def_type();
 
+        let overloads = self.parse_overloads();
+
         Node::new(
             NodeType::TypeDeclaration {
                 identifier: identifier.clone(),
                 object,
+                overloads,
             },
             *identifier.span(),
         )

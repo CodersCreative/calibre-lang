@@ -7,8 +7,8 @@ pub mod r#type;
 use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{
-        LoopType, Node, NodeType, ParserDataType, ParserInnerType,
-        PotentialDollarIdentifier, PotentialNewType, RefMutability, comparison::Comparison,
+        LoopType, Node, NodeType, ParserDataType, ParserInnerType, PotentialDollarIdentifier,
+        PotentialNewType, RefMutability, comparison::Comparison,
     },
     lexer::{Bracket, Span, Token, TokenType},
 };
@@ -76,6 +76,7 @@ impl Parser {
             Some(PotentialNewType::NewType {
                 identifier,
                 type_def: self.parse_type_def_type(),
+                overloads: self.parse_overloads(),
             })
         } else if let Some(x) = self.parse_type() {
             Some(x.into())

@@ -130,6 +130,7 @@ pub enum PotentialNewType {
     NewType {
         identifier: PotentialDollarIdentifier,
         type_def: TypeDefType,
+        overloads: Vec<Overload>,
     },
     DataType(ParserDataType),
 }
@@ -137,10 +138,7 @@ pub enum PotentialNewType {
 impl PotentialNewType {
     pub fn span(&self) -> &Span {
         match self {
-            Self::NewType {
-                identifier,
-                type_def: _,
-            } => identifier.span(),
+            Self::NewType { identifier, .. } => identifier.span(),
             Self::DataType(x) => &x.span,
         }
     }
@@ -499,6 +497,21 @@ impl Display for CompStage {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Overload {
+    pub operator: ParserText,
+    pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
+    pub body: Box<Node>,
+    pub return_type: PotentialNewType,
+    pub is_async: bool,
+}
+
+impl Overload {
+    pub fn span(&self) -> &Span {
+        &self.operator.span
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     Break,
     Continue,
@@ -534,6 +547,7 @@ pub enum NodeType {
     TypeDeclaration {
         identifier: PotentialDollarIdentifier,
         object: TypeDefType,
+        overloads: Vec<Overload>,
     },
     EnumExpression {
         identifier: PotentialDollarIdentifier,

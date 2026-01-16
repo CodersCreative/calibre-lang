@@ -88,6 +88,7 @@ pub enum TokenType {
     Identifier,
     Equals,
     Dollar,
+    Overload,
     Open(Bracket),
     Close(Bracket),
     Colon,
@@ -225,6 +226,7 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
             String::from("|="),
             TokenType::BinaryAssign(BinaryOperator::BitOr),
         ),
+        (String::from("@overload"), TokenType::Overload),
         (String::from("&mut"), TokenType::RefMut),
         (String::from("=="), TokenType::Comparison(Comparison::Equal)),
         (

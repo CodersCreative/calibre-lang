@@ -254,6 +254,7 @@ impl MiddleEnvironment {
             PotentialNewType::NewType {
                 identifier,
                 type_def,
+                overloads,
             } => {
                 let identifier = self.resolve_dollar_ident_only(scope, &identifier).unwrap();
                 let new_name = get_disamubiguous_name(scope, Some(identifier.text.trim()), None);

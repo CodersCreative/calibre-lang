@@ -3,8 +3,8 @@ use std::error::Error;
 use crate::{
     Parser,
     ast::{
-        IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, ParserInnerType,
-        PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
+        IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, Overload,
+        ParserInnerType, PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -796,8 +796,19 @@ impl Formatter {
                 txt
             }
             NodeType::ParenExpression { value } => format!("({})", self.format(&*value)),
-            NodeType::TypeDeclaration { identifier, object } => {
-                format!("type {} = {}", identifier, self.fmt_type_def_type(&object))
+            NodeType::TypeDeclaration {
+                identifier,
+                object,
+                overloads,
+            } => {
+                let mut txt = format!(
+                    "type {} = {}{}",
+                    identifier,
+                    self.fmt_type_def_type(&object),
+                    self.fmt_overloads(&overloads)
+                );
+
+                txt
             }
         }
     }
@@ -826,6 +837,71 @@ impl Formatter {
             Some(Formatter::fmt_comments(comments))
         } else {
             None
+        }
+    }
+
+    fn fmt_overloads(&mut self, overloads: &[Overload]) -> String {
+        if !overloads.is_empty() {
+            let mut txt = String::from(" @overload {\n");
+
+            for func in overloads {
+                let func_txt = {
+                    let mut txt = if func.is_async {
+                        String::from("fn async")
+                    } else {
+                        String::from("fn")
+                    };
+
+                    txt.push_str(&format!(" \"{}\" (", func.operator));
+
+                    let mut adjusted_params = func
+                        .parameters
+                        .first()
+                        .map(|x| vec![vec![x]])
+                        .unwrap_or(Vec::new());
+
+                    for param in func.parameters.iter().skip(1) {
+                        let last = adjusted_params.last().unwrap().first().unwrap();
+                        if last.1 == param.1 {
+                            adjusted_params.last_mut().unwrap().push(param);
+                        } else {
+                            adjusted_params.push(vec![param]);
+                        }
+                    }
+
+                    for params in &adjusted_params {
+                        for id in params {
+                            txt.push_str(&format!("{} ", id.0));
+                        }
+
+                        let last = params.last().unwrap();
+
+                        txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
+
+                        txt.push_str(", ");
+                    }
+
+                    let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+
+                    txt.push_str(&format!(
+                        ") -> {} {}",
+                        self.fmt_potential_new_type(&func.return_type),
+                        self.format(&func.body)
+                    ));
+
+                    txt
+                };
+
+                let temp = handle_comment!(self.get_potential_comment(func.span()), func_txt);
+                txt.push_str(&format!("\n{};\n", self.fmt_txt_with_tab(&temp, 1, true)));
+            }
+
+            txt = txt.trim().to_string();
+
+            txt.push_str("\n}");
+            txt
+        } else {
+            String::new()
         }
     }
 
@@ -935,11 +1011,13 @@ impl Formatter {
             PotentialNewType::NewType {
                 identifier,
                 type_def,
+                overloads,
             } => {
                 format!(
-                    "type {} = {}",
+                    "type {} = {}{}",
                     identifier,
-                    self.fmt_type_def_type(&type_def)
+                    self.fmt_type_def_type(&type_def),
+                    self.fmt_overloads(&overloads)
                 )
             }
         }

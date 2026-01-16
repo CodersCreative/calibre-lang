@@ -314,7 +314,11 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::TypeDeclaration { identifier, object } => {
+            NodeType::TypeDeclaration {
+                identifier,
+                object,
+                overloads,
+            } => {
                 let identifier = self.resolve_dollar_ident_only(scope, &identifier).unwrap();
                 let object = self.type_def_type_into(scope, object);
                 let new_name = get_disamubiguous_name(scope, Some(identifier.text.trim()), None);
