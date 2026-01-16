@@ -94,7 +94,7 @@ impl Parser {
         }
     }
 
-    fn expect_type(&mut self) -> ParserDataType {
+    fn expect_type(&mut self) -> ParserDataType<Node> {
         if let Some(x) = self.parse_type() {
             x
         } else {
@@ -216,7 +216,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_type(&mut self) -> Option<ParserDataType> {
+    pub fn parse_type(&mut self) -> Option<ParserDataType<Node>> {
         let t = self.first().clone();
         let mutability = RefMutability::from(t.token_type.clone());
 
@@ -280,7 +280,7 @@ impl Parser {
                 false
             };
 
-            let args: Vec<ParserDataType> = self
+            let args: Vec<ParserDataType<Node>> = self
                 .parse_type_list(
                     TokenType::Open(Bracket::Paren),
                     TokenType::Close(Bracket::Paren),

@@ -69,14 +69,14 @@ pub enum LoopType {
     Loop,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ParserDataType {
-    pub data_type: ParserInnerType,
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParserDataType<T> {
+    pub data_type: ParserInnerType<T>,
     pub span: Span,
 }
 
-impl From<ParserInnerType> for ParserDataType {
-    fn from(value: ParserInnerType) -> Self {
+impl<T> From<ParserInnerType<T>> for ParserDataType<T> {
+    fn from(value: ParserInnerType<T>) -> Self {
         Self {
             data_type: value,
             span: Span::default(),
@@ -84,20 +84,20 @@ impl From<ParserInnerType> for ParserDataType {
     }
 }
 
-impl ParserDataType {
-    pub fn new(data_type: ParserInnerType, span: Span) -> Self {
+impl<T> ParserDataType<T> {
+    pub fn new(data_type: ParserInnerType<T>, span: Span) -> Self {
         Self { data_type, span }
     }
 }
-impl Deref for ParserDataType {
-    type Target = ParserInnerType;
+impl<T> Deref for ParserDataType<T> {
+    type Target = ParserInnerType<T>;
     fn deref(&self) -> &Self::Target {
         &self.data_type
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ParserInnerType {
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParserInnerType<T> {
     Float,
     Int,
     Dynamic,
@@ -105,24 +105,28 @@ pub enum ParserInnerType {
     Bool,
     Str,
     Char,
-    Tuple(Vec<ParserDataType>),
-    List(Box<ParserDataType>),
-    Scope(Vec<ParserDataType>),
+    Tuple(Vec<ParserDataType<T>>),
+    List(Box<ParserDataType<T>>),
+    Scope(Vec<ParserDataType<T>>),
     Range,
     DollarIdentifier(String),
-    Option(Box<ParserDataType>),
+    Option(Box<ParserDataType<T>>),
     Result {
-        ok: Box<ParserDataType>,
-        err: Box<ParserDataType>,
+        ok: Box<ParserDataType<T>>,
+        err: Box<ParserDataType<T>>,
     },
     Function {
-        return_type: Box<ParserDataType>,
-        parameters: Vec<ParserDataType>,
+        return_type: Box<ParserDataType<T>>,
+        parameters: Vec<ParserDataType<T>>,
         is_async: bool,
     },
-    Ref(Box<ParserDataType>, RefMutability),
+    Ref(Box<ParserDataType<T>>, RefMutability),
     Struct(String),
-    NativeFunction(Box<ParserDataType>),
+    Comp {
+        stage: CompStage,
+        body: Box<T>,
+    },
+    NativeFunction(Box<ParserDataType<T>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -132,7 +136,16 @@ pub enum PotentialNewType {
         type_def: TypeDefType,
         overloads: Vec<Overload>,
     },
-    DataType(ParserDataType),
+    DataType(ParserDataType<Node>),
+}
+
+impl Display for PotentialNewType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DataType(x) => write!(f, "{}", x),
+            _ => unimplemented!(),
+        }
+    }
 }
 
 impl PotentialNewType {
@@ -144,19 +157,19 @@ impl PotentialNewType {
     }
 }
 
-impl From<ParserDataType> for PotentialNewType {
-    fn from(value: ParserDataType) -> Self {
+impl From<ParserDataType<Node>> for PotentialNewType {
+    fn from(value: ParserDataType<Node>) -> Self {
         Self::DataType(value)
     }
 }
 
-impl Display for ParserDataType {
+impl Display for ParserDataType<Node> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.data_type)
     }
 }
 
-impl Display for ParserInnerType {
+impl Display for ParserInnerType<Node> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Float => write!(f, "float"),
@@ -229,11 +242,12 @@ impl Display for ParserInnerType {
 
                 write!(f, "{}", txt)
             }
+            Self::Comp { stage, body } => write!(f, "comp, {} {}", stage, body),
         }
     }
 }
 
-impl FromStr for ParserInnerType {
+impl<T> FromStr for ParserInnerType<T> {
     type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {

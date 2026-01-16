@@ -3,6 +3,7 @@ use crate::runtime::scope::InterpreterEnvironment;
 use calibre_common::environment::InterpreterFrom;
 use calibre_common::errors::ScopeErr;
 use calibre_mir::environment::MiddleTypeDefType;
+use calibre_mir_ty::MiddleNode;
 use calibre_parser::ast::{ObjectMap, ParserDataType, ParserInnerType};
 use helper::Block;
 use std::{collections::HashMap, f64::consts::PI, fmt::Debug, rc::Rc};
@@ -95,12 +96,12 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
     }
 }
 
-impl InterpreterFrom<ParserDataType> for RuntimeType {
+impl InterpreterFrom<ParserDataType<MiddleNode>> for RuntimeType {
     type Interpreter = InterpreterEnvironment;
     fn interpreter_from(
         env: &Self::Interpreter,
         scope: &u64,
-        value: ParserDataType,
+        value: ParserDataType<MiddleNode>,
     ) -> Result<Self, ScopeErr> {
         Ok(match value.data_type {
             ParserInnerType::Null | ParserInnerType::DollarIdentifier(_) => Self::Null,
@@ -158,6 +159,7 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
             ParserInnerType::Ref(x, _) => {
                 Self::Ref(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
             }
+            ParserInnerType::Comp { .. } => unreachable!(),
         })
     }
 }
@@ -203,7 +205,7 @@ impl Into<RuntimeType> for &RuntimeValue {
 pub enum RuntimeValue {
     Null,
     Float(f64),
-    Type(ParserDataType),
+    Type(RuntimeType),
     Int(i64),
     Range(i64, i64),
     Bool(bool),
@@ -257,7 +259,7 @@ impl ToString for RuntimeValue {
             Self::Result(x, _) => format!("{:?}", x),
             Self::Str(x) => x.to_string(),
             Self::Char(x) => x.to_string(),
-            Self::Type(x) => format!("Type {}", x),
+            Self::Type(x) => format!("Type {:?}", x),
             Self::Function {
                 parameters,
                 body: _,

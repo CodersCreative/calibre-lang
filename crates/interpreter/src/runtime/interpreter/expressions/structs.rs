@@ -16,7 +16,7 @@ impl InterpreterEnvironment {
     pub fn evaluate_list_expression(
         &mut self,
         scope: &u64,
-        data_type: ParserDataType,
+        data_type: ParserDataType<MiddleNode>,
         vals: Vec<MiddleNode>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut values = Vec::new();

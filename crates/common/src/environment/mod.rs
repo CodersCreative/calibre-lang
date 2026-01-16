@@ -2,6 +2,7 @@ pub mod objects;
 pub mod variables;
 
 use calibre_mir::environment::{MiddleEnvironment, MiddleObject};
+use calibre_mir_ty::MiddleNode;
 use calibre_parser::{
     ast::{ObjectMap, ParserDataType, VarType},
     lexer::Location,
@@ -19,23 +20,26 @@ pub trait FromParser: Sized {
     fn from_parser_type<I, T: RuntimeValue>(
         env: &I,
         scope: &u64,
-        value: ParserDataType,
+        value: ParserDataType<MiddleNode>,
     ) -> Result<Self, ScopeErr>;
 }
 
-pub trait RuntimeType: PartialEq + Clone + Debug + InterpreterFrom<ParserDataType> {}
+pub trait RuntimeType:
+    PartialEq + Clone + Debug + InterpreterFrom<ParserDataType<MiddleNode>>
+{
+}
 pub trait RuntimeValue: PartialEq + Clone + Debug {
     fn string(txt: String) -> Self;
     fn natives() -> HashMap<String, Self>;
     fn constants() -> HashMap<String, Self>;
 }
 
-impl<U: RuntimeType> InterpreterFrom<ObjectMap<ParserDataType>> for ObjectMap<U> {
+impl<U: RuntimeType> InterpreterFrom<ObjectMap<ParserDataType<MiddleNode>>> for ObjectMap<U> {
     type Interpreter = U::Interpreter;
     fn interpreter_from(
         env: &Self::Interpreter,
         scope: &u64,
-        value: ObjectMap<ParserDataType>,
+        value: ObjectMap<ParserDataType<MiddleNode>>,
     ) -> Result<Self, ScopeErr> {
         let mut map: HashMap<String, U> = HashMap::new();
         for (k, v) in value.0 {

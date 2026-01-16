@@ -35,7 +35,7 @@ pub enum MiddleErr {
     #[error("Enum Variant does not exist : {0:?}")]
     EnumVariant(String),
     #[error("Cannot perform enum style pattern matching on type : {0}")]
-    CantMatch(ParserDataType),
+    CantMatch(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Miette(#[from] ReportWrapper),

@@ -36,7 +36,9 @@ impl InterpreterFrom<RuntimeValue> for MiddleNodeType {
         match value {
             RuntimeValue::Null => Ok(MiddleNodeType::EmptyLine),
             RuntimeValue::Float(x) => Ok(MiddleNodeType::FloatLiteral(x)),
-            RuntimeValue::Type(x) => Ok(MiddleNodeType::DataType { data_type: x }),
+            RuntimeValue::Type(x) => Ok(MiddleNodeType::DataType {
+                data_type: ParserDataType::interpreter_from(env, scope, x)?,
+            }),
             RuntimeValue::Int(x) => Ok(MiddleNodeType::IntLiteral(x)),
             RuntimeValue::Range(from, to) => Ok(MiddleNodeType::RangeDeclaration {
                 from: Box::new(MiddleNode::new_from_type(MiddleNodeType::IntLiteral(from))),
@@ -151,7 +153,7 @@ impl InterpreterFrom<RuntimeValue> for MiddleNodeType {
     }
 }
 
-impl InterpreterFrom<RuntimeType> for ParserDataType {
+impl InterpreterFrom<RuntimeType> for ParserDataType<MiddleNode> {
     type Interpreter = InterpreterEnvironment;
     fn interpreter_from(
         env: &Self::Interpreter,
@@ -165,7 +167,7 @@ impl InterpreterFrom<RuntimeType> for ParserDataType {
     }
 }
 
-impl InterpreterFrom<RuntimeType> for ParserInnerType {
+impl InterpreterFrom<RuntimeType> for ParserInnerType<MiddleNode> {
     type Interpreter = InterpreterEnvironment;
     fn interpreter_from(
         env: &Self::Interpreter,

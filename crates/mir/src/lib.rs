@@ -164,17 +164,16 @@ impl MiddleEnvironment {
                     span: node.span,
                 }),
                 IfComparisonType::IfLet { value, pattern } => {
-                    let value_type = self
-                        .resolve_type_from_node(scope, &value)
-                        .unwrap_or(ParserDataType::new(
-                            ParserInnerType::Dynamic,
-                            Span::default(),
-                        ))
-                        .into();
-                    let then_type = self
-                        .resolve_type_from_node(scope, &then)
-                        .unwrap_or(ParserDataType::from(ParserInnerType::Null))
-                        .into();
+                    let value_type =
+                        calibre_mir_ty::middle_data_type_to_new_type(
+                            self.resolve_type_from_node(scope, &value).unwrap_or(
+                                ParserDataType::new(ParserInnerType::Dynamic, Span::default()),
+                            ),
+                        );
+                    let then_type = calibre_mir_ty::middle_data_type_to_new_type(
+                        self.resolve_type_from_node(scope, &then)
+                            .unwrap_or(ParserDataType::from(ParserInnerType::Null)),
+                    );
                     Ok(MiddleNode {
                         node_type: MiddleNodeType::CallExpression(
                             Box::new(
@@ -444,13 +443,13 @@ impl MiddleEnvironment {
             }
             NodeType::Try { value, catch } => {
                 let resolved_type = self.resolve_type_from_node(scope, &value);
-                let value_type = self
-                    .resolve_type_from_node(scope, &value)
-                    .unwrap_or(ParserDataType::new(
-                        ParserInnerType::Dynamic,
-                        Span::default(),
-                    ))
-                    .into();
+                let value_type = calibre_mir_ty::middle_data_type_to_new_type(
+                    self.resolve_type_from_node(scope, &value)
+                        .unwrap_or(ParserDataType::new(
+                            ParserInnerType::Dynamic,
+                            Span::default(),
+                        )),
+                );
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::CallExpression(
@@ -520,11 +519,11 @@ impl MiddleEnvironment {
                                             },
                                         ]
                                     },
-                                    return_type: match resolved_type {
+                                    return_type: calibre_mir_ty::middle_data_type_to_new_type(match resolved_type {
                                         Some(ParserDataType { data_type: ParserInnerType::Result { ok: x, err: _ }, span: _ }) | Some(ParserDataType { data_type: ParserInnerType::Option(x), span: _ }) => *x,
                                         Some(x) => x,
                                         _ => ParserDataType::from(ParserInnerType::Null),
-                                    }.into(),
+                                    }),
                                     is_async: false,
                                 },
                                 span: node.span,
@@ -702,7 +701,7 @@ impl MiddleEnvironment {
                                         Vec::new(),
                                     ))),
                                     data_type: if let Some(typ) = resolved_data_type {
-                                        Some(ParserDataType::from(ParserInnerType::List(Box::new(typ))).into())
+                                        Some(calibre_mir_ty::middle_data_type_to_new_type(ParserDataType::from(ParserInnerType::List(Box::new(typ)))))
                                     }else{
                                         None
                                     },
@@ -821,8 +820,12 @@ impl MiddleEnvironment {
                             &func.node_type
                         {
                             if parameters.len() > 0 {
-                                let new_data_type =
-                                    self.resolve_data_type(scope, parameters[0].1.clone());
+                                let new_data_type = self.resolve_data_type(
+                                    scope,
+                                    calibre_mir_ty::middle_data_type_to_node(
+                                        parameters[0].1.clone(),
+                                    ),
+                                );
 
                                 if let ParserInnerType::Struct(obj) = new_data_type.data_type {
                                     if obj == resolved.text {
@@ -1117,9 +1120,11 @@ impl MiddleEnvironment {
                 return_type,
                 is_async,
             } => {
-                let resolved_data_type = self
-                    .resolve_potential_new_type(scope, parameters.1.clone())
-                    .data_type;
+                let resolved_data_type =
+                    self.resolve_potential_new_type(scope, parameters.1.clone());
+                let resolved_node_type =
+                    calibre_mir_ty::middle_data_type_to_node(resolved_data_type.clone());
+
                 self.evaluate(scope, Node::new_from_type(NodeType::FunctionDeclaration{
                         parameters: vec![(parameters.0.clone(), parameters.1.clone(), parameters.2.map(|x| *x))],
                         return_type,
@@ -1127,8 +1132,8 @@ impl MiddleEnvironment {
                         body: {
                             let mut lst = Vec::new();
                             let mut reference = None;
-                            let enum_object = if let Some(x) = self.objects.get(resolved_data_type.to_string().replace("mut ", "").replace("&", "").trim()) {
-                                match (resolved_data_type.to_string().contains("mut "), resolved_data_type.to_string().contains("&")) {
+                            let enum_object = if let Some(x) = self.objects.get(resolved_node_type.to_string().replace("mut ", "").replace("&", "").trim()) {
+                                match (parameters.1.to_string().contains("mut "), resolved_node_type.to_string().contains("&")) {
                                     (true, true) => reference = Some(RefMutability::MutRef),
                                     (true, false) => reference = Some(RefMutability::MutValue),
                                     (false, true) => reference = Some(RefMutability::Ref),
@@ -1175,7 +1180,7 @@ impl MiddleEnvironment {
                                         let value = self.resolve_dollar_ident_only(scope, &value).unwrap();
                                         let index : i64 = match value.text.trim() {
                                             _ if enum_object.is_some() => {
-                                                let Some(object) = enum_object else {return Err(MiddleErr::CantMatch(resolved_data_type.into()));};
+                                                let Some(object) = enum_object else {return Err(MiddleErr::CantMatch(calibre_mir_ty::middle_data_type_to_node(resolved_data_type).to_string()));};
                                                 let Some(index) = object.iter().position(|x| x.0.text == value.text) else {return Err(MiddleErr::EnumVariant(value.text));};
                                                 index as i64
                                             }
@@ -1183,7 +1188,7 @@ impl MiddleEnvironment {
                                             "Err" => 1,
                                             "Some" => 0,
                                             "None" => 1,
-                                            _ => return Err(MiddleErr::CantMatch(resolved_data_type.into())),
+                                            _ => return Err(MiddleErr::CantMatch(calibre_mir_ty::middle_data_type_to_node(resolved_data_type).to_string())),
                                         };
 
                                         lst.push(Node::new_from_type(NodeType::IfStatement {

@@ -15,9 +15,9 @@ use crate::errors::MiddleErr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MiddleTypeDefType {
-    Enum(Vec<(ParserText, Option<ParserDataType>)>),
-    Struct(ObjectMap<ParserDataType>),
-    NewType(ParserDataType),
+    Enum(Vec<(ParserText, Option<ParserDataType<MiddleNode>>)>),
+    Struct(ObjectMap<ParserDataType<MiddleNode>>),
+    NewType(ParserDataType<MiddleNode>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,7 +30,7 @@ pub struct MiddleObject {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleVariable {
-    pub data_type: ParserDataType,
+    pub data_type: ParserDataType<MiddleNode>,
     pub var_type: VarType,
     pub location: Option<Location>,
 }
@@ -193,6 +193,70 @@ impl MiddleEnvironment {
         })
     }
 
+    pub fn resolve_comp_data_type(
+        &mut self,
+        scope: &u64,
+        data_type: ParserDataType<Node>,
+    ) -> ParserDataType<MiddleNode> {
+        ParserDataType {
+            data_type: match data_type.data_type {
+                ParserInnerType::Float => ParserInnerType::Float,
+                ParserInnerType::Int => ParserInnerType::Int,
+                ParserInnerType::Dynamic => ParserInnerType::Dynamic,
+                ParserInnerType::Null => ParserInnerType::Null,
+                ParserInnerType::Bool => ParserInnerType::Bool,
+                ParserInnerType::Str => ParserInnerType::Str,
+                ParserInnerType::Char => ParserInnerType::Char,
+                ParserInnerType::Range => ParserInnerType::Range,
+                ParserInnerType::Tuple(x) => ParserInnerType::Tuple(
+                    x.into_iter()
+                        .map(|x| self.resolve_comp_data_type(scope, x))
+                        .collect(),
+                ),
+                ParserInnerType::List(x) => {
+                    ParserInnerType::List(Box::new(self.resolve_comp_data_type(scope, *x)))
+                }
+                ParserInnerType::Scope(x) => ParserInnerType::Scope(
+                    x.into_iter()
+                        .map(|x| self.resolve_comp_data_type(scope, x))
+                        .collect(),
+                ),
+                ParserInnerType::DollarIdentifier(x) => ParserInnerType::DollarIdentifier(x),
+                ParserInnerType::Option(x) => {
+                    ParserInnerType::Option(Box::new(self.resolve_comp_data_type(scope, *x)))
+                }
+                ParserInnerType::Result { ok, err } => ParserInnerType::Result {
+                    ok: Box::new(self.resolve_comp_data_type(scope, *ok)),
+                    err: Box::new(self.resolve_comp_data_type(scope, *err)),
+                },
+                ParserInnerType::Function {
+                    return_type,
+                    parameters,
+                    is_async,
+                } => ParserInnerType::Function {
+                    return_type: Box::new(self.resolve_comp_data_type(scope, *return_type)),
+                    parameters: parameters
+                        .into_iter()
+                        .map(|x| self.resolve_comp_data_type(scope, x))
+                        .collect(),
+                    is_async,
+                },
+                ParserInnerType::Ref(x, refmut) => {
+                    ParserInnerType::Ref(Box::new(self.resolve_comp_data_type(scope, *x)), refmut)
+                }
+                ParserInnerType::Struct(x) => ParserInnerType::Struct(x),
+                ParserInnerType::NativeFunction(x) => ParserInnerType::NativeFunction(Box::new(
+                    self.resolve_comp_data_type(scope, *x),
+                )),
+                ParserInnerType::Comp { stage, body } => ParserInnerType::Comp {
+                    stage,
+                    body: Box::new(self.evaluate(scope, *body.clone()).unwrap()),
+                },
+            },
+            span: data_type.span,
+        }
+    }
+
     pub fn resolve_potential_dollar_ident(
         &self,
         scope: &u64,
@@ -248,7 +312,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         data_type: PotentialNewType,
-    ) -> ParserDataType {
+    ) -> ParserDataType<MiddleNode> {
         match data_type {
             PotentialNewType::DataType(x) => self.resolve_data_type(scope, x),
             PotentialNewType::NewType {
@@ -279,7 +343,11 @@ impl MiddleEnvironment {
         }
     }
 
-    pub fn resolve_data_type(&mut self, scope: &u64, data_type: ParserDataType) -> ParserDataType {
+    pub fn resolve_data_type(
+        &mut self,
+        scope: &u64,
+        data_type: ParserDataType<Node>,
+    ) -> ParserDataType<MiddleNode> {
         match data_type.data_type {
             ParserInnerType::Tuple(x) => {
                 let mut lst = Vec::new();
@@ -290,7 +358,7 @@ impl MiddleEnvironment {
 
                 ParserDataType {
                     data_type: ParserInnerType::Tuple(lst),
-                    ..data_type
+                    span: data_type.span,
                 }
             }
             ParserInnerType::Struct(x) => ParserDataType {
@@ -299,7 +367,7 @@ impl MiddleEnvironment {
                         .map(|x| x.to_string())
                         .unwrap_or(x),
                 ),
-                ..data_type
+                span: data_type.span,
             },
             ParserInnerType::Function {
                 return_type,
@@ -319,29 +387,29 @@ impl MiddleEnvironment {
                     },
                     is_async,
                 },
-                ..data_type
+                span: data_type.span,
             },
             ParserInnerType::Ref(d_type, mutability) => ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_data_type(scope, *d_type)),
                     mutability,
                 ),
-                ..data_type
+                span: data_type.span,
             },
             ParserInnerType::List(x) => ParserDataType {
                 data_type: ParserInnerType::List(Box::new(self.resolve_data_type(scope, *x))),
-                ..data_type
+                span: data_type.span,
             },
             ParserInnerType::Option(x) => ParserDataType {
                 data_type: ParserInnerType::Option(Box::new(self.resolve_data_type(scope, *x))),
-                ..data_type
+                span: data_type.span,
             },
             ParserInnerType::Result { ok, err } => ParserDataType {
                 data_type: ParserInnerType::Result {
                     err: Box::new(self.resolve_data_type(scope, *err)),
                     ok: Box::new(self.resolve_data_type(scope, *ok)),
                 },
-                ..data_type
+                span: data_type.span,
             },
             ParserInnerType::Scope(x) => {
                 let mut lst = Vec::new();
@@ -352,7 +420,7 @@ impl MiddleEnvironment {
 
                 ParserDataType {
                     data_type: ParserInnerType::Scope(lst),
-                    ..data_type
+                    span: data_type.span,
                 }
             }
             ParserInnerType::DollarIdentifier(x) => {
@@ -364,7 +432,7 @@ impl MiddleEnvironment {
 
                 self.resolve_potential_new_type(scope, data_type.clone())
             }
-            _ => data_type,
+            _ => self.resolve_comp_data_type(scope, data_type),
         }
     }
 
@@ -700,7 +768,11 @@ impl MiddleEnvironment {
         todo!()
     }
 
-    pub fn resolve_type_from_node(&mut self, scope: &u64, node: &Node) -> Option<ParserDataType> {
+    pub fn resolve_type_from_node(
+        &mut self,
+        scope: &u64,
+        node: &Node,
+    ) -> Option<ParserDataType<MiddleNode>> {
         let typ = match &node.node_type {
             NodeType::Break
             | NodeType::Continue
@@ -933,7 +1005,7 @@ impl MiddleEnvironment {
         };
 
         if let Some(typ) = typ {
-            Some(self.resolve_data_type(scope, typ))
+            Some(self.resolve_data_type(scope, calibre_mir_ty::middle_data_type_to_node(typ)))
         } else {
             None
         }

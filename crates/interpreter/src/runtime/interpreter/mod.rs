@@ -227,7 +227,9 @@ impl InterpreterEnvironment {
             MiddleNodeType::LoopDeclaration { body, state } => {
                 self.evaluate_loop_declaration(scope, state.map(|x| *x), *body)
             }
-            MiddleNodeType::DataType { data_type } => Ok(RuntimeValue::Type(data_type)),
+            MiddleNodeType::DataType { data_type } => Ok(RuntimeValue::Type(
+                RuntimeType::interpreter_from(self, scope, data_type)?,
+            )),
             MiddleNodeType::Comp {
                 stage: CompStage::Wildcard,
                 body,

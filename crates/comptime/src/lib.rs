@@ -2,7 +2,7 @@ use calibre_common::environment::InterpreterFrom;
 use calibre_interpreter::runtime::{interpreter::InterpreterErr, scope::InterpreterEnvironment};
 use calibre_mir::environment::MiddleEnvironment;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
-use calibre_parser::ast::{CompStage, ObjectMap};
+use calibre_parser::ast::{CompStage, ObjectMap, ParserDataType, ParserInnerType};
 use std::collections::HashMap;
 
 pub struct ComptimeEnvironment {
@@ -55,6 +55,39 @@ impl ComptimeEnvironment {
                 stage += 1;
             }
         }
+    }
+
+    fn evaluate_data_type(
+        &mut self,
+        node: ParserDataType<MiddleNode>,
+        stage: usize,
+    ) -> Result<ParserDataType<MiddleNode>, InterpreterErr> {
+        Ok(ParserDataType {
+            data_type: match node.data_type {
+                ParserInnerType::Comp { stage: s, body } => {
+                    let s = if let CompStage::Specific(x) = s { x } else { 0 };
+
+                    if stage >= s {
+                        self.changed_this_stage += 1;
+                        let scope = self.scope.clone();
+                        let result = self.interpreter.evaluate(&scope, *body)?;
+                        let node = MiddleNodeType::interpreter_from(&self.interpreter, &0, result)?;
+
+                        match node {
+                            MiddleNodeType::DataType { data_type } => data_type.data_type,
+                            _ => panic!(),
+                        }
+                    } else {
+                        ParserInnerType::Comp {
+                            stage: CompStage::Specific(s),
+                            body,
+                        }
+                    }
+                }
+                _ => node.data_type,
+            },
+            ..node
+        })
     }
 
     fn evaluate(&mut self, node: MiddleNode, stage: usize) -> Result<MiddleNode, InterpreterErr> {
