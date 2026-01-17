@@ -13,7 +13,7 @@ def matmul(a, b):
     return c
 
 def main():
-    n = 100
+    n = 40;
     if (len(sys.argv) > 1): n = int(sys.argv[1])
     tmp = 1. / n / n
     a = [[tmp * (i - j) * (i + j) for j in range(n)] for i in range(n)]

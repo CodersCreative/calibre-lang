@@ -20,7 +20,11 @@ impl Parser {
     }
 
     fn second(&self) -> &Token {
-        self.nth(1).unwrap()
+        if let Some(x) = self.nth(1) {
+            x
+        } else {
+            panic!("{:?}", self.errors);
+        }
     }
 
     fn nth(&self, i: usize) -> Option<&Token> {
@@ -47,7 +51,7 @@ impl Parser {
         });
 
         self.errors.push(ParserError::Syntax {
-            input,
+            input: input.trim().to_string(),
             err,
             span: prev.span,
             token: Some((0, prev.value.len() - 1)),

@@ -16,6 +16,7 @@ impl InterpreterEnvironment {
             return Err(ScopeErr::Variable(name.to_string()));
         })
     }
+
     pub fn force_var(
         &mut self,
         scope: &u64,
@@ -23,7 +24,6 @@ impl InterpreterEnvironment {
         value: Variable<RuntimeValue>,
     ) -> Result<RuntimeValue, ScopeErr> {
         let typ = (&value.value).into();
-
         let value = self.convert_runtime_var_into_saveable(value);
 
         self.scopes
@@ -31,6 +31,7 @@ impl InterpreterEnvironment {
             .unwrap()
             .variables
             .push(key.clone());
+
         self.variables.insert(key.clone(), value);
         Ok(RuntimeValue::Ref(key, typ))
     }
@@ -41,79 +42,47 @@ impl InterpreterEnvironment {
     ) -> Variable<RuntimeValue> {
         let var_type = value.var_type.clone();
 
-        fn unwrap_list(env: &InterpreterEnvironment, list: Vec<RuntimeValue>) -> Vec<RuntimeValue> {
-            list.into_iter()
-                .map(|v| match v {
-                    RuntimeValue::Ref(pointer, _) => {
-                        let inner = env.variables.get(&pointer).unwrap().clone();
-                        unwrap_runtime_value(env, inner.value)
-                    }
-                    other => unwrap_runtime_value(env, other),
-                })
-                .collect()
-        }
-
-        fn unwrap_map(
-            env: &InterpreterEnvironment,
-            map: HashMap<String, RuntimeValue>,
-        ) -> HashMap<String, RuntimeValue> {
-            map.into_iter()
-                .map(|(k, v)| {
-                    let val = match v {
-                        RuntimeValue::Ref(pointer, _) => {
-                            let inner = env.variables.get(&pointer).unwrap().clone();
-                            unwrap_runtime_value(env, inner.value)
-                        }
-                        other => unwrap_runtime_value(env, other),
-                    };
-                    (k, val)
-                })
-                .collect()
-        }
-
-        fn unwrap_singular(env: &InterpreterEnvironment, value: RuntimeValue) -> RuntimeValue {
-            match value {
-                RuntimeValue::Ref(pointer, _) => {
-                    let inner = env.variables.get(&pointer).unwrap().clone();
-                    unwrap_runtime_value(env, inner.value)
-                }
-                other => unwrap_runtime_value(env, other),
-            }
-        }
-
         fn unwrap_runtime_value(env: &InterpreterEnvironment, value: RuntimeValue) -> RuntimeValue {
             match value {
-                RuntimeValue::Aggregate(x, ObjectMap(map)) => {
-                    RuntimeValue::Aggregate(x, ObjectMap(unwrap_map(env, map)))
-                }
-                RuntimeValue::Enum(x, y, Some(data)) => {
-                    RuntimeValue::Enum(x, y, Some(Box::new(unwrap_singular(env, *data))))
-                }
-                RuntimeValue::Option(Some(data), typ) => {
-                    RuntimeValue::Option(Some(Box::new(unwrap_singular(env, *data))), typ)
-                }
-                RuntimeValue::Result(Ok(data), typ) => {
-                    RuntimeValue::Result(Ok(Box::new(unwrap_singular(env, *data))), typ)
-                }
-                RuntimeValue::Result(Err(data), typ) => {
-                    RuntimeValue::Result(Err(Box::new(unwrap_singular(env, *data))), typ)
-                }
-                RuntimeValue::List { data, data_type } => RuntimeValue::List {
-                    data: unwrap_list(env, data),
-                    data_type,
-                },
                 RuntimeValue::Ref(pointer, _) => {
                     let inner = env.variables.get(&pointer).unwrap().clone();
                     unwrap_runtime_value(env, inner.value)
+                }
+                RuntimeValue::Aggregate(x, ObjectMap(map)) => {
+                    let new_map = map
+                        .into_iter()
+                        .map(|(k, v)| (k, unwrap_runtime_value(env, v)))
+                        .collect();
+                    RuntimeValue::Aggregate(x, ObjectMap(new_map))
+                }
+                RuntimeValue::List { data, data_type } => {
+                    let new_data = data
+                        .into_iter()
+                        .map(|v| unwrap_runtime_value(env, v))
+                        .collect();
+                    RuntimeValue::List {
+                        data: new_data,
+                        data_type,
+                    }
+                }
+                RuntimeValue::Enum(x, y, Some(data)) => {
+                    RuntimeValue::Enum(x, y, Some(Box::new(unwrap_runtime_value(env, *data))))
+                }
+                RuntimeValue::Option(Some(data), typ) => {
+                    RuntimeValue::Option(Some(Box::new(unwrap_runtime_value(env, *data))), typ)
+                }
+                RuntimeValue::Result(Ok(data), typ) => {
+                    RuntimeValue::Result(Ok(Box::new(unwrap_runtime_value(env, *data))), typ)
+                }
+                RuntimeValue::Result(Err(data), typ) => {
+                    RuntimeValue::Result(Err(Box::new(unwrap_runtime_value(env, *data))), typ)
                 }
                 other => other,
             }
         }
 
-        let runtime_value = unwrap_runtime_value(self, value.value);
-
         Variable {
-            value: runtime_value,
+            value: unwrap_runtime_value(self, value.value),
             var_type,
         }
     }
@@ -124,89 +93,84 @@ impl InterpreterEnvironment {
     ) -> Variable<RuntimeValue> {
         let var_type = value.var_type.clone();
 
-        let get_new_list = |this: &mut Self, list: Vec<RuntimeValue>| -> Vec<RuntimeValue> {
-            let mut new_vec = Vec::new();
-
-            for v in list {
-                let typ = (&v).into();
-
-                let value = this.convert_runtime_var_into_saveable(Variable {
-                    value: v,
-                    var_type: var_type.clone(),
-                });
-
-                let name = rand::random_range(0..10000000).to_string();
-                this.variables.insert(name.clone(), value);
-
-                new_vec.push(RuntimeValue::Ref(name, typ));
+        fn transform(
+            env: &mut InterpreterEnvironment,
+            val: RuntimeValue,
+            v_type: &VarType,
+        ) -> RuntimeValue {
+            match val {
+                RuntimeValue::Aggregate(x, ObjectMap(map)) => {
+                    let mut new_map = HashMap::new();
+                    for (k, v) in map {
+                        let typ = (&v).into();
+                        let inner_val = transform(env, v, v_type);
+                        let name = rand::random_range(0..10000000).to_string();
+                        env.variables.insert(
+                            name.clone(),
+                            Variable {
+                                value: inner_val,
+                                var_type: v_type.clone(),
+                            },
+                        );
+                        new_map.insert(k, RuntimeValue::Ref(name, typ));
+                    }
+                    RuntimeValue::Aggregate(x, ObjectMap(new_map))
+                }
+                RuntimeValue::List { data, data_type } => {
+                    let mut new_vec = Vec::new();
+                    for v in data {
+                        let typ = (&v).into();
+                        let inner_val = transform(env, v, v_type);
+                        let name = rand::random_range(0..10000000).to_string();
+                        env.variables.insert(
+                            name.clone(),
+                            Variable {
+                                value: inner_val,
+                                var_type: v_type.clone(),
+                            },
+                        );
+                        new_vec.push(RuntimeValue::Ref(name, typ));
+                    }
+                    RuntimeValue::List {
+                        data: new_vec,
+                        data_type,
+                    }
+                }
+                RuntimeValue::Enum(x, y, Some(data)) => {
+                    let typ = (&*data).into();
+                    let inner_val = transform(env, *data, v_type);
+                    let name = rand::random_range(0..10000000).to_string();
+                    env.variables.insert(
+                        name.clone(),
+                        Variable {
+                            value: inner_val,
+                            var_type: v_type.clone(),
+                        },
+                    );
+                    RuntimeValue::Enum(x, y, Some(Box::new(RuntimeValue::Ref(name, typ))))
+                }
+                RuntimeValue::Option(Some(data), opt_typ) => {
+                    let typ = (&*data).into();
+                    let inner_val = transform(env, *data, v_type);
+                    let name = rand::random_range(0..10000000).to_string();
+                    env.variables.insert(
+                        name.clone(),
+                        Variable {
+                            value: inner_val,
+                            var_type: v_type.clone(),
+                        },
+                    );
+                    RuntimeValue::Option(Some(Box::new(RuntimeValue::Ref(name, typ))), opt_typ)
+                }
+                other => other,
             }
-            new_vec
-        };
+        }
 
-        let get_new_map = |this: &mut Self,
-                           map: HashMap<String, RuntimeValue>|
-         -> HashMap<String, RuntimeValue> {
-            let mut new_map = HashMap::new();
+        let runtime_value = transform(self, value.value, &var_type);
 
-            for (k, v) in map {
-                let typ = (&v).into();
-
-                let value = this.convert_runtime_var_into_saveable(Variable {
-                    value: v,
-                    var_type: var_type.clone(),
-                });
-                let name = rand::random_range(0..10000000).to_string();
-                this.variables.insert(name.clone(), value);
-
-                new_map.insert(k.clone(), RuntimeValue::Ref(name, typ));
-            }
-
-            new_map
-        };
-
-        let get_singular = |this: &mut Self, value: RuntimeValue| -> RuntimeValue {
-            let typ = (&value).into();
-            let value = this.convert_runtime_var_into_saveable(Variable {
-                value: value,
-                var_type: var_type.clone(),
-            });
-            let name = rand::random_range(0..10000000).to_string();
-            this.variables.insert(name.clone(), value);
-
-            let value = RuntimeValue::Ref(name, typ);
-
-            value
-        };
-
-        match value.value {
-            RuntimeValue::Aggregate(x, ObjectMap(map)) => Variable {
-                value: RuntimeValue::Aggregate(x, ObjectMap(get_new_map(self, map))),
-                var_type,
-            },
-            RuntimeValue::Enum(x, y, Some(data)) => Variable {
-                value: RuntimeValue::Enum(x, y, Some(Box::new(get_singular(self, *data)))),
-                var_type,
-            },
-            RuntimeValue::Option(Some(data), typ) => Variable {
-                value: RuntimeValue::Option(Some(Box::new(get_singular(self, *data))), typ),
-                var_type,
-            },
-            RuntimeValue::Result(Ok(data), typ) => Variable {
-                value: RuntimeValue::Result(Ok(Box::new(get_singular(self, *data))), typ),
-                var_type,
-            },
-            RuntimeValue::Result(Err(data), typ) => Variable {
-                value: RuntimeValue::Result(Err(Box::new(get_singular(self, *data))), typ),
-                var_type,
-            },
-            RuntimeValue::List { data, data_type } => Variable {
-                value: RuntimeValue::List {
-                    data: get_new_list(self, data),
-                    data_type,
-                },
-                var_type,
-            },
-            _ => value,
+        Variable {
+            value: runtime_value,
+            var_type,
         }
     }
 
@@ -230,34 +194,34 @@ impl InterpreterEnvironment {
         pointer: &str,
         value: RuntimeValue,
     ) -> Result<(), ScopeErr> {
-        let var = {
-            let value = self.variables.get(pointer).unwrap();
+        let (target_pointer, var_type) = {
+            let existing_var = self
+                .variables
+                .get(pointer)
+                .ok_or_else(|| ScopeErr::Variable(pointer.to_string()))?;
 
-            let pointer: Option<String> = if let RuntimeValue::Ref(pointer, _) = &value.value {
-                Some(pointer.to_string())
+            if let RuntimeValue::Ref(inner_ptr, _) = &existing_var.value {
+                (Some(inner_ptr.to_string()), existing_var.var_type.clone())
             } else {
-                None
-            };
-
-            (pointer, value.var_type.clone())
+                (None, existing_var.var_type.clone())
+            }
         };
 
-        if let Some(pointer) = var.0 {
-            return self.assign_var_from_ref_pointer(&pointer, value);
+        if let Some(inner_ptr) = target_pointer {
+            return self.assign_var_from_ref_pointer(&inner_ptr, value);
         }
 
-        let value = self.convert_runtime_var_into_saveable(Variable {
+        if var_type != VarType::Mutable {
+            return Err(ScopeErr::AssignConstant(pointer.to_string()));
+        }
+
+        let saved_value = self.convert_runtime_var_into_saveable(Variable {
             value,
-            var_type: var.1.clone(),
+            var_type: var_type.clone(),
         });
 
-        if var.1 != VarType::Mutable {
-            Err(ScopeErr::AssignConstant(pointer.to_string()))
-        } else {
-            self.variables.insert(pointer.to_string(), value);
-
-            Ok(())
-        }
+        self.variables.insert(pointer.to_string(), saved_value);
+        Ok(())
     }
 
     pub fn get_var_ref(&self, name: &str) -> Result<RuntimeValue, ScopeErr> {
@@ -271,83 +235,64 @@ impl InterpreterEnvironment {
     pub fn get_member_ref(&self, keys: &[MemberPathType]) -> Result<RuntimeValue, InterpreterErr> {
         let first = {
             let Some(MemberPathType::Dot(first)) = keys.get(0) else {
-                panic!()
+                panic!("Invalid member path start")
             };
-
             first.clone()
         };
 
         if keys.len() <= 1 {
-            return Ok(self.get_var(&first)?.value);
+            let var = self.get_var(&first)?;
+            let typ = (&var.value).into();
+            return Ok(RuntimeValue::Ref(first, typ));
         }
 
         let mut pointer = first;
 
-        while let RuntimeValue::Ref(x, _) = &self.variables.get(&pointer).unwrap().value {
-            pointer = x.to_string();
+        // Resolve initial pointer chain
+        while let Some(var) = self.variables.get(&pointer) {
+            if let RuntimeValue::Ref(x, _) = &var.value {
+                pointer = x.to_string();
+            } else {
+                break;
+            }
         }
 
         for key in keys.iter().skip(1) {
-            println!("st : {:?}\n", self.variables.get(&pointer).unwrap().value);
-            match (&self.variables.get(&pointer).unwrap().value, key) {
+            let current_val = &self.variables.get(&pointer).unwrap().value;
+            match (current_val, key) {
                 (RuntimeValue::Aggregate(_, ObjectMap(map)), _) => {
                     match map.get(&key.to_string()) {
                         Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
                         _ => break,
                     }
                 }
-
-                (RuntimeValue::List { data, data_type: _ }, MemberPathType::Computed(key)) => {
-                    match data.get(key.parse::<usize>().unwrap()) {
+                (RuntimeValue::List { data, .. }, MemberPathType::Computed(k)) => {
+                    let idx = k.parse::<usize>().unwrap();
+                    match data.get(idx) {
                         Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
                         _ => break,
                     }
                 }
-
                 (
                     RuntimeValue::Enum(_, _, Some(data))
                     | RuntimeValue::Option(Some(data), _)
                     | RuntimeValue::Result(Ok(data), _)
                     | RuntimeValue::Result(Err(data), _),
                     _,
-                ) => match &**data {
-                    RuntimeValue::Ref(p, _) => pointer = p.clone(),
-                    _ => break,
-                },
-                (RuntimeValue::Ref(x, _), _) => pointer = x.clone(),
-                x => unimplemented!("{:?}", x),
-            }
-        }
-        println!("fin : {:?}", self.variables.get(&pointer).unwrap().value);
-        let typ = (&self.variables.get(&pointer).unwrap().value).into();
-        Ok(RuntimeValue::Ref(pointer, typ))
-    }
-
-    pub fn progress_var(
-        &self,
-        value: &RuntimeValue,
-        key: &str,
-    ) -> Result<RuntimeValue, InterpreterErr> {
-        match value {
-            RuntimeValue::Ref(pointer, _) => {
-                self.progress_var(&self.variables.get(pointer).unwrap().value, key)
-            }
-            RuntimeValue::Aggregate(_, ObjectMap(map)) => match map.get(key) {
-                Some(x) => Ok(x.clone()),
-                _ => panic!(),
-            },
-            RuntimeValue::List { data, data_type: _ } => {
-                match data.get(key.parse::<usize>().unwrap()) {
-                    Some(x) => Ok(x.clone()),
-                    _ => panic!(),
+                ) => {
+                    if let RuntimeValue::Ref(p, _) = &**data {
+                        pointer = p.clone();
+                    } else {
+                        break;
+                    }
                 }
+                _ => break,
             }
-            RuntimeValue::Enum(_, _, Some(data))
-            | RuntimeValue::Option(Some(data), _)
-            | RuntimeValue::Result(Ok(data), _)
-            | RuntimeValue::Result(Err(data), _) => Ok(*data.clone()),
-            _ => panic!(),
         }
+
+        let final_var = self.variables.get(&pointer).unwrap();
+        let typ = (&final_var.value).into();
+        Ok(RuntimeValue::Ref(pointer, typ))
     }
 
     pub fn update_var<F>(&mut self, name: &str, mut f: F) -> Result<(), ScopeErr>
@@ -355,7 +300,8 @@ impl InterpreterEnvironment {
         F: FnMut(&mut Variable<RuntimeValue>),
     {
         if let Some(value) = self.variables.get_mut(name) {
-            Ok(f(value))
+            f(value);
+            Ok(())
         } else {
             Err(ScopeErr::Variable(name.to_string()))
         }
@@ -368,24 +314,18 @@ impl InterpreterEnvironment {
     ) -> Result<RuntimeValue, InterpreterErr> {
         let typ: RuntimeType = (&value).into();
 
-        if let Some(var) = self.variables.remove(name) {
+        let var_type = if let Some(var) = self.variables.get(name) {
             match var.var_type {
-                VarType::Mutable => {}
+                VarType::Mutable => var.var_type.clone(),
                 _ => return Err(ScopeErr::AssignConstant(name.to_string()).into()),
             }
-            if var.value.is_type(self, &typ) {
-                let new_var = self.convert_runtime_var_into_saveable(Variable {
-                    value,
-                    var_type: VarType::Mutable,
-                });
-
-                self.variables.insert(name.to_string(), new_var);
-                Ok(RuntimeValue::Ref(name.to_string(), typ))
-            } else {
-                Err(ScopeErr::TypeMismatch(name.to_string()).into())
-            }
         } else {
-            Err(ScopeErr::Variable(name.to_string()).into())
-        }
+            return Err(ScopeErr::Variable(name.to_string()).into());
+        };
+
+        let new_var = self.convert_runtime_var_into_saveable(Variable { value, var_type });
+
+        self.variables.insert(name.to_string(), new_var);
+        Ok(RuntimeValue::Ref(name.to_string(), typ))
     }
 }

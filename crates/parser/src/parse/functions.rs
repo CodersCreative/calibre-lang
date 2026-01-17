@@ -92,7 +92,10 @@ impl Parser {
     }
 
     pub fn parse_potential_member(&mut self, node: Node) -> Node {
-        if self.first().token_type == TokenType::FullStop && !self.first().value.contains(" ") {
+        if !self.is_eof()
+            && self.first().token_type == TokenType::FullStop
+            && !self.first().value.contains(" ")
+        {
             self.parse_member_expression(Some(node))
         } else {
             node
