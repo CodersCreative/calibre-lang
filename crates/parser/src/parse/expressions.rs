@@ -13,7 +13,7 @@ impl Parser {
     pub fn parse_primary_expression(&mut self) -> Node {
         match &self.first().token_type {
             TokenType::If => self.parse_if_statement(),
-            TokenType::Match => self.parse_match_declaration(),
+            TokenType::Match => self.parse_match_statement(),
             TokenType::List => self.parse_list_iter_expression(),
             TokenType::Identifier => {
                 let val = self.eat();

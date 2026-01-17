@@ -1,3 +1,5 @@
+use std::ops::DerefMut;
+
 use crate::{
     Parser, SyntaxErr,
     ast::{
@@ -479,47 +481,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_match_declaration(&mut self) -> Node {
-        let open = self.expect_eat(
-            &TokenType::Match,
-            SyntaxErr::ExpectedKeyword(String::from("match")),
-        );
-
-        let is_async = self.first().token_type == TokenType::Async;
-
-        if is_async {
-            let _ = self.eat();
-        };
-
-        let typ = if self.first().token_type != TokenType::Open(Bracket::Curly) {
-            self.parse_potential_new_type()
-        } else {
-            None
-        };
-
-        let default = if self.first().token_type == TokenType::Equals {
-            let _ = self.eat();
-            Some(Box::new(self.parse_statement()))
-        } else {
-            None
-        };
-
-        let return_type = if self.first().token_type == TokenType::Open(Bracket::Curly) {
-            ParserDataType::from(ParserInnerType::Null).into()
-        } else {
-            let _ = self.expect_eat(
-                &TokenType::Arrow,
-                SyntaxErr::ExpectedKeyword(String::from("->")),
-            );
-            self.parse_potential_new_type()
-                .unwrap_or(ParserDataType::from(ParserInnerType::Null).into())
-        };
-
-        let _ = self.expect_eat(
-            &TokenType::Open(Bracket::Curly),
-            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
-        );
-
+    pub fn parse_match_patterns(&mut self) -> Vec<(MatchArmType, Vec<Node>, Box<Node>)> {
         let mut patterns = Vec::new();
 
         while self.first().token_type != TokenType::Close(Bracket::Curly) {
@@ -562,6 +524,79 @@ impl Parser {
                 let _ = self.eat();
             }
         }
+        patterns
+    }
+
+    pub fn parse_match_statement(&mut self) -> Node {
+        let open = self.expect_eat(
+            &TokenType::Match,
+            SyntaxErr::ExpectedKeyword(String::from("match")),
+        );
+
+        let value = self.parse_statement();
+        let _ = self.expect_eat(
+            &TokenType::Open(Bracket::Curly),
+            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
+        );
+
+        let patterns = self.parse_match_patterns();
+
+        let close = self.expect_eat(
+            &TokenType::Close(Bracket::Curly),
+            SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
+        );
+
+        Node::new(
+            NodeType::MatchStatement {
+                value: Box::new(value),
+                body: patterns,
+            },
+            Span::new_from_spans(open.span, close.span),
+        )
+    }
+
+    pub fn parse_fnmatch_declaration(&mut self) -> Node {
+        let open = self.expect_eat(
+            &TokenType::Match,
+            SyntaxErr::ExpectedKeyword(String::from("match")),
+        );
+
+        let is_async = self.first().token_type == TokenType::Async;
+
+        if is_async {
+            let _ = self.eat();
+        };
+
+        let typ = if self.first().token_type != TokenType::Open(Bracket::Curly) {
+            self.parse_potential_new_type()
+        } else {
+            None
+        };
+
+        let default = if self.first().token_type == TokenType::Equals {
+            let _ = self.eat();
+            Some(Box::new(self.parse_statement()))
+        } else {
+            None
+        };
+
+        let return_type = if self.first().token_type == TokenType::Open(Bracket::Curly) {
+            ParserDataType::from(ParserInnerType::Null).into()
+        } else {
+            let _ = self.expect_eat(
+                &TokenType::Arrow,
+                SyntaxErr::ExpectedKeyword(String::from("->")),
+            );
+            self.parse_potential_new_type()
+                .unwrap_or(ParserDataType::from(ParserInnerType::Null).into())
+        };
+
+        let _ = self.expect_eat(
+            &TokenType::Open(Bracket::Curly),
+            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
+        );
+
+        let patterns = self.parse_match_patterns();
 
         let close = self.expect_eat(
             &TokenType::Close(Bracket::Curly),
@@ -569,7 +604,7 @@ impl Parser {
         );
 
         let func = Node::new(
-            NodeType::MatchDeclaration {
+            NodeType::FnMatchDeclaration {
                 parameters: (
                     ParserText::new(String::from("input_value"), Span::default()).into(),
                     typ.unwrap_or(
@@ -645,6 +680,10 @@ impl Parser {
             &TokenType::Func,
             SyntaxErr::ExpectedKeyword(String::from("fn")),
         );
+
+        if self.first().token_type == TokenType::Match {
+            return self.parse_fnmatch_declaration();
+        }
 
         let is_async = self.first().token_type == TokenType::Async;
 

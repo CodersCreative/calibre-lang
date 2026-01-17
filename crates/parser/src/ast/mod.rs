@@ -580,7 +580,11 @@ pub enum NodeType {
         create_new_scope: Option<bool>,
         define: bool,
     },
-    MatchDeclaration {
+    MatchStatement {
+        value: Box<Node>,
+        body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
+    },
+    FnMatchDeclaration {
         parameters: (
             PotentialDollarIdentifier,
             PotentialNewType,

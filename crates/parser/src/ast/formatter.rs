@@ -524,7 +524,10 @@ impl Formatter {
 
                 txt
             }
-            NodeType::MatchDeclaration {
+            NodeType::MatchStatement { value, body } => {
+                format!("match {} {}", self.format(value), self.fmt_match_body(body))
+            }
+            NodeType::FnMatchDeclaration {
                 parameters,
                 body,
                 return_type,
@@ -545,57 +548,7 @@ impl Formatter {
                     txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
                 }
 
-                txt.push_str(" {\n");
-
-                let mut adjusted_body = body.get(0).map(|x| vec![vec![x]]).unwrap_or(Vec::new());
-
-                for arm in body.iter().skip(1) {
-                    let last = adjusted_body.last().unwrap().first().unwrap();
-                    if last.1 == arm.1 && last.2 == arm.2 {
-                        adjusted_body.last_mut().unwrap().push(arm);
-                    } else {
-                        adjusted_body.push(vec![arm]);
-                    }
-                }
-
-                for arm in adjusted_body {
-                    let temp = handle_comment!(self.get_potential_comment(&arm[0].0.span()), {
-                        let mut txt = self.fmt_match_arm(&arm[0].0, false);
-                        for node in arm.iter().skip(1) {
-                            txt.push_str(&format!(" | {}", self.fmt_match_arm(&node.0, false)));
-                        }
-
-                        match &arm[0].0 {
-                            MatchArmType::Enum {
-                                value: _,
-                                var_type: VarType::Immutable,
-                                name: Some(name),
-                            } => txt.push_str(&format!(" : {}", name)),
-                            MatchArmType::Enum {
-                                value: _,
-                                var_type,
-                                name: Some(name),
-                            } => {
-                                txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name))
-                            }
-                            _ => {}
-                        }
-
-                        format!(
-                            "{}{} {}",
-                            txt,
-                            if arm[0].1.is_empty() {
-                                String::new()
-                            } else {
-                                format!(" {}", self.fmt_conditionals(&arm[0].1))
-                            },
-                            self.format(&*arm[0].2)
-                        )
-                    });
-                    txt.push_str(&format!("{},\n", &self.fmt_txt_with_tab(&temp, 1, true)));
-                }
-                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
-                txt.push_str("\n}");
+                txt.push_str(&format!(" {}", self.fmt_match_body(body)));
 
                 txt
             }
@@ -811,6 +764,59 @@ impl Formatter {
                 txt
             }
         }
+    }
+
+    pub fn fmt_match_body(&mut self, body: &[(MatchArmType, Vec<Node>, Box<Node>)]) -> String {
+        let mut txt = String::from("{\n");
+
+        let mut adjusted_body = body.get(0).map(|x| vec![vec![x]]).unwrap_or(Vec::new());
+
+        for arm in body.iter().skip(1) {
+            let last = adjusted_body.last().unwrap().first().unwrap();
+            if last.1 == arm.1 && last.2 == arm.2 {
+                adjusted_body.last_mut().unwrap().push(arm);
+            } else {
+                adjusted_body.push(vec![arm]);
+            }
+        }
+
+        for arm in adjusted_body {
+            let temp = handle_comment!(self.get_potential_comment(&arm[0].0.span()), {
+                let mut txt = self.fmt_match_arm(&arm[0].0, false);
+                for node in arm.iter().skip(1) {
+                    txt.push_str(&format!(" | {}", self.fmt_match_arm(&node.0, false)));
+                }
+
+                match &arm[0].0 {
+                    MatchArmType::Enum {
+                        value: _,
+                        var_type: VarType::Immutable,
+                        name: Some(name),
+                    } => txt.push_str(&format!(" : {}", name)),
+                    MatchArmType::Enum {
+                        value: _,
+                        var_type,
+                        name: Some(name),
+                    } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
+                    _ => {}
+                }
+
+                format!(
+                    "{}{} {}",
+                    txt,
+                    if arm[0].1.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {}", self.fmt_conditionals(&arm[0].1))
+                    },
+                    self.format(&*arm[0].2)
+                )
+            });
+            txt.push_str(&format!("{},\n", &self.fmt_txt_with_tab(&temp, 1, true)));
+        }
+        let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+        txt.push_str("\n}");
+        txt
     }
 
     pub fn fmt_txt_with_tab(&mut self, txt: &str, tab_amt: usize, starting_tab: bool) -> String {

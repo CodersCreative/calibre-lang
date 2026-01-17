@@ -3,7 +3,9 @@ use calibre_parser::{
     ast::{
         IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectMap, ObjectType,
         ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier, RefMutability,
-        VarType, binary::BinaryOperator, comparison::Comparison,
+        VarType,
+        binary::BinaryOperator,
+        comparison::{BooleanOperation, Comparison},
     },
     lexer::Span,
 };
@@ -163,68 +165,38 @@ impl MiddleEnvironment {
                     },
                     span: node.span,
                 }),
-                IfComparisonType::IfLet { value, pattern } => {
-                    let value_type =
-                        calibre_mir_ty::middle_data_type_to_new_type(
-                            self.resolve_type_from_node(scope, &value).unwrap_or(
-                                ParserDataType::new(ParserInnerType::Dynamic, Span::default()),
-                            ),
-                        );
-                    let then_type = calibre_mir_ty::middle_data_type_to_new_type(
-                        self.resolve_type_from_node(scope, &then)
-                            .unwrap_or(ParserDataType::from(ParserInnerType::Null)),
-                    );
-                    Ok(MiddleNode {
-                        node_type: MiddleNodeType::CallExpression(
-                            Box::new(
-                                self.evaluate(
-                                    scope,
-                                    Node {
-                                        node_type: NodeType::MatchDeclaration {
-                                            parameters: (
-                                                ParserText::new(
-                                                    String::from("input_value"),
-                                                    Span::default(),
-                                                )
-                                                .into(),
-                                                value_type,
-                                                None,
-                                            ),
-                                            return_type: then_type,
-                                            body: {
-                                                let mut lst: Vec<(
-                                                    calibre_parser::ast::MatchArmType,
-                                                    Vec<Node>,
-                                                    Box<Node>,
-                                                )> = pattern
-                                                    .0
-                                                    .clone()
-                                                    .into_iter()
-                                                    .map(|x| (x, pattern.1.clone(), then.clone()))
-                                                    .collect();
+                IfComparisonType::IfLet { value, pattern } => self.evaluate(
+                    scope,
+                    Node {
+                        node_type: NodeType::MatchStatement {
+                            value: Box::new(value),
+                            body: {
+                                let mut lst: Vec<(
+                                    calibre_parser::ast::MatchArmType,
+                                    Vec<Node>,
+                                    Box<Node>,
+                                )> = pattern
+                                    .0
+                                    .clone()
+                                    .into_iter()
+                                    .map(|x| (x, pattern.1.clone(), then.clone()))
+                                    .collect();
 
-                                                lst.push((
-                                                    MatchArmType::Wildcard(Span::default()),
-                                                    Vec::new(),
-                                                    otherwise.unwrap_or(Box::new(Node {
-                                                        node_type: NodeType::EmptyLine,
-                                                        span: Span::default(),
-                                                    })),
-                                                ));
+                                lst.push((
+                                    MatchArmType::Wildcard(Span::default()),
+                                    Vec::new(),
+                                    otherwise.unwrap_or(Box::new(Node {
+                                        node_type: NodeType::EmptyLine,
+                                        span: Span::default(),
+                                    })),
+                                ));
 
-                                                lst
-                                            },
-                                            is_async: false,
-                                        },
-                                        span: node.span,
-                                    },
-                                )?,
-                            ),
-                            vec![(self.evaluate(scope, value)?, None)],
-                        ),
+                                lst
+                            },
+                        },
                         span: node.span,
-                    })
-                }
+                    },
+                ),
             },
             NodeType::Break => Ok(MiddleNode {
                 node_type: MiddleNodeType::Break,
@@ -443,96 +415,70 @@ impl MiddleEnvironment {
             }
             NodeType::Try { value, catch } => {
                 let resolved_type = self.resolve_type_from_node(scope, &value);
-                let value_type = calibre_mir_ty::middle_data_type_to_new_type(
-                    self.resolve_type_from_node(scope, &value)
-                        .unwrap_or(ParserDataType::new(
-                            ParserInnerType::Dynamic,
-                            Span::default(),
-                        )),
-                );
 
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::CallExpression(
-                        Box::new(self.evaluate(
-                            scope,
-                            Node {
-                                node_type: NodeType::MatchDeclaration {
-                                    parameters: (
-                                        ParserText::new(
-                                            String::from("input_value"),
-                                            Span::default(),
-                                        ).into(),
-                                        value_type,
-                                        None,
+                self.evaluate(
+                    scope,
+                    Node {
+                        node_type: NodeType::MatchStatement  {
+                            value,
+                            body: match resolved_type {
+                                Some(ParserDataType { data_type: ParserInnerType::Option(_), span: _ }) => vec![
+                                    (
+                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Some")).into(), name: Some(ParserText::from(String::from("anon_ok_value")).into()) },
+                                        Vec::new(),
+                                        Box::new(Node {
+                                            node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value")).into()),
+                                            span: Span::default(),
+                                        }),
                                     ),
-                                    body: match resolved_type {
-                                        Some(ParserDataType { data_type: ParserInnerType::Option(_), span: _ }) => vec![
-                                            (
-                                                MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Some")).into(), name: Some(ParserText::from(String::from("anon_ok_value")).into()) },
-                                                Vec::new(),
-                                                Box::new(Node {
-                                                    node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value")).into()),
-                                                    span: Span::default(),
-                                                }),
-                                            ),
-                                            if let Some(catch) = catch {
-                                                (
-                                                    MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")).into(), name: catch.name },
-                                                    Vec::new(),
-                                                    catch.body,
-                                                )
-                                            }else {
-                                                (
-                                                    MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")).into(), name: None },
-                                                    Vec::new(),
-                                                    Box::new(Node {
-                                                        node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("none")).into()))), Vec::new())))) },
-                                                        span: Span::default(),
-                                                    }),
-                                                )
-                                            },
-                                        ],
-                                        _ => vec![
-                                            (
-                                                MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Ok")).into(), name: Some(ParserText::from(String::from("anon_ok_value")).into()) },
-                                                Vec::new(),
-                                                Box::new(Node {
-                                                    node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value")).into()),
-                                                    span: Span::default(),
-                                                }),
-                                            ),
-                                            if let Some(catch) = catch {
-                                                (
-                                                    MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")).into(), name: catch.name },
-                                                    Vec::new(),
-                                                    catch.body,
-                                                )
-                                            }else {
-                                                (
-                                                    MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")).into(), name: Some(ParserText::from(String::from("anon_err_value")).into()) },
-                                                    Vec::new(),
-                                                    Box::new(Node {
-                                                        node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("err")).into()))), vec![(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")).into())), None)])))) },
-                                                        span: Span::default(),
-                                                    }),
-                                                )
-                                            },
-                                        ]
+                                    if let Some(catch) = catch {
+                                        (
+                                            MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")).into(), name: catch.name },
+                                            Vec::new(),
+                                            catch.body,
+                                        )
+                                    }else {
+                                        (
+                                            MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")).into(), name: None },
+                                            Vec::new(),
+                                            Box::new(Node {
+                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("none")).into()))), Vec::new())))) },
+                                                span: Span::default(),
+                                            }),
+                                        )
                                     },
-                                    return_type: calibre_mir_ty::middle_data_type_to_new_type(match resolved_type {
-                                        Some(ParserDataType { data_type: ParserInnerType::Result { ok: x, err: _ }, span: _ }) | Some(ParserDataType { data_type: ParserInnerType::Option(x), span: _ }) => *x,
-                                        Some(x) => x,
-                                        _ => ParserDataType::from(ParserInnerType::Null),
-                                    }),
-                                    is_async: false,
-                                },
-                                span: node.span,
+                                ],
+                                _ => vec![
+                                    (
+                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Ok")).into(), name: Some(ParserText::from(String::from("anon_ok_value")).into()) },
+                                        Vec::new(),
+                                        Box::new(Node {
+                                            node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value")).into()),
+                                            span: Span::default(),
+                                        }),
+                                    ),
+                                    if let Some(catch) = catch {
+                                        (
+                                            MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")).into(), name: catch.name },
+                                            Vec::new(),
+                                            catch.body,
+                                        )
+                                    }else {
+                                        (
+                                            MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")).into(), name: Some(ParserText::from(String::from("anon_err_value")).into()) },
+                                            Vec::new(),
+                                            Box::new(Node {
+                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("err")).into()))), vec![(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")).into())), None)])))) },
+                                                span: Span::default(),
+                                            }),
+                                        )
+                                    },
+                                ]
                             },
-                        )?),
-                        vec![(self.evaluate(scope, *value)?, None)],
-                    ),
-                    span: node.span,
-                })
+                        },
+                        span: node.span,
+                    },
+                )
             }
             NodeType::LoopDeclaration { loop_type, body } => {
                 let scope = self.new_scope_from_parent_shallow(*scope);
@@ -1114,7 +1060,207 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::MatchDeclaration {
+            NodeType::MatchStatement { value, body } => {
+                let resolved_data_type = self.resolve_type_from_node(scope, &value).unwrap();
+                let resolved_node_type =
+                    calibre_mir_ty::middle_data_type_to_node(resolved_data_type.clone());
+
+                let mut ifs: Vec<Node> = Vec::new();
+                let mut reference = None;
+                let enum_object = if let Some(x) = self.objects.get(
+                    resolved_node_type
+                        .to_string()
+                        .replace("mut ", "")
+                        .replace("&", "")
+                        .trim(),
+                ) {
+                    match (
+                        resolved_node_type.to_string().contains("mut "),
+                        resolved_node_type.to_string().contains("&"),
+                    ) {
+                        (true, true) => reference = Some(RefMutability::MutRef),
+                        (true, false) => reference = Some(RefMutability::MutValue),
+                        (false, true) => reference = Some(RefMutability::Ref),
+                        (false, false) => reference = Some(RefMutability::Value),
+                    }
+                    match &x.object_type {
+                        MiddleTypeDefType::Enum(x) => Some(x),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                for pattern in body {
+                    let mut conditionals = Node::new_from_type(NodeType::Identifier(
+                        ParserText::from("true".to_string()).into(),
+                    ));
+
+                    for condition in pattern.1 {
+                        conditionals = Node::new_from_type(NodeType::BooleanExpression {
+                            left: Box::new(conditionals),
+                            right: Box::new(condition),
+                            operator: BooleanOperation::And,
+                        });
+                    }
+
+                    match pattern.0 {
+                        MatchArmType::Wildcard(_) => {
+                            ifs.push(Node::new_from_type(NodeType::IfStatement {
+                                comparison: Box::new(IfComparisonType::If(conditionals)),
+                                then: pattern.2,
+                                otherwise: None,
+                            }))
+                        }
+                        MatchArmType::Value(x) => {
+                            ifs.push(Node::new_from_type(NodeType::IfStatement {
+                                comparison: Box::new(IfComparisonType::If(Node::new_from_type(
+                                    NodeType::BooleanExpression {
+                                        left: Box::new(Node::new_from_type(
+                                            NodeType::ComparisonExpression {
+                                                left: value.clone(),
+                                                right: Box::new(x),
+                                                operator: Comparison::Equal,
+                                            },
+                                        )),
+                                        right: Box::new(conditionals),
+                                        operator: BooleanOperation::And,
+                                    },
+                                ))),
+                                then: pattern.2,
+                                otherwise: None,
+                            }))
+                        }
+                        MatchArmType::Let { var_type, name } => {
+                            ifs.push(Node::new_from_type(NodeType::IfStatement {
+                                comparison: Box::new(IfComparisonType::If(conditionals)),
+                                then: Box::new(Node::new_from_type(NodeType::ScopeDeclaration {
+                                    body: Some(vec![
+                                        Node::new_from_type(NodeType::VariableDeclaration {
+                                            var_type,
+                                            identifier: name,
+                                            value: value.clone(),
+                                            data_type: Some(resolved_node_type.clone().into()),
+                                        }),
+                                        *pattern.2,
+                                    ]),
+                                    create_new_scope: Some(true),
+                                    define: false,
+                                    named: None,
+                                    is_temp: true,
+                                })),
+                                otherwise: None,
+                            }))
+                        }
+                        MatchArmType::Enum {
+                            value: val,
+                            var_type,
+                            name,
+                        } => {
+                            let val = self.resolve_dollar_ident_only(scope, &val).unwrap();
+                            let index: i64 = match val.text.trim() {
+                                _ if enum_object.is_some() => {
+                                    let Some(object) = enum_object else {
+                                        return Err(MiddleErr::CantMatch(
+                                            calibre_mir_ty::middle_data_type_to_node(
+                                                resolved_data_type,
+                                            )
+                                            .to_string(),
+                                        ));
+                                    };
+                                    let Some(index) =
+                                        object.iter().position(|x| x.0.text == val.text)
+                                    else {
+                                        return Err(MiddleErr::EnumVariant(val.text));
+                                    };
+                                    index as i64
+                                }
+                                "Ok" => 0,
+                                "Err" => 1,
+                                "Some" => 0,
+                                "None" => 1,
+                                _ => {
+                                    return Err(MiddleErr::CantMatch(
+                                        calibre_mir_ty::middle_data_type_to_node(
+                                            resolved_data_type,
+                                        )
+                                        .to_string(),
+                                    ));
+                                }
+                            };
+
+                            ifs.push(Node::new_from_type(NodeType::IfStatement {
+                                comparison: Box::new(IfComparisonType::If(Node::new_from_type(NodeType::BooleanExpression{
+                                    left : Box::new(Node::new_from_type(NodeType::ComparisonExpression {
+                                        left: Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("discriminant")).into()))), vec![(*value.clone(), None)]))),
+                                        right: Box::new(Node::new_from_type(NodeType::IntLiteral(index))),
+                                        operator: Comparison::Equal
+                                    })),
+                                    right : Box::new(conditionals),
+                                    operator: BooleanOperation::And,
+                                }))),
+                                then: {Box::new(if let Some(name) = name {
+                                    Node::new_from_type(NodeType::ScopeDeclaration {
+                                        body: Some(vec![
+                                            Node::new_from_type(NodeType::VariableDeclaration {
+                                                var_type,
+                                                identifier: name,
+                                                value: if reference.is_some() && reference != Some(RefMutability::Value) {
+                                                    Box::new(Node::new_from_type(NodeType::RefStatement {
+                                                        mutability: reference.clone().unwrap(),
+                                                        value: Box::new(Node::new_from_type(NodeType::MemberExpression {
+                                                            path: vec![
+                                                                (*value.clone(), false),
+                                                                (Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("next")).into())), false)
+                                                            ]
+                                                        }))
+                                                    }))
+                                                }else{
+                                                    Box::new(Node::new_from_type(NodeType::MemberExpression {
+                                                        path: vec![
+                                                            (*value.clone(), false),
+                                                            (Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("next")).into())), false)
+                                                        ]
+                                                    }))
+                                                },
+                                                data_type: None
+                                            }),
+                                            *pattern.2,
+                                        ]),
+                                        is_temp: true,
+                                        create_new_scope: Some(false),
+                                        named: None,
+                                        define: false
+                                    })}else{
+                                        *pattern.2
+                                    })
+                                },
+                                otherwise: None,
+                            }));
+                        }
+                    }
+                }
+                let ifs = if ifs.is_empty() {
+                    Node::new_from_type(NodeType::EmptyLine)
+                } else {
+                    let mut cur_if = ifs.remove(0);
+                    let mut cur_if_ref = &mut cur_if;
+
+                    for new_if in ifs {
+                        match &mut cur_if_ref.node_type {
+                            NodeType::IfStatement { otherwise, .. } => {
+                                *otherwise = Some(Box::new(new_if));
+                                cur_if_ref = otherwise.as_mut().unwrap()
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+
+                    cur_if
+                };
+
+                self.evaluate(scope, ifs)
+            }
+            NodeType::FnMatchDeclaration {
                 parameters,
                 body,
                 return_type,
@@ -1125,122 +1271,29 @@ impl MiddleEnvironment {
                 let resolved_node_type =
                     calibre_mir_ty::middle_data_type_to_node(resolved_data_type.clone());
 
-                self.evaluate(scope, Node::new_from_type(NodeType::FunctionDeclaration{
-                        parameters: vec![(parameters.0.clone(), parameters.1.clone(), parameters.2.map(|x| *x))],
+                self.evaluate(
+                    scope,
+                    Node::new_from_type(NodeType::FunctionDeclaration {
+                        parameters: vec![(
+                            parameters.0.clone(),
+                            parameters.1.clone(),
+                            parameters.2.map(|x| *x),
+                        )],
                         return_type,
                         is_async,
-                        body: {
-                            let mut lst = Vec::new();
-                            let mut reference = None;
-                            let enum_object = if let Some(x) = self.objects.get(resolved_node_type.to_string().replace("mut ", "").replace("&", "").trim()) {
-                                match (parameters.1.to_string().contains("mut "), resolved_node_type.to_string().contains("&")) {
-                                    (true, true) => reference = Some(RefMutability::MutRef),
-                                    (true, false) => reference = Some(RefMutability::MutValue),
-                                    (false, true) => reference = Some(RefMutability::Ref),
-                                    (false, false) => reference = Some(RefMutability::Value),
-                                }
-                                match &x.object_type {
-                                    MiddleTypeDefType::Enum(x) => Some(x),
-                                    _ => None
-                                }
-                            }else{
-                                None
-                            };
-                            for pattern in body {
-                                let main = if pattern.1.is_empty() {
-                                    Node::new_from_type(NodeType::Return { value: Some(pattern.2) })
-                                }else {
-                                    todo!()
-                                };
-                                match pattern.0 {
-                                    MatchArmType::Wildcard(_) => lst.push(main),
-                                    MatchArmType::Value(x) => lst.push(Node::new_from_type(NodeType::IfStatement {
-                                        comparison: Box::new(IfComparisonType::If(Node::new_from_type(NodeType::ComparisonExpression { left: Box::new(Node::new_from_type(NodeType::Identifier(parameters.0.clone()))), right: Box::new(x), operator: Comparison::Equal }))),
-                                        then: Box::new(main),
-                                        otherwise: None,
-                                    })),
-                                    MatchArmType::Let { var_type, name } => {
-                                        lst.push(Node::new_from_type(NodeType::ScopeDeclaration {
-                                            body: Some(vec![
-                                                Node::new_from_type(NodeType::VariableDeclaration {
-                                                    var_type,
-                                                    identifier: name,
-                                                    value: Box::new(Node::new_from_type(NodeType::Identifier(parameters.0.clone()))),
-                                                    data_type: Some(parameters.1.clone())
-                                                }),
-                                                main,
-                                            ]),
-                                            create_new_scope: Some(true),
-                                            define : false,
-                                            named: None,
-                                            is_temp: true
-                                        }));
-                                    }
-                                    MatchArmType::Enum { value, var_type, name }  => {
-                                        let value = self.resolve_dollar_ident_only(scope, &value).unwrap();
-                                        let index : i64 = match value.text.trim() {
-                                            _ if enum_object.is_some() => {
-                                                let Some(object) = enum_object else {return Err(MiddleErr::CantMatch(calibre_mir_ty::middle_data_type_to_node(resolved_data_type).to_string()));};
-                                                let Some(index) = object.iter().position(|x| x.0.text == value.text) else {return Err(MiddleErr::EnumVariant(value.text));};
-                                                index as i64
-                                            }
-                                            "Ok" => 0,
-                                            "Err" => 1,
-                                            "Some" => 0,
-                                            "None" => 1,
-                                            _ => return Err(MiddleErr::CantMatch(calibre_mir_ty::middle_data_type_to_node(resolved_data_type).to_string())),
-                                        };
-
-                                        lst.push(Node::new_from_type(NodeType::IfStatement {
-                                            comparison: Box::new(IfComparisonType::If(Node::new_from_type(NodeType::ComparisonExpression {
-                                                left: Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("discriminant")).into()))), vec![(Node::new_from_type(NodeType::Identifier(parameters.0.clone())), None)]))),
-                                                right: Box::new(Node::new_from_type(NodeType::IntLiteral(index))),
-                                                operator: Comparison::Equal
-                                            }))),
-                                            then: {Box::new(if let Some(name) = name {
-                                                Node::new_from_type(NodeType::ScopeDeclaration {
-                                                    body: Some(vec![
-                                                        Node::new_from_type(NodeType::VariableDeclaration {
-                                                            var_type,
-                                                            identifier: name,
-                                                            value: if reference.is_some() && reference != Some(RefMutability::Value) {
-                                                                Box::new(Node::new_from_type(NodeType::RefStatement {
-                                                                    mutability: reference.clone().unwrap(),
-                                                                    value: Box::new(Node::new_from_type(NodeType::MemberExpression {
-                                                                        path: vec![
-                                                                            (Node::new_from_type(NodeType::Identifier(parameters.0.clone())), false),
-                                                                            (Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("next")).into())), false)
-                                                                        ]
-                                                                    }))
-                                                                }))
-                                                            }else{
-                                                                Box::new(Node::new_from_type(NodeType::MemberExpression {
-                                                                    path: vec![
-                                                                        (Node::new_from_type(NodeType::Identifier(parameters.0.clone())), false),
-                                                                        (Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("next")).into())), false)
-                                                                    ]
-                                                                }))
-                                                            },
-                                                            data_type: None
-                                                        }),
-                                                        main,
-                                                    ]),
-                                                    is_temp: true,
-                                                    create_new_scope: Some(false),
-                                                    named: None,
-                                                    define: false
-                                                })}else{
-                                                  main
-                                                })
-                                            },
-                                            otherwise: None,
-                                        }));
-                                    }
-                                }
-                            }
-                            Box::new(Node::new_from_type(NodeType::ScopeDeclaration { body: Some(lst), is_temp: true, create_new_scope: Some(true), define: false, named: None }))
-                        },
-                    })
+                        body: Box::new(Node::new_from_type(NodeType::ScopeDeclaration {
+                            body: Some(vec![Node::new_from_type(NodeType::MatchStatement {
+                                value: Box::new(Node::new_from_type(NodeType::Identifier(
+                                    parameters.0,
+                                ))),
+                                body,
+                            })]),
+                            named: None,
+                            is_temp: true,
+                            create_new_scope: Some(false),
+                            define: false,
+                        })),
+                    }),
                 )
             }
             NodeType::FunctionDeclaration {

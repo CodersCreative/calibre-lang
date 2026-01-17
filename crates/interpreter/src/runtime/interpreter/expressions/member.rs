@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display};
 
+use calibre_common::errors::ScopeErr;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 
 use crate::runtime::{
@@ -39,13 +40,15 @@ impl InterpreterEnvironment {
         match value_node.node_type {
             MiddleNodeType::Identifier(value) => {
                 return Ok(MembrExprPathRes::Value(
-                    if let Ok(x) = self
-                        .get_function(&path[0].to_string(), &value)
-                        .map(|x| x.0.clone())
-                    {
+                    if let Ok(x) = if path.is_empty() {
+                        Err(ScopeErr::Variable(String::new()))
+                    } else {
+                        self.get_function(&path[0].to_string(), &value)
+                            .map(|x| x.0.clone())
+                    } {
                         let func = self.evaluate(scope, x)?;
                         self.evaluate_function(scope, func, args)?
-                    } else {
+                    } else if !path.is_empty() {
                         let obj = match match self.get_var(&path[0].to_string()) {
                             Ok(x) => x.value.clone(),
                             Err(e) => return Err(e.into()),
@@ -77,6 +80,17 @@ impl InterpreterEnvironment {
                             }
                             Err(e) => return Err(e.into()),
                         }
+                    } else {
+                        self.evaluate(
+                            scope,
+                            MiddleNode::new_from_type(MiddleNodeType::CallExpression(
+                                Box::new(MiddleNode {
+                                    node_type: MiddleNodeType::Identifier(value),
+                                    span: value_node.span,
+                                }),
+                                args,
+                            )),
+                        )?
                     },
                 ));
             }

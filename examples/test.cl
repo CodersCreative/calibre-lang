@@ -26,12 +26,18 @@ const main = fn () => {
 	let mut d = comp, 0 => list[list[2, 0, 4], list[1, 9, 3], list[4, 7, 9], list[9, 0, 1]];
 	let lst = list<int>[2, 0, 4];
 	
-	let mtchfn = match str -> int {
+	let mtchfn = fn match str -> int {
 		"hello" => 0,
 		_ => 10
 	};
 	
 	print(mtchfn("he"));
+
+	let match_res : int = match "hello" {
+		"hello" => 0,
+		_ => 10,
+	};
+	print(match_res);
 	
 	let => @add_scope [$first = 9.0, $second = 11.0, $t = type : float] {
 		let sum : $t = comp, 0 => $first + $second;
@@ -49,12 +55,6 @@ const main = fn () => {
 	
 	let mut correct = -10;
 	let mut other = -10;
-	
-	let hello = try ok("Yesssss") : hello => {
-		print("Nooooo");
-	};
-	
-	print(hello);
 	
 	(false) ? (8 == 9) ? correct : other : other = 0;
 	
