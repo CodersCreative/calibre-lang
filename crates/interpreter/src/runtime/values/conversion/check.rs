@@ -14,7 +14,13 @@ impl RuntimeValue {
         }
 
         match self {
-            RuntimeValue::Ref(_, x) => x == t,
+            RuntimeValue::Ref(_, x) => {
+                if x == t {
+                    true
+                } else {
+                    &RuntimeType::Ref(Box::new(x.clone())) == t
+                }
+            }
             RuntimeValue::Null => false,
             RuntimeValue::NativeFunction(_) => false,
 

@@ -1,15 +1,13 @@
 const matmul = fn (n : int, a b : list<list<float>>) -> list<list<float>> => {
-	let m : int = len(b[0]);
-	let p : int = len(a[0]);
 	let mut c = list<list<float>>[];
 	
 	for i in 0..n => {
-		let mut ci = list<float>[0.0 for _ in 0..m];
-		for k in 0..p => {
-			let aik : float = *a[i][k];
+		let mut ci = list<float>[0.0 for _ in 0..n];
+		for k in 0..n => {
+			let aik : &float = &a[i][k];
+			let bk : &list<float> = &b[k];
 			
-			let bk : list<float> = *b[k];
-			for j in 0..m => ci[j] += aik * bk[j];
+			for j in 0..n => ci[j] += *aik * bk[j];
 		};
 		c <<= ci;
 	};
@@ -17,15 +15,14 @@ const matmul = fn (n : int, a b : list<list<float>>) -> list<list<float>> => {
 };
 
 const main = fn () => {
-	comp, _ => let n : int = 100;
-	comp, _ => let tmp : float = 1.0 / n / n;
-	print("okay");
-	let a = comp => list<list<float>>[list<float>[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n];
-	let b = comp => list<list<float>>[list<float>[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n];
+	let n : int = 100;
+	let tmp : float = 1.0 / n / n;
+	let a = list<list<float>>[list<float>[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n];
+	let b = list<list<float>>[list<float>[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n];
 	print("hello");
 	
 	let d = matmul(n, a, b);
-	
-	print(d[n / 2 as int][n / 2 as int]);
+print("generated");	
+	print(d[n / 2][n / 2]);
 	print("Success");
 };

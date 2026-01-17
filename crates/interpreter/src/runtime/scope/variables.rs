@@ -9,6 +9,13 @@ use crate::runtime::{
 use std::collections::HashMap;
 
 impl InterpreterEnvironment {
+    pub fn get_var<'a>(&'a self, name: &str) -> Result<Variable<RuntimeValue>, ScopeErr> {
+        Ok(if let Some(var) = self.variables.get(name) {
+            self.convert_saveable_into_runtime_var(var.clone())
+        } else {
+            return Err(ScopeErr::Variable(name.to_string()));
+        })
+    }
     pub fn force_var(
         &mut self,
         scope: &u64,
@@ -28,7 +35,7 @@ impl InterpreterEnvironment {
         Ok(RuntimeValue::Ref(key, typ))
     }
 
-    fn _convert_saveable_into_runtime_var(
+    fn convert_saveable_into_runtime_var(
         &self,
         value: Variable<RuntimeValue>,
     ) -> Variable<RuntimeValue> {
@@ -262,23 +269,26 @@ impl InterpreterEnvironment {
     }
 
     pub fn get_member_ref(&self, keys: &[MemberPathType]) -> Result<RuntimeValue, InterpreterErr> {
-        let first = self.get_var_ref({
+        let first = {
             let Some(MemberPathType::Dot(first)) = keys.get(0) else {
                 panic!()
             };
 
-            first
-        })?;
-
-        if keys.len() <= 1 {
-            return Ok(first);
-        }
-
-        let RuntimeValue::Ref(mut pointer, _) = first else {
-            panic!()
+            first.clone()
         };
 
+        if keys.len() <= 1 {
+            return Ok(self.get_var(&first)?.value);
+        }
+
+        let mut pointer = first;
+
+        while let RuntimeValue::Ref(x, _) = &self.variables.get(&pointer).unwrap().value {
+            pointer = x.to_string();
+        }
+
         for key in keys.iter().skip(1) {
+            println!("st : {:?}\n", self.variables.get(&pointer).unwrap().value);
             match (&self.variables.get(&pointer).unwrap().value, key) {
                 (RuntimeValue::Aggregate(_, ObjectMap(map)), _) => {
                     match map.get(&key.to_string()) {
@@ -290,9 +300,7 @@ impl InterpreterEnvironment {
                 (RuntimeValue::List { data, data_type: _ }, MemberPathType::Computed(key)) => {
                     match data.get(key.parse::<usize>().unwrap()) {
                         Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
-                        _x => {
-                            break;
-                        }
+                        _ => break,
                     }
                 }
 
@@ -307,10 +315,10 @@ impl InterpreterEnvironment {
                     _ => break,
                 },
                 (RuntimeValue::Ref(x, _), _) => pointer = x.clone(),
-                _ => unimplemented!(),
+                x => unimplemented!("{:?}", x),
             }
         }
-
+        println!("fin : {:?}", self.variables.get(&pointer).unwrap().value);
         let typ = (&self.variables.get(&pointer).unwrap().value).into();
         Ok(RuntimeValue::Ref(pointer, typ))
     }

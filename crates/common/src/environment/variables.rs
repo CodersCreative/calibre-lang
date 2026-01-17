@@ -4,14 +4,6 @@ use crate::{
 };
 
 impl<T: RuntimeValue, U: RuntimeType> Environment<T, U> {
-    pub fn get_var<'a>(&'a self, name: &str) -> Result<&'a Variable<T>, ScopeErr> {
-        Ok(if let Some(var) = self.variables.get(name) {
-            var
-        } else {
-            return Err(ScopeErr::Variable(name.to_string()));
-        })
-    }
-
     pub fn update_var<F>(&mut self, name: &str, mut f: F) -> Result<(), ScopeErr>
     where
         F: FnMut(&mut Variable<T>),

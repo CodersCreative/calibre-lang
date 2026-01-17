@@ -236,7 +236,7 @@ fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {
         txt.push_str(&format!("{}, ", val.to_string()));
     }
 
-    let _ = (txt.pop(), txt.pop());
+    txt = txt.trim().trim_end_matches(",").trim().to_string();
     txt.push(close);
 
     txt

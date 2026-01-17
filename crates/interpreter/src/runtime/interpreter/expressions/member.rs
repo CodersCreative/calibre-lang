@@ -225,11 +225,8 @@ impl InterpreterEnvironment {
         };
         match self.get_member_ref(&path) {
             Ok(RuntimeValue::Ref(pointer, _)) => {
-                let mut value = &self.get_var(&pointer)?.value;
-                while let RuntimeValue::Ref(pointer, _) = value {
-                    value = &self.get_var(&pointer)?.value;
-                }
-                Ok(value.clone())
+                let mut value = self.get_var(&pointer)?.value;
+                Ok(value)
             }
             Ok(x) => Ok(x),
             Err(_) if path.len() == 2 => {

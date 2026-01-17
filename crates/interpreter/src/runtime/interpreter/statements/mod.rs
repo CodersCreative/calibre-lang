@@ -33,10 +33,16 @@ impl InterpreterEnvironment {
             self.remove_scope(&new_scope);
 
             match self.stop {
-                Some(StopValue::Break) => break,
+                Some(StopValue::Break) => {
+                    self.stop = None;
+                    break;
+                }
                 Some(StopValue::Return) => {
                     self.stop = Some(StopValue::Return);
                     break;
+                }
+                Some(_) => {
+                    self.stop = None;
                 }
                 _ => {}
             };
