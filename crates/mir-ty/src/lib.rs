@@ -10,6 +10,7 @@ use calibre_parser::{
     lexer::Span,
 };
 pub mod identifiers;
+pub mod renaming;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleNode {

@@ -1,5 +1,5 @@
-use calibre_common::{environment::Variable, errors::RuntimeErr};
-use calibre_mir_ty::{MiddleNode, MiddleNodeType};
+use calibre_common::{environment::InterpreterFrom, environment::Variable, errors::RuntimeErr};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType, renaming::AlphaRenameState};
 use calibre_parser::ast::VarType;
 use rand::random_range;
 
@@ -16,6 +16,9 @@ impl InterpreterEnvironment {
         func: RuntimeValue,
         mut arguments: Vec<(MiddleNode, Option<MiddleNode>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
+        let func = MiddleNode::interpreter_from(self, scope, func)?;
+        let func = func.rename(&mut AlphaRenameState::default());
+        let func = self.evaluate(scope, func)?;
         if let RuntimeValue::Function {
             parameters,
             body,
