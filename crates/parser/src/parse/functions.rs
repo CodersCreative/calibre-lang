@@ -74,12 +74,12 @@ impl Parser {
     }
 
     pub fn parse_scope_member_expression(&mut self) -> Node {
-        let mut path: Vec<Node> = vec![self.parse_member_expression()];
+        let mut path: Vec<Node> = vec![self.parse_member_expression(None)];
 
         if let NodeType::Identifier(_) = path[0].node_type {
             while self.first().token_type == TokenType::DoubleColon {
                 let _ = self.eat();
-                path.push(self.parse_member_expression());
+                path.push(self.parse_member_expression(None));
             }
         }
 
@@ -91,8 +91,20 @@ impl Parser {
         }
     }
 
-    pub fn parse_member_expression(&mut self) -> Node {
-        let mut path: Vec<(Node, bool)> = vec![(self.parse_primary_expression(), false)];
+    pub fn parse_potential_member(&mut self, node: Node) -> Node {
+        if self.first().token_type == TokenType::FullStop && !self.first().value.contains(" ") {
+            self.parse_member_expression(Some(node))
+        } else {
+            node
+        }
+    }
+
+    pub fn parse_member_expression(&mut self, start: Option<Node>) -> Node {
+        let mut path: Vec<(Node, bool)> = if let Some(start) = start {
+            vec![(start, false)]
+        } else {
+            vec![(self.parse_primary_expression(), false)]
+        };
 
         while self.first().token_type == TokenType::FullStop
             || self.first().token_type == TokenType::Open(Bracket::Square)

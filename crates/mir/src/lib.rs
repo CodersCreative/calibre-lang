@@ -1090,10 +1090,14 @@ impl MiddleEnvironment {
                 } else {
                     None
                 };
-                for pattern in body {
-                    let mut conditionals = Node::new_from_type(NodeType::Identifier(
-                        ParserText::from("true".to_string()).into(),
-                    ));
+                for mut pattern in body {
+                    let mut conditionals = if pattern.1.is_empty() {
+                        Node::new_from_type(NodeType::Identifier(
+                            ParserText::from("true".to_string()).into(),
+                        ))
+                    } else {
+                        pattern.1.remove(0)
+                    };
 
                     for condition in pattern.1 {
                         conditionals = Node::new_from_type(NodeType::BooleanExpression {
@@ -1227,7 +1231,7 @@ impl MiddleEnvironment {
                                             *pattern.2,
                                         ]),
                                         is_temp: true,
-                                        create_new_scope: Some(false),
+                                        create_new_scope: Some(true),
                                         named: None,
                                         define: false
                                     })}else{

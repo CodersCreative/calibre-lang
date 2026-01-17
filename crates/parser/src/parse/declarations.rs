@@ -13,7 +13,7 @@ use crate::{ast::NodeType, lexer::TokenType};
 
 impl Parser {
     pub fn parse_statement(&mut self) -> Node {
-        match &self.first().token_type {
+        let node = match &self.first().token_type {
             TokenType::Let | TokenType::Const => self.parse_variable_declaration(),
             TokenType::Comp => self.parse_comp(),
             TokenType::Trait => self.parse_if_statement(),
@@ -22,7 +22,9 @@ impl Parser {
             TokenType::Type => self.parse_type_decaration(),
             TokenType::For => self.parse_loop_declaration(),
             _ => self.parse_assignment_expression(),
-        }
+        };
+
+        self.parse_potential_member(node)
     }
 
     pub fn expect_named_scope(&mut self) -> NamedScope {

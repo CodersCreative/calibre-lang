@@ -48,7 +48,9 @@ impl InterpreterEnvironment {
                     } {
                         let func = self.evaluate(scope, x)?;
                         self.evaluate_function(scope, func, args)?
-                    } else if !path.is_empty() {
+                    } else if path.is_empty() {
+                        return Err(InterpreterErr::ExpectedFunctions);
+                    } else {
                         let obj = match match self.get_var(&path[0].to_string()) {
                             Ok(x) => x.value.clone(),
                             Err(e) => return Err(e.into()),
@@ -80,17 +82,6 @@ impl InterpreterEnvironment {
                             }
                             Err(e) => return Err(e.into()),
                         }
-                    } else {
-                        self.evaluate(
-                            scope,
-                            MiddleNode::new_from_type(MiddleNodeType::CallExpression(
-                                Box::new(MiddleNode {
-                                    node_type: MiddleNodeType::Identifier(value),
-                                    span: value_node.span,
-                                }),
-                                args,
-                            )),
-                        )?
                     },
                 ));
             }
@@ -223,42 +214,73 @@ impl InterpreterEnvironment {
         }
     }
 
+    fn evaluate_iden_member_expression(
+        &mut self,
+        scope: &u64,
+        path: Vec<(MiddleNode, bool)>,
+    ) -> Result<RuntimeValue, InterpreterErr> {
+        let mut path = match self.get_member_expression_path(scope, path)? {
+            MembrExprPathRes::Path(x) => x,
+            MembrExprPathRes::Value(x) => return Ok(x),
+        };
+        match self.get_member_ref(&path) {
+            Ok(RuntimeValue::Ref(pointer, _)) => {
+                let mut value = &self.get_var(&pointer)?.value;
+                while let RuntimeValue::Ref(pointer, _) = value {
+                    value = &self.get_var(&pointer)?.value;
+                }
+                Ok(value.clone())
+            }
+            Ok(x) => Ok(x),
+            Err(_) if path.len() == 2 => {
+                return self.evaluate(
+                    scope,
+                    MiddleNode::new_from_type(MiddleNodeType::EnumExpression {
+                        identifier: path.remove(0).to_string().into(),
+                        value: path.remove(0).to_string().into(),
+                        data: None,
+                    }),
+                );
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     pub fn evaluate_member_expression(
         &mut self,
         scope: &u64,
         exp: MiddleNode,
     ) -> Result<RuntimeValue, InterpreterErr> {
         match exp.node_type {
-            MiddleNodeType::MemberExpression { path: og_path } => {
-                let mut path = match self.get_member_expression_path(scope, og_path)? {
+            MiddleNodeType::MemberExpression { mut path } => {
+                if let Ok(x) = self.evaluate_iden_member_expression(scope, path.clone()) {
+                    return Ok(x);
+                }
+
+                let mut value = self.evaluate(scope, path.remove(0).0)?;
+                let path = match self.get_member_expression_path(scope, path)? {
                     MembrExprPathRes::Path(x) => x,
-                    MembrExprPathRes::Value(x) => return Ok(x),
+                    MembrExprPathRes::Value(x) => return Ok(value),
                 };
 
-                match self.get_member_ref(&path) {
-                    Ok(RuntimeValue::Ref(pointer, _)) => {
-                        let mut value = &self.get_var(&pointer)?.value;
-                        while let RuntimeValue::Ref(pointer, _) = value {
-                            value = &self.get_var(&pointer)?.value;
+                for point in path {
+                    match value {
+                        RuntimeValue::Aggregate(_, mut map) => {
+                            value = map.0.remove(point.to_string().trim()).unwrap()
                         }
-                        Ok(value.clone())
+                        RuntimeValue::Enum(_, _, Some(x))
+                        | RuntimeValue::Option(Some(x), _)
+                        | RuntimeValue::Result(Ok(x), _)
+                        | RuntimeValue::Result(Err(x), _)
+                            if point.to_string().trim() == "next" =>
+                        {
+                            value = *x
+                        }
+                        _ => break,
                     }
-                    Ok(x) => Ok(x),
-                    Err(_) if path.len() == 2 => {
-                        return self.evaluate(
-                            scope,
-                            MiddleNode::new(
-                                MiddleNodeType::EnumExpression {
-                                    identifier: path.remove(0).to_string().into(),
-                                    value: path.remove(0).to_string().into(),
-                                    data: None,
-                                },
-                                exp.span,
-                            ),
-                        );
-                    }
-                    Err(e) => Err(e),
                 }
+
+                Ok(value)
             }
             _ => unreachable!(),
         }

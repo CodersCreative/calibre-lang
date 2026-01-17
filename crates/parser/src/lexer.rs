@@ -349,9 +349,24 @@ impl Tokenizer {
                         let _ = buffer.remove(0);
                         Some(self.new_token(t, ";"))
                     }
+                    TokenType::FullStop => {
+                        self.increment_line_col(first);
+                        let value = buffer.remove(0).to_string();
+                        Some(self.new_token(
+                            t,
+                            &format!(
+                                "{}{}",
+                                if tokens.last().unwrap().token_type == TokenType::WhiteSpace {
+                                    String::from(" ")
+                                } else {
+                                    String::new()
+                                },
+                                value.trim()
+                            ),
+                        ))
+                    }
                     t => {
                         self.increment_line_col(first);
-
                         Some(self.new_token(t, buffer.remove(0).to_string().trim()))
                     }
                 },

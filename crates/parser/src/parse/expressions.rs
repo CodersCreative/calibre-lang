@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 impl Parser {
     pub fn parse_primary_expression(&mut self) -> Node {
-        match &self.first().token_type {
+        let node = match &self.first().token_type {
             TokenType::If => self.parse_if_statement(),
             TokenType::Match => self.parse_match_statement(),
             TokenType::List => self.parse_list_iter_expression(),
@@ -167,7 +167,9 @@ impl Parser {
                 self.add_err(SyntaxErr::UnexpectedToken);
                 Node::new(NodeType::EmptyLine, self.eat().span)
             }
-        }
+        };
+
+        self.parse_potential_member(node)
     }
 
     pub fn parse_comp(&mut self) -> Node {
