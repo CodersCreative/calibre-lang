@@ -1,0 +1,11 @@
+[package]
+name = "calibre-comptime"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+calibre-interpreter = {path = "../interpreter"}
+calibre-mir = {path = "../mir"}
+calibre-mir-ty = {path = "../mir-ty"}
+calibre-parser = {path = "../parser"}
+calibre-common = {path = "../common"}

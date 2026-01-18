@@ -7,6 +7,7 @@ use thiserror::Error;
 
 pub mod ast;
 pub mod lexer;
+pub mod native;
 pub mod parse;
 
 #[derive(Debug, Default)]
@@ -51,8 +52,11 @@ impl Parser {
 
         Node::new(
             NodeType::ScopeDeclaration {
-                body,
+                body: Some(body),
                 is_temp: false,
+                define: false,
+                named: None,
+                create_new_scope: Some(false),
             },
             span,
         )
@@ -65,6 +69,7 @@ impl From<LexerError> for ParserError {
     }
 }
 
+#[allow(unused_assignments)]
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum ParserError {
     #[error(transparent)]

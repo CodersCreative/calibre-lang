@@ -1,11 +1,10 @@
+use crate::native::{self, NativeFunction};
 use crate::runtime::scope::InterpreterEnvironment;
-use crate::{
-    native::{self, NativeFunction},
-    runtime::values::helper::MatchBlock,
-};
-use calibre_common::environment::{InterpreterFrom, Type};
+use calibre_common::environment::InterpreterFrom;
 use calibre_common::errors::ScopeErr;
-use calibre_parser::ast::{ObjectType, ParserDataType, ParserInnerType};
+use calibre_mir::environment::MiddleTypeDefType;
+use calibre_mir_ty::MiddleNode;
+use calibre_parser::ast::{ObjectMap, ParserDataType, ParserInnerType};
 use helper::Block;
 use std::{collections::HashMap, f64::consts::PI, fmt::Debug, rc::Rc};
 
@@ -21,18 +20,24 @@ pub enum RuntimeType {
     Str,
     Char,
     Tuple(Vec<RuntimeType>),
-    List(Option<Box<RuntimeType>>),
+    List(Box<RuntimeType>),
     Range,
     Option(Box<RuntimeType>),
-    Result(Box<RuntimeType>, Box<RuntimeType>),
+    Result {
+        ok: Box<RuntimeType>,
+        err: Box<RuntimeType>,
+    },
     Function {
-        return_type: Option<Box<RuntimeType>>,
+        return_type: Box<RuntimeType>,
         parameters: Vec<RuntimeType>,
         is_async: bool,
     },
-    Enum(u64),
-    Struct(Option<u64>),
+    Enum(String),
+    Struct(String),
     Ref(Box<RuntimeType>),
+    Null,
+    Type,
+    NativeFn(Box<RuntimeType>),
 }
 
 impl calibre_common::environment::RuntimeType for RuntimeType {}
@@ -50,6 +55,10 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
             (String::from("INT_MIN"), RuntimeValue::Int(i64::MIN)),
             (String::from("true"), RuntimeValue::Bool(true)),
             (String::from("false"), RuntimeValue::Bool(false)),
+            (
+                String::from("none"),
+                RuntimeValue::Option(None, RuntimeType::Option(Box::new(RuntimeType::Dynamic))),
+            ),
         ])
     }
 
@@ -61,6 +70,7 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
             ("some", Rc::new(native::global::SomeFn())),
             ("len", Rc::new(native::global::Len())),
             ("trim", Rc::new(native::global::Trim())),
+            ("discriminant", Rc::new(native::global::DiscriminantFn())),
             ("tuple", Rc::new(native::global::TupleFn())),
             ("panic", Rc::new(native::global::PanicFn())),
             ("console.out", Rc::new(native::stdlib::console::Out())),
@@ -86,14 +96,18 @@ impl calibre_common::environment::RuntimeValue for RuntimeValue {
     }
 }
 
-impl InterpreterFrom<ParserDataType> for RuntimeType {
+impl InterpreterFrom<ParserDataType<MiddleNode>> for RuntimeType {
     type Interpreter = InterpreterEnvironment;
     fn interpreter_from(
         env: &Self::Interpreter,
         scope: &u64,
-        value: ParserDataType,
+        value: ParserDataType<MiddleNode>,
     ) -> Result<Self, ScopeErr> {
         Ok(match value.data_type {
+            ParserInnerType::Null | ParserInnerType::DollarIdentifier(_) => Self::Null,
+            ParserInnerType::NativeFunction(x) => {
+                Self::NativeFn(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
+            }
             ParserInnerType::Float => Self::Float,
             ParserInnerType::Dynamic => Self::Dynamic,
             ParserInnerType::Int => Self::Int,
@@ -105,41 +119,22 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
                     .map(|x| RuntimeType::interpreter_from(env, scope, x).unwrap())
                     .collect(),
             ),
-            ParserInnerType::List(x) => Self::List(match x {
-                Some(x) => Some(Box::new(RuntimeType::interpreter_from(env, scope, *x)?)),
-                None => None,
-            }),
-            ParserInnerType::Scope(mut nodes) => {
-                let typ = nodes.remove(nodes.len() - 1);
-                let list = nodes
-                    .into_iter()
-                    .map(|x| {
-                        let ParserInnerType::Struct(Some(x)) = x.data_type else {
-                            panic!()
-                        };
-                        x
-                    })
-                    .collect();
-                let scope = env.get_scope_list(scope.clone(), list)?;
-
-                RuntimeType::interpreter_from(env, &scope, typ)?
+            ParserInnerType::List(x) => {
+                Self::List(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
             }
+            ParserInnerType::Scope(_nodes) => unreachable!(),
             ParserInnerType::Range => Self::Range,
             ParserInnerType::Struct(x) => {
-                if let Some(x) = x {
-                    let y = env.get_object_pointer(scope, &x)?;
-
-                    if let Some(obj) = env.objects.get(&y) {
-                        match &obj.object_type {
-                            Type::Enum(_) => Self::Enum(y),
-                            Type::Struct(_) => Self::Struct(Some(y)),
-                            Type::NewType(x) => x.clone(),
+                if let Some(obj) = env.objects.get(&x) {
+                    match &obj.object_type {
+                        MiddleTypeDefType::Enum(_) => Self::Enum(x),
+                        MiddleTypeDefType::Struct(_) => Self::Struct(x),
+                        MiddleTypeDefType::NewType(x) => {
+                            RuntimeType::interpreter_from(env, scope, x.clone()).unwrap()
                         }
-                    } else {
-                        Self::Struct(Some(y))
                     }
                 } else {
-                    Self::Struct(None)
+                    Self::Struct(x)
                 }
             }
             ParserInnerType::Function {
@@ -147,10 +142,7 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
                 parameters,
                 is_async,
             } => Self::Function {
-                return_type: match return_type {
-                    Some(x) => Some(Box::new(RuntimeType::interpreter_from(env, scope, *x)?)),
-                    None => None,
-                },
+                return_type: Box::new(RuntimeType::interpreter_from(env, scope, *return_type)?),
                 parameters: parameters
                     .into_iter()
                     .map(|x| RuntimeType::interpreter_from(env, scope, x).unwrap())
@@ -160,13 +152,14 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
             ParserInnerType::Option(x) => {
                 Self::Option(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
             }
-            ParserInnerType::Result(x, y) => Self::Result(
-                Box::new(RuntimeType::interpreter_from(env, scope, *x)?),
-                Box::new(RuntimeType::interpreter_from(env, scope, *y)?),
-            ),
+            ParserInnerType::Result { ok, err } => Self::Result {
+                ok: Box::new(RuntimeType::interpreter_from(env, scope, *ok)?),
+                err: Box::new(RuntimeType::interpreter_from(env, scope, *err)?),
+            },
             ParserInnerType::Ref(x, _) => {
                 Self::Ref(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
             }
+            ParserInnerType::Comp { .. } => unreachable!(),
         })
     }
 }
@@ -174,20 +167,20 @@ impl InterpreterFrom<ParserDataType> for RuntimeType {
 impl Into<RuntimeType> for &RuntimeValue {
     fn into(self) -> RuntimeType {
         match self {
-            RuntimeValue::Null => RuntimeType::Dynamic,
+            RuntimeValue::Type(_) => RuntimeType::Type,
             RuntimeValue::Float(_) => RuntimeType::Float,
             RuntimeValue::Int(_) => RuntimeType::Int,
             RuntimeValue::Ref(_, x) => x.clone(),
-            RuntimeValue::Enum(y, _, _) => RuntimeType::Enum(*y),
-            RuntimeValue::Struct(y, _) => RuntimeType::Struct(*y),
+            RuntimeValue::Enum(y, _, _) => RuntimeType::Enum(y.clone()),
             RuntimeValue::Bool(_) => RuntimeType::Bool,
             RuntimeValue::Option(_, x) => x.clone(),
             RuntimeValue::Result(_, x) => x.clone(),
             RuntimeValue::Str(_) => RuntimeType::Str,
             RuntimeValue::Char(_) => RuntimeType::Char,
             RuntimeValue::Range(_, _) => RuntimeType::Range,
-            RuntimeValue::Tuple(data) => {
-                RuntimeType::Tuple(data.into_iter().map(|x| x.into()).collect())
+            RuntimeValue::Aggregate(Some(x), _) => RuntimeType::Struct(x.to_string()),
+            RuntimeValue::Aggregate(None, data) => {
+                RuntimeType::Tuple(data.0.iter().map(|x| (x.1).into()).collect())
             }
             RuntimeValue::List { data_type, .. } => RuntimeType::List(data_type.clone()),
             RuntimeValue::Function {
@@ -196,14 +189,14 @@ impl Into<RuntimeType> for &RuntimeValue {
                 is_async,
                 ..
             } => RuntimeType::Function {
-                return_type: match return_type {
-                    Some(x) => Some(Box::new(x.clone())),
-                    None => None,
-                },
+                return_type: Box::new(return_type.clone()),
                 parameters: parameters.iter().map(|x| x.1.clone()).collect(),
                 is_async: *is_async,
             },
-            RuntimeValue::NativeFunction(_) => RuntimeType::Dynamic,
+            RuntimeValue::NativeFunction(_x) => {
+                RuntimeType::NativeFn(Box::new(RuntimeType::Dynamic))
+            }
+            RuntimeValue::Null => RuntimeType::Null,
         }
     }
 }
@@ -212,34 +205,28 @@ impl Into<RuntimeType> for &RuntimeValue {
 pub enum RuntimeValue {
     Null,
     Float(f64),
+    Type(RuntimeType),
     Int(i64),
     Range(i64, i64),
     Bool(bool),
     Str(String),
     Char(char),
-    Struct(Option<u64>, ObjectType<RuntimeValue>),
-    Enum(u64, usize, Option<ObjectType<RuntimeValue>>),
-    Tuple(Vec<RuntimeValue>),
-    Ref(u64, RuntimeType),
+    Aggregate(Option<String>, ObjectMap<RuntimeValue>),
+    Enum(String, usize, Option<Box<RuntimeValue>>),
+    Ref(String, RuntimeType),
     List {
         data: Vec<RuntimeValue>,
-        data_type: Option<Box<RuntimeType>>,
+        data_type: Box<RuntimeType>,
     },
     Option(Option<Box<RuntimeValue>>, RuntimeType),
     Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>, RuntimeType),
     Function {
         parameters: Vec<(String, RuntimeType, Option<RuntimeValue>)>,
-        body: FunctionType,
-        return_type: Option<RuntimeType>,
+        body: Block,
+        return_type: RuntimeType,
         is_async: bool,
     },
     NativeFunction(Rc<dyn NativeFunction>),
-}
-
-#[derive(Clone, PartialEq, PartialOrd, Debug)]
-pub enum FunctionType {
-    Regular(Block),
-    Match(MatchBlock),
 }
 
 fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {
@@ -249,7 +236,7 @@ fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {
         txt.push_str(&format!("{}, ", val.to_string()));
     }
 
-    let _ = (txt.pop(), txt.pop());
+    txt = txt.trim().trim_end_matches(",").trim().to_string();
     txt.push(close);
 
     txt
@@ -265,14 +252,14 @@ impl ToString for RuntimeValue {
             Self::Range(from, to) => format!("{}..{}", from, to),
             Self::Ref(_, ty) => format!("link -> {:?}", ty),
             Self::Bool(x) => x.to_string(),
-            Self::Struct(x, y) => format!("{y:?} = {x:?}"),
+            Self::Aggregate(x, y) => format!("{y:?} = {x:?}"),
             Self::NativeFunction(_) => format!("native function"),
             Self::List { data, data_type: _ } => print_list(data, '[', ']'),
-            Self::Tuple(data) => print_list(data, '(', ')'),
             Self::Option(x, _) => format!("{:?}", x),
             Self::Result(x, _) => format!("{:?}", x),
             Self::Str(x) => x.to_string(),
             Self::Char(x) => x.to_string(),
+            Self::Type(x) => format!("Type {:?}", x),
             Self::Function {
                 parameters,
                 body: _,

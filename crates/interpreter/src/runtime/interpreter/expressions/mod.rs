@@ -6,13 +6,12 @@ use crate::{
         values::{RuntimeType, RuntimeValue},
     },
 };
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{
-    Node, NodeType,
     binary::BinaryOperator,
     comparison::{BooleanOperation, Comparison},
 };
 pub mod call;
-pub mod lists;
 pub mod member;
 pub mod scope;
 pub mod structs;
@@ -20,11 +19,9 @@ pub mod structs;
 impl InterpreterEnvironment {
     pub fn evaluate_identifier(
         &mut self,
-        scope: &u64,
         identifier: &str,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let pointer = self.get_var_pointer(scope, identifier)?;
-        Ok(self.get_var(&pointer)?.value.clone())
+        Ok(self.get_var(identifier)?.value.clone())
     }
 
     pub fn evaluate_not<'a>(
@@ -60,18 +57,24 @@ impl InterpreterEnvironment {
 
     pub fn evaluate_as_expression(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         value: RuntimeValue,
         data_type: RuntimeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        Ok(match value.into_type(self, scope, &data_type) {
+        Ok(match value.into_type(self, &data_type) {
             Ok(x) => RuntimeValue::Result(
-                Ok(Box::new(x.clone())),
-                RuntimeType::Result(Box::new(RuntimeType::Dynamic), Box::new((&x).into())),
+                Ok(Box::new(x)),
+                RuntimeType::Result {
+                    err: Box::new(RuntimeType::Str),
+                    ok: Box::new(data_type),
+                },
             ),
             Err(e) => RuntimeValue::Result(
                 Err(Box::new(RuntimeValue::Str(String::from(e.to_string())))),
-                RuntimeType::Result(Box::new(RuntimeType::Str), Box::new(RuntimeType::Dynamic)),
+                RuntimeType::Result {
+                    err: Box::new(RuntimeType::Str),
+                    ok: Box::new(data_type),
+                },
             ),
         })
     }
@@ -106,42 +109,6 @@ impl InterpreterEnvironment {
         }
     }
 
-    pub fn evaluate_pipe_expression(
-        &mut self,
-        scope: &u64,
-        values: Vec<Node>,
-    ) -> Result<RuntimeValue, InterpreterErr> {
-        let mut pre_values: Vec<Node> = Vec::new();
-        for value in values.into_iter() {
-            match value.node_type {
-                NodeType::Identifier(_)
-                | NodeType::MatchDeclaration { .. }
-                | NodeType::FunctionDeclaration { .. }
-                | NodeType::MemberExpression { .. }
-                | NodeType::EnumExpression { .. } => {
-                    let calculated = self.evaluate(scope, value.clone());
-                    match calculated {
-                        Ok(RuntimeValue::Function { .. }) => {
-                            let args: Vec<(Node, Option<Node>)> =
-                                pre_values.iter().map(|x| (x.clone(), None)).collect();
-                            pre_values.clear();
-                            pre_values.push(Node::new(
-                                NodeType::CallExpression(Box::new(value.clone()), args),
-                                value.span,
-                            ));
-                        }
-                        _ => pre_values.push(value),
-                    }
-                }
-                _ => {
-                    pre_values.push(value);
-                }
-            }
-        }
-
-        self.evaluate(scope, pre_values.pop().unwrap())
-    }
-
     pub fn evaluate_boolean_expression(
         &mut self,
         _scope: &u64,
@@ -154,13 +121,15 @@ impl InterpreterEnvironment {
 
     pub fn evaluate_is_expression(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         value: RuntimeValue,
         data_type: RuntimeType,
     ) -> Result<RuntimeValue, InterpreterErr> {
         match data_type {
-            RuntimeType::Struct(Some(x)) if x == 0 => Ok(RuntimeValue::Bool(value.is_number())),
-            _ => Ok(RuntimeValue::Bool(value.is_type(self, scope, &data_type))),
+            RuntimeType::Struct(x) if &x == "__number__" => {
+                Ok(RuntimeValue::Bool(value.is_number()))
+            }
+            _ => Ok(RuntimeValue::Bool(value.is_type(self, &data_type))),
         }
     }
 
@@ -177,21 +146,21 @@ impl InterpreterEnvironment {
     pub fn evaluate_assignment_expression(
         &mut self,
         scope: &u64,
-        identifier: Node,
+        identifier: MiddleNode,
         value: RuntimeValue,
     ) -> Result<RuntimeValue, InterpreterErr> {
         match identifier.node_type {
-            NodeType::DerefStatement { value: node } => {
+            MiddleNodeType::DerefStatement { value: node } => {
                 if let RuntimeValue::Ref(pointer, _) = match node.node_type.clone() {
-                    NodeType::Identifier(x) => self.get_var_ref(scope, &x)?,
-                    NodeType::MemberExpression { path } => {
+                    MiddleNodeType::Identifier(x) => self.get_var_ref(&x)?,
+                    MiddleNodeType::MemberExpression { path } => {
                         let MembrExprPathRes::Path(path) =
                             self.get_member_expression_path(scope, path)?
                         else {
                             return Err(InterpreterErr::RefNonVar(node.node_type));
                         };
 
-                        self.get_member_ref(scope, &path)?
+                        self.get_member_ref(&path)?
                     }
                     _ => return Err(InterpreterErr::RefNonVar(node.node_type)),
                 } {
@@ -201,11 +170,11 @@ impl InterpreterEnvironment {
                     Err(InterpreterErr::AssignNonVariable(node.node_type))
                 }
             }
-            NodeType::Identifier(identifier) => {
-                let _ = self.assign_var(scope, &identifier, value.clone())?;
+            MiddleNodeType::Identifier(identifier) => {
+                let _ = self.assign_var(&identifier, value.clone())?;
                 Ok(RuntimeValue::Null)
             }
-            NodeType::MemberExpression { .. } | NodeType::ScopeMemberExpression { .. } => {
+            MiddleNodeType::MemberExpression { .. } => {
                 let _ = self.assign_member_expression(scope, identifier, value.clone())?;
                 Ok(RuntimeValue::Null)
             }

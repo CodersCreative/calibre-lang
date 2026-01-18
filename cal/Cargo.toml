@@ -8,7 +8,9 @@ clap = { version = "4.5.40", features = ["derive"] }
 rand = "0.9.1"
 rustyline = "16.0.0"
 calibre-parser = {path = "../crates/parser"}
-calibre-type-checker = {path = "../crates/type-checker"}
 calibre-common = {path = "../crates/common"}
 calibre-interpreter = {path = "../crates/interpreter"}
+calibre-mir = {path = "../crates/mir"}
+calibre-comptime = {path = "../crates/comptime"}
+calibre-mir-ty = {path = "../crates/mir-ty"}
 miette = { version = "7.6.0", features = ["fancy"] }

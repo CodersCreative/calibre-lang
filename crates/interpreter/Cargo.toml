@@ -9,3 +9,5 @@ rustyline = "16.0.0"
 thiserror = "2.0.12"
 calibre-parser = {path = "../parser"}
 calibre-common = {path = "../common"}
+calibre-mir = {path = "../mir"}
+calibre-mir-ty = {path = "../mir-ty"}

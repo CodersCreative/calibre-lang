@@ -7,8 +7,8 @@ pub mod r#type;
 use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{
-        LoopType, Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
-        RefMutability, comparison::Comparison,
+        LoopType, Node, NodeType, ParserDataType, ParserInnerType, PotentialDollarIdentifier,
+        PotentialNewType, RefMutability, comparison::Comparison,
     },
     lexer::{Bracket, Span, Token, TokenType},
 };
@@ -20,7 +20,11 @@ impl Parser {
     }
 
     fn second(&self) -> &Token {
-        self.nth(1).unwrap()
+        if let Some(x) = self.nth(1) {
+            x
+        } else {
+            panic!("{:?}", self.errors);
+        }
     }
 
     fn nth(&self, i: usize) -> Option<&Token> {
@@ -47,7 +51,7 @@ impl Parser {
         });
 
         self.errors.push(ParserError::Syntax {
-            input,
+            input: input.trim().to_string(),
             err,
             span: prev.span,
             token: Some((0, prev.value.len() - 1)),
@@ -68,7 +72,33 @@ impl Parser {
         }
     }
 
-    fn expect_type(&mut self) -> ParserDataType {
+    fn parse_potential_new_type(&mut self) -> Option<PotentialNewType> {
+        if self.first().token_type == TokenType::Type {
+            let _ = self.eat();
+            let identifier = self.expect_potential_dollar_ident();
+            let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
+            Some(PotentialNewType::NewType {
+                identifier,
+                type_def: self.parse_type_def_type(),
+                overloads: self.parse_overloads(),
+            })
+        } else if let Some(x) = self.parse_type() {
+            Some(x.into())
+        } else {
+            None
+        }
+    }
+
+    fn expect_potential_new_type(&mut self) -> PotentialNewType {
+        if let Some(x) = self.parse_potential_new_type() {
+            x
+        } else {
+            self.add_err(SyntaxErr::ExpectedType);
+            ParserDataType::new(ParserInnerType::Dynamic, self.first().span.clone()).into()
+        }
+    }
+
+    fn expect_type(&mut self) -> ParserDataType<Node> {
         if let Some(x) = self.parse_type() {
             x
         } else {
@@ -81,7 +111,7 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<(ParserText, ParserDataType, Option<Node>)> {
+    ) -> Vec<(PotentialDollarIdentifier, PotentialNewType, Option<Node>)> {
         let mut properties = Vec::new();
         let mut defaulted = false;
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
@@ -90,18 +120,15 @@ impl Parser {
             let mut keys = Vec::new();
 
             while self.first().token_type == TokenType::Identifier {
-                keys.push(
-                    self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)
-                        .into(),
-                );
+                keys.push(self.expect_potential_dollar_ident());
             }
 
             let typ = if self.first().token_type == TokenType::Colon {
                 let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-                self.expect_type()
+                self.expect_potential_new_type()
             } else {
-                ParserDataType::new(ParserInnerType::Dynamic, self.first().span.clone())
+                ParserDataType::new(ParserInnerType::Dynamic, self.first().span.clone()).into()
             };
 
             let default = if defaulted || self.first().token_type == TokenType::Equals {
@@ -126,64 +153,11 @@ impl Parser {
         properties
     }
 
-    fn parse_key_type_list_object_val(&mut self) -> ObjectType<ParserDataType> {
-        let mut tuple = Vec::new();
-        let mut properties = HashMap::new();
-
-        let (is_tuple, _, close_token) = match self.eat().token_type {
-            TokenType::Open(Bracket::Curly) => (
-                false,
-                TokenType::Open(Bracket::Curly),
-                TokenType::Close(Bracket::Curly),
-            ),
-            TokenType::Open(Bracket::Paren) => (
-                true,
-                TokenType::Open(Bracket::Paren),
-                TokenType::Close(Bracket::Paren),
-            ),
-            _ => {
-                self.add_err(SyntaxErr::ExpectedOpeningBracket(Bracket::Curly));
-
-                (
-                    true,
-                    TokenType::Open(Bracket::Paren),
-                    TokenType::Close(Bracket::Paren),
-                )
-            }
-        };
-
-        while !self.is_eof() && self.first().token_type != close_token {
-            if is_tuple {
-                tuple.push(self.expect_type());
-            } else {
-                let key = self
-                    .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)
-                    .value;
-
-                let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
-
-                properties.insert(key, self.expect_type());
-            }
-
-            if self.first().token_type != close_token {
-                let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
-            }
-        }
-
-        let _ = self.expect_eat(&close_token, SyntaxErr::ExpectedToken(close_token.clone()));
-
-        if is_tuple {
-            ObjectType::Tuple(tuple)
-        } else {
-            ObjectType::Map(properties)
-        }
-    }
-
     fn parse_key_type_list(
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> HashMap<String, ParserDataType> {
+    ) -> HashMap<String, PotentialNewType> {
         let mut properties = HashMap::new();
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
@@ -194,7 +168,7 @@ impl Parser {
 
             let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-            properties.insert(key, self.expect_type());
+            properties.insert(key, self.expect_potential_new_type());
 
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
@@ -210,12 +184,12 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<ParserDataType> {
+    ) -> Vec<PotentialNewType> {
         let mut properties = Vec::new();
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         while !self.is_eof() && self.first().token_type != close_token {
-            properties.push(self.expect_type());
+            properties.push(self.expect_potential_new_type());
 
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
@@ -246,24 +220,28 @@ impl Parser {
         }
     }
 
-    pub fn parse_type(&mut self) -> Option<ParserDataType> {
+    pub fn parse_type(&mut self) -> Option<ParserDataType<Node>> {
         let t = self.first().clone();
-
-        if self.first().token_type == TokenType::Not {
-            let not = self.eat();
-            let typ = self.expect_type();
-            return Some(ParserDataType::new(
-                ParserInnerType::Result(
-                    Box::new(ParserDataType::new(ParserInnerType::Dynamic, not.span)),
-                    Box::new(typ.clone()),
-                ),
-                Span::new_from_spans(not.span, typ.span),
-            ));
-        }
-
         let mutability = RefMutability::from(t.token_type.clone());
 
-        let mut typ = if mutability != RefMutability::Value {
+        let mut typ = if t.token_type == TokenType::Not {
+            let not = self.eat();
+            let typ = self.expect_type();
+            Some(ParserDataType::new(
+                ParserInnerType::Result {
+                    err: Box::new(ParserDataType::new(ParserInnerType::Dynamic, not.span)),
+                    ok: Box::new(typ.clone()),
+                },
+                Span::new_from_spans(not.span, typ.span),
+            ))
+        } else if t.token_type == TokenType::Dollar {
+            let open = self.eat();
+            let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+            Some(ParserDataType::new(
+                ParserInnerType::DollarIdentifier(ident.value),
+                Span::new_from_spans(open.span, ident.span),
+            ))
+        } else if mutability != RefMutability::Value {
             let mutability_token = self.eat();
             let typ = self.expect_type();
             Some(ParserDataType::new(
@@ -280,12 +258,23 @@ impl Parser {
                 self.first().span.clone()
             } else {
                 Span::new_from_spans(
-                    types.first().unwrap().span.clone(),
-                    types.last().unwrap().span.clone(),
+                    types.first().unwrap().span().clone(),
+                    types.last().unwrap().span().clone(),
                 )
             };
 
-            Some(ParserDataType::new(ParserInnerType::Tuple(types), span))
+            Some(ParserDataType::new(
+                ParserInnerType::Tuple(
+                    types
+                        .into_iter()
+                        .map(|x| match x {
+                            PotentialNewType::DataType(x) => x,
+                            PotentialNewType::NewType { .. } => panic!(),
+                        })
+                        .collect(),
+                ),
+                span,
+            ))
         } else if t.token_type == TokenType::Func {
             let open = self.eat();
             let is_async = if self.first().token_type == TokenType::Async {
@@ -295,18 +284,25 @@ impl Parser {
                 false
             };
 
-            let args = self.parse_type_list(
-                TokenType::Open(Bracket::Paren),
-                TokenType::Close(Bracket::Paren),
-            );
-            let mut ret = None;
+            let args: Vec<ParserDataType<Node>> = self
+                .parse_type_list(
+                    TokenType::Open(Bracket::Paren),
+                    TokenType::Close(Bracket::Paren),
+                )
+                .into_iter()
+                .map(|x| match x {
+                    PotentialNewType::DataType(x) => x,
+                    _ => panic!(),
+                })
+                .collect();
+            let mut ret = ParserDataType::from(ParserInnerType::Null);
 
             if self.first().token_type == TokenType::Arrow {
                 let _ = self.eat();
-                ret = Some(Box::new(self.expect_type()));
+                ret = self.expect_type();
             }
 
-            let close = if let Some(ret) = &ret {
+            let close = if ret.data_type != ParserInnerType::Null {
                 ret.span.clone()
             } else if let Some(arg) = args.last() {
                 arg.span.clone()
@@ -316,7 +312,7 @@ impl Parser {
 
             Some(ParserDataType::new(
                 ParserInnerType::Function {
-                    return_type: ret,
+                    return_type: Box::new(ret),
                     parameters: args,
                     is_async,
                 },
@@ -324,21 +320,20 @@ impl Parser {
             ))
         } else if t.token_type == TokenType::List {
             let open = self.eat();
-            let mut close = open.clone();
-            let t = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
-                let _ = self.eat();
-                let t = Some(Box::new(self.expect_type()));
-                close = self.expect_eat(
-                    &TokenType::Comparison(Comparison::Greater),
-                    SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
-                );
-                t
-            } else {
-                None
-            };
+            let _ = self.expect_eat(
+                &TokenType::Comparison(Comparison::Lesser),
+                SyntaxErr::ExpectedChar('<'),
+            );
+
+            let t = self.expect_type();
+
+            let close = self.expect_eat(
+                &TokenType::Comparison(Comparison::Greater),
+                SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
+            );
 
             Some(ParserDataType::new(
-                ParserInnerType::List(t),
+                ParserInnerType::List(Box::new(t)),
                 Span::new_from_spans(open.span, close.span),
             ))
         } else {
@@ -352,7 +347,7 @@ impl Parser {
                     if let ParserInnerType::Struct(_) = x.data_type {
                         path.push(x);
 
-                        while self.first().token_type == TokenType::Colon {
+                        while self.first().token_type == TokenType::DoubleColon {
                             let value = self.eat();
                             close = value.span;
 
@@ -392,7 +387,10 @@ impl Parser {
             let t = self.parse_type()?;
 
             typ = Some(ParserDataType::new(
-                ParserInnerType::Result(Box::new(typ.clone()?), Box::new(t.clone())),
+                ParserInnerType::Result {
+                    err: Box::new(typ.clone()?),
+                    ok: Box::new(t.clone()),
+                },
                 Span::new_from_spans(typ?.span, t.span),
             ));
         }
@@ -401,7 +399,7 @@ impl Parser {
     }
 
     pub fn parse_paren_expression(&mut self) -> Node {
-        let _ = self.expect_eat(
+        let open = self.expect_eat(
             &TokenType::Open(Bracket::Paren),
             SyntaxErr::ExpectedOpeningBracket(Bracket::Paren),
         );
@@ -409,24 +407,59 @@ impl Parser {
         let value = self.parse_statement();
         let span = value.span.clone();
 
-        let value = Node::new(
-            NodeType::ParenExpression {
-                value: Box::new(value),
-            },
-            span,
-        );
-
         let _ = self.expect_eat(
             &TokenType::Close(Bracket::Paren),
             SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
         );
 
-        value
+        if self.first().token_type == TokenType::Question {
+            let _ = self.eat();
+            let then = self.parse_pipe_expression();
+            let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
+            let otherwise = self.parse_pipe_expression();
+            Node {
+                span: Span::new_from_spans(open.span, otherwise.span),
+                node_type: NodeType::Ternary {
+                    comparison: Box::new(value),
+                    then: Box::new(then),
+                    otherwise: Box::new(otherwise),
+                },
+            }
+        } else {
+            Node::new(
+                NodeType::ParenExpression {
+                    value: Box::new(value),
+                },
+                span,
+            )
+        }
     }
 
-    pub fn parse_list_expression(&mut self) -> Node {
+    pub fn parse_list_iter_expression(&mut self) -> Node {
         let mut values = Vec::new();
-        let open = self.eat();
+        let open = self.expect_eat(&TokenType::List, SyntaxErr::ExpectedType);
+
+        let t = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
+            let _ = self.expect_eat(
+                &TokenType::Comparison(Comparison::Lesser),
+                SyntaxErr::ExpectedChar('<'),
+            );
+
+            let t = self.expect_potential_new_type();
+
+            let _ = self.expect_eat(
+                &TokenType::Comparison(Comparison::Greater),
+                SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
+            );
+            Some(t)
+        } else {
+            None
+        };
+
+        let _ = self.expect_eat(
+            &TokenType::Open(Bracket::Square),
+            SyntaxErr::ExpectedOpeningBracket(Bracket::Square),
+        );
 
         while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Square) {
             values.push(self.parse_statement());
@@ -452,6 +485,7 @@ impl Parser {
 
                 return Node::new(
                     NodeType::IterExpression {
+                        data_type: t,
                         map: Box::new(values[0].clone()),
                         loop_type: Box::new(loop_type),
                         conditionals,
@@ -469,7 +503,7 @@ impl Parser {
         );
 
         Node::new(
-            NodeType::ListLiteral(values),
+            NodeType::ListLiteral(t, values),
             Span::new_from_spans(open.span, close.span),
         )
     }

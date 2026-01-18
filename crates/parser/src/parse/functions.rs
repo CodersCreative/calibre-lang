@@ -1,4 +1,4 @@
-use crate::ast::{Node, ParserText};
+use crate::ast::Node;
 use crate::lexer::{Bracket, Span};
 use crate::{Parser, SyntaxErr};
 use crate::{ast::NodeType, lexer::TokenType};
@@ -33,12 +33,12 @@ impl Parser {
     }
 
     pub fn parse_purely_member(&mut self) -> Node {
-        let first = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+        let first = self.expect_potential_dollar_ident();
 
         let mut path = vec![(
             Node {
-                node_type: NodeType::Identifier(first.clone().into()),
-                span: first.span,
+                node_type: NodeType::Identifier(first.clone()),
+                span: *first.span(),
             },
             false,
         )];
@@ -47,11 +47,11 @@ impl Parser {
             || self.first().token_type == TokenType::Open(Bracket::Square)
         {
             if self.eat().token_type == TokenType::FullStop {
-                let first = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                let first = self.expect_potential_dollar_ident();
                 path.push((
                     Node {
-                        node_type: NodeType::Identifier(first.clone().into()),
-                        span: first.span,
+                        node_type: NodeType::Identifier(first.clone()),
+                        span: *first.span(),
                     },
                     false,
                 ));
@@ -74,12 +74,12 @@ impl Parser {
     }
 
     pub fn parse_scope_member_expression(&mut self) -> Node {
-        let mut path: Vec<Node> = vec![self.parse_member_expression()];
+        let mut path: Vec<Node> = vec![self.parse_member_expression(None)];
 
         if let NodeType::Identifier(_) = path[0].node_type {
-            while self.first().token_type == TokenType::Colon {
+            while self.first().token_type == TokenType::DoubleColon {
                 let _ = self.eat();
-                path.push(self.parse_member_expression());
+                path.push(self.parse_member_expression(None));
             }
         }
 
@@ -91,8 +91,23 @@ impl Parser {
         }
     }
 
-    pub fn parse_member_expression(&mut self) -> Node {
-        let mut path: Vec<(Node, bool)> = vec![(self.parse_primary_expression(), false)];
+    pub fn parse_potential_member(&mut self, node: Node) -> Node {
+        if !self.is_eof()
+            && self.first().token_type == TokenType::FullStop
+            && !self.first().value.contains(" ")
+        {
+            self.parse_member_expression(Some(node))
+        } else {
+            node
+        }
+    }
+
+    pub fn parse_member_expression(&mut self, start: Option<Node>) -> Node {
+        let mut path: Vec<(Node, bool)> = if let Some(start) = start {
+            vec![(start, false)]
+        } else {
+            vec![(self.parse_primary_expression(), false)]
+        };
 
         while self.first().token_type == TokenType::FullStop
             || self.first().token_type == TokenType::Open(Bracket::Square)
@@ -116,25 +131,35 @@ impl Parser {
             if let NodeType::Identifier(identifier) = &path[0].0.node_type {
                 match &path[1].0.node_type {
                     NodeType::Identifier(value) => {
-                        if self.first().token_type == TokenType::Open(Bracket::Curly) {
-                            let data = self.parse_potential_key_value();
+                        if self.first().token_type == TokenType::Colon {
+                            let _ = self.eat();
+                            let data = self.parse_statement();
                             return Node::new(
                                 NodeType::EnumExpression {
-                                    identifier: ParserText::new(
-                                        identifier.to_string(),
-                                        path[0].0.span.clone(),
-                                    ),
-                                    value: ParserText::new(
-                                        value.to_string(),
-                                        path[1].0.span.clone(),
-                                    ),
-                                    data: Some(data),
+                                    identifier: identifier.clone(),
+                                    value: value.clone(),
+                                    data: Some(Box::new(data)),
                                 },
                                 Span::new_from_spans(path[0].0.span, path[1].0.span),
                             );
                         }
                     }
                     _ => {}
+                }
+            }
+        }
+
+        if path.len() == 1 {
+            if let NodeType::Identifier(identifier) = &path[0].0.node_type {
+                if self.first().token_type == TokenType::Open(Bracket::Curly) {
+                    let data = self.parse_potential_key_value();
+                    return Node::new(
+                        NodeType::StructLiteral {
+                            identifier: identifier.clone(),
+                            value: data,
+                        },
+                        path[0].0.span,
+                    );
                 }
             }
         }

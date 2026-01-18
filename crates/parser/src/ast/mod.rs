@@ -60,80 +60,152 @@ impl From<TokenType> for RefMutability {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoopType {
+    Let {
+        value: Node,
+        pattern: (Vec<MatchArmType>, Vec<Node>),
+    },
     While(Node),
-    For(ParserText, Node),
+    For(PotentialDollarIdentifier, Node),
+    Loop,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ParserDataType {
-    pub data_type: ParserInnerType,
+pub struct ParserDataType<T> {
+    pub data_type: ParserInnerType<T>,
     pub span: Span,
 }
 
-impl ParserDataType {
-    pub fn new(data_type: ParserInnerType, span: Span) -> Self {
+impl<T> From<ParserInnerType<T>> for ParserDataType<T> {
+    fn from(value: ParserInnerType<T>) -> Self {
+        Self {
+            data_type: value,
+            span: Span::default(),
+        }
+    }
+}
+
+impl<T> ParserDataType<T> {
+    pub fn new(data_type: ParserInnerType<T>, span: Span) -> Self {
         Self { data_type, span }
     }
 }
-impl Deref for ParserDataType {
-    type Target = ParserInnerType;
+impl<T> Deref for ParserDataType<T> {
+    type Target = ParserInnerType<T>;
     fn deref(&self) -> &Self::Target {
         &self.data_type
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ParserInnerType {
+pub enum ParserInnerType<T> {
     Float,
     Int,
     Dynamic,
+    Null,
     Bool,
     Str,
     Char,
-    Tuple(Vec<ParserDataType>),
-    List(Option<Box<ParserDataType>>),
-    Scope(Vec<ParserDataType>),
+    Tuple(Vec<ParserDataType<T>>),
+    List(Box<ParserDataType<T>>),
+    Scope(Vec<ParserDataType<T>>),
     Range,
-    Option(Box<ParserDataType>),
-    Result(Box<ParserDataType>, Box<ParserDataType>),
+    DollarIdentifier(String),
+    Option(Box<ParserDataType<T>>),
+    Result {
+        ok: Box<ParserDataType<T>>,
+        err: Box<ParserDataType<T>>,
+    },
     Function {
-        return_type: Option<Box<ParserDataType>>,
-        parameters: Vec<ParserDataType>,
+        return_type: Box<ParserDataType<T>>,
+        parameters: Vec<ParserDataType<T>>,
         is_async: bool,
     },
-    Ref(Box<ParserDataType>, RefMutability),
-    Struct(Option<String>),
+    Ref(Box<ParserDataType<T>>, RefMutability),
+    Struct(String),
+    Comp {
+        stage: CompStage,
+        body: Box<T>,
+    },
+    NativeFunction(Box<ParserDataType<T>>),
 }
 
-impl Display for ParserDataType {
+impl<T> ParserDataType<T> {
+    pub fn unwrap_all_refs(self) -> Self {
+        Self {
+            data_type: self.data_type.unwrap_all_refs(),
+            span: self.span,
+        }
+    }
+}
+impl<T> ParserInnerType<T> {
+    pub fn unwrap_all_refs(self) -> Self {
+        match self {
+            Self::Ref(x, _) => x.data_type.unwrap_all_refs(),
+            _ => self,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PotentialNewType {
+    NewType {
+        identifier: PotentialDollarIdentifier,
+        type_def: TypeDefType,
+        overloads: Vec<Overload>,
+    },
+    DataType(ParserDataType<Node>),
+}
+
+impl Display for PotentialNewType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DataType(x) => write!(f, "{}", x),
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl PotentialNewType {
+    pub fn span(&self) -> &Span {
+        match self {
+            Self::NewType { identifier, .. } => identifier.span(),
+            Self::DataType(x) => &x.span,
+        }
+    }
+}
+
+impl From<ParserDataType<Node>> for PotentialNewType {
+    fn from(value: ParserDataType<Node>) -> Self {
+        Self::DataType(value)
+    }
+}
+
+impl Display for ParserDataType<Node> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.data_type)
     }
 }
 
-impl Display for ParserInnerType {
+impl Display for ParserInnerType<Node> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Float => write!(f, "float"),
             Self::Int => write!(f, "int"),
+            Self::Null => write!(f, "null"),
             Self::Dynamic => write!(f, "dyn"),
             Self::Bool => write!(f, "bool"),
             Self::Str => write!(f, "str"),
             Self::Char => write!(f, "char"),
             Self::Range => write!(f, "range"),
+            Self::DollarIdentifier(x) => write!(f, "${}", x),
             Self::Ref(typ, mutability) => {
                 write!(f, "{}", mutability.fmt_with_val(&typ.to_string()))
             }
-            Self::Result(x, y) => write!(f, "{}!{}", x, y),
+            Self::Result { err, ok } => write!(f, "{}!{}", err, ok),
             Self::Option(x) => write!(f, "{}?", x),
-            Self::Struct(x) => match x {
-                Some(x) => write!(f, "{}", x),
-                None => write!(f, "struct"),
-            },
-            Self::List(x) => match x {
-                Some(x) => write!(f, "list<{}>", x),
-                None => write!(f, "list"),
-            },
+            Self::NativeFunction(x) => write!(f, "native -> {}", x),
+            Self::Struct(x) => write!(f, "{}", x),
+            Self::List(x) => write!(f, "list<{}>", x),
             Self::Tuple(types) => {
                 let mut txt = format!(
                     "<{}",
@@ -151,7 +223,7 @@ impl Display for ParserInnerType {
                 let mut txt = values[0].to_string();
 
                 for typ in values.iter().skip(1) {
-                    txt.push_str(&format!(":{}", typ));
+                    txt.push_str(&format!("::{}", typ));
                 }
 
                 write!(f, "{}", txt)
@@ -181,36 +253,81 @@ impl Display for ParserInnerType {
 
                 txt.push_str(")");
 
-                if let Some(typ) = return_type {
-                    txt.push_str(&format!(" -> {}", typ));
+                if return_type.data_type != ParserInnerType::Null {
+                    txt.push_str(&format!(" -> {}", return_type));
                 }
 
                 write!(f, "{}", txt)
             }
+            Self::Comp { stage, body } => write!(f, "comp, {} {}", stage, body),
         }
     }
 }
 
-impl FromStr for ParserInnerType {
+impl<T> FromStr for ParserInnerType<T> {
     type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "int" => Self::Int,
             "float" => Self::Float,
-            "struct" => Self::Struct(None),
             "bool" => Self::Bool,
             "str" => Self::Str,
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
-            _ => Self::Struct(Some(s.to_string())),
+            "null" => Self::Null,
+            _ => Self::Struct(s.to_string()),
         })
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObjectType<T> {
     Map(HashMap<String, T>),
     Tuple(Vec<T>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectMap<T>(pub HashMap<String, T>);
+
+impl<T> From<HashMap<String, T>> for ObjectMap<T> {
+    fn from(value: HashMap<String, T>) -> Self {
+        Self(value)
+    }
+}
+
+impl<T> From<Vec<T>> for ObjectMap<T> {
+    fn from(value: Vec<T>) -> Self {
+        let mut map = HashMap::new();
+
+        for (i, v) in value.into_iter().enumerate() {
+            map.insert(i.to_string(), v);
+        }
+
+        Self(map)
+    }
+}
+
+impl<T> From<ObjectType<T>> for ObjectMap<T> {
+    fn from(value: ObjectType<T>) -> Self {
+        match value {
+            ObjectType::Map(x) => Self(x),
+            ObjectType::Tuple(x) => x.into(),
+        }
+    }
+}
+
+impl<T> Deref for ObjectMap<T> {
+    type Target = HashMap<String, T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for ObjectMap<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -218,6 +335,19 @@ pub enum VarType {
     Mutable,
     Immutable,
     Constant,
+}
+
+impl VarType {
+    pub fn print_only_ends(&self) -> String {
+        format!(
+            "{}",
+            match self {
+                Self::Mutable => "mut",
+                Self::Immutable => "let",
+                Self::Constant => "const",
+            }
+        )
+    }
 }
 
 impl Display for VarType {
@@ -232,9 +362,9 @@ impl Display for VarType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefType {
-    Enum(Vec<(ParserText, Option<ObjectType<ParserDataType>>)>),
-    Struct(ObjectType<ParserDataType>),
-    NewType(ParserDataType),
+    Enum(Vec<(PotentialDollarIdentifier, Option<PotentialNewType>)>),
+    Struct(ObjectType<PotentialNewType>),
+    NewType(Box<PotentialNewType>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -243,7 +373,7 @@ pub struct Node {
     pub span: Span,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ParserText {
     pub text: String,
     pub span: Span,
@@ -252,6 +382,44 @@ pub struct ParserText {
 impl From<Token> for ParserText {
     fn from(value: Token) -> Self {
         Self::new(value.value, value.span)
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PotentialDollarIdentifier {
+    DollarIdentifier(ParserText),
+    Identifier(ParserText),
+}
+
+impl Into<Node> for PotentialDollarIdentifier {
+    fn into(self) -> Node {
+        Node {
+            span: *self.span(),
+            node_type: NodeType::Identifier(self),
+        }
+    }
+}
+
+impl From<ParserText> for PotentialDollarIdentifier {
+    fn from(value: ParserText) -> Self {
+        Self::Identifier(value)
+    }
+}
+
+impl PotentialDollarIdentifier {
+    pub fn span(&self) -> &Span {
+        match self {
+            Self::Identifier(x) => &x.span,
+            Self::DollarIdentifier(x) => &x.span,
+        }
+    }
+}
+
+impl Display for PotentialDollarIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Identifier(x) => write!(f, "{}", x),
+            Self::DollarIdentifier(x) => write!(f, "${}", x),
+        }
     }
 }
 
@@ -307,6 +475,74 @@ impl Node {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum MatchArmType {
+    Enum {
+        value: PotentialDollarIdentifier,
+        var_type: VarType,
+        name: Option<PotentialDollarIdentifier>,
+    },
+    Let {
+        var_type: VarType,
+        name: PotentialDollarIdentifier,
+    },
+    Value(Node),
+    Wildcard(Span),
+}
+
+impl MatchArmType {
+    pub fn span(&self) -> &Span {
+        match self {
+            Self::Enum { value, .. } => value.span(),
+            Self::Let { var_type: _, name } => name.span(),
+            Self::Value(x) => &x.span,
+            Self::Wildcard(x) => &x,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TryCatch {
+    pub name: Option<PotentialDollarIdentifier>,
+    pub body: Box<Node>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NamedScope {
+    pub name: PotentialDollarIdentifier,
+    pub args: Vec<(PotentialDollarIdentifier, Node)>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CompStage {
+    Wildcard,
+    Specific(usize),
+}
+
+impl Display for CompStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Specific(x) => write!(f, "{}", x),
+            Self::Wildcard => write!(f, "_"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Overload {
+    pub operator: ParserText,
+    pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
+    pub body: Box<Node>,
+    pub return_type: PotentialNewType,
+    pub is_async: bool,
+}
+
+impl Overload {
+    pub fn span(&self) -> &Span {
+        &self.operator.span
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     Break,
     Continue,
@@ -314,6 +550,14 @@ pub enum NodeType {
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
+    },
+    Comp {
+        stage: CompStage,
+        body: Box<Node>,
+    },
+    Identifier(PotentialDollarIdentifier),
+    DataType {
+        data_type: PotentialNewType,
     },
     DerefStatement {
         value: Box<Node>,
@@ -323,37 +567,54 @@ pub enum NodeType {
     },
     VariableDeclaration {
         var_type: VarType,
-        identifier: ParserText,
+        identifier: PotentialDollarIdentifier,
         value: Box<Node>,
-        data_type: Option<ParserDataType>,
+        data_type: Option<PotentialNewType>,
     },
     ImplDeclaration {
-        identifier: ParserText,
-        functions: Vec<(Node, bool)>,
+        identifier: PotentialDollarIdentifier,
+        functions: Vec<Node>,
     },
     TypeDeclaration {
-        identifier: ParserText,
+        identifier: PotentialDollarIdentifier,
         object: TypeDefType,
+        overloads: Vec<Overload>,
     },
     EnumExpression {
-        identifier: ParserText,
-        value: ParserText,
-        data: Option<ObjectType<Option<Node>>>,
+        identifier: PotentialDollarIdentifier,
+        value: PotentialDollarIdentifier,
+        data: Option<Box<Node>>,
+    },
+    ScopeAlias {
+        identifier: PotentialDollarIdentifier,
+        value: NamedScope,
+        create_new_scope: Option<bool>,
     },
     ScopeDeclaration {
-        body: Vec<Node>,
+        body: Option<Vec<Node>>,
+        named: Option<NamedScope>,
         is_temp: bool,
+        create_new_scope: Option<bool>,
+        define: bool,
     },
-    MatchDeclaration {
-        parameters: (ParserText, ParserDataType, Option<Box<Node>>),
-        body: Vec<(Node, Vec<Node>, Box<Node>)>,
-        return_type: Option<ParserDataType>,
+    MatchStatement {
+        value: Box<Node>,
+        body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
+    },
+    FnMatchDeclaration {
+        parameters: (
+            PotentialDollarIdentifier,
+            PotentialNewType,
+            Option<Box<Node>>,
+        ),
+        body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
+        return_type: PotentialNewType,
         is_async: bool,
     },
     FunctionDeclaration {
-        parameters: Vec<(ParserText, ParserDataType, Option<Node>)>,
+        parameters: Vec<(PotentialDollarIdentifier, PotentialNewType, Option<Node>)>,
         body: Box<Node>,
-        return_type: Option<ParserDataType>,
+        return_type: PotentialNewType,
         is_async: bool,
     },
     AssignmentExpression {
@@ -371,15 +632,15 @@ pub enum NodeType {
     },
     AsExpression {
         value: Box<Node>,
-        typ: ParserDataType,
+        data_type: PotentialNewType,
     },
     InDeclaration {
         identifier: Box<Node>,
-        expression: Box<Node>,
+        value: Box<Node>,
     },
     IsDeclaration {
         value: Box<Node>,
-        data_type: ParserDataType,
+        data_type: PotentialNewType,
     },
     RangeDeclaration {
         from: Box<Node>,
@@ -387,6 +648,7 @@ pub enum NodeType {
         inclusive: bool,
     },
     IterExpression {
+        data_type: Option<PotentialNewType>,
         map: Box<Node>,
         loop_type: Box<LoopType>,
         conditionals: Vec<Node>,
@@ -397,13 +659,13 @@ pub enum NodeType {
     },
     Try {
         value: Box<Node>,
+        catch: Option<TryCatch>,
     },
     Return {
-        value: Box<Node>,
+        value: Option<Box<Node>>,
     },
-    Identifier(ParserText),
     StringLiteral(ParserText),
-    ListLiteral(Vec<Node>),
+    ListLiteral(Option<PotentialNewType>, Vec<Node>),
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(i64),
@@ -434,14 +696,35 @@ pub enum NodeType {
         comparison: Box<IfComparisonType>,
         then: Box<Node>,
         otherwise: Option<Box<Node>>,
-        special_delim: bool,
+    },
+    Ternary {
+        comparison: Box<Node>,
+        then: Box<Node>,
+        otherwise: Box<Node>,
     },
     ImportStatement {
-        module: Vec<ParserText>,
-        alias: Option<ParserText>,
-        values: Vec<ParserText>,
+        module: Vec<PotentialDollarIdentifier>,
+        alias: Option<PotentialDollarIdentifier>,
+        values: Vec<PotentialDollarIdentifier>,
     },
-    StructLiteral(ObjectType<Option<Node>>),
+    StructLiteral {
+        identifier: PotentialDollarIdentifier,
+        value: ObjectType<Node>,
+    },
+}
+
+impl NodeType {
+    pub fn unwrap(self) -> NodeType {
+        match self {
+            NodeType::ParenExpression { value } => value.node_type.unwrap(),
+            NodeType::ScopeDeclaration {
+                body: Some(mut body),
+                create_new_scope: Some(false),
+                ..
+            } if body.len() == 1 => body.remove(0).node_type.unwrap(),
+            _ => self,
+        }
+    }
 }
 
 impl Display for NodeType {
@@ -473,7 +756,7 @@ impl Display for LoopType {
 pub enum IfComparisonType {
     IfLet {
         value: Node,
-        pattern: (Node, Vec<Node>),
+        pattern: (Vec<MatchArmType>, Vec<Node>),
     },
     If(Node),
 }
@@ -514,12 +797,57 @@ impl<T: PartialEq + ToString> ToString for ObjectType<T> {
 
                 txt
             }
-            ObjectType::Tuple(data) => print_list(data, '(', ')'),
+            ObjectType::Tuple(data) => {
+                let lst: Vec<&T> = data.iter().collect();
+                print_list(&lst, '(', ')')
+            }
         }
     }
 }
 
-fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {
+impl<T: PartialEq> PartialOrd for ObjectMap<T> {
+    fn gt(&self, _other: &Self) -> bool {
+        false
+    }
+
+    fn lt(&self, _other: &Self) -> bool {
+        false
+    }
+
+    fn ge(&self, _other: &Self) -> bool {
+        true
+    }
+
+    fn le(&self, _other: &Self) -> bool {
+        true
+    }
+
+    fn partial_cmp(&self, _other: &Self) -> Option<std::cmp::Ordering> {
+        Some(Ordering::Equal)
+    }
+}
+
+impl<T: PartialEq + ToString> ToString for ObjectMap<T> {
+    fn to_string(&self) -> String {
+        if !self.0.is_empty() {
+            if self.0.get("0").is_some() {
+                let lst: Vec<&T> = self.0.iter().map(|x| x.1).collect();
+                return print_list(&lst, '(', ')');
+            }
+        }
+        let mut txt = String::from("{");
+        for (k, v) in self.0.iter() {
+            txt.push_str(&format!("{k} : {}, ", v.to_string()));
+        }
+
+        let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+        txt.push_str("}");
+
+        txt
+    }
+}
+
+fn print_list<T: ToString>(data: &[&T], open: char, close: char) -> String {
     let mut txt = String::from(open);
 
     for val in data.iter() {

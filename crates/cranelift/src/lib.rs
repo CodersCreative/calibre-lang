@@ -1,8 +1,8 @@
 pub mod translator;
 pub mod values;
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
 use calibre_mir::environment::{MiddleEnvironment, MiddleObject};
-use calibre_parser::ast::{Node, NodeType, ParserDataType, VarType};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
+use calibre_parser::ast::{Node, NodeType, ParserDataType, ParserInnerType, VarType};
 use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::*;
 use cranelift_module::{DataDescription, Linkage, Module};
@@ -46,7 +46,7 @@ impl Compiler {
     ) -> Result<*const u8, Box<dyn Error>> {
         let mut main = None;
 
-        if let MiddleNodeType::ScopeDeclaration { body, is_temp: _ } = program.node_type.clone() {
+        if let MiddleNodeType::ScopeDeclaration { body, .. } = program.node_type.clone() {
             for var in body {
                 if let MiddleNodeType::VariableDeclaration {
                     var_type: VarType::Constant,
@@ -143,8 +143,8 @@ impl Compiler {
 
     fn translate(
         &mut self,
-        params: Vec<(String, ParserDataType)>,
-        return_type: Option<ParserDataType>,
+        params: Vec<(String, ParserDataType<MiddleNode>)>,
+        return_type: ParserDataType<MiddleNode>,
         node: MiddleNode,
         module: &mut ObjectModule,
         ctx: &mut codegen::Context,
@@ -161,11 +161,11 @@ impl Compiler {
                 .push(AbiParam::new(types.get_type_from_parser_type(&p.1)));
         }
 
-        if let Some(t) = return_type {
+        if return_type.data_type != ParserInnerType::Null {
             ctx.func
                 .signature
                 .returns
-                .push(AbiParam::new(types.get_type_from_parser_type(&t)));
+                .push(AbiParam::new(types.get_type_from_parser_type(&return_type)));
         }
 
         ctx.func.signature.call_conv = CallConv::SystemV;

@@ -1,7 +1,8 @@
 use crate::environment::{RuntimeType, RuntimeValue};
+use calibre_mir_ty::MiddleNodeType;
 use calibre_parser::{
     ParserError,
-    ast::{LoopType, NodeType, binary::BinaryOperator},
+    ast::{LoopType, binary::BinaryOperator},
     lexer::LexerError,
 };
 use miette::{Diagnostic, LabeledSpan};
@@ -23,30 +24,22 @@ pub enum ASTError<T: RuntimeValue> {
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum RuntimeErr<T: RuntimeValue, U: RuntimeType> {
-    #[error("{err}")]
-    At {
-        err: Box<Self>,
-        #[source_code]
-        input: String,
-        #[label("here")]
-        span: Option<(usize, usize)>,
-    },
     #[error("{0}")]
     Value(ValueErr<T, U>),
     #[error("{0}")]
     AST(ASTError<T>),
-    #[error("Cannot assign a literal value, {0}.")]
-    AssignNonVariable(NodeType),
+    #[error("Cannot assign a literal value, {0:?}.")]
+    AssignNonVariable(MiddleNodeType),
     #[error("Cannot mutably reference a non mutable value, {0:?}.")]
     MutRefNonMut(T),
-    #[error("Cannot mutably reference a non variable, {0}.")]
-    RefNonVar(NodeType),
-    #[error("Cannot de-reference a non reference, {0}.")]
-    DerefNonRef(NodeType),
-    #[error("Cannot index a value that is not a list, {0}.")]
-    IndexNonList(NodeType),
-    #[error("This AST Node has not been implemented, {0}.")]
-    NotImplemented(NodeType),
+    #[error("Cannot mutably reference a non variable, {0:?}.")]
+    RefNonVar(MiddleNodeType),
+    #[error("Cannot de-reference a non reference, {0:?}.")]
+    DerefNonRef(MiddleNodeType),
+    #[error("Cannot index a value that is not a list, {0:?}.")]
+    IndexNonList(MiddleNodeType),
+    #[error("This AST Node has not been implemented, {0:?}.")]
+    NotImplemented(MiddleNodeType),
     #[error("Cannot call non-callable value, {0:?}.")]
     CantCallNonFunc(T),
     #[error("Cannot perform not opertion on {0:?}.")]
@@ -67,16 +60,16 @@ pub enum RuntimeErr<T: RuntimeValue, U: RuntimeType> {
     ExpectedType(T, U),
     #[error("Variable {0:?} has an unexpected type.")]
     UnexpectedType(T),
-    #[error("Node {0} has an unexpected type.")]
-    UnexpectedNode(NodeType),
-    #[error("Node {0} needs to be used in the global scope.")]
-    UnexpectedNodeInTemp(NodeType),
-    #[error("Node {0} can't be used in the global scope.")]
-    UnexpectedNodeInGlobal(NodeType),
+    #[error("Node {0:?} has an unexpected type.")]
+    UnexpectedNode(MiddleNodeType),
+    #[error("Node {0:?} needs to be used in the global scope.")]
+    UnexpectedNodeInTemp(MiddleNodeType),
+    #[error("Node {0:?} can't be used in the global scope.")]
+    UnexpectedNodeInGlobal(MiddleNodeType),
     #[error("No associated enum item : {1:?} in enum {0:?}")]
     UnexpectedEnumItem(String, String),
     #[error("Setters can only have one argument, {0:?}")]
-    SetterArgs(Vec<(NodeType, Option<NodeType>)>),
+    SetterArgs(Vec<(MiddleNodeType, Option<MiddleNodeType>)>),
     #[error("Property not found, {0:?}")]
     PropertyNotFound(String),
     #[error("Unable to import {0:?}")]

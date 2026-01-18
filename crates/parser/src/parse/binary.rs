@@ -8,7 +8,7 @@ use crate::{
 
 impl Parser {
     pub fn parse_pipe_expression(&mut self) -> Node {
-        let mut left = vec![self.parse_object_expression()];
+        let mut left = vec![self.parse_try_expression()];
 
         while let TokenType::Pipe = self.first().token_type.clone() {
             let _ = self.eat();
@@ -41,7 +41,7 @@ impl Parser {
             left = Node::new(
                 NodeType::AsExpression {
                     value: Box::new(left),
-                    typ: self.expect_type(),
+                    data_type: self.expect_potential_new_type(),
                 },
                 token.span,
             );
@@ -59,7 +59,7 @@ impl Parser {
             left = Node::new(
                 NodeType::IsDeclaration {
                     value: Box::new(left),
-                    data_type: self.expect_type(),
+                    data_type: self.expect_potential_new_type(),
                 },
                 token.span,
             )
@@ -77,7 +77,7 @@ impl Parser {
             left = Node::new(
                 NodeType::InDeclaration {
                     identifier: Box::new(left),
-                    expression: Box::new(self.parse_statement()),
+                    value: Box::new(self.parse_statement()),
                 },
                 token.span,
             )

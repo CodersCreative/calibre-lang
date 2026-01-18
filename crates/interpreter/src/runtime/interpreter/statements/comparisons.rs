@@ -1,12 +1,28 @@
 use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
-use calibre_parser::ast::{IfComparisonType, Node, NodeType};
+use calibre_mir_ty::MiddleNode;
+use calibre_parser::ast::ObjectMap;
 
 impl InterpreterEnvironment {
     fn value_in_list(&self, scope: &u64, value: &RuntimeValue, list: &[RuntimeValue]) -> bool {
         for val in list {
             if self.is_equal(scope, value, val) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn value_in_map(
+        &self,
+        scope: &u64,
+        value: &RuntimeValue,
+        map: &ObjectMap<RuntimeValue>,
+    ) -> bool {
+        for val in map.0.iter() {
+            if self.is_equal(scope, value, val.1) {
                 return true;
             }
         }
@@ -22,7 +38,7 @@ impl InterpreterEnvironment {
                 _ => false,
             },
             RuntimeValue::List { data, .. } => self.value_in_list(scope, value, data),
-            RuntimeValue::Tuple(data) => self.value_in_list(scope, value, data),
+            RuntimeValue::Aggregate(_, map) => self.value_in_map(scope, value, map),
             RuntimeValue::Range(from, to) => {
                 let num: f64 = match value {
                     RuntimeValue::Range(x, y) => (*x as f64 + *y as f64) / 2.0,
@@ -48,43 +64,16 @@ impl InterpreterEnvironment {
     pub fn evaluate_if_statement(
         &mut self,
         scope: &u64,
-        comparison: IfComparisonType,
-        then: Node,
-        otherwise: Option<Node>,
+        comparison: MiddleNode,
+        then: MiddleNode,
+        otherwise: Option<MiddleNode>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        match comparison {
-            IfComparisonType::If(comparison) => {
-                if let RuntimeValue::Bool(x) = self.evaluate(scope, comparison.clone())? {
-                    if x {
-                        return self.evaluate(scope, then);
-                    }
-                } else {
-                    return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
-                }
+        if let RuntimeValue::Bool(x) = self.evaluate(scope, comparison.clone())? {
+            if x {
+                return self.evaluate(scope, then);
             }
-            IfComparisonType::IfLet { value, pattern } => {
-                let path = match &value.node_type {
-                    NodeType::Identifier(x) => vec![x.clone()],
-                    _ => Vec::new(),
-                };
-
-                let value = self.evaluate(scope, value.clone())?;
-
-                if let Some(result) = self.match_pattern(
-                    scope,
-                    &pattern.0,
-                    &value,
-                    path.clone().into_iter().map(|x| x.to_string()).collect(),
-                    &pattern.1,
-                    then,
-                ) {
-                    match result {
-                        Ok(x) => return Ok(x),
-                        Err(InterpreterErr::ExpectedFunctions) => {}
-                        Err(e) => return Err(e),
-                    }
-                }
-            }
+        } else {
+            return Err(InterpreterErr::ExpectedOperation(String::from("boolean")));
         }
 
         if let Some(last) = otherwise {

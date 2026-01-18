@@ -1,6 +1,6 @@
 use crate::{
     Parser, SyntaxErr,
-    ast::{Node, ObjectType, RefMutability},
+    ast::{CompStage, Node, ObjectType, PotentialDollarIdentifier, RefMutability},
     lexer::{Bracket, Span, StopValue},
 };
 use crate::{
@@ -11,10 +11,16 @@ use std::collections::HashMap;
 
 impl Parser {
     pub fn parse_primary_expression(&mut self) -> Node {
-        match &self.first().token_type {
+        let node = match &self.first().token_type {
+            TokenType::If => self.parse_if_statement(),
+            TokenType::Match => self.parse_match_statement(),
+            TokenType::List => self.parse_list_iter_expression(),
             TokenType::Identifier => {
                 let val = self.eat();
-                Node::new(NodeType::Identifier(val.clone().into()), val.span)
+                Node::new(
+                    NodeType::Identifier(PotentialDollarIdentifier::Identifier(val.clone().into())),
+                    val.span,
+                )
             }
             TokenType::Float => {
                 let val = self.eat();
@@ -54,8 +60,8 @@ impl Parser {
                     val.span,
                 )
             }
+            TokenType::FatArrow => self.parse_scope_declaration(false),
             TokenType::Open(Bracket::Paren) => self.parse_paren_expression(),
-            TokenType::Open(Bracket::Square) => self.parse_list_expression(),
             TokenType::BinaryOperator(BinaryOperator::Sub) => {
                 let open = self.eat();
                 let val = self.parse_statement();
@@ -67,6 +73,8 @@ impl Parser {
                     span,
                 )
             }
+            TokenType::Comp => self.parse_comp(),
+            TokenType::Dollar => self.expect_potential_dollar_ident().into(),
             TokenType::Not => {
                 let open = self.eat();
                 let val = self.parse_statement();
@@ -100,6 +108,15 @@ impl Parser {
                     },
                     Span::new_from_spans(open.span, close.span),
                 )
+            }
+            TokenType::Type => {
+                let open = self.eat();
+                let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
+                let data_type = self.expect_potential_new_type();
+                Node {
+                    span: Span::new_from_spans(open.span, *data_type.span()),
+                    node_type: NodeType::DataType { data_type },
+                }
             }
             TokenType::BinaryOperator(BinaryOperator::Pow) => {
                 let open = self.eat();
@@ -150,19 +167,81 @@ impl Parser {
                 self.add_err(SyntaxErr::UnexpectedToken);
                 Node::new(NodeType::EmptyLine, self.eat().span)
             }
+        };
+
+        self.parse_potential_member(node)
+    }
+
+    pub fn parse_comp(&mut self) -> Node {
+        let open = self.expect_eat(
+            &TokenType::Comp,
+            SyntaxErr::ExpectedKeyword(String::from("comp")),
+        );
+
+        let stage = if self.first().token_type == TokenType::Comma {
+            let _ = self.eat();
+            let value = self.eat();
+
+            if &value.value == "_" {
+                CompStage::Wildcard
+            } else {
+                CompStage::Specific(value.value.parse().unwrap_or(0))
+            }
+        } else {
+            CompStage::Specific(0)
+        };
+
+        let value = self.parse_scope_declaration(false);
+
+        Node {
+            span: Span::new_from_spans(open.span, value.span),
+            node_type: NodeType::Comp {
+                stage,
+                body: Box::new(value),
+            },
         }
     }
 
-    pub fn parse_potential_key_value(&mut self) -> ObjectType<Option<Node>> {
+    pub fn expect_potential_dollar_ident(&mut self) -> PotentialDollarIdentifier {
+        if self.first().token_type == TokenType::Dollar {
+            let open = self.eat();
+            if self.first().token_type == TokenType::Identifier {
+                let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                PotentialDollarIdentifier::DollarIdentifier(ident.into())
+            } else {
+                PotentialDollarIdentifier::Identifier(open.into())
+            }
+        } else {
+            let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+            PotentialDollarIdentifier::Identifier(ident.into())
+        }
+    }
+
+    pub fn parse_potential_dollar_ident(&mut self) -> Option<PotentialDollarIdentifier> {
+        if self.first().token_type == TokenType::Dollar {
+            let open = self.eat();
+            if self.first().token_type == TokenType::Identifier {
+                let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                Some(PotentialDollarIdentifier::DollarIdentifier(ident.into()))
+            } else {
+                Some(PotentialDollarIdentifier::Identifier(open.into()))
+            }
+        } else if self.first().token_type == TokenType::Identifier {
+            let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+            Some(PotentialDollarIdentifier::Identifier(ident.into()))
+        } else {
+            None
+        }
+    }
+
+    pub fn parse_potential_key_value(&mut self) -> ObjectType<Node> {
         match self.first().token_type {
             TokenType::Open(Bracket::Curly) => {
                 let _ = self.eat();
                 let mut properties = HashMap::new();
                 while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Curly)
                 {
-                    let key = self
-                        .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier)
-                        .value;
+                    let key = self.expect_potential_dollar_ident();
 
                     if [TokenType::Comma, TokenType::Close(Bracket::Curly)]
                         .contains(&self.first().token_type)
@@ -171,13 +250,16 @@ impl Parser {
                             let _ = self.eat();
                         }
 
-                        properties.insert(key, None);
+                        properties.insert(
+                            key.to_string(),
+                            Node::new(NodeType::Identifier(key.clone()), *key.span()),
+                        );
                         continue;
                     }
 
                     let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-                    properties.insert(key, Some(self.parse_statement()));
+                    properties.insert(key.to_string(), self.parse_statement());
 
                     if self.first().token_type != TokenType::Close(Bracket::Curly) {
                         let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
@@ -197,7 +279,7 @@ impl Parser {
                 let mut tuple = Vec::new();
                 while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Paren)
                 {
-                    tuple.push(Some(self.parse_statement()));
+                    tuple.push(self.parse_statement());
                     if self.first().token_type != TokenType::Close(Bracket::Paren) {
                         let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
                     }
@@ -211,7 +293,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_object_expression(&mut self) -> Node {
+    /*pub fn parse_object_expression(&mut self) -> Node {
         if self.first().token_type != TokenType::Open(Bracket::Curly) {
             return self.parse_try_expression();
         }
@@ -222,7 +304,7 @@ impl Parser {
             NodeType::StructLiteral(self.parse_potential_key_value()),
             open.span,
         )
-    }
+    }*/
 
     pub fn parse_assignment_expression(&mut self) -> Node {
         let mut left: Node = self.parse_pipe_expression();

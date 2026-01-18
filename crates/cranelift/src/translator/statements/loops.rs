@@ -2,7 +2,7 @@ use crate::{
     translator::{BlockType, FunctionTranslator},
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{
     LoopType, Node, NodeType, ParserText, VarType, binary::BinaryOperator, comparison::Comparison,
 };
@@ -69,7 +69,10 @@ impl<'a> FunctionTranslator<'a> {
     }
 
     pub fn translate_loop_statement(&mut self, node: MiddleNode) -> RuntimeValue {
-        if let MiddleNodeType::LoopDeclaration { body } = node.node_type {
+        if let MiddleNodeType::LoopDeclaration { body, state } = node.node_type {
+            if let Some(state) = state {
+                let _ = self.translate(*state);
+            }
             let (header_block, body_block, exit_block) = pre_loop!(self);
             self.break_stack
                 .push(BlockType::Continue(header_block.clone()));

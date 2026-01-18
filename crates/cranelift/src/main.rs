@@ -2,26 +2,26 @@ const BASIC_CODE: &str = r#"
     const thirty = fn () -> int => 30;
     type Language = enum {
     	// Enums can have hasmap type data structuress.
-    	FRENCH	{
-    		data : float,
-    		code : string
-    	},
+    	FRENCH,
     	// Enums can have tuple type data structuress.
-    	ENGLISH(int),
+    	ENGLISH : int,
     	SPANISH,
-    	ARABIC(Language, Language)
+    	ARABIC: <Language, Language>
     };
-
+    type Smth = struct {
+        txt : str,
+        flt : float,
+    }
     type Id = struct (float);
     
     // const main = fn () -> int => if 1 => 10 + 4 else => 30;
-    const main = fn (x : int) -> float =>  {
+    const main = fn (x : int) -> float => {
         // let forty = fn () -> float => 40.0;    
         let mut index : float = 1.0;
-        let arr : list<float> = [10.5, 40.8, 50.2];
+        let arr : list<float> = list[10.5, 40.8, 50.2];
         let tpl : <float, float> = tuple(10.0, 90.8);
-        let mut counter : float = 1 as float;
-        let french = Language.FRENCH {data : 1.0, code : "fr"};
+        let mut counter : float = 1.0;
+        let french = Language.FRENCH;
         let id = Id (70000.0);
         for counter < 98.0 => {
             counter += 1.2 + 1 as float;
@@ -29,7 +29,7 @@ const BASIC_CODE: &str = r#"
         }
         let itm : float = tpl.0;
         let txt = "djsdalk";
-        let smth = {
+        let smth = Smth{
     		txt : "hello",
     		flt : 8.0,
     	};
@@ -41,14 +41,15 @@ const BASIC_CODE: &str = r#"
         for 100 => counter += 2 as float;*/
 
         id.0 + smth.flt;
-    }
+    };
     // const main = fn () -> float => 100.8;
     // const main = fn () -> str => "abcd";
     
 "#;
 
 use calibre_cranelift::Compiler;
-use calibre_mir::{ast::MiddleNode, environment::MiddleEnvironment};
+use calibre_mir::environment::MiddleEnvironment;
+use calibre_mir_ty::MiddleNode;
 use calibre_parser::{Parser, lexer::Tokenizer};
 use std::{fmt::Debug, mem, path::PathBuf, str::FromStr};
 

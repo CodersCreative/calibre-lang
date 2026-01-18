@@ -173,9 +173,11 @@ name = "cal"
 version = "0.1.0"
 dependencies = [
  "calibre-common",
+ "calibre-comptime",
  "calibre-interpreter",
+ "calibre-mir",
+ "calibre-mir-ty",
  "calibre-parser",
- "calibre-type-checker",
  "clap",
  "miette",
  "rand",
@@ -198,7 +200,6 @@ dependencies = [
  "cal-fmt",
  "calibre-common",
  "calibre-parser",
- "calibre-type-checker",
  "tokio",
  "tower",
  "tracing",
@@ -209,9 +210,22 @@ dependencies = [
 name = "calibre-common"
 version = "0.1.0"
 dependencies = [
+ "calibre-mir",
+ "calibre-mir-ty",
  "calibre-parser",
  "miette",
  "thiserror",
+]
+
+[[package]]
+name = "calibre-comptime"
+version = "0.1.0"
+dependencies = [
+ "calibre-common",
+ "calibre-interpreter",
+ "calibre-mir",
+ "calibre-mir-ty",
+ "calibre-parser",
 ]
 
 [[package]]
@@ -219,6 +233,7 @@ name = "calibre-cranelift"
 version = "0.1.0"
 dependencies = [
  "calibre-mir",
+ "calibre-mir-ty",
  "calibre-parser",
  "cranelift",
  "cranelift-module",
@@ -233,6 +248,8 @@ name = "calibre-interpreter"
 version = "0.1.0"
 dependencies = [
  "calibre-common",
+ "calibre-mir",
+ "calibre-mir-ty",
  "calibre-parser",
  "rand",
  "rustyline",
@@ -243,10 +260,20 @@ dependencies = [
 name = "calibre-mir"
 version = "0.1.0"
 dependencies = [
+ "calibre-mir-ty",
  "calibre-parser",
+ "calibre-std",
  "miette",
  "rand",
  "thiserror",
+]
+
+[[package]]
+name = "calibre-mir-ty"
+version = "0.1.0"
+dependencies = [
+ "calibre-parser",
+ "rand",
 ]
 
 [[package]]
@@ -258,13 +285,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "calibre-type-checker"
+name = "calibre-std"
 version = "0.1.0"
-dependencies = [
- "calibre-common",
- "calibre-parser",
- "thiserror",
-]
 
 [[package]]
 name = "cfg-if"

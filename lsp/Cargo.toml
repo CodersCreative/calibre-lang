@@ -6,7 +6,6 @@ edition = "2024"
 [dependencies]
 async-lsp = { version = "0.2.2", features = ["tokio"] }
 calibre-parser = {path = "../crates/parser"}
-calibre-type-checker = {path = "../crates/type-checker"}
 calibre-common = {path = "../crates/common"}
 cal-fmt = {path = "../fmt"}
 tokio = { version = "1.47.1", features = ["full"] }

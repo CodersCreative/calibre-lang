@@ -3,8 +3,8 @@ use std::error::Error;
 use crate::{
     Parser,
     ast::{
-        IfComparisonType, LoopType, Node, NodeType, ObjectType, ParserDataType, ParserText,
-        TypeDefType,
+        IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, Overload,
+        ParserInnerType, PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -97,7 +97,9 @@ impl Formatter {
         let mut tokenizer = Tokenizer::default();
         let tokens = tokenizer.tokenize(contents)?;
         let mut parser = Parser::default();
-        let NodeType::ScopeDeclaration { body, is_temp: _ } = parser.produce_ast(tokens).node_type
+        let NodeType::ScopeDeclaration {
+            body: Some(body), ..
+        } = parser.produce_ast(tokens).node_type
         else {
             unreachable!()
         };
@@ -165,7 +167,7 @@ impl Formatter {
             } => {
                 let mut txt = String::from("import ");
 
-                let get_module = |module: &[ParserText]| -> String {
+                let get_module = |module: &[PotentialDollarIdentifier]| -> String {
                     let mut txt = module[0].to_string();
                     for val in module.iter().skip(1) {
                         txt.push_str(&format!(":{}", &val));
@@ -198,7 +200,16 @@ impl Formatter {
 
                 txt
             }
-
+            NodeType::Ternary {
+                comparison,
+                then,
+                otherwise,
+            } => format!(
+                "({}) ? {} : {}",
+                self.format(&*comparison),
+                self.format(&*then),
+                self.format(&*otherwise)
+            ),
             NodeType::BooleanExpression {
                 left,
                 right,
@@ -242,8 +253,8 @@ impl Formatter {
                 if !functions.is_empty() {
                     for func in functions {
                         let temp = handle_comment!(
-                            self.get_potential_comment(&func.0.span),
-                            self.format(&func.0)
+                            self.get_potential_comment(&func.span),
+                            self.format(&func)
                         );
                         txt.push_str(&format!("\n{};\n", self.fmt_txt_with_tab(&temp, 1, true)));
                     }
@@ -259,9 +270,21 @@ impl Formatter {
             }
             NodeType::NegExpression { value } => format!("-{}", self.format(&*value)),
             NodeType::NotExpression { value } => format!("!{}", self.format(&*value)),
-            NodeType::Try { value } => format!("try {{{}}}", self.format(&*value)),
+            NodeType::Try { value, catch } => {
+                let mut txt = format!("try {}", self.format(&*value));
+                if let Some(catch) = catch {
+                    if let Some(name) = &catch.name {
+                        txt.push_str(&format!(" : {}", name));
+                    }
+
+                    txt.push_str(&format!(" {}", self.format(&catch.body)));
+                }
+
+                txt
+            }
             NodeType::DebugExpression { value } => format!("debug {{{}}}", self.format(&*value)),
-            NodeType::Return { value } => format!("return {}", self.format(&*value)),
+            NodeType::Return { value: Some(value) } => format!("return {}", self.format(&*value)),
+            NodeType::Return { value: _ } => String::from("return"),
             NodeType::AssignmentExpression { identifier, value } => match value.node_type.clone() {
                 NodeType::BinaryExpression {
                     left,
@@ -279,11 +302,11 @@ impl Formatter {
                     operator,
                 } if left.node_type == identifier.node_type => format!(
                     "{} {}= {}",
-                    self.format(&*identifier),
+                    self.format(identifier),
                     operator,
-                    self.format(&*right)
+                    self.format(&right)
                 ),
-                _ => format!("{} = {}", self.format(&*identifier), self.format(&*value)),
+                _ => format!("{} = {}", self.format(identifier), self.format(value)),
             },
             NodeType::VariableDeclaration {
                 var_type,
@@ -293,35 +316,36 @@ impl Formatter {
             } => {
                 let mut txt = format!("{} {}", var_type, identifier);
                 if let Some(typ) = data_type {
-                    txt.push_str(&format!(" : {}", typ));
+                    txt.push_str(&format!(" : {}", self.fmt_potential_new_type(typ)));
                 }
 
-                txt.push_str(&format!(" = {}", self.format(&*value)));
+                txt.push_str(&format!(" = {}", self.format(value)));
 
                 txt
             }
-            NodeType::AsExpression { value, typ } => {
-                format!("{} as {}", self.format(&*value), typ)
-            }
-            NodeType::InDeclaration {
-                identifier,
-                expression,
-            } => {
+            NodeType::AsExpression { value, data_type } => {
                 format!(
-                    "{} in {}",
-                    self.format(&*identifier),
-                    self.format(&*expression)
+                    "{} as {}",
+                    self.format(value),
+                    self.fmt_potential_new_type(data_type)
                 )
             }
+            NodeType::InDeclaration { identifier, value } => {
+                format!("{} in {}", self.format(identifier), self.format(value))
+            }
             NodeType::IsDeclaration { value, data_type } => {
-                format!("{} is {}", self.format(&*value), data_type)
+                format!(
+                    "{} is {}",
+                    self.format(value),
+                    self.fmt_potential_new_type(data_type)
+                )
             }
             NodeType::CallExpression(callee, args) => {
-                let mut txt = format!("{}(", self.format(&*callee));
+                let mut txt = format!("{}(", self.format(callee));
 
                 for arg in args {
                     if let Some(x) = &arg.1 {
-                        txt.push_str(&format!("{} = {}, ", self.format(&arg.0), self.format(&x)));
+                        txt.push_str(&format!("{} = {}, ", self.format(&arg.0), self.format(x)));
                     } else {
                         txt.push_str(&format!("{}, ", self.format(&arg.0)));
                     }
@@ -332,20 +356,20 @@ impl Formatter {
 
                 txt
             }
-            NodeType::StructLiteral(x) => self.fmt_struct_literal(&x),
+            NodeType::StructLiteral { identifier, value } => {
+                format!("{}{}", identifier, self.fmt_struct_literal(value))
+            }
             NodeType::EnumExpression {
                 identifier,
                 value,
-                data,
+                data: Some(data),
             } => {
-                format!(
-                    "{}.{}{}",
-                    identifier,
-                    value,
-                    data.clone()
-                        .map(|x| self.fmt_struct_literal(&x))
-                        .unwrap_or_default()
-                )
+                format!("{}.{} : {}", identifier, value, data)
+            }
+            NodeType::EnumExpression {
+                identifier, value, ..
+            } => {
+                format!("{}.{}", identifier, value)
             }
             NodeType::RangeDeclaration {
                 from,
@@ -354,24 +378,34 @@ impl Formatter {
             } => {
                 format!(
                     "{}..{}{}",
-                    self.format(&*from),
+                    self.format(from),
                     if *inclusive { "=" } else { "" },
-                    self.format(&*to)
+                    self.format(to)
                 )
             }
             NodeType::IterExpression {
+                data_type,
                 map,
                 loop_type,
                 conditionals,
             } => {
-                let mut txt = format!(
-                    "[{} for {}",
-                    self.format(&*map),
-                    self.fmt_loop_type(&*loop_type)
-                );
+                let mut txt = if let Some(data_type) = data_type {
+                    format!(
+                        "list<{}>[{} for {}",
+                        self.fmt_potential_new_type(data_type),
+                        self.format(map),
+                        self.fmt_loop_type(loop_type)
+                    )
+                } else {
+                    format!(
+                        "list[{} for {}",
+                        self.format(map),
+                        self.fmt_loop_type(loop_type)
+                    )
+                };
 
                 if !conditionals.is_empty() {
-                    txt.push_str(&format!(" {}", self.fmt_conditionals(&conditionals)));
+                    txt.push_str(&format!(" {}", self.fmt_conditionals(conditionals)));
                 }
 
                 txt.push(']');
@@ -394,7 +428,7 @@ impl Formatter {
                 txt.push_str(" (");
 
                 let mut adjusted_params = parameters
-                    .get(0)
+                    .first()
                     .map(|x| vec![vec![x]])
                     .unwrap_or(Vec::new());
 
@@ -414,10 +448,10 @@ impl Formatter {
 
                     let last = params.last().unwrap();
 
-                    txt.push_str(&format!(": {}", last.1));
+                    txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
 
                     if let Some(default) = &last.2 {
-                        txt.push_str(&format!(" = {}", self.format(&default)));
+                        txt.push_str(&format!(" = {}", self.format(default)));
                     }
 
                     txt.push_str(", ");
@@ -426,58 +460,74 @@ impl Formatter {
                 let mut txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
 
-                if let Some(typ) = return_type {
-                    txt.push_str(&format!(" -> {}", typ));
+                if return_type != &PotentialNewType::DataType(ParserInnerType::Null.into()) {
+                    txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
                 }
 
-                txt.push_str(&format!(" => {}", self.format(&*body)));
+                txt.push_str(&format!(" {}", self.format(body)));
 
                 txt
             }
             NodeType::LoopDeclaration { loop_type, body } => {
                 format!(
-                    "for {} => {}",
-                    self.fmt_loop_type(&*loop_type),
-                    self.format(&*body)
+                    "for {} {}",
+                    self.fmt_loop_type(loop_type),
+                    self.format(body)
                 )
             }
             NodeType::IfStatement {
                 comparison,
                 then,
                 otherwise,
-                special_delim,
             } => {
                 let mut txt = String::from("if");
                 match &**comparison {
                     IfComparisonType::If(x) => {
-                        txt.push_str(&format!(" {}", self.format(&x)));
+                        txt.push_str(&format!(" {}", self.format(x)));
                     }
                     IfComparisonType::IfLet { value, pattern } => {
-                        txt.push_str(&format!(
-                            " let {} {}<- {}",
-                            self.format(&pattern.0),
-                            format!("{} ", self.fmt_conditionals(&pattern.1)),
-                            self.format(&value)
-                        ));
+                        txt.push_str(" let ");
+                        txt.push_str(&self.fmt_match_arm(&pattern.0[0], false));
+                        for node in pattern.0.iter().skip(1) {
+                            txt.push_str(&format!(" | {}", self.fmt_match_arm(node, false)));
+                        }
+
+                        match &pattern.0[0] {
+                            MatchArmType::Enum {
+                                value: _,
+                                var_type: VarType::Immutable,
+                                name: Some(name),
+                            } => txt.push_str(&format!(" : {}", name)),
+                            MatchArmType::Enum {
+                                value: _,
+                                var_type,
+                                name: Some(name),
+                            } => {
+                                txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name))
+                            }
+                            _ => {}
+                        }
+
+                        if !pattern.1.is_empty() {
+                            txt.push_str(&format!(" {}", self.fmt_conditionals(&pattern.1)));
+                        };
+
+                        txt.push_str(&format!(" <- {}", self.format(value)));
                     }
                 }
 
-                txt.push_str(&format!(" => {}", self.format(&then)));
+                txt.push_str(&format!(" {}", self.format(&then)));
 
                 if let Some(otherwise) = otherwise {
-                    let otherwise = self.format(&*otherwise);
-                    if otherwise.trim().starts_with("if") {
-                        txt.push_str(&format!(" else {}", otherwise));
-                    } else {
-                        txt.push_str(&format!(" else => {}", otherwise));
-                    }
-                } else if *special_delim {
-                    txt.push_str(";");
+                    txt.push_str(&format!(" else {}", self.format(&*otherwise)));
                 }
 
                 txt
             }
-            NodeType::MatchDeclaration {
+            NodeType::MatchStatement { value, body } => {
+                format!("match {} {}", self.format(value), self.fmt_match_body(body))
+            }
+            NodeType::FnMatchDeclaration {
                 parameters,
                 body,
                 return_type,
@@ -488,50 +538,17 @@ impl Formatter {
                     txt.push_str(" async");
                 }
 
-                txt.push_str(&format!(" {}", parameters.1));
+                txt.push_str(&format!(" {}", self.fmt_potential_new_type(&parameters.1)));
 
                 if let Some(default) = &parameters.2 {
                     txt.push_str(&format!(" = {}", self.format(&*default)));
                 }
 
-                if let Some(typ) = return_type {
-                    txt.push_str(&format!(" -> {}", typ));
+                if return_type != &PotentialNewType::DataType(ParserInnerType::Null.into()) {
+                    txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
                 }
 
-                txt.push_str(" {\n");
-
-                let mut adjusted_body = body.get(0).map(|x| vec![vec![x]]).unwrap_or(Vec::new());
-
-                for arm in body.iter().skip(1) {
-                    let last = adjusted_body.last().unwrap().first().unwrap();
-                    if last.1 == arm.1 && last.2 == arm.2 {
-                        adjusted_body.last_mut().unwrap().push(arm);
-                    } else {
-                        adjusted_body.push(vec![arm]);
-                    }
-                }
-
-                for arm in adjusted_body {
-                    let temp = handle_comment!(self.get_potential_comment(&arm[0].0.span), {
-                        let mut txt = self.format(&arm[0].0);
-                        for node in arm.iter().skip(1) {
-                            txt.push_str(&format!(" | {}", self.format(&node.0)));
-                        }
-                        format!(
-                            "{}{} => {}",
-                            txt,
-                            if arm[0].1.is_empty() {
-                                String::new()
-                            } else {
-                                format!(" {}", self.fmt_conditionals(&arm[0].1))
-                            },
-                            self.format(&*arm[0].2)
-                        )
-                    });
-                    txt.push_str(&format!("{},\n", &self.fmt_txt_with_tab(&temp, 1, true)));
-                }
-                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
-                txt.push_str("\n}");
+                txt.push_str(&format!(" {}", self.fmt_match_body(body)));
 
                 txt
             }
@@ -570,14 +587,25 @@ impl Formatter {
             }
             NodeType::CharLiteral(x) => format!("'{}'", x),
             NodeType::StringLiteral(x) => format!("\"{}\"", x),
-            NodeType::ListLiteral(values) => {
-                let mut txt = format!(
-                    "[{}",
-                    values
-                        .get(0)
-                        .map(|x| self.format(&*x))
-                        .unwrap_or(String::new())
-                );
+            NodeType::ListLiteral(data_type, values) => {
+                let mut txt = if let Some(data_type) = data_type {
+                    format!(
+                        "list<{}>[{}",
+                        self.fmt_potential_new_type(&data_type),
+                        values
+                            .get(0)
+                            .map(|x| self.format(&*x))
+                            .unwrap_or(String::new())
+                    )
+                } else {
+                    format!(
+                        "list[{}",
+                        values
+                            .get(0)
+                            .map(|x| self.format(&*x))
+                            .unwrap_or(String::new())
+                    )
+                };
 
                 for value in values.iter().skip(1) {
                     txt.push_str(&format!(", {}", self.format(value)));
@@ -587,35 +615,110 @@ impl Formatter {
 
                 txt
             }
+            NodeType::DataType { data_type } => {
+                format!("type : {}", self.fmt_potential_new_type(data_type))
+            }
+            NodeType::Comp { stage, body } => format!("comp, {} {}", stage, self.format(&body)),
+            NodeType::ScopeAlias {
+                identifier,
+                value,
+                create_new_scope,
+            } => {
+                let mut txt = format!("let @{} => @{} [", identifier, value.name);
+
+                for arg in &value.args {
+                    txt.push_str(&format!("${} = {}, ", &arg.0, self.format(&arg.1)));
+                }
+                txt = txt.trim_end().trim_end_matches(",").to_string();
+                txt.push(']');
+
+                if let Some(new_scope) = create_new_scope {
+                    if *new_scope {
+                        txt.push_str("{}");
+                    } else {
+                        txt.push_str("{{}}");
+                    }
+                }
+
+                txt
+            }
             NodeType::ScopeDeclaration {
                 body,
                 is_temp: true,
+                create_new_scope,
+                named,
+                define,
             } => {
-                let mut txt = String::from("{");
+                let mut txt = if *define {
+                    String::from("let =>")
+                } else {
+                    String::from("=>")
+                };
 
-                if !body.is_empty() {
-                    txt.push_str("\n");
-                    let lines = self.get_scope_lines(&body);
-
-                    for line in lines {
-                        txt.push_str(&line);
+                if let Some(named) = named {
+                    txt.push_str(&format!(" @{} [", named.name));
+                    for arg in &named.args {
+                        txt.push_str(&format!("${} = {}, ", &arg.0, self.format(&arg.1)));
                     }
-
-                    txt = self.fmt_txt_with_tab(&txt, 1, false).trim_end().to_string();
-
-                    txt.push_str("\n");
+                    txt = txt.trim_end().trim_end_matches(",").to_string();
+                    txt.push_str("]");
                 }
 
-                txt.push_str("}");
+                let mut empty_body = false;
+
+                if let Some(body) = &body {
+                    if !body.is_empty() {
+                        let create_new_scope = create_new_scope.clone().unwrap();
+                        if body.len() > 1 || create_new_scope {
+                            txt.push_str(" {");
+                            if !create_new_scope {
+                                txt.push_str("{");
+                            }
+                            txt.push_str("\n");
+                        }
+
+                        if body.len() > 1 || create_new_scope {
+                            let lines = self.get_scope_lines(&body);
+
+                            for line in lines {
+                                txt.push_str(&line);
+                            }
+
+                            txt = self.fmt_txt_with_tab(&txt, 1, false).trim_end().to_string();
+                        } else {
+                            txt.push_str(&format!(" {}", self.format(&body[0])));
+                        }
+
+                        if body.len() > 1 || create_new_scope {
+                            txt.push_str("\n");
+                            if !create_new_scope {
+                                txt.push_str("}");
+                            }
+                            txt.push_str("}");
+                        }
+                    } else {
+                        empty_body = true;
+                    }
+                } else {
+                    empty_body = true;
+                }
+
+                if empty_body {
+                    if let Some(create_new_scope) = create_new_scope {
+                        if *create_new_scope {
+                            txt.push_str(" {}");
+                        } else {
+                            txt.push_str(" {{}}");
+                        }
+                    }
+                }
 
                 txt
             }
 
-            NodeType::ScopeDeclaration {
-                body,
-                is_temp: false,
-            } => {
+            NodeType::ScopeDeclaration { body, .. } => {
                 let mut txt = String::new();
+                let Some(body) = body else { unreachable!() };
 
                 if !body.is_empty() {
                     let lines = self.get_scope_lines(&body);
@@ -646,79 +749,74 @@ impl Formatter {
                 txt
             }
             NodeType::ParenExpression { value } => format!("({})", self.format(&*value)),
-            NodeType::TypeDeclaration { identifier, object } => {
-                let mut txt = format!("type {} = ", identifier);
-
-                let fmt_obj = |this: &mut Self, obj: &ObjectType<ParserDataType>| -> String {
-                    match obj {
-                        ObjectType::Map(x) => {
-                            let mut txt = String::from("{\n");
-                            for (key, value) in x {
-                                txt.push_str(&handle_comment!(
-                                    this.get_potential_comment(&value.span),
-                                    format!("{} : {},\n", key, value)
-                                ));
-                            }
-
-                            let mut txt = this.fmt_txt_with_tab(
-                                txt.trim_end().trim_end_matches(","),
-                                1,
-                                true,
-                            );
-
-                            txt.push_str("\n}");
-                            txt
-                        }
-
-                        ObjectType::Tuple(x) => {
-                            let mut txt = String::from("(");
-
-                            for value in x {
-                                txt.push_str(&handle_comment!(
-                                    this.get_potential_comment(&value.span),
-                                    format!("{}, ", value)
-                                ));
-                            }
-
-                            let mut txt = this.fmt_txt_with_tab(
-                                txt.trim_end().trim_end_matches(","),
-                                1,
-                                false,
-                            );
-
-                            txt.push_str(")");
-                            txt
-                        }
-                    }
-                };
-
-                match &object {
-                    TypeDefType::Enum(values) => {
-                        txt.push_str("enum {\n");
-
-                        for arm in values {
-                            txt.push_str(&handle_comment!(
-                                self.get_potential_comment(&arm.0.span),
-                                if let Some(x) = &arm.1 {
-                                    format!("{}{},\n", arm.0, fmt_obj(self, x))
-                                } else {
-                                    format!("{},\n", arm.0)
-                                }
-                            ));
-                        }
-
-                        txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
-                        txt.push_str("\n}");
-                    }
-                    TypeDefType::NewType(x) => txt.push_str(&x.to_string()),
-                    TypeDefType::Struct(x) => {
-                        txt.push_str(&format!("struct {}", fmt_obj(self, x)));
-                    }
-                }
+            NodeType::TypeDeclaration {
+                identifier,
+                object,
+                overloads,
+            } => {
+                let mut txt = format!(
+                    "type {} = {}{}",
+                    identifier,
+                    self.fmt_type_def_type(&object),
+                    self.fmt_overloads(&overloads)
+                );
 
                 txt
             }
         }
+    }
+
+    pub fn fmt_match_body(&mut self, body: &[(MatchArmType, Vec<Node>, Box<Node>)]) -> String {
+        let mut txt = String::from("{\n");
+
+        let mut adjusted_body = body.get(0).map(|x| vec![vec![x]]).unwrap_or(Vec::new());
+
+        for arm in body.iter().skip(1) {
+            let last = adjusted_body.last().unwrap().first().unwrap();
+            if last.1 == arm.1 && last.2 == arm.2 {
+                adjusted_body.last_mut().unwrap().push(arm);
+            } else {
+                adjusted_body.push(vec![arm]);
+            }
+        }
+
+        for arm in adjusted_body {
+            let temp = handle_comment!(self.get_potential_comment(&arm[0].0.span()), {
+                let mut txt = self.fmt_match_arm(&arm[0].0, false);
+                for node in arm.iter().skip(1) {
+                    txt.push_str(&format!(" | {}", self.fmt_match_arm(&node.0, false)));
+                }
+
+                match &arm[0].0 {
+                    MatchArmType::Enum {
+                        value: _,
+                        var_type: VarType::Immutable,
+                        name: Some(name),
+                    } => txt.push_str(&format!(" : {}", name)),
+                    MatchArmType::Enum {
+                        value: _,
+                        var_type,
+                        name: Some(name),
+                    } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
+                    _ => {}
+                }
+
+                format!(
+                    "{}{} {}",
+                    txt,
+                    if arm[0].1.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {}", self.fmt_conditionals(&arm[0].1))
+                    },
+                    self.format(&*arm[0].2)
+                )
+            });
+            txt.push_str(&format!("{},\n", &self.fmt_txt_with_tab(&temp, 1, true)));
+        }
+        let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+        txt.push_str("\n}");
+        txt
     }
 
     pub fn fmt_txt_with_tab(&mut self, txt: &str, tab_amt: usize, starting_tab: bool) -> String {
@@ -745,6 +843,71 @@ impl Formatter {
             Some(Formatter::fmt_comments(comments))
         } else {
             None
+        }
+    }
+
+    fn fmt_overloads(&mut self, overloads: &[Overload]) -> String {
+        if !overloads.is_empty() {
+            let mut txt = String::from(" @overload {\n");
+
+            for func in overloads {
+                let func_txt = {
+                    let mut txt = if func.is_async {
+                        String::from("fn async")
+                    } else {
+                        String::from("fn")
+                    };
+
+                    txt.push_str(&format!(" \"{}\" (", func.operator));
+
+                    let mut adjusted_params = func
+                        .parameters
+                        .first()
+                        .map(|x| vec![vec![x]])
+                        .unwrap_or(Vec::new());
+
+                    for param in func.parameters.iter().skip(1) {
+                        let last = adjusted_params.last().unwrap().first().unwrap();
+                        if last.1 == param.1 {
+                            adjusted_params.last_mut().unwrap().push(param);
+                        } else {
+                            adjusted_params.push(vec![param]);
+                        }
+                    }
+
+                    for params in &adjusted_params {
+                        for id in params {
+                            txt.push_str(&format!("{} ", id.0));
+                        }
+
+                        let last = params.last().unwrap();
+
+                        txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
+
+                        txt.push_str(", ");
+                    }
+
+                    let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+
+                    txt.push_str(&format!(
+                        ") -> {} {}",
+                        self.fmt_potential_new_type(&func.return_type),
+                        self.format(&func.body)
+                    ));
+
+                    txt
+                };
+
+                let temp = handle_comment!(self.get_potential_comment(func.span()), func_txt);
+                txt.push_str(&format!("\n{};\n", self.fmt_txt_with_tab(&temp, 1, true)));
+            }
+
+            txt = txt.trim().to_string();
+
+            txt.push_str("\n}");
+            txt
+        } else {
+            String::new()
         }
     }
 
@@ -785,14 +948,109 @@ impl Formatter {
         }
     }
 
-    fn fmt_struct_literal(&mut self, object_type: &ObjectType<Option<Node>>) -> String {
+    fn fmt_new_type_obj(&mut self, obj: &ObjectType<PotentialNewType>) -> String {
+        match obj {
+            ObjectType::Map(x) => {
+                let mut txt = String::from("{\n");
+                for (key, value) in x {
+                    txt.push_str(&handle_comment!(
+                        self.get_potential_comment(value.span()),
+                        format!("{} : {},\n", key, self.fmt_potential_new_type(value))
+                    ));
+                }
+
+                let mut txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, true);
+
+                txt.push_str("\n}");
+                txt
+            }
+
+            ObjectType::Tuple(x) => {
+                let mut txt = String::from("(");
+
+                for value in x {
+                    txt.push_str(&handle_comment!(
+                        self.get_potential_comment(value.span()),
+                        format!("{}, ", self.fmt_potential_new_type(value))
+                    ));
+                }
+
+                let mut txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
+
+                txt.push_str(")");
+                txt
+            }
+        }
+    }
+
+    fn fmt_type_def_type(&mut self, type_def: &TypeDefType) -> String {
+        let mut txt = String::new();
+        match type_def {
+            TypeDefType::Enum(values) => {
+                txt.push_str("enum {\n");
+
+                for arm in values {
+                    txt.push_str(&handle_comment!(
+                        self.get_potential_comment(arm.0.span()),
+                        if let Some(x) = &arm.1 {
+                            format!("{} : {},\n", arm.0, self.fmt_potential_new_type(x))
+                        } else {
+                            format!("{},\n", arm.0)
+                        }
+                    ));
+                }
+
+                txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
+                txt.push_str("\n}");
+            }
+            TypeDefType::NewType(x) => txt.push_str(&self.fmt_potential_new_type(&x)),
+            TypeDefType::Struct(x) => {
+                txt.push_str(&format!("struct {}", self.fmt_new_type_obj(&x)));
+            }
+        }
+        txt
+    }
+
+    fn fmt_potential_new_type(&mut self, data_type: &PotentialNewType) -> String {
+        match data_type {
+            PotentialNewType::DataType(x) => x.to_string(),
+            PotentialNewType::NewType {
+                identifier,
+                type_def,
+                overloads,
+            } => {
+                format!(
+                    "type {} = {}{}",
+                    identifier,
+                    self.fmt_type_def_type(&type_def),
+                    self.fmt_overloads(&overloads)
+                )
+            }
+        }
+    }
+
+    fn fmt_struct_literal(&mut self, object_type: &ObjectType<Node>) -> String {
         let allow_new_line = false;
         match object_type {
             ObjectType::Map(map) => {
                 let mut txt = format!("{{{}", if allow_new_line { "\n" } else { "" });
                 for (key, value) in map.iter() {
-                    let temp = if let Some(value) = value {
-                        handle_comment!(
+                    let mut temp = None;
+
+                    if let NodeType::Identifier(x) = &value.node_type {
+                        if &x.to_string() == key {
+                            temp = Some({
+                                let span = Span::default();
+                                handle_comment!(
+                                    self.get_potential_comment(&span),
+                                    format!("{},{}", key, if allow_new_line { "\n" } else { " " })
+                                )
+                            });
+                        }
+                    }
+
+                    if temp.is_none() {
+                        temp = Some(handle_comment!(
                             self.get_potential_comment(&value.span),
                             format!(
                                 "{} : {},{}",
@@ -800,16 +1058,10 @@ impl Formatter {
                                 self.format(value),
                                 if allow_new_line { "\n" } else { " " }
                             )
-                        )
-                    } else {
-                        let span = Span::default();
-                        handle_comment!(
-                            self.get_potential_comment(&span),
-                            format!("{},{}", key, if allow_new_line { "\n" } else { " " })
-                        )
-                    };
+                        ));
+                    }
 
-                    txt.push_str(&self.fmt_txt_with_tab(&temp, 1, false));
+                    txt.push_str(&self.fmt_txt_with_tab(&temp.unwrap(), 1, false));
                 }
 
                 let mut txt = txt.trim_end().trim_end_matches(",").to_string();
@@ -819,13 +1071,11 @@ impl Formatter {
             ObjectType::Tuple(lst) => {
                 let mut txt = String::from("(");
                 for value in lst.iter() {
-                    if let Some(value) = value {
-                        let temp = handle_comment!(
-                            self.get_potential_comment(&value.span),
-                            self.format(value)
-                        );
-                        txt.push_str(&self.fmt_txt_with_tab(&format!("{}, ", temp), 1, false));
-                    }
+                    let temp = handle_comment!(
+                        self.get_potential_comment(&value.span),
+                        self.format(value)
+                    );
+                    txt.push_str(&self.fmt_txt_with_tab(&format!("{}, ", temp), 1, false));
                 }
 
                 let mut txt = txt.trim_end().trim_end_matches(",").to_string();
@@ -834,11 +1084,57 @@ impl Formatter {
             }
         }
     }
-
+    pub fn fmt_match_arm(&mut self, arm: &MatchArmType, write_name: bool) -> String {
+        match arm {
+            MatchArmType::Enum {
+                value,
+                var_type: VarType::Immutable,
+                name: Some(name),
+            } if write_name => format!(".{} : {}", value, name),
+            MatchArmType::Enum {
+                value,
+                var_type,
+                name: Some(name),
+            } if write_name => format!(".{} : {} {}", value, var_type.print_only_ends(), name),
+            MatchArmType::Let { var_type, name } => format!("{} {}", var_type, name),
+            MatchArmType::Enum { value, .. } => format!(".{}", value),
+            MatchArmType::Value(x) => self.format(x),
+            MatchArmType::Wildcard(_) => String::from("_"),
+        }
+    }
     pub fn fmt_loop_type(&mut self, loop_type: &LoopType) -> String {
         match loop_type {
             LoopType::While(x) => self.format(x),
             LoopType::For(id, x) => format!("{} in {}", id, self.format(x)),
+            LoopType::Let { value, pattern } => {
+                let mut txt = String::from("let ");
+                txt.push_str(&self.fmt_match_arm(&pattern.0[0], false));
+                for node in pattern.0.iter().skip(1) {
+                    txt.push_str(&format!(" | {}", self.fmt_match_arm(node, false)));
+                }
+
+                match &pattern.0[0] {
+                    MatchArmType::Enum {
+                        value: _,
+                        var_type: VarType::Immutable,
+                        name: Some(name),
+                    } => txt.push_str(&format!(" : {}", name)),
+                    MatchArmType::Enum {
+                        value: _,
+                        var_type,
+                        name: Some(name),
+                    } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
+                    _ => {}
+                }
+
+                if !pattern.1.is_empty() {
+                    txt.push_str(&format!(" {}", self.fmt_conditionals(&pattern.1)));
+                };
+
+                txt.push_str(&format!(" <- {}", self.format(value)));
+                txt
+            }
+            LoopType::Loop => String::new(),
         }
     }
 

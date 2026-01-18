@@ -8,39 +8,50 @@ impl RuntimeValue {
         matches!(self, RuntimeValue::Float(_) | RuntimeValue::Int(_))
     }
 
-    pub fn is_type(&self, env: &InterpreterEnvironment, scope: &u64, t: &RuntimeType) -> bool {
+    pub fn is_type(&self, env: &InterpreterEnvironment, t: &RuntimeType) -> bool {
         if t == &RuntimeType::Dynamic {
             return true;
         }
 
         match self {
-            RuntimeValue::Ref(_, x) => x == t,
+            RuntimeValue::Ref(_, x) => {
+                if x == t {
+                    true
+                } else {
+                    &RuntimeType::Ref(Box::new(x.clone())) == t
+                }
+            }
             RuntimeValue::Null => false,
             RuntimeValue::NativeFunction(_) => false,
-            RuntimeValue::Struct(x, _) => match t {
-                RuntimeType::Struct(y) => x == y,
-                _ => false,
-            },
+
             RuntimeValue::Option(d, x) => d.is_none() || x == t,
             RuntimeValue::Result(d, x) => {
                 if x == t {
                     true
-                } else if let RuntimeType::Result(x, y) = x {
-                    if d.is_ok() { &**x == t } else { &**y == t }
+                } else if let RuntimeType::Result { ok, err } = x {
+                    if d.is_ok() { &**ok == t } else { &**err == t }
                 } else {
                     false
                 }
             }
-            RuntimeValue::Tuple(data) => match t {
+            RuntimeValue::Aggregate(Some(x), _) => match t {
+                RuntimeType::Struct(y) => x == y,
+                _ => false,
+            },
+            RuntimeValue::Aggregate(None, data) => match t {
                 RuntimeType::Tuple(data_types) => {
                     if data.len() != data_types.len() {
                         false
                     } else {
                         let mut valid = true;
                         for i in 0..data.len() {
-                            if !data[i].is_type(env, scope, &data_types[i]) {
-                                valid = false;
-                                break;
+                            if let Some(x) = data.get(&i.to_string()) {
+                                if !x.is_type(env, &data_types[i]) {
+                                    valid = false;
+                                    break;
+                                }
+                            } else {
+                                return false;
                             }
                         }
                         valid
@@ -50,7 +61,7 @@ impl RuntimeValue {
             },
             RuntimeValue::Enum(x, _, _) => match t {
                 RuntimeType::Enum(y) => x == y,
-                RuntimeType::Struct(y) => Some(x) == y.as_ref(),
+                RuntimeType::Struct(y) => x == y,
                 _ => false,
             },
             RuntimeValue::Function {
@@ -68,14 +79,8 @@ impl RuntimeValue {
                         return false;
                     };
 
-                    if let Some(x) = return_type {
-                        if let Some(y) = val_type {
-                            if **x != *y {
-                                return false;
-                            }
-                        } else {
-                            return false;
-                        }
+                    if **return_type != *val_type {
+                        return false;
                     }
 
                     if val_parameters.len() != parameters.len() {

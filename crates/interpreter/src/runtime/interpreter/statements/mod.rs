@@ -1,68 +1,62 @@
 use calibre_common::environment::{InterpreterFrom, Variable};
-use calibre_parser::ast::{Node, NodeType, VarType};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
+use calibre_parser::ast::VarType;
 
 use crate::runtime::{
     interpreter::InterpreterErr,
     scope::InterpreterEnvironment,
     values::{
-        FunctionType, RuntimeType, RuntimeValue,
-        helper::{Block, MatchBlock},
+        RuntimeType, RuntimeValue,
+        helper::{Block, StopValue},
     },
 };
 
 pub mod comparisons;
-pub mod import;
-pub mod loops;
-pub mod matching;
-pub mod structs;
 
 impl InterpreterEnvironment {
-    pub fn evaluate_match_declaration(
+    pub fn evaluate_loop_declaration(
         &mut self,
         scope: &u64,
-        declaration: Node,
+        state: Option<MiddleNode>,
+        body: MiddleNode,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let NodeType::MatchDeclaration {
-            parameters,
-            body,
-            return_type,
-            is_async,
-        } = declaration.node_type
-        else {
-            unreachable!()
-        };
+        #[allow(unused)]
+        let mut result = RuntimeValue::Null;
+        let new_scope = self.get_new_scope(scope, Vec::new(), Vec::new())?;
 
-        let mut params = Vec::new();
+        if let Some(state) = state {
+            let _ = self.evaluate(scope, state)?;
+        }
 
-        let default = if let Some(node) = parameters.2 {
-            Some(self.evaluate(scope, *node)?)
-        } else {
-            None
-        };
+        loop {
+            result = self.evaluate(&new_scope, body.clone())?;
+            self.remove_scope(&new_scope);
 
-        params.push((
-            parameters.0.to_string(),
-            RuntimeType::interpreter_from(self, scope, parameters.1)?,
-            default,
-        ));
+            match self.stop {
+                Some(StopValue::Break) => {
+                    self.stop = None;
+                    break;
+                }
+                Some(StopValue::Return) => {
+                    self.stop = Some(StopValue::Return);
+                    break;
+                }
+                Some(_) => {
+                    self.stop = None;
+                }
+                _ => {}
+            };
+        }
 
-        Ok(RuntimeValue::Function {
-            parameters: params,
-            body: FunctionType::Match(MatchBlock(body)),
-            return_type: match return_type {
-                Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
-                None => None,
-            },
-            is_async,
-        })
+        Ok(result)
     }
 
     pub fn evaluate_function_declaration(
         &mut self,
         scope: &u64,
-        declaration: Node,
+        declaration: MiddleNode,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let NodeType::FunctionDeclaration {
+        let MiddleNodeType::FunctionDeclaration {
             parameters,
             body,
             return_type,
@@ -89,11 +83,8 @@ impl InterpreterEnvironment {
 
         Ok(RuntimeValue::Function {
             parameters: params,
-            body: FunctionType::Regular(Block(body)),
-            return_type: match return_type {
-                Some(x) => Some(RuntimeType::interpreter_from(self, scope, x)?),
-                None => None,
-            },
+            body: Block(body),
+            return_type: RuntimeType::interpreter_from(self, scope, return_type)?,
             is_async,
         })
     }
@@ -109,24 +100,16 @@ impl InterpreterEnvironment {
         if let Some(t) = data_type {
             value = match value {
                 RuntimeValue::List { data, data_type } if data.len() <= 0 => {
-                    RuntimeValue::List { data, data_type }.into_type(self, scope, &t)?
+                    RuntimeValue::List { data, data_type }.into_type(self, &t)?
                 }
                 x => x,
             };
-            if !value.is_type(self, scope, &t) {
+            if !value.is_type(self, &t) {
                 return Err(InterpreterErr::ExpectedType(value.clone(), t));
             }
         }
 
-        Ok(self.push_var(
-            scope,
-            identifier,
-            Variable {
-                value,
-                var_type,
-                location: self.current_location.clone(),
-            },
-        )?)
+        Ok(self.push_var(scope, identifier, Variable { value, var_type })?)
     }
 }
 

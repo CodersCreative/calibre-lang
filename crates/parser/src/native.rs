@@ -1,0 +1,79 @@
+use std::collections::HashMap;
+
+use crate::ast::{ParserDataType, ParserInnerType};
+
+impl<T> ParserDataType<T> {
+    pub fn constants() -> std::collections::HashMap<String, Self> {
+        let lst: Vec<(&'static str, ParserInnerType<T>)> = vec![
+            ("PI", ParserInnerType::Float),
+            ("FLOAT_MAX", ParserInnerType::Float),
+            ("INT_MAX", ParserInnerType::Int),
+            ("FLOAT_MIN", ParserInnerType::Float),
+            ("INT_MIN", ParserInnerType::Int),
+            ("true", ParserInnerType::Bool),
+            ("false", ParserInnerType::Bool),
+            (
+                "none",
+                ParserInnerType::Option(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
+            ),
+        ];
+
+        let mut map = HashMap::new();
+
+        for val in lst {
+            map.insert(val.0.to_string(), ParserDataType::from(val.1));
+        }
+
+        map
+    }
+
+    pub fn natives() -> HashMap<String, ParserDataType<T>> {
+        let lst: Vec<(&'static str, ParserInnerType<T>)> = vec![
+            ("print", ParserInnerType::Null),
+            (
+                "ok",
+                ParserInnerType::Result {
+                    err: Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
+                    ok: Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
+                },
+            ),
+            (
+                "err",
+                ParserInnerType::Result {
+                    err: Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
+                    ok: Box::new(ParserDataType::from(ParserInnerType::Dynamic)),
+                },
+            ),
+            (
+                "some",
+                ParserInnerType::Option(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
+            ),
+            ("len", ParserInnerType::Int),
+            ("panic", ParserInnerType::Null),
+            ("tuple", ParserInnerType::Dynamic),
+            ("trim", ParserInnerType::Str),
+            ("discriminant", ParserInnerType::Int),
+            ("console.out", ParserInnerType::Null),
+            ("console.input", ParserInnerType::Str),
+            ("console.err", ParserInnerType::Null),
+            ("console.clear", ParserInnerType::Null),
+            ("thread.wait", ParserInnerType::Null),
+            ("random.generate", ParserInnerType::Float),
+            ("random.bool", ParserInnerType::Bool),
+            ("random.ratio", ParserInnerType::Bool),
+        ];
+
+        let mut map = HashMap::new();
+
+        for val in lst {
+            map.insert(
+                val.0.to_string(),
+                ParserDataType::from(ParserInnerType::NativeFunction(Box::new(
+                    ParserDataType::from(val.1),
+                ))),
+            );
+        }
+
+        map
+    }
+}

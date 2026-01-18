@@ -1,9 +1,0 @@
-[package]
-name = "calibre-type-checker"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-thiserror = "2.0.12"
-calibre-parser = {path = "../parser"}
-calibre-common = {path = "../common"}

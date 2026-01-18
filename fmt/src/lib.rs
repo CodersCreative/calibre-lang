@@ -33,9 +33,14 @@ pub fn format_all(formatter: &mut Formatter, path: &PathBuf) -> Result<(), Box<d
             if path.exists() {
                 format_all(formatter, &path)?;
             } else {
-                let path = base.join(&format!("{}/main.cl", module[0]));
+                let path = base.join(&format!("{}/mod.cl", module[0]));
                 if path.exists() {
                     format_all(formatter, &path)?;
+                } else {
+                    let path = base.join(&format!("{}/main.cl", module[0]));
+                    if path.exists() {
+                        format_all(formatter, &path)?;
+                    }
                 }
             }
         }

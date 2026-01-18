@@ -87,9 +87,12 @@ pub enum TokenType {
     Char,
     Identifier,
     Equals,
+    Dollar,
+    Overload,
     Open(Bracket),
     Close(Bracket),
     Colon,
+    DoubleColon,
     Comment,
     Comma,
     Comparison(Comparison),
@@ -126,9 +129,11 @@ pub enum TokenType {
     As,
     Try,
     This,
+    At,
     FullStop,
     EOL,
     EOF,
+    Comp,
     Struct,
     Else,
     Pipe,
@@ -172,6 +177,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("import"), TokenType::Import),
         (String::from("from"), TokenType::From),
         (String::from("type"), TokenType::Type),
+        (String::from("comp"), TokenType::Comp),
     ])
 }
 
@@ -182,6 +188,7 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
         (String::from("<-"), TokenType::LeftArrow),
         (String::from("=>"), TokenType::FatArrow),
         (String::from(".."), TokenType::Range),
+        (String::from("::"), TokenType::DoubleColon),
         (
             String::from("**"),
             TokenType::BinaryOperator(BinaryOperator::Pow),
@@ -219,6 +226,7 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
             String::from("|="),
             TokenType::BinaryAssign(BinaryOperator::BitOr),
         ),
+        (String::from("@overload"), TokenType::Overload),
         (String::from("&mut"), TokenType::RefMut),
         (String::from("=="), TokenType::Comparison(Comparison::Equal)),
         (
@@ -314,8 +322,9 @@ impl Tokenizer {
                     '[' => Some(TokenType::Open(Bracket::Square)),
                     ']' => Some(TokenType::Close(Bracket::Square)),
                     ',' => Some(TokenType::Comma),
+                    '@' => Some(TokenType::At),
                     '&' => Some(TokenType::Ref),
-                    '$' => Some(TokenType::Identifier),
+                    '$' => Some(TokenType::Dollar),
                     '?' => Some(TokenType::Question),
                     '<' | '>' => Some(TokenType::Comparison(
                         Comparison::from_operator(&c.to_string()).unwrap(),
@@ -340,9 +349,24 @@ impl Tokenizer {
                         let _ = buffer.remove(0);
                         Some(self.new_token(t, ";"))
                     }
+                    TokenType::FullStop => {
+                        self.increment_line_col(first);
+                        let value = buffer.remove(0).to_string();
+                        Some(self.new_token(
+                            t,
+                            &format!(
+                                "{}{}",
+                                if tokens.last().unwrap().token_type == TokenType::WhiteSpace {
+                                    String::from(" ")
+                                } else {
+                                    String::new()
+                                },
+                                value.trim()
+                            ),
+                        ))
+                    }
                     t => {
                         self.increment_line_col(first);
-
                         Some(self.new_token(t, buffer.remove(0).to_string().trim()))
                     }
                 },

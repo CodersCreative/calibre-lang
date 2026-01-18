@@ -7,6 +7,9 @@ use rand::{self, random_bool, random_range, random_ratio};
 pub struct Generate();
 
 impl NativeFunction for Generate {
+    fn name(&self) -> String {
+        String::from("generate")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -44,6 +47,9 @@ impl NativeFunction for Generate {
 pub struct Bool();
 
 impl NativeFunction for Bool {
+    fn name(&self) -> String {
+        String::from("bool")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
@@ -67,6 +73,9 @@ impl NativeFunction for Bool {
 pub struct Ratio();
 
 impl NativeFunction for Ratio {
+    fn name(&self) -> String {
+        String::from("ratio")
+    }
     fn run(
         &self,
         _env: &mut InterpreterEnvironment,
