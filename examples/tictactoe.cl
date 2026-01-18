@@ -7,7 +7,7 @@ type Player = enum {
 impl Player {
 	const default = fn () -> Player => Player.None;
 
-	const get_opposite = match &Player -> Player {
+	const get_opposite = fn match &Player -> Player {
 		Player.X => Player.O,
 		Player.O => Player.X,
 		_ => Player.None
@@ -15,7 +15,7 @@ impl Player {
 
 	const switch = fn (self : &mut Player) => self = self.get_opposite(self);
 
-	const to_char = match &Player -> char {
+	const to_char = fn match &Player -> char {
 		Player.X => 'X',
 		Player.O => 'O',
 		_ => ' '
@@ -25,8 +25,8 @@ impl Player {
 const get_pos = fn (x y : int) -> int => y * 3 + x;
 
 const get_user_input = fn () -> int => {
-	let mut x : int = unwrap(unwrap(std:console:input("Enter x position (min = 1, max = 3): ")) as int);
-	let mut y : int = unwrap(unwrap(std:console:input("Enter y position (min = 1, max = 3): ")) as int);
+	let mut x : int = try (try std::console::input("Enter x position (min = 1, max = 3): ") => panic() as int) => panic();
+	let mut y : int = try (try std::console::input("Enter y position (min = 1, max = 3): ") => panic() as int) => panic();
 	
 	x -= 1;
 	y -= 1;
@@ -37,7 +37,7 @@ const get_user_input = fn () -> int => {
 type Board = struct (list<Player>);
 
 impl Board {
-	const default = fn () -> Board => Board(list[Player.None for _ in 0..9]);
+	const default = fn () -> Board => Board(list<Player>[Player.None for _ in 0..9]);
 
 	const print_board = fn (self : &Board) => {
 		print("|---|---|---|");
@@ -110,7 +110,7 @@ impl Board {
 			if maximising => if best_value < value => {
 				best_value = value;
 				best_pos = i;
-			}; else if best_value > value => {
+			} else if best_value > value => {
 				best_value = value;
 				best_pos = i;
 			};
@@ -120,10 +120,10 @@ impl Board {
 	};
 
 	const minimax = fn (self : &mut Board, player : Player, depth : int = 0) -> int => {
-		board.get_winner() |> match dyn {
+		match self.get_winner() {
 			Player.X => return 100 - depth,
 			Player.Y => return -100 + depth,
-			Player.None if board.is_full() => return 0
+			Player.None if self.is_full() => return 0
 		};
 		
 		let maximising = player == Player.X;
@@ -136,7 +136,7 @@ impl Board {
 			let value = self.minimax(player.get_opposite(), depth + 1);
 			self.0[i] = Player.None;
 			
-			if maximising => if best_value < value => best_value = value; else if best_value > value => best_value = value;
+			if maximising => if best_value < value => best_value = value else if best_value > value => best_value = value;
 		};
 		best_value;
 	};
@@ -145,20 +145,21 @@ impl Board {
 const get_ais = fn () -> <bool, bool> => {
 	let mut ais = tuple(false, false);
 	
-	if trim(unwrap(std:console:input("Enter 'y' to make Player X (1) an AI: "))) == 'y' => ais.0 = true;
-	if trim(unwrap(std:console:input("Enter 'y' to make Player O (2) an AI: "))) == 'y' => ais.1 = true;
+	if trim(try std::console::input("Enter 'y' to make Player X (1) an AI: ") => panic()) == 'y' => ais.0 = true;
+	if trim(try std::console::input("Enter 'y' to make Player O (2) an AI: ") => panic()) == 'y' => ais.1 = true;
 	
 	ais;
 };
 
 const main = fn () => {
-	for true => {
+	for => {
 		let ais = get_ais();
 		let both_ais = ais.0 && ais.1;
 		let mut board : Board = Board.default();
 		print("okay");
 		let mut player : Player = Player.X;
 		
+		print("okay");
 		for !board.is_full() && board.get_winner() == Player.None => {
 			print("okay");
 			// std.console.clear();
@@ -166,22 +167,22 @@ const main = fn () => {
 			
 			if ais.0 && Player.X == player || ais.1 && Player.O == player => {
 				board.0[board.get_best_position(player)] = player;
-				if both => std.thread.wait(4);
+				if both_ais => std::thread::wait(4);
 				player.switch();
 				continue;
 			};
 			
-			player |> board.set_user_input;
+			board.set_user_input(player);
 			player.switch();
 		};
 		
 		// std.console.clear();
 		board.print_board();
 		
-		match dyn {
+		match board.get_winner() {
 			Player.X => print("Player X Won!"),
 			Player.O => print("Player O Won!"),
 			Player.None => print("Tied!")
-		}(board.get_winner());
+		};
 	};
 };

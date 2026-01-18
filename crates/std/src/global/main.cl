@@ -1,18 +1,3 @@
-const unwrap = fn(val : dyn) -> dyn => {
-  *val |> match {
-    Ok(x) => return *x,
-    Some(x) => return *x,
-    _ => panic()
-  }
-}
-
-const unwrap_err = fn(val : dyn) -> dyn => {
-  *val |> match {
-    Err(x) => return *x,
-    _ => panic()
-  }
-}
-
 const range = fn(start end : mut int = INT_MIN, step : int = 1, inclusive : bool = false) -> list<int> => {
   if start != INT_MIN && end == INT_MIN => {
     end = start;
@@ -27,7 +12,7 @@ const range = fn(start end : mut int = INT_MIN, step : int = 1, inclusive : bool
   for (index < end && step > 0) || (index > end && step < 0) => {
     lst <<= index;
     index += step;
-  }
+  };
 
-  lst
-}
+  lst;
+};

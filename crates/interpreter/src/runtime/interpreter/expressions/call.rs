@@ -143,7 +143,23 @@ impl InterpreterEnvironment {
         caller: MiddleNode,
         arguments: Vec<(MiddleNode, Option<MiddleNode>)>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let func = self.evaluate(scope, caller.clone())?;
+        let func = match self.evaluate(scope, caller.clone()) {
+            Ok(x) => x,
+            Err(e) => {
+                let (object, func) = match caller.node_type.clone() {
+                    MiddleNodeType::MemberExpression { path } if path.len() == 2 => (
+                        path[0].0.node_type.to_string(),
+                        path[1].0.node_type.to_string(),
+                    ),
+                    _ => panic!("{:?}", caller),
+                    _ => return Err(e),
+                };
+
+                let func =
+                    self.evaluate(scope, self.get_function(&object, &func).unwrap().0.clone())?;
+                return self.evaluate_function(scope, func, arguments);
+            }
+        };
 
         let func = match func {
             RuntimeValue::Ref(x, _) => self.get_var(&x)?.value.clone(),

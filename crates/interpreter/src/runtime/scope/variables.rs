@@ -258,7 +258,13 @@ impl InterpreterEnvironment {
         }
 
         for key in keys.iter().skip(1) {
-            let current_val = &self.variables.get(&pointer).unwrap().value;
+            let current_val = if let Some(x) = self.variables.get(&pointer) {
+                &x.value
+            } else {
+                return Err(InterpreterErr::Value(
+                    calibre_common::errors::ValueErr::ProgressErr,
+                ));
+            };
             match (current_val, key) {
                 (RuntimeValue::Aggregate(_, ObjectMap(map)), _) => {
                     match map.get(&key.to_string()) {

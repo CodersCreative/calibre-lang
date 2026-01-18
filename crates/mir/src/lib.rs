@@ -85,7 +85,6 @@ impl MiddleEnvironment {
                         span: node.span,
                     });
                 }
-
                 if let NodeType::Identifier(x) = &path[0].0.node_type {
                     if let Some(Some(object)) = self
                         .resolve_potential_dollar_ident(scope, x)
@@ -124,6 +123,68 @@ impl MiddleEnvironment {
                                 ),
                                 span: node.span,
                             },
+                            NodeType::CallExpression(caller, args) if !item.1 => {
+                                let first = list.first().unwrap().clone();
+                                let node =
+                                    MiddleNode::new_from_type(MiddleNodeType::MemberExpression {
+                                        path: list,
+                                    });
+
+                                let struct_name = if let Some(ParserInnerType::Struct(x)) = self
+                                    .resolve_type_from_node(scope, &node.clone().into())
+                                    .map(|x| x.unwrap_all_refs().data_type)
+                                {
+                                    Some(x.to_string())
+                                } else if let MiddleNodeType::Identifier(x) = first.0.node_type {
+                                    Some(x.text)
+                                } else {
+                                    None
+                                };
+                                if let Some(x) = struct_name {
+                                    let mut args: Vec<(MiddleNode, Option<MiddleNode>)> = args
+                                        .into_iter()
+                                        .map(|x| {
+                                            (
+                                                self.evaluate(scope, x.0).unwrap(),
+                                                x.1.map(|x| self.evaluate(scope, x).unwrap()),
+                                            )
+                                        })
+                                        .collect();
+                                    args.insert(0, (node, None));
+                                    let caller = match caller.node_type {
+                                        NodeType::Identifier(x) => MiddleNode {
+                                            node_type: MiddleNodeType::Identifier(
+                                                self.resolve_potential_dollar_ident(scope, &x)
+                                                    .unwrap_or(x.to_string().into()),
+                                            ),
+                                            span: caller.span,
+                                        },
+                                        _ => panic!(),
+                                    };
+                                    return Ok(MiddleNode::new_from_type(
+                                        MiddleNodeType::CallExpression(
+                                            Box::new(MiddleNode::new_from_type(
+                                                MiddleNodeType::MemberExpression {
+                                                    path: vec![
+                                                        (
+                                                            MiddleNode::new_from_type(
+                                                                MiddleNodeType::Identifier(
+                                                                    x.to_string().into(),
+                                                                ),
+                                                            ),
+                                                            false,
+                                                        ),
+                                                        (caller, false),
+                                                    ],
+                                                },
+                                            )),
+                                            args,
+                                        ),
+                                    ));
+                                }
+
+                                panic!("{:?}", struct_name)
+                            }
                             _ => self.evaluate(scope, item.0)?,
                         },
                         item.1,
@@ -1531,7 +1592,9 @@ impl MiddleEnvironment {
         mut path: Vec<Node>,
     ) -> Result<(u64, Node), MiddleErr> {
         if let NodeType::Identifier(x) = &path[0].node_type {
-            let x = self.resolve_potential_dollar_ident(scope, x).unwrap();
+            let x = self
+                .resolve_potential_dollar_ident(scope, x)
+                .unwrap_or(x.to_string().into());
             if let Ok(s) = self.get_next_scope(*scope, &x.text) {
                 if path.len() <= 2 {
                     return Ok((s, path.remove(1)));

@@ -157,6 +157,8 @@ impl MiddleEnvironment {
             Some(x.to_string())
         } else if let Some(parent) = scope.parent.as_ref() {
             self.resolve_str(parent, iden)
+        } else if iden.contains("-") {
+            Some(iden.to_string())
         } else {
             None
         }
@@ -768,6 +770,22 @@ impl MiddleEnvironment {
         todo!()
     }
 
+    pub fn quick_resolve_potential_scope_member(
+        &mut self,
+        scope: &u64,
+        node: Node,
+    ) -> Result<Node, MiddleErr> {
+        Ok(Node {
+            node_type: match node.node_type {
+                NodeType::ScopeMemberExpression { path } => {
+                    return Ok(self.evaluate_scope_member_expression(scope, path)?.into());
+                }
+                _ => node.node_type,
+            },
+            span: node.span,
+        })
+    }
+
     pub fn resolve_type_from_node(
         &mut self,
         scope: &u64,
@@ -974,6 +992,9 @@ impl MiddleEnvironment {
                 x => x,
             },
             NodeType::CallExpression(caller, args) => {
+                let caller = self
+                    .quick_resolve_potential_scope_member(scope, *caller.clone())
+                    .unwrap();
                 let mut caller_type = None;
                 if let NodeType::Identifier(caller) = &caller.node_type {
                     if &caller.to_string() == "tuple" {
@@ -1001,7 +1022,7 @@ impl MiddleEnvironment {
                 }
 
                 let Some(caller_type) = caller_type else {
-                    todo!()
+                    todo!("{:?}", caller);
                 };
 
                 match caller_type.data_type {
@@ -1023,7 +1044,10 @@ impl MiddleEnvironment {
 
                 None
             }
-            NodeType::MemberExpression { path: _ } => {
+            NodeType::MemberExpression { path } => {
+                if path.len() == 1 {
+                    return self.resolve_type_from_node(scope, &path[0].0);
+                }
                 // TODO resolve the type
                 Some(ParserDataType::from(ParserInnerType::Dynamic))
             }

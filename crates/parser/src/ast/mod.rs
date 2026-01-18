@@ -129,6 +129,23 @@ pub enum ParserInnerType<T> {
     NativeFunction(Box<ParserDataType<T>>),
 }
 
+impl<T> ParserDataType<T> {
+    pub fn unwrap_all_refs(self) -> Self {
+        Self {
+            data_type: self.data_type.unwrap_all_refs(),
+            span: self.span,
+        }
+    }
+}
+impl<T> ParserInnerType<T> {
+    pub fn unwrap_all_refs(self) -> Self {
+        match self {
+            Self::Ref(x, _) => x.data_type.unwrap_all_refs(),
+            _ => self,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum PotentialNewType {
     NewType {
