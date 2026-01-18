@@ -1,5 +1,6 @@
 pub mod cast;
 
+use calibre_mir_ty::MiddleNode;
 use calibre_parser::ast::{ParserDataType, ParserInnerType};
 use cranelift::prelude::Value;
 
@@ -21,23 +22,29 @@ pub struct MemberType {
     pub ty: RuntimeType,
 }
 
-impl From<ParserDataType> for RuntimeType {
-    fn from(value: ParserDataType) -> Self {
+impl<T> From<ParserDataType<T>> for RuntimeType {
+    fn from(value: ParserDataType<T>) -> Self {
         match value.data_type {
+            ParserInnerType::Null => RuntimeType::Null,
             ParserInnerType::Bool => RuntimeType::Bool,
             ParserInnerType::Int => RuntimeType::Int,
             ParserInnerType::Float => RuntimeType::Float,
             ParserInnerType::Str => RuntimeType::Str,
             ParserInnerType::Char => RuntimeType::Char,
             ParserInnerType::Range => RuntimeType::Range,
-            ParserInnerType::List(x) => RuntimeType::List(Box::new(match x {
-                Some(x) => RuntimeType::from(*x),
-                None => RuntimeType::Dynamic,
-            })),
-            ParserInnerType::Struct(Some(x)) => RuntimeType::Named(x),
-            ParserInnerType::Tuple(x) => {
-                RuntimeType::Tuple(x.into_iter().map(|x| x.into()).collect())
-            }
+            ParserInnerType::List(x) => RuntimeType::List(Box::new(RuntimeType::from(*x))),
+            ParserInnerType::Struct(x) => RuntimeType::Named(x),
+            ParserInnerType::Tuple(x) => RuntimeType::Aggregate {
+                name: None,
+                members: x
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, x)| MemberType {
+                        name: i.to_string(),
+                        ty: x.into(),
+                    })
+                    .collect(),
+            },
             x => {
                 // eprintln!("Data type not implemented {}", x);
                 RuntimeType::Dynamic
@@ -48,6 +55,7 @@ impl From<ParserDataType> for RuntimeType {
 
 #[derive(Clone, Debug, PartialEq, Hash, Eq)]
 pub enum RuntimeType {
+    Null,
     Float,
     Int,
     Bool,
@@ -58,21 +66,21 @@ pub enum RuntimeType {
         mutable: bool,
         data_type: Box<RuntimeType>,
     },
-    Tuple(Vec<RuntimeType>),
     List(Box<RuntimeType>),
     Range,
     Option(Box<RuntimeType>),
     Result(Box<RuntimeType>, Box<RuntimeType>),
     Function {
-        return_type: Option<Box<RuntimeType>>,
+        return_type: Box<RuntimeType>,
         captures: Vec<String>,
         parameters: Vec<(RuntimeType, calibre_parser::ast::RefMutability)>,
         is_async: bool,
     },
     Enum {
         name: String,
+        variant: usize,
     },
-    Struct {
+    Aggregate {
         name: Option<String>,
         members: Vec<MemberType>,
     },
@@ -82,8 +90,7 @@ pub enum RuntimeType {
 impl RuntimeType {
     pub fn is_aggregate(&self) -> bool {
         match self {
-            RuntimeType::Struct { .. }
-            | RuntimeType::Enum { .. }
+            RuntimeType::Aggregate { .. }
             | RuntimeType::Result { .. }
             | RuntimeType::List { .. }
             | RuntimeType::Dynamic => true,

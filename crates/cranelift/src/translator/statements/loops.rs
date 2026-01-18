@@ -2,7 +2,7 @@ use crate::{
     translator::{BlockType, FunctionTranslator},
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{
     LoopType, Node, NodeType, ParserText, VarType, binary::BinaryOperator, comparison::Comparison,
 };

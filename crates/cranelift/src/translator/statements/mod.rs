@@ -1,7 +1,7 @@
 pub mod loops;
 
 use crate::{translator::FunctionTranslator, values::RuntimeValue};
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{IfComparisonType, Node, NodeType};
 use cranelift::{codegen::ir::BlockArg, prelude::*};
 

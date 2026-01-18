@@ -8,7 +8,7 @@ pub(crate) struct TyLayouts {
     pub pointer_bit_width: u32,
     pub sizes: HashMap<RuntimeType, u32>,
     pub alignments: HashMap<RuntimeType, u32>,
-    pub struct_layouts: HashMap<RuntimeType, StructLayout>,
+    pub aggregate_layouts: HashMap<RuntimeType, AggregateLayout>,
     pub enum_layouts: HashMap<RuntimeType, EnumLayout>,
 }
 
@@ -19,7 +19,7 @@ pub trait GetLayoutInfo {
     fn align(&self) -> u32;
     fn stride(&self) -> u32;
     fn align_shift(&self) -> u8;
-    fn struct_layout(&self) -> Option<StructLayout>;
+    fn aggregate_layout(&self) -> Option<AggregateLayout>;
     fn enum_layout(&self) -> Option<EnumLayout>;
     fn ensure_layout(&self);
 }
@@ -56,11 +56,11 @@ impl GetLayoutInfo for RuntimeType {
         (layouts.sizes[self] + mask) & !mask
     }
 
-    fn struct_layout(&self) -> Option<StructLayout> {
+    fn aggregate_layout(&self) -> Option<AggregateLayout> {
         self.ensure_layout();
         let layouts = LAYOUTS.lock().ok()?;
         let layouts = layouts.get()?;
-        layouts.struct_layouts.get(self).cloned()
+        layouts.aggregate_layouts.get(self).cloned()
     }
 
     fn enum_layout(&self) -> Option<EnumLayout> {
@@ -89,7 +89,7 @@ pub fn create_layout(pointer_bit_width: u32) {
         pointer_bit_width,
         sizes: HashMap::default(),
         alignments: HashMap::default(),
-        struct_layouts: HashMap::default(),
+        aggregate_layouts: HashMap::default(),
         enum_layouts: HashMap::default(),
     };
 
@@ -119,14 +119,6 @@ fn calc_single(ty: &RuntimeType) {
 
         RuntimeType::Bool | RuntimeType::Char => 1,
         RuntimeType::Str => pointer_bit_width / 8,
-        RuntimeType::Tuple(data) => {
-            let mut size = 0;
-            for d in data {
-                size += d.stride();
-                calc_single(d);
-            }
-            size
-        }
         RuntimeType::List(t) => {
             calc_single(&**t);
             t.stride() * 32 as u32
@@ -200,7 +192,7 @@ fn calc_single(ty: &RuntimeType) {
             current_offset
         }
         RuntimeType::Ref { .. } => pointer_bit_width / 8,
-        RuntimeType::Struct { members, .. } => {
+        RuntimeType::Aggregate { members, .. } => {
             let members = members
                 .iter()
                 .map(|member| member.ty.clone())
@@ -208,7 +200,7 @@ fn calc_single(ty: &RuntimeType) {
             for member_ty in &members {
                 calc_single(member_ty);
             }
-            let struct_layout = StructLayout::new(members);
+            let struct_layout = AggregateLayout::new(members);
             let size = struct_layout.size;
 
             {
@@ -216,7 +208,7 @@ fn calc_single(ty: &RuntimeType) {
                 layouts
                     .get_mut()
                     .unwrap()
-                    .struct_layouts
+                    .aggregate_layouts
                     .insert(ty.clone(), struct_layout);
             }
 
@@ -231,21 +223,14 @@ fn calc_single(ty: &RuntimeType) {
         RuntimeType::Range => size.min(16),
         RuntimeType::Bool | RuntimeType::Char => 1, // bools and chars are u8's
         RuntimeType::Str | RuntimeType::Ref { .. } | RuntimeType::Function { .. } => size.min(8),
-        RuntimeType::Tuple(types) => {
-            let mut val = 1;
-            for t in types {
-                val = val.max(t.align())
-            }
-            val
-        }
         RuntimeType::List(ty) => ty.align(),
-        RuntimeType::Struct { .. } => {
+        RuntimeType::Aggregate { .. } => {
             LAYOUTS
                 .lock()
                 .unwrap()
                 .get()
                 .unwrap()
-                .struct_layouts
+                .aggregate_layouts
                 .get(ty)
                 .unwrap()
                 .align
@@ -289,7 +274,7 @@ impl EnumLayout {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct StructLayout {
+pub(crate) struct AggregateLayout {
     size: u32,
     align: u32,
     offsets: Vec<u32>,
@@ -309,7 +294,7 @@ pub(crate) fn padding_needed_for(offset: u32, align: u32) -> u32 {
     }
 }
 
-impl StructLayout {
+impl AggregateLayout {
     pub(crate) fn new(fields: Vec<RuntimeType>) -> Self {
         let mut offsets = Vec::with_capacity(fields.len());
         let mut max_align = 1;

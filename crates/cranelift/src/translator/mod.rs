@@ -3,8 +3,8 @@ pub mod memory;
 
 use std::{collections::HashMap, error::Error};
 
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
 use calibre_mir::environment::MiddleObject;
+use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::binary::BinaryOperator;
 use calibre_parser::ast::{
     Node, NodeType, ObjectType, ParserDataType, ParserInnerType, TypeDefType, VarType,
@@ -104,7 +104,7 @@ impl Types {
             _ => self.ptr(),
         }
     }
-    pub fn get_type_from_parser_type(&self, t: &ParserDataType) -> Type {
+    pub fn get_type_from_parser_type(&self, t: &ParserDataType<MiddleNode>) -> Type {
         match t.data_type {
             ParserInnerType::Int => types::I64,
             ParserInnerType::Float => types::F64,
@@ -161,9 +161,9 @@ impl<'a> FunctionTranslator<'a> {
                 self.builder.ins().iconst(self.types.int(), x as i64),
                 RuntimeType::Int,
             ),
-            MiddleNodeType::AsExpression { value, typ } => {
+            MiddleNodeType::AsExpression { value, data_type } => {
                 let value = self.translate(*value);
-                value.into_type(self, typ.into())
+                value.into_type(self, data_type.into())
             }
             MiddleNodeType::RefStatement { mutability, value } => {
                 let inner = *value;
@@ -240,13 +240,21 @@ impl<'a> FunctionTranslator<'a> {
                 self.builder.ins().iconst(types::I32, i64::from(c as u32)),
                 RuntimeType::Char,
             ),
-            MiddleNodeType::ListLiteral(items) => self.translate_array_expression(items),
-            MiddleNodeType::StructLiteral(obj) => self.translate_struct_expression(obj),
+            MiddleNodeType::ListLiteral(data_type, items) => {
+                self.translate_array_expression(data_type.into(), items)
+            }
+            MiddleNodeType::AggregateExpression { identifier, value } => {
+                self.translate_aggregate_expression(identifier.map(|x| x.text), value)
+            }
             MiddleNodeType::EnumExpression {
                 identifier,
                 value,
                 data,
-            } => self.translate_enum_expression(identifier.to_string(), value.to_string(), data),
+            } => self.translate_enum_expression(
+                identifier.to_string(),
+                value.to_string(),
+                data.map(|x| *x),
+            ),
             MiddleNodeType::StringLiteral(txt) => {
                 println!("{txt}");
                 let name = format!("string_literal_{}", rand::random_range(0..100000));
@@ -258,7 +266,7 @@ impl<'a> FunctionTranslator<'a> {
                     RuntimeType::Str,
                 )
             }
-            MiddleNodeType::ScopeDeclaration { body, is_temp: _ } => {
+            MiddleNodeType::ScopeDeclaration { body, .. } => {
                 let mut value = self.translate_null();
                 for node in body {
                     value = self.translate(node);
@@ -321,9 +329,15 @@ impl<'a> FunctionTranslator<'a> {
                 value
             }
             MiddleNodeType::Return { value } => {
-                let value = self.translate(*value);
-                self.builder.ins().return_(&[value.value.clone()]);
-                value
+                if let Some(value) = value {
+                    let value = self.translate(*value);
+                    self.builder.ins().return_(&[value.value.clone()]);
+                    value
+                } else {
+                    let value = self.translate_null();
+                    self.builder.ins().return_(&[]);
+                    value
+                }
             }
             MiddleNodeType::Break => {
                 let block = self.pop_break_block(true);
@@ -375,7 +389,7 @@ impl<'a> FunctionTranslator<'a> {
                 let is_computed = path[1].1.clone();
 
                 match value.data_type {
-                    RuntimeType::Struct { .. } => {
+                    RuntimeType::Aggregate { .. } => {
                         if let Some((node, _)) = path.get(1) {
                             let index = match &node.node_type {
                                 MiddleNodeType::IntLiteral(x) => x.to_string(),
@@ -383,19 +397,12 @@ impl<'a> FunctionTranslator<'a> {
                                 MiddleNodeType::StringLiteral(x) if is_computed => x.to_string(),
                                 _ => panic!(),
                             };
-                            return self.get_struct_member(value, index);
+                            return self.get_aggregate_member(value, index);
                         }
                     }
                     RuntimeType::List(_) if is_computed => {
                         let index = self.translate(path.pop().unwrap().0);
                         return self.get_array_member(value, index.value);
-                    }
-                    RuntimeType::Tuple(_) if !is_computed => {
-                        if let Some((node, _)) = path.get(1) {
-                            if let MiddleNodeType::IntLiteral(index) = node.node_type {
-                                return self.get_tuple_member(value, index as usize);
-                            }
-                        }
                     }
                     _ => {}
                 }
@@ -437,12 +444,10 @@ impl<'a> FunctionTranslator<'a> {
                         .push(AbiParam::new(self.types.get_type_from_parser_type(&p.1)));
                 }
 
-                if let Some(ret) = &return_type {
-                    fn_ctx
-                        .func
-                        .signature
-                        .returns
-                        .push(AbiParam::new(self.types.get_type_from_parser_type(ret)));
+                if return_type.data_type != ParserInnerType::Null {
+                    fn_ctx.func.signature.returns.push(AbiParam::new(
+                        self.types.get_type_from_parser_type(&return_type),
+                    ));
                 }
 
                 let mut fn_fbctx = FunctionBuilderContext::new();
@@ -475,7 +480,7 @@ impl<'a> FunctionTranslator<'a> {
 
                 let ret = nested.translate(*body);
 
-                if return_type.is_some() {
+                if return_type.data_type != ParserInnerType::Null {
                     nested.builder.ins().return_(&[ret.value]);
                 } else {
                     nested.builder.ins().return_(&[]);
@@ -496,7 +501,7 @@ impl<'a> FunctionTranslator<'a> {
                 RuntimeValue::new(
                     code_ptr,
                     RuntimeType::Function {
-                        return_type: return_type.map(|r| Box::new(r.into())),
+                        return_type: Box::new(return_type.into()),
                         parameters: vec![],
                         captures: captured_names,
                         is_async: false,
@@ -532,9 +537,10 @@ impl<'a> FunctionTranslator<'a> {
                         ));
                     }
 
-                    if let Some(ret) = &return_type {
-                        sig.returns
-                            .push(AbiParam::new(self.types.get_type_from_runtime_type(&*ret)));
+                    if &*return_type != &RuntimeType::Null {
+                        sig.returns.push(AbiParam::new(
+                            self.types.get_type_from_runtime_type(&return_type),
+                        ));
                     }
 
                     let sigref = self.builder.func.import_signature(sig);
@@ -546,23 +552,17 @@ impl<'a> FunctionTranslator<'a> {
 
                     let results = self.builder.inst_results(call_inst);
 
-                    let ret_ty = match return_type {
-                        Some(rt) => (*rt).clone(),
-                        None => RuntimeType::Int,
-                    };
-
                     let ret_val = if !results.is_empty() {
                         results[0]
                     } else {
                         self.builder.ins().iconst(self.types.int(), 0)
                     };
 
-                    return RuntimeValue::new(ret_val, ret_ty);
+                    return RuntimeValue::new(ret_val, *return_type);
                 }
 
                 todo!()
             }
-            MiddleNodeType::TupleLiteral(x) => self.translate_tuple_expression(x),
             MiddleNodeType::IfStatement { .. } => self.translate_if_statement(node),
             MiddleNodeType::LoopDeclaration { .. } => self.translate_loop_statement(node),
             x => unimplemented!("{:?}", x),

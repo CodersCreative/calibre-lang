@@ -2,7 +2,7 @@ use crate::{
     translator::{FunctionTranslator, layout::GetLayoutInfo, memory::MemoryLoc},
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_mir::ast::MiddleNode;
+use calibre_mir_ty::MiddleNode;
 use calibre_parser::ast::{Node, comparison::Comparison};
 use cranelift::{codegen::ir::BlockArg, prelude::*};
 
@@ -170,70 +170,13 @@ impl<'a> FunctionTranslator<'a> {
         RuntimeValue::new(val, *left_r_type)
     }
 
-    pub fn get_tuple_member(&mut self, left: RuntimeValue, index: usize) -> RuntimeValue {
-        let RuntimeType::Tuple(types) = left.data_type else {
-            panic!()
-        };
-
-        let offset = types[0..index]
-            .iter()
-            .map(|x| x.stride() as i32)
-            .sum::<i32>();
-
-        let val = self.builder.ins().load(
-            self.types.get_type_from_runtime_type(&types[index]),
-            MemFlags::new().with_aligned(),
-            left.value,
-            offset,
-        );
-
-        RuntimeValue::new(val, types[index].clone())
-    }
-
-    pub fn translate_tuple_expression(&mut self, items: Vec<MiddleNode>) -> RuntimeValue {
-        let items: Vec<RuntimeValue> = items.into_iter().map(|x| self.translate(x)).collect();
-        let item_runtime_types: Vec<RuntimeType> =
-            items.iter().map(|x| x.data_type.clone()).collect();
-
-        let total_size: u32 = item_runtime_types.iter().map(|x| x.stride()).sum();
-        let slot = self.builder.create_sized_stack_slot(StackSlotData::new(
-            StackSlotKind::ExplicitSlot,
-            total_size,
-            0,
-        ));
-
-        let memory = MemoryLoc::from_stack(slot, 0);
-
-        for (i, item) in items.iter().enumerate() {
-            let offset = if i <= 0 {
-                0
-            } else {
-                item_runtime_types[0..i]
-                    .iter()
-                    .map(|x| x.stride() as u32)
-                    .sum()
-            };
-
-            let _ = memory.with_offset(offset).write_all(
-                Some(item.value),
-                item_runtime_types[i].clone(),
-                self.module,
-                &mut self.builder,
-            );
-        }
-        RuntimeValue::new(
-            memory.into_value(&mut self.builder, self.types.ptr()),
-            RuntimeType::Tuple(item_runtime_types),
-        )
-    }
-
-    pub fn translate_array_expression(&mut self, items: Vec<MiddleNode>) -> RuntimeValue {
+    pub fn translate_array_expression(
+        &mut self,
+        element_type: RuntimeType,
+        items: Vec<MiddleNode>,
+    ) -> RuntimeValue {
         let items: Vec<RuntimeValue> = items.into_iter().map(|x| self.translate(x)).collect();
 
-        let element_type = items
-            .get(0)
-            .map(|v| v.data_type.clone())
-            .unwrap_or(RuntimeType::Int);
         let stride = element_type.stride();
 
         let data_size = stride * (items.len() as u32);
