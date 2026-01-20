@@ -1,5 +1,5 @@
 use crate::{
-    translator::{BlockType, FunctionTranslator},
+    translator::{BlockDetails, FunctionTranslator},
     values::{RuntimeType, RuntimeValue},
 };
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
@@ -67,22 +67,23 @@ impl<'a> FunctionTranslator<'a> {
         end_loop!(self, header_block, exit_block);
         result
     }
-
     pub fn translate_loop_statement(&mut self, node: MiddleNode) -> RuntimeValue {
         if let MiddleNodeType::LoopDeclaration { body, state } = node.node_type {
             if let Some(state) = state {
                 let _ = self.translate(*state);
             }
             let (header_block, body_block, exit_block) = pre_loop!(self);
-            self.break_stack
-                .push(BlockType::Continue(header_block.clone()));
-            self.break_stack.push(BlockType::Break(exit_block.clone()));
+            self.break_stack.push(BlockDetails {
+                break_block: exit_block,
+                continue_block: header_block,
+                broken: false,
+            });
             self.builder.ins().jump(body_block, &[]);
-            self.builder.switch_to_block(body_block);
+
             let value = self.translate(*body);
+            self.builder.switch_to_block(body_block);
             self.builder.seal_block(body_block);
             end_loop!(self, header_block, exit_block);
-            self.break_stack.pop();
             self.break_stack.pop();
             value
         } else {

@@ -8,6 +8,7 @@ cranelift = "0.123.2"
 cranelift-module = "0.123.2"
 cranelift-native ="0.123.2"
 cranelift-object = "0.123.2"
+calibre-comptime = {path = "../comptime"}
 calibre-parser = {path = "../parser"}
 calibre-mir = {path = "../mir"}
 calibre-mir-ty = {path = "../mir-ty"}

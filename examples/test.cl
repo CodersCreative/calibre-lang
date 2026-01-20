@@ -2,10 +2,18 @@ type SmthType = struct {
 	txt : type Smth = struct {
 		txt : int
 	}
+}
+
+type NumType = struct {
+	num : int,
 } @overload {
-	fn "+" (self, value : int) -> int => {
-		return self.txt.txt + value;
+	fn "+" (self: NumType, value : int) -> int => {
+		return self.num + value;
 	}
+
+	fn "/" (self: NumType, value : int) -> int => {
+		return self.num / value;
+	}	
 }
 
 let => @mult_scope [$ident = adder_int, $t = type : int] const $ident = fn (first : dyn, second : $t) -> $t => {
@@ -21,7 +29,15 @@ let @float_mult_scope => @mult_scope [$ident = adder_float, $t = type : float];
 
 const main = fn () => {
 	print(adder_float(90, 10.6));
-	let smth = SmthType{txt : Smth{txt : "tyui"}};
+
+	print("overload");
+	let mut num = NumType{num : 10};
+	let res : int = num + 10;
+	print(res);
+	let res : int = (num + 90) / 2;
+	print(res);
+	print("overload done");
+	
 	
 	let mut d = comp, 0 => list[list[2, 0, 4], list[1, 9, 3], list[4, 7, 9], list[9, 0, 1]];
 	let lst = list<int>[2, 0, 4];

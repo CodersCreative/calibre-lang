@@ -9,7 +9,7 @@ use calibre_parser::{
     },
     lexer::Span,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use crate::errors::MiddleErr;
 use environment::*;
@@ -370,7 +370,40 @@ impl MiddleEnvironment {
                     .get_mut(scope)
                     .unwrap()
                     .mappings
-                    .insert(identifier.text, new_name);
+                    .insert(identifier.text, new_name.clone());
+
+                for overload in overloads {
+                    let overload = MiddleOverload {
+                        operator: Operator::from_str(&overload.operator.text)?,
+                        parameters: {
+                            let mut params = Vec::new();
+                            let mut contains = false;
+
+                            for param in overload.parameters.iter() {
+                                let ty = self.resolve_potential_new_type(scope, param.1.clone());
+
+                                if let ParserInnerType::Struct(x) =
+                                    ty.data_type.clone().unwrap_all_refs()
+                                {
+                                    if x == new_name {
+                                        contains = true;
+                                    }
+                                }
+
+                                params.push(ty);
+                            }
+
+                            if !contains {
+                                continue;
+                            }
+
+                            params
+                        },
+                        func: overload.into(),
+                    };
+
+                    self.overloads.push(overload);
+                }
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::EmptyLine,
@@ -381,38 +414,72 @@ impl MiddleEnvironment {
                 left,
                 right,
                 operator,
-            } => Ok(MiddleNode {
-                node_type: MiddleNodeType::BooleanExpression {
-                    left: Box::new(self.evaluate(scope, *left)?),
-                    right: Box::new(self.evaluate(scope, *right)?),
-                    operator,
-                },
-                span: node.span,
-            }),
+            } => {
+                if let Some(x) = self.handle_operator_overloads(
+                    scope,
+                    node.span,
+                    *left.clone(),
+                    *right.clone(),
+                    Operator::Boolean(operator.clone()),
+                )? {
+                    return Ok(x);
+                }
+
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::BooleanExpression {
+                        left: Box::new(self.evaluate(scope, *left)?),
+                        right: Box::new(self.evaluate(scope, *right)?),
+                        operator,
+                    },
+                    span: node.span,
+                })
+            }
             NodeType::ComparisonExpression {
                 left,
                 right,
                 operator,
-            } => Ok(MiddleNode {
-                node_type: MiddleNodeType::ComparisonExpression {
-                    left: Box::new(self.evaluate(scope, *left)?),
-                    right: Box::new(self.evaluate(scope, *right)?),
-                    operator,
-                },
-                span: node.span,
-            }),
+            } => {
+                if let Some(x) = self.handle_operator_overloads(
+                    scope,
+                    node.span,
+                    *left.clone(),
+                    *right.clone(),
+                    Operator::Comparison(operator.clone()),
+                )? {
+                    return Ok(x);
+                }
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::ComparisonExpression {
+                        left: Box::new(self.evaluate(scope, *left)?),
+                        right: Box::new(self.evaluate(scope, *right)?),
+                        operator,
+                    },
+                    span: node.span,
+                })
+            }
             NodeType::BinaryExpression {
                 left,
                 right,
                 operator,
-            } => Ok(MiddleNode {
-                node_type: MiddleNodeType::BinaryExpression {
-                    left: Box::new(self.evaluate(scope, *left)?),
-                    right: Box::new(self.evaluate(scope, *right)?),
-                    operator,
-                },
-                span: node.span,
-            }),
+            } => {
+                if let Some(x) = self.handle_operator_overloads(
+                    scope,
+                    node.span,
+                    *left.clone(),
+                    *right.clone(),
+                    Operator::Binary(operator.clone()),
+                )? {
+                    return Ok(x);
+                }
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::BinaryExpression {
+                        left: Box::new(self.evaluate(scope, *left)?),
+                        right: Box::new(self.evaluate(scope, *right)?),
+                        operator,
+                    },
+                    span: node.span,
+                })
+            }
             NodeType::NotExpression { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::NotExpression {
                     value: Box::new(self.evaluate(scope, *value)?),
@@ -1608,6 +1675,44 @@ impl MiddleEnvironment {
         }
 
         Err(MiddleErr::Scope(format!("{:?}", path[0].node_type)).into())
+    }
+
+    pub fn handle_operator_overloads(
+        &mut self,
+        scope: &u64,
+        span: Span,
+        left: Node,
+        right: Node,
+        operator: Operator,
+    ) -> Result<Option<MiddleNode>, MiddleErr> {
+        if let (Some(left_ty), Some(right_ty)) = (
+            self.resolve_type_from_node(scope, &left),
+            self.resolve_type_from_node(scope, &right),
+        ) {
+            if let Some(overload) = self
+                .overloads
+                .iter()
+                .filter(|x| x.parameters.len() == 2 && x.operator == operator)
+                .find(|x| {
+                    x.parameters[0].data_type == left_ty.data_type
+                        && x.parameters[1].data_type == right_ty.data_type
+                })
+                .map(|x| x.clone())
+            {
+                return Ok(Some(MiddleNode {
+                    node_type: MiddleNodeType::CallExpression(
+                        Box::new(self.evaluate(scope, overload.func.clone())?),
+                        vec![
+                            (self.evaluate(scope, left)?, None),
+                            (self.evaluate(scope, right)?, None),
+                        ],
+                    ),
+                    span,
+                }));
+            }
+        }
+
+        Ok(None)
     }
 
     pub fn evaluate_scope_member_expression(

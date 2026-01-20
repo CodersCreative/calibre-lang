@@ -434,7 +434,8 @@ impl Tokenizer {
                             && (buffer[0].is_alphanumeric()
                                 || buffer[0] == '_'
                                 || buffer[0].to_uppercase().to_string().trim()
-                                    != buffer[0].to_lowercase().to_string().trim())
+                                    != buffer[0].to_lowercase().to_string().trim()
+                                || buffer[0].is_numeric())
                             && !buffer[0].is_whitespace()
                         {
                             let char = buffer.remove(0);

@@ -31,31 +31,14 @@ pub struct FunctionTranslator<'a> {
     pub variables: HashMap<String, (VarType, RuntimeType, Variable)>,
     pub module: &'a mut ObjectModule,
     pub objects: &'a std::collections::HashMap<String, MiddleObject>,
-    pub break_stack: Vec<BlockType>,
+    pub break_stack: Vec<BlockDetails>,
 }
 
 #[derive(Clone)]
-pub enum BlockType {
-    Break(Block),
-    Continue(Block),
-}
-
-impl BlockType {
-    pub fn is_break(&self) -> bool {
-        match self {
-            Self::Break(_) => true,
-            _ => false,
-        }
-    }
-}
-
-impl Into<Block> for BlockType {
-    fn into(self) -> Block {
-        match self {
-            Self::Break(x) => x,
-            Self::Continue(x) => x,
-        }
-    }
+pub struct BlockDetails {
+    pub break_block: Block,
+    pub continue_block: Block,
+    pub broken: bool,
 }
 
 #[derive(Clone)]
@@ -117,15 +100,6 @@ impl Types {
 }
 
 impl<'a> FunctionTranslator<'a> {
-    pub fn pop_break_block(&mut self, is_break: bool) -> Block {
-        self.break_stack
-            .iter()
-            .rev()
-            .find(|x| x.is_break() == is_break)
-            .unwrap()
-            .clone()
-            .into()
-    }
     pub fn create_data(
         &mut self,
         name: &str,
@@ -291,7 +265,7 @@ impl<'a> FunctionTranslator<'a> {
                 let value = self.translate(*value);
 
                 let data_type = data_type.into();
-                if value.data_type != data_type && data_type != RuntimeType::Dynamic {
+                if !value.data_type.is_type(&data_type) && data_type != RuntimeType::Dynamic {
                     eprintln!("Type Mismatch {:?} and {:?}", value.data_type, data_type);
                     //panic!()
                     // value = value.into_type(self, data_type);
@@ -315,7 +289,7 @@ impl<'a> FunctionTranslator<'a> {
 
                 let value = self.translate(*value);
 
-                if value.data_type != data_type {
+                if !value.data_type.is_type(&data_type) {
                     panic!();
                     // value = value.into_type(self, data_type.clone());
                 }
@@ -340,20 +314,20 @@ impl<'a> FunctionTranslator<'a> {
                 }
             }
             MiddleNodeType::Break => {
-                let block = self.pop_break_block(true);
-                let next_part = self.builder.create_block();
+                let block = {
+                    let details = self.break_stack.last_mut().unwrap();
+                    details.broken = true;
+                    details.break_block.clone()
+                };
+                let val = self.translate_null();
                 self.builder.ins().jump(block, []);
-                self.builder.switch_to_block(next_part);
-                self.builder.seal_block(next_part);
-                self.translate_null()
+                val
             }
             MiddleNodeType::Continue => {
-                let block = self.pop_break_block(false);
-                let next_part = self.builder.create_block();
+                let block = self.break_stack.last().unwrap().continue_block.clone();
+                let val = self.translate_null();
                 self.builder.ins().jump(block, []);
-                self.builder.switch_to_block(next_part);
-                self.builder.seal_block(next_part);
-                self.translate_null()
+                val
             }
             MiddleNodeType::BinaryExpression {
                 left,

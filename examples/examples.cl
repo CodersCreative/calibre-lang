@@ -2,7 +2,28 @@ const main = fn () => {
 	print(bmi(52.5, 1.65));
 	print(factorial(5));
 	print(lock(3, 4,6));
+	a_fn();
+	a_two_fn();
 };
+
+const a_fn = fn() => {
+	let mut a = 1;
+	print(a + => {
+		a += 1;
+		a;
+	});
+}
+
+const a_two_fn = fn() => {
+	let mut a = 1;
+
+	let f = fn() => {
+		a += 1;
+		a;	
+	};
+
+	print(a + f());
+}
 
 const bmi = fn (mass height : float) -> float => mass / height ** 2;
 

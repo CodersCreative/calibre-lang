@@ -35,7 +35,6 @@ impl MiddleEnvironment {
         self.setup_global(&scope);
         let mut parser = Parser::default();
         let mut tokenizer = Tokenizer::default();
-        println!("{:?}", get_globals_path());
         let program = parser.produce_ast(
             tokenizer
                 .tokenize(fs::read_to_string(get_globals_path()).unwrap())

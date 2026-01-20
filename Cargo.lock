@@ -232,6 +232,7 @@ dependencies = [
 name = "calibre-cranelift"
 version = "0.1.0"
 dependencies = [
+ "calibre-comptime",
  "calibre-mir",
  "calibre-mir-ty",
  "calibre-parser",

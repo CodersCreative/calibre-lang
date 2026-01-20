@@ -536,6 +536,21 @@ pub struct Overload {
     pub is_async: bool,
 }
 
+impl Into<Node> for Overload {
+    fn into(self) -> Node {
+        Node::new_from_type(NodeType::FunctionDeclaration {
+            parameters: self
+                .parameters
+                .into_iter()
+                .map(|x| (x.0, x.1, None))
+                .collect(),
+            body: self.body,
+            return_type: self.return_type,
+            is_async: self.is_async,
+        })
+    }
+}
+
 impl Overload {
     pub fn span(&self) -> &Span {
         &self.operator.span

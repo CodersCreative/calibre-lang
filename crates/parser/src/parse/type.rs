@@ -44,7 +44,7 @@ impl Parser {
         let mut overloads = Vec::new();
 
         while self.first().token_type == TokenType::Func {
-            let open = self.expect_eat(
+            let _ = self.expect_eat(
                 &TokenType::Func,
                 SyntaxErr::ExpectedKeyword(String::from("fn")),
             );

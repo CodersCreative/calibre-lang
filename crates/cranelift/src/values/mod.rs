@@ -97,4 +97,34 @@ impl RuntimeType {
             _ => false,
         }
     }
+
+    pub fn is_type(&self, other: &Self) -> bool {
+        if self == other {
+            return true;
+        }
+
+        match (self, other) {
+            (
+                RuntimeType::Named(x),
+                RuntimeType::Enum {
+                    name: y,
+                    variant: _,
+                },
+            )
+            | (
+                RuntimeType::Enum {
+                    name: y,
+                    variant: _,
+                },
+                RuntimeType::Named(x),
+            )
+            | (RuntimeType::Named(x), RuntimeType::Aggregate { name: Some(y), .. })
+            | (RuntimeType::Aggregate { name: Some(y), .. }, RuntimeType::Named(x))
+                if x == y =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
 }

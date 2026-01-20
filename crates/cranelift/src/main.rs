@@ -23,10 +23,13 @@ const BASIC_CODE: &str = r#"
         let mut counter : float = 1.0;
         let french = Language.FRENCH;
         let id = Id (70000.0);
+
         for counter < 98.0 => {
-            counter += 1.2 + 1 as float;
+            counter += 1.2 + 10.9;
+            let _ = "11";
             index *= counter;
         }
+                
         let itm : float = tpl.0;
         let txt = "djsdalk";
         let smth = Smth{
@@ -47,6 +50,7 @@ const BASIC_CODE: &str = r#"
     
 "#;
 
+use calibre_comptime::ComptimeEnvironment;
 use calibre_cranelift::Compiler;
 use calibre_mir::environment::MiddleEnvironment;
 use calibre_mir_ty::MiddleNode;
@@ -56,10 +60,16 @@ use std::{fmt::Debug, mem, path::PathBuf, str::FromStr};
 fn parse(text: String) -> (MiddleNode, MiddleEnvironment) {
     let mut parser = Parser::default();
     let mut tokenizer = Tokenizer::default();
-    let ast = parser.produce_ast(tokenizer.tokenize(text).unwrap());
-    let mut env = MiddleEnvironment::new();
-    let scope = env.new_scope_with_stdlib(None, PathBuf::from_str("./main.cl").unwrap(), None);
-    (env.evaluate(&scope, ast).unwrap(), env)
+    let program = parser.produce_ast(tokenizer.tokenize(text).unwrap());
+
+    let mut middle_result =
+        MiddleEnvironment::new_and_evaluate(program, PathBuf::from_str("./main.cl").unwrap())
+            .unwrap();
+    println!("Starting comptime...");
+    middle_result.2 =
+        ComptimeEnvironment::new_and_evaluate(middle_result.2, &middle_result.0).unwrap();
+    println!("Starting jit...");
+    (middle_result.2, middle_result.0)
 }
 
 fn run<I, T: Debug>(input: I) {

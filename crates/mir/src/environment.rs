@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{collections::HashMap, fs, path::PathBuf, str::FromStr};
 
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
@@ -6,6 +6,8 @@ use calibre_parser::{
     ast::{
         Node, NodeType, ObjectMap, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
+        binary::BinaryOperator,
+        comparison::{BooleanOperation, Comparison},
     },
     lexer::{Location, Span, Tokenizer},
 };
@@ -35,13 +37,42 @@ pub struct MiddleVariable {
     pub location: Option<Location>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct MiddleOverload {
+    pub operator: Operator,
+    pub parameters: Vec<ParserDataType<MiddleNode>>,
+    pub func: Node,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Operator {
+    Binary(BinaryOperator),
+    Comparison(Comparison),
+    Boolean(BooleanOperation),
+}
+
+impl FromStr for Operator {
+    type Err = MiddleErr;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some(x) = BinaryOperator::from_symbol(s) {
+            Ok(Self::Binary(x))
+        } else if let Some(x) = Comparison::from_operator(s) {
+            Ok(Self::Comparison(x))
+        } else if let Some(x) = BooleanOperation::from_operator(s) {
+            Ok(Self::Boolean(x))
+        } else {
+            panic!()
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleEnvironment {
     pub scope_counter: u64,
     pub scopes: HashMap<u64, MiddleScope>,
     pub variables: HashMap<String, MiddleVariable>,
     pub resolved_variables: Vec<String>,
-
+    pub overloads: Vec<MiddleOverload>,
     pub objects: HashMap<String, MiddleObject>,
     pub current_location: Option<Location>,
 }
@@ -87,6 +118,7 @@ pub fn get_disamubiguous_name(
 impl MiddleEnvironment {
     pub fn new() -> MiddleEnvironment {
         MiddleEnvironment {
+            overloads: Vec::new(),
             scope_counter: 0,
             scopes: HashMap::new(),
             resolved_variables: Vec::new(),
@@ -340,6 +372,40 @@ impl MiddleEnvironment {
                     .unwrap()
                     .mappings
                     .insert(identifier.text, new_name.clone());
+
+                for overload in overloads {
+                    let overload = MiddleOverload {
+                        operator: Operator::from_str(&overload.operator.text).unwrap(),
+                        parameters: {
+                            let mut params = Vec::new();
+                            let mut contains = false;
+
+                            for param in overload.parameters.iter() {
+                                let ty = self.resolve_potential_new_type(scope, param.1.clone());
+
+                                if let ParserInnerType::Struct(x) =
+                                    ty.data_type.clone().unwrap_all_refs()
+                                {
+                                    if x == new_name {
+                                        contains = true;
+                                    }
+                                }
+
+                                params.push(ty);
+                            }
+
+                            if !contains {
+                                continue;
+                            }
+
+                            params
+                        },
+                        func: overload.into(),
+                    };
+
+                    self.overloads.push(overload);
+                }
+
                 ParserDataType::from(ParserInnerType::Struct(new_name))
             }
         }
