@@ -1,8 +1,29 @@
-type SmthType = struct {
-	txt : type Smth = struct {
-		txt : int
+/* Future generic type syntax pseudocode
+type SmthType<T> = struct {
+	value : T
+} @overload {
+	fn "+" (self: SmthType<T>, value : T) -> T => {
+		return self.value + value;
+	}
+
+	// Type specific override
+	fn "/" (self: SmthType<int>, value : int) -> int => {
+		return self.value / value;
 	}
 }
+
+const generic<T> = fn(smth : SmthType<T>, other : T) -> T => {
+	let res : T = smth + other;
+	res;
+};
+
+const main = fn() => {
+	// Atleast at this stage of the language's development we'll just force people to type generics with minimal to no inference for compiler simplicity.
+	// However I'll try to make it infer at var declarations and operator overrides...
+	let res = generic<int>(SmthType<int>{value : 10}, 10);
+	print(res);	
+};
+*/
 
 type NumType = struct {
 	num : int,
@@ -13,7 +34,7 @@ type NumType = struct {
 
 	fn "/" (self: NumType, value : int) -> int => {
 		return self.num / value;
-	}	
+	}
 }
 
 let => @mult_scope [$ident = adder_int, $t = type : int] const $ident = fn (first : dyn, second : $t) -> $t => {
@@ -32,9 +53,9 @@ const main = fn () => {
 
 	print("overload");
 	let mut num = NumType{num : 10};
-	let res : int = num + 10;
+	let res = num + 10;
 	print(res);
-	let res : int = (num + 90) / 2;
+	let res = (num + 90) / 2;
 	print(res);
 	print("overload done");
 	

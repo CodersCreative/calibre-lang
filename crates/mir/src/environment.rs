@@ -41,6 +41,7 @@ pub struct MiddleVariable {
 pub struct MiddleOverload {
     pub operator: Operator,
     pub parameters: Vec<ParserDataType<MiddleNode>>,
+    pub return_type: ParserDataType<MiddleNode>,
     pub func: Node,
 }
 
@@ -376,6 +377,8 @@ impl MiddleEnvironment {
                 for overload in overloads {
                     let overload = MiddleOverload {
                         operator: Operator::from_str(&overload.operator.text).unwrap(),
+                        return_type: self
+                            .resolve_potential_new_type(scope, overload.return_type.clone()),
                         parameters: {
                             let mut params = Vec::new();
                             let mut contains = false;
@@ -983,15 +986,66 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::BooleanExpression { .. }
-            | NodeType::ComparisonExpression { .. }
-            | NodeType::NotExpression { .. }
+            NodeType::NotExpression { .. }
             | NodeType::InDeclaration { .. }
             | NodeType::IsDeclaration { .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Bool,
                 span: node.span,
             }),
-            NodeType::BinaryExpression { left, .. } => self.resolve_type_from_node(scope, left),
+            NodeType::ComparisonExpression {
+                left,
+                right,
+                operator,
+            } => {
+                if let Some(x) = self.get_operator_overload(
+                    scope,
+                    left,
+                    right,
+                    &Operator::Comparison(operator.clone()),
+                ) {
+                    Some(x.return_type.clone())
+                } else {
+                    Some(ParserDataType {
+                        data_type: ParserInnerType::Bool,
+                        span: node.span,
+                    })
+                }
+            }
+            NodeType::BooleanExpression {
+                left,
+                right,
+                operator,
+            } => {
+                if let Some(x) = self.get_operator_overload(
+                    scope,
+                    left,
+                    right,
+                    &Operator::Boolean(operator.clone()),
+                ) {
+                    Some(x.return_type.clone())
+                } else {
+                    Some(ParserDataType {
+                        data_type: ParserInnerType::Bool,
+                        span: node.span,
+                    })
+                }
+            }
+            NodeType::BinaryExpression {
+                left,
+                right,
+                operator,
+            } => {
+                if let Some(x) = self.get_operator_overload(
+                    scope,
+                    left,
+                    right,
+                    &Operator::Binary(operator.clone()),
+                ) {
+                    Some(x.return_type.clone())
+                } else {
+                    self.resolve_type_from_node(scope, left)
+                }
+            }
             NodeType::IterExpression {
                 data_type: Some(data_type),
                 ..

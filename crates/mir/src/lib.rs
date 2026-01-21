@@ -375,6 +375,8 @@ impl MiddleEnvironment {
                 for overload in overloads {
                     let overload = MiddleOverload {
                         operator: Operator::from_str(&overload.operator.text)?,
+                        return_type: self
+                            .resolve_potential_new_type(scope, overload.return_type.clone()),
                         parameters: {
                             let mut params = Vec::new();
                             let mut contains = false;
@@ -1713,6 +1715,33 @@ impl MiddleEnvironment {
         }
 
         Ok(None)
+    }
+
+    pub fn get_operator_overload(
+        &mut self,
+        scope: &u64,
+        left: &Node,
+        right: &Node,
+        operator: &Operator,
+    ) -> Option<&MiddleOverload> {
+        if let (Some(left_ty), Some(right_ty)) = (
+            self.resolve_type_from_node(scope, left),
+            self.resolve_type_from_node(scope, right),
+        ) {
+            if let Some(overload) = self
+                .overloads
+                .iter()
+                .filter(|x| x.parameters.len() == 2 && &x.operator == operator)
+                .find(|x| {
+                    x.parameters[0].data_type == left_ty.data_type
+                        && x.parameters[1].data_type == right_ty.data_type
+                })
+            {
+                return Some(overload);
+            }
+        }
+
+        None
     }
 
     pub fn evaluate_scope_member_expression(
