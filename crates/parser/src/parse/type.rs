@@ -43,7 +43,19 @@ impl Parser {
 
         let mut overloads = Vec::new();
 
-        while self.first().token_type == TokenType::Func {
+        while self.first().token_type == TokenType::Const {
+            let _ = self.expect_eat(
+                &TokenType::Const,
+                SyntaxErr::ExpectedKeyword(String::from("const")),
+            );
+
+            let operator = self.expect_eat(
+                &TokenType::String,
+                SyntaxErr::ExpectedToken(TokenType::String),
+            );
+
+            let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
+
             let _ = self.expect_eat(
                 &TokenType::Func,
                 SyntaxErr::ExpectedKeyword(String::from("fn")),
@@ -54,11 +66,6 @@ impl Parser {
             if is_async {
                 let _ = self.eat();
             }
-
-            let operator = self.expect_eat(
-                &TokenType::String,
-                SyntaxErr::ExpectedToken(TokenType::String),
-            );
 
             let parameters = self.parse_key_type_list_ordered_with_ref(
                 TokenType::Open(Bracket::Paren),
@@ -77,6 +84,8 @@ impl Parser {
             };
 
             let block = self.parse_scope_declaration(false);
+
+            let _ = self.parse_delimited();
 
             overloads.push(Overload {
                 operator: operator.into(),
@@ -117,7 +126,6 @@ impl Parser {
         let object = self.parse_type_def_type();
 
         let overloads = self.parse_overloads();
-
         Node::new(
             NodeType::TypeDeclaration {
                 identifier: identifier.clone(),

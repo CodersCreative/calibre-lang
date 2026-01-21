@@ -23,7 +23,7 @@ impl Parser {
         if let Some(x) = self.nth(1) {
             x
         } else {
-            panic!("{:?}", self.errors);
+            self.first()
         }
     }
 
@@ -32,6 +32,9 @@ impl Parser {
     }
 
     fn eat(&mut self) -> Token {
+        if self.is_eof() {
+            return self.tokens.last().unwrap().clone();
+        }
         let token = self.tokens.remove(0);
         self.prev_token = Some(token.clone());
         token
@@ -202,6 +205,13 @@ impl Parser {
     }
 
     pub fn parse_delimited(&mut self) -> Token {
+        if self.is_eof() {
+            return Token {
+                token_type: TokenType::EOL,
+                value: String::new(),
+                span: Span::default(),
+            };
+        }
         match self.first().token_type {
             TokenType::Close(Bracket::Curly) => self.first().clone(),
             TokenType::EOL => self.eat(),

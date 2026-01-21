@@ -852,13 +852,10 @@ impl Formatter {
 
             for func in overloads {
                 let func_txt = {
-                    let mut txt = if func.is_async {
-                        String::from("fn async")
-                    } else {
-                        String::from("fn")
-                    };
+                    let mut txt = format!("const \"{}\" = ", func.operator);
+                    txt.push_str(if func.is_async { "fn async" } else { "fn" });
 
-                    txt.push_str(&format!(" \"{}\" (", func.operator));
+                    txt.push_str(" (");
 
                     let mut adjusted_params = func
                         .parameters

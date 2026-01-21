@@ -12,7 +12,7 @@ type SmthType<T> = struct {
 	}
 }
 
-const generic<T> = fn(smth : SmthType<T>, other : T) -> T => {
+const generic = fn<T>(smth : SmthType<T>, other : T) -> T => {
 	let res : T = smth + other;
 	res;
 };
@@ -23,16 +23,50 @@ const main = fn() => {
 	let res = generic<int>(SmthType<int>{value : 10}, 10);
 	print(res);	
 };
+
+trait Person {
+	// This doesn't have a default implementation it only specifies the type of the function that must be implemented.
+	const name : fn(&Self) -> str;
+
+	// Default implementation
+	const planet = fn() -> str => {
+		"Earth";	
+	};
+
+	// This can use other functions that need to be implied by the trait
+	const name_and_planet = fn(self: &Self) -> <str, str> => {
+		tuple(self.name(), Self.planet());
+	};
+}
+
+trait Student : Person {
+	const university : fn(&Self) -> str;
+
+	// You can use functions defined in implied traits
+	const greeting = fn(self : &Self) -> str => {
+		"Hello, I'm " & self.name() & " and I learn at " & self.university() & " which is on planet " & self.planet() & "."; 
+	};
+}
+
+trait Programmer {
+	const fav_language : fn(&Self) -> str;
+}
+
+// Anytime CompSciStudent is used it will automatically assume that Programmer and Student are implemented instead of constantly having to mention Programmer + Student
+trait CompSciStudent : Programmer + Student {
+	const git_username : fn(&Self) -> str;
+}
 */
 
 type NumType = struct {
 	num : int,
 } @overload {
-	fn "+" (self: NumType, value : int) -> int => {
+	// TODO Add support for Self type
+	const "+" = fn(self: NumType, value : int) -> int => {
 		return self.num + value;
 	}
 
-	fn "/" (self: NumType, value : int) -> int => {
+	const "/" = fn(self: NumType, value : int) -> int => {
 		return self.num / value;
 	}
 }
@@ -106,4 +140,4 @@ const main = fn () => {
 	
 	// for i in 0..5 => print(i);
 	print("Ho");
-};
+}
