@@ -1,9 +1,10 @@
 use crate::{
     Parser, SyntaxErr,
     ast::{
-        FunctionHeader, GenericType, GenericTypes, IfComparisonType, LoopType, MatchArmType,
-        NamedScope, Node, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
-        PotentialNewType, TryCatch, VarType, binary::BinaryOperator, comparison::Comparison,
+        CallArg, FunctionHeader, GenericType, GenericTypes, IfComparisonType, LoopType,
+        MatchArmType, NamedScope, Node, ParserDataType, ParserInnerType, ParserText,
+        PotentialDollarIdentifier, PotentialNewType, TryCatch, VarType, binary::BinaryOperator,
+        comparison::Comparison,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -440,16 +441,25 @@ impl Parser {
         .contains(&self.first().token_type)
         {
             let values = if TokenType::Open(Bracket::Paren) == self.first().token_type {
-                self.parse_arguments(
-                    TokenType::Open(Bracket::Paren),
-                    TokenType::Close(Bracket::Paren),
-                )
-                .into_iter()
-                .map(|x| match x.0.node_type {
-                    NodeType::Identifier(x) => x.into(),
-                    _ => panic!(),
-                })
-                .collect()
+                let _ = self.expect_eat(
+                    &TokenType::Open(Bracket::Paren),
+                    SyntaxErr::ExpectedOpeningBracket(Bracket::Paren),
+                );
+
+                let mut values = Vec::new();
+
+                while self.first().token_type != TokenType::Close(Bracket::Paren) {
+                    values.push(self.expect_potential_dollar_ident());
+                    if self.first().token_type == TokenType::Comma {
+                        let _ = self.eat();
+                    }
+                }
+
+                let _ = self.expect_eat(
+                    &TokenType::Close(Bracket::Paren),
+                    SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
+                );
+                values
             } else {
                 vec![self.expect_potential_dollar_ident()]
             };
@@ -653,13 +663,6 @@ impl Parser {
             None
         };
 
-        let default = if self.first().token_type == TokenType::Equals {
-            let _ = self.eat();
-            Some(self.parse_statement())
-        } else {
-            None
-        };
-
         let return_type = if self.first().token_type == TokenType::Open(Bracket::Curly) {
             ParserDataType::from(ParserInnerType::Null).into()
         } else {
@@ -693,7 +696,6 @@ impl Parser {
                         typ.unwrap_or(
                             ParserDataType::new(Span::default(), ParserInnerType::Dynamic).into(),
                         ),
-                        default,
                     )],
                     return_type,
                     is_async,

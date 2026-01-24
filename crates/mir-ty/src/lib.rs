@@ -2,9 +2,9 @@ use std::{collections::HashMap, fmt::Display};
 
 use calibre_parser::{
     ast::{
-        CompStage, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
-        ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText, PotentialNewType,
-        RefMutability, VarType,
+        CallArg, CompStage, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node,
+        NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
+        PotentialNewType, RefMutability, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperation, Comparison},
     },
@@ -131,7 +131,7 @@ pub enum MiddleNodeType {
         is_temp: bool,
     },
     FunctionDeclaration {
-        parameters: Vec<(ParserText, ParserDataType<MiddleNode>, Option<MiddleNode>)>,
+        parameters: Vec<(ParserText, ParserDataType<MiddleNode>)>,
         body: Box<MiddleNode>,
         return_type: ParserDataType<MiddleNode>,
         is_async: bool,
@@ -192,7 +192,7 @@ pub enum MiddleNodeType {
     },
     CallExpression {
         caller: Box<MiddleNode>,
-        args: Vec<(MiddleNode, Option<MiddleNode>)>,
+        args: Vec<MiddleNode>,
     },
     BinaryExpression {
         left: Box<MiddleNode>,
@@ -310,15 +310,7 @@ impl Into<NodeType> for MiddleNodeType {
                         let mut lst = Vec::new();
 
                         for param in parameters {
-                            lst.push((
-                                param.0.into(),
-                                middle_data_type_to_new_type(param.1),
-                                if let Some(x) = param.2 {
-                                    Some(x.into())
-                                } else {
-                                    None
-                                },
-                            ));
+                            lst.push((param.0.into(), middle_data_type_to_new_type(param.1)));
                         }
                         lst
                     },
@@ -439,14 +431,7 @@ impl Into<NodeType> for MiddleNodeType {
                     let mut lst = Vec::new();
 
                     for arg in args {
-                        lst.push((
-                            arg.0.into(),
-                            if let Some(a) = arg.1 {
-                                Some(a.into())
-                            } else {
-                                None
-                            },
-                        ));
+                        lst.push(CallArg::Value(arg.into()));
                     }
                     lst
                 },
@@ -505,7 +490,7 @@ impl Into<NodeType> for MiddleNodeType {
                                 value.0.into_iter().collect();
                             value.sort_by(|a, b| a.0.cmp(&b.0));
                             for arg in value {
-                                lst.push((arg.1.into(), None));
+                                lst.push(CallArg::Value(arg.1.into()));
                             }
                             lst
                         },

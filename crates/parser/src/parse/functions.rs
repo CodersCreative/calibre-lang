@@ -1,4 +1,4 @@
-use crate::ast::Node;
+use crate::ast::{CallArg, Node};
 use crate::lexer::{Bracket, Span};
 use crate::{Parser, SyntaxErr};
 use crate::{ast::NodeType, lexer::TokenType};
@@ -183,7 +183,7 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<(Node, Option<Node>)> {
+    ) -> Vec<CallArg> {
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         let args = if self.first().token_type == close_token {
@@ -197,28 +197,28 @@ impl Parser {
         args
     }
 
-    pub fn parse_arguments_list(&mut self) -> Vec<(Node, Option<Node>)> {
+    pub fn parse_arguments_list(&mut self) -> Vec<CallArg> {
         let mut defaulted = false;
 
         macro_rules! parse_arg {
             () => {{
                 if let Some(equals) = self.nth(1) {
                     if defaulted || equals.token_type == TokenType::Equals {
-                        (self.parse_primary_expression(), {
+                        CallArg::Named(self.expect_potential_dollar_ident(), {
                             let _ =
                                 self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
                             defaulted = true;
-                            Some(self.parse_statement())
+                            self.parse_statement()
                         })
                     } else {
-                        (self.parse_statement(), None)
+                        CallArg::Value(self.parse_statement())
                     }
                 } else {
                     if defaulted {
                         self.add_err(SyntaxErr::ExpectedChar('='))
                     }
 
-                    (self.parse_statement(), None)
+                    CallArg::Value(self.parse_statement())
                 }
             }};
         }

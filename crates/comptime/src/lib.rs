@@ -154,15 +154,7 @@ impl ComptimeEnvironment {
                         let mut params = Vec::new();
 
                         for param in parameters {
-                            params.push((
-                                param.0,
-                                param.1,
-                                if let Some(value) = param.2 {
-                                    Some(self.evaluate(value, stage)?)
-                                } else {
-                                    None
-                                },
-                            ));
+                            params.push((param.0, param.1));
                         }
 
                         params
@@ -247,14 +239,7 @@ impl ComptimeEnvironment {
                     args: {
                         let mut lst = Vec::new();
                         for arg in args {
-                            lst.push((
-                                self.evaluate(arg.0, stage)?,
-                                if let Some(a) = arg.1 {
-                                    Some(self.evaluate(a, stage)?)
-                                } else {
-                                    None
-                                },
-                            ));
+                            lst.push(self.evaluate(arg, stage)?);
                         }
 
                         lst

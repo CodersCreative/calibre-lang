@@ -99,7 +99,7 @@ impl InterpreterFrom<RuntimeValue> for MiddleNodeType {
                 caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
                     ParserText::from(String::from("some")),
                 ))),
-                args: vec![(MiddleNode::interpreter_from(env, scope, *value)?, None)],
+                args: vec![(MiddleNode::interpreter_from(env, scope, *value)?)],
             }),
             RuntimeValue::Option(None, _) => Ok(MiddleNodeType::CallExpression {
                 caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
@@ -111,13 +111,13 @@ impl InterpreterFrom<RuntimeValue> for MiddleNodeType {
                 caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
                     ParserText::from(String::from("ok")),
                 ))),
-                args: vec![(MiddleNode::interpreter_from(env, scope, *value)?, None)],
+                args: vec![(MiddleNode::interpreter_from(env, scope, *value)?)],
             }),
             RuntimeValue::Result(Err(value), _) => Ok(MiddleNodeType::CallExpression {
                 caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
                     ParserText::from(String::from("err")),
                 ))),
-                args: vec![(MiddleNode::interpreter_from(env, scope, *value)?, None)],
+                args: vec![(MiddleNode::interpreter_from(env, scope, *value)?)],
             }),
             RuntimeValue::NativeFunction(x) => Ok(MiddleNodeType::Identifier(ParserText::from(
                 x.get_resolved_name(env),
@@ -135,11 +135,6 @@ impl InterpreterFrom<RuntimeValue> for MiddleNodeType {
                         params.push((
                             ParserText::from(param.0),
                             ParserDataType::interpreter_from(env, scope, param.1)?,
-                            if let Some(def) = param.2 {
-                                Some(MiddleNode::interpreter_from(env, scope, def)?)
-                            } else {
-                                None
-                            },
                         ));
                     }
 

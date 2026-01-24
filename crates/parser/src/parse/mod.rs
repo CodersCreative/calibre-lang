@@ -114,9 +114,8 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<(PotentialDollarIdentifier, PotentialNewType, Option<Node>)> {
+    ) -> Vec<(PotentialDollarIdentifier, PotentialNewType)> {
         let mut properties = Vec::new();
-        let mut defaulted = false;
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         while !self.is_eof() && self.first().token_type != close_token {
@@ -134,16 +133,8 @@ impl Parser {
                 ParserDataType::new(self.first().span.clone(), ParserInnerType::Dynamic).into()
             };
 
-            let default = if defaulted || self.first().token_type == TokenType::Equals {
-                let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
-                defaulted = true;
-                Some(self.parse_statement())
-            } else {
-                None
-            };
-
             for key in keys {
-                properties.push((key, typ.clone(), default.clone()));
+                properties.push((key, typ.clone()));
             }
 
             if self.first().token_type != close_token {
@@ -478,10 +469,6 @@ impl Parser {
             if self.first().token_type == TokenType::For {
                 let _ = self.eat();
                 let loop_type = self.get_loop_type();
-
-                if let LoopType::While(_) = loop_type {
-                    self.add_err(SyntaxErr::UnexpectedWhileLoop);
-                }
 
                 let mut conditionals = Vec::new();
 

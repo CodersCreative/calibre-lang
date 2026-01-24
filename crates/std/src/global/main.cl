@@ -1,4 +1,4 @@
-const range = fn(start end : mut int = INT_MIN, step : int = 1, inclusive : bool = false) -> list<int> => {
+const range = fn(start end : mut int, step : int, inclusive : bool) -> list<int> => {
   if start != INT_MIN && end == INT_MIN => {
     end = start;
     start = 0;

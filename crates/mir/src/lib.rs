@@ -1,7 +1,7 @@
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     ast::{
-        IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectMap, ObjectType,
+        CallArg, IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectMap, ObjectType,
         ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
         PotentialGenericTypeIdentifier, RefMutability, VarType,
         binary::BinaryOperator,
@@ -147,16 +147,11 @@ impl MiddleEnvironment {
                                     None
                                 };
                                 if let Some(x) = struct_name {
-                                    let mut args: Vec<(MiddleNode, Option<MiddleNode>)> = args
+                                    let mut args: Vec<MiddleNode> = args
                                         .into_iter()
-                                        .map(|x| {
-                                            (
-                                                self.evaluate(scope, x.0).unwrap(),
-                                                x.1.map(|x| self.evaluate(scope, x).unwrap()),
-                                            )
-                                        })
+                                        .map(|x| self.evaluate(scope, x.into()).unwrap())
                                         .collect();
-                                    args.insert(0, (node, None));
+                                    args.insert(0, node);
                                     let caller = match caller.node_type {
                                         NodeType::Identifier(x) => MiddleNode {
                                             node_type: MiddleNodeType::Identifier(
@@ -622,7 +617,7 @@ impl MiddleEnvironment {
                                             MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")).into(), name: Some(ParserText::from(String::from("anon_err_value")).into()) },
                                             Vec::new(),
                                             Box::new(Node {
-                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression{generic_types: Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("err")).into()))), args : vec![(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")).into())), None)]}))) },
+                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression{generic_types: Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("err")).into()))), args : vec![CallArg::Value(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")).into())))]}))) },
                                                 span: Span::default(),
                                             }),
                                         )
@@ -789,7 +784,7 @@ impl MiddleEnvironment {
                                                 comparison: Box::new(IfComparisonType::If(
                                                     Node::new_from_type(NodeType::ComparisonExpression {
                                                         left: Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))),
-                                                        right: Box::new(Node::new_from_type(NodeType::CallExpression{generic_types : Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("len".to_string()).into()))), args : vec![(range, None)]})),
+                                                        right: Box::new(Node::new_from_type(NodeType::CallExpression{generic_types : Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("len".to_string()).into()))), args : vec![CallArg::Value(range)]})),
                                                         operator: calibre_parser::ast::comparison::Comparison::Lesser
                                                     }),
                                                 )),
@@ -1404,7 +1399,7 @@ impl MiddleEnvironment {
                             ifs.push(Node::new_from_type(NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(Node::new_from_type(NodeType::BooleanExpression{
                                     left : Box::new(Node::new_from_type(NodeType::ComparisonExpression {
-                                        left: Box::new(Node::new_from_type(NodeType::CallExpression{generic_types: Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("discriminant")).into()))), args : vec![(*value.clone(), None)]})),
+                                        left: Box::new(Node::new_from_type(NodeType::CallExpression{generic_types: Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("discriminant")).into()))), args : vec![CallArg::Value(*value.clone())]})),
                                         right: Box::new(Node::new_from_type(NodeType::IntLiteral(index))),
                                         operator: Comparison::Equal
                                     })),
@@ -1520,15 +1515,7 @@ impl MiddleEnvironment {
                         .mappings
                         .insert(og_name.text.clone(), new_name.clone());
 
-                    params.push((
-                        ParserText::from(new_name),
-                        data_type,
-                        if let Some(x) = param.2 {
-                            Some(self.evaluate(scope, x)?)
-                        } else {
-                            None
-                        },
-                    ));
+                    params.push((ParserText::from(new_name), data_type));
                 }
 
                 let return_type = self.resolve_potential_new_type(scope, header.return_type);
@@ -1554,7 +1541,7 @@ impl MiddleEnvironment {
                         let mut map = HashMap::new();
 
                         for (i, arg) in args.into_iter().enumerate() {
-                            map.insert(i.to_string(), self.evaluate(scope, arg.0)?);
+                            map.insert(i.to_string(), self.evaluate(scope, arg.into())?);
                         }
 
                         return Ok(MiddleNode {
@@ -1574,7 +1561,7 @@ impl MiddleEnvironment {
                             let mut map = HashMap::new();
 
                             for (i, arg) in args.into_iter().enumerate() {
-                                map.insert(i.to_string(), self.evaluate(scope, arg.0)?);
+                                map.insert(i.to_string(), self.evaluate(scope, arg.into())?);
                             }
 
                             return Ok(MiddleNode {
@@ -1604,41 +1591,32 @@ impl MiddleEnvironment {
                                 let mut lst = Vec::new();
                                 for _ in 0..(parameters.len() - 1) {
                                     let arg = args.remove(0);
-                                    lst.push((
-                                        self.evaluate(scope, arg.0)?,
-                                        if let Some(a) = arg.1 {
-                                            Some(self.evaluate(scope, a)?)
-                                        } else {
-                                            None
-                                        },
-                                    ));
+                                    lst.push(self.evaluate(scope, arg.into())?);
                                 }
 
-                                lst.push((
-                                    self.evaluate(
-                                        scope,
-                                        Node::new_from_type(NodeType::ListLiteral(
-                                            None,
-                                            args.into_iter().map(|x| x.0).collect(),
-                                        )),
-                                    )?,
-                                    None,
-                                ));
+                                lst.push(self.evaluate(
+                                    scope,
+                                    Node::new_from_type(NodeType::ListLiteral(
+                                        None,
+                                        args.into_iter().map(|x| x.into()).collect(),
+                                    )),
+                                )?);
 
                                 lst
+                            }
+                            Some(ParserInnerType::Function {
+                                return_type,
+                                parameters,
+                                is_async,
+                            }) if parameters.len() > args.len() => {
+                                // TODO currying
+                                unimplemented!("Currying is not yet complete")
                             }
                             _ => {
                                 let mut lst = Vec::new();
 
                                 for arg in args {
-                                    lst.push((
-                                        self.evaluate(scope, arg.0)?,
-                                        if let Some(a) = arg.1 {
-                                            Some(self.evaluate(scope, a)?)
-                                        } else {
-                                            None
-                                        },
-                                    ));
+                                    lst.push(self.evaluate(scope, arg.into())?);
                                 }
 
                                 lst
@@ -1809,10 +1787,7 @@ impl MiddleEnvironment {
                 return Ok(Some(MiddleNode {
                     node_type: MiddleNodeType::CallExpression {
                         caller: Box::new(self.evaluate(scope, overload.func.clone())?),
-                        args: vec![
-                            (self.evaluate(scope, left)?, None),
-                            (self.evaluate(scope, right)?, None),
-                        ],
+                        args: vec![self.evaluate(scope, left)?, self.evaluate(scope, right)?],
                     },
                     span,
                 }));

@@ -688,9 +688,24 @@ impl Overload {
 #[derive(Clone, Debug, PartialEq)]
 pub struct FunctionHeader {
     pub generics: GenericTypes,
-    pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType, Option<Node>)>,
+    pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
     pub return_type: PotentialNewType,
     pub is_async: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CallArg {
+    Value(Node),
+    Named(PotentialDollarIdentifier, Node),
+}
+
+impl Into<Node> for CallArg {
+    fn into(self) -> Node {
+        match self {
+            Self::Value(x) => x,
+            Self::Named(_, x) => x,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -830,7 +845,7 @@ pub enum NodeType {
     CallExpression {
         caller: Box<Node>,
         generic_types: Vec<PotentialNewType>,
-        args: Vec<(Node, Option<Node>)>,
+        args: Vec<CallArg>,
     },
     BinaryExpression {
         left: Box<Node>,

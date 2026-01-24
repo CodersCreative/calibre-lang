@@ -40,18 +40,18 @@ impl InterpreterEnvironment {
     pub fn get_new_scope(
         &mut self,
         scope: &u64,
-        parameters: Vec<(String, RuntimeType, Option<RuntimeValue>)>,
-        arguments: Vec<(MiddleNode, Option<MiddleNode>)>,
+        parameters: Vec<(String, RuntimeType)>,
+        arguments: Vec<MiddleNode>,
     ) -> Result<u64, InterpreterErr> {
         let new_scope = self.new_scope(Some(*scope));
 
-        for (i, (k, v, d)) in parameters.iter().enumerate() {
+        for (i, (k, v)) in parameters.iter().enumerate() {
             let m = match v {
                 RuntimeType::Ref(_) => RefMutability::MutRef,
                 _ => RefMutability::MutValue,
             };
 
-            if let Some((arg, None)) = arguments.get(i) {
+            if let Some(arg) = arguments.get(i) {
                 let arg = self.evaluate(&new_scope, arg.clone())?;
                 self.push_var(
                     &new_scope,
@@ -66,47 +66,9 @@ impl InterpreterEnvironment {
                 )?;
                 continue;
             }
-            if let Some(d) = arguments.iter().find(|x| {
-                if let MiddleNodeType::Identifier(key) = &x.0.node_type {
-                    &key.to_string() == k && x.1.is_some()
-                } else {
-                    false
-                }
-            }) {
-                let value = self.evaluate(scope, d.1.clone().unwrap())?;
-                self.push_var(
-                    &new_scope,
-                    k.to_string(),
-                    Variable {
-                        value,
-                        var_type: match m {
-                            RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
-                            _ => VarType::Immutable,
-                        },
-                    },
-                )?;
-
-                continue;
-            }
-
-            if let Some(d) = d {
-                self.push_var(
-                    &new_scope,
-                    k.to_string(),
-                    Variable {
-                        value: d.clone(),
-                        var_type: match m {
-                            RefMutability::MutRef | RefMutability::MutValue => VarType::Mutable,
-                            _ => VarType::Immutable,
-                        },
-                    },
-                )?;
-
-                continue;
-            }
 
             if !arguments.is_empty() {
-                return Err(InterpreterErr::RefNonVar(arguments[0].0.node_type.clone()));
+                return Err(InterpreterErr::RefNonVar(arguments[0].node_type.clone()));
             }
         }
 

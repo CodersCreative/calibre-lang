@@ -1153,7 +1153,10 @@ impl MiddleEnvironment {
                         let mut lst = Vec::new();
 
                         for arg in args {
-                            lst.push(self.resolve_type_from_node(scope, &arg.0).unwrap());
+                            lst.push(
+                                self.resolve_type_from_node(scope, &arg.clone().into())
+                                    .unwrap(),
+                            );
                         }
                         return Some(ParserDataType {
                             data_type: ParserInnerType::Tuple(lst),

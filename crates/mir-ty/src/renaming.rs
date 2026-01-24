@@ -85,25 +85,14 @@ impl MiddleNodeType {
                     .map(|x| {
                         let new_name = format!("{}->{}", x.0.text, random_range(0..10000000));
                         state.data.insert(x.0.text, new_name.clone());
-                        if let Some(y) = x.2 {
-                            (
-                                ParserText {
-                                    text: new_name,
-                                    span: x.0.span,
-                                },
-                                x.1,
-                                Some(y.rename(state)),
-                            )
-                        } else {
-                            (
-                                ParserText {
-                                    text: new_name,
-                                    span: x.0.span,
-                                },
-                                x.1,
-                                None,
-                            )
-                        }
+
+                        (
+                            ParserText {
+                                text: new_name,
+                                span: x.0.span,
+                            },
+                            x.1,
+                        )
                     })
                     .collect(),
                 body: Box::new(body.rename(state)),
@@ -181,10 +170,7 @@ impl MiddleNodeType {
             }
             MiddleNodeType::CallExpression { caller, args } => MiddleNodeType::CallExpression {
                 caller: Box::new(caller.rename(state)),
-                args: args
-                    .into_iter()
-                    .map(|x| (x.0.rename(state), x.1.map(|x| x.rename(state))))
-                    .collect(),
+                args: args.into_iter().map(|x| x.rename(state)).collect(),
             },
             MiddleNodeType::BinaryExpression {
                 left,

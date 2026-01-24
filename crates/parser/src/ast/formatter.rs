@@ -3,9 +3,9 @@ use std::error::Error;
 use crate::{
     Parser,
     ast::{
-        GenericTypes, IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType,
-        Overload, ParserInnerType, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        PotentialNewType, TypeDefType, VarType,
+        CallArg, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node, NodeType,
+        ObjectType, Overload, ParserInnerType, PotentialDollarIdentifier,
+        PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -371,10 +371,11 @@ impl Formatter {
                 txt.push('(');
 
                 for arg in args {
-                    if let Some(x) = &arg.1 {
-                        txt.push_str(&format!("{} = {}, ", self.format(&arg.0), self.format(x)));
-                    } else {
-                        txt.push_str(&format!("{}, ", self.format(&arg.0)));
+                    match arg {
+                        CallArg::Value(x) => txt.push_str(&format!("{}, ", self.format(x))),
+                        CallArg::Named(x, y) => {
+                            txt.push_str(&format!("{} = {}, ", x, self.format(y)))
+                        }
                     }
                 }
 
@@ -466,7 +467,7 @@ impl Formatter {
 
                 for param in header.parameters.iter().skip(1) {
                     let last = adjusted_params.last().unwrap().first().unwrap();
-                    if last.1 == param.1 && last.2 == param.2 {
+                    if last.1 == param.1 {
                         adjusted_params.last_mut().unwrap().push(param);
                     } else {
                         adjusted_params.push(vec![param]);
@@ -481,10 +482,6 @@ impl Formatter {
                     let last = params.last().unwrap();
 
                     txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
-
-                    if let Some(default) = &last.2 {
-                        txt.push_str(&format!(" = {}", self.format(default)));
-                    }
 
                     txt.push_str(", ");
                 }
@@ -586,10 +583,6 @@ impl Formatter {
                     " {}",
                     self.fmt_potential_new_type(&header.parameters[0].1)
                 ));
-
-                if let Some(default) = &header.parameters[0].2 {
-                    txt.push_str(&format!(" = {}", self.format(&*default)));
-                }
 
                 if header.return_type != PotentialNewType::DataType(ParserInnerType::Null.into()) {
                     txt.push_str(&format!(

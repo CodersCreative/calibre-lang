@@ -223,7 +223,7 @@ pub enum RuntimeValue {
     Option(Option<Box<RuntimeValue>>, RuntimeType),
     Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>, RuntimeType),
     Function {
-        parameters: Vec<(String, RuntimeType, Option<RuntimeValue>)>,
+        parameters: Vec<(String, RuntimeType)>,
         body: Block,
         return_type: RuntimeType,
         is_async: bool,

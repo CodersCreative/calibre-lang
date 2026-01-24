@@ -7,11 +7,7 @@ use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 use std::{fs, path::PathBuf, process::Command, str::FromStr};
 
-fn file(
-    path: &PathBuf,
-    _use_checker: bool,
-    args: Vec<(MiddleNode, Option<MiddleNode>)>,
-) -> Result<()> {
+fn file(path: &PathBuf, _use_checker: bool, args: Vec<MiddleNode>) -> Result<()> {
     let mut parser = calibre_parser::Parser::default();
     let mut tokenizer = Tokenizer::default();
     let contents = fs::read_to_string(path).into_diagnostic()?;
