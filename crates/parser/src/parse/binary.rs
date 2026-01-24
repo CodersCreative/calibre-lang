@@ -1,4 +1,4 @@
-use crate::ast::Node;
+use crate::ast::{Node, PipeSegment};
 use crate::lexer::Span;
 use crate::{Parser, SyntaxErr};
 use crate::{
@@ -8,25 +8,45 @@ use crate::{
 
 impl Parser {
     pub fn parse_pipe_expression(&mut self) -> Node {
-        let mut left = vec![self.parse_try_expression()];
+        let mut left = vec![PipeSegment::Unnamed(self.parse_try_expression())];
 
-        while let TokenType::Pipe = self.first().token_type.clone() {
-            let _ = self.eat();
+        while TokenType::Pipe == self.first().token_type
+            || (self.first().token_type == TokenType::BinaryOperator(BinaryOperator::BitOr)
+                && [TokenType::Identifier, TokenType::Dollar].contains(&self.second().token_type))
+        {
+            let name = if TokenType::Pipe == self.eat().token_type {
+                None
+            } else {
+                let name = self.expect_potential_dollar_ident();
+                let _ = self.expect_eat(
+                    &TokenType::Arrow,
+                    SyntaxErr::ExpectedKeyword("->".to_string()),
+                );
+                Some(name)
+            };
+
             let value = self.parse_statement();
             if let NodeType::PipeExpression(mut x) = value.node_type {
                 left.append(&mut x);
             } else {
-                left.push(value);
+                left.push(if let Some(name) = name {
+                    PipeSegment::Named {
+                        identifier: name,
+                        node: value,
+                    }
+                } else {
+                    PipeSegment::Unnamed(value)
+                });
             }
         }
 
         if left.len() > 1 {
             Node::new(
-                Span::new_from_spans(left[0].span, left.last().unwrap().span),
+                Span::new_from_spans(*left[0].span(), *left.last().unwrap().span()),
                 NodeType::PipeExpression(left),
             )
         } else {
-            left.remove(0)
+            left.remove(0).into()
         }
     }
 

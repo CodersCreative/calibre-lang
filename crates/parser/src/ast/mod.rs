@@ -862,7 +862,7 @@ pub enum NodeType {
         right: Box<Node>,
         operator: Comparison,
     },
-    PipeExpression(Vec<Node>),
+    PipeExpression(Vec<PipeSegment>),
     BooleanExpression {
         left: Box<Node>,
         right: Box<Node>,
@@ -887,6 +887,49 @@ pub enum NodeType {
         identifier: PotentialGenericTypeIdentifier,
         value: ObjectType<Node>,
     },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum PipeSegment {
+    Unnamed(Node),
+    Named {
+        identifier: PotentialDollarIdentifier,
+        node: Node,
+    },
+}
+
+impl PipeSegment {
+    pub fn span(&self) -> &Span {
+        match self {
+            Self::Unnamed(x) => &x.span,
+            Self::Named {
+                identifier: _,
+                node,
+            } => &node.span,
+        }
+    }
+
+    pub fn get_node(&self) -> &Node {
+        match self {
+            Self::Unnamed(x) => x,
+            Self::Named {
+                identifier: _,
+                node,
+            } => node,
+        }
+    }
+}
+
+impl Into<Node> for PipeSegment {
+    fn into(self) -> Node {
+        match self {
+            Self::Unnamed(x) => x,
+            Self::Named {
+                identifier: _,
+                node,
+            } => node,
+        }
+    }
 }
 
 impl NodeType {

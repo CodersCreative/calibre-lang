@@ -10,6 +10,7 @@ use calibre_parser::{
     },
     lexer::Span,
 };
+use rand::distr::Map;
 use std::{collections::HashMap, str::FromStr};
 
 use crate::errors::MiddleErr;
@@ -1610,13 +1611,28 @@ impl MiddleEnvironment {
                                     lst.push(self.evaluate(scope, arg.into())?);
                                 }
 
-                                lst.push(self.evaluate(
-                                    scope,
-                                    Node::new_from_type(NodeType::ListLiteral(
-                                        None,
-                                        args.into_iter().map(|x| x.into()).collect(),
-                                    )),
-                                )?);
+                                lst.push(
+                                    self.evaluate(
+                                        scope,
+                                        Node::new_from_type(NodeType::ListLiteral(
+                                            match parameters
+                                                .last()
+                                                .unwrap()
+                                                .clone()
+                                                .unwrap_all_refs()
+                                                .data_type
+                                            {
+                                                ParserInnerType::List(x) => Some(
+                                                    calibre_mir_ty::middle_data_type_to_new_type(
+                                                        *x,
+                                                    ),
+                                                ),
+                                                _ => None,
+                                            },
+                                            args.into_iter().map(|x| x.into()).collect(),
+                                        )),
+                                    )?,
+                                );
 
                                 lst
                             }
@@ -1806,7 +1822,114 @@ impl MiddleEnvironment {
             NodeType::ScopeMemberExpression { path } => {
                 self.evaluate_scope_member_expression(scope, path)
             }
-            NodeType::PipeExpression(_) => todo!(),
+            NodeType::PipeExpression(mut path) if !path.is_empty() => {
+                let mut value = path.remove(0).into();
+                let mut prior_mappings = HashMap::new();
+
+                prior_mappings.insert(
+                    "$".to_string(),
+                    self.scopes
+                        .get(scope)
+                        .unwrap()
+                        .mappings
+                        .get("$")
+                        .map(|x| x.to_string()),
+                );
+
+                for point in path.into_iter() {
+                    let resolved_type = self
+                        .resolve_type_from_node(scope, point.get_node())
+                        .map(|x| x.unwrap_all_refs().data_type);
+
+                    match resolved_type {
+                        Some(ParserInnerType::Function { .. })
+                        | Some(ParserInnerType::NativeFunction(_))
+                            if !point.get_node().to_string().contains("$") =>
+                        {
+                            value = Node::new_from_type(NodeType::CallExpression {
+                                string_fn: None,
+                                caller: Box::new(point.into()),
+                                generic_types: Vec::new(),
+                                args: vec![CallArg::Value(value)],
+                            })
+                        }
+                        _ => {
+                            let var_dec = match &point {
+                                calibre_parser::ast::PipeSegment::Named { identifier, .. } => {
+                                    let ident =
+                                        self.resolve_dollar_ident_only(scope, identifier).unwrap();
+
+                                    prior_mappings.insert(
+                                        ident.text.clone(),
+                                        self.scopes
+                                            .get(scope)
+                                            .unwrap()
+                                            .mappings
+                                            .get(&ident.text)
+                                            .map(|x| x.to_string()),
+                                    );
+
+                                    Node::new_from_type(NodeType::VariableDeclaration {
+                                        var_type: VarType::Mutable,
+                                        identifier: ident.into(),
+                                        value: Box::new(value),
+                                        data_type: None,
+                                    })
+                                }
+                                _ => Node::new_from_type(NodeType::VariableDeclaration {
+                                    var_type: VarType::Mutable,
+                                    identifier: ParserText::from(String::from("$")).into(),
+                                    value: Box::new(value),
+                                    data_type: None,
+                                }),
+                            };
+
+                            let _ = self.evaluate(scope, var_dec.clone());
+
+                            let point: Node = point.into();
+                            value = match point.node_type {
+                                NodeType::ScopeDeclaration {
+                                    body: Some(mut body),
+                                    named: None,
+                                    is_temp,
+                                    create_new_scope,
+                                    define,
+                                } => {
+                                    body.insert(0, var_dec);
+
+                                    Node {
+                                        node_type: NodeType::ScopeDeclaration {
+                                            body: Some(body),
+                                            named: None,
+                                            is_temp,
+                                            create_new_scope,
+                                            define,
+                                        },
+                                        ..point
+                                    }
+                                }
+                                _ => Node::new_from_type(NodeType::ScopeDeclaration {
+                                    body: Some(vec![var_dec, point]),
+                                    named: None,
+                                    is_temp: true,
+                                    create_new_scope: Some(true),
+                                    define: false,
+                                }),
+                            }
+                        }
+                    }
+                }
+
+                for (k, v) in prior_mappings {
+                    if let Some(v) = v {
+                        self.scopes.get_mut(scope).unwrap().mappings.insert(k, v);
+                    } else {
+                        self.scopes.get_mut(scope).unwrap().mappings.remove(&k);
+                    }
+                }
+                self.evaluate(scope, value)
+            }
+            NodeType::PipeExpression(_) => Ok(MiddleNode::new_from_type(MiddleNodeType::EmptyLine)),
         }
     }
 }

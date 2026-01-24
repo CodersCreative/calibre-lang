@@ -4,7 +4,7 @@ use crate::{
     Parser,
     ast::{
         CallArg, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node, NodeType,
-        ObjectType, Overload, ParserInnerType, PotentialDollarIdentifier,
+        ObjectType, Overload, ParserInnerType, PipeSegment, PotentialDollarIdentifier,
         PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
@@ -785,10 +785,15 @@ impl Formatter {
             }
 
             NodeType::PipeExpression(values) => {
-                let mut txt = self.format(&values[0]);
+                let mut txt = self.format(values[0].get_node());
 
                 for value in values.iter().skip(1) {
-                    txt.push_str(&format!(" |> {}", self.format(value)));
+                    match value {
+                        PipeSegment::Unnamed(x) => txt.push_str(&format!(" |> {}", self.format(x))),
+                        PipeSegment::Named { identifier, node } => {
+                            txt.push_str(&format!(" | {} -> {}", identifier, self.format(node)))
+                        }
+                    }
                 }
 
                 txt
@@ -799,14 +804,12 @@ impl Formatter {
                 object,
                 overloads,
             } => {
-                let mut txt = format!(
+                format!(
                     "type {} = {}{}",
                     identifier,
                     self.fmt_type_def_type(&object),
                     self.fmt_overloads(&overloads)
-                );
-
-                txt
+                )
             }
         }
     }

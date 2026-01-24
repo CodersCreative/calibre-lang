@@ -916,7 +916,10 @@ impl MiddleEnvironment {
             | NodeType::ImportStatement { .. }
             | NodeType::AssignmentExpression { .. }
             | NodeType::LoopDeclaration { .. }
-            | NodeType::ScopeDeclaration { define: true, .. } => None,
+            | NodeType::ScopeDeclaration { define: true, .. }
+            | NodeType::ScopeAlias { .. }
+            | NodeType::DataType { .. }
+            | NodeType::Until { .. } => None,
             NodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_type_from_node(scope, value)?),
@@ -1100,9 +1103,9 @@ impl MiddleEnvironment {
                 )),
                 span: node.span,
             }),
-            NodeType::NegExpression { value } | NodeType::DebugExpression { value } => {
-                self.resolve_type_from_node(scope, value)
-            }
+            NodeType::NegExpression { value }
+            | NodeType::DebugExpression { value }
+            | NodeType::Ternary { then: value, .. } => self.resolve_type_from_node(scope, value),
             NodeType::AsExpression {
                 value: _,
                 data_type,
@@ -1178,7 +1181,7 @@ impl MiddleEnvironment {
                 }
 
                 let Some(caller_type) = caller_type else {
-                    todo!("{:?}", caller);
+                    return None;
                 };
 
                 match caller_type.data_type {
@@ -1205,7 +1208,7 @@ impl MiddleEnvironment {
                         is_async: _,
                     } => Some(*return_type.clone()),
                     ParserInnerType::NativeFunction(x) => Some(*x),
-                    x => todo!("{:?}", x),
+                    _ => return None,
                 }
             }
             NodeType::Identifier(x) => {
@@ -1225,7 +1228,20 @@ impl MiddleEnvironment {
                 Some(ParserDataType::from(ParserInnerType::Dynamic))
             }
             NodeType::Comp { stage: _, body } => self.resolve_type_from_node(scope, &body),
-            x => todo!("{:?}", x),
+            NodeType::PipeExpression(path) => {
+                self.resolve_type_from_node(scope, path.last().unwrap().get_node())
+            }
+            NodeType::DerefStatement { value } => {
+                let typ = self.resolve_type_from_node(scope, &value)?;
+
+                if let ParserInnerType::Ref(x, _) = typ.data_type {
+                    Some(*x)
+                } else {
+                    Some(typ)
+                }
+            }
+            NodeType::ScopeMemberExpression { .. } => todo!(),
+            NodeType::ScopeDeclaration { .. } => unreachable!(),
         };
 
         if let Some(typ) = typ {
