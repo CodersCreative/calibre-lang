@@ -108,12 +108,12 @@ impl InterpreterEnvironment {
                         .unwrap();
 
                     let body = Block(Box::new(MiddleNode::new_from_type(
-                        MiddleNodeType::CallExpression(
-                            Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
-                                format!("$-{}", counter).into(),
-                            ))),
-                            arguments,
-                        ),
+                        MiddleNodeType::CallExpression {
+                            caller: Box::new(MiddleNode::new_from_type(
+                                MiddleNodeType::Identifier(format!("$-{}", counter).into()),
+                            )),
+                            args: arguments,
+                        },
                     )));
 
                     return Ok(RuntimeValue::Function {

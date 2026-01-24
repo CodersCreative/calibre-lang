@@ -3,8 +3,9 @@ use std::error::Error;
 use crate::{
     Parser,
     ast::{
-        IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, Overload,
-        ParserInnerType, PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
+        GenericTypes, IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType,
+        Overload, ParserInnerType, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+        PotentialNewType, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -340,8 +341,30 @@ impl Formatter {
                     self.fmt_potential_new_type(data_type)
                 )
             }
-            NodeType::CallExpression(callee, args) => {
-                let mut txt = format!("{}(", self.format(callee));
+            NodeType::CallExpression {
+                caller,
+                generic_types,
+                args,
+            } => {
+                let mut txt = format!("{}", self.format(caller));
+
+                if !generic_types.is_empty() {
+                    txt.push_str(&format!(
+                        ":<{}",
+                        generic_types
+                            .get(0)
+                            .map(|x| x.to_string())
+                            .unwrap_or(String::new())
+                    ));
+
+                    for typ in generic_types.iter().skip(1) {
+                        txt.push_str(&format!(", {}", typ));
+                    }
+
+                    txt.push_str(">")
+                }
+
+                txt.push('(');
 
                 for arg in args {
                     if let Some(x) = &arg.1 {
@@ -391,7 +414,7 @@ impl Formatter {
             } => {
                 let mut txt = if let Some(data_type) = data_type {
                     format!(
-                        "list<{}>[{} for {}",
+                        "list:<{}>[{} for {}",
                         self.fmt_potential_new_type(data_type),
                         self.format(map),
                         self.fmt_loop_type(loop_type)
@@ -414,6 +437,7 @@ impl Formatter {
             }
 
             NodeType::FunctionDeclaration {
+                generics,
                 parameters,
                 body,
                 return_type,
@@ -424,6 +448,10 @@ impl Formatter {
                 } else {
                     String::from("fn")
                 };
+
+                if !generics.0.is_empty() {
+                    txt.push_str(&format!(" {}", self.fmt_generic_types(generics)));
+                }
 
                 txt.push_str(" (");
 
@@ -528,6 +556,7 @@ impl Formatter {
                 format!("match {} {}", self.format(value), self.fmt_match_body(body))
             }
             NodeType::FnMatchDeclaration {
+                generics,
                 parameters,
                 body,
                 return_type,
@@ -536,6 +565,10 @@ impl Formatter {
                 let mut txt = String::from("match");
                 if *is_async {
                     txt.push_str(" async");
+                }
+
+                if !generics.0.is_empty() {
+                    txt.push_str(&format!(" {}", self.fmt_generic_types(generics)));
                 }
 
                 txt.push_str(&format!(" {}", self.fmt_potential_new_type(&parameters.1)));
@@ -590,7 +623,7 @@ impl Formatter {
             NodeType::ListLiteral(data_type, values) => {
                 let mut txt = if let Some(data_type) = data_type {
                     format!(
-                        "list<{}>[{}",
+                        "list:<{}>[{}",
                         self.fmt_potential_new_type(&data_type),
                         values
                             .get(0)
@@ -844,6 +877,31 @@ impl Formatter {
         } else {
             None
         }
+    }
+
+    fn fmt_generic_types(&mut self, types: &GenericTypes) -> String {
+        if types.0.is_empty() {
+            return String::new();
+        }
+
+        let mut txt = String::from("<");
+
+        for typ in types.0.iter() {
+            txt.push_str(&typ.identifier.to_string());
+            if !typ.trait_constraints.is_empty() {
+                txt.push_str(" :");
+                for constraint in &typ.trait_constraints {
+                    txt.push_str(&format!(" {} +", constraint));
+                }
+                txt = txt.trim_end_matches("+").trim().to_string();
+            }
+            txt.push_str(", ");
+        }
+
+        txt = txt.trim().trim_end_matches(",").trim().to_string();
+
+        txt.push_str(">");
+        txt
     }
 
     fn fmt_overloads(&mut self, overloads: &[Overload]) -> String {

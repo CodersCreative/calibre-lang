@@ -114,7 +114,7 @@ impl InterpreterEnvironment {
             MiddleNodeType::ListLiteral(typ, vals) => {
                 self.evaluate_list_expression(scope, typ, vals)
             }
-            MiddleNodeType::CallExpression(caller, args) => {
+            MiddleNodeType::CallExpression { caller, args } => {
                 self.evaluate_call_expression(scope, *caller, args)
             }
             MiddleNodeType::VariableDeclaration {

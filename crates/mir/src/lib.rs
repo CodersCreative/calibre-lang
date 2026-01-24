@@ -2,8 +2,8 @@ use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     ast::{
         IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectMap, ObjectType,
-        ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier, RefMutability,
-        VarType,
+        ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
+        PotentialGenericTypeIdentifier, RefMutability, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperation, Comparison},
     },
@@ -25,9 +25,9 @@ impl MiddleEnvironment {
         match node.node_type {
             NodeType::Identifier(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Identifier(
-                    if let Some(x) = self.resolve_potential_dollar_ident(scope, &x) {
+                    if let Some(x) = self.resolve_potential_generic_ident(scope, &x) {
                         x
-                    } else if let PotentialDollarIdentifier::DollarIdentifier(x) = x {
+                    } else if let PotentialDollarIdentifier::DollarIdentifier(x) = x.get_ident() {
                         let val = self.resolve_macro_arg(scope, &x).unwrap().clone();
                         return self.evaluate(scope, val);
                     } else {
@@ -87,7 +87,7 @@ impl MiddleEnvironment {
                 }
                 if let NodeType::Identifier(x) = &path[0].0.node_type {
                     if let Some(Some(object)) = self
-                        .resolve_potential_dollar_ident(scope, x)
+                        .resolve_potential_generic_ident(scope, x)
                         .map(|x| self.objects.get(&x.text))
                     {
                         match object.object_type {
@@ -98,7 +98,7 @@ impl MiddleEnvironment {
                                             scope,
                                             Node::new_from_type(NodeType::EnumExpression {
                                                 identifier: x.clone(),
-                                                value: y.clone(),
+                                                value: y.clone().into(),
                                                 data: None,
                                             }),
                                         );
@@ -119,11 +119,17 @@ impl MiddleEnvironment {
                             NodeType::Identifier(_) if item.1 => self.evaluate(scope, item.0)?,
                             NodeType::Identifier(x) => MiddleNode {
                                 node_type: MiddleNodeType::Identifier(
-                                    self.resolve_dollar_ident_only(scope, &x).unwrap(),
+                                    self.resolve_dollar_ident_potential_generic_only(scope, &x)
+                                        .unwrap(),
                                 ),
                                 span: node.span,
                             },
-                            NodeType::CallExpression(caller, args) if !item.1 => {
+                            NodeType::CallExpression {
+                                caller,
+                                generic_types,
+                                args,
+                            } if !item.1 => {
+                                // TODO Handle generics
                                 let first = list.first().unwrap().clone();
                                 let node =
                                     MiddleNode::new_from_type(MiddleNodeType::MemberExpression {
@@ -154,7 +160,7 @@ impl MiddleEnvironment {
                                     let caller = match caller.node_type {
                                         NodeType::Identifier(x) => MiddleNode {
                                             node_type: MiddleNodeType::Identifier(
-                                                self.resolve_potential_dollar_ident(scope, &x)
+                                                self.resolve_potential_generic_ident(scope, &x)
                                                     .unwrap_or(x.to_string().into()),
                                             ),
                                             span: caller.span,
@@ -162,8 +168,8 @@ impl MiddleEnvironment {
                                         _ => panic!(),
                                     };
                                     return Ok(MiddleNode::new_from_type(
-                                        MiddleNodeType::CallExpression(
-                                            Box::new(MiddleNode::new_from_type(
+                                        MiddleNodeType::CallExpression {
+                                            caller: Box::new(MiddleNode::new_from_type(
                                                 MiddleNodeType::MemberExpression {
                                                     path: vec![
                                                         (
@@ -179,7 +185,7 @@ impl MiddleEnvironment {
                                                 },
                                             )),
                                             args,
-                                        ),
+                                        },
                                     ));
                                 }
 
@@ -352,7 +358,10 @@ impl MiddleEnvironment {
                 object,
                 overloads,
             } => {
-                let identifier = self.resolve_dollar_ident_only(scope, &identifier).unwrap();
+                // TODO Handle generics
+                let identifier = self
+                    .resolve_dollar_ident_potential_generic_only(scope, &identifier)
+                    .unwrap();
                 let object = self.type_def_type_into(scope, object);
                 let new_name = get_disamubiguous_name(scope, Some(identifier.text.trim()), None);
 
@@ -573,7 +582,7 @@ impl MiddleEnvironment {
                                             MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")).into(), name: None },
                                             Vec::new(),
                                             Box::new(Node {
-                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("none")).into()))), Vec::new())))) },
+                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression{generic_types: Vec::new(),caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("none")).into()))), args : Vec::new()}))) },
                                                 span: Span::default(),
                                             }),
                                         )
@@ -599,7 +608,7 @@ impl MiddleEnvironment {
                                             MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")).into(), name: Some(ParserText::from(String::from("anon_err_value")).into()) },
                                             Vec::new(),
                                             Box::new(Node {
-                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("err")).into()))), vec![(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")).into())), None)])))) },
+                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression{generic_types: Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("err")).into()))), args : vec![(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")).into())), None)]}))) },
                                                 span: Span::default(),
                                             }),
                                         )
@@ -722,7 +731,7 @@ impl MiddleEnvironment {
                                                 comparison: Box::new(IfComparisonType::If(
                                                     Node::new_from_type(NodeType::ComparisonExpression {
                                                         left: Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))),
-                                                        right: Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("len".to_string()).into()))), vec![(range, None)]))),
+                                                        right: Box::new(Node::new_from_type(NodeType::CallExpression{generic_types : Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("len".to_string()).into()))), args : vec![(range, None)]})),
                                                         operator: calibre_parser::ast::comparison::Comparison::Lesser
                                                     }),
                                                 )),
@@ -882,7 +891,7 @@ impl MiddleEnvironment {
                 functions,
             } => {
                 let resolved = self
-                    .resolve_potential_dollar_ident(scope, &identifier)
+                    .resolve_potential_generic_ident(scope, &identifier)
                     .unwrap();
                 for function in functions {
                     if let NodeType::VariableDeclaration {
@@ -1143,7 +1152,7 @@ impl MiddleEnvironment {
             NodeType::StructLiteral { identifier, value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::AggregateExpression {
                     identifier: Some(
-                        self.resolve_potential_dollar_ident(scope, &identifier)
+                        self.resolve_potential_generic_ident(scope, &identifier)
                             .unwrap(),
                     ),
                     value: ObjectMap(match value {
@@ -1175,7 +1184,7 @@ impl MiddleEnvironment {
                 data,
             } => {
                 let identifier =
-                    if let Some(x) = self.resolve_potential_dollar_ident(scope, &identifier) {
+                    if let Some(x) = self.resolve_potential_generic_ident(scope, &identifier) {
                         x
                     } else {
                         return Err(MiddleErr::Object(identifier.to_string()));
@@ -1328,7 +1337,7 @@ impl MiddleEnvironment {
                             ifs.push(Node::new_from_type(NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(Node::new_from_type(NodeType::BooleanExpression{
                                     left : Box::new(Node::new_from_type(NodeType::ComparisonExpression {
-                                        left: Box::new(Node::new_from_type(NodeType::CallExpression(Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("discriminant")).into()))), vec![(*value.clone(), None)]))),
+                                        left: Box::new(Node::new_from_type(NodeType::CallExpression{generic_types: Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("discriminant")).into()))), args : vec![(*value.clone(), None)]})),
                                         right: Box::new(Node::new_from_type(NodeType::IntLiteral(index))),
                                         operator: Comparison::Equal
                                     })),
@@ -1398,6 +1407,7 @@ impl MiddleEnvironment {
                 self.evaluate(scope, ifs)
             }
             NodeType::FnMatchDeclaration {
+                generics,
                 parameters,
                 body,
                 return_type,
@@ -1405,6 +1415,7 @@ impl MiddleEnvironment {
             } => self.evaluate(
                 scope,
                 Node::new_from_type(NodeType::FunctionDeclaration {
+                    generics,
                     parameters: vec![(
                         parameters.0.clone(),
                         parameters.1.clone(),
@@ -1415,7 +1426,7 @@ impl MiddleEnvironment {
                     body: Box::new(Node::new_from_type(NodeType::ScopeDeclaration {
                         body: Some(vec![Node::new_from_type(NodeType::MatchStatement {
                             value: Box::new(Node::new_from_type(NodeType::Identifier(
-                                parameters.0,
+                                PotentialGenericTypeIdentifier::Identifier(parameters.0),
                             ))),
                             body,
                         })]),
@@ -1427,11 +1438,13 @@ impl MiddleEnvironment {
                 }),
             ),
             NodeType::FunctionDeclaration {
+                generics,
                 parameters,
                 body,
                 return_type,
                 is_async,
             } => {
+                // TODO Handle generics
                 let mut params = Vec::with_capacity(parameters.len());
                 let new_scope = self.new_scope_from_parent_shallow(*scope);
                 for param in parameters {
@@ -1480,7 +1493,12 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::CallExpression(caller, args) => {
+            NodeType::CallExpression {
+                caller,
+                generic_types,
+                args,
+            } => {
+                // TODO Handle Generics
                 if let NodeType::Identifier(caller) = &caller.node_type {
                     if "tuple" == &caller.to_string() {
                         let mut map = HashMap::new();
@@ -1499,7 +1517,7 @@ impl MiddleEnvironment {
                     }
 
                     if let Some(caller) = self
-                        .resolve_potential_dollar_ident(scope, caller)
+                        .resolve_potential_generic_ident(scope, &caller)
                         .map(|x| x.clone())
                     {
                         if self.objects.contains_key(&caller.text) {
@@ -1521,9 +1539,9 @@ impl MiddleEnvironment {
                 }
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::CallExpression(
-                        Box::new(self.evaluate(scope, *caller)?),
-                        {
+                    node_type: MiddleNodeType::CallExpression {
+                        caller: Box::new(self.evaluate(scope, *caller)?),
+                        args: {
                             let mut lst = Vec::new();
 
                             for arg in args {
@@ -1539,7 +1557,7 @@ impl MiddleEnvironment {
 
                             lst
                         },
-                    ),
+                    },
                     span: node.span,
                 })
             }
@@ -1662,7 +1680,7 @@ impl MiddleEnvironment {
     ) -> Result<(u64, Node), MiddleErr> {
         if let NodeType::Identifier(x) = &path[0].node_type {
             let x = self
-                .resolve_potential_dollar_ident(scope, x)
+                .resolve_potential_generic_ident(scope, x)
                 .unwrap_or(x.to_string().into());
             if let Ok(s) = self.get_next_scope(*scope, &x.text) {
                 if path.len() <= 2 {
@@ -1702,13 +1720,13 @@ impl MiddleEnvironment {
                 .map(|x| x.clone())
             {
                 return Ok(Some(MiddleNode {
-                    node_type: MiddleNodeType::CallExpression(
-                        Box::new(self.evaluate(scope, overload.func.clone())?),
-                        vec![
+                    node_type: MiddleNodeType::CallExpression {
+                        caller: Box::new(self.evaluate(scope, overload.func.clone())?),
+                        args: vec![
                             (self.evaluate(scope, left)?, None),
                             (self.evaluate(scope, right)?, None),
                         ],
-                    ),
+                    },
                     span,
                 }));
             }

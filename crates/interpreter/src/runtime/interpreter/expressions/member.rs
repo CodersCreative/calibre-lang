@@ -105,11 +105,11 @@ impl InterpreterEnvironment {
                     MiddleNodeType::IntLiteral(x) => {
                         path.push(MemberPathType::Dot(x.to_string()));
                     }
-                    MiddleNodeType::CallExpression(value_node, args) => {
+                    MiddleNodeType::CallExpression { caller, args } => {
                         return self.handle_call_expr_in_path(
                             scope,
                             path,
-                            value_node.clone(),
+                            caller.clone(),
                             args.clone(),
                         );
                     }
@@ -172,11 +172,11 @@ impl InterpreterEnvironment {
                             ),
                         )?));
                     }
-                    MiddleNodeType::CallExpression(value_node, args) => {
+                    MiddleNodeType::CallExpression { caller, args } => {
                         return self.handle_call_expr_in_path(
                             scope,
                             path,
-                            value_node.clone(),
+                            caller.clone(),
                             args.clone(),
                         );
                     }

@@ -242,8 +242,9 @@ impl ComptimeEnvironment {
                         data_type,
                     }
                 }
-                MiddleNodeType::CallExpression(caller, args) => {
-                    MiddleNodeType::CallExpression(Box::new(self.evaluate(*caller, stage)?), {
+                MiddleNodeType::CallExpression { caller, args } => MiddleNodeType::CallExpression {
+                    caller: Box::new(self.evaluate(*caller, stage)?),
+                    args: {
                         let mut lst = Vec::new();
                         for arg in args {
                             lst.push((
@@ -257,8 +258,8 @@ impl ComptimeEnvironment {
                         }
 
                         lst
-                    })
-                }
+                    },
+                },
                 MiddleNodeType::BinaryExpression {
                     left,
                     right,

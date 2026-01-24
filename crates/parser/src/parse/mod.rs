@@ -97,7 +97,7 @@ impl Parser {
             x
         } else {
             self.add_err(SyntaxErr::ExpectedType);
-            ParserDataType::new(ParserInnerType::Dynamic, self.first().span.clone()).into()
+            ParserDataType::new(self.first().span.clone(), ParserInnerType::Dynamic).into()
         }
     }
 
@@ -106,7 +106,7 @@ impl Parser {
             x
         } else {
             self.add_err(SyntaxErr::ExpectedType);
-            ParserDataType::new(ParserInnerType::Dynamic, self.first().span.clone())
+            ParserDataType::new(self.first().span.clone(), ParserInnerType::Dynamic)
         }
     }
 
@@ -131,7 +131,7 @@ impl Parser {
 
                 self.expect_potential_new_type()
             } else {
-                ParserDataType::new(ParserInnerType::Dynamic, self.first().span.clone()).into()
+                ParserDataType::new(self.first().span.clone(), ParserInnerType::Dynamic).into()
             };
 
             let default = if defaulted || self.first().token_type == TokenType::Equals {
@@ -238,25 +238,25 @@ impl Parser {
             let not = self.eat();
             let typ = self.expect_type();
             Some(ParserDataType::new(
-                ParserInnerType::Result {
-                    err: Box::new(ParserDataType::new(ParserInnerType::Dynamic, not.span)),
-                    ok: Box::new(typ.clone()),
-                },
                 Span::new_from_spans(not.span, typ.span),
+                ParserInnerType::Result {
+                    err: Box::new(ParserDataType::new(not.span, ParserInnerType::Dynamic)),
+                    ok: Box::new(typ),
+                },
             ))
         } else if t.token_type == TokenType::Dollar {
             let open = self.eat();
             let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
             Some(ParserDataType::new(
-                ParserInnerType::DollarIdentifier(ident.value),
                 Span::new_from_spans(open.span, ident.span),
+                ParserInnerType::DollarIdentifier(ident.value),
             ))
         } else if mutability != RefMutability::Value {
             let mutability_token = self.eat();
             let typ = self.expect_type();
             Some(ParserDataType::new(
-                ParserInnerType::Ref(Box::new(typ.clone()), mutability.clone()),
                 Span::new_from_spans(mutability_token.span, typ.span),
+                ParserInnerType::Ref(Box::new(typ), mutability.clone()),
             ))
         } else if t.token_type == TokenType::Comparison(Comparison::Lesser) {
             let types = self.parse_type_list(
@@ -274,6 +274,7 @@ impl Parser {
             };
 
             Some(ParserDataType::new(
+                span,
                 ParserInnerType::Tuple(
                     types
                         .into_iter()
@@ -283,7 +284,6 @@ impl Parser {
                         })
                         .collect(),
                 ),
-                span,
             ))
         } else if t.token_type == TokenType::Func {
             let open = self.eat();
@@ -321,18 +321,18 @@ impl Parser {
             };
 
             Some(ParserDataType::new(
+                Span::new_from_spans(open.span, close),
                 ParserInnerType::Function {
                     return_type: Box::new(ret),
                     parameters: args,
                     is_async,
                 },
-                Span::new_from_spans(open.span, close),
             ))
         } else if t.token_type == TokenType::List {
             let open = self.eat();
             let _ = self.expect_eat(
-                &TokenType::Comparison(Comparison::Lesser),
-                SyntaxErr::ExpectedChar('<'),
+                &TokenType::ColonAngled,
+                SyntaxErr::ExpectedKeyword(String::from(":<")),
             );
 
             let t = self.expect_type();
@@ -343,8 +343,8 @@ impl Parser {
             );
 
             Some(ParserDataType::new(
-                ParserInnerType::List(Box::new(t)),
                 Span::new_from_spans(open.span, close.span),
+                ParserInnerType::List(Box::new(t)),
             ))
         } else {
             match ParserInnerType::from_str(&t.value) {
@@ -352,7 +352,7 @@ impl Parser {
                     let mut path = Vec::new();
                     let open = self.eat().span;
                     let mut close = open.clone();
-                    let x = ParserDataType::new(x, open.clone());
+                    let x = ParserDataType::new(open.clone(), x);
 
                     if let ParserInnerType::Struct(_) = x.data_type {
                         path.push(x);
@@ -362,17 +362,19 @@ impl Parser {
                             close = value.span;
 
                             path.push(ParserDataType::new(
-                                ParserInnerType::from_str(&value.value).unwrap(),
                                 value.span,
+                                ParserInnerType::from_str(&value.value).unwrap(),
                             ));
                         }
+
+                        // TODO Handle generics
 
                         if path.len() == 1 {
                             Some(path.remove(0))
                         } else {
                             Some(ParserDataType::new(
-                                ParserInnerType::Scope(path),
                                 Span::new_from_spans(open, close),
+                                ParserInnerType::Scope(path),
                             ))
                         }
                     } else {
@@ -385,23 +387,23 @@ impl Parser {
 
         if self.first().token_type == TokenType::Question {
             let close = self.eat();
-
+            let typ2: ParserDataType<Node> = typ?;
             typ = Some(ParserDataType::new(
-                ParserInnerType::Option(Box::new(typ.clone()?)),
-                Span::new_from_spans(typ?.span, close.span),
+                Span::new_from_spans(typ2.span, close.span),
+                ParserInnerType::Option(Box::new(typ2)),
             ));
         }
 
         if self.first().token_type == TokenType::Not {
             let _ = self.eat();
             let t = self.parse_type()?;
-
+            let typ2: ParserDataType<Node> = typ?;
             typ = Some(ParserDataType::new(
+                Span::new_from_spans(typ2.span, t.span),
                 ParserInnerType::Result {
-                    err: Box::new(typ.clone()?),
-                    ok: Box::new(t.clone()),
+                    err: Box::new(typ2),
+                    ok: Box::new(t),
                 },
-                Span::new_from_spans(typ?.span, t.span),
             ));
         }
 
@@ -437,10 +439,10 @@ impl Parser {
             }
         } else {
             Node::new(
+                span,
                 NodeType::ParenExpression {
                     value: Box::new(value),
                 },
-                span,
             )
         }
     }
@@ -449,10 +451,10 @@ impl Parser {
         let mut values = Vec::new();
         let open = self.expect_eat(&TokenType::List, SyntaxErr::ExpectedType);
 
-        let t = if self.first().token_type == TokenType::Comparison(Comparison::Lesser) {
+        let t = if self.first().token_type == TokenType::ColonAngled {
             let _ = self.expect_eat(
-                &TokenType::Comparison(Comparison::Lesser),
-                SyntaxErr::ExpectedChar('<'),
+                &TokenType::ColonAngled,
+                SyntaxErr::ExpectedKeyword(String::from(":<")),
             );
 
             let t = self.expect_potential_new_type();
@@ -494,13 +496,13 @@ impl Parser {
                 );
 
                 return Node::new(
+                    Span::new_from_spans(open.span, close.span),
                     NodeType::IterExpression {
                         data_type: t,
                         map: Box::new(values[0].clone()),
                         loop_type: Box::new(loop_type),
                         conditionals,
                     },
-                    Span::new_from_spans(open.span, close.span),
                 );
             } else if self.first().token_type != TokenType::Close(Bracket::Square) {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
@@ -513,8 +515,8 @@ impl Parser {
         );
 
         Node::new(
-            NodeType::ListLiteral(t, values),
             Span::new_from_spans(open.span, close.span),
+            NodeType::ListLiteral(t, values),
         )
     }
 }

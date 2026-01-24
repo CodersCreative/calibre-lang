@@ -482,7 +482,7 @@ impl<'a> FunctionTranslator<'a> {
                     },
                 )
             }
-            MiddleNodeType::CallExpression(caller, args) => {
+            MiddleNodeType::CallExpression { caller, args } => {
                 let callee = self.translate(*caller);
 
                 if let RuntimeType::Function {

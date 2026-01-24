@@ -18,7 +18,7 @@ const BASIC_CODE: &str = r#"
     const main = fn (x : int) -> float => {
         // let forty = fn () -> float => 40.0;    
         let mut index : float = 1.0;
-        let arr : list<float> = list[10.5, 40.8, 50.2];
+        let arr : list:<float> = list[10.5, 40.8, 50.2];
         let tpl : <float, float> = tuple(10.0, 90.8);
         let mut counter : float = 1.0;
         let french = Language.FRENCH;

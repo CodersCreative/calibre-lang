@@ -56,12 +56,12 @@ fn file(
         .0
         .evaluate(
             &interpreter_result.1,
-            MiddleNode::new_from_type(MiddleNodeType::CallExpression(
-                Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
+            MiddleNode::new_from_type(MiddleNodeType::CallExpression {
+                caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
                     name.into(),
                 ))),
                 args,
-            )),
+            }),
         )
         .into_diagnostic()?;
 

@@ -7,7 +7,7 @@ impl Parser {
     pub fn parse_call_member_expression(&mut self) -> Node {
         let member = self.parse_scope_member_expression();
 
-        if self.first().token_type == TokenType::Open(Bracket::Paren) {
+        if self.is_first_potential_call() {
             return self.parse_call_expression(member);
         }
 
@@ -15,14 +15,19 @@ impl Parser {
     }
 
     pub fn parse_call_expression(&mut self, caller: Node) -> Node {
+        let generic_types = self.parse_generic_types();
         let args = self.parse_arguments(
             TokenType::Open(Bracket::Paren),
             TokenType::Close(Bracket::Paren),
         );
 
         let mut expression = Node::new(
-            NodeType::CallExpression(Box::new(caller.clone()), args),
             caller.span,
+            NodeType::CallExpression {
+                caller: Box::new(caller),
+                generic_types,
+                args,
+            },
         );
 
         if self.first().token_type == TokenType::Open(Bracket::Paren) {
@@ -33,7 +38,7 @@ impl Parser {
     }
 
     pub fn parse_purely_member(&mut self) -> Node {
-        let first = self.expect_potential_dollar_ident();
+        let first = self.expect_potential_generic_type_ident();
 
         let mut path = vec![(
             Node {
@@ -50,7 +55,7 @@ impl Parser {
                 let first = self.expect_potential_dollar_ident();
                 path.push((
                     Node {
-                        node_type: NodeType::Identifier(first.clone()),
+                        node_type: NodeType::Identifier(first.clone().into()),
                         span: *first.span(),
                     },
                     false,
@@ -69,7 +74,7 @@ impl Parser {
             path.remove(0).0
         } else {
             let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
-            Node::new(NodeType::MemberExpression { path: path }, first)
+            Node::new(first, NodeType::MemberExpression { path: path })
         }
     }
 
@@ -87,7 +92,7 @@ impl Parser {
             path.remove(0)
         } else {
             let first = Span::new_from_spans(path[0].span, path.last().unwrap().span);
-            Node::new(NodeType::ScopeMemberExpression { path: path }, first)
+            Node::new(first, NodeType::ScopeMemberExpression { path: path })
         }
     }
 
@@ -97,6 +102,8 @@ impl Parser {
             && !self.first().value.contains(" ")
         {
             self.parse_member_expression(Some(node))
+        } else if !self.is_eof() && self.is_first_potential_call() {
+            self.parse_call_expression(node)
         } else {
             node
         }
@@ -135,12 +142,12 @@ impl Parser {
                             let _ = self.eat();
                             let data = self.parse_statement();
                             return Node::new(
+                                Span::new_from_spans(path[0].0.span, path[1].0.span),
                                 NodeType::EnumExpression {
                                     identifier: identifier.clone(),
-                                    value: value.clone(),
+                                    value: value.clone().into(),
                                     data: Some(Box::new(data)),
                                 },
-                                Span::new_from_spans(path[0].0.span, path[1].0.span),
                             );
                         }
                     }
@@ -154,11 +161,11 @@ impl Parser {
                 if self.first().token_type == TokenType::Open(Bracket::Curly) {
                     let data = self.parse_potential_key_value();
                     return Node::new(
+                        path[0].0.span,
                         NodeType::StructLiteral {
                             identifier: identifier.clone(),
                             value: data,
                         },
-                        path[0].0.span,
                     );
                 }
             }
@@ -168,7 +175,7 @@ impl Parser {
             path.remove(0).0
         } else {
             let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
-            Node::new(NodeType::MemberExpression { path: path }, first)
+            Node::new(first, NodeType::MemberExpression { path: path })
         }
     }
 

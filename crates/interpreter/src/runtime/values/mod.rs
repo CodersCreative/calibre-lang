@@ -104,7 +104,9 @@ impl InterpreterFrom<ParserDataType<MiddleNode>> for RuntimeType {
         value: ParserDataType<MiddleNode>,
     ) -> Result<Self, ScopeErr> {
         Ok(match value.data_type {
-            ParserInnerType::Null | ParserInnerType::DollarIdentifier(_) => Self::Null,
+            ParserInnerType::Null
+            | ParserInnerType::DollarIdentifier(_)
+            | ParserInnerType::StructWithGenerics { .. } => Self::Null,
             ParserInnerType::NativeFunction(x) => {
                 Self::NativeFn(Box::new(RuntimeType::interpreter_from(env, scope, *x)?))
             }

@@ -16,8 +16,8 @@ impl Parser {
                     self.add_err(SyntaxErr::ExpectedType);
                     TypeDefType::NewType(Box::new(
                         crate::ast::ParserDataType::new(
-                            crate::ast::ParserInnerType::Dynamic,
                             self.first().span,
+                            crate::ast::ParserInnerType::Dynamic,
                         )
                         .into(),
                     ))
@@ -119,7 +119,7 @@ impl Parser {
             };
         }
 
-        let identifier = self.expect_potential_dollar_ident();
+        let identifier = self.expect_potential_generic_type_ident();
 
         let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
 
@@ -127,12 +127,12 @@ impl Parser {
 
         let overloads = self.parse_overloads();
         Node::new(
+            *identifier.span(),
             NodeType::TypeDeclaration {
-                identifier: identifier.clone(),
+                identifier,
                 object,
                 overloads,
             },
-            *identifier.span(),
         )
     }
 

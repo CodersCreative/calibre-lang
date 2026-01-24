@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use calibre_parser::{
     ast::{
-        CompStage, IfComparisonType, LoopType, Node, NodeType, ObjectMap, ObjectType,
+        CompStage, GenericTypes, IfComparisonType, LoopType, Node, NodeType, ObjectMap, ObjectType,
         ParserDataType, ParserInnerType, ParserText, PotentialNewType, RefMutability, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperation, Comparison},
@@ -42,6 +42,16 @@ pub fn middle_data_type_to_node(data_type: ParserDataType<MiddleNode>) -> Parser
             ParserInnerType::Str => ParserInnerType::Str,
             ParserInnerType::Char => ParserInnerType::Char,
             ParserInnerType::Range => ParserInnerType::Range,
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } => ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types: generic_types
+                    .into_iter()
+                    .map(|x| middle_data_type_to_node(x))
+                    .collect(),
+            },
             ParserInnerType::Tuple(x) => {
                 ParserInnerType::Tuple(x.into_iter().map(|x| middle_data_type_to_node(x)).collect())
             }
@@ -179,7 +189,10 @@ pub enum MiddleNodeType {
     MemberExpression {
         path: Vec<(MiddleNode, bool)>,
     },
-    CallExpression(Box<MiddleNode>, Vec<(MiddleNode, Option<MiddleNode>)>),
+    CallExpression {
+        caller: Box<MiddleNode>,
+        args: Vec<(MiddleNode, Option<MiddleNode>)>,
+    },
     BinaryExpression {
         left: Box<MiddleNode>,
         right: Box<MiddleNode>,
@@ -290,6 +303,7 @@ impl Into<NodeType> for MiddleNodeType {
                 return_type,
                 is_async,
             } => NodeType::FunctionDeclaration {
+                generics: GenericTypes::default(),
                 parameters: {
                     let mut lst = Vec::new();
 
@@ -414,8 +428,10 @@ impl Into<NodeType> for MiddleNodeType {
                     lst
                 },
             },
-            Self::CallExpression(caller, args) => {
-                NodeType::CallExpression(Box::new((*caller).into()), {
+            Self::CallExpression { caller, args } => NodeType::CallExpression {
+                generic_types: Vec::new(),
+                caller: Box::new((*caller).into()),
+                args: {
                     let mut lst = Vec::new();
 
                     for arg in args {
@@ -429,8 +445,8 @@ impl Into<NodeType> for MiddleNodeType {
                         ));
                     }
                     lst
-                })
-            }
+                },
+            },
             Self::BinaryExpression {
                 left,
                 right,
@@ -469,8 +485,9 @@ impl Into<NodeType> for MiddleNodeType {
                     value.0.contains_key("0")
                 };
                 if is_tuple {
-                    NodeType::CallExpression(
-                        Box::new(Node::new_from_type(NodeType::Identifier(
+                    NodeType::CallExpression {
+                        generic_types: Vec::new(),
+                        caller: Box::new(Node::new_from_type(NodeType::Identifier(
                             if let Some(identifier) = identifier {
                                 identifier
                             } else {
@@ -478,7 +495,7 @@ impl Into<NodeType> for MiddleNodeType {
                             }
                             .into(),
                         ))),
-                        {
+                        args: {
                             let mut lst = Vec::new();
                             let mut value: Vec<(String, MiddleNode)> =
                                 value.0.into_iter().collect();
@@ -488,7 +505,7 @@ impl Into<NodeType> for MiddleNodeType {
                             }
                             lst
                         },
-                    )
+                    }
                 } else {
                     NodeType::StructLiteral {
                         identifier: identifier.unwrap().into(),

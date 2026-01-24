@@ -81,8 +81,8 @@ impl MiddleNode {
                 left.append(&mut right.identifiers_used());
                 left
             }
-            MiddleNodeType::CallExpression(callee, args) => {
-                let mut amt = callee.identifiers_used();
+            MiddleNodeType::CallExpression { caller, args } => {
+                let mut amt = caller.identifiers_used();
 
                 for n in args {
                     if let Some(n) = &n.1 {

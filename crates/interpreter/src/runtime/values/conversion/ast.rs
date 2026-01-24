@@ -95,30 +95,30 @@ impl InterpreterFrom<RuntimeValue> for MiddleNodeType {
                     lst,
                 ))
             }
-            RuntimeValue::Option(Some(value), _) => Ok(MiddleNodeType::CallExpression(
-                Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
+            RuntimeValue::Option(Some(value), _) => Ok(MiddleNodeType::CallExpression {
+                caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
                     ParserText::from(String::from("some")),
                 ))),
-                vec![(MiddleNode::interpreter_from(env, scope, *value)?, None)],
-            )),
-            RuntimeValue::Option(None, _) => Ok(MiddleNodeType::CallExpression(
-                Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
+                args: vec![(MiddleNode::interpreter_from(env, scope, *value)?, None)],
+            }),
+            RuntimeValue::Option(None, _) => Ok(MiddleNodeType::CallExpression {
+                caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
                     ParserText::from(String::from("none")),
                 ))),
-                Vec::new(),
-            )),
-            RuntimeValue::Result(Ok(value), _) => Ok(MiddleNodeType::CallExpression(
-                Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
+                args: Vec::new(),
+            }),
+            RuntimeValue::Result(Ok(value), _) => Ok(MiddleNodeType::CallExpression {
+                caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
                     ParserText::from(String::from("ok")),
                 ))),
-                vec![(MiddleNode::interpreter_from(env, scope, *value)?, None)],
-            )),
-            RuntimeValue::Result(Err(value), _) => Ok(MiddleNodeType::CallExpression(
-                Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
+                args: vec![(MiddleNode::interpreter_from(env, scope, *value)?, None)],
+            }),
+            RuntimeValue::Result(Err(value), _) => Ok(MiddleNodeType::CallExpression {
+                caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
                     ParserText::from(String::from("err")),
                 ))),
-                vec![(MiddleNode::interpreter_from(env, scope, *value)?, None)],
-            )),
+                args: vec![(MiddleNode::interpreter_from(env, scope, *value)?, None)],
+            }),
             RuntimeValue::NativeFunction(x) => Ok(MiddleNodeType::Identifier(ParserText::from(
                 x.get_resolved_name(env),
             ))),

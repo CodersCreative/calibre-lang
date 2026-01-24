@@ -85,6 +85,7 @@ pub enum TokenType {
     Integer,
     String,
     Char,
+    ColonAngled,
     Identifier,
     Equals,
     Dollar,
@@ -189,6 +190,7 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
         (String::from("=>"), TokenType::FatArrow),
         (String::from(".."), TokenType::Range),
         (String::from("::"), TokenType::DoubleColon),
+        (String::from(":<"), TokenType::ColonAngled),
         (
             String::from("**"),
             TokenType::BinaryOperator(BinaryOperator::Pow),

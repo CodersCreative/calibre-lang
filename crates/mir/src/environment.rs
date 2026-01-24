@@ -5,7 +5,8 @@ use calibre_parser::{
     Parser,
     ast::{
         Node, NodeType, ObjectMap, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
+        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType,
+        VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperation, Comparison},
     },
@@ -243,6 +244,16 @@ impl MiddleEnvironment {
                 ParserInnerType::Str => ParserInnerType::Str,
                 ParserInnerType::Char => ParserInnerType::Char,
                 ParserInnerType::Range => ParserInnerType::Range,
+                ParserInnerType::StructWithGenerics {
+                    identifier,
+                    generic_types,
+                } => ParserInnerType::StructWithGenerics {
+                    identifier,
+                    generic_types: generic_types
+                        .into_iter()
+                        .map(|x| self.resolve_comp_data_type(scope, x))
+                        .collect(),
+                },
                 ParserInnerType::Tuple(x) => ParserInnerType::Tuple(
                     x.into_iter()
                         .map(|x| self.resolve_comp_data_type(scope, x))
@@ -292,6 +303,38 @@ impl MiddleEnvironment {
         }
     }
 
+    pub fn resolve_potential_generic_ident(
+        &self,
+        scope: &u64,
+        iden: &PotentialGenericTypeIdentifier,
+    ) -> Option<ParserText> {
+        match iden {
+            PotentialGenericTypeIdentifier::Identifier(x) => {
+                self.resolve_potential_dollar_ident(scope, &x)
+            }
+            PotentialGenericTypeIdentifier::Generic {
+                identifier,
+                generic_types,
+            } => todo!(),
+        }
+    }
+
+    pub fn resolve_dollar_ident_potential_generic_only(
+        &self,
+        scope: &u64,
+        iden: &PotentialGenericTypeIdentifier,
+    ) -> Option<ParserText> {
+        match iden {
+            PotentialGenericTypeIdentifier::Identifier(x) => {
+                self.resolve_dollar_ident_only(scope, &x)
+            }
+            PotentialGenericTypeIdentifier::Generic {
+                identifier,
+                generic_types,
+            } => todo!(),
+        }
+    }
+
     pub fn resolve_potential_dollar_ident(
         &self,
         scope: &u64,
@@ -303,11 +346,12 @@ impl MiddleEnvironment {
                 if let Some(text) = self
                     .resolve_macro_arg(scope, x)
                     .map(|x| match &x.node_type {
-                        NodeType::Identifier(PotentialDollarIdentifier::DollarIdentifier(x)) => {
-                            Some(x.clone())
-                        }
-                        NodeType::Identifier(PotentialDollarIdentifier::Identifier(x)) => {
-                            Some(x.clone())
+                        NodeType::Identifier(x) => {
+                            // TODO Handle generics
+                            match x.get_ident() {
+                                PotentialDollarIdentifier::DollarIdentifier(x) => Some(x.clone()),
+                                PotentialDollarIdentifier::Identifier(x) => Some(x.clone()),
+                            }
                         }
                         _ => None,
                     })
@@ -331,11 +375,12 @@ impl MiddleEnvironment {
             PotentialDollarIdentifier::DollarIdentifier(x) => self
                 .resolve_macro_arg(scope, x)
                 .map(|x| match &x.node_type {
-                    NodeType::Identifier(PotentialDollarIdentifier::DollarIdentifier(x)) => {
-                        Some(x.clone())
-                    }
-                    NodeType::Identifier(PotentialDollarIdentifier::Identifier(x)) => {
-                        Some(x.clone())
+                    NodeType::Identifier(x) => {
+                        // TODO Handle generics
+                        match x.get_ident() {
+                            PotentialDollarIdentifier::DollarIdentifier(x) => Some(x.clone()),
+                            PotentialDollarIdentifier::Identifier(x) => Some(x.clone()),
+                        }
                     }
                     _ => None,
                 })
@@ -514,7 +559,7 @@ impl MiddleEnvironment {
         self.variables.insert(
             name_name.clone(),
             MiddleVariable {
-                data_type: ParserDataType::new(ParserInnerType::Str, Span::default()),
+                data_type: ParserDataType::from(ParserInnerType::Str),
                 var_type: VarType::Constant,
                 location: None,
             },
@@ -524,7 +569,7 @@ impl MiddleEnvironment {
         self.variables.insert(
             file_name.clone(),
             MiddleVariable {
-                data_type: ParserDataType::new(ParserInnerType::Str, Span::default()),
+                data_type: ParserDataType::from(ParserInnerType::Str),
                 var_type: VarType::Constant,
                 location: None,
             },
@@ -944,11 +989,12 @@ impl MiddleEnvironment {
             | NodeType::StructLiteral { identifier, .. } => Some(ParserDataType {
                 span: *identifier.span(),
                 data_type: ParserInnerType::Struct(
-                    self.resolve_potential_dollar_ident(scope, &identifier)?
+                    self.resolve_potential_generic_ident(scope, &identifier)?
                         .to_string(),
                 ),
             }),
             NodeType::FunctionDeclaration {
+                generics: _,
                 parameters,
                 body: _,
                 return_type,
@@ -972,6 +1018,7 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             NodeType::FnMatchDeclaration {
+                generics: _,
                 parameters,
                 body: _,
                 return_type,
@@ -1111,7 +1158,12 @@ impl MiddleEnvironment {
                 }) => Some(*x),
                 x => x,
             },
-            NodeType::CallExpression(caller, args) => {
+            NodeType::CallExpression {
+                caller,
+                generic_types,
+                args,
+            } => {
+                // TODO handle generics
                 let caller = self
                     .quick_resolve_potential_scope_member(scope, *caller.clone())
                     .unwrap();
@@ -1129,7 +1181,7 @@ impl MiddleEnvironment {
                         });
                     }
 
-                    if let Some(caller) = self.resolve_potential_dollar_ident(scope, caller) {
+                    if let Some(caller) = self.resolve_potential_generic_ident(scope, caller) {
                         if self.objects.contains_key(&caller.text) {
                             return Some(ParserDataType {
                                 data_type: ParserInnerType::Struct(caller.to_string()),
@@ -1152,11 +1204,11 @@ impl MiddleEnvironment {
                         is_async: _,
                     } => Some(*return_type.clone()),
                     ParserInnerType::NativeFunction(x) => Some(*x),
-                    _ => todo!(),
+                    x => todo!("{:?}", x),
                 }
             }
             NodeType::Identifier(x) => {
-                if let Some(iden) = self.resolve_potential_dollar_ident(scope, &x) {
+                if let Some(iden) = self.resolve_potential_generic_ident(scope, &x) {
                     if let Some(x) = self.variables.get(&iden.text) {
                         return Some(x.data_type.clone());
                     }

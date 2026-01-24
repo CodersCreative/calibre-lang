@@ -179,12 +179,13 @@ impl MiddleNodeType {
 
                 MiddleNodeType::MemberExpression { path }
             }
-            MiddleNodeType::CallExpression(caller, args) => MiddleNodeType::CallExpression(
-                Box::new(caller.rename(state)),
-                args.into_iter()
+            MiddleNodeType::CallExpression { caller, args } => MiddleNodeType::CallExpression {
+                caller: Box::new(caller.rename(state)),
+                args: args
+                    .into_iter()
                     .map(|x| (x.0.rename(state), x.1.map(|x| x.rename(state))))
                     .collect(),
-            ),
+            },
             MiddleNodeType::BinaryExpression {
                 left,
                 right,
