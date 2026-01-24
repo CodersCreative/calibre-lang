@@ -60,8 +60,6 @@ trait CompSciStudent : Programmer + Student {
 
 /* String functions pseudocode
 // All string functions need to take in 2 lists with the first one needing to be a list<str>, however they can have any return type
-
-// All args will be automatically converted to a string;
 // This just showcases how to have a basic format function like in rust
 const fmt = fn(splits : list<str>, inputs : list<str>) -> str => {
 	let mut txt : str = "";
@@ -85,9 +83,11 @@ const main = fn() => {
 
 // Other potential configs
 // For intaking a variety of different types
-// const fmt = fn(splits : list<str>, inputs : list<dyn>) -> str => ...
+// const fmt = fn(splits : list<str>, ..inputs : list<dyn>) -> str => ...
 // Or for taking advantage of generics
-// const fmt = fn<T>(splits : list<str>, inputs : list<T>) -> str => ...
+// const fmt = fn<T>(splits : list<str>, ..inputs : list<T>) -> str => ...
+// It will also allow for all the inputs to be individually wriiten like this:
+// const fmt = fn(splits : list<str>, num : int, txt : str) -> str => ...// 
 */
 
 type NumType = struct {
@@ -114,6 +114,10 @@ let @float_mult_scope => @mult_scope [$ident = adder_float, $t = type : float];
 => @float_mult_scope [];
 => @float_mult_scope [$ident = adder_flt];
 
+const print_text = fn (values : list:<str>) => {
+	print(values);
+};
+
 const main = fn () => {
 	print(adder_float(90, 10.6));
 
@@ -125,6 +129,8 @@ const main = fn () => {
 	print(res);
 	print("overload done");
 	
+	// The inputs get combined into a list
+	print_text("1", "2", "6");
 	
 	let mut d = comp, 0 => list[list[2, 0, 4], list[1, 9, 3], list[4, 7, 9], list[9, 0, 1]];
 	let lst = list:<int>[2, 0, 4];

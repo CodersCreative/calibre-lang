@@ -161,6 +161,9 @@ impl Formatter {
             NodeType::Break => String::from("break"),
             NodeType::Continue => String::from("continue"),
             NodeType::EmptyLine => String::new(),
+            NodeType::StringFunction { caller, input } => {
+                format!("{}{:?}", self.format(caller), input)
+            }
             NodeType::ImportStatement {
                 module,
                 alias,
@@ -436,31 +439,26 @@ impl Formatter {
                 txt
             }
 
-            NodeType::FunctionDeclaration {
-                generics,
-                parameters,
-                body,
-                return_type,
-                is_async,
-            } => {
-                let mut txt = if *is_async {
+            NodeType::FunctionDeclaration { header, body } => {
+                let mut txt = if header.is_async {
                     String::from("fn async")
                 } else {
                     String::from("fn")
                 };
 
-                if !generics.0.is_empty() {
-                    txt.push_str(&format!(" {}", self.fmt_generic_types(generics)));
+                if !header.generics.0.is_empty() {
+                    txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
                 }
 
                 txt.push_str(" (");
 
-                let mut adjusted_params = parameters
+                let mut adjusted_params = header
+                    .parameters
                     .first()
                     .map(|x| vec![vec![x]])
                     .unwrap_or(Vec::new());
 
-                for param in parameters.iter().skip(1) {
+                for param in header.parameters.iter().skip(1) {
                     let last = adjusted_params.last().unwrap().first().unwrap();
                     if last.1 == param.1 && last.2 == param.2 {
                         adjusted_params.last_mut().unwrap().push(param);
@@ -488,8 +486,11 @@ impl Formatter {
                 let mut txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
 
-                if return_type != &PotentialNewType::DataType(ParserInnerType::Null.into()) {
-                    txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
+                if header.return_type != PotentialNewType::DataType(ParserInnerType::Null.into()) {
+                    txt.push_str(&format!(
+                        " -> {}",
+                        self.fmt_potential_new_type(&header.return_type)
+                    ));
                 }
 
                 txt.push_str(&format!(" {}", self.format(body)));
@@ -555,30 +556,30 @@ impl Formatter {
             NodeType::MatchStatement { value, body } => {
                 format!("match {} {}", self.format(value), self.fmt_match_body(body))
             }
-            NodeType::FnMatchDeclaration {
-                generics,
-                parameters,
-                body,
-                return_type,
-                is_async,
-            } => {
+            NodeType::FnMatchDeclaration { header, body } => {
                 let mut txt = String::from("match");
-                if *is_async {
+                if header.is_async {
                     txt.push_str(" async");
                 }
 
-                if !generics.0.is_empty() {
-                    txt.push_str(&format!(" {}", self.fmt_generic_types(generics)));
+                if !header.generics.0.is_empty() {
+                    txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
                 }
 
-                txt.push_str(&format!(" {}", self.fmt_potential_new_type(&parameters.1)));
+                txt.push_str(&format!(
+                    " {}",
+                    self.fmt_potential_new_type(&header.parameters[0].1)
+                ));
 
-                if let Some(default) = &parameters.2 {
+                if let Some(default) = &header.parameters[0].2 {
                     txt.push_str(&format!(" = {}", self.format(&*default)));
                 }
 
-                if return_type != &PotentialNewType::DataType(ParserInnerType::Null.into()) {
-                    txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
+                if header.return_type != PotentialNewType::DataType(ParserInnerType::Null.into()) {
+                    txt.push_str(&format!(
+                        " -> {}",
+                        self.fmt_potential_new_type(&header.return_type)
+                    ));
                 }
 
                 txt.push_str(&format!(" {}", self.fmt_match_body(body)));
@@ -911,17 +912,22 @@ impl Formatter {
             for func in overloads {
                 let func_txt = {
                     let mut txt = format!("const \"{}\" = ", func.operator);
-                    txt.push_str(if func.is_async { "fn async" } else { "fn" });
+                    txt.push_str(if func.header.is_async {
+                        "fn async"
+                    } else {
+                        "fn"
+                    });
 
                     txt.push_str(" (");
 
                     let mut adjusted_params = func
+                        .header
                         .parameters
                         .first()
                         .map(|x| vec![vec![x]])
                         .unwrap_or(Vec::new());
 
-                    for param in func.parameters.iter().skip(1) {
+                    for param in func.header.parameters.iter().skip(1) {
                         let last = adjusted_params.last().unwrap().first().unwrap();
                         if last.1 == param.1 {
                             adjusted_params.last_mut().unwrap().push(param);
@@ -946,7 +952,7 @@ impl Formatter {
 
                     txt.push_str(&format!(
                         ") -> {} {}",
-                        self.fmt_potential_new_type(&func.return_type),
+                        self.fmt_potential_new_type(&func.header.return_type),
                         self.format(&func.body)
                     ));
 

@@ -423,12 +423,12 @@ impl MiddleEnvironment {
                     let overload = MiddleOverload {
                         operator: Operator::from_str(&overload.operator.text).unwrap(),
                         return_type: self
-                            .resolve_potential_new_type(scope, overload.return_type.clone()),
+                            .resolve_potential_new_type(scope, overload.header.return_type.clone()),
                         parameters: {
                             let mut params = Vec::new();
                             let mut contains = false;
 
-                            for param in overload.parameters.iter() {
+                            for param in overload.header.parameters.iter() {
                                 let ty = self.resolve_potential_new_type(scope, param.1.clone());
 
                                 if let ParserInnerType::Struct(x) =
@@ -993,46 +993,26 @@ impl MiddleEnvironment {
                         .to_string(),
                 ),
             }),
-            NodeType::FunctionDeclaration {
-                generics: _,
-                parameters,
-                body: _,
-                return_type,
-                is_async,
-            } => Some(ParserDataType {
+            NodeType::FunctionDeclaration { header, .. }
+            | NodeType::FnMatchDeclaration { header, .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Function {
                     return_type: Box::new(
-                        self.resolve_potential_new_type(scope, return_type.clone()),
+                        self.resolve_potential_new_type(scope, header.return_type.clone()),
                     ),
                     parameters: {
                         let mut params = Vec::new();
 
-                        for param in parameters {
+                        for param in header.parameters.clone() {
                             params.push(self.resolve_potential_new_type(scope, param.1.clone()));
                         }
 
                         params
                     },
-                    is_async: *is_async,
+                    is_async: header.is_async,
                 },
                 span: node.span,
             }),
-            NodeType::FnMatchDeclaration {
-                generics: _,
-                parameters,
-                body: _,
-                return_type,
-                is_async,
-            } => Some(ParserDataType {
-                data_type: ParserInnerType::Function {
-                    return_type: Box::new(
-                        self.resolve_potential_new_type(scope, return_type.clone()),
-                    ),
-                    parameters: vec![self.resolve_potential_new_type(scope, parameters.1.clone())],
-                    is_async: *is_async,
-                },
-                span: node.span,
-            }),
+
             NodeType::NotExpression { .. }
             | NodeType::InDeclaration { .. }
             | NodeType::IsDeclaration { .. } => Some(ParserDataType {

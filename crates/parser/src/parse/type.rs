@@ -1,6 +1,9 @@
 use crate::{
     Parser, SyntaxErr,
-    ast::{Node, NodeType, ObjectType, Overload, ParserDataType, ParserInnerType, TypeDefType},
+    ast::{
+        FunctionHeader, GenericTypes, Node, NodeType, ObjectType, Overload, ParserDataType,
+        ParserInnerType, TypeDefType,
+    },
     lexer::{Bracket, Span, TokenType},
 };
 
@@ -88,11 +91,14 @@ impl Parser {
             let _ = self.parse_delimited();
 
             overloads.push(Overload {
+                header: FunctionHeader {
+                    generics: GenericTypes::default(),
+                    parameters,
+                    return_type,
+                    is_async,
+                },
                 operator: operator.into(),
-                parameters: parameters.into_iter().map(|x| (x.0, x.1)).collect(),
-                return_type,
                 body: Box::new(block),
-                is_async,
             });
         }
 

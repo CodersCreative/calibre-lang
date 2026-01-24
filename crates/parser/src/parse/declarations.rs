@@ -1,9 +1,9 @@
 use crate::{
     Parser, SyntaxErr,
     ast::{
-        GenericType, GenericTypes, IfComparisonType, LoopType, MatchArmType, NamedScope, Node,
-        ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialNewType,
-        TryCatch, VarType, binary::BinaryOperator, comparison::Comparison,
+        FunctionHeader, GenericType, GenericTypes, IfComparisonType, LoopType, MatchArmType,
+        NamedScope, Node, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
+        PotentialNewType, TryCatch, VarType, binary::BinaryOperator, comparison::Comparison,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -655,7 +655,7 @@ impl Parser {
 
         let default = if self.first().token_type == TokenType::Equals {
             let _ = self.eat();
-            Some(Box::new(self.parse_statement()))
+            Some(self.parse_statement())
         } else {
             None
         };
@@ -686,17 +686,19 @@ impl Parser {
         let func = Node::new(
             Span::new_from_spans(open.span, close.span),
             NodeType::FnMatchDeclaration {
-                generics: generic_types,
-                parameters: (
-                    ParserText::new(Span::default(), String::from("input_value")).into(),
-                    typ.unwrap_or(
-                        ParserDataType::new(Span::default(), ParserInnerType::Dynamic).into(),
-                    ),
-                    default,
-                ),
+                header: FunctionHeader {
+                    generics: generic_types,
+                    parameters: vec![(
+                        ParserText::new(Span::default(), String::from("input_value")).into(),
+                        typ.unwrap_or(
+                            ParserDataType::new(Span::default(), ParserInnerType::Dynamic).into(),
+                        ),
+                        default,
+                    )],
+                    return_type,
+                    is_async,
+                },
                 body: patterns,
-                return_type,
-                is_async,
             },
         );
 
@@ -793,11 +795,13 @@ impl Parser {
         let func = Node::new(
             Span::new_from_spans(open.span, block.span),
             NodeType::FunctionDeclaration {
-                generics: generic_types,
-                parameters,
+                header: FunctionHeader {
+                    generics: generic_types,
+                    parameters,
+                    return_type,
+                    is_async,
+                },
                 body: Box::new(block),
-                return_type,
-                is_async,
             },
         );
 

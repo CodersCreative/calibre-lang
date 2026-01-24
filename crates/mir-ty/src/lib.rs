@@ -2,8 +2,9 @@ use std::{collections::HashMap, fmt::Display};
 
 use calibre_parser::{
     ast::{
-        CompStage, GenericTypes, IfComparisonType, LoopType, Node, NodeType, ObjectMap, ObjectType,
-        ParserDataType, ParserInnerType, ParserText, PotentialNewType, RefMutability, VarType,
+        CompStage, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
+        ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText, PotentialNewType,
+        RefMutability, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperation, Comparison},
     },
@@ -303,26 +304,28 @@ impl Into<NodeType> for MiddleNodeType {
                 return_type,
                 is_async,
             } => NodeType::FunctionDeclaration {
-                generics: GenericTypes::default(),
-                parameters: {
-                    let mut lst = Vec::new();
+                header: FunctionHeader {
+                    generics: GenericTypes::default(),
+                    parameters: {
+                        let mut lst = Vec::new();
 
-                    for param in parameters {
-                        lst.push((
-                            param.0.into(),
-                            middle_data_type_to_new_type(param.1),
-                            if let Some(x) = param.2 {
-                                Some(x.into())
-                            } else {
-                                None
-                            },
-                        ));
-                    }
-                    lst
+                        for param in parameters {
+                            lst.push((
+                                param.0.into(),
+                                middle_data_type_to_new_type(param.1),
+                                if let Some(x) = param.2 {
+                                    Some(x.into())
+                                } else {
+                                    None
+                                },
+                            ));
+                        }
+                        lst
+                    },
+                    return_type: middle_data_type_to_new_type(return_type),
+                    is_async,
                 },
                 body: Box::new((*body).into()),
-                return_type: middle_data_type_to_new_type(return_type),
-                is_async,
             },
             Self::AssignmentExpression { identifier, value } => NodeType::AssignmentExpression {
                 identifier: Box::new((*identifier).into()),

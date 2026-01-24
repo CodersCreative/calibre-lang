@@ -666,24 +666,15 @@ impl Display for CompStage {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Overload {
     pub operator: ParserText,
-    pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
     pub body: Box<Node>,
-    pub return_type: PotentialNewType,
-    pub is_async: bool,
+    pub header: FunctionHeader,
 }
 
 impl Into<Node> for Overload {
     fn into(self) -> Node {
         Node::new_from_type(NodeType::FunctionDeclaration {
-            generics: GenericTypes::default(),
-            parameters: self
-                .parameters
-                .into_iter()
-                .map(|x| (x.0, x.1, None))
-                .collect(),
+            header: self.header,
             body: self.body,
-            return_type: self.return_type,
-            is_async: self.is_async,
         })
     }
 }
@@ -695,10 +686,22 @@ impl Overload {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct FunctionHeader {
+    pub generics: GenericTypes,
+    pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType, Option<Node>)>,
+    pub return_type: PotentialNewType,
+    pub is_async: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     Break,
     Continue,
     EmptyLine,
+    StringFunction {
+        caller: Box<Node>,
+        input: ParserText,
+    },
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
@@ -754,22 +757,12 @@ pub enum NodeType {
         body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
     },
     FnMatchDeclaration {
-        generics: GenericTypes,
-        parameters: (
-            PotentialDollarIdentifier,
-            PotentialNewType,
-            Option<Box<Node>>,
-        ),
+        header: FunctionHeader,
         body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
-        return_type: PotentialNewType,
-        is_async: bool,
     },
     FunctionDeclaration {
-        generics: GenericTypes,
-        parameters: Vec<(PotentialDollarIdentifier, PotentialNewType, Option<Node>)>,
+        header: FunctionHeader,
         body: Box<Node>,
-        return_type: PotentialNewType,
-        is_async: bool,
     },
     AssignmentExpression {
         identifier: Box<Node>,

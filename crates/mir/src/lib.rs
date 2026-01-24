@@ -9,7 +9,7 @@ use calibre_parser::{
     },
     lexer::Span,
 };
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, mem::MaybeUninit, str::FromStr};
 
 use crate::errors::MiddleErr;
 use environment::*;
@@ -385,12 +385,12 @@ impl MiddleEnvironment {
                     let overload = MiddleOverload {
                         operator: Operator::from_str(&overload.operator.text)?,
                         return_type: self
-                            .resolve_potential_new_type(scope, overload.return_type.clone()),
+                            .resolve_potential_new_type(scope, overload.header.return_type.clone()),
                         parameters: {
                             let mut params = Vec::new();
                             let mut contains = false;
 
-                            for param in overload.parameters.iter() {
+                            for param in overload.header.parameters.iter() {
                                 let ty = self.resolve_potential_new_type(scope, param.1.clone());
 
                                 if let ParserInnerType::Struct(x) =
@@ -1406,27 +1406,15 @@ impl MiddleEnvironment {
 
                 self.evaluate(scope, ifs)
             }
-            NodeType::FnMatchDeclaration {
-                generics,
-                parameters,
-                body,
-                return_type,
-                is_async,
-            } => self.evaluate(
+            NodeType::FnMatchDeclaration { header, body } => self.evaluate(
                 scope,
                 Node::new_from_type(NodeType::FunctionDeclaration {
-                    generics,
-                    parameters: vec![(
-                        parameters.0.clone(),
-                        parameters.1.clone(),
-                        parameters.2.map(|x| *x),
-                    )],
-                    return_type,
-                    is_async,
                     body: Box::new(Node::new_from_type(NodeType::ScopeDeclaration {
                         body: Some(vec![Node::new_from_type(NodeType::MatchStatement {
                             value: Box::new(Node::new_from_type(NodeType::Identifier(
-                                PotentialGenericTypeIdentifier::Identifier(parameters.0),
+                                PotentialGenericTypeIdentifier::Identifier(
+                                    header.parameters[0].0.clone(),
+                                ),
                             ))),
                             body,
                         })]),
@@ -1435,19 +1423,14 @@ impl MiddleEnvironment {
                         create_new_scope: Some(false),
                         define: false,
                     })),
+                    header,
                 }),
             ),
-            NodeType::FunctionDeclaration {
-                generics,
-                parameters,
-                body,
-                return_type,
-                is_async,
-            } => {
+            NodeType::FunctionDeclaration { header, body } => {
                 // TODO Handle generics
-                let mut params = Vec::with_capacity(parameters.len());
+                let mut params = Vec::with_capacity(header.parameters.len());
                 let new_scope = self.new_scope_from_parent_shallow(*scope);
-                for param in parameters {
+                for param in header.parameters {
                     let og_name = self.resolve_dollar_ident_only(scope, &param.0).unwrap();
                     let new_name = get_disamubiguous_name(
                         scope,
@@ -1481,14 +1464,14 @@ impl MiddleEnvironment {
                     ));
                 }
 
-                let return_type = self.resolve_potential_new_type(scope, return_type);
+                let return_type = self.resolve_potential_new_type(scope, header.return_type);
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::FunctionDeclaration {
                         parameters: params,
                         body: Box::new(self.evaluate(&new_scope, *body)?),
                         return_type,
-                        is_async,
+                        is_async: header.is_async,
                     },
                     span: node.span,
                 })
@@ -1496,7 +1479,7 @@ impl MiddleEnvironment {
             NodeType::CallExpression {
                 caller,
                 generic_types,
-                args,
+                mut args,
             } => {
                 // TODO Handle Generics
                 if let NodeType::Identifier(caller) = &caller.node_type {
@@ -1538,24 +1521,61 @@ impl MiddleEnvironment {
                     }
                 }
 
+                let data_type = self
+                    .resolve_type_from_node(scope, &caller)
+                    .map(|x| x.unwrap_all_refs().data_type);
+
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::CallExpression {
                         caller: Box::new(self.evaluate(scope, *caller)?),
-                        args: {
-                            let mut lst = Vec::new();
+                        args: match data_type {
+                            Some(ParserInnerType::Function {
+                                return_type,
+                                parameters,
+                                is_async,
+                            }) if parameters.len() < args.len() => {
+                                let mut lst = Vec::new();
+                                for _ in 0..(parameters.len() - 1) {
+                                    let arg = args.remove(0);
+                                    lst.push((
+                                        self.evaluate(scope, arg.0)?,
+                                        if let Some(a) = arg.1 {
+                                            Some(self.evaluate(scope, a)?)
+                                        } else {
+                                            None
+                                        },
+                                    ));
+                                }
 
-                            for arg in args {
                                 lst.push((
-                                    self.evaluate(scope, arg.0)?,
-                                    if let Some(a) = arg.1 {
-                                        Some(self.evaluate(scope, a)?)
-                                    } else {
-                                        None
-                                    },
+                                    self.evaluate(
+                                        scope,
+                                        Node::new_from_type(NodeType::ListLiteral(
+                                            None,
+                                            args.into_iter().map(|x| x.0).collect(),
+                                        )),
+                                    )?,
+                                    None,
                                 ));
-                            }
 
-                            lst
+                                lst
+                            }
+                            _ => {
+                                let mut lst = Vec::new();
+
+                                for arg in args {
+                                    lst.push((
+                                        self.evaluate(scope, arg.0)?,
+                                        if let Some(a) = arg.1 {
+                                            Some(self.evaluate(scope, a)?)
+                                        } else {
+                                            None
+                                        },
+                                    ));
+                                }
+
+                                lst
+                            }
                         },
                     },
                     span: node.span,
@@ -1667,7 +1687,7 @@ impl MiddleEnvironment {
             NodeType::ScopeMemberExpression { path } => {
                 self.evaluate_scope_member_expression(scope, path)
             }
-            NodeType::PipeExpression(_) => todo!(),
+            NodeType::PipeExpression(_) | NodeType::StringFunction { .. } => todo!(),
         }
     }
 }
