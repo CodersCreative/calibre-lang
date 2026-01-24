@@ -1183,6 +1183,23 @@ impl MiddleEnvironment {
                 match caller_type.data_type {
                     ParserInnerType::Function {
                         return_type,
+                        parameters,
+                        is_async,
+                    } if parameters.len() > args.len() => Some(ParserDataType {
+                        data_type: ParserInnerType::Function {
+                            return_type,
+                            parameters: parameters
+                                .iter()
+                                .enumerate()
+                                .filter(|(i, _)| i >= &args.len())
+                                .map(|x| x.1.clone())
+                                .collect(),
+                            is_async,
+                        },
+                        span: node.span,
+                    }),
+                    ParserInnerType::Function {
+                        return_type,
                         parameters: _,
                         is_async: _,
                     } => Some(*return_type.clone()),

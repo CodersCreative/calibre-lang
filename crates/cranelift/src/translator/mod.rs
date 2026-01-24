@@ -503,7 +503,7 @@ impl<'a> FunctionTranslator<'a> {
                         ));
                     }
 
-                    for (a, _) in args.into_iter() {
+                    for a in args.into_iter() {
                         let value = self.translate(a);
                         call_args.push(value.value);
                         sig.params.push(AbiParam::new(

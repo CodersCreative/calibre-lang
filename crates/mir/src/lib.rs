@@ -1,9 +1,10 @@
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     ast::{
-        CallArg, IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectMap, ObjectType,
-        ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
-        PotentialGenericTypeIdentifier, RefMutability, VarType,
+        CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node,
+        NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
+        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, RefMutability,
+        VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperation, Comparison},
     },
@@ -332,6 +333,11 @@ impl MiddleEnvironment {
                     }
                 };
 
+                let val = if self.resolve_str(scope, &identifier.text).is_some() {
+                    Some(self.evaluate(scope, *value.clone())?)
+                } else {
+                    None
+                };
                 self.variables.insert(
                     new_name.clone(),
                     MiddleVariable {
@@ -347,7 +353,11 @@ impl MiddleEnvironment {
                     .mappings
                     .insert(identifier.text, new_name.clone());
 
-                let value = self.evaluate(scope, *value)?;
+                let value = if let Some(x) = val {
+                    x
+                } else {
+                    self.evaluate(scope, *value)?
+                };
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::VariableDeclaration {
@@ -1581,7 +1591,6 @@ impl MiddleEnvironment {
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::CallExpression {
-                        caller: Box::new(self.evaluate(scope, *caller)?),
                         args: match data_type {
                             Some(ParserInnerType::Function {
                                 return_type,
@@ -1609,8 +1618,64 @@ impl MiddleEnvironment {
                                 parameters,
                                 is_async,
                             }) if parameters.len() > args.len() => {
-                                // TODO currying
-                                unimplemented!("Currying is not yet complete")
+                                let mut converted_missing_param_types: Vec<PotentialNewType> =
+                                    parameters
+                                        .iter()
+                                        .enumerate()
+                                        .filter(|(i, _)| i >= &args.len())
+                                        .map(|x| {
+                                            calibre_mir_ty::middle_data_type_to_new_type(
+                                                x.1.clone(),
+                                            )
+                                        })
+                                        .collect();
+
+                                let mut missing_param_names: Vec<String> = (0
+                                    ..converted_missing_param_types.len())
+                                    .map(|i| format!("$-curry-{i}"))
+                                    .collect();
+
+                                for name in missing_param_names.clone() {
+                                    args.push(CallArg::Value(Node::new_from_type(
+                                        NodeType::Identifier(ParserText::from(name).into()),
+                                    )));
+                                }
+
+                                return self.evaluate(
+                                    scope,
+                                    Node {
+                                        node_type: NodeType::FunctionDeclaration {
+                                            header: FunctionHeader {
+                                                generics: GenericTypes::default(),
+                                                parameters: (0..converted_missing_param_types
+                                                    .len())
+                                                    .map(|_| {
+                                                        (
+                                                            ParserText::from(
+                                                                missing_param_names.remove(0),
+                                                            )
+                                                            .into(),
+                                                            converted_missing_param_types.remove(0),
+                                                        )
+                                                    })
+                                                    .collect(),
+                                                return_type:
+                                                    calibre_mir_ty::middle_data_type_to_new_type(
+                                                        *return_type,
+                                                    ),
+                                                is_async,
+                                            },
+                                            body: Box::new(Node::new_from_type(
+                                                NodeType::CallExpression {
+                                                    caller,
+                                                    generic_types,
+                                                    args,
+                                                },
+                                            )),
+                                        },
+                                        span: node.span,
+                                    },
+                                );
                             }
                             _ => {
                                 let mut lst = Vec::new();
@@ -1622,6 +1687,7 @@ impl MiddleEnvironment {
                                 lst
                             }
                         },
+                        caller: Box::new(self.evaluate(scope, *caller)?),
                     },
                     span: node.span,
                 })
