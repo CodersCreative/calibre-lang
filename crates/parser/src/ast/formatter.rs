@@ -286,8 +286,9 @@ impl Formatter {
 
                 txt
             }
-            NodeType::DebugExpression { value } => format!("debug {{{}}}", self.format(&*value)),
-            NodeType::Return { value: Some(value) } => format!("return {}", self.format(&*value)),
+            NodeType::DebugExpression { value } => format!("debug {{{}}}", self.format(value)),
+            NodeType::Until { condition } => format!("until {}", self.format(condition)),
+            NodeType::Return { value: Some(value) } => format!("return {}", self.format(value)),
             NodeType::Return { value: _ } => String::from("return"),
             NodeType::AssignmentExpression { identifier, value } => match value.node_type.clone() {
                 NodeType::BinaryExpression {
@@ -414,6 +415,7 @@ impl Formatter {
                 map,
                 loop_type,
                 conditionals,
+                until,
             } => {
                 let mut txt = if let Some(data_type) = data_type {
                     format!(
@@ -432,6 +434,10 @@ impl Formatter {
 
                 if !conditionals.is_empty() {
                     txt.push_str(&format!(" {}", self.fmt_conditionals(conditionals)));
+                }
+
+                if let Some(until) = until {
+                    txt.push_str(&format!(" until {}", self.format(until)));
                 }
 
                 txt.push(']');
@@ -497,12 +503,22 @@ impl Formatter {
 
                 txt
             }
-            NodeType::LoopDeclaration { loop_type, body } => {
-                format!(
+            NodeType::LoopDeclaration {
+                loop_type,
+                body,
+                until,
+            } => {
+                let mut txt = format!(
                     "for {} {}",
                     self.fmt_loop_type(loop_type),
                     self.format(body)
-                )
+                );
+
+                if let Some(until) = until {
+                    txt.push_str(&format!(" until {}", self.format(until)));
+                }
+
+                txt
             }
             NodeType::IfStatement {
                 comparison,

@@ -391,6 +391,7 @@ impl Into<NodeType> for MiddleNodeType {
                     lst.push(Node::new_from_type(NodeType::LoopDeclaration {
                         loop_type: Box::new(LoopType::Loop),
                         body: Box::new((*body).into()),
+                        until: None,
                     }));
 
                     Some(lst)

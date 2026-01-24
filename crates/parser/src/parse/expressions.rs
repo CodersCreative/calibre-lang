@@ -48,6 +48,16 @@ impl Parser {
                 )
             }
             TokenType::Stop(x) => match x {
+                StopValue::Until => {
+                    let open = self.eat();
+                    let condition = self.parse_statement();
+                    Node::new(
+                        Span::new_from_spans(open.span, condition.span),
+                        NodeType::Until {
+                            condition: Box::new(condition),
+                        },
+                    )
+                }
                 StopValue::Return => self.parse_return_declaration(),
                 StopValue::Break => {
                     let val = self.eat();

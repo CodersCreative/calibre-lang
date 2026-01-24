@@ -266,6 +266,20 @@ impl MiddleEnvironment {
                     },
                 ),
             },
+            NodeType::Until { condition } => self.evaluate(
+                scope,
+                Node {
+                    node_type: NodeType::IfStatement {
+                        comparison: Box::new(IfComparisonType::If(*condition)),
+                        then: Box::new(Node {
+                            node_type: NodeType::Break,
+                            span: node.span,
+                        }),
+                        otherwise: None,
+                    },
+                    span: node.span,
+                },
+            ),
             NodeType::Break => Ok(MiddleNode {
                 node_type: MiddleNodeType::Break,
                 span: node.span,
@@ -620,7 +634,50 @@ impl MiddleEnvironment {
                     },
                 )
             }
-            NodeType::LoopDeclaration { loop_type, body } => {
+            NodeType::LoopDeclaration {
+                loop_type,
+                mut body,
+                until,
+            } => {
+                if let Some(until) = until.clone() {
+                    let until = Node::new_from_type(NodeType::Until { condition: until });
+                    body = if let NodeType::ScopeDeclaration {
+                        body: bod,
+                        named,
+                        is_temp,
+                        create_new_scope,
+                        define: _,
+                    } = body.node_type.clone()
+                    {
+                        if let Some(mut body) = bod {
+                            body.push(until);
+                            Box::new(Node::new_from_type(NodeType::ScopeDeclaration {
+                                body: Some(body),
+                                named,
+                                is_temp,
+                                create_new_scope,
+                                define: false,
+                            }))
+                        } else {
+                            Box::new(Node::new_from_type(NodeType::ScopeDeclaration {
+                                body: Some(vec![*body, until]),
+                                named: None,
+                                is_temp,
+                                create_new_scope,
+                                define: false,
+                            }))
+                        }
+                    } else {
+                        Box::new(Node::new_from_type(NodeType::ScopeDeclaration {
+                            body: Some(vec![*body, until]),
+                            named: None,
+                            is_temp: true,
+                            create_new_scope: Some(true),
+                            define: false,
+                        }))
+                    };
+                }
+
                 let scope = self.new_scope_from_parent_shallow(*scope);
                 match *loop_type {
                     LoopType::Loop => Ok(MiddleNode {
@@ -650,6 +707,7 @@ impl MiddleEnvironment {
                                                         condition,
                                                     )),
                                                     body,
+                                                    until,
                                                 },
                                                 span: node.span,
                                             },
@@ -768,11 +826,19 @@ impl MiddleEnvironment {
                 map,
                 loop_type,
                 conditionals,
+                until,
             } => {
                 let resolved_data_type = if let Some(data_type) = data_type.clone() {
                     Some(self.resolve_potential_new_type(scope, data_type))
                 } else {
                     self.resolve_type_from_node(scope, &map)
+                };
+
+                let data_type = if let Some(typ) = data_type {
+                    Some(typ)
+                } else {
+                    self.resolve_type_from_node(scope, &map)
+                        .map(|x| calibre_mir_ty::middle_data_type_to_new_type(x))
                 };
 
                 let node = Node {
@@ -795,6 +861,7 @@ impl MiddleEnvironment {
                             }),
                             Node::new_from_type(NodeType::LoopDeclaration {
                                 loop_type,
+                                until,
                                 body: Box::new(Node::new_from_type(NodeType::ScopeDeclaration {
                                     body: {
                                         let mut lst = Vec::new();

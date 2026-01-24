@@ -78,6 +78,7 @@ pub enum StopValue {
     Return,
     Break,
     Continue,
+    Until,
 }
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TokenType {
@@ -147,6 +148,7 @@ pub enum TokenType {
 
 pub fn keywords() -> HashMap<String, TokenType> {
     HashMap::from([
+        (String::from("until"), TokenType::Stop(StopValue::Until)),
         (String::from("mut"), TokenType::Mut),
         (String::from("const"), TokenType::Const),
         (String::from("let"), TokenType::Let),
@@ -419,6 +421,12 @@ impl Tokenizer {
                             let c = buffer.remove(0);
                             self.increment_line_col(&c);
                             number.push(c);
+                        }
+
+                        if !buffer.is_empty() && buffer[0] == 'f' {
+                            let c = buffer.remove(0);
+                            self.increment_line_col(&c);
+                            is_int = false;
                         }
 
                         if is_int {

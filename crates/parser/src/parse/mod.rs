@@ -10,7 +10,7 @@ use crate::{
         LoopType, Node, NodeType, ParserDataType, ParserInnerType, PotentialDollarIdentifier,
         PotentialNewType, RefMutability, comparison::Comparison,
     },
-    lexer::{Bracket, Span, Token, TokenType},
+    lexer::{Bracket, Span, StopValue, Token, TokenType},
 };
 use std::{collections::HashMap, str::FromStr};
 
@@ -490,6 +490,13 @@ impl Parser {
                     conditionals.push(self.parse_statement());
                 }
 
+                let until = if self.first().token_type == TokenType::Stop(StopValue::Until) {
+                    let _ = self.eat();
+                    Some(Box::new(self.parse_statement()))
+                } else {
+                    None
+                };
+
                 let close = self.expect_eat(
                     &TokenType::Close(Bracket::Square),
                     SyntaxErr::ExpectedClosingBracket(Bracket::Square),
@@ -502,6 +509,7 @@ impl Parser {
                         map: Box::new(values[0].clone()),
                         loop_type: Box::new(loop_type),
                         conditionals,
+                        until,
                     },
                 );
             } else if self.first().token_type != TokenType::Close(Bracket::Square) {

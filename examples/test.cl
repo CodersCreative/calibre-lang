@@ -172,6 +172,13 @@ const main = fn () => {
 	print(hello);
 	
 	(false) ? (8 == 9) ? correct : other : other = 0;
+
+	// until allows you to end test the loop with the condition only breaking at the end of each iteration
+	for i in 0..10 => print("hello") until true;
+
+	// until also works with list comprehensions
+	let lst = list[10 for i in 10 until i > 4];
+	print(lst);	
 	
 	print(correct);
 	print(other);

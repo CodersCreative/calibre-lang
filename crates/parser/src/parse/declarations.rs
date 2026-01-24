@@ -747,11 +747,19 @@ impl Parser {
         };
         let block = self.parse_scope_declaration(false);
 
+        let until = if self.first().token_type == TokenType::Stop(StopValue::Until) {
+            let _ = self.eat();
+            Some(Box::new(self.parse_statement()))
+        } else {
+            None
+        };
+
         Node::new(
             Span::new_from_spans(open.span, block.span),
             NodeType::LoopDeclaration {
                 loop_type: Box::new(typ),
                 body: Box::new(block),
+                until,
             },
         )
     }

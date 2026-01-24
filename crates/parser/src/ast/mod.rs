@@ -799,10 +799,12 @@ pub enum NodeType {
         map: Box<Node>,
         loop_type: Box<LoopType>,
         conditionals: Vec<Node>,
+        until: Option<Box<Node>>,
     },
     LoopDeclaration {
         loop_type: Box<LoopType>,
         body: Box<Node>,
+        until: Option<Box<Node>>,
     },
     Try {
         value: Box<Node>,
@@ -810,6 +812,9 @@ pub enum NodeType {
     },
     Return {
         value: Option<Box<Node>>,
+    },
+    Until {
+        condition: Box<Node>,
     },
     StringLiteral(ParserText),
     ListLiteral(Option<PotentialNewType>, Vec<Node>),
