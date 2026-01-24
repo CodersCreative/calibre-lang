@@ -251,7 +251,7 @@ impl Parser {
 
     pub fn is_first_potential_call(&self) -> bool {
         match self.first().token_type {
-            TokenType::Open(Bracket::Paren) | TokenType::ColonAngled => true,
+            TokenType::Open(Bracket::Paren) | TokenType::ColonAngled | TokenType::String => true,
             _ => false,
         }
     }

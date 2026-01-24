@@ -16,3 +16,14 @@ const range = fn(start end : mut int, step : int, inclusive : bool) -> list<int>
 
   lst;
 };
+
+const fmt = fn(splits : list:<str>, inputs : list:<str>) -> str => {
+	let mut txt : str = "";
+
+	for i in len(splits) => {
+		txt &= splits[i];
+		if i < len(inputs) => txt &= inputs[i];
+	};
+	
+	txt;
+};

@@ -166,6 +166,11 @@ impl MiddleNodeType {
             MiddleNodeType::MemberExpression { mut path } => {
                 path[0].0 = path[0].0.clone().rename(state);
 
+                path = path
+                    .into_iter()
+                    .map(|x| if x.1 { (x.0.rename(state), x.1) } else { x })
+                    .collect();
+
                 MiddleNodeType::MemberExpression { path }
             }
             MiddleNodeType::CallExpression { caller, args } => MiddleNodeType::CallExpression {

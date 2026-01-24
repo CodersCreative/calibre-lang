@@ -1,7 +1,52 @@
-use crate::ast::{CallArg, Node};
-use crate::lexer::{Bracket, Span};
+use crate::ast::{CallArg, Node, ParserDataType, ParserInnerType, PotentialNewType};
+use crate::lexer::{Bracket, Span, Tokenizer};
 use crate::{Parser, SyntaxErr};
 use crate::{ast::NodeType, lexer::TokenType};
+
+fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
+    let mut normal_parts = Vec::new();
+    let mut extracted_parts = Vec::new();
+
+    let mut current_buffer = String::new();
+    let mut chars = input.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        match c {
+            '{' => {
+                if chars.peek() == Some(&'{') {
+                    current_buffer.push('{');
+                    chars.next();
+                } else {
+                    normal_parts.push(current_buffer.clone());
+                    current_buffer.clear();
+
+                    let mut extracted = String::new();
+                    while let Some(&next_c) = chars.peek() {
+                        if next_c == '}' {
+                            chars.next();
+                            break;
+                        }
+                        extracted.push(chars.next().unwrap());
+                    }
+                    extracted_parts.push(extracted);
+                }
+            }
+            '}' => {
+                if chars.peek() == Some(&'}') {
+                    current_buffer.push('}');
+                    chars.next();
+                } else {
+                    current_buffer.push('}');
+                }
+            }
+            _ => current_buffer.push(c),
+        }
+    }
+
+    normal_parts.push(current_buffer);
+
+    (normal_parts, extracted_parts)
+}
 
 impl Parser {
     pub fn parse_call_member_expression(&mut self) -> Node {
@@ -16,14 +61,62 @@ impl Parser {
 
     pub fn parse_call_expression(&mut self, caller: Node) -> Node {
         let generic_types = self.parse_generic_types();
-        let args = self.parse_arguments(
-            TokenType::Open(Bracket::Paren),
-            TokenType::Close(Bracket::Paren),
-        );
+
+        let mut string_fn = None;
+
+        let args = if self.first().token_type == TokenType::String {
+            let val = self.eat();
+            string_fn = Some(val.clone().into());
+            let mut tokenizer = Tokenizer::new(false);
+            let (texts, args) = parse_splits(&val.value);
+
+            let mut parsed_args = vec![CallArg::Value(Node {
+                node_type: NodeType::ListLiteral(
+                    Some(PotentialNewType::DataType(ParserDataType::from(
+                        ParserInnerType::Str,
+                    ))),
+                    {
+                        let mut txts = Vec::new();
+
+                        for txt in texts {
+                            txts.push(Node::new_from_type(NodeType::StringLiteral(txt.into())));
+                        }
+
+                        txts
+                    },
+                ),
+                span: Span::default(),
+            })];
+
+            let args = args
+                .into_iter()
+                .map(|x| tokenizer.tokenize(x).unwrap())
+                .collect::<Vec<_>>();
+
+            let mut original = Vec::new();
+            original.append(&mut self.tokens);
+
+            self.tokens.clear();
+
+            for arg in args {
+                self.tokens = arg;
+                parsed_args.push(CallArg::Value(self.parse_statement()));
+            }
+
+            self.tokens = original;
+
+            parsed_args
+        } else {
+            self.parse_arguments(
+                TokenType::Open(Bracket::Paren),
+                TokenType::Close(Bracket::Paren),
+            )
+        };
 
         let mut expression = Node::new(
             caller.span,
             NodeType::CallExpression {
+                string_fn,
                 caller: Box::new(caller),
                 generic_types,
                 args,

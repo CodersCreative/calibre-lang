@@ -58,28 +58,19 @@ trait CompSciStudent : Programmer + Student {
 }
 */
 
-/* String functions pseudocode
 // All string functions need to take in 2 lists with the first one needing to be a list<str>, however they can have any return type
 // This just showcases how to have a basic format function like in rust
-const fmt = fn(splits : list<str>, inputs : list<str>) -> str => {
+const fmt = fn(splits : list:<str>, inputs : list:<str>) -> str => {
 	let mut txt : str = "";
 
 	for i in len(splits) => {
 		txt &= splits[i];
-		txt	&= inputs[i];
+		if i < len(inputs) => txt &= inputs[i];
 	};
 	
 	txt;
 };
 
-// In order to use a string function
-const main = fn() => {
-	let name = "Ty";
-	let age = 10;
-	// In these string function blocks "{{}}" can be used to mean "{}"
-	let txt : str = fmt"Hello, my name is {name} and I'm {age} years old!";
-	print(txt);
-}
 
 // Other potential configs
 // For intaking a variety of different types
@@ -88,7 +79,7 @@ const main = fn() => {
 // const fmt = fn<T>(splits : list<str>, ..inputs : list<T>) -> str => ...
 // It will also allow for all the inputs to be individually wriiten like this:
 // const fmt = fn(splits : list<str>, num : int, txt : str) -> str => ...// 
-*/
+
 
 type NumType = struct {
 	num : int,
@@ -119,6 +110,12 @@ const print_text = fn (values : list:<str>) => {
 };
 
 const main = fn () => {
+	let name = "Ty";
+	let age = "10";
+	// In these string function blocks "{{}}" can be used to mean "{}"
+	let txt : str = fmt"Hello, my name is {name} and I'm {age} years old!";
+	print(txt);
+	
 	print(adder_float(90, 10.6));
 
 	print("overload");

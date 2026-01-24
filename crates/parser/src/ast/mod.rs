@@ -148,6 +148,14 @@ impl<T> ParserInnerType<T> {
             _ => self,
         }
     }
+
+    pub fn is_list(&self) -> bool {
+        match self {
+            Self::List(_) => true,
+            Self::Ref(x, _) => x.is_list(),
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -713,10 +721,6 @@ pub enum NodeType {
     Break,
     Continue,
     EmptyLine,
-    StringFunction {
-        caller: Box<Node>,
-        input: ParserText,
-    },
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
@@ -843,6 +847,7 @@ pub enum NodeType {
         path: Vec<Node>,
     },
     CallExpression {
+        string_fn: Option<ParserText>,
         caller: Box<Node>,
         generic_types: Vec<PotentialNewType>,
         args: Vec<CallArg>,

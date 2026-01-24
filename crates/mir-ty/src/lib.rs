@@ -425,6 +425,7 @@ impl Into<NodeType> for MiddleNodeType {
                 },
             },
             Self::CallExpression { caller, args } => NodeType::CallExpression {
+                string_fn: None,
                 generic_types: Vec::new(),
                 caller: Box::new((*caller).into()),
                 args: {
@@ -475,6 +476,7 @@ impl Into<NodeType> for MiddleNodeType {
                 };
                 if is_tuple {
                     NodeType::CallExpression {
+                        string_fn: None,
                         generic_types: Vec::new(),
                         caller: Box::new(Node::new_from_type(NodeType::Identifier(
                             if let Some(identifier) = identifier {

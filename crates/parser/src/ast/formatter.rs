@@ -161,9 +161,6 @@ impl Formatter {
             NodeType::Break => String::from("break"),
             NodeType::Continue => String::from("continue"),
             NodeType::EmptyLine => String::new(),
-            NodeType::StringFunction { caller, input } => {
-                format!("{}{:?}", self.format(caller), input)
-            }
             NodeType::ImportStatement {
                 module,
                 alias,
@@ -346,6 +343,7 @@ impl Formatter {
                 )
             }
             NodeType::CallExpression {
+                string_fn,
                 caller,
                 generic_types,
                 args,
@@ -368,19 +366,23 @@ impl Formatter {
                     txt.push_str(">")
                 }
 
-                txt.push('(');
+                if let Some(sfn) = string_fn {
+                    txt.push_str(&format!("{:?}", sfn.text));
+                } else {
+                    txt.push('(');
 
-                for arg in args {
-                    match arg {
-                        CallArg::Value(x) => txt.push_str(&format!("{}, ", self.format(x))),
-                        CallArg::Named(x, y) => {
-                            txt.push_str(&format!("{} = {}, ", x, self.format(y)))
+                    for arg in args {
+                        match arg {
+                            CallArg::Value(x) => txt.push_str(&format!("{}, ", self.format(x))),
+                            CallArg::Named(x, y) => {
+                                txt.push_str(&format!("{} = {}, ", x, self.format(y)))
+                            }
                         }
                     }
-                }
 
-                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
-                txt.push(')');
+                    let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                    txt.push(')');
+                };
 
                 txt
             }

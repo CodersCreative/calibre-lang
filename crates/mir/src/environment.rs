@@ -1142,6 +1142,7 @@ impl MiddleEnvironment {
                 caller,
                 generic_types,
                 args,
+                ..
             } => {
                 // TODO handle generics
                 let caller = self
