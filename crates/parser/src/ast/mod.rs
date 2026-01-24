@@ -899,6 +899,12 @@ pub enum PipeSegment {
 }
 
 impl PipeSegment {
+    pub fn is_named(&self) -> bool {
+        match self {
+            Self::Unnamed(_) => false,
+            _ => true,
+        }
+    }
     pub fn span(&self) -> &Span {
         match self {
             Self::Unnamed(x) => &x.span,
@@ -942,6 +948,17 @@ impl NodeType {
                 ..
             } if body.len() == 1 => body.remove(0).node_type.unwrap(),
             _ => self,
+        }
+    }
+
+    pub fn is_call(&self) -> bool {
+        match self {
+            Self::CallExpression { .. } => true,
+            Self::RefStatement { value, .. } | Self::DerefStatement { value } => {
+                value.node_type.is_call()
+            }
+
+            _ => false,
         }
     }
 }

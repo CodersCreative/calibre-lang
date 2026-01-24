@@ -119,6 +119,7 @@ pub enum TokenType {
     Arrow,
     LeftArrow,
     FatArrow,
+    OrColon,
     Object,
     Question,
     Async,
@@ -188,6 +189,7 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("->"), TokenType::Arrow),
         (String::from("|>"), TokenType::Pipe),
+        (String::from("|:"), TokenType::OrColon),
         (String::from("<-"), TokenType::LeftArrow),
         (String::from("=>"), TokenType::FatArrow),
         (String::from(".."), TokenType::Range),

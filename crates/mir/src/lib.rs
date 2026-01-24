@@ -1844,7 +1844,7 @@ impl MiddleEnvironment {
                     match resolved_type {
                         Some(ParserInnerType::Function { .. })
                         | Some(ParserInnerType::NativeFunction(_))
-                            if !point.get_node().to_string().contains("$") =>
+                            if !point.is_named() && !point.get_node().node_type.is_call() =>
                         {
                             value = Node::new_from_type(NodeType::CallExpression {
                                 string_fn: None,
@@ -1927,6 +1927,7 @@ impl MiddleEnvironment {
                         self.scopes.get_mut(scope).unwrap().mappings.remove(&k);
                     }
                 }
+
                 self.evaluate(scope, value)
             }
             NodeType::PipeExpression(_) => Ok(MiddleNode::new_from_type(MiddleNodeType::EmptyLine)),

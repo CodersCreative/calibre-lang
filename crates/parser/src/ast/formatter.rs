@@ -791,7 +791,7 @@ impl Formatter {
                     match value {
                         PipeSegment::Unnamed(x) => txt.push_str(&format!(" |> {}", self.format(x))),
                         PipeSegment::Named { identifier, node } => {
-                            txt.push_str(&format!(" | {} -> {}", identifier, self.format(node)))
+                            txt.push_str(&format!(" |: {} > {}", identifier, self.format(node)))
                         }
                     }
                 }

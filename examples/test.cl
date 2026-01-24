@@ -119,7 +119,7 @@ const main = fn () => {
 	print(adder_float(90, 10.6));
 
 	print("piping");
-	40 |> adder_float($) |> $(80) |> print;
+	40 |: forty> adder_float(forty) |> $(80) |> print;
 
 	print("overload");
 	let mut num = NumType{num : 10};

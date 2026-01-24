@@ -1,3 +1,4 @@
+use crate::ast::comparison::Comparison;
 use crate::ast::{Node, PipeSegment};
 use crate::lexer::Span;
 use crate::{Parser, SyntaxErr};
@@ -11,22 +12,27 @@ impl Parser {
         let mut left = vec![PipeSegment::Unnamed(self.parse_try_expression())];
 
         while TokenType::Pipe == self.first().token_type
-            || (self.first().token_type == TokenType::BinaryOperator(BinaryOperator::BitOr)
-                && [TokenType::Identifier, TokenType::Dollar].contains(&self.second().token_type))
+            || self.first().token_type == TokenType::OrColon
         {
             let name = if TokenType::Pipe == self.eat().token_type {
                 None
             } else {
                 let name = self.expect_potential_dollar_ident();
                 let _ = self.expect_eat(
-                    &TokenType::Arrow,
-                    SyntaxErr::ExpectedKeyword("->".to_string()),
+                    &TokenType::Comparison(Comparison::Greater),
+                    SyntaxErr::ExpectedChar('>'),
                 );
                 Some(name)
             };
 
             let value = self.parse_statement();
             if let NodeType::PipeExpression(mut x) = value.node_type {
+                if let (Some(first), Some(name)) = (x.first_mut(), name) {
+                    *first = PipeSegment::Named {
+                        identifier: name,
+                        node: first.get_node().clone(),
+                    }
+                }
                 left.append(&mut x);
             } else {
                 left.push(if let Some(name) = name {
