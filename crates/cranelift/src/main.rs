@@ -13,6 +13,7 @@ const BASIC_CODE: &str = r#"
         flt : float,
     }
     type Id = struct (float);
+    const sixty : int = 60;
     
     // const main = fn () -> int => if 1 => 10 + 4 else => 30;
     const main = fn (x : int) -> float => {
@@ -29,8 +30,8 @@ const BASIC_CODE: &str = r#"
 
         id.0 + smth.flt;
     };
-    // const main = fn () -> float => 100.8;
-    // const main = fn () -> str => "abcd";
+    const min = fn () -> float => 100.8 + 11.4;
+    const man = fn () -> str => "abcd";
     
 "#;
 

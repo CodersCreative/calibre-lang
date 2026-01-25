@@ -266,10 +266,7 @@ impl<'a> FunctionTranslator<'a> {
                 let value = self.translate(*value);
                 self.get_aggregate_member(value, key)
             }
-            LirNodeType::Closure {
-                label,
-                captured_values,
-            } => todo!(),
+            LirNodeType::Closure { label, captures } => todo!(),
             LirNodeType::Call { caller, args } => {
                 let callee = self.translate(*caller);
 
