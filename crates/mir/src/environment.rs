@@ -1016,12 +1016,12 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
 
-            NodeType::NotExpression { .. }
-            | NodeType::InDeclaration { .. }
-            | NodeType::IsDeclaration { .. } => Some(ParserDataType {
-                data_type: ParserInnerType::Bool,
-                span: node.span,
-            }),
+            NodeType::NotExpression { .. } | NodeType::InDeclaration { .. } => {
+                Some(ParserDataType {
+                    data_type: ParserInnerType::Bool,
+                    span: node.span,
+                })
+            }
             NodeType::ComparisonExpression {
                 left,
                 right,

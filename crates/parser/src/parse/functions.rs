@@ -213,7 +213,12 @@ impl Parser {
             || self.first().token_type == TokenType::Open(Bracket::Square)
         {
             path.push(if self.eat().token_type == TokenType::FullStop {
-                let prop = self.parse_call_member_expression();
+                let mut prop = self.parse_primary_expression();
+
+                if self.is_first_potential_call() {
+                    prop = self.parse_call_expression(prop);
+                }
+
                 (prop, false)
             } else {
                 let prop = self.parse_statement();

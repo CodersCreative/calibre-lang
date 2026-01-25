@@ -105,9 +105,6 @@ impl MiddleNodeType {
                     value: Box::new(value.rename(state)),
                 }
             }
-            MiddleNodeType::NotExpression { value } => MiddleNodeType::NotExpression {
-                value: Box::new(value.rename(state)),
-            },
             MiddleNodeType::NegExpression { value } => MiddleNodeType::NegExpression {
                 value: Box::new(value.rename(state)),
             },
@@ -119,14 +116,6 @@ impl MiddleNodeType {
                 value: Box::new(value.rename(state)),
             },
             MiddleNodeType::AsExpression { value, data_type } => MiddleNodeType::AsExpression {
-                value: Box::new(value.rename(state)),
-                data_type,
-            },
-            MiddleNodeType::InDeclaration { identifier, value } => MiddleNodeType::InDeclaration {
-                identifier: Box::new(identifier.rename(state)),
-                value: Box::new(value.rename(state)),
-            },
-            MiddleNodeType::IsDeclaration { value, data_type } => MiddleNodeType::IsDeclaration {
                 value: Box::new(value.rename(state)),
                 data_type,
             },

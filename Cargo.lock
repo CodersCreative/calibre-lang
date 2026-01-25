@@ -175,6 +175,7 @@ dependencies = [
  "calibre-common",
  "calibre-comptime",
  "calibre-interpreter",
+ "calibre-lir",
  "calibre-mir",
  "calibre-mir-ty",
  "calibre-parser",
@@ -223,6 +224,7 @@ version = "0.1.0"
 dependencies = [
  "calibre-common",
  "calibre-interpreter",
+ "calibre-lir",
  "calibre-mir",
  "calibre-mir-ty",
  "calibre-parser",
@@ -233,6 +235,7 @@ name = "calibre-cranelift"
 version = "0.1.0"
 dependencies = [
  "calibre-comptime",
+ "calibre-lir",
  "calibre-mir",
  "calibre-mir-ty",
  "calibre-parser",
@@ -255,6 +258,16 @@ dependencies = [
  "rand",
  "rustyline",
  "thiserror",
+]
+
+[[package]]
+name = "calibre-lir"
+version = "0.1.0"
+dependencies = [
+ "calibre-common",
+ "calibre-mir",
+ "calibre-mir-ty",
+ "calibre-parser",
 ]
 
 [[package]]

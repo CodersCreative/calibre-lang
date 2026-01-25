@@ -1,5 +1,6 @@
 use calibre_comptime::ComptimeEnvironment;
 use calibre_interpreter::runtime::scope::InterpreterEnvironment;
+use calibre_lir::LirEnvironment;
 use calibre_mir::environment::MiddleEnvironment;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::lexer::Tokenizer;
@@ -23,7 +24,6 @@ fn file(path: &PathBuf, _use_checker: bool, args: Vec<MiddleNode>) -> Result<()>
     let mut middle_result = MiddleEnvironment::new_and_evaluate(program, path.clone())?;
     println!("Starting comptime...");
     middle_result.2 = ComptimeEnvironment::new_and_evaluate(middle_result.2, &middle_result.0)?;
-    // println!("{}", middle_result.2);
     println!("Starting interpreter...");
 
     /*if use_checker {

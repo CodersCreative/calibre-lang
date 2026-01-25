@@ -157,6 +157,6 @@ impl<'a> FunctionTranslator<'a> {
             .variables
             .get(identifier)
             .expect(&format!("variable {} not defined", identifier));
-        RuntimeValue::new(self.builder.use_var(variable.2), variable.1.clone())
+        RuntimeValue::new(self.builder.use_var(variable.1), variable.0.clone())
     }
 }

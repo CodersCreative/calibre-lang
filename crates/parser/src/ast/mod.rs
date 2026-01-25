@@ -192,13 +192,16 @@ impl From<ParserDataType<Node>> for PotentialNewType {
     }
 }
 
-impl Display for ParserDataType<Node> {
+impl<T: Display + PartialEq> Display for ParserDataType<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.data_type)
     }
 }
 
-impl Display for ParserInnerType<Node> {
+impl<T: Display + PartialEq> Display for ParserInnerType<T>
+where
+    ParserDataType<T>: std::fmt::Display,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Float => write!(f, "float"),
@@ -803,10 +806,6 @@ pub enum NodeType {
     InDeclaration {
         identifier: Box<Node>,
         value: Box<Node>,
-    },
-    IsDeclaration {
-        value: Box<Node>,
-        data_type: PotentialNewType,
     },
     RangeDeclaration {
         from: Box<Node>,

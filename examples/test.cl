@@ -112,6 +112,8 @@ const print_text = fn (values : list:<str>) => {
 const main = fn () => {
 	let name = "Ty";
 	let age = "10";
+	// TODO Add defer keyword
+	
 	// In these string function blocks "{{}}" can be used to mean "{}"
 	let txt : str = fmt"Hello, my name is {name} and I'm {age} years old!";
 	print(txt);
@@ -119,7 +121,7 @@ const main = fn () => {
 	print(adder_float(90, 10.6));
 
 	print("piping");
-	40 |: forty> adder_float(forty) |> $(80) |> print;
+	40 |: forty > adder_float(forty) |> $(80) |> fn(input : float) => print(input);
 
 	print("overload");
 	let mut num = NumType{num : 10};
@@ -142,18 +144,21 @@ const main = fn () => {
 	
 	print(mtchfn("he"));
 
-	let match_res : int = match "hello" {
+	let mut match_res : int = match "hello" {
 		"hello" => 0,
 		_ => 10,
 	};
 	print(match_res);
 	
 	let => @add_scope [$first = 9.0, $second = 11.0, $t = type : float] {
-		let sum : $t = comp, 0 => $first + $second;
+		// match_res will be captured at the call_site
+		let sum : $t = $first + $second + match_res;
 		print("add_scope: ");
 		print(sum);
 	};
 	
+	=> @add_scope [];
+	match_res = 60;
 	=> @add_scope [];
 	
 	=> @add_scope [$first = (5.0 / 99.0)];

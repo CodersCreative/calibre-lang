@@ -72,24 +72,8 @@ impl Parser {
         left
     }
 
-    pub fn parse_is_expression(&mut self) -> Node {
-        let mut left = self.parse_bitwise_expression();
-
-        while let TokenType::Is = self.first().token_type.clone() {
-            left = Node::new(
-                self.eat().span,
-                NodeType::IsDeclaration {
-                    value: Box::new(left),
-                    data_type: self.expect_potential_new_type(),
-                },
-            )
-        }
-
-        left
-    }
-
     pub fn parse_in_expression(&mut self) -> Node {
-        let mut left = self.parse_is_expression();
+        let mut left = self.parse_bitwise_expression();
 
         while let TokenType::In = self.first().token_type.clone() {
             left = Node::new(

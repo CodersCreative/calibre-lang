@@ -5,7 +5,7 @@ use crate::{
     ast::{
         CallArg, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node, NodeType,
         ObjectType, Overload, ParserInnerType, PipeSegment, PotentialDollarIdentifier,
-        PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType, VarType,
+        PotentialNewType, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -334,13 +334,6 @@ impl Formatter {
             }
             NodeType::InDeclaration { identifier, value } => {
                 format!("{} in {}", self.format(identifier), self.format(value))
-            }
-            NodeType::IsDeclaration { value, data_type } => {
-                format!(
-                    "{} is {}",
-                    self.format(value),
-                    self.fmt_potential_new_type(data_type)
-                )
             }
             NodeType::CallExpression {
                 string_fn,

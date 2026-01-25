@@ -2,6 +2,7 @@ use crate::{
     translator::{FunctionTranslator, layout::GetLayoutInfo, memory::MemoryLoc},
     values::{RuntimeType, RuntimeValue},
 };
+use calibre_lir::LirNodeType;
 use calibre_mir_ty::MiddleNode;
 use calibre_parser::ast::{Node, comparison::Comparison};
 use cranelift::{codegen::ir::BlockArg, prelude::*};
@@ -173,7 +174,7 @@ impl<'a> FunctionTranslator<'a> {
     pub fn translate_array_expression(
         &mut self,
         element_type: RuntimeType,
-        items: Vec<MiddleNode>,
+        items: Vec<LirNodeType>,
     ) -> RuntimeValue {
         let items: Vec<RuntimeValue> = items.into_iter().map(|x| self.translate(x)).collect();
 

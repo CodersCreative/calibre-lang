@@ -63,7 +63,6 @@ pub enum RuntimeType {
     Char,
     Dynamic,
     Ref {
-        mutable: bool,
         data_type: Box<RuntimeType>,
     },
     List(Box<RuntimeType>),

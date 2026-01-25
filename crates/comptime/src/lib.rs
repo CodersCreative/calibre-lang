@@ -140,9 +140,6 @@ impl ComptimeEnvironment {
                         is_temp,
                     }
                 }
-                MiddleNodeType::NotExpression { value } => MiddleNodeType::NotExpression {
-                    value: Box::new(self.evaluate(*value, stage)?),
-                },
                 MiddleNodeType::DataType { data_type } => MiddleNodeType::DataType { data_type },
                 MiddleNodeType::FunctionDeclaration {
                     parameters,
@@ -183,12 +180,6 @@ impl ComptimeEnvironment {
                     value: Box::new(self.evaluate(*value, stage)?),
                     data_type,
                 },
-                MiddleNodeType::InDeclaration { identifier, value } => {
-                    MiddleNodeType::InDeclaration {
-                        identifier: Box::new(self.evaluate(*identifier, stage)?),
-                        value: Box::new(self.evaluate(*value, stage)?),
-                    }
-                }
                 MiddleNodeType::AggregateExpression { identifier, value } => {
                     MiddleNodeType::AggregateExpression {
                         identifier,
@@ -226,12 +217,6 @@ impl ComptimeEnvironment {
                             None
                         },
                         body: Box::new(self.evaluate(*body, stage)?),
-                    }
-                }
-                MiddleNodeType::IsDeclaration { value, data_type } => {
-                    MiddleNodeType::IsDeclaration {
-                        value: Box::new(self.evaluate(*value, stage)?),
-                        data_type,
                     }
                 }
                 MiddleNodeType::CallExpression { caller, args } => MiddleNodeType::CallExpression {

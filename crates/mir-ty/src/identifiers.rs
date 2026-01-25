@@ -30,13 +30,8 @@ impl MiddleNode {
                 value,
                 data_type: _,
             }
-            | MiddleNodeType::NotExpression { value }
             | MiddleNodeType::NegExpression { value }
             | MiddleNodeType::AsExpression {
-                value,
-                data_type: _,
-            }
-            | MiddleNodeType::IsDeclaration {
                 value,
                 data_type: _,
             }
@@ -64,10 +59,6 @@ impl MiddleNode {
                 operator: _,
             }
             | MiddleNodeType::AssignmentExpression {
-                identifier: left,
-                value: right,
-            }
-            | MiddleNodeType::InDeclaration {
                 identifier: left,
                 value: right,
             }

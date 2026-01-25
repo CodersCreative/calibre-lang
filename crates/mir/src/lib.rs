@@ -10,7 +10,6 @@ use calibre_parser::{
     },
     lexer::Span,
 };
-use rand::distr::Map;
 use std::{collections::HashMap, str::FromStr};
 
 use crate::errors::MiddleErr;
@@ -513,12 +512,19 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::NotExpression { value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::NotExpression {
-                    value: Box::new(self.evaluate(scope, *value)?),
+            NodeType::NotExpression { value } => self.evaluate(
+                scope,
+                Node {
+                    node_type: NodeType::ComparisonExpression {
+                        left: value,
+                        right: Box::new(Node::new_from_type(NodeType::Identifier(
+                            ParserText::from("false".to_string()).into(),
+                        ))),
+                        operator: Comparison::Equal,
+                    },
+                    span: node.span,
                 },
-                span: node.span,
-            }),
+            ),
             NodeType::NegExpression { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::NegExpression {
                     value: Box::new(self.evaluate(scope, *value)?),
@@ -532,20 +538,17 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::IsDeclaration { value, data_type } => Ok(MiddleNode {
-                node_type: MiddleNodeType::IsDeclaration {
-                    value: Box::new(self.evaluate(scope, *value)?),
-                    data_type: self.resolve_potential_new_type(scope, data_type),
-                },
-                span: node.span,
-            }),
-            NodeType::InDeclaration { identifier, value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::InDeclaration {
-                    identifier: Box::new(self.evaluate(scope, *identifier)?),
-                    value: Box::new(self.evaluate(scope, *value)?),
-                },
-                span: node.span,
-            }),
+            NodeType::InDeclaration { identifier, value } => self.evaluate(
+                scope,
+                Node::new_from_type(NodeType::CallExpression {
+                    string_fn: None,
+                    caller: Box::new(Node::new_from_type(NodeType::Identifier(
+                        ParserText::from("contains".to_string()).into(),
+                    ))),
+                    generic_types: Vec::new(),
+                    args: vec![CallArg::Value(*value)],
+                }),
+            ),
             NodeType::DebugExpression { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::DebugExpression {
                     pretty_printed_str: value.to_string(),

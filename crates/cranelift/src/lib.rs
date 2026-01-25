@@ -1,5 +1,6 @@
 pub mod translator;
 pub mod values;
+use calibre_lir::{BasicBlock, BlockId, LirFunction, LirNodeType, LirRegistry, Terminator};
 use calibre_mir::environment::{MiddleEnvironment, MiddleObject};
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{Node, NodeType, ParserDataType, ParserInnerType, VarType};
@@ -41,38 +42,25 @@ impl Default for Compiler {
 impl Compiler {
     pub fn compile(
         &mut self,
-        program: MiddleNode,
+        registry: LirRegistry,
         env: MiddleEnvironment,
     ) -> Result<*const u8, Box<dyn Error>> {
         let mut main = None;
 
-        if let MiddleNodeType::ScopeDeclaration { body, .. } = program.node_type.clone() {
-            for var in body {
-                if let MiddleNodeType::VariableDeclaration {
-                    var_type: VarType::Constant,
-                    identifier,
-                    value,
-                    ..
-                } = var.node_type.clone()
-                {
-                    match &value.node_type {
-                        MiddleNodeType::FunctionDeclaration { .. } => {
-                            let val = self.compile_const_fn(
-                                if identifier.to_string() == "main" {
-                                    "_start".to_string()
-                                } else {
-                                    identifier.to_string()
-                                },
-                                *value,
-                                &env.objects,
-                            )?;
-                            if identifier.to_string().contains(":main") {
-                                main = Some(val);
-                            }
-                        }
-                        _ => todo!("Implement constant variables in the global scope"),
-                    }
-                }
+        for (key, var) in registry.functions.clone() {
+            let identifier = var.name.clone();
+            let val = self.compile_const_fn(
+                if key.to_string().contains(":main") {
+                    "_start".to_string()
+                } else {
+                    identifier.clone()
+                },
+                var,
+                &registry,
+                &env.objects,
+            )?;
+            if identifier.contains("main") {
+                main = Some(val);
             }
         }
 
@@ -82,70 +70,64 @@ impl Compiler {
     pub fn compile_const_fn(
         &mut self,
         identifier: String,
-        value: MiddleNode,
+        value: LirFunction,
+        registry: &LirRegistry,
         objects: &std::collections::HashMap<String, MiddleObject>,
     ) -> Result<*const u8, Box<dyn Error>> {
-        if let MiddleNodeType::FunctionDeclaration {
-            parameters,
-            body,
-            return_type,
-            is_async: _,
-        } = value.node_type
-        {
-            let mut flag_builder = settings::builder();
-            flag_builder.set("use_colocated_libcalls", "false").unwrap();
-            flag_builder.set("is_pic", "false").unwrap();
-            let isa_builder = cranelift_native::builder().unwrap();
-            let isa = isa_builder
-                .finish(settings::Flags::new(flag_builder))
-                .unwrap();
-
-            let builder = ObjectBuilder::new(
-                isa,
-                "calibre".to_string(),
-                cranelift_module::default_libcall_names(),
-            )
+        let mut flag_builder = settings::builder();
+        flag_builder.set("use_colocated_libcalls", "false").unwrap();
+        flag_builder.set("is_pic", "false").unwrap();
+        let isa_builder = cranelift_native::builder().unwrap();
+        let isa = isa_builder
+            .finish(settings::Flags::new(flag_builder))
             .unwrap();
 
-            let mut module = ObjectModule::new(builder);
-            let mut ctx = module.make_context();
+        let builder = ObjectBuilder::new(
+            isa,
+            "calibre".to_string(),
+            cranelift_module::default_libcall_names(),
+        )
+        .unwrap();
 
-            self.translate(
-                parameters
-                    .into_iter()
-                    .map(|x| (x.0.to_string(), x.1.clone()))
-                    .collect(),
-                return_type,
-                *body,
-                &mut module,
-                &mut ctx,
-                objects,
-            )?;
+        let mut module = ObjectModule::new(builder);
+        let mut ctx = module.make_context();
 
-            let id = module
-                .declare_function(&identifier, Linkage::Export, &ctx.func.signature)
-                .map_err(|e| e.to_string())?;
+        self.translate(
+            value
+                .params
+                .into_iter()
+                .map(|x| (x.0.to_string(), x.1.clone()))
+                .collect(),
+            value.return_type,
+            value.blocks,
+            registry,
+            &mut module,
+            &mut ctx,
+            objects,
+        )?;
 
-            module
-                .define_function(id, &mut ctx)
-                .map_err(|e| e.to_string())?;
-            module.clear_context(&mut ctx);
+        let id = module
+            .declare_function(&identifier, Linkage::Export, &ctx.func.signature)
+            .map_err(|e| e.to_string())?;
 
-            let product = module.finish();
-            let obj_bytes = product.emit().map_err(|e| e.to_string())?;
+        module
+            .define_function(id, &mut ctx)
+            .map_err(|e| e.to_string())?;
+        module.clear_context(&mut ctx);
 
-            let addr = unsafe { Self::load_object_and_resolve(&obj_bytes, &identifier)? };
-            Ok(addr as *const u8)
-        } else {
-            todo!()
-        }
+        let product = module.finish();
+        let obj_bytes = product.emit().map_err(|e| e.to_string())?;
+
+        let addr = unsafe { Self::load_object_and_resolve(&obj_bytes, &identifier)? };
+        Ok(addr as *const u8)
     }
 
     fn translate(
         &mut self,
         params: Vec<(String, ParserDataType<MiddleNode>)>,
         return_type: ParserDataType<MiddleNode>,
-        node: MiddleNode,
+        body: Vec<BasicBlock>,
+        registry: &LirRegistry,
         module: &mut ObjectModule,
         ctx: &mut codegen::Context,
         objects: &std::collections::HashMap<String, MiddleObject>,
@@ -186,21 +168,69 @@ impl Compiler {
         builder.seal_block(entry_block);
 
         // Now translate the statements of the function body.
+
         let mut trans = FunctionTranslator {
             variables: HashMap::new(),
             types,
+            registry,
             builder,
             module,
             description: &mut self.data_description,
             objects,
             break_stack: Vec::new(),
         };
-        let value = trans.translate(node);
 
-        // Emit the return instruction.
-        trans.builder.ins().return_(&[value.value]);
+        let mut block_map = HashMap::new();
 
-        // Tell the builder we're done with this function.
+        for v in body.iter() {
+            let block = trans.builder.create_block();
+            block_map.insert(v.id, block);
+        }
+
+        for lir_block in body {
+            let cl_block = block_map[&lir_block.id];
+            trans.builder.switch_to_block(cl_block);
+
+            if lir_block.id.0 == 0 {
+                trans
+                    .builder
+                    .append_block_params_for_function_params(cl_block);
+            }
+
+            for instr in lir_block.instructions {
+                trans.translate(instr);
+            }
+
+            if let Some(term) = lir_block.terminator {
+                match term {
+                    Terminator::Jump(target) => {
+                        trans.builder.ins().jump(block_map[&target], &[]);
+                    }
+                    Terminator::Branch {
+                        condition,
+                        then_block,
+                        else_block,
+                    } => {
+                        let cond_val = trans.translate(condition).value;
+                        trans.builder.ins().brif(
+                            cond_val,
+                            block_map[&then_block],
+                            &[],
+                            block_map[&else_block],
+                            &[],
+                        );
+                    }
+                    Terminator::Return(val) => {
+                        let mut ret_vals = Vec::new();
+                        if let Some(v) = val {
+                            ret_vals.push(trans.translate(v).value);
+                        }
+                        trans.builder.ins().return_(&ret_vals);
+                    }
+                }
+            }
+        }
+        trans.builder.seal_all_blocks();
         trans.builder.finalize();
         Ok(())
     }

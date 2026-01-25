@@ -140,9 +140,6 @@ pub enum MiddleNodeType {
         identifier: Box<MiddleNode>,
         value: Box<MiddleNode>,
     },
-    NotExpression {
-        value: Box<MiddleNode>,
-    },
     Comp {
         stage: CompStage,
         body: Box<MiddleNode>,
@@ -158,14 +155,6 @@ pub enum MiddleNodeType {
         value: Box<MiddleNode>,
     },
     AsExpression {
-        value: Box<MiddleNode>,
-        data_type: ParserDataType<MiddleNode>,
-    },
-    InDeclaration {
-        identifier: Box<MiddleNode>,
-        value: Box<MiddleNode>,
-    },
-    IsDeclaration {
         value: Box<MiddleNode>,
         data_type: ParserDataType<MiddleNode>,
     },
@@ -323,9 +312,6 @@ impl Into<NodeType> for MiddleNodeType {
                 identifier: Box::new((*identifier).into()),
                 value: Box::new((*value).into()),
             },
-            Self::NotExpression { value } => NodeType::NotExpression {
-                value: Box::new((*value).into()),
-            },
             Self::DebugExpression {
                 pretty_printed_str: _,
                 value,
@@ -354,14 +340,6 @@ impl Into<NodeType> for MiddleNodeType {
                 } else {
                     None
                 },
-            },
-            Self::InDeclaration { identifier, value } => NodeType::InDeclaration {
-                identifier: Box::new((*identifier).into()),
-                value: Box::new((*value).into()),
-            },
-            Self::IsDeclaration { value, data_type } => NodeType::IsDeclaration {
-                value: Box::new((*value).into()),
-                data_type: middle_data_type_to_new_type(data_type),
             },
             Self::RangeDeclaration {
                 from,
