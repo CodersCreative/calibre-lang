@@ -245,7 +245,7 @@ where
                     write!(f, "{}", txt)
                 }
             }
-            Self::List(x) => write!(f, "list<{}>", x),
+            Self::List(x) => write!(f, "list:<{}>", x),
             Self::Tuple(types) => {
                 let mut txt = format!(
                     "<{}",

@@ -848,7 +848,8 @@ impl MiddleEnvironment {
                 let data_type = if let Some(typ) = data_type {
                     Some(typ)
                 } else {
-                    self.resolve_type_from_node(scope, &map)
+                    resolved_data_type
+                        .clone()
                         .map(|x| calibre_mir_ty::middle_data_type_to_new_type(x))
                 };
 

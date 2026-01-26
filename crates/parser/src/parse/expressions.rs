@@ -17,7 +17,7 @@ impl Parser {
         let node = match &self.first().token_type {
             TokenType::If => self.parse_if_statement(),
             TokenType::Match => self.parse_match_statement(),
-            TokenType::List => self.parse_list_iter_expression(),
+            TokenType::List | TokenType::Open(Bracket::Square) => self.parse_list_iter_expression(),
             TokenType::Identifier => {
                 let val = self.eat();
                 let constraints = self.parse_generic_types();

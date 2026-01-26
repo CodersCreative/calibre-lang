@@ -440,26 +440,30 @@ impl Parser {
 
     pub fn parse_list_iter_expression(&mut self) -> Node {
         let mut values = Vec::new();
-        let open = self.expect_eat(&TokenType::List, SyntaxErr::ExpectedType);
 
-        let t = if self.first().token_type == TokenType::ColonAngled {
-            let _ = self.expect_eat(
-                &TokenType::ColonAngled,
-                SyntaxErr::ExpectedKeyword(String::from(":<")),
-            );
+        let t = if self.first().token_type == TokenType::List {
+            let _ = self.expect_eat(&TokenType::List, SyntaxErr::ExpectedType);
+            if self.first().token_type == TokenType::ColonAngled {
+                let _ = self.expect_eat(
+                    &TokenType::ColonAngled,
+                    SyntaxErr::ExpectedKeyword(String::from(":<")),
+                );
 
-            let t = self.expect_potential_new_type();
+                let t = self.expect_potential_new_type();
 
-            let _ = self.expect_eat(
-                &TokenType::Comparison(Comparison::Greater),
-                SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
-            );
-            Some(t)
+                let _ = self.expect_eat(
+                    &TokenType::Comparison(Comparison::Greater),
+                    SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
+                );
+                Some(t)
+            } else {
+                None
+            }
         } else {
             None
         };
 
-        let _ = self.expect_eat(
+        let open = self.expect_eat(
             &TokenType::Open(Bracket::Square),
             SyntaxErr::ExpectedOpeningBracket(Bracket::Square),
         );

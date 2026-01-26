@@ -422,7 +422,7 @@ impl Formatter {
                     )
                 } else {
                     format!(
-                        "list[{} for {}",
+                        "[{} for {}",
                         self.format(map),
                         self.fmt_loop_type(loop_type)
                     )
@@ -637,7 +637,7 @@ impl Formatter {
                     )
                 } else {
                     format!(
-                        "list[{}",
+                        "[{}",
                         values
                             .get(0)
                             .map(|x| self.format(&*x))
