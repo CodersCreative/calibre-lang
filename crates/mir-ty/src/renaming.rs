@@ -85,25 +85,14 @@ impl MiddleNodeType {
                     .map(|x| {
                         let new_name = format!("{}->{}", x.0.text, random_range(0..10000000));
                         state.data.insert(x.0.text, new_name.clone());
-                        if let Some(y) = x.2 {
-                            (
-                                ParserText {
-                                    text: new_name,
-                                    span: x.0.span,
-                                },
-                                x.1,
-                                Some(y.rename(state)),
-                            )
-                        } else {
-                            (
-                                ParserText {
-                                    text: new_name,
-                                    span: x.0.span,
-                                },
-                                x.1,
-                                None,
-                            )
-                        }
+
+                        (
+                            ParserText {
+                                text: new_name,
+                                span: x.0.span,
+                            },
+                            x.1,
+                        )
                     })
                     .collect(),
                 body: Box::new(body.rename(state)),
@@ -116,9 +105,6 @@ impl MiddleNodeType {
                     value: Box::new(value.rename(state)),
                 }
             }
-            MiddleNodeType::NotExpression { value } => MiddleNodeType::NotExpression {
-                value: Box::new(value.rename(state)),
-            },
             MiddleNodeType::NegExpression { value } => MiddleNodeType::NegExpression {
                 value: Box::new(value.rename(state)),
             },
@@ -130,14 +116,6 @@ impl MiddleNodeType {
                 value: Box::new(value.rename(state)),
             },
             MiddleNodeType::AsExpression { value, data_type } => MiddleNodeType::AsExpression {
-                value: Box::new(value.rename(state)),
-                data_type,
-            },
-            MiddleNodeType::InDeclaration { identifier, value } => MiddleNodeType::InDeclaration {
-                identifier: Box::new(identifier.rename(state)),
-                value: Box::new(value.rename(state)),
-            },
-            MiddleNodeType::IsDeclaration { value, data_type } => MiddleNodeType::IsDeclaration {
                 value: Box::new(value.rename(state)),
                 data_type,
             },
@@ -177,14 +155,17 @@ impl MiddleNodeType {
             MiddleNodeType::MemberExpression { mut path } => {
                 path[0].0 = path[0].0.clone().rename(state);
 
+                path = path
+                    .into_iter()
+                    .map(|x| if x.1 { (x.0.rename(state), x.1) } else { x })
+                    .collect();
+
                 MiddleNodeType::MemberExpression { path }
             }
-            MiddleNodeType::CallExpression(caller, args) => MiddleNodeType::CallExpression(
-                Box::new(caller.rename(state)),
-                args.into_iter()
-                    .map(|x| (x.0.rename(state), x.1.map(|x| x.rename(state))))
-                    .collect(),
-            ),
+            MiddleNodeType::CallExpression { caller, args } => MiddleNodeType::CallExpression {
+                caller: Box::new(caller.rename(state)),
+                args: args.into_iter().map(|x| x.rename(state)).collect(),
+            },
             MiddleNodeType::BinaryExpression {
                 left,
                 right,

@@ -14,7 +14,7 @@ impl InterpreterEnvironment {
         &mut self,
         scope: &u64,
         func: RuntimeValue,
-        mut arguments: Vec<(MiddleNode, Option<MiddleNode>)>,
+        mut arguments: Vec<MiddleNode>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let func = MiddleNode::interpreter_from(self, scope, func)?;
         let func = func.rename(&mut AlphaRenameState::default());
@@ -26,105 +26,6 @@ impl InterpreterEnvironment {
             is_async,
         } = &func
         {
-            if arguments.len() == 1 && parameters.len() > 1 {
-                if let Ok(x) = self.evaluate(scope, arguments[0].0.clone()) {
-                    if let RuntimeValue::Aggregate(None, x) = x {
-                        arguments =
-                            x.0.into_iter()
-                                .map(|x| {
-                                    let counter = random_range(0..1000000000);
-
-                                    let _ = self
-                                        .force_var(
-                                            &scope,
-                                            format!("$-{}", counter),
-                                            Variable {
-                                                value: x.1,
-                                                var_type: VarType::Mutable,
-                                            },
-                                        )
-                                        .unwrap();
-
-                                    (
-                                        MiddleNode::new_from_type(MiddleNodeType::Identifier(
-                                            format!("$-{}", counter).into(),
-                                        )),
-                                        None,
-                                    )
-                                })
-                                .collect();
-                    }
-                }
-            };
-
-            if parameters.len() > arguments.len() {
-                let params: Vec<(String, RuntimeType, Option<RuntimeValue>)> = parameters
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, x)| {
-                        for arg in arguments.iter() {
-                            if let (MiddleNodeType::Identifier(y), Some(_)) =
-                                (&arg.0.node_type, &arg.1)
-                            {
-                                if x.0 == y.to_string() {
-                                    return false;
-                                }
-                            }
-                        }
-
-                        i > &(arguments.len() - 1)
-                    })
-                    .map(|x| x.1.clone())
-                    .collect();
-
-                if params.iter().filter(|x| x.2.is_none()).count() > 0 {
-                    let arguments: Vec<(MiddleNode, Option<MiddleNode>)> = [
-                        arguments,
-                        params
-                            .iter()
-                            .map(|x| {
-                                (
-                                    MiddleNode::new_from_type(MiddleNodeType::Identifier(
-                                        x.0.clone().into(),
-                                    )),
-                                    None,
-                                )
-                            })
-                            .collect(),
-                    ]
-                    .concat();
-
-                    let counter = random_range(0..100000000);
-
-                    let _ = self
-                        .force_var(
-                            &scope,
-                            format!("$-{}", counter),
-                            Variable {
-                                value: func.clone(),
-                                var_type: VarType::Mutable,
-                            },
-                        )
-                        .unwrap();
-
-                    let body = Block(Box::new(MiddleNode::new_from_type(
-                        MiddleNodeType::CallExpression(
-                            Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
-                                format!("$-{}", counter).into(),
-                            ))),
-                            arguments,
-                        ),
-                    )));
-
-                    return Ok(RuntimeValue::Function {
-                        parameters: params,
-                        body,
-                        return_type: return_type.clone(),
-                        is_async: *is_async,
-                    });
-                }
-            }
-
             let new_scope = self.get_new_scope(scope, parameters.to_vec(), arguments)?;
             let result = self.evaluate(&new_scope, *body.0.clone())?;
             self.stop = None;
@@ -141,7 +42,7 @@ impl InterpreterEnvironment {
         &mut self,
         scope: &u64,
         caller: MiddleNode,
-        arguments: Vec<(MiddleNode, Option<MiddleNode>)>,
+        arguments: Vec<MiddleNode>,
     ) -> Result<RuntimeValue, InterpreterErr> {
         let func = match self.evaluate(scope, caller.clone()) {
             Ok(x) => x,
@@ -173,18 +74,7 @@ impl InterpreterEnvironment {
                 let mut evaluated_arguments = Vec::new();
 
                 for arg in arguments.iter() {
-                    evaluated_arguments.push(if let Some(d) = &arg.1 {
-                        if let MiddleNodeType::Identifier(name) = &arg.0.node_type {
-                            (
-                                RuntimeValue::Str(name.to_string()),
-                                Some(self.evaluate(scope, d.clone())?),
-                            )
-                        } else {
-                            return Err(RuntimeErr::InvalidDefaultFuncArg);
-                        }
-                    } else {
-                        (self.evaluate(scope, arg.0.clone())?, None)
-                    });
+                    evaluated_arguments.push(self.evaluate(scope, arg.clone())?);
                 }
 
                 match func {

@@ -78,6 +78,7 @@ pub enum StopValue {
     Return,
     Break,
     Continue,
+    Until,
 }
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TokenType {
@@ -85,6 +86,7 @@ pub enum TokenType {
     Integer,
     String,
     Char,
+    ColonAngled,
     Identifier,
     Equals,
     Dollar,
@@ -117,13 +119,13 @@ pub enum TokenType {
     Arrow,
     LeftArrow,
     FatArrow,
+    OrColon,
     Object,
     Question,
     Async,
     Func,
     If,
     In,
-    Is,
     Or,
     Main,
     As,
@@ -146,6 +148,7 @@ pub enum TokenType {
 
 pub fn keywords() -> HashMap<String, TokenType> {
     HashMap::from([
+        (String::from("until"), TokenType::Stop(StopValue::Until)),
         (String::from("mut"), TokenType::Mut),
         (String::from("const"), TokenType::Const),
         (String::from("let"), TokenType::Let),
@@ -165,7 +168,6 @@ pub fn keywords() -> HashMap<String, TokenType> {
         ),
         (String::from("try"), TokenType::Try),
         (String::from("if"), TokenType::If),
-        (String::from("is"), TokenType::Is),
         (String::from("as"), TokenType::As),
         (String::from("func"), TokenType::Func),
         (String::from("struct"), TokenType::Struct),
@@ -185,10 +187,12 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("->"), TokenType::Arrow),
         (String::from("|>"), TokenType::Pipe),
+        (String::from("|:"), TokenType::OrColon),
         (String::from("<-"), TokenType::LeftArrow),
         (String::from("=>"), TokenType::FatArrow),
         (String::from(".."), TokenType::Range),
         (String::from("::"), TokenType::DoubleColon),
+        (String::from(":<"), TokenType::ColonAngled),
         (
             String::from("**"),
             TokenType::BinaryOperator(BinaryOperator::Pow),
@@ -419,6 +423,12 @@ impl Tokenizer {
                             number.push(c);
                         }
 
+                        if !buffer.is_empty() && buffer[0] == 'f' {
+                            let c = buffer.remove(0);
+                            self.increment_line_col(&c);
+                            is_int = false;
+                        }
+
                         if is_int {
                             Some(self.new_token(TokenType::Integer, number.trim()))
                         } else {
@@ -434,7 +444,8 @@ impl Tokenizer {
                             && (buffer[0].is_alphanumeric()
                                 || buffer[0] == '_'
                                 || buffer[0].to_uppercase().to_string().trim()
-                                    != buffer[0].to_lowercase().to_string().trim())
+                                    != buffer[0].to_lowercase().to_string().trim()
+                                || buffer[0].is_numeric())
                             && !buffer[0].is_whitespace()
                         {
                             let char = buffer.remove(0);

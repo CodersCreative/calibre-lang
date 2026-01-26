@@ -18,14 +18,14 @@ impl NativeFunction for Out {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         use std::io::{self, Write};
         let stdout = io::stdout();
         let mut handle = stdout.lock();
 
         for arg in args {
-            let s = arg.0.to_string();
+            let s = arg.to_string();
 
             handle.write_all(s.as_bytes()).unwrap();
         }
@@ -46,14 +46,14 @@ impl NativeFunction for ErrFn {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         use std::io::{self, Write};
         let stderr = io::stderr();
         let mut handle = stderr.lock();
 
         for arg in args {
-            let s = arg.0.to_string();
+            let s = arg.to_string();
 
             handle.write_all(s.as_bytes()).unwrap();
         }
@@ -74,11 +74,11 @@ impl NativeFunction for Input {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut editor = DefaultEditor::new().unwrap();
         let txt = match args.get(0) {
-            Some(x) => x.0.clone(),
+            Some(x) => x.clone(),
             None => RuntimeValue::Str("".to_string()),
         };
 
@@ -103,7 +103,7 @@ impl NativeFunction for Clear {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        _args: &[(RuntimeValue, Option<RuntimeValue>)],
+        _args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
         Ok(RuntimeValue::Null)

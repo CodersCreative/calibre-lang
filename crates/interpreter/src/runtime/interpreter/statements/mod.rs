@@ -68,16 +68,9 @@ impl InterpreterEnvironment {
         let mut params = Vec::new();
 
         for p in parameters.into_iter() {
-            let default = if let Some(node) = p.2 {
-                Some(self.evaluate(scope, node)?)
-            } else {
-                None
-            };
-
             params.push((
                 p.0.to_string(),
                 RuntimeType::interpreter_from(self, scope, p.1)?,
-                default,
             ));
         }
 

@@ -35,7 +35,7 @@ impl InterpreterEnvironment {
         scope: &u64,
         path: Vec<MemberPathType>,
         value_node: Box<MiddleNode>,
-        mut args: Vec<(MiddleNode, Option<MiddleNode>)>,
+        mut args: Vec<MiddleNode>,
     ) -> Result<MembrExprPathRes, InterpreterErr> {
         match value_node.node_type {
             MiddleNodeType::Identifier(value) => {
@@ -65,14 +65,9 @@ impl InterpreterEnvironment {
                                 if x.2 {
                                     args.insert(
                                         0,
-                                        (
-                                            MiddleNode::new(
-                                                MiddleNodeType::Identifier(
-                                                    path[0].to_string().into(),
-                                                ),
-                                                value_node.span,
-                                            ),
-                                            None,
+                                        MiddleNode::new(
+                                            MiddleNodeType::Identifier(path[0].to_string().into()),
+                                            value_node.span,
                                         ),
                                     );
                                 }
@@ -105,11 +100,11 @@ impl InterpreterEnvironment {
                     MiddleNodeType::IntLiteral(x) => {
                         path.push(MemberPathType::Dot(x.to_string()));
                     }
-                    MiddleNodeType::CallExpression(value_node, args) => {
+                    MiddleNodeType::CallExpression { caller, args } => {
                         return self.handle_call_expr_in_path(
                             scope,
                             path,
-                            value_node.clone(),
+                            caller.clone(),
                             args.clone(),
                         );
                     }
@@ -172,11 +167,11 @@ impl InterpreterEnvironment {
                             ),
                         )?));
                     }
-                    MiddleNodeType::CallExpression(value_node, args) => {
+                    MiddleNodeType::CallExpression { caller, args } => {
                         return self.handle_call_expr_in_path(
                             scope,
                             path,
-                            value_node.clone(),
+                            caller.clone(),
                             args.clone(),
                         );
                     }

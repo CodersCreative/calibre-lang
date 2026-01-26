@@ -18,13 +18,13 @@ impl NativeFunction for ErrFn {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(if let Some(x) = args.get(0) {
             RuntimeValue::Result(
-                Err(Box::new(x.0.clone())),
+                Err(Box::new(x.clone())),
                 RuntimeType::Result {
-                    err: Box::new((&x.0).into()),
+                    err: Box::new(x.into()),
                     ok: Box::new(RuntimeType::Dynamic),
                 },
             )
@@ -50,14 +50,14 @@ impl NativeFunction for OkFn {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(if let Some(x) = args.get(0) {
             RuntimeValue::Result(
-                Ok(Box::new(x.0.clone())),
+                Ok(Box::new(x.clone())),
                 RuntimeType::Result {
                     err: Box::new(RuntimeType::Dynamic),
-                    ok: Box::new((&x.0).into()),
+                    ok: Box::new(x.into()),
                 },
             )
         } else {
@@ -82,11 +82,11 @@ impl NativeFunction for TupleFn {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         let mut tple = Vec::new();
         for arg in args {
-            tple.push(arg.0.clone());
+            tple.push(arg.clone());
         }
         Ok(RuntimeValue::Aggregate(None, tple.into()))
     }
@@ -102,12 +102,12 @@ impl NativeFunction for SomeFn {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(if let Some(x) = args.get(0) {
             RuntimeValue::Option(
-                Some(Box::new(x.0.clone())),
-                RuntimeType::Option(Box::new((&x.0).into())),
+                Some(Box::new(x.clone())),
+                RuntimeType::Option(Box::new(x.into())),
             )
         } else {
             RuntimeValue::Option(None, RuntimeType::Option(Box::new(RuntimeType::Dynamic)))
@@ -125,7 +125,7 @@ impl NativeFunction for PanicFn {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        _args: &[(RuntimeValue, Option<RuntimeValue>)],
+        _args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         panic!();
     }
@@ -141,9 +141,9 @@ impl NativeFunction for Len {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let Some((x, _)) = args.get(0) {
+        if let Some(x) = args.get(0) {
             Ok(RuntimeValue::Int(match x {
                 RuntimeValue::List { data, data_type: _ } => data.len() as i64,
                 RuntimeValue::Aggregate(_, data) => data.len() as i64,
@@ -169,9 +169,9 @@ impl NativeFunction for Trim {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let Some((x, _)) = args.get(0) {
+        if let Some(x) = args.get(0) {
             let RuntimeValue::Str(x) = x else { panic!() };
             Ok(RuntimeValue::Str(x.trim().to_string()))
         } else {
@@ -190,9 +190,9 @@ impl NativeFunction for DiscriminantFn {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
-        if let Some((x, _)) = args.get(0) {
+        if let Some(x) = args.get(0) {
             Ok(RuntimeValue::Int(match x {
                 RuntimeValue::Enum(_, index, _) => *index as i64,
                 RuntimeValue::Option(Some(_), _) | RuntimeValue::Result(Ok(_), _) => 0 as i64,

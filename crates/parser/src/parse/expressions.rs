@@ -1,6 +1,9 @@
 use crate::{
     Parser, SyntaxErr,
-    ast::{CompStage, Node, ObjectType, PotentialDollarIdentifier, RefMutability},
+    ast::{
+        CompStage, Node, ObjectType, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+        RefMutability,
+    },
     lexer::{Bracket, Span, StopValue},
 };
 use crate::{
@@ -14,50 +17,68 @@ impl Parser {
         let node = match &self.first().token_type {
             TokenType::If => self.parse_if_statement(),
             TokenType::Match => self.parse_match_statement(),
-            TokenType::List => self.parse_list_iter_expression(),
+            TokenType::List | TokenType::Open(Bracket::Square) => self.parse_list_iter_expression(),
             TokenType::Identifier => {
                 let val = self.eat();
+                let constraints = self.parse_generic_types();
                 Node::new(
-                    NodeType::Identifier(PotentialDollarIdentifier::Identifier(val.clone().into())),
                     val.span,
+                    NodeType::Identifier(if constraints.is_empty() {
+                        PotentialDollarIdentifier::Identifier(val.into()).into()
+                    } else {
+                        PotentialGenericTypeIdentifier::Generic {
+                            identifier: PotentialDollarIdentifier::Identifier(val.into()),
+                            generic_types: constraints,
+                        }
+                    }),
                 )
             }
             TokenType::Float => {
                 let val = self.eat();
                 Node::new(
-                    NodeType::FloatLiteral(val.value.trim().parse().unwrap()),
                     val.span,
+                    NodeType::FloatLiteral(val.value.trim().parse().unwrap()),
                 )
             }
             TokenType::Integer => {
                 let val = self.eat();
                 Node::new(
-                    NodeType::IntLiteral(val.value.trim().parse().unwrap()),
                     val.span,
+                    NodeType::IntLiteral(val.value.trim().parse().unwrap()),
                 )
             }
             TokenType::Stop(x) => match x {
+                StopValue::Until => {
+                    let open = self.eat();
+                    let condition = self.parse_statement();
+                    Node::new(
+                        Span::new_from_spans(open.span, condition.span),
+                        NodeType::Until {
+                            condition: Box::new(condition),
+                        },
+                    )
+                }
                 StopValue::Return => self.parse_return_declaration(),
                 StopValue::Break => {
                     let val = self.eat();
-                    Node::new(NodeType::Break, val.span)
+                    Node::new(val.span, NodeType::Break)
                 }
                 StopValue::Continue => {
                     let val = self.eat();
-                    Node::new(NodeType::Continue, val.span)
+                    Node::new(val.span, NodeType::Continue)
                 }
             },
             TokenType::String => {
                 let val = self.eat();
 
-                Node::new(NodeType::StringLiteral(val.clone().into()), val.span)
+                Node::new(val.span, NodeType::StringLiteral(val.into()))
             }
             TokenType::Char => {
                 let val = self.eat();
 
                 Node::new(
-                    NodeType::CharLiteral(val.value.chars().nth(0).unwrap()),
                     val.span,
+                    NodeType::CharLiteral(val.value.chars().nth(0).unwrap()),
                 )
             }
             TokenType::FatArrow => self.parse_scope_declaration(false),
@@ -65,36 +86,50 @@ impl Parser {
             TokenType::BinaryOperator(BinaryOperator::Sub) => {
                 let open = self.eat();
                 let val = self.parse_statement();
-                let span = Span::new_from_spans(open.span, val.span);
                 Node::new(
+                    Span::new_from_spans(open.span, val.span),
                     NodeType::NegExpression {
                         value: Box::new(val),
                     },
-                    span,
                 )
             }
             TokenType::Comp => self.parse_comp(),
-            TokenType::Dollar => self.expect_potential_dollar_ident().into(),
+            TokenType::Dollar => {
+                let val = self.expect_potential_dollar_ident();
+                let constraints = self.parse_generic_types();
+
+                Node::new(
+                    *val.span(),
+                    NodeType::Identifier(if constraints.is_empty() {
+                        val.into()
+                    } else {
+                        PotentialGenericTypeIdentifier::Generic {
+                            identifier: val.into(),
+                            generic_types: constraints,
+                        }
+                    }),
+                )
+            }
             TokenType::Not => {
                 let open = self.eat();
                 let val = self.parse_statement();
-                let span = Span::new_from_spans(open.span, val.span);
+
                 Node::new(
+                    Span::new_from_spans(open.span, val.span),
                     NodeType::NotExpression {
                         value: Box::new(val),
                     },
-                    span,
                 )
             }
             TokenType::Debug => {
                 let open = self.eat();
                 let val = self.parse_statement();
-                let span = Span::new_from_spans(open.span, val.span);
+
                 Node::new(
+                    Span::new_from_spans(open.span, val.span),
                     NodeType::DebugExpression {
                         value: Box::new(val),
                     },
-                    span,
                 )
             }
             TokenType::Try => self.parse_try_expression(),
@@ -103,10 +138,10 @@ impl Parser {
                 let open = self.eat();
                 let close = self.parse_purely_member();
                 Node::new(
-                    NodeType::DerefStatement {
-                        value: Box::new(close.clone()),
-                    },
                     Span::new_from_spans(open.span, close.span),
+                    NodeType::DerefStatement {
+                        value: Box::new(close),
+                    },
                 )
             }
             TokenType::Type => {
@@ -122,15 +157,15 @@ impl Parser {
                 let open = self.eat();
                 let close = self.parse_purely_member();
                 Node::new(
+                    Span::new_from_spans(open.span, close.span),
                     NodeType::DerefStatement {
                         value: Box::new(Node::new(
-                            NodeType::DerefStatement {
-                                value: Box::new(close.clone()),
-                            },
                             Span::new_from_spans(open.span, close.span),
+                            NodeType::DerefStatement {
+                                value: Box::new(close),
+                            },
                         )),
                     },
-                    Span::new_from_spans(open.span, close.span),
                 )
             }
 
@@ -138,34 +173,34 @@ impl Parser {
                 let open = self.eat();
                 let close = self.parse_purely_member();
                 Node::new(
+                    Span::new_from_spans(open.span, close.span),
                     NodeType::RefStatement {
                         mutability: RefMutability::Ref,
                         value: Box::new(Node::new(
+                            Span::new_from_spans(open.span, close.span),
                             NodeType::RefStatement {
                                 mutability: RefMutability::Ref,
-                                value: Box::new(close.clone()),
+                                value: Box::new(close),
                             },
-                            Span::new_from_spans(open.span, close.span),
                         )),
                     },
-                    Span::new_from_spans(open.span, close.span),
                 )
             }
             x if RefMutability::from(x.clone()) != RefMutability::Value => {
                 let open = self.eat();
                 let close = self.parse_purely_member();
                 Node::new(
+                    Span::new_from_spans(open.span, close.span),
                     NodeType::RefStatement {
                         mutability: RefMutability::from(open.token_type),
-                        value: Box::new(close.clone()),
+                        value: Box::new(close),
                     },
-                    Span::new_from_spans(open.span, close.span),
                 )
             }
-            TokenType::EOL => Node::new(NodeType::EmptyLine, self.eat().span),
+            TokenType::EOL => Node::new(self.eat().span, NodeType::EmptyLine),
             _ => {
                 self.add_err(SyntaxErr::UnexpectedToken);
-                Node::new(NodeType::EmptyLine, self.eat().span)
+                Node::new(self.eat().span, NodeType::EmptyLine)
             }
         };
 
@@ -199,6 +234,34 @@ impl Parser {
                 stage,
                 body: Box::new(value),
             },
+        }
+    }
+
+    pub fn expect_potential_generic_type_ident(&mut self) -> PotentialGenericTypeIdentifier {
+        let ident = self.expect_potential_dollar_ident();
+        let constraints = self.parse_generic_types();
+
+        if constraints.is_empty() {
+            PotentialGenericTypeIdentifier::Identifier(ident)
+        } else {
+            PotentialGenericTypeIdentifier::Generic {
+                identifier: ident,
+                generic_types: constraints,
+            }
+        }
+    }
+
+    pub fn parse_potential_generic_type_ident(&mut self) -> Option<PotentialGenericTypeIdentifier> {
+        let ident = self.parse_potential_dollar_ident()?;
+        let constraints = self.parse_generic_types();
+
+        if constraints.is_empty() {
+            Some(PotentialGenericTypeIdentifier::Identifier(ident))
+        } else {
+            Some(PotentialGenericTypeIdentifier::Generic {
+                identifier: ident,
+                generic_types: constraints,
+            })
         }
     }
 
@@ -252,7 +315,7 @@ impl Parser {
 
                         properties.insert(
                             key.to_string(),
-                            Node::new(NodeType::Identifier(key.clone()), *key.span()),
+                            Node::new(*key.span(), NodeType::Identifier(key.into())),
                         );
                         continue;
                     }
@@ -293,63 +356,50 @@ impl Parser {
         }
     }
 
-    /*pub fn parse_object_expression(&mut self) -> Node {
-        if self.first().token_type != TokenType::Open(Bracket::Curly) {
-            return self.parse_try_expression();
-        }
-
-        let open = self.first().clone();
-
-        Node::new(
-            NodeType::StructLiteral(self.parse_potential_key_value()),
-            open.span,
-        )
-    }*/
-
     pub fn parse_assignment_expression(&mut self) -> Node {
         let mut left: Node = self.parse_pipe_expression();
 
         if let TokenType::BooleanAssign(op) = self.first().token_type.clone() {
             let open = self.eat();
             left = Node::new(
+                open.span,
                 NodeType::AssignmentExpression {
                     identifier: Box::new(left.clone()),
                     value: Box::new(Node::new(
+                        open.span,
                         NodeType::BooleanExpression {
                             left: Box::new(left),
                             right: Box::new(self.parse_statement()),
                             operator: op,
                         },
-                        open.span.clone(),
                     )),
                 },
-                open.span,
             );
         } else if let TokenType::BinaryAssign(op) = self.first().token_type.clone() {
             let open = self.eat();
             left = Node::new(
+                open.span,
                 NodeType::AssignmentExpression {
                     identifier: Box::new(left.clone()),
                     value: Box::new(Node::new(
+                        open.span,
                         NodeType::BinaryExpression {
                             left: Box::new(left),
                             right: Box::new(self.parse_statement()),
                             operator: op,
                         },
-                        open.span.clone(),
                     )),
                 },
-                open.span,
             );
         } else if [TokenType::Equals].contains(&self.first().token_type) {
             let open = self.eat();
             let right = self.parse_statement();
             left = Node::new(
+                open.span,
                 NodeType::AssignmentExpression {
                     identifier: Box::new(left),
                     value: Box::new(right),
                 },
-                open.span,
             );
         }
 

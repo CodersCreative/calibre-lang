@@ -3,8 +3,9 @@ use std::error::Error;
 use crate::{
     Parser,
     ast::{
-        IfComparisonType, LoopType, MatchArmType, Node, NodeType, ObjectType, Overload,
-        ParserInnerType, PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
+        CallArg, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node, NodeType,
+        ObjectType, Overload, ParserInnerType, PipeSegment, PotentialDollarIdentifier,
+        PotentialNewType, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -282,8 +283,9 @@ impl Formatter {
 
                 txt
             }
-            NodeType::DebugExpression { value } => format!("debug {{{}}}", self.format(&*value)),
-            NodeType::Return { value: Some(value) } => format!("return {}", self.format(&*value)),
+            NodeType::DebugExpression { value } => format!("debug {{{}}}", self.format(value)),
+            NodeType::Until { condition } => format!("until {}", self.format(condition)),
+            NodeType::Return { value: Some(value) } => format!("return {}", self.format(value)),
             NodeType::Return { value: _ } => String::from("return"),
             NodeType::AssignmentExpression { identifier, value } => match value.node_type.clone() {
                 NodeType::BinaryExpression {
@@ -333,26 +335,47 @@ impl Formatter {
             NodeType::InDeclaration { identifier, value } => {
                 format!("{} in {}", self.format(identifier), self.format(value))
             }
-            NodeType::IsDeclaration { value, data_type } => {
-                format!(
-                    "{} is {}",
-                    self.format(value),
-                    self.fmt_potential_new_type(data_type)
-                )
-            }
-            NodeType::CallExpression(callee, args) => {
-                let mut txt = format!("{}(", self.format(callee));
+            NodeType::CallExpression {
+                string_fn,
+                caller,
+                generic_types,
+                args,
+            } => {
+                let mut txt = format!("{}", self.format(caller));
 
-                for arg in args {
-                    if let Some(x) = &arg.1 {
-                        txt.push_str(&format!("{} = {}, ", self.format(&arg.0), self.format(x)));
-                    } else {
-                        txt.push_str(&format!("{}, ", self.format(&arg.0)));
+                if !generic_types.is_empty() {
+                    txt.push_str(&format!(
+                        ":<{}",
+                        generic_types
+                            .get(0)
+                            .map(|x| x.to_string())
+                            .unwrap_or(String::new())
+                    ));
+
+                    for typ in generic_types.iter().skip(1) {
+                        txt.push_str(&format!(", {}", typ));
                     }
+
+                    txt.push_str(">")
                 }
 
-                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
-                txt.push(')');
+                if let Some(sfn) = string_fn {
+                    txt.push_str(&format!("{:?}", sfn.text));
+                } else {
+                    txt.push('(');
+
+                    for arg in args {
+                        match arg {
+                            CallArg::Value(x) => txt.push_str(&format!("{}, ", self.format(x))),
+                            CallArg::Named(x, y) => {
+                                txt.push_str(&format!("{} = {}, ", x, self.format(y)))
+                            }
+                        }
+                    }
+
+                    let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                    txt.push(')');
+                };
 
                 txt
             }
@@ -388,17 +411,18 @@ impl Formatter {
                 map,
                 loop_type,
                 conditionals,
+                until,
             } => {
                 let mut txt = if let Some(data_type) = data_type {
                     format!(
-                        "list<{}>[{} for {}",
+                        "list:<{}>[{} for {}",
                         self.fmt_potential_new_type(data_type),
                         self.format(map),
                         self.fmt_loop_type(loop_type)
                     )
                 } else {
                     format!(
-                        "list[{} for {}",
+                        "[{} for {}",
                         self.format(map),
                         self.fmt_loop_type(loop_type)
                     )
@@ -408,33 +432,37 @@ impl Formatter {
                     txt.push_str(&format!(" {}", self.fmt_conditionals(conditionals)));
                 }
 
+                if let Some(until) = until {
+                    txt.push_str(&format!(" until {}", self.format(until)));
+                }
+
                 txt.push(']');
 
                 txt
             }
 
-            NodeType::FunctionDeclaration {
-                parameters,
-                body,
-                return_type,
-                is_async,
-            } => {
-                let mut txt = if *is_async {
+            NodeType::FunctionDeclaration { header, body } => {
+                let mut txt = if header.is_async {
                     String::from("fn async")
                 } else {
                     String::from("fn")
                 };
 
+                if !header.generics.0.is_empty() {
+                    txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
+                }
+
                 txt.push_str(" (");
 
-                let mut adjusted_params = parameters
+                let mut adjusted_params = header
+                    .parameters
                     .first()
                     .map(|x| vec![vec![x]])
                     .unwrap_or(Vec::new());
 
-                for param in parameters.iter().skip(1) {
+                for param in header.parameters.iter().skip(1) {
                     let last = adjusted_params.last().unwrap().first().unwrap();
-                    if last.1 == param.1 && last.2 == param.2 {
+                    if last.1 == param.1 {
                         adjusted_params.last_mut().unwrap().push(param);
                     } else {
                         adjusted_params.push(vec![param]);
@@ -450,30 +478,39 @@ impl Formatter {
 
                     txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
 
-                    if let Some(default) = &last.2 {
-                        txt.push_str(&format!(" = {}", self.format(default)));
-                    }
-
                     txt.push_str(", ");
                 }
 
                 let mut txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
 
-                if return_type != &PotentialNewType::DataType(ParserInnerType::Null.into()) {
-                    txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
+                if header.return_type != PotentialNewType::DataType(ParserInnerType::Null.into()) {
+                    txt.push_str(&format!(
+                        " -> {}",
+                        self.fmt_potential_new_type(&header.return_type)
+                    ));
                 }
 
                 txt.push_str(&format!(" {}", self.format(body)));
 
                 txt
             }
-            NodeType::LoopDeclaration { loop_type, body } => {
-                format!(
+            NodeType::LoopDeclaration {
+                loop_type,
+                body,
+                until,
+            } => {
+                let mut txt = format!(
                     "for {} {}",
                     self.fmt_loop_type(loop_type),
                     self.format(body)
-                )
+                );
+
+                if let Some(until) = until {
+                    txt.push_str(&format!(" until {}", self.format(until)));
+                }
+
+                txt
             }
             NodeType::IfStatement {
                 comparison,
@@ -527,25 +564,26 @@ impl Formatter {
             NodeType::MatchStatement { value, body } => {
                 format!("match {} {}", self.format(value), self.fmt_match_body(body))
             }
-            NodeType::FnMatchDeclaration {
-                parameters,
-                body,
-                return_type,
-                is_async,
-            } => {
+            NodeType::FnMatchDeclaration { header, body } => {
                 let mut txt = String::from("match");
-                if *is_async {
+                if header.is_async {
                     txt.push_str(" async");
                 }
 
-                txt.push_str(&format!(" {}", self.fmt_potential_new_type(&parameters.1)));
-
-                if let Some(default) = &parameters.2 {
-                    txt.push_str(&format!(" = {}", self.format(&*default)));
+                if !header.generics.0.is_empty() {
+                    txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
                 }
 
-                if return_type != &PotentialNewType::DataType(ParserInnerType::Null.into()) {
-                    txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
+                txt.push_str(&format!(
+                    " {}",
+                    self.fmt_potential_new_type(&header.parameters[0].1)
+                ));
+
+                if header.return_type != PotentialNewType::DataType(ParserInnerType::Null.into()) {
+                    txt.push_str(&format!(
+                        " -> {}",
+                        self.fmt_potential_new_type(&header.return_type)
+                    ));
                 }
 
                 txt.push_str(&format!(" {}", self.fmt_match_body(body)));
@@ -590,7 +628,7 @@ impl Formatter {
             NodeType::ListLiteral(data_type, values) => {
                 let mut txt = if let Some(data_type) = data_type {
                     format!(
-                        "list<{}>[{}",
+                        "list:<{}>[{}",
                         self.fmt_potential_new_type(&data_type),
                         values
                             .get(0)
@@ -599,7 +637,7 @@ impl Formatter {
                     )
                 } else {
                     format!(
-                        "list[{}",
+                        "[{}",
                         values
                             .get(0)
                             .map(|x| self.format(&*x))
@@ -740,10 +778,15 @@ impl Formatter {
             }
 
             NodeType::PipeExpression(values) => {
-                let mut txt = self.format(&values[0]);
+                let mut txt = self.format(values[0].get_node());
 
                 for value in values.iter().skip(1) {
-                    txt.push_str(&format!(" |> {}", self.format(value)));
+                    match value {
+                        PipeSegment::Unnamed(x) => txt.push_str(&format!(" |> {}", self.format(x))),
+                        PipeSegment::Named { identifier, node } => {
+                            txt.push_str(&format!(" |: {} > {}", identifier, self.format(node)))
+                        }
+                    }
                 }
 
                 txt
@@ -754,14 +797,12 @@ impl Formatter {
                 object,
                 overloads,
             } => {
-                let mut txt = format!(
+                format!(
                     "type {} = {}{}",
                     identifier,
                     self.fmt_type_def_type(&object),
                     self.fmt_overloads(&overloads)
-                );
-
-                txt
+                )
             }
         }
     }
@@ -846,27 +887,54 @@ impl Formatter {
         }
     }
 
+    fn fmt_generic_types(&mut self, types: &GenericTypes) -> String {
+        if types.0.is_empty() {
+            return String::new();
+        }
+
+        let mut txt = String::from("<");
+
+        for typ in types.0.iter() {
+            txt.push_str(&typ.identifier.to_string());
+            if !typ.trait_constraints.is_empty() {
+                txt.push_str(" :");
+                for constraint in &typ.trait_constraints {
+                    txt.push_str(&format!(" {} +", constraint));
+                }
+                txt = txt.trim_end_matches("+").trim().to_string();
+            }
+            txt.push_str(", ");
+        }
+
+        txt = txt.trim().trim_end_matches(",").trim().to_string();
+
+        txt.push_str(">");
+        txt
+    }
+
     fn fmt_overloads(&mut self, overloads: &[Overload]) -> String {
         if !overloads.is_empty() {
             let mut txt = String::from(" @overload {\n");
 
             for func in overloads {
                 let func_txt = {
-                    let mut txt = if func.is_async {
-                        String::from("fn async")
+                    let mut txt = format!("const \"{}\" = ", func.operator);
+                    txt.push_str(if func.header.is_async {
+                        "fn async"
                     } else {
-                        String::from("fn")
-                    };
+                        "fn"
+                    });
 
-                    txt.push_str(&format!(" \"{}\" (", func.operator));
+                    txt.push_str(" (");
 
                     let mut adjusted_params = func
+                        .header
                         .parameters
                         .first()
                         .map(|x| vec![vec![x]])
                         .unwrap_or(Vec::new());
 
-                    for param in func.parameters.iter().skip(1) {
+                    for param in func.header.parameters.iter().skip(1) {
                         let last = adjusted_params.last().unwrap().first().unwrap();
                         if last.1 == param.1 {
                             adjusted_params.last_mut().unwrap().push(param);
@@ -891,7 +959,7 @@ impl Formatter {
 
                     txt.push_str(&format!(
                         ") -> {} {}",
-                        self.fmt_potential_new_type(&func.return_type),
+                        self.fmt_potential_new_type(&func.header.return_type),
                         self.format(&func.body)
                     ));
 

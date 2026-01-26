@@ -15,7 +15,7 @@ pub trait NativeFunction {
         &self,
         env: &mut InterpreterEnvironment,
         scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr>;
 
     fn name(&self) -> String;

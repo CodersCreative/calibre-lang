@@ -14,26 +14,26 @@ impl NativeFunction for Generate {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if args.is_empty() {
             Ok(RuntimeValue::Float(random_range(0.0..=1.0)))
         } else if args.len() == 1 {
-            if let RuntimeValue::Range(start, stop) = args[0].0 {
+            if let RuntimeValue::Range(start, stop) = args[0] {
                 Ok(RuntimeValue::Float(random_range(start as f64..stop as f64)))
             } else {
-                let RuntimeValue::Float(amt) = args[0].0 else {
+                let RuntimeValue::Float(amt) = args[0] else {
                     panic!()
                 };
 
                 Ok(RuntimeValue::Float(random_range(0.0..=amt)))
             }
         } else if args.len() == 2 {
-            let RuntimeValue::Float(start) = args[0].0 else {
+            let RuntimeValue::Float(start) = args[0] else {
                 panic!()
             };
 
-            let RuntimeValue::Float(stop) = args[1].0 else {
+            let RuntimeValue::Float(stop) = args[1] else {
                 panic!()
             };
 
@@ -54,12 +54,12 @@ impl NativeFunction for Bool {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if args.is_empty() {
             Ok(RuntimeValue::Bool(random_bool(0.5)))
         } else if args.len() == 1 {
-            let RuntimeValue::Float(amt) = args[0].0 else {
+            let RuntimeValue::Float(amt) = args[0] else {
                 panic!()
             };
 
@@ -80,22 +80,22 @@ impl NativeFunction for Ratio {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(RuntimeValue, Option<RuntimeValue>)],
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, InterpreterErr> {
         if args.is_empty() {
             Ok(RuntimeValue::Bool(random_ratio(1, 2)))
         } else if args.len() == 1 {
-            let RuntimeValue::Int(amt) = args[0].0 else {
+            let RuntimeValue::Int(amt) = args[0] else {
                 panic!()
             };
 
             Ok(RuntimeValue::Bool(random_ratio(1, amt as u32)))
         } else if args.len() == 2 {
-            let RuntimeValue::Int(start) = args[0].0 else {
+            let RuntimeValue::Int(start) = args[0] else {
                 panic!()
             };
 
-            let RuntimeValue::Int(stop) = args[1].0 else {
+            let RuntimeValue::Int(stop) = args[1] else {
                 panic!()
             };
 

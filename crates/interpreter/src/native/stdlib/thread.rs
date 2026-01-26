@@ -17,15 +17,12 @@ impl NativeFunction for Wait {
         &self,
         _env: &mut InterpreterEnvironment,
         _scope: &u64,
-        args: &[(
-            crate::runtime::values::RuntimeValue,
-            Option<crate::runtime::values::RuntimeValue>,
-        )],
+        args: &[crate::runtime::values::RuntimeValue],
     ) -> Result<crate::runtime::values::RuntimeValue, crate::runtime::interpreter::InterpreterErr>
     {
-        if let Some((RuntimeValue::Int(x), _)) = args.get(0) {
+        if let Some(RuntimeValue::Int(x)) = args.get(0) {
             thread::sleep(Duration::from_secs(*x as u64));
-        } else if let Some((RuntimeValue::Float(x), _)) = args.get(0) {
+        } else if let Some(RuntimeValue::Float(x)) = args.get(0) {
             thread::sleep(Duration::from_secs_f64(*x));
         }
         Ok(RuntimeValue::Null)

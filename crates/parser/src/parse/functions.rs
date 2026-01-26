@@ -1,13 +1,58 @@
-use crate::ast::Node;
-use crate::lexer::{Bracket, Span};
+use crate::ast::{CallArg, Node, ParserDataType, ParserInnerType, PotentialNewType};
+use crate::lexer::{Bracket, Span, Tokenizer};
 use crate::{Parser, SyntaxErr};
 use crate::{ast::NodeType, lexer::TokenType};
+
+fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
+    let mut normal_parts = Vec::new();
+    let mut extracted_parts = Vec::new();
+
+    let mut current_buffer = String::new();
+    let mut chars = input.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        match c {
+            '{' => {
+                if chars.peek() == Some(&'{') {
+                    current_buffer.push('{');
+                    chars.next();
+                } else {
+                    normal_parts.push(current_buffer.clone());
+                    current_buffer.clear();
+
+                    let mut extracted = String::new();
+                    while let Some(&next_c) = chars.peek() {
+                        if next_c == '}' {
+                            chars.next();
+                            break;
+                        }
+                        extracted.push(chars.next().unwrap());
+                    }
+                    extracted_parts.push(extracted);
+                }
+            }
+            '}' => {
+                if chars.peek() == Some(&'}') {
+                    current_buffer.push('}');
+                    chars.next();
+                } else {
+                    current_buffer.push('}');
+                }
+            }
+            _ => current_buffer.push(c),
+        }
+    }
+
+    normal_parts.push(current_buffer);
+
+    (normal_parts, extracted_parts)
+}
 
 impl Parser {
     pub fn parse_call_member_expression(&mut self) -> Node {
         let member = self.parse_scope_member_expression();
 
-        if self.first().token_type == TokenType::Open(Bracket::Paren) {
+        if self.is_first_potential_call() {
             return self.parse_call_expression(member);
         }
 
@@ -15,14 +60,67 @@ impl Parser {
     }
 
     pub fn parse_call_expression(&mut self, caller: Node) -> Node {
-        let args = self.parse_arguments(
-            TokenType::Open(Bracket::Paren),
-            TokenType::Close(Bracket::Paren),
-        );
+        let generic_types = self.parse_generic_types();
+
+        let mut string_fn = None;
+
+        let args = if self.first().token_type == TokenType::String {
+            let val = self.eat();
+            string_fn = Some(val.clone().into());
+            let mut tokenizer = Tokenizer::new(false);
+            let (texts, args) = parse_splits(&val.value);
+
+            let mut parsed_args = vec![CallArg::Value(Node {
+                node_type: NodeType::ListLiteral(
+                    Some(PotentialNewType::DataType(ParserDataType::from(
+                        ParserInnerType::Str,
+                    ))),
+                    {
+                        let mut txts = Vec::new();
+
+                        for txt in texts {
+                            txts.push(Node::new_from_type(NodeType::StringLiteral(txt.into())));
+                        }
+
+                        txts
+                    },
+                ),
+                span: Span::default(),
+            })];
+
+            let args = args
+                .into_iter()
+                .map(|x| tokenizer.tokenize(x).unwrap())
+                .collect::<Vec<_>>();
+
+            let mut original = Vec::new();
+            original.append(&mut self.tokens);
+
+            self.tokens.clear();
+
+            for arg in args {
+                self.tokens = arg;
+                parsed_args.push(CallArg::Value(self.parse_statement()));
+            }
+
+            self.tokens = original;
+
+            parsed_args
+        } else {
+            self.parse_arguments(
+                TokenType::Open(Bracket::Paren),
+                TokenType::Close(Bracket::Paren),
+            )
+        };
 
         let mut expression = Node::new(
-            NodeType::CallExpression(Box::new(caller.clone()), args),
             caller.span,
+            NodeType::CallExpression {
+                string_fn,
+                caller: Box::new(caller),
+                generic_types,
+                args,
+            },
         );
 
         if self.first().token_type == TokenType::Open(Bracket::Paren) {
@@ -33,7 +131,7 @@ impl Parser {
     }
 
     pub fn parse_purely_member(&mut self) -> Node {
-        let first = self.expect_potential_dollar_ident();
+        let first = self.expect_potential_generic_type_ident();
 
         let mut path = vec![(
             Node {
@@ -50,7 +148,7 @@ impl Parser {
                 let first = self.expect_potential_dollar_ident();
                 path.push((
                     Node {
-                        node_type: NodeType::Identifier(first.clone()),
+                        node_type: NodeType::Identifier(first.clone().into()),
                         span: *first.span(),
                     },
                     false,
@@ -69,7 +167,7 @@ impl Parser {
             path.remove(0).0
         } else {
             let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
-            Node::new(NodeType::MemberExpression { path: path }, first)
+            Node::new(first, NodeType::MemberExpression { path: path })
         }
     }
 
@@ -87,7 +185,7 @@ impl Parser {
             path.remove(0)
         } else {
             let first = Span::new_from_spans(path[0].span, path.last().unwrap().span);
-            Node::new(NodeType::ScopeMemberExpression { path: path }, first)
+            Node::new(first, NodeType::ScopeMemberExpression { path: path })
         }
     }
 
@@ -97,6 +195,8 @@ impl Parser {
             && !self.first().value.contains(" ")
         {
             self.parse_member_expression(Some(node))
+        } else if !self.is_eof() && self.is_first_potential_call() {
+            self.parse_call_expression(node)
         } else {
             node
         }
@@ -113,7 +213,12 @@ impl Parser {
             || self.first().token_type == TokenType::Open(Bracket::Square)
         {
             path.push(if self.eat().token_type == TokenType::FullStop {
-                let prop = self.parse_call_member_expression();
+                let mut prop = self.parse_primary_expression();
+
+                if self.is_first_potential_call() {
+                    prop = self.parse_call_expression(prop);
+                }
+
                 (prop, false)
             } else {
                 let prop = self.parse_statement();
@@ -135,12 +240,12 @@ impl Parser {
                             let _ = self.eat();
                             let data = self.parse_statement();
                             return Node::new(
+                                Span::new_from_spans(path[0].0.span, path[1].0.span),
                                 NodeType::EnumExpression {
                                     identifier: identifier.clone(),
-                                    value: value.clone(),
+                                    value: value.clone().into(),
                                     data: Some(Box::new(data)),
                                 },
-                                Span::new_from_spans(path[0].0.span, path[1].0.span),
                             );
                         }
                     }
@@ -154,11 +259,11 @@ impl Parser {
                 if self.first().token_type == TokenType::Open(Bracket::Curly) {
                     let data = self.parse_potential_key_value();
                     return Node::new(
+                        path[0].0.span,
                         NodeType::StructLiteral {
                             identifier: identifier.clone(),
                             value: data,
                         },
-                        path[0].0.span,
                     );
                 }
             }
@@ -168,7 +273,7 @@ impl Parser {
             path.remove(0).0
         } else {
             let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
-            Node::new(NodeType::MemberExpression { path: path }, first)
+            Node::new(first, NodeType::MemberExpression { path: path })
         }
     }
 
@@ -176,7 +281,7 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> Vec<(Node, Option<Node>)> {
+    ) -> Vec<CallArg> {
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         let args = if self.first().token_type == close_token {
@@ -190,28 +295,28 @@ impl Parser {
         args
     }
 
-    pub fn parse_arguments_list(&mut self) -> Vec<(Node, Option<Node>)> {
+    pub fn parse_arguments_list(&mut self) -> Vec<CallArg> {
         let mut defaulted = false;
 
         macro_rules! parse_arg {
             () => {{
                 if let Some(equals) = self.nth(1) {
                     if defaulted || equals.token_type == TokenType::Equals {
-                        (self.parse_primary_expression(), {
+                        CallArg::Named(self.expect_potential_dollar_ident(), {
                             let _ =
                                 self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
                             defaulted = true;
-                            Some(self.parse_statement())
+                            self.parse_statement()
                         })
                     } else {
-                        (self.parse_statement(), None)
+                        CallArg::Value(self.parse_statement())
                     }
                 } else {
                     if defaulted {
                         self.add_err(SyntaxErr::ExpectedChar('='))
                     }
 
-                    (self.parse_statement(), None)
+                    CallArg::Value(self.parse_statement())
                 }
             }};
         }

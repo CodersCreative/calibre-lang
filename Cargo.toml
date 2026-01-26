@@ -6,5 +6,5 @@ members = [
     "crates/interpreter",
     "crates/parser",
     "crates/cranelift",
-    "crates/common", "fmt", "crates/mir", "crates/std", "crates/comptime", "crates/mir-ty",
+    "crates/common", "fmt", "crates/mir", "crates/std", "crates/comptime", "crates/mir-ty", "crates/lir",
 ]

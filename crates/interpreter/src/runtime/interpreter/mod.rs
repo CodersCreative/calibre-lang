@@ -114,7 +114,7 @@ impl InterpreterEnvironment {
             MiddleNodeType::ListLiteral(typ, vals) => {
                 self.evaluate_list_expression(scope, typ, vals)
             }
-            MiddleNodeType::CallExpression(caller, args) => {
+            MiddleNodeType::CallExpression { caller, args } => {
                 self.evaluate_call_expression(scope, *caller, args)
             }
             MiddleNodeType::VariableDeclaration {
@@ -139,14 +139,6 @@ impl InterpreterEnvironment {
             } => {
                 let (from, to) = (self.evaluate(scope, *from)?, self.evaluate(scope, *to)?);
                 self.evaluate_range_expression(scope, from, to, inclusive)
-            }
-            MiddleNodeType::IsDeclaration { value, data_type } => {
-                let value = self.evaluate(scope, *value)?;
-                self.evaluate_is_expression(
-                    scope,
-                    value,
-                    RuntimeType::interpreter_from(self, scope, data_type)?,
-                )
             }
             MiddleNodeType::AssignmentExpression { identifier, value } => {
                 let value = self.evaluate(scope, *value)?;
@@ -185,13 +177,6 @@ impl InterpreterEnvironment {
                     None => None,
                 },
             ),
-            MiddleNodeType::InDeclaration { identifier, value } => {
-                let (identifier, value) = (
-                    self.evaluate(scope, *identifier)?,
-                    self.evaluate(scope, *value)?,
-                );
-                self.evaluate_in_statement(scope, identifier, value)
-            }
             MiddleNodeType::AsExpression { value, data_type } => {
                 let value = self.evaluate(scope, *value)?;
                 self.evaluate_as_expression(
@@ -209,10 +194,6 @@ impl InterpreterEnvironment {
             MiddleNodeType::NegExpression { value } => {
                 let value = self.evaluate(scope, *value)?;
                 self.evaluate_neg(scope, value)
-            }
-            MiddleNodeType::NotExpression { value } => {
-                let value = self.evaluate(scope, *value)?;
-                self.evaluate_not(scope, value)
             }
             MiddleNodeType::EnumExpression {
                 identifier,

@@ -1,5 +1,6 @@
 use calibre_comptime::ComptimeEnvironment;
 use calibre_interpreter::runtime::scope::InterpreterEnvironment;
+use calibre_lir::LirEnvironment;
 use calibre_mir::environment::MiddleEnvironment;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::lexer::Tokenizer;
@@ -7,11 +8,7 @@ use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 use std::{fs, path::PathBuf, process::Command, str::FromStr};
 
-fn file(
-    path: &PathBuf,
-    _use_checker: bool,
-    args: Vec<(MiddleNode, Option<MiddleNode>)>,
-) -> Result<()> {
+fn file(path: &PathBuf, _use_checker: bool, args: Vec<MiddleNode>) -> Result<()> {
     let mut parser = calibre_parser::Parser::default();
     let mut tokenizer = Tokenizer::default();
     let contents = fs::read_to_string(path).into_diagnostic()?;
@@ -56,12 +53,12 @@ fn file(
         .0
         .evaluate(
             &interpreter_result.1,
-            MiddleNode::new_from_type(MiddleNodeType::CallExpression(
-                Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
+            MiddleNode::new_from_type(MiddleNodeType::CallExpression {
+                caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
                     name.into(),
                 ))),
                 args,
-            )),
+            }),
         )
         .into_diagnostic()?;
 

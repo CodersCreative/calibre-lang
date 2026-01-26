@@ -1,6 +1,9 @@
 use crate::{
     Parser, SyntaxErr,
-    ast::{Node, NodeType, ObjectType, Overload, ParserDataType, ParserInnerType, TypeDefType},
+    ast::{
+        FunctionHeader, GenericTypes, Node, NodeType, ObjectType, Overload, ParserDataType,
+        ParserInnerType, TypeDefType,
+    },
     lexer::{Bracket, Span, TokenType},
 };
 
@@ -16,8 +19,8 @@ impl Parser {
                     self.add_err(SyntaxErr::ExpectedType);
                     TypeDefType::NewType(Box::new(
                         crate::ast::ParserDataType::new(
-                            crate::ast::ParserInnerType::Dynamic,
                             self.first().span,
+                            crate::ast::ParserInnerType::Dynamic,
                         )
                         .into(),
                     ))
@@ -43,8 +46,20 @@ impl Parser {
 
         let mut overloads = Vec::new();
 
-        while self.first().token_type == TokenType::Func {
-            let open = self.expect_eat(
+        while self.first().token_type == TokenType::Const {
+            let _ = self.expect_eat(
+                &TokenType::Const,
+                SyntaxErr::ExpectedKeyword(String::from("const")),
+            );
+
+            let operator = self.expect_eat(
+                &TokenType::String,
+                SyntaxErr::ExpectedToken(TokenType::String),
+            );
+
+            let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
+
+            let _ = self.expect_eat(
                 &TokenType::Func,
                 SyntaxErr::ExpectedKeyword(String::from("fn")),
             );
@@ -54,11 +69,6 @@ impl Parser {
             if is_async {
                 let _ = self.eat();
             }
-
-            let operator = self.expect_eat(
-                &TokenType::String,
-                SyntaxErr::ExpectedToken(TokenType::String),
-            );
 
             let parameters = self.parse_key_type_list_ordered_with_ref(
                 TokenType::Open(Bracket::Paren),
@@ -78,12 +88,17 @@ impl Parser {
 
             let block = self.parse_scope_declaration(false);
 
+            let _ = self.parse_delimited();
+
             overloads.push(Overload {
+                header: FunctionHeader {
+                    generics: GenericTypes::default(),
+                    parameters,
+                    return_type,
+                    is_async,
+                },
                 operator: operator.into(),
-                parameters: parameters.into_iter().map(|x| (x.0, x.1)).collect(),
-                return_type,
                 body: Box::new(block),
-                is_async,
             });
         }
 
@@ -110,21 +125,20 @@ impl Parser {
             };
         }
 
-        let identifier = self.expect_potential_dollar_ident();
+        let identifier = self.expect_potential_generic_type_ident();
 
         let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
 
         let object = self.parse_type_def_type();
 
         let overloads = self.parse_overloads();
-
         Node::new(
+            *identifier.span(),
             NodeType::TypeDeclaration {
-                identifier: identifier.clone(),
+                identifier,
                 object,
                 overloads,
             },
-            *identifier.span(),
         )
     }
 

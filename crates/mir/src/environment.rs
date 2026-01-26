@@ -1,11 +1,14 @@
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{collections::HashMap, fs, path::PathBuf, str::FromStr};
 
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Parser,
     ast::{
         Node, NodeType, ObjectMap, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
+        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType,
+        VarType,
+        binary::BinaryOperator,
+        comparison::{BooleanOperation, Comparison},
     },
     lexer::{Location, Span, Tokenizer},
 };
@@ -35,13 +38,43 @@ pub struct MiddleVariable {
     pub location: Option<Location>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct MiddleOverload {
+    pub operator: Operator,
+    pub parameters: Vec<ParserDataType<MiddleNode>>,
+    pub return_type: ParserDataType<MiddleNode>,
+    pub func: Node,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Operator {
+    Binary(BinaryOperator),
+    Comparison(Comparison),
+    Boolean(BooleanOperation),
+}
+
+impl FromStr for Operator {
+    type Err = MiddleErr;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some(x) = BinaryOperator::from_symbol(s) {
+            Ok(Self::Binary(x))
+        } else if let Some(x) = Comparison::from_operator(s) {
+            Ok(Self::Comparison(x))
+        } else if let Some(x) = BooleanOperation::from_operator(s) {
+            Ok(Self::Boolean(x))
+        } else {
+            panic!()
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleEnvironment {
     pub scope_counter: u64,
     pub scopes: HashMap<u64, MiddleScope>,
     pub variables: HashMap<String, MiddleVariable>,
     pub resolved_variables: Vec<String>,
-
+    pub overloads: Vec<MiddleOverload>,
     pub objects: HashMap<String, MiddleObject>,
     pub current_location: Option<Location>,
 }
@@ -87,6 +120,7 @@ pub fn get_disamubiguous_name(
 impl MiddleEnvironment {
     pub fn new() -> MiddleEnvironment {
         MiddleEnvironment {
+            overloads: Vec::new(),
             scope_counter: 0,
             scopes: HashMap::new(),
             resolved_variables: Vec::new(),
@@ -210,6 +244,16 @@ impl MiddleEnvironment {
                 ParserInnerType::Str => ParserInnerType::Str,
                 ParserInnerType::Char => ParserInnerType::Char,
                 ParserInnerType::Range => ParserInnerType::Range,
+                ParserInnerType::StructWithGenerics {
+                    identifier,
+                    generic_types,
+                } => ParserInnerType::StructWithGenerics {
+                    identifier,
+                    generic_types: generic_types
+                        .into_iter()
+                        .map(|x| self.resolve_comp_data_type(scope, x))
+                        .collect(),
+                },
                 ParserInnerType::Tuple(x) => ParserInnerType::Tuple(
                     x.into_iter()
                         .map(|x| self.resolve_comp_data_type(scope, x))
@@ -259,6 +303,38 @@ impl MiddleEnvironment {
         }
     }
 
+    pub fn resolve_potential_generic_ident(
+        &self,
+        scope: &u64,
+        iden: &PotentialGenericTypeIdentifier,
+    ) -> Option<ParserText> {
+        match iden {
+            PotentialGenericTypeIdentifier::Identifier(x) => {
+                self.resolve_potential_dollar_ident(scope, &x)
+            }
+            PotentialGenericTypeIdentifier::Generic {
+                identifier,
+                generic_types,
+            } => todo!(),
+        }
+    }
+
+    pub fn resolve_dollar_ident_potential_generic_only(
+        &self,
+        scope: &u64,
+        iden: &PotentialGenericTypeIdentifier,
+    ) -> Option<ParserText> {
+        match iden {
+            PotentialGenericTypeIdentifier::Identifier(x) => {
+                self.resolve_dollar_ident_only(scope, &x)
+            }
+            PotentialGenericTypeIdentifier::Generic {
+                identifier,
+                generic_types,
+            } => todo!(),
+        }
+    }
+
     pub fn resolve_potential_dollar_ident(
         &self,
         scope: &u64,
@@ -270,11 +346,12 @@ impl MiddleEnvironment {
                 if let Some(text) = self
                     .resolve_macro_arg(scope, x)
                     .map(|x| match &x.node_type {
-                        NodeType::Identifier(PotentialDollarIdentifier::DollarIdentifier(x)) => {
-                            Some(x.clone())
-                        }
-                        NodeType::Identifier(PotentialDollarIdentifier::Identifier(x)) => {
-                            Some(x.clone())
+                        NodeType::Identifier(x) => {
+                            // TODO Handle generics
+                            match x.get_ident() {
+                                PotentialDollarIdentifier::DollarIdentifier(x) => Some(x.clone()),
+                                PotentialDollarIdentifier::Identifier(x) => Some(x.clone()),
+                            }
                         }
                         _ => None,
                     })
@@ -298,11 +375,12 @@ impl MiddleEnvironment {
             PotentialDollarIdentifier::DollarIdentifier(x) => self
                 .resolve_macro_arg(scope, x)
                 .map(|x| match &x.node_type {
-                    NodeType::Identifier(PotentialDollarIdentifier::DollarIdentifier(x)) => {
-                        Some(x.clone())
-                    }
-                    NodeType::Identifier(PotentialDollarIdentifier::Identifier(x)) => {
-                        Some(x.clone())
+                    NodeType::Identifier(x) => {
+                        // TODO Handle generics
+                        match x.get_ident() {
+                            PotentialDollarIdentifier::DollarIdentifier(x) => Some(x.clone()),
+                            PotentialDollarIdentifier::Identifier(x) => Some(x.clone()),
+                        }
                     }
                     _ => None,
                 })
@@ -340,6 +418,42 @@ impl MiddleEnvironment {
                     .unwrap()
                     .mappings
                     .insert(identifier.text, new_name.clone());
+
+                for overload in overloads {
+                    let overload = MiddleOverload {
+                        operator: Operator::from_str(&overload.operator.text).unwrap(),
+                        return_type: self
+                            .resolve_potential_new_type(scope, overload.header.return_type.clone()),
+                        parameters: {
+                            let mut params = Vec::new();
+                            let mut contains = false;
+
+                            for param in overload.header.parameters.iter() {
+                                let ty = self.resolve_potential_new_type(scope, param.1.clone());
+
+                                if let ParserInnerType::Struct(x) =
+                                    ty.data_type.clone().unwrap_all_refs()
+                                {
+                                    if x == new_name {
+                                        contains = true;
+                                    }
+                                }
+
+                                params.push(ty);
+                            }
+
+                            if !contains {
+                                continue;
+                            }
+
+                            params
+                        },
+                        func: overload.into(),
+                    };
+
+                    self.overloads.push(overload);
+                }
+
                 ParserDataType::from(ParserInnerType::Struct(new_name))
             }
         }
@@ -445,7 +559,7 @@ impl MiddleEnvironment {
         self.variables.insert(
             name_name.clone(),
             MiddleVariable {
-                data_type: ParserDataType::new(ParserInnerType::Str, Span::default()),
+                data_type: ParserDataType::from(ParserInnerType::Str),
                 var_type: VarType::Constant,
                 location: None,
             },
@@ -455,7 +569,7 @@ impl MiddleEnvironment {
         self.variables.insert(
             file_name.clone(),
             MiddleVariable {
-                data_type: ParserDataType::new(ParserInnerType::Str, Span::default()),
+                data_type: ParserDataType::from(ParserInnerType::Str),
                 var_type: VarType::Constant,
                 location: None,
             },
@@ -802,7 +916,10 @@ impl MiddleEnvironment {
             | NodeType::ImportStatement { .. }
             | NodeType::AssignmentExpression { .. }
             | NodeType::LoopDeclaration { .. }
-            | NodeType::ScopeDeclaration { define: true, .. } => None,
+            | NodeType::ScopeDeclaration { define: true, .. }
+            | NodeType::ScopeAlias { .. }
+            | NodeType::DataType { .. }
+            | NodeType::Until { .. } => None,
             NodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_type_from_node(scope, value)?),
@@ -875,57 +992,90 @@ impl MiddleEnvironment {
             | NodeType::StructLiteral { identifier, .. } => Some(ParserDataType {
                 span: *identifier.span(),
                 data_type: ParserInnerType::Struct(
-                    self.resolve_potential_dollar_ident(scope, &identifier)?
+                    self.resolve_potential_generic_ident(scope, &identifier)?
                         .to_string(),
                 ),
             }),
-            NodeType::FunctionDeclaration {
-                parameters,
-                body: _,
-                return_type,
-                is_async,
-            } => Some(ParserDataType {
+            NodeType::FunctionDeclaration { header, .. }
+            | NodeType::FnMatchDeclaration { header, .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Function {
                     return_type: Box::new(
-                        self.resolve_potential_new_type(scope, return_type.clone()),
+                        self.resolve_potential_new_type(scope, header.return_type.clone()),
                     ),
                     parameters: {
                         let mut params = Vec::new();
 
-                        for param in parameters {
+                        for param in header.parameters.clone() {
                             params.push(self.resolve_potential_new_type(scope, param.1.clone()));
                         }
 
                         params
                     },
-                    is_async: *is_async,
+                    is_async: header.is_async,
                 },
                 span: node.span,
             }),
-            NodeType::FnMatchDeclaration {
-                parameters,
-                body: _,
-                return_type,
-                is_async,
-            } => Some(ParserDataType {
-                data_type: ParserInnerType::Function {
-                    return_type: Box::new(
-                        self.resolve_potential_new_type(scope, return_type.clone()),
-                    ),
-                    parameters: vec![self.resolve_potential_new_type(scope, parameters.1.clone())],
-                    is_async: *is_async,
-                },
-                span: node.span,
-            }),
-            NodeType::BooleanExpression { .. }
-            | NodeType::ComparisonExpression { .. }
-            | NodeType::NotExpression { .. }
-            | NodeType::InDeclaration { .. }
-            | NodeType::IsDeclaration { .. } => Some(ParserDataType {
-                data_type: ParserInnerType::Bool,
-                span: node.span,
-            }),
-            NodeType::BinaryExpression { left, .. } => self.resolve_type_from_node(scope, left),
+
+            NodeType::NotExpression { .. } | NodeType::InDeclaration { .. } => {
+                Some(ParserDataType {
+                    data_type: ParserInnerType::Bool,
+                    span: node.span,
+                })
+            }
+            NodeType::ComparisonExpression {
+                left,
+                right,
+                operator,
+            } => {
+                if let Some(x) = self.get_operator_overload(
+                    scope,
+                    left,
+                    right,
+                    &Operator::Comparison(operator.clone()),
+                ) {
+                    Some(x.return_type.clone())
+                } else {
+                    Some(ParserDataType {
+                        data_type: ParserInnerType::Bool,
+                        span: node.span,
+                    })
+                }
+            }
+            NodeType::BooleanExpression {
+                left,
+                right,
+                operator,
+            } => {
+                if let Some(x) = self.get_operator_overload(
+                    scope,
+                    left,
+                    right,
+                    &Operator::Boolean(operator.clone()),
+                ) {
+                    Some(x.return_type.clone())
+                } else {
+                    Some(ParserDataType {
+                        data_type: ParserInnerType::Bool,
+                        span: node.span,
+                    })
+                }
+            }
+            NodeType::BinaryExpression {
+                left,
+                right,
+                operator,
+            } => {
+                if let Some(x) = self.get_operator_overload(
+                    scope,
+                    left,
+                    right,
+                    &Operator::Binary(operator.clone()),
+                ) {
+                    Some(x.return_type.clone())
+                } else {
+                    self.resolve_type_from_node(scope, left)
+                }
+            }
             NodeType::IterExpression {
                 data_type: Some(data_type),
                 ..
@@ -953,9 +1103,9 @@ impl MiddleEnvironment {
                 )),
                 span: node.span,
             }),
-            NodeType::NegExpression { value } | NodeType::DebugExpression { value } => {
-                self.resolve_type_from_node(scope, value)
-            }
+            NodeType::NegExpression { value }
+            | NodeType::DebugExpression { value }
+            | NodeType::Ternary { then: value, .. } => self.resolve_type_from_node(scope, value),
             NodeType::AsExpression {
                 value: _,
                 data_type,
@@ -991,7 +1141,13 @@ impl MiddleEnvironment {
                 }) => Some(*x),
                 x => x,
             },
-            NodeType::CallExpression(caller, args) => {
+            NodeType::CallExpression {
+                caller,
+                generic_types,
+                args,
+                ..
+            } => {
+                // TODO handle generics
                 let caller = self
                     .quick_resolve_potential_scope_member(scope, *caller.clone())
                     .unwrap();
@@ -1001,7 +1157,10 @@ impl MiddleEnvironment {
                         let mut lst = Vec::new();
 
                         for arg in args {
-                            lst.push(self.resolve_type_from_node(scope, &arg.0).unwrap());
+                            lst.push(
+                                self.resolve_type_from_node(scope, &arg.clone().into())
+                                    .unwrap(),
+                            );
                         }
                         return Some(ParserDataType {
                             data_type: ParserInnerType::Tuple(lst),
@@ -1009,7 +1168,7 @@ impl MiddleEnvironment {
                         });
                     }
 
-                    if let Some(caller) = self.resolve_potential_dollar_ident(scope, caller) {
+                    if let Some(caller) = self.resolve_potential_generic_ident(scope, caller) {
                         if self.objects.contains_key(&caller.text) {
                             return Some(ParserDataType {
                                 data_type: ParserInnerType::Struct(caller.to_string()),
@@ -1022,21 +1181,38 @@ impl MiddleEnvironment {
                 }
 
                 let Some(caller_type) = caller_type else {
-                    todo!("{:?}", caller);
+                    return None;
                 };
 
                 match caller_type.data_type {
+                    ParserInnerType::Function {
+                        return_type,
+                        parameters,
+                        is_async,
+                    } if parameters.len() > args.len() => Some(ParserDataType {
+                        data_type: ParserInnerType::Function {
+                            return_type,
+                            parameters: parameters
+                                .iter()
+                                .enumerate()
+                                .filter(|(i, _)| i >= &args.len())
+                                .map(|x| x.1.clone())
+                                .collect(),
+                            is_async,
+                        },
+                        span: node.span,
+                    }),
                     ParserInnerType::Function {
                         return_type,
                         parameters: _,
                         is_async: _,
                     } => Some(*return_type.clone()),
                     ParserInnerType::NativeFunction(x) => Some(*x),
-                    _ => todo!(),
+                    _ => return None,
                 }
             }
             NodeType::Identifier(x) => {
-                if let Some(iden) = self.resolve_potential_dollar_ident(scope, &x) {
+                if let Some(iden) = self.resolve_potential_generic_ident(scope, &x) {
                     if let Some(x) = self.variables.get(&iden.text) {
                         return Some(x.data_type.clone());
                     }
@@ -1052,7 +1228,20 @@ impl MiddleEnvironment {
                 Some(ParserDataType::from(ParserInnerType::Dynamic))
             }
             NodeType::Comp { stage: _, body } => self.resolve_type_from_node(scope, &body),
-            x => todo!("{:?}", x),
+            NodeType::PipeExpression(path) => {
+                self.resolve_type_from_node(scope, path.last().unwrap().get_node())
+            }
+            NodeType::DerefStatement { value } => {
+                let typ = self.resolve_type_from_node(scope, &value)?;
+
+                if let ParserInnerType::Ref(x, _) = typ.data_type {
+                    Some(*x)
+                } else {
+                    Some(typ)
+                }
+            }
+            NodeType::ScopeMemberExpression { .. } => todo!(),
+            NodeType::ScopeDeclaration { .. } => unreachable!(),
         };
 
         if let Some(typ) = typ {

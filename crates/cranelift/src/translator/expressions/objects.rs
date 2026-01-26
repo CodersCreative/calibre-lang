@@ -2,6 +2,7 @@ use crate::{
     translator::{FunctionTranslator, layout::GetLayoutInfo, memory::MemoryLoc},
     values::{MemberType, RuntimeType, RuntimeValue},
 };
+use calibre_lir::LirNodeType;
 use calibre_mir::environment::MiddleTypeDefType;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{
@@ -13,8 +14,8 @@ impl<'a> FunctionTranslator<'a> {
     pub fn translate_enum_expression(
         &mut self,
         enum_name: String,
-        value: String,
-        data: Option<MiddleNode>,
+        variant_index: u32,
+        data: Option<LirNodeType>,
     ) -> RuntimeValue {
         let type_def = self.objects.get(&enum_name);
         if type_def.is_none() {
@@ -89,12 +90,6 @@ impl<'a> FunctionTranslator<'a> {
         ));
         let memory = MemoryLoc::from_stack(slot, 0);
 
-        let variant_name = value.to_string();
-        let variant_index = variants
-            .iter()
-            .position(|(n, _)| n.to_string() == variant_name)
-            .unwrap_or(0) as i64;
-
         if let Some(provided) = data {
             let value = self.translate(provided);
             let _ = memory.write_all(
@@ -144,7 +139,7 @@ impl<'a> FunctionTranslator<'a> {
     pub fn translate_aggregate_expression(
         &mut self,
         name: Option<String>,
-        obj: ObjectMap<MiddleNode>,
+        obj: ObjectMap<LirNodeType>,
     ) -> RuntimeValue {
         let mut members: Vec<MemberType> = Vec::new();
         let mut values: Vec<RuntimeValue> = Vec::new();

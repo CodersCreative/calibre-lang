@@ -140,9 +140,6 @@ impl ComptimeEnvironment {
                         is_temp,
                     }
                 }
-                MiddleNodeType::NotExpression { value } => MiddleNodeType::NotExpression {
-                    value: Box::new(self.evaluate(*value, stage)?),
-                },
                 MiddleNodeType::DataType { data_type } => MiddleNodeType::DataType { data_type },
                 MiddleNodeType::FunctionDeclaration {
                     parameters,
@@ -154,15 +151,7 @@ impl ComptimeEnvironment {
                         let mut params = Vec::new();
 
                         for param in parameters {
-                            params.push((
-                                param.0,
-                                param.1,
-                                if let Some(value) = param.2 {
-                                    Some(self.evaluate(value, stage)?)
-                                } else {
-                                    None
-                                },
-                            ));
+                            params.push((param.0, param.1));
                         }
 
                         params
@@ -191,12 +180,6 @@ impl ComptimeEnvironment {
                     value: Box::new(self.evaluate(*value, stage)?),
                     data_type,
                 },
-                MiddleNodeType::InDeclaration { identifier, value } => {
-                    MiddleNodeType::InDeclaration {
-                        identifier: Box::new(self.evaluate(*identifier, stage)?),
-                        value: Box::new(self.evaluate(*value, stage)?),
-                    }
-                }
                 MiddleNodeType::AggregateExpression { identifier, value } => {
                     MiddleNodeType::AggregateExpression {
                         identifier,
@@ -236,29 +219,17 @@ impl ComptimeEnvironment {
                         body: Box::new(self.evaluate(*body, stage)?),
                     }
                 }
-                MiddleNodeType::IsDeclaration { value, data_type } => {
-                    MiddleNodeType::IsDeclaration {
-                        value: Box::new(self.evaluate(*value, stage)?),
-                        data_type,
-                    }
-                }
-                MiddleNodeType::CallExpression(caller, args) => {
-                    MiddleNodeType::CallExpression(Box::new(self.evaluate(*caller, stage)?), {
+                MiddleNodeType::CallExpression { caller, args } => MiddleNodeType::CallExpression {
+                    caller: Box::new(self.evaluate(*caller, stage)?),
+                    args: {
                         let mut lst = Vec::new();
                         for arg in args {
-                            lst.push((
-                                self.evaluate(arg.0, stage)?,
-                                if let Some(a) = arg.1 {
-                                    Some(self.evaluate(a, stage)?)
-                                } else {
-                                    None
-                                },
-                            ));
+                            lst.push(self.evaluate(arg, stage)?);
                         }
 
                         lst
-                    })
-                }
+                    },
+                },
                 MiddleNodeType::BinaryExpression {
                     left,
                     right,

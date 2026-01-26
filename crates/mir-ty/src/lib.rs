@@ -2,8 +2,9 @@ use std::{collections::HashMap, fmt::Display};
 
 use calibre_parser::{
     ast::{
-        CompStage, IfComparisonType, LoopType, Node, NodeType, ObjectMap, ObjectType,
-        ParserDataType, ParserInnerType, ParserText, PotentialNewType, RefMutability, VarType,
+        CallArg, CompStage, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node,
+        NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
+        PotentialNewType, RefMutability, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperation, Comparison},
     },
@@ -42,6 +43,16 @@ pub fn middle_data_type_to_node(data_type: ParserDataType<MiddleNode>) -> Parser
             ParserInnerType::Str => ParserInnerType::Str,
             ParserInnerType::Char => ParserInnerType::Char,
             ParserInnerType::Range => ParserInnerType::Range,
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } => ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types: generic_types
+                    .into_iter()
+                    .map(|x| middle_data_type_to_node(x))
+                    .collect(),
+            },
             ParserInnerType::Tuple(x) => {
                 ParserInnerType::Tuple(x.into_iter().map(|x| middle_data_type_to_node(x)).collect())
             }
@@ -120,16 +131,13 @@ pub enum MiddleNodeType {
         is_temp: bool,
     },
     FunctionDeclaration {
-        parameters: Vec<(ParserText, ParserDataType<MiddleNode>, Option<MiddleNode>)>,
+        parameters: Vec<(ParserText, ParserDataType<MiddleNode>)>,
         body: Box<MiddleNode>,
         return_type: ParserDataType<MiddleNode>,
         is_async: bool,
     },
     AssignmentExpression {
         identifier: Box<MiddleNode>,
-        value: Box<MiddleNode>,
-    },
-    NotExpression {
         value: Box<MiddleNode>,
     },
     Comp {
@@ -147,14 +155,6 @@ pub enum MiddleNodeType {
         value: Box<MiddleNode>,
     },
     AsExpression {
-        value: Box<MiddleNode>,
-        data_type: ParserDataType<MiddleNode>,
-    },
-    InDeclaration {
-        identifier: Box<MiddleNode>,
-        value: Box<MiddleNode>,
-    },
-    IsDeclaration {
         value: Box<MiddleNode>,
         data_type: ParserDataType<MiddleNode>,
     },
@@ -179,7 +179,10 @@ pub enum MiddleNodeType {
     MemberExpression {
         path: Vec<(MiddleNode, bool)>,
     },
-    CallExpression(Box<MiddleNode>, Vec<(MiddleNode, Option<MiddleNode>)>),
+    CallExpression {
+        caller: Box<MiddleNode>,
+        args: Vec<MiddleNode>,
+    },
     BinaryExpression {
         left: Box<MiddleNode>,
         right: Box<MiddleNode>,
@@ -290,31 +293,23 @@ impl Into<NodeType> for MiddleNodeType {
                 return_type,
                 is_async,
             } => NodeType::FunctionDeclaration {
-                parameters: {
-                    let mut lst = Vec::new();
+                header: FunctionHeader {
+                    generics: GenericTypes::default(),
+                    parameters: {
+                        let mut lst = Vec::new();
 
-                    for param in parameters {
-                        lst.push((
-                            param.0.into(),
-                            middle_data_type_to_new_type(param.1),
-                            if let Some(x) = param.2 {
-                                Some(x.into())
-                            } else {
-                                None
-                            },
-                        ));
-                    }
-                    lst
+                        for param in parameters {
+                            lst.push((param.0.into(), middle_data_type_to_new_type(param.1)));
+                        }
+                        lst
+                    },
+                    return_type: middle_data_type_to_new_type(return_type),
+                    is_async,
                 },
                 body: Box::new((*body).into()),
-                return_type: middle_data_type_to_new_type(return_type),
-                is_async,
             },
             Self::AssignmentExpression { identifier, value } => NodeType::AssignmentExpression {
                 identifier: Box::new((*identifier).into()),
-                value: Box::new((*value).into()),
-            },
-            Self::NotExpression { value } => NodeType::NotExpression {
                 value: Box::new((*value).into()),
             },
             Self::DebugExpression {
@@ -346,14 +341,6 @@ impl Into<NodeType> for MiddleNodeType {
                     None
                 },
             },
-            Self::InDeclaration { identifier, value } => NodeType::InDeclaration {
-                identifier: Box::new((*identifier).into()),
-                value: Box::new((*value).into()),
-            },
-            Self::IsDeclaration { value, data_type } => NodeType::IsDeclaration {
-                value: Box::new((*value).into()),
-                data_type: middle_data_type_to_new_type(data_type),
-            },
             Self::RangeDeclaration {
                 from,
                 to,
@@ -374,6 +361,7 @@ impl Into<NodeType> for MiddleNodeType {
                     lst.push(Node::new_from_type(NodeType::LoopDeclaration {
                         loop_type: Box::new(LoopType::Loop),
                         body: Box::new((*body).into()),
+                        until: None,
                     }));
 
                     Some(lst)
@@ -414,23 +402,19 @@ impl Into<NodeType> for MiddleNodeType {
                     lst
                 },
             },
-            Self::CallExpression(caller, args) => {
-                NodeType::CallExpression(Box::new((*caller).into()), {
+            Self::CallExpression { caller, args } => NodeType::CallExpression {
+                string_fn: None,
+                generic_types: Vec::new(),
+                caller: Box::new((*caller).into()),
+                args: {
                     let mut lst = Vec::new();
 
                     for arg in args {
-                        lst.push((
-                            arg.0.into(),
-                            if let Some(a) = arg.1 {
-                                Some(a.into())
-                            } else {
-                                None
-                            },
-                        ));
+                        lst.push(CallArg::Value(arg.into()));
                     }
                     lst
-                })
-            }
+                },
+            },
             Self::BinaryExpression {
                 left,
                 right,
@@ -469,8 +453,10 @@ impl Into<NodeType> for MiddleNodeType {
                     value.0.contains_key("0")
                 };
                 if is_tuple {
-                    NodeType::CallExpression(
-                        Box::new(Node::new_from_type(NodeType::Identifier(
+                    NodeType::CallExpression {
+                        string_fn: None,
+                        generic_types: Vec::new(),
+                        caller: Box::new(Node::new_from_type(NodeType::Identifier(
                             if let Some(identifier) = identifier {
                                 identifier
                             } else {
@@ -478,17 +464,17 @@ impl Into<NodeType> for MiddleNodeType {
                             }
                             .into(),
                         ))),
-                        {
+                        args: {
                             let mut lst = Vec::new();
                             let mut value: Vec<(String, MiddleNode)> =
                                 value.0.into_iter().collect();
                             value.sort_by(|a, b| a.0.cmp(&b.0));
                             for arg in value {
-                                lst.push((arg.1.into(), None));
+                                lst.push(CallArg::Value(arg.1.into()));
                             }
                             lst
                         },
-                    )
+                    }
                 } else {
                     NodeType::StructLiteral {
                         identifier: identifier.unwrap().into(),

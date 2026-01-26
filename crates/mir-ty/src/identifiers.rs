@@ -30,13 +30,8 @@ impl MiddleNode {
                 value,
                 data_type: _,
             }
-            | MiddleNodeType::NotExpression { value }
             | MiddleNodeType::NegExpression { value }
             | MiddleNodeType::AsExpression {
-                value,
-                data_type: _,
-            }
-            | MiddleNodeType::IsDeclaration {
                 value,
                 data_type: _,
             }
@@ -67,10 +62,6 @@ impl MiddleNode {
                 identifier: left,
                 value: right,
             }
-            | MiddleNodeType::InDeclaration {
-                identifier: left,
-                value: right,
-            }
             | MiddleNodeType::RangeDeclaration {
                 from: left,
                 to: right,
@@ -81,15 +72,11 @@ impl MiddleNode {
                 left.append(&mut right.identifiers_used());
                 left
             }
-            MiddleNodeType::CallExpression(callee, args) => {
-                let mut amt = callee.identifiers_used();
+            MiddleNodeType::CallExpression { caller, args } => {
+                let mut amt = caller.identifiers_used();
 
                 for n in args {
-                    if let Some(n) = &n.1 {
-                        amt.append(&mut n.identifiers_used());
-                    } else {
-                        amt.append(&mut n.0.identifiers_used());
-                    }
+                    amt.append(&mut n.identifiers_used());
                 }
 
                 amt
@@ -127,12 +114,6 @@ impl MiddleNode {
                 is_async: _,
             } => {
                 let mut amt = body.identifiers_used();
-
-                for n in parameters {
-                    if let Some(n) = &n.2 {
-                        amt.append(&mut n.identifiers_used());
-                    }
-                }
 
                 amt
             }
