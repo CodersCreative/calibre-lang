@@ -179,6 +179,7 @@ dependencies = [
  "calibre-mir",
  "calibre-mir-ty",
  "calibre-parser",
+ "calibre-vm",
  "clap",
  "miette",
  "rand",
@@ -301,6 +302,16 @@ dependencies = [
 [[package]]
 name = "calibre-std"
 version = "0.1.0"
+
+[[package]]
+name = "calibre-vm"
+version = "0.1.0"
+dependencies = [
+ "calibre-lir",
+ "calibre-mir-ty",
+ "calibre-parser",
+ "rand",
+]
 
 [[package]]
 name = "cfg-if"
@@ -1685,15 +1696,6 @@ name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
-
-[[package]]
-name = "vm"
-version = "0.1.0"
-dependencies = [
- "calibre-lir",
- "calibre-mir-ty",
- "calibre-parser",
-]
 
 [[package]]
 name = "waitpid-any"

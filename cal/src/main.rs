@@ -4,11 +4,12 @@ use calibre_lir::LirEnvironment;
 use calibre_mir::environment::MiddleEnvironment;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::lexer::Tokenizer;
+use calibre_vm::conversion::VMRegistry;
 use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 use std::{fs, path::PathBuf, process::Command, str::FromStr};
 
-fn file(path: &PathBuf, _use_checker: bool, args: Vec<MiddleNode>) -> Result<()> {
+fn file(path: &PathBuf, _use_checker: bool, use_vm: bool, args: Vec<MiddleNode>) -> Result<()> {
     let mut parser = calibre_parser::Parser::default();
     let mut tokenizer = Tokenizer::default();
     let contents = fs::read_to_string(path).into_diagnostic()?;
@@ -24,6 +25,13 @@ fn file(path: &PathBuf, _use_checker: bool, args: Vec<MiddleNode>) -> Result<()>
     let mut middle_result = MiddleEnvironment::new_and_evaluate(program, path.clone())?;
     println!("Starting comptime...");
     middle_result.2 = ComptimeEnvironment::new_and_evaluate(middle_result.2, &middle_result.0)?;
+
+    if use_vm {
+        let lir_result = LirEnvironment::lower(&middle_result.0, middle_result.2.clone());
+        let bytecode: VMRegistry = lir_result.into();
+        println!("Bytecode:");
+        println!("{}", bytecode);
+    }
     println!("Starting interpreter...");
 
     /*if use_checker {
@@ -74,6 +82,8 @@ struct Args {
     fmt: bool,
     #[arg(short, long)]
     check: bool,
+    #[arg(short, long)]
+    vm: bool,
 }
 
 fn main() -> Result<()> {
@@ -88,7 +98,7 @@ fn main() -> Result<()> {
                 .into_diagnostic()?;
         }
         let path = PathBuf::from_str(&path)?;
-        file(&path, args.check, Vec::new())
+        file(&path, args.check, args.vm, Vec::new())
     } else {
         //repl(None)
         Ok(())

@@ -1,5 +1,5 @@
 [package]
-name = "vm"
+name = "calibre-vm"
 version = "0.1.0"
 edition = "2024"
 
@@ -7,3 +7,4 @@ edition = "2024"
 calibre-lir = {path = "../lir"}
 calibre-mir-ty = {path = "../mir-ty"}
 calibre-parser = {path = "../parser"}
+rand = "0.9.1"
