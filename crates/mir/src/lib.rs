@@ -6,7 +6,7 @@ use calibre_parser::{
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, RefMutability,
         VarType,
         binary::BinaryOperator,
-        comparison::{BooleanOperation, Comparison},
+        comparison::{BooleanOperator, ComparisonOperator},
     },
     lexer::Span,
 };
@@ -520,7 +520,7 @@ impl MiddleEnvironment {
                         right: Box::new(Node::new_from_type(NodeType::Identifier(
                             ParserText::from("false".to_string()).into(),
                         ))),
-                        operator: Comparison::Equal,
+                        operator: ComparisonOperator::Equal,
                     },
                     span: node.span,
                 },
@@ -801,7 +801,7 @@ impl MiddleEnvironment {
                                                     Node::new_from_type(NodeType::ComparisonExpression {
                                                         left: Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))),
                                                         right: Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None,generic_types : Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("len".to_string()).into()))), args : vec![CallArg::Value(range)]})),
-                                                        operator: calibre_parser::ast::comparison::Comparison::Lesser
+                                                        operator: calibre_parser::ast::comparison::ComparisonOperator::Lesser
                                                     }),
                                                 )),
                                                 then: Box::new(Node::new_from_type(
@@ -1324,7 +1324,7 @@ impl MiddleEnvironment {
                         conditionals = Node::new_from_type(NodeType::BooleanExpression {
                             left: Box::new(conditionals),
                             right: Box::new(condition),
-                            operator: BooleanOperation::And,
+                            operator: BooleanOperator::And,
                         });
                     }
 
@@ -1344,11 +1344,11 @@ impl MiddleEnvironment {
                                             NodeType::ComparisonExpression {
                                                 left: value.clone(),
                                                 right: Box::new(x),
-                                                operator: Comparison::Equal,
+                                                operator: ComparisonOperator::Equal,
                                             },
                                         )),
                                         right: Box::new(conditionals),
-                                        operator: BooleanOperation::And,
+                                        operator: BooleanOperator::And,
                                     },
                                 ))),
                                 then: pattern.2,
@@ -1418,10 +1418,10 @@ impl MiddleEnvironment {
                                     left : Box::new(Node::new_from_type(NodeType::ComparisonExpression {
                                         left: Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None, generic_types: Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("discriminant")).into()))), args : vec![CallArg::Value(*value.clone())]})),
                                         right: Box::new(Node::new_from_type(NodeType::IntLiteral(index))),
-                                        operator: Comparison::Equal
+                                        operator: ComparisonOperator::Equal
                                     })),
                                     right : Box::new(conditionals),
-                                    operator: BooleanOperation::And,
+                                    operator: BooleanOperator::And,
                                 }))),
                                 then: {Box::new(if let Some(name) = name {
                                     Node::new_from_type(NodeType::ScopeDeclaration {

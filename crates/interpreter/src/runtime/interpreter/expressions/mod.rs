@@ -9,7 +9,7 @@ use crate::{
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{
     binary::BinaryOperator,
-    comparison::{BooleanOperation, Comparison},
+    comparison::{BooleanOperator, ComparisonOperator},
 };
 pub mod call;
 pub mod member;
@@ -114,7 +114,7 @@ impl InterpreterEnvironment {
         _scope: &u64,
         left: RuntimeValue,
         right: RuntimeValue,
-        operator: BooleanOperation,
+        operator: BooleanOperator,
     ) -> Result<RuntimeValue, InterpreterErr> {
         Ok(operators::boolean::handle(&operator, &left, &right)?)
     }
@@ -138,7 +138,7 @@ impl InterpreterEnvironment {
         scope: &u64,
         left: RuntimeValue,
         right: RuntimeValue,
-        operator: Comparison,
+        operator: ComparisonOperator,
     ) -> Result<RuntimeValue, InterpreterErr> {
         operators::comparison::handle(&operator, self, scope, left, right)
     }
@@ -187,7 +187,7 @@ impl InterpreterEnvironment {
 mod tests {
     use calibre_parser::ast::VarType;
     use calibre_parser::ast::binary::BinaryOperator;
-    use calibre_parser::ast::comparison::{BooleanOperation, Comparison};
+    use calibre_parser::ast::comparison::{BooleanOperator, ComparisonOperator};
 
     use super::*;
     use crate::runtime::scope::Variable;
@@ -334,7 +334,7 @@ mod tests {
         let node = NodeType::BooleanExpression {
             left: Box::new(NodeType::Identifier(String::from("true"))),
             right: Box::new(NodeType::Identifier(String::from("false"))),
-            operator: BooleanOperation::And,
+            operator: BooleanOperator::And,
         };
         let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Bool(false));
@@ -346,7 +346,7 @@ mod tests {
         let node = NodeType::ComparisonExpression {
             left: Box::new(NodeType::IntLiteral(3)),
             right: Box::new(NodeType::IntLiteral(2)),
-            operator: Comparison::Greater,
+            operator: ComparisonOperator::Greater,
         };
         let result = env.evaluate(&scope, node).unwrap();
         assert_eq!(result, RuntimeValue::Bool(true));

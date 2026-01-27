@@ -4,7 +4,7 @@ use crate::{
 };
 use calibre_lir::LirNodeType;
 use calibre_mir_ty::MiddleNode;
-use calibre_parser::ast::{Node, comparison::Comparison};
+use calibre_parser::ast::{Node, comparison::ComparisonOperator};
 use cranelift::{codegen::ir::BlockArg, prelude::*};
 
 impl<'a> FunctionTranslator<'a> {
@@ -12,7 +12,7 @@ impl<'a> FunctionTranslator<'a> {
         &mut self,
         left: RuntimeValue,
         right: RuntimeValue,
-        operator: Comparison,
+        operator: ComparisonOperator,
     ) -> Value {
         let RuntimeType::List(left_r_type) = left.data_type else {
             panic!()
@@ -71,8 +71,8 @@ impl<'a> FunctionTranslator<'a> {
             &[BlockArg::Value(header_idx)],
             exit,
             &[match operator {
-                Comparison::Equal => BlockArg::Value(true_val),
-                Comparison::NotEqual => BlockArg::Value(false_val),
+                ComparisonOperator::Equal => BlockArg::Value(true_val),
+                ComparisonOperator::NotEqual => BlockArg::Value(false_val),
                 _ => unimplemented!(),
             }],
         );
@@ -114,7 +114,7 @@ impl<'a> FunctionTranslator<'a> {
         let idx_plus_one = self.builder.ins().iadd_imm(body_idx, 1);
 
         match operator {
-            Comparison::Equal => {
+            ComparisonOperator::Equal => {
                 self.builder.ins().brif(
                     res.value,
                     header,
@@ -123,7 +123,7 @@ impl<'a> FunctionTranslator<'a> {
                     &[BlockArg::Value(false_val)],
                 );
             }
-            Comparison::NotEqual => {
+            ComparisonOperator::NotEqual => {
                 self.builder.ins().brif(
                     res.value,
                     exit,

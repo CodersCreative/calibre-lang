@@ -1,6 +1,6 @@
 pub mod translator;
 pub mod values;
-use calibre_lir::{BasicBlock, BlockId, LirFunction, LirNodeType, LirRegistry, Terminator};
+use calibre_lir::{BlockId, LirBlock, LirFunction, LirNodeType, LirRegistry, LirTerminator};
 use calibre_mir::environment::{MiddleEnvironment, MiddleObject};
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{Node, NodeType, ParserDataType, ParserInnerType, VarType};
@@ -126,7 +126,7 @@ impl Compiler {
         &mut self,
         params: Vec<(String, ParserDataType<MiddleNode>)>,
         return_type: ParserDataType<MiddleNode>,
-        body: Vec<BasicBlock>,
+        body: Vec<LirBlock>,
         registry: &LirRegistry,
         module: &mut ObjectModule,
         ctx: &mut codegen::Context,
@@ -203,10 +203,10 @@ impl Compiler {
 
             if let Some(term) = lir_block.terminator {
                 match term {
-                    Terminator::Jump(target) => {
+                    LirTerminator::Jump(target) => {
                         trans.builder.ins().jump(block_map[&target], &[]);
                     }
-                    Terminator::Branch {
+                    LirTerminator::Branch {
                         condition,
                         then_block,
                         else_block,
@@ -220,7 +220,7 @@ impl Compiler {
                             &[],
                         );
                     }
-                    Terminator::Return(val) => {
+                    LirTerminator::Return(val) => {
                         let mut ret_vals = Vec::new();
                         if let Some(v) = val {
                             ret_vals.push(trans.translate(v).value);

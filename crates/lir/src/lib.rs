@@ -5,7 +5,7 @@ use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{
     CompStage, ObjectMap, ParserDataType, ParserInnerType, ParserText,
     binary::BinaryOperator,
-    comparison::{BooleanOperation, Comparison},
+    comparison::{BooleanOperator, ComparisonOperator},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -53,7 +53,7 @@ pub struct LirFunction {
     pub params: Vec<(String, ParserDataType<MiddleNode>)>,
     pub captures: Vec<String>,
     pub return_type: ParserDataType<MiddleNode>,
-    pub blocks: Vec<BasicBlock>,
+    pub blocks: Vec<LirBlock>,
     pub is_async: bool,
 }
 
@@ -76,7 +76,7 @@ impl Display for LirFunction {
 pub struct BlockId(pub u32);
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
+pub enum LirLiteral {
     Int(i64),
     Float(f64),
     Char(char),
@@ -84,7 +84,7 @@ pub enum Literal {
     Null,
 }
 
-impl Display for Literal {
+impl Display for LirLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Int(x) => write!(f, "{x}"),
@@ -115,12 +115,12 @@ pub enum LirNodeType {
         to: Box<LirNodeType>,
         inclusive: bool,
     },
-    Literal(Literal),
+    Literal(LirLiteral),
     Load(String),
     Boolean {
         left: Box<LirNodeType>,
         right: Box<LirNodeType>,
-        operator: BooleanOperation,
+        operator: BooleanOperator,
     },
     Binary {
         left: Box<LirNodeType>,
@@ -130,7 +130,7 @@ pub enum LirNodeType {
     Comparison {
         left: Box<LirNodeType>,
         right: Box<LirNodeType>,
-        operator: Comparison,
+        operator: ComparisonOperator,
     },
     Call {
         caller: Box<LirNodeType>,
@@ -264,7 +264,7 @@ impl Display for LirLValue {
 }
 
 #[derive(Debug, Clone)]
-pub enum Terminator {
+pub enum LirTerminator {
     Jump(BlockId),
     Branch {
         condition: LirNodeType,
@@ -274,7 +274,7 @@ pub enum Terminator {
     Return(Option<LirNodeType>),
 }
 
-impl Display for Terminator {
+impl Display for LirTerminator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Jump(x) => write!(f, "jmp blk {}", x.0),
@@ -301,13 +301,13 @@ impl Display for Terminator {
 }
 
 #[derive(Debug, Clone)]
-pub struct BasicBlock {
+pub struct LirBlock {
     pub id: BlockId,
     pub instructions: Vec<LirNodeType>,
-    pub terminator: Option<Terminator>,
+    pub terminator: Option<LirTerminator>,
 }
 
-impl Display for BasicBlock {
+impl Display for LirBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut txt = format!("blk {}:", self.id.0);
         for instr in &self.instructions {
@@ -327,7 +327,7 @@ pub struct LirEnvironment<'a> {
     pub env: &'a MiddleEnvironment,
     pub last_ident: Option<String>,
     pub registry: LirRegistry,
-    pub blocks: Vec<BasicBlock>,
+    pub blocks: Vec<LirBlock>,
     pub current_block: BlockId,
     pub temp_count: usize,
     pub loop_stack: Vec<(BlockId, BlockId)>,
@@ -346,7 +346,7 @@ impl<'a> LirEnvironment<'a> {
             env,
             last_ident: None,
             registry: LirRegistry::default(),
-            blocks: vec![BasicBlock {
+            blocks: vec![LirBlock {
                 id: entry_id,
                 instructions: vec![],
                 terminator: None,
@@ -368,7 +368,7 @@ impl<'a> LirEnvironment<'a> {
         self.blocks[idx].instructions.push(instr);
     }
 
-    fn set_terminator(&mut self, term: Terminator) {
+    fn set_terminator(&mut self, term: LirTerminator) {
         let idx = self.current_block.0 as usize;
         if self.blocks[idx].terminator.is_none() {
             self.blocks[idx].terminator = Some(term);
@@ -377,7 +377,7 @@ impl<'a> LirEnvironment<'a> {
 
     fn create_block(&mut self) -> BlockId {
         let id = BlockId(self.blocks.len() as u32);
-        self.blocks.push(BasicBlock {
+        self.blocks.push(LirBlock {
             id,
             instructions: vec![],
             terminator: None,
@@ -391,11 +391,11 @@ impl<'a> LirEnvironment<'a> {
 
     pub fn lower_node(&mut self, node: MiddleNode) -> LirNodeType {
         match node.node_type {
-            MiddleNodeType::IntLiteral(i) => LirNodeType::Literal(Literal::Int(i)),
-            MiddleNodeType::FloatLiteral(f) => LirNodeType::Literal(Literal::Float(f)),
-            MiddleNodeType::CharLiteral(c) => LirNodeType::Literal(Literal::Char(c)),
+            MiddleNodeType::IntLiteral(i) => LirNodeType::Literal(LirLiteral::Int(i)),
+            MiddleNodeType::FloatLiteral(f) => LirNodeType::Literal(LirLiteral::Float(f)),
+            MiddleNodeType::CharLiteral(c) => LirNodeType::Literal(LirLiteral::Char(c)),
             MiddleNodeType::StringLiteral(s) => {
-                LirNodeType::Literal(Literal::String(s.to_string()))
+                LirNodeType::Literal(LirLiteral::String(s.to_string()))
             }
             MiddleNodeType::ListLiteral(data_type, elements) => {
                 let lowered_elements = elements.into_iter().map(|e| self.lower_node(e)).collect();
@@ -416,7 +416,7 @@ impl<'a> LirEnvironment<'a> {
                     fields: ObjectMap(lowered_fields),
                 }
             }
-            MiddleNodeType::EmptyLine => LirNodeType::Literal(Literal::Null),
+            MiddleNodeType::EmptyLine => LirNodeType::Literal(LirLiteral::Null),
             MiddleNodeType::Identifier(name) => LirNodeType::Load(name.to_string()),
             MiddleNodeType::VariableDeclaration {
                 identifier, value, ..
@@ -427,7 +427,7 @@ impl<'a> LirEnvironment<'a> {
                     dest: identifier.to_string(),
                     value: Box::new(val),
                 });
-                LirNodeType::Literal(Literal::Null)
+                LirNodeType::Literal(LirLiteral::Null)
             }
 
             MiddleNodeType::AssignmentExpression { identifier, value } => {
@@ -437,7 +437,7 @@ impl<'a> LirEnvironment<'a> {
                     dest: lhs,
                     value: Box::new(rhs),
                 });
-                LirNodeType::Literal(Literal::Null)
+                LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::FunctionDeclaration {
                 parameters,
@@ -483,7 +483,7 @@ impl<'a> LirEnvironment<'a> {
                 let body_val = sub_lowerer.lower_node(*body);
 
                 if sub_lowerer.blocks.last().unwrap().terminator.is_none() {
-                    sub_lowerer.set_terminator(Terminator::Return(Some(body_val)));
+                    sub_lowerer.set_terminator(LirTerminator::Return(Some(body_val)));
                 }
 
                 let lir_func = LirFunction {
@@ -557,16 +557,16 @@ impl<'a> LirEnvironment<'a> {
                     self.add_instr(val);
                 }
 
-                LirNodeType::Literal(Literal::Null)
+                LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::ScopeDeclaration { body, .. } => {
-                let mut last = LirNodeType::Literal(Literal::Null);
+                let mut last = LirNodeType::Literal(LirLiteral::Null);
                 for stmt in body {
-                    if last != LirNodeType::Literal(Literal::Null) {
+                    if last != LirNodeType::Literal(LirLiteral::Null) {
                         self.add_instr(last.clone());
                     }
                     let val = self.lower_node(stmt);
-                    if val != LirNodeType::Literal(Literal::Null) {
+                    if val != LirNodeType::Literal(LirLiteral::Null) {
                         last = val;
                     }
                 }
@@ -582,7 +582,7 @@ impl<'a> LirEnvironment<'a> {
                 let merge_id = self.create_block();
 
                 let cond = self.lower_node(*comparison);
-                self.set_terminator(Terminator::Branch {
+                self.set_terminator(LirTerminator::Branch {
                     condition: cond,
                     then_block: then_id,
                     else_block: else_id,
@@ -590,16 +590,16 @@ impl<'a> LirEnvironment<'a> {
 
                 self.switch_to(then_id);
                 self.lower_node(*then);
-                self.set_terminator(Terminator::Jump(merge_id));
+                self.set_terminator(LirTerminator::Jump(merge_id));
 
                 self.switch_to(else_id);
                 if let Some(alt) = otherwise {
                     self.lower_node(*alt);
                 }
-                self.set_terminator(Terminator::Jump(merge_id));
+                self.set_terminator(LirTerminator::Jump(merge_id));
 
                 self.switch_to(merge_id);
-                LirNodeType::Literal(Literal::Null)
+                LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::LoopDeclaration { state, body } => {
                 let header_id = self.create_block();
@@ -609,34 +609,34 @@ impl<'a> LirEnvironment<'a> {
                 if let Some(s) = state {
                     self.lower_node(*s);
                 }
-                self.set_terminator(Terminator::Jump(header_id));
+                self.set_terminator(LirTerminator::Jump(header_id));
 
                 self.switch_to(header_id);
-                self.set_terminator(Terminator::Jump(body_id));
+                self.set_terminator(LirTerminator::Jump(body_id));
 
                 self.loop_stack.push((header_id, exit_id));
                 self.switch_to(body_id);
                 self.lower_node(*body);
-                self.set_terminator(Terminator::Jump(header_id));
+                self.set_terminator(LirTerminator::Jump(header_id));
                 self.loop_stack.pop();
 
                 self.switch_to(exit_id);
-                LirNodeType::Literal(Literal::Null)
+                LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::Return { value } => {
                 let val = value.map(|v| self.lower_node(*v));
-                self.set_terminator(Terminator::Return(val));
-                LirNodeType::Literal(Literal::Null)
+                self.set_terminator(LirTerminator::Return(val));
+                LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::Break => {
                 let (_, exit) = *self.loop_stack.last().expect("Break outside loop");
-                self.set_terminator(Terminator::Jump(exit));
-                LirNodeType::Literal(Literal::Null)
+                self.set_terminator(LirTerminator::Jump(exit));
+                LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::Continue => {
                 let (header, _) = *self.loop_stack.last().expect("Continue outside loop");
-                self.set_terminator(Terminator::Jump(header));
-                LirNodeType::Literal(Literal::Null)
+                self.set_terminator(LirTerminator::Jump(header));
+                LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::MemberExpression { path } => {
                 let (base_node, _) = &path[0];
@@ -712,7 +712,7 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::NegExpression { value } => {
                 let val = self.lower_node(*value);
                 LirNodeType::Binary {
-                    left: Box::new(LirNodeType::Literal(Literal::Int(0))),
+                    left: Box::new(LirNodeType::Literal(LirLiteral::Int(0))),
                     right: Box::new(val),
                     operator: BinaryOperator::Sub,
                 }

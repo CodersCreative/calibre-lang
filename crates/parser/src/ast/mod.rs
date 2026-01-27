@@ -3,11 +3,11 @@ pub mod comparison;
 pub mod formatter;
 
 use crate::{
-    ast::{comparison::BooleanOperation, formatter::Formatter},
+    ast::{comparison::BooleanOperator, formatter::Formatter},
     lexer::{Span, Token, TokenType},
 };
 use binary::BinaryOperator;
-use comparison::Comparison;
+use comparison::ComparisonOperator;
 use std::{
     cmp::Ordering,
     collections::HashMap,
@@ -859,13 +859,13 @@ pub enum NodeType {
     ComparisonExpression {
         left: Box<Node>,
         right: Box<Node>,
-        operator: Comparison,
+        operator: ComparisonOperator,
     },
     PipeExpression(Vec<PipeSegment>),
     BooleanExpression {
         left: Box<Node>,
         right: Box<Node>,
-        operator: BooleanOperation,
+        operator: BooleanOperator,
     },
     IfStatement {
         comparison: Box<IfComparisonType>,

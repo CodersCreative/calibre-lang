@@ -6,7 +6,7 @@ use calibre_parser::{
         NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
         PotentialNewType, RefMutability, VarType,
         binary::BinaryOperator,
-        comparison::{BooleanOperation, Comparison},
+        comparison::{BooleanOperator, ComparisonOperator},
     },
     lexer::Span,
 };
@@ -191,12 +191,12 @@ pub enum MiddleNodeType {
     ComparisonExpression {
         left: Box<MiddleNode>,
         right: Box<MiddleNode>,
-        operator: Comparison,
+        operator: ComparisonOperator,
     },
     BooleanExpression {
         left: Box<MiddleNode>,
         right: Box<MiddleNode>,
-        operator: BooleanOperation,
+        operator: BooleanOperator,
     },
     AggregateExpression {
         identifier: Option<ParserText>,

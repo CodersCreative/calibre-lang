@@ -6,7 +6,8 @@ use calibre_lir::LirNodeType;
 use calibre_mir::environment::MiddleTypeDefType;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{
-    Node, NodeType, ObjectMap, ObjectType, PotentialNewType, TypeDefType, comparison::Comparison,
+    Node, NodeType, ObjectMap, ObjectType, PotentialNewType, TypeDefType,
+    comparison::ComparisonOperator,
 };
 use cranelift::{codegen::ir::BlockArg, prelude::*};
 

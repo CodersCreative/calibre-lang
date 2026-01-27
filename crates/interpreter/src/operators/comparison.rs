@@ -2,12 +2,12 @@ use crate::runtime::{
     interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
 };
 use calibre_common::errors::ASTError;
-use calibre_parser::ast::comparison::Comparison;
+use calibre_parser::ast::comparison::ComparisonOperator;
 
 impl InterpreterEnvironment {
     pub fn is_equal(&self, scope: &u64, value: &RuntimeValue, other: &RuntimeValue) -> bool {
         if let Ok(RuntimeValue::Bool(x)) = handle(
-            &Comparison::Equal,
+            &ComparisonOperator::Equal,
             self,
             scope,
             value.clone(),
@@ -20,19 +20,19 @@ impl InterpreterEnvironment {
     }
 }
 
-fn value_handle<T: PartialEq + PartialOrd>(op: &Comparison, left: T, right: T) -> bool {
+fn value_handle<T: PartialEq + PartialOrd>(op: &ComparisonOperator, left: T, right: T) -> bool {
     match op {
-        Comparison::NotEqual => left != right,
-        Comparison::Equal => left == right,
-        Comparison::Lesser => left < right,
-        Comparison::LesserEqual => left <= right,
-        Comparison::Greater => left > right,
-        Comparison::GreaterEqual => left >= right,
+        ComparisonOperator::NotEqual => left != right,
+        ComparisonOperator::Equal => left == right,
+        ComparisonOperator::Lesser => left < right,
+        ComparisonOperator::LesserEqual => left <= right,
+        ComparisonOperator::Greater => left > right,
+        ComparisonOperator::GreaterEqual => left >= right,
     }
 }
 
 pub fn handle(
-    op: &Comparison,
+    op: &ComparisonOperator,
     _env: &InterpreterEnvironment,
     _scope: &u64,
     left: RuntimeValue,

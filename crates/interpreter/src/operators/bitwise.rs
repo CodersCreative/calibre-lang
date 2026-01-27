@@ -1,7 +1,7 @@
-use std::ops::{BitAnd, BitOr, BitXor, Shl, Shr};
-use calibre_common::errors::ASTError;
 use crate::runtime::values::RuntimeValue;
+use calibre_common::errors::ASTError;
 use calibre_parser::ast::binary::BinaryOperator;
+use std::ops::{BitAnd, BitOr, BitXor, Shl, Shr};
 
 macro_rules! handle_bitwise {
     ($op_trait:ident, $op:tt, $rhs:ident, $self:ident) => {

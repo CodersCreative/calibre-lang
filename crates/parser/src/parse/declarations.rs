@@ -4,7 +4,7 @@ use crate::{
         CallArg, FunctionHeader, GenericType, GenericTypes, IfComparisonType, LoopType,
         MatchArmType, NamedScope, Node, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialNewType, TryCatch, VarType, binary::BinaryOperator,
-        comparison::Comparison,
+        comparison::ComparisonOperator,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -268,16 +268,16 @@ impl Parser {
 
         let mut types = Vec::new();
 
-        while self.first().token_type != TokenType::Comparison(Comparison::Greater) {
+        while self.first().token_type != TokenType::Comparison(ComparisonOperator::Greater) {
             types.push(self.expect_potential_new_type());
 
-            if self.first().token_type != TokenType::Comparison(Comparison::Greater) {
+            if self.first().token_type != TokenType::Comparison(ComparisonOperator::Greater) {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
             }
         }
 
         let _ = self.expect_eat(
-            &TokenType::Comparison(Comparison::Greater),
+            &TokenType::Comparison(ComparisonOperator::Greater),
             SyntaxErr::ExpectedChar('>'),
         );
 
@@ -285,17 +285,17 @@ impl Parser {
     }
 
     pub fn parse_generic_types_with_constraints(&mut self) -> GenericTypes {
-        if self.first().token_type != TokenType::Comparison(Comparison::Lesser) {
+        if self.first().token_type != TokenType::Comparison(ComparisonOperator::Lesser) {
             return GenericTypes::default();
         }
         let _ = self.expect_eat(
-            &TokenType::Comparison(Comparison::Lesser),
+            &TokenType::Comparison(ComparisonOperator::Lesser),
             SyntaxErr::ExpectedChar('<'),
         );
 
         let mut types = Vec::new();
 
-        while self.first().token_type != TokenType::Comparison(Comparison::Greater) {
+        while self.first().token_type != TokenType::Comparison(ComparisonOperator::Greater) {
             let identifier = self.parse_potential_dollar_ident().unwrap();
             let mut constraints = Vec::new();
 
@@ -309,7 +309,7 @@ impl Parser {
                 }
             }
 
-            if self.first().token_type != TokenType::Comparison(Comparison::Greater) {
+            if self.first().token_type != TokenType::Comparison(ComparisonOperator::Greater) {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
             }
 
@@ -320,7 +320,7 @@ impl Parser {
         }
 
         let _ = self.expect_eat(
-            &TokenType::Comparison(Comparison::Greater),
+            &TokenType::Comparison(ComparisonOperator::Greater),
             SyntaxErr::ExpectedChar('>'),
         );
 

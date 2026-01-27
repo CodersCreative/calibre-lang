@@ -2,7 +2,7 @@ use crate::{
     Parser, SyntaxErr,
     ast::{
         CompStage, Node, ObjectType, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        RefMutability,
+        RefMutability, comparison::BooleanOperator,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -169,7 +169,7 @@ impl Parser {
                 )
             }
 
-            TokenType::Boolean(crate::ast::comparison::BooleanOperation::And) => {
+            TokenType::Boolean(BooleanOperator::And) => {
                 let open = self.eat();
                 let close = self.parse_purely_member();
                 Node::new(

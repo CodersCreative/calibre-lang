@@ -3,7 +3,7 @@ pub mod memory;
 
 use std::{collections::HashMap, error::Error};
 
-use calibre_lir::{LirGlobal, LirLValue, LirNodeType, LirRegistry, Literal};
+use calibre_lir::{LirGlobal, LirLValue, LirLiteral, LirNodeType, LirRegistry};
 use calibre_mir::environment::MiddleObject;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::binary::BinaryOperator;
@@ -129,11 +129,11 @@ impl<'a> FunctionTranslator<'a> {
     pub fn translate(&mut self, node: LirNodeType) -> RuntimeValue {
         match node {
             LirNodeType::Load(x) => self.translate_identifier(&x),
-            LirNodeType::Literal(Literal::Int(x)) => RuntimeValue::new(
+            LirNodeType::Literal(LirLiteral::Int(x)) => RuntimeValue::new(
                 self.builder.ins().iconst(self.types.int(), x as i64),
                 RuntimeType::Int,
             ),
-            LirNodeType::Literal(Literal::Float(x)) => {
+            LirNodeType::Literal(LirLiteral::Float(x)) => {
                 RuntimeValue::new(self.builder.ins().f64const(x), RuntimeType::Float)
             }
             LirNodeType::As(value, data_type) => {
@@ -186,7 +186,7 @@ impl<'a> FunctionTranslator<'a> {
 
                 panic!("Deref non-ref value")
             }
-            LirNodeType::Literal(Literal::Char(c)) => RuntimeValue::new(
+            LirNodeType::Literal(LirLiteral::Char(c)) => RuntimeValue::new(
                 self.builder.ins().iconst(types::I32, i64::from(c as u32)),
                 RuntimeType::Char,
             ),
@@ -202,7 +202,7 @@ impl<'a> FunctionTranslator<'a> {
                 variant,
                 payload,
             } => self.translate_enum_expression(name, variant, payload.map(|x| *x)),
-            LirNodeType::Literal(Literal::String(txt)) => {
+            LirNodeType::Literal(LirLiteral::String(txt)) => {
                 println!("{txt}");
                 let name = format!("string_literal_{}", rand::random_range(0..100000));
                 let id = self

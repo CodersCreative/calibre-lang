@@ -1,4 +1,4 @@
-use crate::ast::comparison::Comparison;
+use crate::ast::comparison::ComparisonOperator;
 use crate::ast::{Node, PipeSegment};
 use crate::lexer::Span;
 use crate::{Parser, SyntaxErr};
@@ -19,7 +19,7 @@ impl Parser {
             } else {
                 let name = self.expect_potential_dollar_ident();
                 let _ = self.expect_eat(
-                    &TokenType::Comparison(Comparison::Greater),
+                    &TokenType::Comparison(ComparisonOperator::Greater),
                     SyntaxErr::ExpectedChar('>'),
                 );
                 Some(name)
@@ -196,12 +196,12 @@ impl Parser {
         let mut left = self.parse_additive_expression();
         while [
             (
-                TokenType::Comparison(crate::ast::comparison::Comparison::Greater),
-                TokenType::Comparison(crate::ast::comparison::Comparison::Greater),
+                TokenType::Comparison(crate::ast::comparison::ComparisonOperator::Greater),
+                TokenType::Comparison(crate::ast::comparison::ComparisonOperator::Greater),
             ),
             (
-                TokenType::Comparison(crate::ast::comparison::Comparison::Lesser),
-                TokenType::Comparison(crate::ast::comparison::Comparison::Lesser),
+                TokenType::Comparison(crate::ast::comparison::ComparisonOperator::Lesser),
+                TokenType::Comparison(crate::ast::comparison::ComparisonOperator::Lesser),
             ),
         ]
         .contains(&(
@@ -217,9 +217,9 @@ impl Parser {
                     left: Box::new(left),
                     right: Box::new(self.parse_additive_expression()),
                     operator: match token.token_type {
-                        TokenType::Comparison(crate::ast::comparison::Comparison::Greater) => {
-                            BinaryOperator::Shr
-                        }
+                        TokenType::Comparison(
+                            crate::ast::comparison::ComparisonOperator::Greater,
+                        ) => BinaryOperator::Shr,
                         _ => BinaryOperator::Shl,
                     },
                 },
@@ -253,13 +253,13 @@ impl Parser {
 
             if self.first().token_type == TokenType::Equals {
                 match comparison {
-                    crate::ast::comparison::Comparison::Greater => {
+                    crate::ast::comparison::ComparisonOperator::Greater => {
                         let _ = self.eat();
-                        comparison = crate::ast::comparison::Comparison::GreaterEqual;
+                        comparison = crate::ast::comparison::ComparisonOperator::GreaterEqual;
                     }
-                    crate::ast::comparison::Comparison::Lesser => {
+                    crate::ast::comparison::ComparisonOperator::Lesser => {
                         let _ = self.eat();
-                        comparison = crate::ast::comparison::Comparison::LesserEqual;
+                        comparison = crate::ast::comparison::ComparisonOperator::LesserEqual;
                     }
                     _ => {}
                 }
@@ -298,7 +298,7 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use crate::Parser;
-    use crate::ast::comparison::{BooleanOperation, Comparison};
+    use crate::ast::comparison::{BooleanOperator, ComparisonOperator};
     use crate::ast::{NodeType, binary::BinaryOperator};
     use crate::lexer::{Token, tokenize};
 
@@ -374,7 +374,7 @@ mod tests {
         let node = parser.parse_comparison_expression().unwrap();
         match node {
             NodeType::ComparisonExpression { operator, .. } => {
-                assert_eq!(operator, Comparison::Greater);
+                assert_eq!(operator, ComparisonOperator::Greater);
             }
             _ => panic!("Expected ComparisonExpression"),
         }
@@ -387,7 +387,7 @@ mod tests {
         let node = parser.parse_boolean_expression().unwrap();
         match node {
             NodeType::BooleanExpression { operator, .. } => {
-                assert_eq!(operator, BooleanOperation::Or);
+                assert_eq!(operator, BooleanOperator::Or);
             }
             _ => panic!("Expected BooleanExpression"),
         }

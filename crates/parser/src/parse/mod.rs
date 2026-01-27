@@ -8,7 +8,7 @@ use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{
         LoopType, Node, NodeType, ParserDataType, ParserInnerType, PotentialDollarIdentifier,
-        PotentialNewType, RefMutability, comparison::Comparison,
+        PotentialNewType, RefMutability, comparison::ComparisonOperator,
     },
     lexer::{Bracket, Span, StopValue, Token, TokenType},
 };
@@ -249,10 +249,10 @@ impl Parser {
                 Span::new_from_spans(mutability_token.span, typ.span),
                 ParserInnerType::Ref(Box::new(typ), mutability.clone()),
             ))
-        } else if t.token_type == TokenType::Comparison(Comparison::Lesser) {
+        } else if t.token_type == TokenType::Comparison(ComparisonOperator::Lesser) {
             let types = self.parse_type_list(
-                TokenType::Comparison(Comparison::Lesser),
-                TokenType::Comparison(Comparison::Greater),
+                TokenType::Comparison(ComparisonOperator::Lesser),
+                TokenType::Comparison(ComparisonOperator::Greater),
             );
 
             let span = if types.is_empty() {
@@ -329,8 +329,8 @@ impl Parser {
             let t = self.expect_type();
 
             let close = self.expect_eat(
-                &TokenType::Comparison(Comparison::Greater),
-                SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
+                &TokenType::Comparison(ComparisonOperator::Greater),
+                SyntaxErr::ExpectedToken(TokenType::Comparison(ComparisonOperator::Greater)),
             );
 
             Some(ParserDataType::new(
@@ -452,8 +452,8 @@ impl Parser {
                 let t = self.expect_potential_new_type();
 
                 let _ = self.expect_eat(
-                    &TokenType::Comparison(Comparison::Greater),
-                    SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
+                    &TokenType::Comparison(ComparisonOperator::Greater),
+                    SyntaxErr::ExpectedToken(TokenType::Comparison(ComparisonOperator::Greater)),
                 );
                 Some(t)
             } else {

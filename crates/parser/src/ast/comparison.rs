@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Comparison {
+pub enum ComparisonOperator {
     Greater,
     Lesser,
     LesserEqual,
@@ -10,25 +10,25 @@ pub enum Comparison {
     NotEqual,
 }
 
-impl Display for Comparison {
+impl Display for ComparisonOperator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_operator())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BooleanOperation {
+pub enum BooleanOperator {
     And,
     Or,
 }
 
-impl Display for BooleanOperation {
+impl Display for BooleanOperator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_operator())
     }
 }
 
-impl BooleanOperation {
+impl BooleanOperator {
     pub fn from_operator(txt: &str) -> Option<Self> {
         match txt.trim() {
             "&&" => Some(Self::And),
@@ -45,7 +45,7 @@ impl BooleanOperation {
     }
 }
 
-impl Comparison {
+impl ComparisonOperator {
     pub fn from_operator(txt: &str) -> Option<Self> {
         match txt.trim() {
             ">=" => Some(Self::GreaterEqual),

@@ -1,6 +1,6 @@
 use crate::ast::{
     binary::BinaryOperator,
-    comparison::{BooleanOperation, Comparison},
+    comparison::{BooleanOperator, ComparisonOperator},
 };
 use miette::Diagnostic;
 use std::{collections::HashMap, fmt::Display, path::PathBuf};
@@ -97,11 +97,11 @@ pub enum TokenType {
     DoubleColon,
     Comment,
     Comma,
-    Comparison(Comparison),
-    Boolean(BooleanOperation),
+    Comparison(ComparisonOperator),
+    Boolean(BooleanOperator),
     BinaryOperator(BinaryOperator),
     BinaryAssign(BinaryOperator),
-    BooleanAssign(BooleanOperation),
+    BooleanAssign(BooleanOperator),
     Stop(StopValue),
     Not,
     Ref,
@@ -215,27 +215,27 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
         ),
         (
             String::from("&&="),
-            TokenType::BooleanAssign(BooleanOperation::And),
+            TokenType::BooleanAssign(BooleanOperator::And),
         ),
         (
             String::from("||="),
-            TokenType::BooleanAssign(BooleanOperation::Or),
+            TokenType::BooleanAssign(BooleanOperator::Or),
         ),
-        (
-            String::from("&&"),
-            TokenType::Boolean(BooleanOperation::And),
-        ),
-        (String::from("||"), TokenType::Boolean(BooleanOperation::Or)),
+        (String::from("&&"), TokenType::Boolean(BooleanOperator::And)),
+        (String::from("||"), TokenType::Boolean(BooleanOperator::Or)),
         (
             String::from("|="),
             TokenType::BinaryAssign(BinaryOperator::BitOr),
         ),
         (String::from("@overload"), TokenType::Overload),
         (String::from("&mut"), TokenType::RefMut),
-        (String::from("=="), TokenType::Comparison(Comparison::Equal)),
+        (
+            String::from("=="),
+            TokenType::Comparison(ComparisonOperator::Equal),
+        ),
         (
             String::from("!="),
-            TokenType::Comparison(Comparison::NotEqual),
+            TokenType::Comparison(ComparisonOperator::NotEqual),
         ),
     ])
 }
@@ -331,7 +331,7 @@ impl Tokenizer {
                     '$' => Some(TokenType::Dollar),
                     '?' => Some(TokenType::Question),
                     '<' | '>' => Some(TokenType::Comparison(
-                        Comparison::from_operator(&c.to_string()).unwrap(),
+                        ComparisonOperator::from_operator(&c.to_string()).unwrap(),
                     )),
                     '.' => Some(TokenType::FullStop),
                     ':' => Some(TokenType::Colon),
@@ -565,7 +565,7 @@ mod tests {
             TokenType::Integer,
             TokenType::If,
             TokenType::Identifier,
-            TokenType::Comparison(Comparison::Greater),
+            TokenType::Comparison(ComparisonOperator::Greater),
             TokenType::Integer,
             TokenType::Open(Bracket::Curly),
             TokenType::Identifier,
@@ -630,11 +630,11 @@ mod tests {
         let fin_tokens = vec![
             TokenType::If,
             TokenType::Identifier,
-            TokenType::Comparison(Comparison::GreaterEqual),
+            TokenType::Comparison(ComparisonOperator::GreaterEqual),
             TokenType::Integer,
-            TokenType::Boolean(BooleanOperation::And),
+            TokenType::Boolean(BooleanOperator::And),
             TokenType::Identifier,
-            TokenType::Comparison(Comparison::LesserEqual),
+            TokenType::Comparison(ComparisonOperator::LesserEqual),
             TokenType::Integer,
             TokenType::Open(Bracket::Curly),
             TokenType::Stop(StopValue::Return),

@@ -8,7 +8,7 @@ use calibre_parser::{
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType,
         VarType,
         binary::BinaryOperator,
-        comparison::{BooleanOperation, Comparison},
+        comparison::{BooleanOperator, ComparisonOperator},
     },
     lexer::{Location, Span, Tokenizer},
 };
@@ -49,8 +49,8 @@ pub struct MiddleOverload {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Operator {
     Binary(BinaryOperator),
-    Comparison(Comparison),
-    Boolean(BooleanOperation),
+    Comparison(ComparisonOperator),
+    Boolean(BooleanOperator),
 }
 
 impl FromStr for Operator {
@@ -58,9 +58,9 @@ impl FromStr for Operator {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(x) = BinaryOperator::from_symbol(s) {
             Ok(Self::Binary(x))
-        } else if let Some(x) = Comparison::from_operator(s) {
+        } else if let Some(x) = ComparisonOperator::from_operator(s) {
             Ok(Self::Comparison(x))
-        } else if let Some(x) = BooleanOperation::from_operator(s) {
+        } else if let Some(x) = BooleanOperator::from_operator(s) {
             Ok(Self::Boolean(x))
         } else {
             panic!()
