@@ -184,10 +184,10 @@ impl ComptimeEnvironment {
                     MiddleNodeType::AggregateExpression {
                         identifier,
                         value: {
-                            let mut map = HashMap::new();
+                            let mut map = Vec::new();
 
                             for (k, value) in value.0 {
-                                map.insert(k, self.evaluate(value, stage)?);
+                                map.push((k, self.evaluate(value, stage)?));
                             }
 
                             ObjectMap(map)

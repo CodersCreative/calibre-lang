@@ -182,7 +182,7 @@ impl Into<RuntimeType> for &RuntimeValue {
             RuntimeValue::Range(_, _) => RuntimeType::Range,
             RuntimeValue::Aggregate(Some(x), _) => RuntimeType::Struct(x.to_string()),
             RuntimeValue::Aggregate(None, data) => {
-                RuntimeType::Tuple(data.0.iter().map(|x| (x.1).into()).collect())
+                RuntimeType::Tuple(data.0.iter().map(|x| (&x.1).into()).collect())
             }
             RuntimeValue::List { data_type, .. } => RuntimeType::List(data_type.clone()),
             RuntimeValue::Function {

@@ -258,7 +258,7 @@ impl InterpreterEnvironment {
                 for point in path {
                     match value {
                         RuntimeValue::Aggregate(_, mut map) => {
-                            value = map.0.remove(point.to_string().trim()).unwrap()
+                            value = map.remove(point.to_string().trim()).unwrap()
                         }
                         RuntimeValue::Enum(_, _, Some(x))
                         | RuntimeValue::Option(Some(x), _)

@@ -149,10 +149,10 @@ impl MiddleEnvironment {
             }),
             TypeDefType::Struct(x) => MiddleTypeDefType::Struct({
                 let data: ObjectMap<PotentialNewType> = x.into();
-                let mut map = HashMap::new();
+                let mut map = Vec::new();
 
                 for (k, v) in data.0 {
-                    map.insert(k, self.resolve_potential_new_type(scope, v));
+                    map.push((k, self.resolve_potential_new_type(scope, v)));
                 }
 
                 ObjectMap(map)

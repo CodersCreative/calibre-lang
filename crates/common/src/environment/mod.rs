@@ -41,9 +41,9 @@ impl<U: RuntimeType> InterpreterFrom<ObjectMap<ParserDataType<MiddleNode>>> for 
         scope: &u64,
         value: ObjectMap<ParserDataType<MiddleNode>>,
     ) -> Result<Self, ScopeErr> {
-        let mut map: HashMap<String, U> = HashMap::new();
+        let mut map: Vec<(String, U)> = Vec::new();
         for (k, v) in value.0 {
-            map.insert(k, U::interpreter_from(env, scope, v)?);
+            map.push((k, U::interpreter_from(env, scope, v)?));
         }
         Ok(ObjectMap(map))
     }

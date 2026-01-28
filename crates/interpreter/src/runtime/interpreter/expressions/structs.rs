@@ -37,11 +37,11 @@ impl InterpreterEnvironment {
         identifier: Option<String>,
         props: ObjectMap<MiddleNode>,
     ) -> Result<RuntimeValue, InterpreterErr> {
-        let mut properties = HashMap::new();
+        let mut properties = Vec::new();
         for (k, value) in props.0 {
             let value = self.evaluate(scope, value)?;
 
-            properties.insert(k.to_string(), value);
+            properties.push((k.to_string(), value));
         }
 
         Ok(RuntimeValue::Aggregate(identifier, ObjectMap(properties)))

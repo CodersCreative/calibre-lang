@@ -151,8 +151,8 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> HashMap<String, PotentialNewType> {
-        let mut properties = HashMap::new();
+    ) -> Vec<(String, PotentialNewType)> {
+        let mut properties = Vec::new();
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         while !self.is_eof() && self.first().token_type != close_token {
@@ -162,7 +162,7 @@ impl Parser {
 
             let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-            properties.insert(key, self.expect_potential_new_type());
+            properties.push((key, self.expect_potential_new_type()));
 
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));

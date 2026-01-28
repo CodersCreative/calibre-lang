@@ -51,7 +51,7 @@ impl Display for LirGlobal {
 pub struct LirFunction {
     pub name: String,
     pub params: Vec<(String, ParserDataType<MiddleNode>)>,
-    pub captures: Vec<String>,
+    pub captures: Vec<(String, ParserDataType<MiddleNode>)>,
     pub return_type: ParserDataType<MiddleNode>,
     pub blocks: Vec<LirBlock>,
     pub is_async: bool,
@@ -406,9 +406,9 @@ impl<'a> LirEnvironment<'a> {
                 }
             }
             MiddleNodeType::AggregateExpression { identifier, value } => {
-                let mut lowered_fields = HashMap::new();
+                let mut lowered_fields = Vec::new();
                 for (field_name, field_node) in value.0 {
-                    lowered_fields.insert(field_name.to_string(), self.lower_node(field_node));
+                    lowered_fields.push((field_name.to_string(), self.lower_node(field_node)));
                 }
 
                 LirNodeType::Aggregate {
@@ -445,24 +445,9 @@ impl<'a> LirEnvironment<'a> {
                 return_type,
                 is_async,
             } => {
-                let all_used = body.identifiers_used();
-                let param_names: Vec<String> =
-                    parameters.iter().map(|(p, _)| p.to_string()).collect();
+                let mut captures = Vec::new();
 
-                let mut captures: Vec<String> = all_used
-                    .into_iter()
-                    .cloned()
-                    .filter(|id| !param_names.contains(id))
-                    .collect();
-                captures.sort();
-                captures.dedup();
-
-                let mut lifted_params = parameters
-                    .iter()
-                    .map(|(n, t)| (n.to_string(), t.clone()))
-                    .collect::<Vec<_>>();
-
-                for cap in &captures {
+                for cap in body.captured() {
                     let cap_type = self
                         .env
                         .variables
@@ -470,7 +455,7 @@ impl<'a> LirEnvironment<'a> {
                         .map(|v| v.data_type.clone())
                         .unwrap_or_else(|| ParserDataType::from(ParserInnerType::Dynamic).into());
 
-                    lifted_params.push((cap.clone(), cap_type));
+                    captures.push((cap.clone(), cap_type));
                 }
 
                 let internal_name = if let Some(x) = &self.last_ident {
@@ -486,10 +471,12 @@ impl<'a> LirEnvironment<'a> {
                     sub_lowerer.set_terminator(LirTerminator::Return(Some(body_val)));
                 }
 
+                let capture_names = captures.iter().map(|x| x.0.clone()).collect();
+
                 let lir_func = LirFunction {
                     name: internal_name.clone(),
-                    params: lifted_params,
-                    captures: captures.clone(),
+                    params: parameters.into_iter().map(|x| (x.0.text, x.1)).collect(),
+                    captures,
                     return_type,
                     blocks: sub_lowerer.blocks,
                     is_async,
@@ -501,7 +488,7 @@ impl<'a> LirEnvironment<'a> {
 
                 LirNodeType::Closure {
                     label: internal_name,
-                    captures,
+                    captures: capture_names,
                 }
             }
 

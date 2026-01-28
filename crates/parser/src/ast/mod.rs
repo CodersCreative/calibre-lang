@@ -423,28 +423,49 @@ impl<T> FromStr for ParserInnerType<T> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObjectType<T> {
-    Map(HashMap<String, T>),
+    Map(Vec<(String, T)>),
     Tuple(Vec<T>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ObjectMap<T>(pub HashMap<String, T>);
+pub struct ObjectMap<T>(pub Vec<(String, T)>);
+
+impl<T> ObjectMap<T> {
+    pub fn get(&self, key: &str) -> Option<&T> {
+        self.0.iter().find(|x| &x.0 == key).map(|x| &x.1)
+    }
+
+    pub fn remove(&mut self, key: &str) -> Option<T> {
+        let index = self.0.iter().position(|x| &x.0 == key)?;
+        Some(self.0.remove(index).1)
+    }
+
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.0.iter().find(|x| &x.0 == key).is_some()
+    }
+}
 
 impl<T> From<HashMap<String, T>> for ObjectMap<T> {
     fn from(value: HashMap<String, T>) -> Self {
+        Self(value.into_iter().collect())
+    }
+}
+
+impl<T> From<Vec<(String, T)>> for ObjectMap<T> {
+    fn from(value: Vec<(String, T)>) -> Self {
         Self(value)
     }
 }
 
 impl<T> From<Vec<T>> for ObjectMap<T> {
     fn from(value: Vec<T>) -> Self {
-        let mut map = HashMap::new();
-
-        for (i, v) in value.into_iter().enumerate() {
-            map.insert(i.to_string(), v);
-        }
-
-        Self(map)
+        Self(
+            value
+                .into_iter()
+                .enumerate()
+                .map(|x| (x.0.to_string(), x.1))
+                .collect(),
+        )
     }
 }
 
@@ -458,7 +479,7 @@ impl<T> From<ObjectType<T>> for ObjectMap<T> {
 }
 
 impl<T> Deref for ObjectMap<T> {
-    type Target = HashMap<String, T>;
+    type Target = Vec<(String, T)>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -1065,8 +1086,8 @@ impl<T: PartialEq> PartialOrd for ObjectMap<T> {
 impl<T: PartialEq + ToString> ToString for ObjectMap<T> {
     fn to_string(&self) -> String {
         if !self.0.is_empty() {
-            if self.0.get("0").is_some() {
-                let lst: Vec<&T> = self.0.iter().map(|x| x.1).collect();
+            if self.get("0").is_some() {
+                let lst: Vec<&T> = self.0.iter().map(|x| &x.1).collect();
                 return print_list(&lst, '(', ')');
             }
         }

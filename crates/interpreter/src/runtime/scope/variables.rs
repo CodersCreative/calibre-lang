@@ -100,7 +100,7 @@ impl InterpreterEnvironment {
         ) -> RuntimeValue {
             match val {
                 RuntimeValue::Aggregate(x, ObjectMap(map)) => {
-                    let mut new_map = HashMap::new();
+                    let mut new_map = Vec::new();
                     for (k, v) in map {
                         let typ = (&v).into();
                         let inner_val = transform(env, v, v_type);
@@ -112,7 +112,7 @@ impl InterpreterEnvironment {
                                 var_type: v_type.clone(),
                             },
                         );
-                        new_map.insert(k, RuntimeValue::Ref(name, typ));
+                        new_map.push((k, RuntimeValue::Ref(name, typ)));
                     }
                     RuntimeValue::Aggregate(x, ObjectMap(new_map))
                 }
@@ -266,12 +266,10 @@ impl InterpreterEnvironment {
                 ));
             };
             match (current_val, key) {
-                (RuntimeValue::Aggregate(_, ObjectMap(map)), _) => {
-                    match map.get(&key.to_string()) {
-                        Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
-                        _ => break,
-                    }
-                }
+                (RuntimeValue::Aggregate(_, map), _) => match map.get(&key.to_string()) {
+                    Some(RuntimeValue::Ref(p, _)) => pointer = p.clone(),
+                    _ => break,
+                },
                 (RuntimeValue::List { data, .. }, MemberPathType::Computed(k)) => {
                     let idx = k.parse::<usize>().unwrap();
                     match data.get(idx) {

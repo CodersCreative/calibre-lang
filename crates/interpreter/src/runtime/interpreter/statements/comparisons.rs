@@ -22,7 +22,7 @@ impl InterpreterEnvironment {
         map: &ObjectMap<RuntimeValue>,
     ) -> bool {
         for val in map.0.iter() {
-            if self.is_equal(scope, value, val.1) {
+            if self.is_equal(scope, value, &val.1) {
                 return true;
             }
         }

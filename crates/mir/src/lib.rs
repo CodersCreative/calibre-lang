@@ -546,7 +546,7 @@ impl MiddleEnvironment {
                         ParserText::from("contains".to_string()).into(),
                     ))),
                     generic_types: Vec::new(),
-                    args: vec![CallArg::Value(*value)],
+                    args: vec![CallArg::Value(*value), CallArg::Value(*identifier)],
                 }),
             ),
             NodeType::DebugExpression { value } => Ok(MiddleNode {
@@ -1236,19 +1236,19 @@ impl MiddleEnvironment {
                     ),
                     value: ObjectMap(match value {
                         ObjectType::Map(x) => {
-                            let mut map = HashMap::new();
+                            let mut map = Vec::new();
 
                             for itm in x {
-                                map.insert(itm.0, self.evaluate(scope, itm.1)?);
+                                map.push((itm.0, self.evaluate(scope, itm.1)?));
                             }
 
                             map
                         }
                         ObjectType::Tuple(x) => {
-                            let mut map = HashMap::new();
+                            let mut map = Vec::new();
 
                             for itm in x.into_iter().enumerate() {
-                                map.insert(itm.0.to_string(), self.evaluate(scope, itm.1)?);
+                                map.push((itm.0.to_string(), self.evaluate(scope, itm.1)?));
                             }
 
                             map

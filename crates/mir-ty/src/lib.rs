@@ -450,7 +450,7 @@ impl Into<NodeType> for MiddleNodeType {
                 let is_tuple = if value.is_empty() {
                     true
                 } else {
-                    value.0.contains_key("0")
+                    value.contains_key("0")
                 };
                 if is_tuple {
                     NodeType::CallExpression {
@@ -478,15 +478,9 @@ impl Into<NodeType> for MiddleNodeType {
                 } else {
                     NodeType::StructLiteral {
                         identifier: identifier.unwrap().into(),
-                        value: ObjectType::Map({
-                            let mut map = HashMap::new();
-
-                            for (k, v) in value.0 {
-                                map.insert(k, v.into());
-                            }
-
-                            map
-                        }),
+                        value: ObjectType::Map(
+                            value.0.into_iter().map(|x| (x.0, x.1.into())).collect(),
+                        ),
                     }
                 }
             }

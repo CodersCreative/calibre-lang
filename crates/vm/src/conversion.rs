@@ -153,7 +153,7 @@ impl From<LirFunction> for VMFunction {
         Self {
             name: value.name,
             params: value.params.into_iter().map(|x| x.0).collect(),
-            captures: value.captures,
+            captures: value.captures.into_iter().map(|x| x.0).collect(),
             returns_value: value.return_type.data_type != ParserInnerType::Null,
             blocks: value.blocks.into_iter().map(|x| x.into()).collect(),
             is_async: value.is_async,
@@ -167,6 +167,13 @@ pub struct VMBlock {
     pub instructions: Vec<VMInstruction>,
     pub local_literals: Vec<VMLiteral>,
     pub local_strings: Vec<String>,
+    pub aggregate_layouts: Vec<AggregateLayout>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AggregateLayout {
+    pub name: Option<String>,
+    pub members: Vec<String>,
 }
 
 impl Display for VMBlock {
@@ -176,7 +183,11 @@ impl Display for VMBlock {
         for instr in &self.instructions {
             txt.push_str(&format!(
                 "\n{}",
-                instr.display(&self.local_literals, &self.local_strings)
+                instr.display(
+                    &self.local_literals,
+                    &self.local_strings,
+                    &self.aggregate_layouts
+                )
             ));
         }
 
@@ -226,7 +237,12 @@ pub type Count = u8;
 pub type StringIndex = u8;
 
 impl VMInstruction {
-    pub fn display(&self, literals: &[VMLiteral], strings: &[String]) -> String {
+    pub fn display(
+        &self,
+        literals: &[VMLiteral],
+        strings: &[String],
+        aggregate: &[AggregateLayout],
+    ) -> String {
         match self {
             Self::Jump(x) => format!("JMP BLK {}", x.0),
             Self::Branch(then_block, else_block) => format!(
@@ -245,15 +261,18 @@ impl VMInstruction {
             Self::Boolean(x) => format!("BOOLEAN {}", x),
             Self::List(x) => format!("LIST WITH {}", x),
             Self::Call(x) => format!("CALL WITH {}", x),
-            Self::Aggregate { name, count } => format!(
-                "STRUCT {} LAST {}",
-                if let Some(x) = name {
-                    strings[*x as usize].to_string()
-                } else {
-                    String::from("tuple")
-                },
-                count
-            ),
+            Self::Aggregate(x) => {
+                let layout = aggregate.get(*x as usize).unwrap();
+                format!(
+                    "STRUCT {} LAST {}",
+                    if let Some(x) = &layout.name {
+                        x.to_string()
+                    } else {
+                        "tuple".to_string()
+                    },
+                    layout.members.len()
+                )
+            }
             Self::Range(x) => format!("RANGE ..{}", if *x { "=" } else { "" }),
             Self::Index => "INDEX".to_string(),
             Self::LoadMember(x) => format!("LOADMEMBER {}", strings[*x as usize]),
@@ -289,10 +308,7 @@ pub enum VMInstruction {
     Boolean(BooleanOperator),
     List(Count),
     Call(Count),
-    Aggregate {
-        name: Option<StringIndex>,
-        count: Count,
-    },
+    Aggregate(u8),
     Range(bool),
     Index,
     LoadMember(StringIndex),
@@ -312,6 +328,7 @@ impl From<LirBlock> for VMBlock {
             instructions: Vec::with_capacity(value.instructions.len()),
             local_literals: Vec::new(),
             local_strings: Vec::new(),
+            aggregate_layouts: Vec::new(),
         };
 
         for node in value.instructions {
@@ -363,20 +380,21 @@ impl VMBlock {
                 self.instructions.push(VMInstruction::LoadVar(name));
             }
             LirNodeType::Aggregate { name, fields } => {
-                let name = if let Some(name) = name {
-                    Some(self.add_string(name))
-                } else {
-                    None
-                };
-
-                let count = fields.0.len();
-                for (_, item) in fields.0 {
+                let mut layout = Vec::new();
+                for (k, item) in fields.0 {
                     self.translate(item);
+                    layout.push(k.to_string());
                 }
-                self.instructions.push(VMInstruction::Aggregate {
-                    name,
-                    count: count as u8,
+
+                self.aggregate_layouts.push(AggregateLayout {
+                    name: name,
+                    members: layout,
                 });
+
+                let index = self.aggregate_layouts.len() - 1;
+
+                self.instructions
+                    .push(VMInstruction::Aggregate(index as u8));
             }
             LirNodeType::Boolean {
                 left,

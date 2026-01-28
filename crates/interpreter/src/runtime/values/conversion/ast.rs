@@ -54,10 +54,10 @@ impl InterpreterFrom<RuntimeValue> for MiddleNodeType {
             RuntimeValue::Aggregate(x, y) => Ok(MiddleNodeType::AggregateExpression {
                 identifier: x.map(ParserText::from),
                 value: {
-                    let mut map = HashMap::new();
+                    let mut map = Vec::new();
 
                     for (k, v) in y.0 {
-                        map.insert(k, MiddleNode::interpreter_from(env, scope, v)?);
+                        map.push((k, MiddleNode::interpreter_from(env, scope, v)?));
                     }
 
                     ObjectMap(map)

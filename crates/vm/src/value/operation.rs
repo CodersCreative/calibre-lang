@@ -1,17 +1,110 @@
-use crate::runtime::{
-    interpreter::InterpreterErr, scope::InterpreterEnvironment, values::RuntimeValue,
+use calibre_parser::ast::{
+    binary::BinaryOperator,
+    comparison::{BooleanOperator, ComparisonOperator},
 };
-use calibre_common::errors::ASTError;
-use calibre_parser::ast::binary::BinaryOperator;
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
 
-pub fn handle(
-    op: &BinaryOperator,
-    env: &InterpreterEnvironment,
-    scope: &u64,
+use crate::{error::RuntimeError, value::RuntimeValue};
+
+fn comparison_value_handle<T: PartialEq + PartialOrd>(
+    op: &ComparisonOperator,
+    left: T,
+    right: T,
+) -> bool {
+    match op {
+        ComparisonOperator::NotEqual => left != right,
+        ComparisonOperator::Equal => left == right,
+        ComparisonOperator::Lesser => left < right,
+        ComparisonOperator::LesserEqual => left <= right,
+        ComparisonOperator::Greater => left > right,
+        ComparisonOperator::GreaterEqual => left >= right,
+    }
+}
+
+pub fn comparison(
+    op: &ComparisonOperator,
     left: RuntimeValue,
     right: RuntimeValue,
-) -> Result<RuntimeValue, InterpreterErr> {
+) -> Result<RuntimeValue, RuntimeError> {
+    match left {
+        RuntimeValue::Int(x) => match right {
+            RuntimeValue::Int(y) => Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y))),
+            _ => Err(RuntimeError::Comparison(left, right, op.clone())),
+        },
+        RuntimeValue::Float(x) => match right {
+            RuntimeValue::Float(y) => Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y))),
+            _ => Err(RuntimeError::Comparison(left, right, op.clone())),
+        },
+        _ => Err(RuntimeError::Comparison(left, right, op.clone())),
+    }
+}
+
+pub fn boolean(
+    op: &BooleanOperator,
+    left: &RuntimeValue,
+    right: &RuntimeValue,
+) -> Result<RuntimeValue, RuntimeError> {
+    if let RuntimeValue::Bool(x) = left {
+        if *x && op == &BooleanOperator::Or {
+            return Ok(RuntimeValue::Bool(true));
+        } else if !x && op == &BooleanOperator::And {
+            return Ok(RuntimeValue::Bool(false));
+        }
+        if let RuntimeValue::Bool(y) = right {
+            return Ok(RuntimeValue::Bool(match op {
+                BooleanOperator::And => *x && *y,
+                BooleanOperator::Or => *x || *y,
+            }));
+        }
+    }
+
+    Err(RuntimeError::Boolean(
+        left.clone(),
+        right.clone(),
+        op.clone(),
+    ))
+}
+
+macro_rules! handle_bitwise {
+    ($op_trait:ident, $op:tt, $rhs:ident, $self:ident) => {
+        match $self {
+            RuntimeValue::Int(x) => match $rhs{
+                RuntimeValue::Int(y) => Ok(RuntimeValue::Int(x $op y)),
+                RuntimeValue::Bool(y) => Ok(RuntimeValue::Int(x $op y as i64)),
+                _ => $self.panic_operator(&$rhs, &BinaryOperator::$op_trait),
+            },
+            RuntimeValue::Bool(x) => match $rhs{
+                RuntimeValue::Int(y) => Ok(RuntimeValue::Int((x as i64) $op y)),
+                RuntimeValue::Bool(y) => Ok(RuntimeValue::Int((x as i64) $op y as i64)),
+                _ => $self.panic_operator(&$rhs, &BinaryOperator::$op_trait),
+            },
+            _ => $self.panic_operator(&$rhs, &BinaryOperator::$op_trait),
+        }
+    };
+}
+
+macro_rules! impl_bitwise {
+    ($op_trait:ident, $op_fn:ident, $op:tt) => {
+        impl $op_trait for RuntimeValue {
+            type Output = Result<RuntimeValue, RuntimeError>;
+            fn $op_fn(self, rhs: Self) -> Self::Output {
+                handle_bitwise!($op_trait, $op, rhs, self)
+            }
+        }
+    };
+}
+
+impl_bitwise!(BitXor, bitxor, ^);
+impl_bitwise!(BitAnd, bitand, &);
+impl_bitwise!(BitOr, bitor, |);
+impl_bitwise!(Shl, shl, <<);
+impl_bitwise!(Shr, shr, >>);
+
+pub fn binary(
+    op: &BinaryOperator,
+    left: RuntimeValue,
+    right: RuntimeValue,
+) -> Result<RuntimeValue, RuntimeError> {
     Ok(match op {
         BinaryOperator::Add => left + right,
         BinaryOperator::Sub => left - right,
@@ -23,15 +116,15 @@ pub fn handle(
         BinaryOperator::BitOr => left | right,
         BinaryOperator::BitAnd => Ok(match left.clone() & right.clone() {
             Ok(x) => x,
-            _ => left.special_and(right, env, scope)?,
+            _ => left.special_and(right)?,
         }),
         BinaryOperator::Shl => Ok(match left.clone() << right.clone() {
             Ok(x) => x,
-            _ => left.special_shl(right, env, scope)?,
+            _ => left.special_shl(right)?,
         }),
         BinaryOperator::Shr => Ok(match left.clone() >> right.clone() {
             Ok(x) => x,
-            _ => left.special_shr(right, env, scope)?,
+            _ => left.special_shr(right)?,
         }),
     }?)
 }
@@ -41,8 +134,8 @@ impl RuntimeValue {
         &self,
         rhs: &Self,
         operator: &BinaryOperator,
-    ) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
-        Err(ASTError::BinaryOperator(
+    ) -> Result<RuntimeValue, RuntimeError> {
+        Err(RuntimeError::Binary(
             self.clone(),
             rhs.clone(),
             operator.clone(),
@@ -71,7 +164,7 @@ macro_rules! handle_binop_numeric {
 macro_rules! impl_binop_numeric {
     ($op_trait:ident, $op_fn:ident, $op:tt) => {
         impl $op_trait for RuntimeValue {
-            type Output = Result<RuntimeValue, ASTError<RuntimeValue>>;
+            type Output = Result<RuntimeValue, RuntimeError>;
             fn $op_fn(self, rhs: Self) -> Self::Output {
                 handle_binop_numeric!($op_trait, $op, rhs, self)
             }
@@ -85,17 +178,12 @@ impl_binop_numeric!(Mul, mul, *);
 impl_binop_numeric!(Div, div, /);
 
 impl RuntimeValue {
-    fn modulus(self, rhs: Self) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
+    fn modulus(self, rhs: Self) -> Result<RuntimeValue, RuntimeError> {
         handle_binop_numeric!(Mul, %, rhs, self)
     }
 
-    fn special_and(
-        self,
-        rhs: Self,
-        _env: &InterpreterEnvironment,
-        _scope: &u64,
-    ) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
-        let add_str = || -> Result<RuntimeValue, ASTError<RuntimeValue>> {
+    fn special_and(self, rhs: Self) -> Result<RuntimeValue, RuntimeError> {
+        let add_str = || -> Result<RuntimeValue, RuntimeError> {
             let mut x = rhs.to_string();
             x.push_str(&self.to_string());
             Ok(RuntimeValue::Str(x))
@@ -119,27 +207,16 @@ impl RuntimeValue {
         }
     }
 
-    fn special_shr(
-        self,
-        rhs: Self,
-        _env: &InterpreterEnvironment,
-        _scope: &u64,
-    ) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
+    fn special_shr(self, rhs: Self) -> Result<RuntimeValue, RuntimeError> {
         match rhs {
             Self::Aggregate(None, mut data) => {
                 let key = (data.len() - 1).to_string();
                 data.push((key, self));
                 Ok(Self::Aggregate(None, data))
             }
-            Self::List {
-                mut data,
-                data_type,
-            } => {
+            Self::List(mut data) => {
                 data.push(self);
-                Ok(Self::List {
-                    data,
-                    data_type: data_type.clone(),
-                })
+                Ok(Self::List(data))
             }
             _ => match rhs {
                 _ => self.panic_operator(&rhs, &BinaryOperator::Shl),
@@ -147,27 +224,16 @@ impl RuntimeValue {
         }
     }
 
-    fn special_shl(
-        self,
-        rhs: Self,
-        _env: &InterpreterEnvironment,
-        _scope: &u64,
-    ) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
+    fn special_shl(self, rhs: Self) -> Result<RuntimeValue, RuntimeError> {
         match self {
             Self::Aggregate(None, mut data) => {
                 let key = (data.len() - 1).to_string();
                 data.push((key, rhs));
                 Ok(Self::Aggregate(None, data))
             }
-            Self::List {
-                mut data,
-                data_type,
-            } => {
+            Self::List(mut data) => {
                 data.push(rhs);
-                Ok(Self::List {
-                    data,
-                    data_type: data_type.clone(),
-                })
+                Ok(Self::List(data))
             }
             _ => match rhs {
                 _ => self.panic_operator(&rhs, &BinaryOperator::Shl),
@@ -175,7 +241,7 @@ impl RuntimeValue {
         }
     }
 
-    fn pow(self, rhs: Self) -> Result<RuntimeValue, ASTError<RuntimeValue>> {
+    fn pow(self, rhs: Self) -> Result<RuntimeValue, RuntimeError> {
         match self {
             RuntimeValue::Int(x) => match rhs {
                 RuntimeValue::Int(y) => Ok(RuntimeValue::Int(x.pow(y as u32))),

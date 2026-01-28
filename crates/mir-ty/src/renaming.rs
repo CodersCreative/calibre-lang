@@ -196,15 +196,13 @@ impl MiddleNodeType {
             MiddleNodeType::AggregateExpression { identifier, value } => {
                 MiddleNodeType::AggregateExpression {
                     identifier,
-                    value: {
-                        let mut map = HashMap::new();
-
-                        for (k, v) in value.0 {
-                            map.insert(k, v.rename(state));
-                        }
-
-                        ObjectMap(map)
-                    },
+                    value: ObjectMap(
+                        value
+                            .0
+                            .into_iter()
+                            .map(|x| (x.0, x.1.rename(state)))
+                            .collect(),
+                    ),
                 }
             }
             MiddleNodeType::IfStatement {

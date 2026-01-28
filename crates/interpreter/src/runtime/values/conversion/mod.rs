@@ -149,14 +149,14 @@ impl RuntimeValue {
             RuntimeValue::Aggregate(_o, map) => match t {
                 RuntimeType::Tuple(data_types) => {
                     if map.len() == data_types.len() {
-                        let mut valid = HashMap::new();
+                        let mut valid = Vec::new();
                         for i in 0..map.len() {
-                            valid.insert(
+                            valid.push((
                                 i.to_string(),
                                 map.get(&i.to_string())
                                     .unwrap()
                                     .into_type(env, &data_types[i])?,
-                            );
+                            ));
                         }
                         Ok(RuntimeValue::Aggregate(None, ObjectMap(valid)))
                     } else {
@@ -175,17 +175,17 @@ impl RuntimeValue {
                     else {
                         return panic_type();
                     };
-                    let mut new_values = HashMap::new();
+                    let mut new_values = Vec::new();
 
                     for (i, property) in properties.iter() {
-                        if let Some(val) = map.0.get(i) {
-                            new_values.insert(
+                        if let Some(val) = map.get(i) {
+                            new_values.push((
                                 i.to_string(),
                                 val.into_type(
                                     env,
                                     &RuntimeType::interpreter_from(env, &0, property.clone())?,
                                 )?,
-                            );
+                            ));
                         } else {
                             return panic_type();
                         }

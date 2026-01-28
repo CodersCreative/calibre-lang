@@ -301,7 +301,7 @@ impl Parser {
         match self.first().token_type {
             TokenType::Open(Bracket::Curly) => {
                 let _ = self.eat();
-                let mut properties = HashMap::new();
+                let mut properties = Vec::new();
                 while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Curly)
                 {
                     let key = self.expect_potential_dollar_ident();
@@ -313,16 +313,16 @@ impl Parser {
                             let _ = self.eat();
                         }
 
-                        properties.insert(
+                        properties.push((
                             key.to_string(),
                             Node::new(*key.span(), NodeType::Identifier(key.into())),
-                        );
+                        ));
                         continue;
                     }
 
                     let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-                    properties.insert(key.to_string(), self.parse_statement());
+                    properties.push((key.to_string(), self.parse_statement()));
 
                     if self.first().token_type != TokenType::Close(Bracket::Curly) {
                         let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
