@@ -561,18 +561,13 @@ impl<'a> LirEnvironment<'a> {
 
                 LirNodeType::Literal(LirLiteral::Null)
             }
-            MiddleNodeType::ScopeDeclaration { body, .. } => {
-                let mut last = LirNodeType::Literal(LirLiteral::Null);
+            MiddleNodeType::ScopeDeclaration { mut body, .. } => {
+                let mut last = body.pop();
                 for stmt in body {
-                    if last != LirNodeType::Literal(LirLiteral::Null) {
-                        self.add_instr(last.clone());
-                    }
-                    let val = self.lower_node(stmt);
-                    if val != LirNodeType::Literal(LirLiteral::Null) {
-                        last = val;
-                    }
+                    self.lower_and_add_node(stmt);
                 }
-                last
+                last.map(|x| self.lower_node(x))
+                    .unwrap_or(LirNodeType::Literal(LirLiteral::Null))
             }
             MiddleNodeType::IfStatement {
                 comparison,

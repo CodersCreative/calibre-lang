@@ -9,7 +9,7 @@ use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 use std::{fs, path::PathBuf, process::Command, str::FromStr};
 
-fn file(path: &PathBuf, _use_checker: bool, use_vm: bool, args: Vec<MiddleNode>) -> Result<()> {
+fn file(path: &PathBuf, verbose: bool, use_vm: bool, args: Vec<MiddleNode>) -> Result<()> {
     let mut parser = calibre_parser::Parser::default();
     let mut tokenizer = Tokenizer::default();
     let contents = fs::read_to_string(path).into_diagnostic()?;
@@ -33,8 +33,19 @@ fn file(path: &PathBuf, _use_checker: bool, use_vm: bool, args: Vec<MiddleNode>)
         .unwrap_or(String::from("main"));
 
     if use_vm {
+        if verbose {
+            println!("Mir:");
+            println!("{}", middle_result.2);
+        }
+
         println!("Starting vm...");
+
         let lir_result = LirEnvironment::lower(&middle_result.0, middle_result.2.clone());
+
+        if verbose {
+            println!("Lir:");
+            println!("{}", lir_result);
+        }
 
         let mut vm: VM = VM::new(
             VMRegistry::from(lir_result),
@@ -46,8 +57,10 @@ fn file(path: &PathBuf, _use_checker: bool, use_vm: bool, args: Vec<MiddleNode>)
                 .collect(),
         );
 
-        println!("Bytecode:");
-        println!("{}", vm.registry);
+        if verbose {
+            println!("Bytecode:");
+            println!("{}", vm.registry);
+        }
 
         let main = vm.registry.functions.get(&name).unwrap().clone();
         vm.run_function(&main, Vec::new()).unwrap();
@@ -83,8 +96,8 @@ struct Args {
     #[arg(short, long)]
     fmt: bool,
     #[arg(short, long)]
-    check: bool,
-    #[arg(short, long)]
+    verbose: bool,
+    #[arg(long)]
     vm: bool,
 }
 
@@ -100,7 +113,7 @@ fn main() -> Result<()> {
                 .into_diagnostic()?;
         }
         let path = PathBuf::from_str(&path)?;
-        file(&path, args.check, args.vm, Vec::new())
+        file(&path, args.verbose, args.vm, Vec::new())
     } else {
         //repl(None)
         Ok(())
