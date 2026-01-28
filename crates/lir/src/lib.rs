@@ -14,6 +14,14 @@ pub struct LirRegistry {
     pub globals: HashMap<String, LirGlobal>,
 }
 
+impl LirRegistry {
+    pub fn append(&mut self, other: LirRegistry) {
+        for func in other.functions {
+            self.functions.insert(func.0, func.1);
+        }
+    }
+}
+
 impl Display for LirRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut txt = String::new();
@@ -23,7 +31,7 @@ impl Display for LirRegistry {
         }
 
         for func in &self.functions {
-            txt.push_str(&format!("{}\n", func.1));
+            txt.push_str(&format!("{}\n\n", func.1));
         }
 
         write!(f, "{}", txt)
@@ -389,6 +397,11 @@ impl<'a> LirEnvironment<'a> {
         self.current_block = id;
     }
 
+    pub fn lower_and_add_node(&mut self, node: MiddleNode) {
+        let value = self.lower_node(node);
+        self.add_instr(value);
+    }
+
     pub fn lower_node(&mut self, node: MiddleNode) -> LirNodeType {
         match node.node_type {
             MiddleNodeType::IntLiteral(i) => LirNodeType::Literal(LirLiteral::Int(i)),
@@ -470,6 +483,8 @@ impl<'a> LirEnvironment<'a> {
                 if sub_lowerer.blocks.last().unwrap().terminator.is_none() {
                     sub_lowerer.set_terminator(LirTerminator::Return(Some(body_val)));
                 }
+
+                self.registry.append(sub_lowerer.registry);
 
                 let capture_names = captures.iter().map(|x| x.0.clone()).collect();
 
@@ -576,12 +591,12 @@ impl<'a> LirEnvironment<'a> {
                 });
 
                 self.switch_to(then_id);
-                self.lower_node(*then);
+                self.lower_and_add_node(*then);
                 self.set_terminator(LirTerminator::Jump(merge_id));
 
                 self.switch_to(else_id);
                 if let Some(alt) = otherwise {
-                    self.lower_node(*alt);
+                    self.lower_and_add_node(*alt);
                 }
                 self.set_terminator(LirTerminator::Jump(merge_id));
 
@@ -594,7 +609,7 @@ impl<'a> LirEnvironment<'a> {
                 let exit_id = self.create_block();
 
                 if let Some(s) = state {
-                    self.lower_node(*s);
+                    self.lower_and_add_node(*s);
                 }
                 self.set_terminator(LirTerminator::Jump(header_id));
 
@@ -603,7 +618,7 @@ impl<'a> LirEnvironment<'a> {
 
                 self.loop_stack.push((header_id, exit_id));
                 self.switch_to(body_id);
-                self.lower_node(*body);
+                self.lower_and_add_node(*body);
                 self.set_terminator(LirTerminator::Jump(header_id));
                 self.loop_stack.pop();
 

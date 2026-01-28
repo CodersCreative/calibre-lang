@@ -1,3 +1,5 @@
-const main = fn() => {
-    let o = [10 for i in 10];
-}
+const main = fn () => {
+    print(factorial(5));
+};
+
+const factorial = fn (x : int) -> int => if x <= 1 => return 1 else => x * factorial(x - 1);

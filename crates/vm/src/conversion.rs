@@ -82,13 +82,12 @@ pub struct VMFunction {
     pub captures: Vec<String>,
     pub returns_value: bool,
     pub blocks: Vec<VMBlock>,
+    pub renamed: HashMap<String, String>,
     pub is_async: bool,
 }
 
 impl VMFunction {
-    pub fn rename(mut self) -> Self {
-        let mut declared: HashMap<String, String> = HashMap::new();
-
+    pub fn rename(mut self, mut declared: HashMap<String, String>) -> Self {
         for block in self.blocks.iter_mut() {
             for instruction in block.instructions.iter() {
                 match instruction {
@@ -111,8 +110,20 @@ impl VMFunction {
                     *string = x.to_string();
                 }
             }
+
+            for literal in block.local_literals.iter_mut() {
+                match literal {
+                    VMLiteral::Closure { label, captures } => {
+                        if let Some(x) = declared.get(label) {
+                            *label = x.to_string();
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
 
+        self.renamed = declared;
         self
     }
 }
@@ -156,6 +167,7 @@ impl From<LirFunction> for VMFunction {
             captures: value.captures.into_iter().map(|x| x.0).collect(),
             returns_value: value.return_type.data_type != ParserInnerType::Null,
             blocks: value.blocks.into_iter().map(|x| x.into()).collect(),
+            renamed: HashMap::new(),
             is_async: value.is_async,
         }
     }

@@ -4,7 +4,7 @@ use calibre_lir::BlockId;
 use calibre_parser::ast::ObjectMap;
 
 use crate::{
-    conversion::{VMBlock, VMInstruction, VMRegistry},
+    conversion::{VMBlock, VMFunction, VMInstruction, VMRegistry},
     error::RuntimeError,
     value::{
         RuntimeValue, TerminateValue,
@@ -14,32 +14,97 @@ use crate::{
 
 pub mod conversion;
 pub mod error;
+pub mod native;
 pub mod value;
 
 #[derive(Debug, Clone, Default)]
 pub struct VM {
     pub variables: HashMap<String, RuntimeValue>,
     pub registry: VMRegistry,
+    pub mappings: Vec<String>,
+}
+
+impl From<VMRegistry> for VM {
+    fn from(value: VMRegistry) -> Self {
+        Self {
+            variables: HashMap::new(),
+            mappings: Vec::new(),
+            registry: value,
+        }
+    }
 }
 
 impl VM {
-    pub fn run_block(&mut self, block: &VMBlock) -> Result<TerminateValue, RuntimeError> {
-        let mut stack: Vec<RuntimeValue> = Vec::new();
+    pub fn new(registry: VMRegistry, mappings: Vec<String>) -> Self {
+        let mut vm = Self {
+            registry,
+            mappings,
+            variables: HashMap::new(),
+        };
+
+        vm.setup_global();
+        vm.setup_stdlib();
+
+        vm
+    }
+}
+
+impl VM {
+    pub fn run_function(
+        &mut self,
+        function: &VMFunction,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
+        let mut stack = Vec::new();
+        let mut block = function.blocks.first().unwrap();
+
+        for param in function.params.clone().into_iter() {
+            self.variables.insert(param, args.remove(0));
+        }
+
+        loop {
+            match self.run_block(block, &mut stack, &function.renamed)? {
+                TerminateValue::Jump(x) => block = function.blocks.get(x.0 as usize).unwrap(),
+                TerminateValue::Return(x) => match x {
+                    RuntimeValue::Null if function.returns_value => break,
+                    x => return Ok(x),
+                },
+                TerminateValue::None => break,
+            }
+        }
+        if function.returns_value {
+            loop {
+                match stack.pop() {
+                    None => break,
+                    Some(RuntimeValue::Null) => {}
+                    Some(x) => return Ok(x),
+                }
+            }
+        }
+        Ok(RuntimeValue::Null)
+    }
+
+    pub fn run_block(
+        &mut self,
+        block: &VMBlock,
+        stack: &mut Vec<RuntimeValue>,
+        declared: &HashMap<String, String>,
+    ) -> Result<TerminateValue, RuntimeError> {
         for instruction in &block.instructions {
             match instruction {
                 VMInstruction::Binary(x) => {
-                    let left = stack.pop().unwrap();
                     let right = stack.pop().unwrap();
+                    let left = stack.pop().unwrap();
                     stack.push(binary(&x, left, right)?);
                 }
                 VMInstruction::Comparison(x) => {
-                    let left = stack.pop().unwrap();
                     let right = stack.pop().unwrap();
+                    let left = stack.pop().unwrap();
                     stack.push(comparison(&x, left, right)?);
                 }
                 VMInstruction::Boolean(x) => {
-                    let left = stack.pop().unwrap();
                     let right = stack.pop().unwrap();
+                    let left = stack.pop().unwrap();
                     stack.push(boolean(&x, &left, &right)?);
                 }
                 VMInstruction::Jump(x) => return Ok(TerminateValue::Jump(*x)),
@@ -70,7 +135,29 @@ impl VM {
                 }
                 VMInstruction::LoadVar(x) => {
                     let name = block.local_strings.get(*x as usize).unwrap();
-                    stack.push(self.variables.get(name).unwrap().clone())
+                    if let Some(var) = self.variables.get(name) {
+                        stack.push(var.clone());
+                    } else if let Some(func) = self.registry.functions.get(name) {
+                        stack.push(RuntimeValue::Function {
+                            name: func.name.clone(),
+                            captures: func.captures.clone(),
+                        });
+                    } else if let Some(name) = name.split_once("->") {
+                        let name = name.0;
+
+                        if let Some(var) = self.variables.get(name) {
+                            stack.push(var.clone());
+                        } else if let Some(func) = self.registry.functions.get(name) {
+                            stack.push(RuntimeValue::Function {
+                                name: func.name.clone(),
+                                captures: func.captures.clone(),
+                            });
+                        } else {
+                            // TODO handle globals
+                        }
+                    } else {
+                        // TODO handle globals
+                    }
                 }
                 VMInstruction::LoadVarRef(x) => {
                     let name = block.local_strings.get(*x as usize).unwrap();
@@ -91,15 +178,39 @@ impl VM {
                     for i in 0..(*count as usize) {
                         values.push(stack.pop().unwrap());
                     }
+                    values.reverse();
                     stack.push(RuntimeValue::List(values));
                 }
                 VMInstruction::Call(count) => {
-                    let func = stack.pop();
+                    let func = stack.pop().unwrap();
                     let mut args = Vec::new();
                     for i in 0..(*count as usize) {
                         args.push(stack.pop().unwrap());
                     }
-                    // TODO call func with args
+                    args.reverse();
+
+                    match func {
+                        RuntimeValue::Function { name, captures } => {
+                            let func = if let Some(x) = self.registry.functions.get(&name) {
+                                x.clone()
+                            } else if let Some(x) = self
+                                .registry
+                                .functions
+                                .get(name.split_once("->").unwrap().0)
+                            {
+                                x.clone()
+                            } else {
+                                panic!()
+                            }
+                            .rename(declared.clone());
+                            let value = self.run_function(&func, args)?;
+                            stack.push(value);
+                        }
+                        RuntimeValue::NativeFunction(func) => {
+                            stack.push(func.run(self, args)?);
+                        }
+                        _ => panic!(),
+                    }
                 }
                 VMInstruction::Deref => {
                     let value = match stack.pop().unwrap() {
@@ -138,6 +249,7 @@ impl VM {
                     for i in 0..(layout.members.len()) {
                         values.push(stack.pop().unwrap());
                     }
+                    values.reverse();
 
                     stack.push(RuntimeValue::Aggregate(layout.name.clone(), {
                         let mut map = Vec::new();
@@ -150,7 +262,7 @@ impl VM {
                     }));
                 }
                 VMInstruction::Range(inclusive) => {
-                    let (RuntimeValue::Int(from), RuntimeValue::Int(mut to)) =
+                    let (RuntimeValue::Int(mut to), RuntimeValue::Int(from)) =
                         (stack.pop().unwrap(), stack.pop().unwrap())
                     else {
                         panic!()

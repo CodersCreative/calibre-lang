@@ -311,6 +311,8 @@ dependencies = [
  "calibre-mir-ty",
  "calibre-parser",
  "rand",
+ "rustyline",
+ "thiserror",
 ]
 
 [[package]]

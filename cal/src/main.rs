@@ -4,7 +4,7 @@ use calibre_lir::LirEnvironment;
 use calibre_mir::environment::MiddleEnvironment;
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::lexer::Tokenizer;
-use calibre_vm::conversion::VMRegistry;
+use calibre_vm::{VM, conversion::VMRegistry};
 use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 use std::{fs, path::PathBuf, process::Command, str::FromStr};
@@ -26,49 +26,51 @@ fn file(path: &PathBuf, _use_checker: bool, use_vm: bool, args: Vec<MiddleNode>)
     println!("Starting comptime...");
     middle_result.2 = ComptimeEnvironment::new_and_evaluate(middle_result.2, &middle_result.0)?;
 
-    if use_vm {
-        let lir_result = LirEnvironment::lower(&middle_result.0, middle_result.2.clone());
-        let bytecode: VMRegistry = lir_result.into();
-        println!("Bytecode:");
-        println!("{}", bytecode);
-    }
-    println!("Starting interpreter...");
-
-    /*if use_checker {
-        let mut checker = CheckerEnvironment::new();
-        let checker_scope = checker.new_scope_with_stdlib(None, path.clone(), None);
-        let _ = checker.evaluate(&checker_scope, program.clone())?;
-
-        if !checker.errors.is_empty() {
-            eprintln!("Type checker errors:");
-
-            for err in &checker.errors {
-                eprintln!("{}", err)
-            }
-        }
-    }*/
-
-    let mut interpreter_result =
-        InterpreterEnvironment::new_and_evaluate(middle_result.2.clone(), &middle_result.0)
-            .into_diagnostic()?;
-
     let name = middle_result
         .0
         .resolve_str(&middle_result.1, "main")
         .map(|x| x.to_string())
         .unwrap_or(String::from("main"));
-    let _ = interpreter_result
-        .0
-        .evaluate(
-            &interpreter_result.1,
-            MiddleNode::new_from_type(MiddleNodeType::CallExpression {
-                caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
-                    name.into(),
-                ))),
-                args,
-            }),
-        )
-        .into_diagnostic()?;
+
+    if use_vm {
+        println!("Starting vm...");
+        let lir_result = LirEnvironment::lower(&middle_result.0, middle_result.2.clone());
+
+        let mut vm: VM = VM::new(
+            VMRegistry::from(lir_result),
+            middle_result
+                .0
+                .variables
+                .iter()
+                .map(|x| x.0.to_string())
+                .collect(),
+        );
+
+        println!("Bytecode:");
+        println!("{}", vm.registry);
+
+        let main = vm.registry.functions.get(&name).unwrap().clone();
+        vm.run_function(&main, Vec::new()).unwrap();
+    } else {
+        println!("Starting interpreter...");
+
+        let mut interpreter_result =
+            InterpreterEnvironment::new_and_evaluate(middle_result.2.clone(), &middle_result.0)
+                .into_diagnostic()?;
+
+        let _ = interpreter_result
+            .0
+            .evaluate(
+                &interpreter_result.1,
+                MiddleNode::new_from_type(MiddleNodeType::CallExpression {
+                    caller: Box::new(MiddleNode::new_from_type(MiddleNodeType::Identifier(
+                        name.into(),
+                    ))),
+                    args,
+                }),
+            )
+            .into_diagnostic()?;
+    }
 
     Ok(())
 }
