@@ -16,7 +16,6 @@ pub enum RuntimeValue {
     #[default]
     Null,
     Float(f64),
-    Type(ParserDataType<MiddleNode>),
     Int(i64),
     Range(i64, i64),
     Bool(bool),
@@ -129,7 +128,6 @@ impl ToString for RuntimeValue {
             Self::Result(x) => format!("{:?}", x),
             Self::Str(x) => x.to_string(),
             Self::Char(x) => x.to_string(),
-            Self::Type(x) => format!("Type {:?}", x),
             Self::Function { name, captures } => {
                 format!("fn {}(..)", name)
             }

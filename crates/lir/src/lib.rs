@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Display};
 use calibre_mir::environment::{MiddleEnvironment, MiddleTypeDefType};
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{
-    CompStage, ObjectMap, ParserDataType, ParserInnerType, ParserText,
+    ObjectMap, ParserDataType, ParserInnerType, ParserText,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
@@ -41,7 +41,7 @@ impl Display for LirRegistry {
 #[derive(Debug, Clone)]
 pub struct LirGlobal {
     pub name: String,
-    pub data_type: ParserDataType<MiddleNode>,
+    pub data_type: ParserDataType,
     pub initial_value: LirNodeType,
 }
 
@@ -58,9 +58,9 @@ impl Display for LirGlobal {
 #[derive(Debug, Clone)]
 pub struct LirFunction {
     pub name: String,
-    pub params: Vec<(String, ParserDataType<MiddleNode>)>,
-    pub captures: Vec<(String, ParserDataType<MiddleNode>)>,
-    pub return_type: ParserDataType<MiddleNode>,
+    pub params: Vec<(String, ParserDataType)>,
+    pub captures: Vec<(String, ParserDataType)>,
+    pub return_type: ParserDataType,
     pub blocks: Vec<LirBlock>,
     pub is_async: bool,
 }
@@ -112,7 +112,7 @@ pub enum LirNodeType {
     },
     List {
         elements: Vec<LirNodeType>,
-        data_type: ParserDataType<MiddleNode>,
+        data_type: ParserDataType,
     },
     Aggregate {
         name: Option<String>,
@@ -153,7 +153,7 @@ pub enum LirNodeType {
         variant: u32,
         payload: Option<Box<LirNodeType>>,
     },
-    As(Box<LirNodeType>, ParserDataType<MiddleNode>),
+    As(Box<LirNodeType>, ParserDataType),
     Assign {
         dest: LirLValue,
         value: Box<LirNodeType>,
@@ -701,10 +701,6 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::AsExpression { value, data_type } => {
                 LirNodeType::As(Box::new(self.lower_node(*value)), data_type)
             }
-            MiddleNodeType::Comp {
-                stage: CompStage::Wildcard,
-                body,
-            } => self.lower_node(*body),
             MiddleNodeType::DebugExpression { value, .. } => self.lower_node(*value),
             MiddleNodeType::NegExpression { value } => {
                 let val = self.lower_node(*value);
@@ -728,7 +724,6 @@ impl<'a> LirEnvironment<'a> {
                     inclusive,
                 }
             }
-            MiddleNodeType::DataType { .. } | MiddleNodeType::Comp { .. } => unreachable!(),
         }
     }
 

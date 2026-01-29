@@ -330,7 +330,7 @@ pub enum VMInstruction {
         variant: u8,
         has_payload: bool,
     },
-    As(ParserDataType<MiddleNode>),
+    As(ParserDataType),
 }
 
 impl From<LirBlock> for VMBlock {
