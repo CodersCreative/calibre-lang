@@ -332,6 +332,7 @@ impl Into<NodeType> for MiddleNodeType {
                     }
                     lst
                 },
+                reverse_args: Vec::new(),
             },
             Self::BinaryExpression {
                 left,
@@ -388,6 +389,7 @@ impl Into<NodeType> for MiddleNodeType {
                             }
                             lst
                         },
+                        reverse_args: Vec::new(),
                     }
                 } else {
                     NodeType::StructLiteral {

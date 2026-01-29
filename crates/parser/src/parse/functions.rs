@@ -111,6 +111,25 @@ impl Parser {
             )
         };
 
+        let reverse_args = if self.first().token_type == TokenType::PipeParen {
+            let _ = self.eat();
+            let mut args = vec![self.parse_statement()];
+
+            while self.first().token_type == TokenType::Comma {
+                let _ = self.eat();
+                args.push(self.parse_statement());
+            }
+
+            let _ = self.expect_eat(
+                &TokenType::Close(Bracket::Paren),
+                SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
+            );
+
+            args
+        } else {
+            Vec::new()
+        };
+
         let mut expression = Node::new(
             caller.span,
             NodeType::CallExpression {
@@ -118,6 +137,7 @@ impl Parser {
                 caller: Box::new(caller),
                 generic_types,
                 args,
+                reverse_args,
             },
         );
 

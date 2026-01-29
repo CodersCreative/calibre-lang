@@ -118,6 +118,7 @@ impl MiddleEnvironment {
                                 caller,
                                 generic_types,
                                 args,
+                                reverse_args,
                             } if !item.1 => {
                                 // TODO Handle generics
                                 let first = list.first().unwrap().clone();
@@ -312,7 +313,12 @@ impl MiddleEnvironment {
                 let new_name =
                     get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type));
 
-                let data_type = self.resolve_potential_new_type(scope, data_type);
+                let data_type = if data_type.is_auto() {
+                    self.resolve_type_from_node(scope, &value)
+                        .unwrap_or(self.resolve_potential_new_type(scope, data_type))
+                } else {
+                    self.resolve_potential_new_type(scope, data_type)
+                };
 
                 let val = if self.resolve_str(scope, &identifier.text).is_some() {
                     Some(self.evaluate(scope, *value.clone())?)
@@ -526,6 +532,7 @@ impl MiddleEnvironment {
                     ))),
                     generic_types: Vec::new(),
                     args: vec![CallArg::Value(*value), CallArg::Value(*identifier)],
+                    reverse_args: Vec::new(),
                 }),
             ),
             NodeType::DebugExpression { value } => Ok(MiddleNode {
@@ -535,8 +542,13 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::ListLiteral(typ, x) => {
-                let typ = self.resolve_potential_new_type(scope, typ);
+            NodeType::ListLiteral(data_type, x) => {
+                let data_type = if data_type.is_auto() && !x.is_empty() {
+                    self.resolve_type_from_node(scope, x.first().unwrap())
+                        .unwrap_or(self.resolve_potential_new_type(scope, data_type))
+                } else {
+                    self.resolve_potential_new_type(scope, data_type)
+                };
 
                 let mut lst = Vec::new();
 
@@ -545,7 +557,7 @@ impl MiddleEnvironment {
                 }
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::ListLiteral(typ, lst),
+                    node_type: MiddleNodeType::ListLiteral(data_type, lst),
                     span: node.span,
                 })
             }
@@ -578,7 +590,7 @@ impl MiddleEnvironment {
                                             MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")).into(), name: None },
                                             Vec::new(),
                                             Box::new(Node {
-                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None,generic_types: Vec::new(),caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("none")).into()))), args : Vec::new()}))) },
+                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None,generic_types: Vec::new(),caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("none")).into()))), args : Vec::new(), reverse_args: Vec::new(),}))) },
                                                 span: Span::default(),
                                             }),
                                         )
@@ -604,7 +616,7 @@ impl MiddleEnvironment {
                                             MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")).into(), name: Some(ParserText::from(String::from("anon_err_value")).into()) },
                                             Vec::new(),
                                             Box::new(Node {
-                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None,generic_types: Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("err")).into()))), args : vec![CallArg::Value(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")).into())))]}))) },
+                                                node_type: NodeType::Return { value: Some(Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None,generic_types: Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("err")).into()))), args : vec![CallArg::Value(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("anon_err_value")).into())))], reverse_args: Vec::new(),}))) },
                                                 span: Span::default(),
                                             }),
                                         )
@@ -778,7 +790,7 @@ impl MiddleEnvironment {
                                                 comparison: Box::new(IfComparisonType::If(
                                                     Node::new_from_type(NodeType::ComparisonExpression {
                                                         left: Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))),
-                                                        right: Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None,generic_types : Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("len".to_string()).into()))), args : vec![CallArg::Value(range)]})),
+                                                        right: Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None,generic_types : Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("len".to_string()).into()))), args : vec![CallArg::Value(range)], reverse_args: Vec::new(),})),
                                                         operator: calibre_parser::ast::comparison::ComparisonOperator::Lesser
                                                     }),
                                                 )),
@@ -817,7 +829,12 @@ impl MiddleEnvironment {
                 conditionals,
                 until,
             } => {
-                let resolved_data_type = self.resolve_potential_new_type(scope, data_type.clone());
+                let resolved_data_type = if data_type.is_auto() {
+                    self.resolve_type_from_node(scope, &map)
+                        .unwrap_or(self.resolve_potential_new_type(scope, data_type.clone()))
+                } else {
+                    self.resolve_potential_new_type(scope, data_type.clone())
+                };
 
                 let node = Node {
                     node_type: NodeType::ScopeDeclaration {
@@ -1363,7 +1380,7 @@ impl MiddleEnvironment {
                             ifs.push(Node::new_from_type(NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(Node::new_from_type(NodeType::BooleanExpression{
                                     left : Box::new(Node::new_from_type(NodeType::ComparisonExpression {
-                                        left: Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None, generic_types: Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("discriminant")).into()))), args : vec![CallArg::Value(*value.clone())]})),
+                                        left: Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None, generic_types: Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from(String::from("discriminant")).into()))), args : vec![CallArg::Value(*value.clone())], reverse_args: Vec::new(),})),
                                         right: Box::new(Node::new_from_type(NodeType::IntLiteral(index))),
                                         operator: ComparisonOperator::Equal
                                     })),
@@ -1501,14 +1518,18 @@ impl MiddleEnvironment {
                 caller,
                 generic_types,
                 mut args,
+                mut reverse_args,
             } => {
                 // TODO Handle Generics
                 if let NodeType::Identifier(caller) = &caller.node_type {
                     if "tuple" == &caller.to_string() {
+                        let mut args: Vec<Node> = args.into_iter().map(|x| x.into()).collect();
+                        args.append(&mut reverse_args);
+
                         let mut map = HashMap::new();
 
                         for (i, arg) in args.into_iter().enumerate() {
-                            map.insert(i.to_string(), self.evaluate(scope, arg.into())?);
+                            map.insert(i.to_string(), self.evaluate(scope, arg)?);
                         }
 
                         return Ok(MiddleNode {
@@ -1526,9 +1547,11 @@ impl MiddleEnvironment {
                     {
                         if self.objects.contains_key(&caller.text) {
                             let mut map = HashMap::new();
+                            let mut args: Vec<Node> = args.into_iter().map(|x| x.into()).collect();
+                            args.append(&mut reverse_args);
 
                             for (i, arg) in args.into_iter().enumerate() {
-                                map.insert(i.to_string(), self.evaluate(scope, arg.into())?);
+                                map.insert(i.to_string(), self.evaluate(scope, arg)?);
                             }
 
                             return Ok(MiddleNode {
@@ -1553,13 +1576,15 @@ impl MiddleEnvironment {
                                 return_type,
                                 parameters,
                                 is_async,
-                            }) if (parameters.len() < args.len()
-                                || parameters.len() == args.len() + 1)
-                                && parameters.last().unwrap().is_list() =>
+                            }) if (parameters.len() < args.len() + reverse_args.len()
+                                || parameters.len() == args.len() + reverse_args.len() + 1)
+                                && parameters
+                                    .get(parameters.len() - reverse_args.len() - 1)
+                                    .unwrap()
+                                    .is_list() =>
                             {
                                 let mut lst = Vec::new();
-
-                                for _ in 0..(parameters.len() - 1) {
+                                for _ in 0..(parameters.len() - 1 - reverse_args.len()) {
                                     let arg = args.remove(0);
                                     lst.push(self.evaluate(scope, arg.into())?);
                                 }
@@ -1587,18 +1612,22 @@ impl MiddleEnvironment {
                                     )?,
                                 );
 
+                                for _ in 0..reverse_args.len() {
+                                    lst.push(self.evaluate(scope, reverse_args.remove(0))?);
+                                }
+
                                 lst
                             }
                             Some(ParserInnerType::Function {
                                 return_type,
                                 parameters,
                                 is_async,
-                            }) if parameters.len() > args.len() => {
+                            }) if parameters.len() > args.len() + reverse_args.len() => {
                                 let mut converted_missing_param_types: Vec<PotentialNewType> =
                                     parameters
                                         .iter()
                                         .enumerate()
-                                        .filter(|(i, _)| i >= &args.len())
+                                        .filter(|(i, _)| i >= &(args.len() + reverse_args.len()))
                                         .map(|x| x.1.clone().into())
                                         .collect();
 
@@ -1611,6 +1640,10 @@ impl MiddleEnvironment {
                                     args.push(CallArg::Value(Node::new_from_type(
                                         NodeType::Identifier(ParserText::from(name).into()),
                                     )));
+                                }
+
+                                for _ in 0..reverse_args.len() {
+                                    args.push(CallArg::Value(reverse_args.remove(0)));
                                 }
 
                                 return self.evaluate(
@@ -1640,6 +1673,7 @@ impl MiddleEnvironment {
                                                     caller,
                                                     generic_types,
                                                     args,
+                                                    reverse_args: Vec::new(),
                                                 },
                                             )),
                                         },
@@ -1652,6 +1686,10 @@ impl MiddleEnvironment {
 
                                 for arg in args {
                                     lst.push(self.evaluate(scope, arg.into())?);
+                                }
+
+                                for _ in 0..reverse_args.len() {
+                                    lst.push(self.evaluate(scope, reverse_args.remove(0))?);
                                 }
 
                                 lst
@@ -1797,6 +1835,7 @@ impl MiddleEnvironment {
                                 caller: Box::new(point.into()),
                                 generic_types: Vec::new(),
                                 args: vec![CallArg::Value(value)],
+                                reverse_args: Vec::new(),
                             })
                         }
                         _ => {

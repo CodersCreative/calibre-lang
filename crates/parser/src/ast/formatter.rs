@@ -341,6 +341,7 @@ impl Formatter {
                 caller,
                 generic_types,
                 args,
+                reverse_args,
             } => {
                 let mut txt = format!("{}", self.format(caller));
 
@@ -377,6 +378,14 @@ impl Formatter {
                     let mut txt = txt.trim_end().trim_end_matches(",").to_string();
                     txt.push(')');
                 };
+
+                if !reverse_args.is_empty() {
+                    txt.push_str("<(");
+                    for arg in reverse_args {
+                        txt.push_str(&format!("{}, ", self.format(arg)));
+                    }
+                    txt.push(')');
+                }
 
                 txt
             }

@@ -1,4 +1,14 @@
+const test_str = fn(splits : list:<str>, inputs : list:<str>, extra : bool, extra2 : int) => {
+	print(splits);
+	print(inputs);
+	print("extra : " & extra & " and " & extra2);
+};
+
 const main = fn () => {
+	let name = "Ty";
+	let age = "10";
+	test_str"Hello, my name is {name} and I'm {age} years old!" <(true, 900003);
+
 	print(bmi(52.5, 1.65));
 	print(factorial(5));
 	print(lock(3, 4,6));

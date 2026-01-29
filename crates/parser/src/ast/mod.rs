@@ -864,6 +864,7 @@ pub enum NodeType {
         caller: Box<Node>,
         generic_types: Vec<PotentialNewType>,
         args: Vec<CallArg>,
+        reverse_args: Vec<Node>,
     },
     BinaryExpression {
         left: Box<Node>,
