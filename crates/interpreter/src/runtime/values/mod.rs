@@ -105,6 +105,7 @@ impl InterpreterFrom<ParserDataType<MiddleNode>> for RuntimeType {
     ) -> Result<Self, ScopeErr> {
         Ok(match value.data_type {
             ParserInnerType::Null
+            | ParserInnerType::Auto(_)
             | ParserInnerType::DollarIdentifier(_)
             | ParserInnerType::StructWithGenerics { .. } => Self::Null,
             ParserInnerType::NativeFunction(x) => {

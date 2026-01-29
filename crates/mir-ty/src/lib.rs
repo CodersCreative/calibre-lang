@@ -43,6 +43,7 @@ pub fn middle_data_type_to_node(data_type: ParserDataType<MiddleNode>) -> Parser
             ParserInnerType::Str => ParserInnerType::Str,
             ParserInnerType::Char => ParserInnerType::Char,
             ParserInnerType::Range => ParserInnerType::Range,
+            ParserInnerType::Auto(x) => ParserInnerType::Auto(x),
             ParserInnerType::StructWithGenerics {
                 identifier,
                 generic_types,
@@ -253,7 +254,7 @@ impl Into<NodeType> for MiddleNodeType {
                 var_type,
                 identifier: identifier.into(),
                 value: Box::new((*value).into()),
-                data_type: Some(middle_data_type_to_new_type(data_type)),
+                data_type: middle_data_type_to_new_type(data_type),
             },
             Self::EnumExpression {
                 identifier,
@@ -378,7 +379,7 @@ impl Into<NodeType> for MiddleNodeType {
             Self::Identifier(x) => NodeType::Identifier(x.into()),
             Self::StringLiteral(x) => NodeType::StringLiteral(x),
             Self::ListLiteral(typ, data) => {
-                NodeType::ListLiteral(Some(middle_data_type_to_new_type(typ)), {
+                NodeType::ListLiteral(middle_data_type_to_new_type(typ), {
                     let mut lst = Vec::new();
 
                     for node in data {

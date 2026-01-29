@@ -324,16 +324,7 @@ impl MiddleEnvironment {
                 let new_name =
                     get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type));
 
-                let data_type = if let Some(x) = data_type {
-                    self.resolve_potential_new_type(scope, x)
-                } else if let Some(x) = self.resolve_type_from_node(scope, &value) {
-                    x
-                } else {
-                    ParserDataType {
-                        data_type: ParserInnerType::Dynamic,
-                        span: identifier.span,
-                    }
-                };
+                let data_type = self.resolve_potential_new_type(scope, data_type);
 
                 let val = if self.resolve_str(scope, &identifier.text).is_some() {
                     Some(self.evaluate(scope, *value.clone())?)
@@ -557,15 +548,7 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             NodeType::ListLiteral(typ, x) => {
-                let typ = if let Some(typ) = typ {
-                    self.resolve_potential_new_type(scope, typ)
-                } else if x.is_empty() {
-                    panic!()
-                } else if let Some(typ) = self.resolve_type_from_node(scope, &x[0]) {
-                    typ
-                } else {
-                    panic!()
-                };
+                let typ = self.resolve_potential_new_type(scope, typ);
 
                 let mut lst = Vec::new();
 
@@ -785,17 +768,24 @@ impl MiddleEnvironment {
 
                         Ok(MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration {
-                        state: Some(Box::new(self.evaluate(&scope, Node::new_from_type(NodeType::VariableDeclaration { var_type: VarType::Mutable, identifier: ParserText::from("anon_loop_index".to_string()).into(), value: Box::new(Node::new_from_type(NodeType::IntLiteral(0))), data_type: Some(ParserDataType::from(ParserInnerType::Int).into()) }))?)),
+                        state: Some(Box::new(self.evaluate(&scope, Node::new_from_type(NodeType::VariableDeclaration { var_type: VarType::Mutable, identifier: ParserText::from("anon_loop_index".to_string()).into(), value: Box::new(Node::new_from_type(NodeType::IntLiteral(0))), data_type: ParserDataType::from(ParserInnerType::Int).into() }))?)),
                         body: Box::new(self.evaluate(
                             &scope,
                             Node::new_from_type(NodeType::ScopeDeclaration {
                                 body: {
                                     let mut lst = vec![
-                                        Node::new_from_type(NodeType::VariableDeclaration  { identifier: name.clone(), var_type: VarType::Mutable, data_type: None, value: match range_data_type.map(|x| x.data_type) {
-                                            Some(ParserInnerType::List(_)) => Box::new(Node::new_from_type(NodeType::MemberExpression { path: vec![(range.clone(), false), (Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into())), true)] })),
-                                            Some(ParserInnerType::Tuple(_)) => Box::new(Node::new_from_type(NodeType::MemberExpression { path: vec![(range.clone(), false), (Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into())), false)] })),
-                                            _ => Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))),
-                                        } }),
+                                        Node::new_from_type(NodeType::VariableDeclaration  {
+                                            identifier: name.clone(),
+                                            var_type: VarType::Mutable,
+                                            data_type: PotentialNewType::DataType(ParserDataType::from(
+                                                ParserInnerType::Auto(None),
+                                            )),
+                                            value: match range_data_type.map(|x| x.data_type) {
+                                                Some(ParserInnerType::List(_)) => Box::new(Node::new_from_type(NodeType::MemberExpression { path: vec![(range.clone(), false), (Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into())), true)] })),
+                                                Some(ParserInnerType::Tuple(_)) => Box::new(Node::new_from_type(NodeType::MemberExpression { path: vec![(range.clone(), false), (Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into())), false)] })),
+                                                _ => Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))),
+                                            }
+                                        }),
                                         Node::new_from_type(NodeType::IfStatement {
                                                 comparison: Box::new(IfComparisonType::If(
                                                     Node::new_from_type(NodeType::ComparisonExpression {
@@ -839,19 +829,7 @@ impl MiddleEnvironment {
                 conditionals,
                 until,
             } => {
-                let resolved_data_type = if let Some(data_type) = data_type.clone() {
-                    Some(self.resolve_potential_new_type(scope, data_type))
-                } else {
-                    self.resolve_type_from_node(scope, &map)
-                };
-
-                let data_type = if let Some(typ) = data_type {
-                    Some(typ)
-                } else {
-                    resolved_data_type
-                        .clone()
-                        .map(|x| calibre_mir_ty::middle_data_type_to_new_type(x))
-                };
+                let resolved_data_type = self.resolve_potential_new_type(scope, data_type.clone());
 
                 let node = Node {
                     node_type: NodeType::ScopeDeclaration {
@@ -863,13 +841,11 @@ impl MiddleEnvironment {
                                     data_type.clone(),
                                     Vec::new(),
                                 ))),
-                                data_type: if let Some(typ) = resolved_data_type {
-                                    Some(calibre_mir_ty::middle_data_type_to_new_type(
-                                        ParserDataType::from(ParserInnerType::List(Box::new(typ))),
-                                    ))
-                                } else {
-                                    None
-                                },
+                                data_type: calibre_mir_ty::middle_data_type_to_new_type(
+                                    ParserDataType::from(ParserInnerType::List(Box::new(
+                                        resolved_data_type,
+                                    ))),
+                                ),
                             }),
                             Node::new_from_type(NodeType::LoopDeclaration {
                                 loop_type,
@@ -1364,7 +1340,7 @@ impl MiddleEnvironment {
                                             var_type,
                                             identifier: name,
                                             value: value.clone(),
-                                            data_type: Some(resolved_node_type.clone().into()),
+                                            data_type: resolved_node_type.clone().into(),
                                         }),
                                         *pattern.2,
                                     ]),
@@ -1447,7 +1423,9 @@ impl MiddleEnvironment {
                                                         ]
                                                     }))
                                                 },
-                                                data_type: None
+                                                data_type: PotentialNewType::DataType(ParserDataType::from(
+                                                    ParserInnerType::Auto(None),
+                                                )),
                                             }),
                                             *pattern.2,
                                         ]),
@@ -1626,12 +1604,14 @@ impl MiddleEnvironment {
                                                 .unwrap_all_refs()
                                                 .data_type
                                             {
-                                                ParserInnerType::List(x) => Some(
-                                                    calibre_mir_ty::middle_data_type_to_new_type(
-                                                        *x,
-                                                    ),
+                                                ParserInnerType::List(x) => {
+                                                    calibre_mir_ty::middle_data_type_to_new_type(*x)
+                                                }
+                                                _ => PotentialNewType::DataType(
+                                                    ParserDataType::from(ParserInnerType::Auto(
+                                                        None,
+                                                    )),
                                                 ),
-                                                _ => None,
                                             },
                                             args.into_iter().map(|x| x.into()).collect(),
                                         )),
@@ -1877,14 +1857,18 @@ impl MiddleEnvironment {
                                         var_type: VarType::Mutable,
                                         identifier: ident.into(),
                                         value: Box::new(value),
-                                        data_type: None,
+                                        data_type: PotentialNewType::DataType(
+                                            ParserDataType::from(ParserInnerType::Auto(None)),
+                                        ),
                                     })
                                 }
                                 _ => Node::new_from_type(NodeType::VariableDeclaration {
                                     var_type: VarType::Mutable,
                                     identifier: ParserText::from(String::from("$")).into(),
                                     value: Box::new(value),
-                                    data_type: None,
+                                    data_type: PotentialNewType::DataType(ParserDataType::from(
+                                        ParserInnerType::Auto(None),
+                                    )),
                                 }),
                             };
 

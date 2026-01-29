@@ -244,6 +244,7 @@ impl MiddleEnvironment {
                 ParserInnerType::Str => ParserInnerType::Str,
                 ParserInnerType::Char => ParserInnerType::Char,
                 ParserInnerType::Range => ParserInnerType::Range,
+                ParserInnerType::Auto(x) => ParserInnerType::Auto(x),
                 ParserInnerType::StructWithGenerics {
                     identifier,
                     generic_types,
@@ -1076,33 +1077,14 @@ impl MiddleEnvironment {
                     self.resolve_type_from_node(scope, left)
                 }
             }
-            NodeType::IterExpression {
-                data_type: Some(data_type),
-                ..
+            NodeType::IterExpression { data_type, .. } | NodeType::ListLiteral(data_type, _) => {
+                Some(ParserDataType {
+                    data_type: ParserInnerType::List(Box::new(
+                        self.resolve_potential_new_type(scope, data_type.clone()),
+                    )),
+                    span: node.span,
+                })
             }
-            | NodeType::ListLiteral(Some(data_type), _) => Some(ParserDataType {
-                data_type: ParserInnerType::List(Box::new(
-                    self.resolve_potential_new_type(scope, data_type.clone()),
-                )),
-                span: node.span,
-            }),
-            NodeType::IterExpression {
-                data_type: None,
-                map,
-                ..
-            } => Some(ParserDataType {
-                data_type: ParserInnerType::List(Box::new(
-                    self.resolve_type_from_node(scope, map)?,
-                )),
-                span: node.span,
-            }),
-            NodeType::ListLiteral(_, x) if x.is_empty() => None,
-            NodeType::ListLiteral(None, block) => Some(ParserDataType {
-                data_type: ParserInnerType::List(Box::new(
-                    self.resolve_type_from_node(scope, &block[0])?,
-                )),
-                span: node.span,
-            }),
             NodeType::NegExpression { value }
             | NodeType::DebugExpression { value }
             | NodeType::Ternary { then: value, .. } => self.resolve_type_from_node(scope, value),
