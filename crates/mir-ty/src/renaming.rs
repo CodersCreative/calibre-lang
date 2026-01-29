@@ -119,7 +119,6 @@ impl MiddleNodeType {
                 value: Box::new(value.rename(state)),
                 data_type,
             },
-            MiddleNodeType::DataType { data_type } => MiddleNodeType::DataType { data_type },
             MiddleNodeType::RangeDeclaration {
                 from,
                 to,
@@ -213,10 +212,6 @@ impl MiddleNodeType {
                 comparison: Box::new(comparison.rename(state)),
                 then: Box::new(then.rename(state)),
                 otherwise: otherwise.map(|value| Box::new(value.rename(state))),
-            },
-            MiddleNodeType::Comp { stage, body } => MiddleNodeType::Comp {
-                stage,
-                body: Box::new(body.rename(state)),
             },
         }
     }

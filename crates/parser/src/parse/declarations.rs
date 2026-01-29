@@ -1,9 +1,9 @@
 use crate::{
     Parser, SyntaxErr,
     ast::{
-        CallArg, FunctionHeader, GenericType, GenericTypes, IfComparisonType, LoopType,
-        MatchArmType, NamedScope, Node, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialNewType, TryCatch, VarType, binary::BinaryOperator,
+        FunctionHeader, GenericType, GenericTypes, IfComparisonType, LoopType, MatchArmType,
+        NamedScope, Node, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
+        PotentialNewType, TryCatch, VarType, binary::BinaryOperator,
         comparison::ComparisonOperator,
     },
     lexer::{Bracket, Span, StopValue},
@@ -14,7 +14,6 @@ impl Parser {
     pub fn parse_statement(&mut self) -> Node {
         let node = match &self.first().token_type {
             TokenType::Let | TokenType::Const => self.parse_variable_declaration(),
-            TokenType::Comp => self.parse_comp(),
             TokenType::Trait => self.parse_if_statement(),
             TokenType::Impl => self.parse_impl_declaration(),
             TokenType::Import => self.parse_import_declaration(),

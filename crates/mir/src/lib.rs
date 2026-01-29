@@ -24,6 +24,7 @@ impl MiddleEnvironment {
         self.current_location = self.get_location(scope, node.span);
 
         match node.node_type {
+            NodeType::DataType { .. } => unreachable!(),
             NodeType::Identifier(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Identifier(
                     if let Some(x) = self.resolve_potential_generic_ident(scope, &x) {
@@ -36,19 +37,6 @@ impl MiddleEnvironment {
                         return Err(MiddleErr::Variable(x.to_string()));
                     },
                 ),
-                span: node.span,
-            }),
-            NodeType::Comp { stage, body } => Ok(MiddleNode {
-                node_type: MiddleNodeType::Comp {
-                    stage,
-                    body: Box::new(self.evaluate(scope, *body)?),
-                },
-                span: node.span,
-            }),
-            NodeType::DataType { data_type } => Ok(MiddleNode {
-                node_type: MiddleNodeType::DataType {
-                    data_type: self.resolve_potential_new_type(scope, data_type),
-                },
                 span: node.span,
             }),
             NodeType::IntLiteral(x) => Ok(MiddleNode {
@@ -841,11 +829,10 @@ impl MiddleEnvironment {
                                     data_type.clone(),
                                     Vec::new(),
                                 ))),
-                                data_type: calibre_mir_ty::middle_data_type_to_new_type(
-                                    ParserDataType::from(ParserInnerType::List(Box::new(
-                                        resolved_data_type,
-                                    ))),
-                                ),
+                                data_type: ParserDataType::from(ParserInnerType::List(Box::new(
+                                    resolved_data_type,
+                                )))
+                                .into(),
                             }),
                             Node::new_from_type(NodeType::LoopDeclaration {
                                 loop_type,
@@ -963,12 +950,8 @@ impl MiddleEnvironment {
                             &func.node_type
                         {
                             if parameters.len() > 0 {
-                                let new_data_type = self.resolve_data_type(
-                                    scope,
-                                    calibre_mir_ty::middle_data_type_to_node(
-                                        parameters[0].1.clone(),
-                                    ),
-                                );
+                                let new_data_type =
+                                    self.resolve_data_type(scope, parameters[0].1.clone());
 
                                 if let ParserInnerType::Struct(obj) = new_data_type.data_type {
                                     if obj == resolved.text {
@@ -1259,21 +1242,19 @@ impl MiddleEnvironment {
             }
             NodeType::MatchStatement { value, body } => {
                 let resolved_data_type = self.resolve_type_from_node(scope, &value).unwrap();
-                let resolved_node_type =
-                    calibre_mir_ty::middle_data_type_to_node(resolved_data_type.clone());
 
                 let mut ifs: Vec<Node> = Vec::new();
                 let mut reference = None;
                 let enum_object = if let Some(x) = self.objects.get(
-                    resolved_node_type
+                    resolved_data_type
                         .to_string()
                         .replace("mut ", "")
                         .replace("&", "")
                         .trim(),
                 ) {
                     match (
-                        resolved_node_type.to_string().contains("mut "),
-                        resolved_node_type.to_string().contains("&"),
+                        resolved_data_type.to_string().contains("mut "),
+                        resolved_data_type.to_string().contains("&"),
                     ) {
                         (true, true) => reference = Some(RefMutability::MutRef),
                         (true, false) => reference = Some(RefMutability::MutValue),
@@ -1340,7 +1321,7 @@ impl MiddleEnvironment {
                                             var_type,
                                             identifier: name,
                                             value: value.clone(),
-                                            data_type: resolved_node_type.clone().into(),
+                                            data_type: resolved_data_type.clone().into(),
                                         }),
                                         *pattern.2,
                                     ]),
@@ -1361,12 +1342,7 @@ impl MiddleEnvironment {
                             let index: i64 = match val.text.trim() {
                                 _ if enum_object.is_some() => {
                                     let Some(object) = enum_object else {
-                                        return Err(MiddleErr::CantMatch(
-                                            calibre_mir_ty::middle_data_type_to_node(
-                                                resolved_data_type,
-                                            )
-                                            .to_string(),
-                                        ));
+                                        return Err(MiddleErr::CantMatch(resolved_data_type));
                                     };
                                     let Some(index) =
                                         object.iter().position(|x| x.0.text == val.text)
@@ -1380,12 +1356,7 @@ impl MiddleEnvironment {
                                 "Some" => 0,
                                 "None" => 1,
                                 _ => {
-                                    return Err(MiddleErr::CantMatch(
-                                        calibre_mir_ty::middle_data_type_to_node(
-                                            resolved_data_type,
-                                        )
-                                        .to_string(),
-                                    ));
+                                    return Err(MiddleErr::CantMatch(resolved_data_type));
                                 }
                             };
 
@@ -1604,9 +1575,7 @@ impl MiddleEnvironment {
                                                 .unwrap_all_refs()
                                                 .data_type
                                             {
-                                                ParserInnerType::List(x) => {
-                                                    calibre_mir_ty::middle_data_type_to_new_type(*x)
-                                                }
+                                                ParserInnerType::List(x) => (*x).into(),
                                                 _ => PotentialNewType::DataType(
                                                     ParserDataType::from(ParserInnerType::Auto(
                                                         None,
@@ -1630,11 +1599,7 @@ impl MiddleEnvironment {
                                         .iter()
                                         .enumerate()
                                         .filter(|(i, _)| i >= &args.len())
-                                        .map(|x| {
-                                            calibre_mir_ty::middle_data_type_to_new_type(
-                                                x.1.clone(),
-                                            )
-                                        })
+                                        .map(|x| x.1.clone().into())
                                         .collect();
 
                                 let mut missing_param_names: Vec<String> = (0
@@ -1666,10 +1631,7 @@ impl MiddleEnvironment {
                                                         )
                                                     })
                                                     .collect(),
-                                                return_type:
-                                                    calibre_mir_ty::middle_data_type_to_new_type(
-                                                        *return_type,
-                                                    ),
+                                                return_type: (*return_type).into(),
                                                 is_async,
                                             },
                                             body: Box::new(Node::new_from_type(

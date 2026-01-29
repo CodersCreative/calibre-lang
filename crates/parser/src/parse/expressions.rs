@@ -1,8 +1,8 @@
 use crate::{
     Parser, SyntaxErr,
     ast::{
-        CompStage, Node, ObjectType, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        RefMutability, comparison::BooleanOperator,
+        Node, ObjectType, PotentialDollarIdentifier, PotentialGenericTypeIdentifier, RefMutability,
+        comparison::BooleanOperator,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -10,7 +10,6 @@ use crate::{
     ast::{NodeType, binary::BinaryOperator},
     lexer::TokenType,
 };
-use std::collections::HashMap;
 
 impl Parser {
     pub fn parse_primary_expression(&mut self) -> Node {
@@ -93,7 +92,6 @@ impl Parser {
                     },
                 )
             }
-            TokenType::Comp => self.parse_comp(),
             TokenType::Dollar => {
                 let val = self.expect_potential_dollar_ident();
                 let constraints = self.parse_generic_types();
@@ -205,36 +203,6 @@ impl Parser {
         };
 
         self.parse_potential_member(node)
-    }
-
-    pub fn parse_comp(&mut self) -> Node {
-        let open = self.expect_eat(
-            &TokenType::Comp,
-            SyntaxErr::ExpectedKeyword(String::from("comp")),
-        );
-
-        let stage = if self.first().token_type == TokenType::Comma {
-            let _ = self.eat();
-            let value = self.eat();
-
-            if &value.value == "_" {
-                CompStage::Wildcard
-            } else {
-                CompStage::Specific(value.value.parse().unwrap_or(0))
-            }
-        } else {
-            CompStage::Specific(0)
-        };
-
-        let value = self.parse_scope_declaration(false);
-
-        Node {
-            span: Span::new_from_spans(open.span, value.span),
-            node_type: NodeType::Comp {
-                stage,
-                body: Box::new(value),
-            },
-        }
     }
 
     pub fn expect_potential_generic_type_ident(&mut self) -> PotentialGenericTypeIdentifier {

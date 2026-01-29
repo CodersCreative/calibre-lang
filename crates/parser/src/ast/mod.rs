@@ -70,13 +70,13 @@ pub enum LoopType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ParserDataType<T> {
-    pub data_type: ParserInnerType<T>,
+pub struct ParserDataType {
+    pub data_type: ParserInnerType,
     pub span: Span,
 }
 
-impl<T> From<ParserInnerType<T>> for ParserDataType<T> {
-    fn from(value: ParserInnerType<T>) -> Self {
+impl From<ParserInnerType> for ParserDataType {
+    fn from(value: ParserInnerType) -> Self {
         Self {
             data_type: value,
             span: Span::default(),
@@ -84,20 +84,21 @@ impl<T> From<ParserInnerType<T>> for ParserDataType<T> {
     }
 }
 
-impl<T> ParserDataType<T> {
-    pub fn new(span: Span, data_type: ParserInnerType<T>) -> Self {
+impl ParserDataType {
+    pub fn new(span: Span, data_type: ParserInnerType) -> Self {
         Self { data_type, span }
     }
 }
-impl<T> Deref for ParserDataType<T> {
-    type Target = ParserInnerType<T>;
+
+impl Deref for ParserDataType {
+    type Target = ParserInnerType;
     fn deref(&self) -> &Self::Target {
         &self.data_type
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ParserInnerType<T> {
+pub enum ParserInnerType {
     Float,
     Int,
     Null,
@@ -105,36 +106,32 @@ pub enum ParserInnerType<T> {
     Str,
     Char,
     Dynamic,
-    Tuple(Vec<ParserDataType<T>>),
-    List(Box<ParserDataType<T>>),
-    Scope(Vec<ParserDataType<T>>),
+    Tuple(Vec<ParserDataType>),
+    List(Box<ParserDataType>),
+    Scope(Vec<ParserDataType>),
     Auto(Option<u16>),
     Range,
     DollarIdentifier(String),
-    Option(Box<ParserDataType<T>>),
+    Option(Box<ParserDataType>),
     Result {
-        ok: Box<ParserDataType<T>>,
-        err: Box<ParserDataType<T>>,
+        ok: Box<ParserDataType>,
+        err: Box<ParserDataType>,
     },
     Function {
-        return_type: Box<ParserDataType<T>>,
-        parameters: Vec<ParserDataType<T>>,
+        return_type: Box<ParserDataType>,
+        parameters: Vec<ParserDataType>,
         is_async: bool,
     },
-    Ref(Box<ParserDataType<T>>, RefMutability),
+    Ref(Box<ParserDataType>, RefMutability),
     Struct(String),
     StructWithGenerics {
         identifier: String,
-        generic_types: Vec<ParserDataType<T>>,
+        generic_types: Vec<ParserDataType>,
     },
-    Comp {
-        stage: CompStage,
-        body: Box<T>,
-    },
-    NativeFunction(Box<ParserDataType<T>>),
+    NativeFunction(Box<ParserDataType>),
 }
 
-impl<T> ParserDataType<T> {
+impl ParserDataType {
     pub fn unwrap_all_refs(self) -> Self {
         Self {
             data_type: self.data_type.unwrap_all_refs(),
@@ -142,7 +139,7 @@ impl<T> ParserDataType<T> {
         }
     }
 }
-impl<T> ParserInnerType<T> {
+impl ParserInnerType {
     pub fn unwrap_all_refs(self) -> Self {
         match self {
             Self::Ref(x, _) => x.data_type.unwrap_all_refs(),
@@ -173,7 +170,7 @@ pub enum PotentialNewType {
         type_def: TypeDefType,
         overloads: Vec<Overload>,
     },
-    DataType(ParserDataType<Node>),
+    DataType(ParserDataType),
 }
 
 impl PotentialNewType {
@@ -203,22 +200,19 @@ impl PotentialNewType {
     }
 }
 
-impl From<ParserDataType<Node>> for PotentialNewType {
-    fn from(value: ParserDataType<Node>) -> Self {
+impl From<ParserDataType> for PotentialNewType {
+    fn from(value: ParserDataType) -> Self {
         Self::DataType(value)
     }
 }
 
-impl<T: Display + PartialEq> Display for ParserDataType<T> {
+impl Display for ParserDataType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.data_type)
     }
 }
 
-impl<T: Display + PartialEq> Display for ParserInnerType<T>
-where
-    ParserDataType<T>: std::fmt::Display,
-{
+impl Display for ParserInnerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Float => write!(f, "float"),
@@ -317,7 +311,6 @@ where
 
                 write!(f, "{}", txt)
             }
-            Self::Comp { stage, body } => write!(f, "comp, {} {}", stage, body),
         }
     }
 }
@@ -423,7 +416,7 @@ impl PotentialGenericTypeIdentifier {
     }
 }
 
-impl<T> FromStr for ParserInnerType<T> {
+impl FromStr for ParserInnerType {
     type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
@@ -700,21 +693,6 @@ pub struct NamedScope {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum CompStage {
-    Wildcard,
-    Specific(usize),
-}
-
-impl Display for CompStage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Specific(x) => write!(f, "{}", x),
-            Self::Wildcard => write!(f, "_"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
 pub struct Overload {
     pub operator: ParserText,
     pub body: Box<Node>,
@@ -767,10 +745,6 @@ pub enum NodeType {
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
-    },
-    Comp {
-        stage: CompStage,
-        body: Box<Node>,
     },
     Identifier(PotentialGenericTypeIdentifier),
     DataType {

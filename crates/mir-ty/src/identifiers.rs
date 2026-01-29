@@ -17,8 +17,6 @@ impl MiddleNode {
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::IntLiteral(_)
             | MiddleNodeType::FloatLiteral(_)
-            | MiddleNodeType::Comp { .. }
-            | MiddleNodeType::DataType { .. }
             | MiddleNodeType::Return { value: None } => Vec::new(),
             MiddleNodeType::Identifier(x) => vec![x],
             MiddleNodeType::RefStatement {
@@ -163,8 +161,6 @@ impl MiddleNode {
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::IntLiteral(_)
             | MiddleNodeType::FloatLiteral(_)
-            | MiddleNodeType::Comp { .. }
-            | MiddleNodeType::DataType { .. }
             | MiddleNodeType::Return { value: None } => Vec::new(),
             MiddleNodeType::Identifier(x) => vec![x],
             MiddleNodeType::RefStatement {

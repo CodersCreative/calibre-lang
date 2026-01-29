@@ -1,12 +1,10 @@
-use std::{collections::HashMap, fs, path::PathBuf};
-
-use calibre_mir_ty::MiddleNode;
 use calibre_parser::{
     Parser,
     ast::{ParserDataType, VarType},
     lexer::Tokenizer,
 };
 use calibre_std::{get_globals_path, get_stdlib_path};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use crate::environment::{MiddleEnvironment, MiddleScope, MiddleVariable, get_disamubiguous_name};
 
@@ -72,7 +70,7 @@ impl MiddleEnvironment {
             .map(|x| (String::from(x), map.get(x).unwrap().clone()))
             .collect();
 
-        let mut vars: Vec<(String, ParserDataType<MiddleNode>)> =
+        let mut vars: Vec<(String, ParserDataType)> =
             ParserDataType::constants().into_iter().map(|x| x).collect();
         vars.append(&mut funcs);
 
@@ -122,8 +120,7 @@ impl MiddleEnvironment {
             self.scopes.get(parent).unwrap().path.clone(),
             Some(name),
         );
-        let map: std::collections::HashMap<String, ParserDataType<MiddleNode>> =
-            ParserDataType::natives();
+        let map: std::collections::HashMap<String, ParserDataType> = ParserDataType::natives();
 
         let funcs = funcs.into_iter().map(|x| {
             (

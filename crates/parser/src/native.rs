@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use crate::ast::{ParserDataType, ParserInnerType};
 
-impl<T> ParserDataType<T> {
+impl ParserDataType {
     pub fn constants() -> std::collections::HashMap<String, Self> {
-        let lst: Vec<(&'static str, ParserInnerType<T>)> = vec![
+        let lst: Vec<(&'static str, ParserInnerType)> = vec![
             ("PI", ParserInnerType::Float),
             ("FLOAT_MAX", ParserInnerType::Float),
             ("INT_MAX", ParserInnerType::Int),
@@ -27,8 +27,8 @@ impl<T> ParserDataType<T> {
         map
     }
 
-    pub fn natives() -> HashMap<String, ParserDataType<T>> {
-        let lst: Vec<(&'static str, ParserInnerType<T>)> = vec![
+    pub fn natives() -> HashMap<String, ParserDataType> {
+        let lst: Vec<(&'static str, ParserInnerType)> = vec![
             ("print", ParserInnerType::Null),
             (
                 "ok",

@@ -2,9 +2,9 @@ use std::{collections::HashMap, fmt::Display};
 
 use calibre_parser::{
     ast::{
-        CallArg, CompStage, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node,
-        NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
-        PotentialNewType, RefMutability, VarType,
+        CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
+        ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText, PotentialNewType,
+        RefMutability, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
@@ -32,77 +32,6 @@ impl MiddleNode {
     }
 }
 
-pub fn middle_data_type_to_node(data_type: ParserDataType<MiddleNode>) -> ParserDataType<Node> {
-    ParserDataType {
-        data_type: match data_type.data_type {
-            ParserInnerType::Float => ParserInnerType::Float,
-            ParserInnerType::Int => ParserInnerType::Int,
-            ParserInnerType::Dynamic => ParserInnerType::Dynamic,
-            ParserInnerType::Null => ParserInnerType::Null,
-            ParserInnerType::Bool => ParserInnerType::Bool,
-            ParserInnerType::Str => ParserInnerType::Str,
-            ParserInnerType::Char => ParserInnerType::Char,
-            ParserInnerType::Range => ParserInnerType::Range,
-            ParserInnerType::Auto(x) => ParserInnerType::Auto(x),
-            ParserInnerType::StructWithGenerics {
-                identifier,
-                generic_types,
-            } => ParserInnerType::StructWithGenerics {
-                identifier,
-                generic_types: generic_types
-                    .into_iter()
-                    .map(|x| middle_data_type_to_node(x))
-                    .collect(),
-            },
-            ParserInnerType::Tuple(x) => {
-                ParserInnerType::Tuple(x.into_iter().map(|x| middle_data_type_to_node(x)).collect())
-            }
-            ParserInnerType::List(x) => {
-                ParserInnerType::List(Box::new(middle_data_type_to_node(*x)))
-            }
-            ParserInnerType::Scope(x) => {
-                ParserInnerType::Scope(x.into_iter().map(|x| middle_data_type_to_node(x)).collect())
-            }
-            ParserInnerType::DollarIdentifier(x) => ParserInnerType::DollarIdentifier(x),
-            ParserInnerType::Option(x) => {
-                ParserInnerType::Option(Box::new(middle_data_type_to_node(*x)))
-            }
-            ParserInnerType::Result { ok, err } => ParserInnerType::Result {
-                ok: Box::new(middle_data_type_to_node(*ok)),
-                err: Box::new(middle_data_type_to_node(*err)),
-            },
-            ParserInnerType::Function {
-                return_type,
-                parameters,
-                is_async,
-            } => ParserInnerType::Function {
-                return_type: Box::new(middle_data_type_to_node(*return_type)),
-                parameters: parameters
-                    .into_iter()
-                    .map(|x| middle_data_type_to_node(x))
-                    .collect(),
-                is_async,
-            },
-            ParserInnerType::Ref(x, refmut) => {
-                ParserInnerType::Ref(Box::new(middle_data_type_to_node(*x)), refmut)
-            }
-            ParserInnerType::Struct(x) => ParserInnerType::Struct(x),
-            ParserInnerType::NativeFunction(x) => {
-                ParserInnerType::NativeFunction(Box::new(middle_data_type_to_node(*x)))
-            }
-            ParserInnerType::Comp { stage, body } => ParserInnerType::Comp {
-                stage,
-                body: Box::new((*body.clone()).into()),
-            },
-        },
-        span: data_type.span,
-    }
-}
-
-pub fn middle_data_type_to_new_type(data_type: ParserDataType<MiddleNode>) -> PotentialNewType {
-    PotentialNewType::DataType(middle_data_type_to_node(data_type))
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
     Break,
@@ -119,7 +48,7 @@ pub enum MiddleNodeType {
         var_type: VarType,
         identifier: ParserText,
         value: Box<MiddleNode>,
-        data_type: ParserDataType<MiddleNode>,
+        data_type: ParserDataType,
     },
     EnumExpression {
         identifier: ParserText,
@@ -132,32 +61,25 @@ pub enum MiddleNodeType {
         is_temp: bool,
     },
     FunctionDeclaration {
-        parameters: Vec<(ParserText, ParserDataType<MiddleNode>)>,
+        parameters: Vec<(ParserText, ParserDataType)>,
         body: Box<MiddleNode>,
-        return_type: ParserDataType<MiddleNode>,
+        return_type: ParserDataType,
         is_async: bool,
     },
     AssignmentExpression {
         identifier: Box<MiddleNode>,
         value: Box<MiddleNode>,
     },
-    Comp {
-        stage: CompStage,
-        body: Box<MiddleNode>,
-    },
     DebugExpression {
         pretty_printed_str: String,
         value: Box<MiddleNode>,
-    },
-    DataType {
-        data_type: ParserDataType<MiddleNode>,
     },
     NegExpression {
         value: Box<MiddleNode>,
     },
     AsExpression {
         value: Box<MiddleNode>,
-        data_type: ParserDataType<MiddleNode>,
+        data_type: ParserDataType,
     },
     RangeDeclaration {
         from: Box<MiddleNode>,
@@ -173,7 +95,7 @@ pub enum MiddleNodeType {
     },
     Identifier(ParserText),
     StringLiteral(ParserText),
-    ListLiteral(ParserDataType<MiddleNode>, Vec<MiddleNode>),
+    ListLiteral(ParserDataType, Vec<MiddleNode>),
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(i64),
@@ -254,7 +176,7 @@ impl Into<NodeType> for MiddleNodeType {
                 var_type,
                 identifier: identifier.into(),
                 value: Box::new((*value).into()),
-                data_type: middle_data_type_to_new_type(data_type),
+                data_type: data_type.into(),
             },
             Self::EnumExpression {
                 identifier,
@@ -300,11 +222,11 @@ impl Into<NodeType> for MiddleNodeType {
                         let mut lst = Vec::new();
 
                         for param in parameters {
-                            lst.push((param.0.into(), middle_data_type_to_new_type(param.1)));
+                            lst.push((param.0.into(), param.1.into()));
                         }
                         lst
                     },
-                    return_type: middle_data_type_to_new_type(return_type),
+                    return_type: return_type.into(),
                     is_async,
                 },
                 body: Box::new((*body).into()),
@@ -319,15 +241,12 @@ impl Into<NodeType> for MiddleNodeType {
             } => NodeType::DebugExpression {
                 value: Box::new((*value).into()),
             },
-            Self::DataType { data_type } => NodeType::DataType {
-                data_type: middle_data_type_to_new_type(data_type),
-            },
             Self::NegExpression { value } => NodeType::NotExpression {
                 value: Box::new((*value).into()),
             },
             Self::AsExpression { value, data_type } => NodeType::AsExpression {
                 value: Box::new((*value).into()),
-                data_type: middle_data_type_to_new_type(data_type),
+                data_type: data_type.into(),
             },
             Self::IfStatement {
                 comparison,
@@ -378,17 +297,15 @@ impl Into<NodeType> for MiddleNodeType {
             Self::Return { value: None } => NodeType::Return { value: None },
             Self::Identifier(x) => NodeType::Identifier(x.into()),
             Self::StringLiteral(x) => NodeType::StringLiteral(x),
-            Self::ListLiteral(typ, data) => {
-                NodeType::ListLiteral(middle_data_type_to_new_type(typ), {
-                    let mut lst = Vec::new();
+            Self::ListLiteral(typ, data) => NodeType::ListLiteral(typ.into(), {
+                let mut lst = Vec::new();
 
-                    for node in data {
-                        lst.push(node.into());
-                    }
+                for node in data {
+                    lst.push(node.into());
+                }
 
-                    lst
-                })
-            }
+                lst
+            }),
             Self::CharLiteral(x) => NodeType::CharLiteral(x),
             Self::FloatLiteral(x) => NodeType::FloatLiteral(x),
             Self::IntLiteral(x) => NodeType::IntLiteral(x),
@@ -442,10 +359,6 @@ impl Into<NodeType> for MiddleNodeType {
                 left: Box::new((*left).into()),
                 right: Box::new((*right).into()),
                 operator,
-            },
-            Self::Comp { stage, body } => NodeType::Comp {
-                stage,
-                body: Box::new((*body).into()),
             },
             Self::AggregateExpression { identifier, value } => {
                 let is_tuple = if value.is_empty() {

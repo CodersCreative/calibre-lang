@@ -101,7 +101,7 @@ impl Parser {
         }
     }
 
-    fn expect_type(&mut self) -> ParserDataType<Node> {
+    fn expect_type(&mut self) -> ParserDataType {
         if let Some(x) = self.parse_type() {
             x
         } else {
@@ -221,7 +221,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_type(&mut self) -> Option<ParserDataType<Node>> {
+    pub fn parse_type(&mut self) -> Option<ParserDataType> {
         let t = self.first().clone();
         let mutability = RefMutability::from(t.token_type.clone());
 
@@ -285,7 +285,7 @@ impl Parser {
                 false
             };
 
-            let args: Vec<ParserDataType<Node>> = self
+            let args: Vec<ParserDataType> = self
                 .parse_type_list(
                     TokenType::Open(Bracket::Paren),
                     TokenType::Close(Bracket::Paren),
@@ -378,7 +378,7 @@ impl Parser {
 
         if self.first().token_type == TokenType::Question {
             let close = self.eat();
-            let typ2: ParserDataType<Node> = typ?;
+            let typ2: ParserDataType = typ?;
             typ = Some(ParserDataType::new(
                 Span::new_from_spans(typ2.span, close.span),
                 ParserInnerType::Option(Box::new(typ2)),
@@ -388,7 +388,7 @@ impl Parser {
         if self.first().token_type == TokenType::Not {
             let _ = self.eat();
             let t = self.parse_type()?;
-            let typ2: ParserDataType<Node> = typ?;
+            let typ2: ParserDataType = typ?;
             typ = Some(ParserDataType::new(
                 Span::new_from_spans(typ2.span, t.span),
                 ParserInnerType::Result {

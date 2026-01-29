@@ -657,7 +657,6 @@ impl Formatter {
             NodeType::DataType { data_type } => {
                 format!("type : {}", self.fmt_potential_new_type(data_type))
             }
-            NodeType::Comp { stage, body } => format!("comp, {} {}", stage, self.format(&body)),
             NodeType::ScopeAlias {
                 identifier,
                 value,
