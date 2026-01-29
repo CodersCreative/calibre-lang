@@ -97,7 +97,7 @@ impl Parser {
             x
         } else {
             self.add_err(SyntaxErr::ExpectedType);
-            ParserDataType::new(self.first().span.clone(), ParserInnerType::Dynamic).into()
+            ParserDataType::new(self.first().span.clone(), ParserInnerType::Auto(None)).into()
         }
     }
 
@@ -106,7 +106,7 @@ impl Parser {
             x
         } else {
             self.add_err(SyntaxErr::ExpectedType);
-            ParserDataType::new(self.first().span.clone(), ParserInnerType::Dynamic)
+            ParserDataType::new(self.first().span.clone(), ParserInnerType::Auto(None))
         }
     }
 
@@ -130,7 +130,7 @@ impl Parser {
 
                 self.expect_potential_new_type()
             } else {
-                ParserDataType::new(self.first().span.clone(), ParserInnerType::Dynamic).into()
+                ParserDataType::new(self.first().span.clone(), ParserInnerType::Auto(None)).into()
             };
 
             for key in keys {
@@ -231,7 +231,7 @@ impl Parser {
             Some(ParserDataType::new(
                 Span::new_from_spans(not.span, typ.span),
                 ParserInnerType::Result {
-                    err: Box::new(ParserDataType::new(not.span, ParserInnerType::Dynamic)),
+                    err: Box::new(ParserDataType::new(not.span, ParserInnerType::Auto(None))),
                     ok: Box::new(typ),
                 },
             ))
@@ -461,7 +461,10 @@ impl Parser {
             }
         } else {
             None
-        };
+        }
+        .unwrap_or(PotentialNewType::DataType(ParserDataType::from(
+            ParserInnerType::Auto(None),
+        )));
 
         let open = self.expect_eat(
             &TokenType::Open(Bracket::Square),

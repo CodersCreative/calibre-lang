@@ -12,20 +12,7 @@ impl Parser {
         match &self.first().token_type {
             TokenType::Enum => self.parse_enum_declaration(),
             TokenType::Struct => self.parse_struct_declaration(),
-            _ => {
-                if let Some(t) = self.parse_type() {
-                    TypeDefType::NewType(Box::new(t.into()))
-                } else {
-                    self.add_err(SyntaxErr::ExpectedType);
-                    TypeDefType::NewType(Box::new(
-                        crate::ast::ParserDataType::new(
-                            self.first().span,
-                            crate::ast::ParserInnerType::Dynamic,
-                        )
-                        .into(),
-                    ))
-                }
-            }
+            _ => TypeDefType::NewType(Box::new(self.expect_type().into())),
         }
     }
 

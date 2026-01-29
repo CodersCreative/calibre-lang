@@ -100,14 +100,15 @@ impl<T> Deref for ParserDataType<T> {
 pub enum ParserInnerType<T> {
     Float,
     Int,
-    Dynamic,
     Null,
     Bool,
     Str,
     Char,
+    Dynamic,
     Tuple(Vec<ParserDataType<T>>),
     List(Box<ParserDataType<T>>),
     Scope(Vec<ParserDataType<T>>),
+    Auto(Option<u16>),
     Range,
     DollarIdentifier(String),
     Option(Box<ParserDataType<T>>),
@@ -149,6 +150,13 @@ impl<T> ParserInnerType<T> {
         }
     }
 
+    pub fn is_auto(&self) -> bool {
+        match self {
+            Self::Auto(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_list(&self) -> bool {
         match self {
             Self::List(_) => true,
@@ -166,6 +174,15 @@ pub enum PotentialNewType {
         overloads: Vec<Overload>,
     },
     DataType(ParserDataType<Node>),
+}
+
+impl PotentialNewType {
+    pub fn is_auto(&self) -> bool {
+        match self {
+            Self::DataType(x) => x.is_auto(),
+            _ => false,
+        }
+    }
 }
 
 impl Display for PotentialNewType {
@@ -212,6 +229,7 @@ where
             Self::Str => write!(f, "str"),
             Self::Char => write!(f, "char"),
             Self::Range => write!(f, "range"),
+            Self::Auto(_) => write!(f, "auto"),
             Self::DollarIdentifier(x) => write!(f, "${}", x),
             Self::Ref(typ, mutability) => {
                 write!(f, "{}", mutability.fmt_with_val(&typ.to_string()))
@@ -416,6 +434,7 @@ impl<T> FromStr for ParserInnerType<T> {
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
             "null" => Self::Null,
+            "auto" => Self::Auto(None),
             _ => Self::Struct(s.to_string()),
         })
     }
@@ -767,7 +786,7 @@ pub enum NodeType {
         var_type: VarType,
         identifier: PotentialDollarIdentifier,
         value: Box<Node>,
-        data_type: Option<PotentialNewType>,
+        data_type: PotentialNewType,
     },
     ImplDeclaration {
         identifier: PotentialGenericTypeIdentifier,
@@ -834,7 +853,7 @@ pub enum NodeType {
         inclusive: bool,
     },
     IterExpression {
-        data_type: Option<PotentialNewType>,
+        data_type: PotentialNewType,
         map: Box<Node>,
         loop_type: Box<LoopType>,
         conditionals: Vec<Node>,
@@ -856,7 +875,7 @@ pub enum NodeType {
         condition: Box<Node>,
     },
     StringLiteral(ParserText),
-    ListLiteral(Option<PotentialNewType>, Vec<Node>),
+    ListLiteral(PotentialNewType, Vec<Node>),
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(i64),

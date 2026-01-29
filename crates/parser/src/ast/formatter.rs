@@ -317,8 +317,9 @@ impl Formatter {
                 data_type,
             } => {
                 let mut txt = format!("{} {}", var_type, identifier);
-                if let Some(typ) = data_type {
-                    txt.push_str(&format!(" : {}", self.fmt_potential_new_type(typ)));
+
+                if !data_type.is_auto() {
+                    txt.push_str(&format!(" : {}", self.fmt_potential_new_type(&data_type)));
                 }
 
                 txt.push_str(&format!(" = {}", self.format(value)));
@@ -413,7 +414,7 @@ impl Formatter {
                 conditionals,
                 until,
             } => {
-                let mut txt = if let Some(data_type) = data_type {
+                let mut txt = if !data_type.is_auto() {
                     format!(
                         "list:<{}>[{} for {}",
                         self.fmt_potential_new_type(data_type),
@@ -626,7 +627,7 @@ impl Formatter {
             NodeType::CharLiteral(x) => format!("'{}'", x),
             NodeType::StringLiteral(x) => format!("\"{}\"", x),
             NodeType::ListLiteral(data_type, values) => {
-                let mut txt = if let Some(data_type) = data_type {
+                let mut txt = if !data_type.is_auto() {
                     format!(
                         "list:<{}>[{}",
                         self.fmt_potential_new_type(&data_type),

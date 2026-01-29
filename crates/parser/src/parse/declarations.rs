@@ -229,9 +229,9 @@ impl Parser {
         let data_type = match self.first().token_type {
             TokenType::Colon => {
                 let _ = self.eat();
-                self.parse_potential_new_type()
+                self.expect_potential_new_type()
             }
-            _ => None,
+            _ => PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(None))),
         };
 
         let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
@@ -694,7 +694,8 @@ impl Parser {
                     parameters: vec![(
                         ParserText::new(Span::default(), String::from("input_value")).into(),
                         typ.unwrap_or(
-                            ParserDataType::new(Span::default(), ParserInnerType::Dynamic).into(),
+                            ParserDataType::new(Span::default(), ParserInnerType::Auto(None))
+                                .into(),
                         ),
                     )],
                     return_type,

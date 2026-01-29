@@ -72,9 +72,7 @@ impl Parser {
 
             let mut parsed_args = vec![CallArg::Value(Node {
                 node_type: NodeType::ListLiteral(
-                    Some(PotentialNewType::DataType(ParserDataType::from(
-                        ParserInnerType::Str,
-                    ))),
+                    PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Str)),
                     {
                         let mut txts = Vec::new();
 
