@@ -49,6 +49,12 @@ impl VM {
     }
 }
 
+pub enum VarName {
+    Func(String),
+    Var(String),
+    Global,
+}
+
 impl VM {
     pub fn run_function(
         &mut self,
@@ -82,6 +88,28 @@ impl VM {
             }
         }
         Ok(RuntimeValue::Null)
+    }
+
+    pub fn resolve_var_name<'a>(&'a self, name: String) -> VarName {
+        if self.variables.contains_key(&name) {
+            return VarName::Var(name);
+        } else if self.registry.functions.contains_key(&name) {
+            return VarName::Func(name);
+        } else if let Some(name) = name.split_once("->") {
+            let name = name.0;
+
+            if self.variables.contains_key(name) {
+                return VarName::Var(name.to_string());
+            } else if self.registry.functions.contains_key(name) {
+                return VarName::Func(name.to_string());
+            } else {
+                // TODO handle globals
+            }
+        } else {
+            // TODO handle globals
+        }
+
+        VarName::Global
     }
 
     pub fn run_block(
@@ -133,30 +161,54 @@ impl VM {
                         block.local_literals.get(*x as usize).unwrap().clone(),
                     ));
                 }
-                VMInstruction::LoadVar(x) => {
-                    let name = block.local_strings.get(*x as usize).unwrap();
-                    if let Some(var) = self.variables.get(name) {
-                        stack.push(var.clone());
-                    } else if let Some(func) = self.registry.functions.get(name) {
-                        stack.push(RuntimeValue::Function {
-                            name: func.name.clone(),
-                            captures: func.captures.clone(),
-                        });
-                    } else if let Some(name) = name.split_once("->") {
-                        let name = name.0;
-
-                        if let Some(var) = self.variables.get(name) {
-                            stack.push(var.clone());
-                        } else if let Some(func) = self.registry.functions.get(name) {
-                            stack.push(RuntimeValue::Function {
-                                name: func.name.clone(),
-                                captures: func.captures.clone(),
-                            });
-                        } else {
-                            // TODO handle globals
+                VMInstruction::Drop(x) => {
+                    let name = block.local_strings.get(*x as usize).unwrap().to_string();
+                    match self.resolve_var_name(name) {
+                        VarName::Func(func) => {
+                            let _ = self.registry.functions.remove(&func);
                         }
-                    } else {
-                        // TODO handle globals
+                        VarName::Var(var) => {
+                            let _ = self.variables.remove(&var);
+                        }
+                        _ => {}
+                    }
+                }
+                VMInstruction::Move(x) => {
+                    let name = block.local_strings.get(*x as usize).unwrap().to_string();
+                    match self.resolve_var_name(name) {
+                        VarName::Func(func) => {
+                            if let Some(func) = self.registry.functions.remove(&func) {
+                                stack.push(RuntimeValue::Function {
+                                    name: func.name.clone(),
+                                    captures: func.captures.clone(),
+                                });
+                            }
+                        }
+                        VarName::Var(var) => {
+                            if let Some(var) = self.variables.remove(&var) {
+                                stack.push(var.clone());
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                VMInstruction::LoadVar(x) => {
+                    let name = block.local_strings.get(*x as usize).unwrap().to_string();
+                    match self.resolve_var_name(name) {
+                        VarName::Func(func) => {
+                            if let Some(func) = self.registry.functions.get(&func) {
+                                stack.push(RuntimeValue::Function {
+                                    name: func.name.clone(),
+                                    captures: func.captures.clone(),
+                                });
+                            }
+                        }
+                        VarName::Var(var) => {
+                            if let Some(var) = self.variables.get(&var) {
+                                stack.push(var.clone());
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 VMInstruction::LoadVarRef(x) => {

@@ -97,6 +97,8 @@ pub struct MiddleScope {
     pub children: HashMap<String, u64>,
     pub namespace: String,
     pub path: PathBuf,
+    pub defined: Vec<String>,
+    pub defers: Vec<Node>,
 }
 
 pub fn get_disamubiguous_name(
@@ -625,6 +627,8 @@ impl MiddleEnvironment {
                 parent: Some(parent),
                 children: HashMap::new(),
                 mappings: HashMap::new(),
+                defined: Vec::new(),
+                defers: Vec::new(),
                 path,
             };
             let _ = self.add_scope(scope);
@@ -837,7 +841,14 @@ impl MiddleEnvironment {
             | NodeType::ScopeDeclaration { define: true, .. }
             | NodeType::ScopeAlias { .. }
             | NodeType::DataType { .. }
-            | NodeType::Until { .. } => None,
+            | NodeType::Until { .. }
+            | NodeType::Defer(_)
+            | NodeType::Drop(_) => None,
+            NodeType::Move(x) => {
+                let ident = self.resolve_potential_dollar_ident(scope, &x)?.text;
+
+                Some(self.variables.get(&ident)?.data_type.clone())
+            }
             NodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_type_from_node(scope, value)?),

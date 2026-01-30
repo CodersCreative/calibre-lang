@@ -80,6 +80,33 @@ impl Parser {
                     NodeType::CharLiteral(val.value.chars().nth(0).unwrap()),
                 )
             }
+            TokenType::Drop => {
+                let open = self.eat();
+                let ident = self.expect_potential_dollar_ident();
+
+                Node::new(
+                    Span::new_from_spans(open.span, *ident.span()),
+                    NodeType::Drop(ident),
+                )
+            }
+            TokenType::Move => {
+                let open = self.eat();
+                let ident = self.expect_potential_dollar_ident();
+
+                Node::new(
+                    Span::new_from_spans(open.span, *ident.span()),
+                    NodeType::Move(ident),
+                )
+            }
+            TokenType::Defer => {
+                let open = self.eat();
+                let ident = self.parse_statement();
+
+                Node::new(
+                    Span::new_from_spans(open.span, ident.span),
+                    NodeType::Defer(Box::new(ident)),
+                )
+            }
             TokenType::FatArrow => self.parse_scope_declaration(false),
             TokenType::Open(Bracket::Paren) => self.parse_paren_expression(),
             TokenType::BinaryOperator(BinaryOperator::Sub) => {

@@ -144,6 +144,9 @@ pub enum TokenType {
     Type,
     WhiteSpace,
     Debug,
+    Drop,
+    Move,
+    Defer,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
@@ -156,6 +159,9 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("match"), TokenType::Match),
         (String::from("obj"), TokenType::Object),
         (String::from("fn"), TokenType::Func),
+        (String::from("drop"), TokenType::Drop),
+        (String::from("move"), TokenType::Move),
+        (String::from("defer"), TokenType::Defer),
         (String::from("else"), TokenType::Else),
         (String::from("list"), TokenType::List),
         (String::from("debug"), TokenType::Debug),

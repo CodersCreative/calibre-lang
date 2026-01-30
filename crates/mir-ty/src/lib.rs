@@ -41,6 +41,8 @@ pub enum MiddleNodeType {
         mutability: RefMutability,
         value: Box<MiddleNode>,
     },
+    Drop(ParserText),
+    Move(ParserText),
     DerefStatement {
         value: Box<MiddleNode>,
     },
@@ -157,6 +159,8 @@ impl Into<Node> for MiddleNode {
 impl Into<NodeType> for MiddleNodeType {
     fn into(self) -> NodeType {
         match self {
+            Self::Drop(x) => NodeType::Drop(x.into()),
+            Self::Move(x) => NodeType::Move(x.into()),
             Self::Break => NodeType::Break,
             Self::Continue => NodeType::Continue,
             Self::EmptyLine => NodeType::EmptyLine,

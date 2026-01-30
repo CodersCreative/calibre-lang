@@ -28,6 +28,8 @@ impl MiddleEnvironment {
             children: HashMap::new(),
             path: path.clone(),
             mappings: HashMap::new(),
+            defined: Vec::new(),
+            defers: Vec::new(),
         });
 
         self.setup_global(&scope);

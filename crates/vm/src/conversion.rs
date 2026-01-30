@@ -273,6 +273,8 @@ impl VMInstruction {
             Self::Boolean(x) => format!("BOOLEAN {}", x),
             Self::List(x) => format!("LIST WITH {}", x),
             Self::Call(x) => format!("CALL WITH {}", x),
+            Self::Move(x) => format!("MOVE {}", strings[*x as usize]),
+            Self::Drop(x) => format!("DROP {}", strings[*x as usize]),
             Self::Aggregate(x) => {
                 let layout = aggregate.get(*x as usize).unwrap();
                 format!(
@@ -310,6 +312,8 @@ pub enum VMInstruction {
     Branch(BlockId, BlockId),
     Return(bool),
     LoadLiteral(u8),
+    Move(StringIndex),
+    Drop(StringIndex),
     LoadVar(StringIndex),
     LoadVarRef(StringIndex),
     Deref,
@@ -386,6 +390,14 @@ impl VMBlock {
                     self.translate(item);
                 }
                 self.instructions.push(VMInstruction::List(count as u8));
+            }
+            LirNodeType::Move(x) => {
+                let name = self.add_string(x);
+                self.instructions.push(VMInstruction::Move(name));
+            }
+            LirNodeType::Drop(x) => {
+                let name = self.add_string(x);
+                self.instructions.push(VMInstruction::Drop(name));
             }
             LirNodeType::Load(x) => {
                 let name = self.add_string(x);

@@ -753,6 +753,9 @@ pub enum NodeType {
     DerefStatement {
         value: Box<Node>,
     },
+    Drop(PotentialDollarIdentifier),
+    Move(PotentialDollarIdentifier),
+    Defer(Box<Node>),
     ParenExpression {
         value: Box<Node>,
     },

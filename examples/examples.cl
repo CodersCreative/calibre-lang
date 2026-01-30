@@ -1,6 +1,6 @@
 const test_str = fn(splits : list:<str>, inputs : list:<str>, extra : bool, extra2 : int) => {
-	print(splits);
-	print(inputs);
+	print(move splits);
+	print(move inputs);
 	print("extra : " & extra & " and " & extra2);
 };
 

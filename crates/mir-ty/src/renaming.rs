@@ -37,6 +37,24 @@ impl MiddleNodeType {
             MiddleNodeType::DerefStatement { value } => MiddleNodeType::DerefStatement {
                 value: Box::new(value.rename(state)),
             },
+            MiddleNodeType::Drop(x) => {
+                let name = if let Some(x) = state.data.get(&x.text) {
+                    x.clone()
+                } else {
+                    x.text
+                };
+
+                MiddleNodeType::Drop(name.into())
+            }
+            MiddleNodeType::Move(x) => {
+                let name = if let Some(x) = state.data.get(&x.text) {
+                    x.clone()
+                } else {
+                    x.text
+                };
+
+                MiddleNodeType::Move(name.into())
+            }
             MiddleNodeType::VariableDeclaration {
                 var_type,
                 identifier,

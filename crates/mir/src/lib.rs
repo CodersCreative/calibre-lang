@@ -25,6 +25,13 @@ impl MiddleEnvironment {
 
         match node.node_type {
             NodeType::DataType { .. } => unreachable!(),
+            NodeType::Defer(x) => {
+                self.scopes.get_mut(scope).unwrap().defers.push(*x);
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::EmptyLine,
+                    span: node.span,
+                })
+            }
             NodeType::Identifier(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Identifier(
                     if let Some(x) = self.resolve_potential_generic_ident(scope, &x) {
@@ -204,6 +211,18 @@ impl MiddleEnvironment {
                     span: node.span,
                 },
             ),
+            NodeType::Move(x) => Ok(MiddleNode {
+                node_type: MiddleNodeType::Move(
+                    self.resolve_potential_dollar_ident(scope, &x).unwrap(),
+                ),
+                span: node.span,
+            }),
+            NodeType::Drop(x) => Ok(MiddleNode {
+                node_type: MiddleNodeType::Drop(
+                    self.resolve_potential_dollar_ident(scope, &x).unwrap(),
+                ),
+                span: node.span,
+            }),
             NodeType::IfStatement {
                 comparison,
                 then,
@@ -281,10 +300,60 @@ impl MiddleEnvironment {
             }),
             NodeType::Return { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::Return {
-                    value: if let Some(value) = value {
-                        Some(Box::new(self.evaluate(scope, *value)?))
-                    } else {
-                        None
+                    value: {
+                        if self.scopes.get(scope).unwrap().defers.is_empty() {
+                            if let Some(value) = value {
+                                Some(Box::new(self.evaluate(scope, *value)?))
+                            } else {
+                                None
+                            }
+                        } else {
+                            let mut lst = Vec::new();
+
+                            let mut in_return = Vec::new();
+
+                            let value = if let Some(x) = value {
+                                let x = self.evaluate(scope, *x)?;
+                                in_return = x
+                                    .identifiers_used()
+                                    .into_iter()
+                                    .map(|x| x.to_string())
+                                    .collect();
+                                Some(x)
+                            } else {
+                                None
+                            };
+
+                            for x in self.scopes.get(scope).unwrap().defers.clone() {
+                                lst.push(self.evaluate(scope, x)?);
+                            }
+
+                            for value in self
+                                .scopes
+                                .get(scope)
+                                .unwrap()
+                                .defined
+                                .clone()
+                                .into_iter()
+                                .filter(|x| !in_return.contains(&&x))
+                            {
+                                lst.push(MiddleNode::new_from_type(MiddleNodeType::Drop(
+                                    value.into(),
+                                )))
+                            }
+
+                            if let Some(x) = value {
+                                lst.push(x);
+                            }
+
+                            Some(Box::new(MiddleNode::new_from_type(
+                                MiddleNodeType::ScopeDeclaration {
+                                    body: lst,
+                                    create_new_scope: false,
+                                    is_temp: true,
+                                },
+                            )))
+                        }
                     },
                 },
                 span: node.span,
@@ -1135,10 +1204,47 @@ impl MiddleEnvironment {
                     }
                 }
 
-                if let Some(body) = body {
+                if let Some(mut body) = body {
                     if is_temp {
+                        let last = body.pop();
                         for statement in body.into_iter() {
                             stmts.push(self.evaluate(&new_scope, statement)?);
+                        }
+
+                        let mut in_return = Vec::new();
+
+                        let last = if let Some(x) = last {
+                            let x = self.evaluate(&new_scope, x)?;
+                            in_return = x
+                                .identifiers_used()
+                                .into_iter()
+                                .map(|x| x.to_string())
+                                .collect();
+                            Some(x)
+                        } else {
+                            None
+                        };
+
+                        for x in self.scopes.get(&new_scope).unwrap().defers.clone() {
+                            stmts.push(self.evaluate(&new_scope, x)?);
+                        }
+
+                        for value in self
+                            .scopes
+                            .get(&new_scope)
+                            .unwrap()
+                            .defined
+                            .clone()
+                            .into_iter()
+                            .filter(|x| !in_return.contains(&&x))
+                        {
+                            stmts.push(MiddleNode::new_from_type(MiddleNodeType::Drop(
+                                value.into(),
+                            )))
+                        }
+
+                        if let Some(last) = last {
+                            stmts.push(last);
                         }
                     } else {
                         let mut errored = Vec::new();
@@ -1498,6 +1604,11 @@ impl MiddleEnvironment {
                         .mappings
                         .insert(og_name.text.clone(), new_name.clone());
 
+                    self.scopes
+                        .get_mut(&new_scope)
+                        .unwrap()
+                        .defined
+                        .push(new_name.clone());
                     params.push((ParserText::from(new_name), data_type));
                 }
 

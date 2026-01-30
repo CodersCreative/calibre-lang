@@ -130,6 +130,8 @@ pub enum LirNodeType {
         right: Box<LirNodeType>,
         operator: BooleanOperator,
     },
+    Move(String),
+    Drop(String),
     Binary {
         left: Box<LirNodeType>,
         right: Box<LirNodeType>,
@@ -236,6 +238,8 @@ impl Display for LirNodeType {
                 }
                 Self::Ref(x) => format!("&{}", x),
                 Self::Deref(x) => format!("*{}", x),
+                Self::Drop(x) => format!("drop {}", x),
+                Self::Move(x) => format!("move {}", x),
                 Self::Enum {
                     name,
                     variant,
@@ -430,6 +434,8 @@ impl<'a> LirEnvironment<'a> {
                 }
             }
             MiddleNodeType::EmptyLine => LirNodeType::Literal(LirLiteral::Null),
+            MiddleNodeType::Drop(name) => LirNodeType::Drop(name.to_string()),
+            MiddleNodeType::Move(name) => LirNodeType::Move(name.to_string()),
             MiddleNodeType::Identifier(name) => LirNodeType::Load(name.to_string()),
             MiddleNodeType::VariableDeclaration {
                 identifier, value, ..

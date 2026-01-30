@@ -161,6 +161,9 @@ impl Formatter {
             NodeType::Break => String::from("break"),
             NodeType::Continue => String::from("continue"),
             NodeType::EmptyLine => String::new(),
+            NodeType::Defer(x) => format!("defer {}", self.format(&x)),
+            NodeType::Drop(x) => format!("drop {}", x),
+            NodeType::Move(x) => format!("move {}", x),
             NodeType::ImportStatement {
                 module,
                 alias,
