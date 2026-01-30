@@ -620,7 +620,12 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("match")),
         );
 
-        let value = self.parse_statement();
+        let value = if self.first().token_type == TokenType::Open(Bracket::Curly) {
+            None
+        } else {
+            Some(Box::new(self.parse_statement()))
+        };
+
         let _ = self.expect_eat(
             &TokenType::Open(Bracket::Curly),
             SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
@@ -636,7 +641,7 @@ impl Parser {
         Node::new(
             Span::new_from_spans(open.span, close.span),
             NodeType::MatchStatement {
-                value: Box::new(value),
+                value,
                 body: patterns,
             },
         )

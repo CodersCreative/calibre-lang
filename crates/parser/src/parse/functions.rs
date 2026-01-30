@@ -274,7 +274,11 @@ impl Parser {
 
         if path.len() == 1 {
             if let NodeType::Identifier(identifier) = &path[0].0.node_type {
-                if self.first().token_type == TokenType::Open(Bracket::Curly) {
+                if self.first().token_type == TokenType::Open(Bracket::Curly)
+                    && self.second().token_type == TokenType::Identifier
+                    && (self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Colon)
+                        || self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Comma))
+                {
                     let data = self.parse_potential_key_value();
                     return Node::new(
                         path[0].0.span,

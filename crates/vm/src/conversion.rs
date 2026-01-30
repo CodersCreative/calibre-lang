@@ -11,6 +11,7 @@ use calibre_parser::ast::{
 use rand::random_range;
 use std::{
     collections::HashMap,
+    ffi::FromBytesWithNulError,
     fmt::{Display, format},
 };
 
@@ -88,6 +89,12 @@ pub struct VMFunction {
 
 impl VMFunction {
     pub fn rename(mut self, mut declared: HashMap<String, String>) -> Self {
+        for param in self.params.iter_mut() {
+            let new_name = format!("{}->{}", param, random_range(0..10000000));
+            declared.insert(param.to_string(), new_name.clone());
+            *param = new_name;
+        }
+
         for block in self.blocks.iter_mut() {
             for instruction in block.instructions.iter() {
                 match instruction {

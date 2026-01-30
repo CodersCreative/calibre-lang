@@ -580,7 +580,15 @@ impl Formatter {
                 txt
             }
             NodeType::MatchStatement { value, body } => {
-                format!("match {} {}", self.format(value), self.fmt_match_body(body))
+                format!(
+                    "match {}{}",
+                    if let Some(value) = value {
+                        format!("{} ", self.format(value))
+                    } else {
+                        String::new()
+                    },
+                    self.fmt_match_body(body)
+                )
             }
             NodeType::FnMatchDeclaration { header, body } => {
                 let mut txt = String::from("match");

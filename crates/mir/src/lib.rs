@@ -251,7 +251,7 @@ impl MiddleEnvironment {
                     scope,
                     Node {
                         node_type: NodeType::MatchStatement {
-                            value: Box::new(value),
+                            value: Some(Box::new(value)),
                             body: {
                                 let mut lst: Vec<(
                                     calibre_parser::ast::MatchArmType,
@@ -695,7 +695,7 @@ impl MiddleEnvironment {
                     scope,
                     Node {
                         node_type: NodeType::MatchStatement  {
-                            value,
+                            value: Some(value),
                             body: match resolved_type {
                                 Some(ParserDataType { data_type: ParserInnerType::Option(_), span: _ }) => vec![
                                     (
@@ -1424,29 +1424,37 @@ impl MiddleEnvironment {
                 })
             }
             NodeType::MatchStatement { value, body } => {
-                let resolved_data_type = self.resolve_type_from_node(scope, &value).unwrap();
+                let resolved_data_type = if let Some(value) = value.as_ref() {
+                    self.resolve_type_from_node(scope, value)
+                } else {
+                    None
+                };
 
                 let mut ifs: Vec<Node> = Vec::new();
                 let mut reference = None;
-                let enum_object = if let Some(x) = self.objects.get(
-                    resolved_data_type
-                        .to_string()
-                        .replace("mut ", "")
-                        .replace("&", "")
-                        .trim(),
-                ) {
-                    match (
-                        resolved_data_type.to_string().contains("mut "),
-                        resolved_data_type.to_string().contains("&"),
+                let enum_object = if let Some(resolved_data_type) = &resolved_data_type {
+                    if let Some(x) = self.objects.get(
+                        resolved_data_type
+                            .to_string()
+                            .replace("mut ", "")
+                            .replace("&", "")
+                            .trim(),
                     ) {
-                        (true, true) => reference = Some(RefMutability::MutRef),
-                        (true, false) => reference = Some(RefMutability::MutValue),
-                        (false, true) => reference = Some(RefMutability::Ref),
-                        (false, false) => reference = Some(RefMutability::Value),
-                    }
-                    match &x.object_type {
-                        MiddleTypeDefType::Enum(x) => Some(x),
-                        _ => None,
+                        match (
+                            resolved_data_type.to_string().contains("mut "),
+                            resolved_data_type.to_string().contains("&"),
+                        ) {
+                            (true, true) => reference = Some(RefMutability::MutRef),
+                            (true, false) => reference = Some(RefMutability::MutValue),
+                            (false, true) => reference = Some(RefMutability::Ref),
+                            (false, false) => reference = Some(RefMutability::Value),
+                        }
+                        match &x.object_type {
+                            MiddleTypeDefType::Enum(x) => Some(x),
+                            _ => None,
+                        }
+                    } else {
+                        None
                     }
                 } else {
                     None
@@ -1467,6 +1475,36 @@ impl MiddleEnvironment {
                             operator: BooleanOperator::And,
                         });
                     }
+
+                    let (Some(value), Some(resolved_data_type)) =
+                        (value.clone(), resolved_data_type.as_ref())
+                    else {
+                        match pattern.0 {
+                            MatchArmType::Wildcard(_) => {
+                                ifs.push(Node::new_from_type(NodeType::IfStatement {
+                                    comparison: Box::new(IfComparisonType::If(conditionals)),
+                                    then: pattern.2,
+                                    otherwise: None,
+                                }))
+                            }
+                            MatchArmType::Value(x) => {
+                                conditionals = Node::new_from_type(NodeType::BooleanExpression {
+                                    left: Box::new(x),
+                                    right: Box::new(conditionals),
+                                    operator: BooleanOperator::And,
+                                });
+
+                                ifs.push(Node::new_from_type(NodeType::IfStatement {
+                                    comparison: Box::new(IfComparisonType::If(conditionals)),
+                                    then: pattern.2,
+                                    otherwise: None,
+                                }))
+                            }
+                            _ => unreachable!(),
+                        }
+
+                        continue;
+                    };
 
                     match pattern.0 {
                         MatchArmType::Wildcard(_) => {
@@ -1525,7 +1563,9 @@ impl MiddleEnvironment {
                             let index: i64 = match val.text.trim() {
                                 _ if enum_object.is_some() => {
                                     let Some(object) = enum_object else {
-                                        return Err(MiddleErr::CantMatch(resolved_data_type));
+                                        return Err(MiddleErr::CantMatch(
+                                            resolved_data_type.clone(),
+                                        ));
                                     };
                                     let Some(index) =
                                         object.iter().position(|x| x.0.text == val.text)
@@ -1539,7 +1579,7 @@ impl MiddleEnvironment {
                                 "Some" => 0,
                                 "None" => 1,
                                 _ => {
-                                    return Err(MiddleErr::CantMatch(resolved_data_type));
+                                    return Err(MiddleErr::CantMatch(resolved_data_type.clone()));
                                 }
                             };
 
@@ -1622,11 +1662,11 @@ impl MiddleEnvironment {
                 Node::new_from_type(NodeType::FunctionDeclaration {
                     body: Box::new(Node::new_from_type(NodeType::ScopeDeclaration {
                         body: Some(vec![Node::new_from_type(NodeType::MatchStatement {
-                            value: Box::new(Node::new_from_type(NodeType::Identifier(
+                            value: Some(Box::new(Node::new_from_type(NodeType::Identifier(
                                 PotentialGenericTypeIdentifier::Identifier(
                                     header.parameters[0].0.clone(),
                                 ),
-                            ))),
+                            )))),
                             body,
                         })]),
                         named: None,

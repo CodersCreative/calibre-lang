@@ -29,11 +29,35 @@ pub fn comparison(
     match left {
         RuntimeValue::Int(x) => match right {
             RuntimeValue::Int(y) => Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y))),
-            _ => Err(RuntimeError::Comparison(left, right, op.clone())),
+            right => Err(RuntimeError::Comparison(
+                RuntimeValue::Int(x),
+                right,
+                op.clone(),
+            )),
         },
         RuntimeValue::Float(x) => match right {
             RuntimeValue::Float(y) => Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y))),
-            _ => Err(RuntimeError::Comparison(left, right, op.clone())),
+            right => Err(RuntimeError::Comparison(
+                RuntimeValue::Float(x),
+                right,
+                op.clone(),
+            )),
+        },
+        RuntimeValue::Char(x) => match right {
+            RuntimeValue::Char(y) => Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y))),
+            right => Err(RuntimeError::Comparison(
+                RuntimeValue::Char(x),
+                right,
+                op.clone(),
+            )),
+        },
+        RuntimeValue::Str(x) => match right {
+            RuntimeValue::Str(y) => Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y))),
+            right => Err(RuntimeError::Comparison(
+                RuntimeValue::Str(x),
+                right,
+                op.clone(),
+            )),
         },
         _ => Err(RuntimeError::Comparison(left, right, op.clone())),
     }

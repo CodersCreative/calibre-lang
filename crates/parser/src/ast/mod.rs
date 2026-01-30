@@ -796,7 +796,7 @@ pub enum NodeType {
         define: bool,
     },
     MatchStatement {
-        value: Box<Node>,
+        value: Option<Box<Node>>,
         body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
     },
     FnMatchDeclaration {
