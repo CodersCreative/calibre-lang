@@ -411,6 +411,7 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::IntLiteral(i) => LirNodeType::Literal(LirLiteral::Int(i)),
             MiddleNodeType::FloatLiteral(f) => LirNodeType::Literal(LirLiteral::Float(f)),
             MiddleNodeType::CharLiteral(c) => LirNodeType::Literal(LirLiteral::Char(c)),
+            MiddleNodeType::Null => LirNodeType::Literal(LirLiteral::Null),
             MiddleNodeType::StringLiteral(s) => {
                 LirNodeType::Literal(LirLiteral::String(s.to_string()))
             }

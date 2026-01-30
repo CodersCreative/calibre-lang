@@ -25,8 +25,16 @@ impl MiddleEnvironment {
 
         match node.node_type {
             NodeType::DataType { .. } => unreachable!(),
-            NodeType::Defer(x) => {
-                self.scopes.get_mut(scope).unwrap().defers.push(*x);
+            NodeType::Null => Ok(MiddleNode {
+                node_type: MiddleNodeType::Null,
+                span: node.span,
+            }),
+            NodeType::Defer { value, function } => {
+                if function {
+                    self.func_defers.push(*value);
+                } else {
+                    self.scopes.get_mut(scope).unwrap().defers.push(*value);
+                }
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::EmptyLine,
                     span: node.span,
@@ -287,11 +295,56 @@ impl MiddleEnvironment {
                 },
             ),
             NodeType::Break => Ok(MiddleNode {
-                node_type: MiddleNodeType::Break,
+                node_type: if self.scopes.get(scope).unwrap().defers.is_empty() {
+                    // TODO find a way to get all defers since the last loop was created
+                    let mut lst = Vec::new();
+
+                    for x in self.scopes.get(scope).unwrap().defers.clone() {
+                        lst.push(self.evaluate(scope, x)?);
+                    }
+
+                    for value in self.scopes.get(scope).unwrap().defined.clone() {
+                        lst.push(MiddleNode::new_from_type(MiddleNodeType::Drop(
+                            value.into(),
+                        )))
+                    }
+
+                    lst.push(MiddleNode::new_from_type(MiddleNodeType::Break));
+
+                    MiddleNodeType::ScopeDeclaration {
+                        body: lst,
+                        create_new_scope: false,
+                        is_temp: true,
+                    }
+                } else {
+                    MiddleNodeType::Break
+                },
                 span: node.span,
             }),
             NodeType::Continue => Ok(MiddleNode {
-                node_type: MiddleNodeType::Continue,
+                node_type: if self.scopes.get(scope).unwrap().defers.is_empty() {
+                    let mut lst = Vec::new();
+
+                    for x in self.scopes.get(scope).unwrap().defers.clone() {
+                        lst.push(self.evaluate(scope, x)?);
+                    }
+
+                    for value in self.scopes.get(scope).unwrap().defined.clone() {
+                        lst.push(MiddleNode::new_from_type(MiddleNodeType::Drop(
+                            value.into(),
+                        )))
+                    }
+
+                    lst.push(MiddleNode::new_from_type(MiddleNodeType::Continue));
+
+                    MiddleNodeType::ScopeDeclaration {
+                        body: lst,
+                        create_new_scope: false,
+                        is_temp: true,
+                    }
+                } else {
+                    MiddleNodeType::Continue
+                },
                 span: node.span,
             }),
             NodeType::EmptyLine => Ok(MiddleNode {
@@ -301,6 +354,7 @@ impl MiddleEnvironment {
             NodeType::Return { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::Return {
                     value: {
+                        // TODO get all defers in the function body
                         if self.scopes.get(scope).unwrap().defers.is_empty() {
                             if let Some(value) = value {
                                 Some(Box::new(self.evaluate(scope, *value)?))
@@ -325,6 +379,10 @@ impl MiddleEnvironment {
                             };
 
                             for x in self.scopes.get(scope).unwrap().defers.clone() {
+                                lst.push(self.evaluate(scope, x)?);
+                            }
+
+                            for x in self.func_defers.clone() {
                                 lst.push(self.evaluate(scope, x)?);
                             }
 
@@ -742,7 +800,7 @@ impl MiddleEnvironment {
                 }
 
                 let scope = self.new_scope_from_parent_shallow(*scope);
-                match *loop_type {
+                let node = match *loop_type {
                     LoopType::Loop => Ok(MiddleNode {
                         node_type: MiddleNodeType::LoopDeclaration {
                             state: None,
@@ -836,60 +894,62 @@ impl MiddleEnvironment {
                         let range_data_type = self.resolve_type_from_node(&scope, &range);
 
                         Ok(MiddleNode {
-                    node_type: MiddleNodeType::LoopDeclaration {
-                        state: Some(Box::new(self.evaluate(&scope, Node::new_from_type(NodeType::VariableDeclaration { var_type: VarType::Mutable, identifier: ParserText::from("anon_loop_index".to_string()).into(), value: Box::new(Node::new_from_type(NodeType::IntLiteral(0))), data_type: ParserDataType::from(ParserInnerType::Int).into() }))?)),
-                        body: Box::new(self.evaluate(
-                            &scope,
-                            Node::new_from_type(NodeType::ScopeDeclaration {
-                                body: {
-                                    let mut lst = vec![
-                                        Node::new_from_type(NodeType::VariableDeclaration  {
-                                            identifier: name.clone(),
-                                            var_type: VarType::Mutable,
-                                            data_type: PotentialNewType::DataType(ParserDataType::from(
-                                                ParserInnerType::Auto(None),
-                                            )),
-                                            value: match range_data_type.map(|x| x.data_type) {
-                                                Some(ParserInnerType::List(_)) => Box::new(Node::new_from_type(NodeType::MemberExpression { path: vec![(range.clone(), false), (Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into())), true)] })),
-                                                Some(ParserInnerType::Tuple(_)) => Box::new(Node::new_from_type(NodeType::MemberExpression { path: vec![(range.clone(), false), (Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into())), false)] })),
-                                                _ => Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))),
-                                            }
-                                        }),
-                                        Node::new_from_type(NodeType::IfStatement {
-                                                comparison: Box::new(IfComparisonType::If(
-                                                    Node::new_from_type(NodeType::ComparisonExpression {
-                                                        left: Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))),
-                                                        right: Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None,generic_types : Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("len".to_string()).into()))), args : vec![CallArg::Value(range)], reverse_args: Vec::new(),})),
-                                                        operator: calibre_parser::ast::comparison::ComparisonOperator::Lesser
-                                                    }),
+                        node_type: MiddleNodeType::LoopDeclaration {
+                            state: Some(Box::new(self.evaluate(&scope, Node::new_from_type(NodeType::VariableDeclaration { var_type: VarType::Mutable, identifier: ParserText::from("anon_loop_index".to_string()).into(), value: Box::new(Node::new_from_type(NodeType::IntLiteral(0))), data_type: ParserDataType::from(ParserInnerType::Int).into() }))?)),
+                            body: Box::new(self.evaluate(
+                                &scope,
+                                Node::new_from_type(NodeType::ScopeDeclaration {
+                                    body: {
+                                        let mut lst = vec![
+                                            Node::new_from_type(NodeType::VariableDeclaration  {
+                                                identifier: name.clone(),
+                                                var_type: VarType::Mutable,
+                                                data_type: PotentialNewType::DataType(ParserDataType::from(
+                                                    ParserInnerType::Auto(None),
                                                 )),
-                                                then: Box::new(Node::new_from_type(
-                                                    NodeType::AssignmentExpression { identifier: Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))), value: Box::new(Node::new_from_type(NodeType::BinaryExpression { left: Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))), right: Box::new(Node::new_from_type(NodeType::IntLiteral(1))), operator: BinaryOperator::Add })) },
-                                                )),
-                                                otherwise: Some(Box::new(Node::new_from_type(
-                                                    NodeType::Break,
-                                                ))),
-                                            })
-                                    ];
+                                                value: match range_data_type.map(|x| x.data_type) {
+                                                    Some(ParserInnerType::List(_)) => Box::new(Node::new_from_type(NodeType::MemberExpression { path: vec![(range.clone(), false), (Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into())), true)] })),
+                                                    Some(ParserInnerType::Tuple(_)) => Box::new(Node::new_from_type(NodeType::MemberExpression { path: vec![(range.clone(), false), (Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into())), false)] })),
+                                                    _ => Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))),
+                                                }
+                                            }),
+                                            Node::new_from_type(NodeType::IfStatement {
+                                                    comparison: Box::new(IfComparisonType::If(
+                                                        Node::new_from_type(NodeType::ComparisonExpression {
+                                                            left: Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))),
+                                                            right: Box::new(Node::new_from_type(NodeType::CallExpression{string_fn : None,generic_types : Vec::new(), caller : Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("len".to_string()).into()))), args : vec![CallArg::Value(range)], reverse_args: Vec::new(),})),
+                                                            operator: calibre_parser::ast::comparison::ComparisonOperator::Lesser
+                                                        }),
+                                                    )),
+                                                    then: Box::new(Node::new_from_type(
+                                                        NodeType::AssignmentExpression { identifier: Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))), value: Box::new(Node::new_from_type(NodeType::BinaryExpression { left: Box::new(Node::new_from_type(NodeType::Identifier(ParserText::from("anon_loop_index".to_string()).into()))), right: Box::new(Node::new_from_type(NodeType::IntLiteral(1))), operator: BinaryOperator::Add })) },
+                                                    )),
+                                                    otherwise: Some(Box::new(Node::new_from_type(
+                                                        NodeType::Break,
+                                                    ))),
+                                                })
+                                        ];
 
-                                    match body.node_type {
-                                        NodeType::ScopeDeclaration { body : Some(mut body), .. } => lst.append(&mut body),
-                                        _ => lst.push(*body),
-                                    }
+                                        match body.node_type {
+                                            NodeType::ScopeDeclaration { body : Some(mut body), .. } => lst.append(&mut body),
+                                            _ => lst.push(*body),
+                                        }
 
-                                    Some(lst)
-                                },
-                                is_temp: true,
-                                create_new_scope: Some(true),
-                                define : false,
-                                named: None,
-                            }),
-                        )?),
-                    },
-                    span: node.span,
-                })
+                                        Some(lst)
+                                    },
+                                    is_temp: true,
+                                    create_new_scope: Some(true),
+                                    define : false,
+                                    named: None,
+                                }),
+                            )?),
+                        },
+                        span: node.span,
                     }
-                }
+                )
+                    }
+                };
+                node
             }
             NodeType::IterExpression {
                 data_type,
@@ -1580,6 +1640,8 @@ impl MiddleEnvironment {
             NodeType::FunctionDeclaration { header, body } => {
                 // TODO Handle generics
                 let mut params = Vec::with_capacity(header.parameters.len());
+                let mut old_func_defers = Vec::new();
+                old_func_defers.append(&mut self.func_defers);
                 let new_scope = self.new_scope_from_parent_shallow(*scope);
                 for param in header.parameters {
                     let og_name = self.resolve_dollar_ident_only(scope, &param.0).unwrap();
@@ -1612,12 +1674,44 @@ impl MiddleEnvironment {
                     params.push((ParserText::from(new_name), data_type));
                 }
 
-                let return_type = self.resolve_potential_new_type(scope, header.return_type);
+                let return_type = self.resolve_potential_new_type(&new_scope, header.return_type);
+
+                let body = self.evaluate(&new_scope, *body)?;
+                let mut func_defers = Vec::new();
+                func_defers.append(&mut self.func_defers);
+
+                let body = if let MiddleNodeType::ScopeDeclaration {
+                    body: mut scope_body,
+                    create_new_scope,
+                    is_temp,
+                } = body.node_type
+                {
+                    let last = scope_body.pop();
+                    for defer in func_defers {
+                        scope_body.push(self.evaluate(scope, defer)?);
+                    }
+
+                    if let Some(last) = last {
+                        scope_body.push(last);
+                    }
+
+                    MiddleNode {
+                        span: body.span,
+                        node_type: MiddleNodeType::ScopeDeclaration {
+                            body: scope_body,
+                            create_new_scope,
+                            is_temp,
+                        },
+                    }
+                } else {
+                    body
+                };
+                self.func_defers.append(&mut old_func_defers);
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::FunctionDeclaration {
                         parameters: params,
-                        body: Box::new(self.evaluate(&new_scope, *body)?),
+                        body: Box::new(body),
                         return_type,
                         is_async: header.is_async,
                     },

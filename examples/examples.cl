@@ -9,6 +9,13 @@ const main = fn () => {
 	let age = "10";
 	test_str"Hello, my name is {name} and I'm {age} years old!" <(true, 900003);
 
+	=> {
+		defer print("end of scope");
+		// Defers are only evaluated when performed so they wont capture values from this scope only the scope they're defered to.
+		defer return print("end of func");
+		// end of scope printed here
+	};
+
 	print(bmi(52.5, 1.65));
 	print(factorial(5));
 	print(lock(3, 4,6));
@@ -18,7 +25,9 @@ const main = fn () => {
 	let tri = is_a_triangle(10f, 20f);
 	print(tri);
 	let tri = tri(10f);
-	print(tri);
+	print(move tri);
+	// end of func printed here
+	null;
 };
 
 const a_fn = fn() => {

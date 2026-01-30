@@ -25,6 +25,7 @@ impl MiddleNodeType {
             MiddleNodeType::Break
             | MiddleNodeType::Continue
             | MiddleNodeType::EmptyLine
+            | MiddleNodeType::Null
             | MiddleNodeType::EnumExpression { data: None, .. }
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::FloatLiteral(_)

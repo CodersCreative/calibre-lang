@@ -84,6 +84,7 @@ pub enum StopValue {
 pub enum TokenType {
     Float,
     Integer,
+    Null,
     String,
     Char,
     ColonAngled,
@@ -153,6 +154,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("until"), TokenType::Stop(StopValue::Until)),
         (String::from("mut"), TokenType::Mut),
+        (String::from("null"), TokenType::Null),
         (String::from("const"), TokenType::Const),
         (String::from("let"), TokenType::Let),
         (String::from("enum"), TokenType::Enum),

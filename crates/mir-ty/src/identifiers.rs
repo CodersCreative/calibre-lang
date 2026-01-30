@@ -1,5 +1,3 @@
-use calibre_parser::parse::declarations;
-
 use crate::{MiddleNode, MiddleNodeType};
 
 impl MiddleNode {
@@ -8,6 +6,7 @@ impl MiddleNode {
             MiddleNodeType::Break
             | MiddleNodeType::EmptyLine
             | MiddleNodeType::Continue
+            | MiddleNodeType::Null
             | MiddleNodeType::EnumExpression {
                 identifier: _,
                 value: _,
@@ -153,6 +152,7 @@ impl MiddleNode {
         match &self.node_type {
             MiddleNodeType::Break
             | MiddleNodeType::EmptyLine
+            | MiddleNodeType::Null
             | MiddleNodeType::Continue
             | MiddleNodeType::EnumExpression {
                 identifier: _,

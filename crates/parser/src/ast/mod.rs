@@ -742,6 +742,7 @@ pub enum NodeType {
     Break,
     Continue,
     EmptyLine,
+    Null,
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
@@ -755,7 +756,10 @@ pub enum NodeType {
     },
     Drop(PotentialDollarIdentifier),
     Move(PotentialDollarIdentifier),
-    Defer(Box<Node>),
+    Defer {
+        value: Box<Node>,
+        function: bool,
+    },
     ParenExpression {
         value: Box<Node>,
     },

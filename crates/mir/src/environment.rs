@@ -75,6 +75,7 @@ pub struct MiddleEnvironment {
     pub variables: HashMap<String, MiddleVariable>,
     pub resolved_variables: Vec<String>,
     pub overloads: Vec<MiddleOverload>,
+    pub func_defers: Vec<Node>,
     pub objects: HashMap<String, MiddleObject>,
     pub current_location: Option<Location>,
 }
@@ -122,6 +123,7 @@ pub fn get_disamubiguous_name(
 impl MiddleEnvironment {
     pub fn new() -> MiddleEnvironment {
         MiddleEnvironment {
+            func_defers: Vec::new(),
             overloads: Vec::new(),
             scope_counter: 0,
             scopes: HashMap::new(),
@@ -830,7 +832,6 @@ impl MiddleEnvironment {
         let typ = match &node.node_type {
             NodeType::Break
             | NodeType::Continue
-            | NodeType::EmptyLine
             | NodeType::VariableDeclaration { .. }
             | NodeType::ImplDeclaration { .. }
             | NodeType::TypeDeclaration { .. }
@@ -841,9 +842,10 @@ impl MiddleEnvironment {
             | NodeType::ScopeDeclaration { define: true, .. }
             | NodeType::ScopeAlias { .. }
             | NodeType::DataType { .. }
-            | NodeType::Until { .. }
-            | NodeType::Defer(_)
-            | NodeType::Drop(_) => None,
+            | NodeType::Until { .. } => None,
+            NodeType::Null | NodeType::Defer { .. } | NodeType::Drop(_) | NodeType::EmptyLine => {
+                Some(ParserDataType::from(ParserInnerType::Null))
+            }
             NodeType::Move(x) => {
                 let ident = self.resolve_potential_dollar_ident(scope, &x)?.text;
 

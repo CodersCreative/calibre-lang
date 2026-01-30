@@ -39,6 +39,7 @@ impl Parser {
                     NodeType::FloatLiteral(val.value.trim().parse().unwrap()),
                 )
             }
+            TokenType::Null => Node::new(self.eat().span, NodeType::Null),
             TokenType::Integer => {
                 let val = self.eat();
                 Node::new(
@@ -100,11 +101,22 @@ impl Parser {
             }
             TokenType::Defer => {
                 let open = self.eat();
+
+                let function = if self.first().token_type == TokenType::Stop(StopValue::Return) {
+                    let _ = self.eat();
+                    true
+                } else {
+                    false
+                };
+
                 let ident = self.parse_statement();
 
                 Node::new(
                     Span::new_from_spans(open.span, ident.span),
-                    NodeType::Defer(Box::new(ident)),
+                    NodeType::Defer {
+                        value: Box::new(ident),
+                        function,
+                    },
                 )
             }
             TokenType::FatArrow => self.parse_scope_declaration(false),

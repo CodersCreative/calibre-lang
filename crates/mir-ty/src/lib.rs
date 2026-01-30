@@ -37,6 +37,7 @@ pub enum MiddleNodeType {
     Break,
     Continue,
     EmptyLine,
+    Null,
     RefStatement {
         mutability: RefMutability,
         value: Box<MiddleNode>,
@@ -164,6 +165,7 @@ impl Into<NodeType> for MiddleNodeType {
             Self::Break => NodeType::Break,
             Self::Continue => NodeType::Continue,
             Self::EmptyLine => NodeType::EmptyLine,
+            Self::Null => NodeType::Null,
             Self::RefStatement { mutability, value } => NodeType::RefStatement {
                 mutability,
                 value: Box::new((*value).into()),
