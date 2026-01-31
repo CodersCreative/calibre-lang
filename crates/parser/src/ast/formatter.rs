@@ -255,15 +255,15 @@ impl Formatter {
             NodeType::DerefStatement { value } => format!("*{}", self.format(&*value)),
             NodeType::ImplDeclaration {
                 identifier,
-                functions,
+                variables,
             } => {
                 let mut txt = format!("impl {} {{", identifier);
 
-                if !functions.is_empty() {
-                    for func in functions {
+                if !variables.is_empty() {
+                    for var in variables {
                         let temp = handle_comment!(
-                            self.get_potential_comment(&func.span),
-                            self.format(&func)
+                            self.get_potential_comment(&var.span),
+                            self.format(&var)
                         );
                         txt.push_str(&format!("\n{};\n", self.fmt_txt_with_tab(&temp, 1, true)));
                     }

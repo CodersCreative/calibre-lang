@@ -26,7 +26,7 @@ pub enum MiddleTypeDefType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleObject {
     pub object_type: MiddleTypeDefType,
-    pub functions: HashMap<String, (MiddleNode, Option<Location>, bool)>,
+    pub variables: HashMap<String, (String, bool)>,
     pub traits: Vec<String>,
     pub location: Option<Location>,
 }
@@ -337,7 +337,7 @@ impl MiddleEnvironment {
                     new_name.clone(),
                     MiddleObject {
                         object_type: type_def,
-                        functions: HashMap::new(),
+                        variables: HashMap::new(),
                         traits: Vec::new(),
                         location: self.current_location.clone(),
                     },
@@ -348,6 +348,13 @@ impl MiddleEnvironment {
                     .unwrap()
                     .mappings
                     .insert(identifier.text, new_name.clone());
+
+                let previous_self = self
+                    .scopes
+                    .get_mut(scope)
+                    .unwrap()
+                    .mappings
+                    .insert(String::from("Self"), new_name.clone());
 
                 for overload in overloads {
                     let overload = MiddleOverload {
@@ -382,6 +389,14 @@ impl MiddleEnvironment {
                     };
 
                     self.overloads.push(overload);
+                }
+
+                if let Some(prev) = previous_self {
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .mappings
+                        .insert(String::from("Self"), prev);
                 }
 
                 ParserDataType::from(ParserInnerType::Struct(new_name))

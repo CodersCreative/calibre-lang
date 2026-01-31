@@ -105,8 +105,8 @@ impl MiddleNode {
                 amt
             }
             MiddleNodeType::MemberExpression { path } => match path.len() {
-                2 | 3 => path.first().unwrap().0.identifiers_used(),
-                _ => todo!(),
+                1 | 2 | 3 => path.first().unwrap().0.identifiers_used(),
+                x => todo!("{}", x),
             },
             MiddleNodeType::FunctionDeclaration {
                 parameters,
@@ -257,7 +257,7 @@ impl MiddleNode {
                 amt
             }
             MiddleNodeType::MemberExpression { path } => match path.len() {
-                2 | 3 => path.first().unwrap().0.identifiers_declared(),
+                1 | 2 | 3 => path.first().unwrap().0.identifiers_declared(),
                 _ => todo!(),
             },
             MiddleNodeType::FunctionDeclaration {

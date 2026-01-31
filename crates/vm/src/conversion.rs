@@ -468,7 +468,24 @@ impl VMBlock {
                 self.instructions.push(VMInstruction::Deref);
             }
             LirNodeType::Ref(x) => {
-                todo!()
+                match *x {
+                    LirNodeType::Load(name) => {
+                        let name = self.add_string(name);
+                        self.instructions.push(VMInstruction::LoadVarRef(name));
+                    }
+                    LirNodeType::Member(x, member) => match *x {
+                        LirNodeType::Load(name) => {
+                            let name = self.add_string(name);
+                            let member = self.add_string(member);
+                            self.instructions.push(VMInstruction::LoadVarRef(name));
+                            self.instructions.push(VMInstruction::LoadMember(member));
+                        }
+                        _ => unimplemented!(),
+                    },
+                    _ => {
+                        // TODO Members
+                    }
+                }
             }
             LirNodeType::As(value, data_type) => {
                 self.translate(*value);

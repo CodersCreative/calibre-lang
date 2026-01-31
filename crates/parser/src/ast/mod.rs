@@ -771,7 +771,7 @@ pub enum NodeType {
     },
     ImplDeclaration {
         identifier: PotentialGenericTypeIdentifier,
-        functions: Vec<Node>,
+        variables: Vec<Node>,
     },
     TypeDeclaration {
         identifier: PotentialGenericTypeIdentifier,

@@ -334,7 +334,7 @@ impl Parser {
 
         let identifier = self.expect_potential_dollar_ident();
 
-        let mut functions = Vec::new();
+        let mut variables = Vec::new();
 
         let _ = self.expect_eat(
             &TokenType::Open(Bracket::Curly),
@@ -351,7 +351,7 @@ impl Parser {
                     var_type: VarType::Constant,
                     ..
                 } => {
-                    functions.push(decl);
+                    variables.push(decl);
                 }
                 _ => self.add_err(SyntaxErr::ExpectedFunctions),
             }
@@ -366,7 +366,7 @@ impl Parser {
             *identifier.span(),
             NodeType::ImplDeclaration {
                 identifier: identifier.into(),
-                functions,
+                variables,
             },
         )
     }

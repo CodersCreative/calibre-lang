@@ -5,6 +5,7 @@ use calibre_mir_ty::MiddleNode;
 use calibre_parser::ast::{ObjectMap, ParserDataType};
 
 use crate::{
+    VM,
     conversion::VMLiteral,
     native::{self, NativeFunction},
 };
@@ -139,4 +140,140 @@ pub enum TerminateValue {
     None,
     Jump(BlockId),
     Return(RuntimeValue),
+}
+
+impl VM {
+    pub fn move_saveable_into_runtime_var(&mut self, value: RuntimeValue) -> RuntimeValue {
+        fn unwrap_runtime_value(env: &mut VM, value: RuntimeValue) -> RuntimeValue {
+            match value {
+                RuntimeValue::Ref(pointer) => {
+                    let inner = env.variables.remove(&pointer).unwrap();
+                    unwrap_runtime_value(env, inner)
+                }
+                RuntimeValue::Aggregate(x, ObjectMap(map)) => {
+                    let new_map = map
+                        .into_iter()
+                        .map(|(k, v)| (k, unwrap_runtime_value(env, v)))
+                        .collect();
+                    RuntimeValue::Aggregate(x, ObjectMap(new_map))
+                }
+                RuntimeValue::List(data) => {
+                    let data = data
+                        .into_iter()
+                        .map(|v| unwrap_runtime_value(env, v))
+                        .collect();
+                    RuntimeValue::List(data)
+                }
+                RuntimeValue::Enum(x, y, Some(data)) => {
+                    RuntimeValue::Enum(x, y, Some(Box::new(unwrap_runtime_value(env, *data))))
+                }
+                RuntimeValue::Option(Some(data)) => {
+                    RuntimeValue::Option(Some(Box::new(unwrap_runtime_value(env, *data))))
+                }
+                RuntimeValue::Result(Ok(data)) => {
+                    RuntimeValue::Result(Ok(Box::new(unwrap_runtime_value(env, *data))))
+                }
+                RuntimeValue::Result(Err(data)) => {
+                    RuntimeValue::Result(Err(Box::new(unwrap_runtime_value(env, *data))))
+                }
+                other => other,
+            }
+        }
+
+        unwrap_runtime_value(self, value)
+    }
+
+    pub fn copy_saveable_into_runtime_var(&self, value: RuntimeValue) -> RuntimeValue {
+        fn unwrap_runtime_value(env: &VM, value: RuntimeValue) -> RuntimeValue {
+            match value {
+                RuntimeValue::Ref(pointer) => {
+                    let inner = env.variables.get(&pointer).unwrap().clone();
+                    unwrap_runtime_value(env, inner)
+                }
+                RuntimeValue::Aggregate(x, ObjectMap(map)) => {
+                    let new_map = map
+                        .into_iter()
+                        .map(|(k, v)| (k, unwrap_runtime_value(env, v)))
+                        .collect();
+                    RuntimeValue::Aggregate(x, ObjectMap(new_map))
+                }
+                RuntimeValue::List(data) => {
+                    let data = data
+                        .into_iter()
+                        .map(|v| unwrap_runtime_value(env, v))
+                        .collect();
+                    RuntimeValue::List(data)
+                }
+                RuntimeValue::Enum(x, y, Some(data)) => {
+                    RuntimeValue::Enum(x, y, Some(Box::new(unwrap_runtime_value(env, *data))))
+                }
+                RuntimeValue::Option(Some(data)) => {
+                    RuntimeValue::Option(Some(Box::new(unwrap_runtime_value(env, *data))))
+                }
+                RuntimeValue::Result(Ok(data)) => {
+                    RuntimeValue::Result(Ok(Box::new(unwrap_runtime_value(env, *data))))
+                }
+                RuntimeValue::Result(Err(data)) => {
+                    RuntimeValue::Result(Err(Box::new(unwrap_runtime_value(env, *data))))
+                }
+                other => other,
+            }
+        }
+
+        unwrap_runtime_value(self, value)
+    }
+
+    pub fn convert_runtime_var_into_saveable(&mut self, value: RuntimeValue) -> RuntimeValue {
+        fn transform(env: &mut VM, val: RuntimeValue) -> RuntimeValue {
+            match val {
+                RuntimeValue::Aggregate(x, ObjectMap(map)) => {
+                    let mut new_map = Vec::new();
+                    for (k, v) in map {
+                        let inner_val = transform(env, v);
+                        let name = rand::random_range(0..10000000).to_string();
+                        env.variables.insert(name.clone(), inner_val);
+                        new_map.push((k, RuntimeValue::Ref(name)));
+                    }
+                    RuntimeValue::Aggregate(x, ObjectMap(new_map))
+                }
+                RuntimeValue::List(data) => {
+                    let mut lst = Vec::new();
+                    for v in data {
+                        let inner_val = transform(env, v);
+                        let name = rand::random_range(0..10000000).to_string();
+                        env.variables.insert(name.clone(), inner_val);
+                        lst.push(RuntimeValue::Ref(name));
+                    }
+                    RuntimeValue::List(lst)
+                }
+                RuntimeValue::Enum(x, y, Some(data)) => {
+                    let inner_val = transform(env, *data);
+                    let name = rand::random_range(0..10000000).to_string();
+                    env.variables.insert(name.clone(), inner_val);
+                    RuntimeValue::Enum(x, y, Some(Box::new(RuntimeValue::Ref(name))))
+                }
+                RuntimeValue::Option(Some(data)) => {
+                    let inner_val = transform(env, *data);
+                    let name = rand::random_range(0..10000000).to_string();
+                    env.variables.insert(name.clone(), inner_val);
+                    RuntimeValue::Option(Some(Box::new(RuntimeValue::Ref(name))))
+                }
+                RuntimeValue::Result(Ok(data)) => {
+                    let inner_val = transform(env, *data);
+                    let name = rand::random_range(0..10000000).to_string();
+                    env.variables.insert(name.clone(), inner_val);
+                    RuntimeValue::Result(Ok(Box::new(RuntimeValue::Ref(name))))
+                }
+                RuntimeValue::Result(Err(data)) => {
+                    let inner_val = transform(env, *data);
+                    let name = rand::random_range(0..10000000).to_string();
+                    env.variables.insert(name.clone(), inner_val);
+                    RuntimeValue::Result(Err(Box::new(RuntimeValue::Ref(name))))
+                }
+                other => other,
+            }
+        }
+
+        transform(self, value)
+    }
 }

@@ -89,25 +89,82 @@ impl MiddleEnvironment {
                         span: node.span,
                     });
                 }
+
                 if let NodeType::Identifier(x) = &path[0].0.node_type {
                     if let Some(Some(object)) = self
                         .resolve_potential_generic_ident(scope, x)
                         .map(|x| self.objects.get(&x.text))
                     {
-                        match object.object_type {
-                            MiddleTypeDefType::Enum(_) if path.len() == 2 => {
-                                match &path[1].0.node_type {
-                                    NodeType::Identifier(y) => {
+                        match (&object.object_type, &path[1].0.node_type) {
+                            (MiddleTypeDefType::Enum(_), NodeType::Identifier(y))
+                                if path.len() == 2 =>
+                            {
+                                return self.evaluate(
+                                    scope,
+                                    Node::new_from_type(NodeType::EnumExpression {
+                                        identifier: x.clone(),
+                                        value: y.clone().into(),
+                                        data: None,
+                                    }),
+                                );
+                            }
+                            (
+                                _,
+                                NodeType::CallExpression {
+                                    string_fn,
+                                    caller,
+                                    generic_types,
+                                    args,
+                                    reverse_args,
+                                },
+                            ) => {
+                                let static_fn =
+                                    if let NodeType::Identifier(second) = &caller.node_type {
+                                        object
+                                            .variables
+                                            .get(&second.to_string())
+                                            .map(|x| x.0.clone())
+                                    } else {
+                                        None
+                                    };
+
+                                if let Some(static_fn) = static_fn {
+                                    return self.evaluate(
+                                        scope,
+                                        Node::new_from_type(NodeType::CallExpression {
+                                            string_fn: string_fn.clone(),
+                                            caller: Box::new(Node::new_from_type(
+                                                NodeType::Identifier(
+                                                    PotentialGenericTypeIdentifier::Identifier(
+                                                        ParserText::from(static_fn).into(),
+                                                    ),
+                                                ),
+                                            )),
+                                            generic_types: generic_types.clone(),
+                                            args: args.clone(),
+                                            reverse_args: reverse_args.clone(),
+                                        }),
+                                    );
+                                }
+                            }
+                            (_, NodeType::Identifier(ident)) => {
+                                let ident =
+                                    self.resolve_dollar_ident_potential_generic_only(scope, ident);
+
+                                if let Some(ident) = ident {
+                                    let var =
+                                        object.variables.get(&ident.text).map(|x| x.0.clone());
+
+                                    if let Some(var) = var {
                                         return self.evaluate(
                                             scope,
-                                            Node::new_from_type(NodeType::EnumExpression {
-                                                identifier: x.clone(),
-                                                value: y.clone().into(),
-                                                data: None,
-                                            }),
+                                            Node::new_from_type(NodeType::Identifier(
+                                                PotentialGenericTypeIdentifier::Identifier(
+                                                    ParserText::from(var).into(),
+                                                ),
+                                            )),
                                         );
                                     }
-                                    _ => {}
                                 }
                             }
                             _ => {}
@@ -117,10 +174,56 @@ impl MiddleEnvironment {
                 let first = path.remove(0);
                 let mut list = vec![(self.evaluate(scope, first.0)?, first.1)];
 
-                for item in path {
+                for (i, item) in path.into_iter().enumerate() {
                     list.push((
                         match item.0.node_type {
                             NodeType::Identifier(_) if item.1 => self.evaluate(scope, item.0)?,
+                            NodeType::Identifier(x) if i == 0 => {
+                                let first = list.first().unwrap().clone();
+
+                                let x = self
+                                    .resolve_dollar_ident_potential_generic_only(scope, &x)
+                                    .unwrap();
+
+                                let struct_name =
+                                    if let MiddleNodeType::Identifier(x) = first.0.node_type {
+                                        if let Some(ParserInnerType::Struct(x)) =
+                                            self.variables.get(&x.text).map(|x| {
+                                                x.data_type.clone().unwrap_all_refs().data_type
+                                            })
+                                        {
+                                            Some(x.to_string())
+                                        } else {
+                                            Some(x.text)
+                                        }
+                                    } else {
+                                        None
+                                    };
+
+                                if let Some(obj) = &struct_name {
+                                    let static_var = if let Some(s) = self.objects.get(obj) {
+                                        s.variables.get(&x.text).map(|x| x.0.clone())
+                                    } else {
+                                        None
+                                    };
+
+                                    if let Some(static_var) = static_var {
+                                        return self.evaluate(
+                                            scope,
+                                            Node::new_from_type(NodeType::Identifier(
+                                                PotentialGenericTypeIdentifier::Identifier(
+                                                    ParserText::from(static_var).into(),
+                                                ),
+                                            )),
+                                        );
+                                    }
+                                }
+
+                                MiddleNode {
+                                    node_type: MiddleNodeType::Identifier(x),
+                                    span: node.span,
+                                }
+                            }
                             NodeType::Identifier(x) => MiddleNode {
                                 node_type: MiddleNodeType::Identifier(
                                     self.resolve_dollar_ident_potential_generic_only(scope, &x)
@@ -132,10 +235,9 @@ impl MiddleEnvironment {
                                 string_fn: _,
                                 caller,
                                 generic_types,
-                                args,
+                                mut args,
                                 reverse_args,
                             } if !item.1 => {
-                                // TODO Handle generics
                                 let first = list.first().unwrap().clone();
                                 let node =
                                     MiddleNode::new_from_type(MiddleNodeType::MemberExpression {
@@ -153,42 +255,38 @@ impl MiddleEnvironment {
                                     None
                                 };
 
-                                if let Some(x) = struct_name {
-                                    let mut args: Vec<MiddleNode> = args
-                                        .into_iter()
-                                        .map(|x| self.evaluate(scope, x.into()).unwrap())
-                                        .collect();
-                                    args.insert(0, node);
-                                    let caller = match caller.node_type {
-                                        NodeType::Identifier(x) => MiddleNode {
-                                            node_type: MiddleNodeType::Identifier(
-                                                self.resolve_potential_generic_ident(scope, &x)
-                                                    .unwrap_or(x.to_string().into()),
-                                            ),
-                                            span: caller.span,
-                                        },
-                                        _ => panic!(),
+                                if let Some(x) = &struct_name {
+                                    let static_fn = if let Some(s) = self.objects.get(x) {
+                                        if let NodeType::Identifier(second) = &caller.node_type {
+                                            s.variables
+                                                .get(&second.to_string())
+                                                .map(|x| x.0.clone())
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
                                     };
-                                    return Ok(MiddleNode::new_from_type(
-                                        MiddleNodeType::CallExpression {
-                                            caller: Box::new(MiddleNode::new_from_type(
-                                                MiddleNodeType::MemberExpression {
-                                                    path: vec![
-                                                        (
-                                                            MiddleNode::new_from_type(
-                                                                MiddleNodeType::Identifier(
-                                                                    x.to_string().into(),
-                                                                ),
-                                                            ),
-                                                            false,
+                                    args.insert(0, CallArg::Value(node.into()));
+
+                                    if let Some(static_fn) = static_fn {
+                                        return self.evaluate(
+                                            scope,
+                                            Node::new_from_type(NodeType::CallExpression {
+                                                string_fn: None,
+                                                caller: Box::new(Node::new_from_type(
+                                                    NodeType::Identifier(
+                                                        PotentialGenericTypeIdentifier::Identifier(
+                                                            ParserText::from(static_fn).into(),
                                                         ),
-                                                        (caller, false),
-                                                    ],
-                                                },
-                                            )),
-                                            args,
-                                        },
-                                    ));
+                                                    ),
+                                                )),
+                                                generic_types,
+                                                args,
+                                                reverse_args,
+                                            }),
+                                        );
+                                    }
                                 }
 
                                 panic!("{:?}", struct_name)
@@ -502,7 +600,7 @@ impl MiddleEnvironment {
                     new_name.clone(),
                     MiddleObject {
                         object_type: object,
-                        functions: HashMap::new(),
+                        variables: HashMap::new(),
                         traits: Vec::new(),
                         location: self.current_location.clone(),
                     },
@@ -513,6 +611,13 @@ impl MiddleEnvironment {
                     .unwrap()
                     .mappings
                     .insert(identifier.text, new_name.clone());
+
+                let previous_self = self
+                    .scopes
+                    .get_mut(scope)
+                    .unwrap()
+                    .mappings
+                    .insert(String::from("Self"), new_name.clone());
 
                 for overload in overloads {
                     let overload = MiddleOverload {
@@ -547,6 +652,14 @@ impl MiddleEnvironment {
                     };
 
                     self.overloads.push(overload);
+                }
+
+                if let Some(prev) = previous_self {
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .mappings
+                        .insert(String::from("Self"), prev);
                 }
 
                 Ok(MiddleNode {
@@ -1076,47 +1189,100 @@ impl MiddleEnvironment {
             }
             NodeType::ImplDeclaration {
                 identifier,
-                functions,
+                variables,
             } => {
                 let resolved = self
                     .resolve_potential_generic_ident(scope, &identifier)
                     .unwrap();
-                for function in functions {
-                    if let NodeType::VariableDeclaration {
-                        identifier: iden,
-                        value,
-                        ..
-                    } = function.node_type
-                    {
-                        let func = self.evaluate(scope, *value)?;
-                        let location = self.get_location(scope, function.span);
-                        let mut dependant = false;
 
-                        if let MiddleNodeType::FunctionDeclaration { parameters, .. } =
-                            &func.node_type
-                        {
-                            if parameters.len() > 0 {
-                                let new_data_type =
-                                    self.resolve_data_type(scope, parameters[0].1.clone());
+                let previous_self = self
+                    .scopes
+                    .get_mut(scope)
+                    .unwrap()
+                    .mappings
+                    .insert(String::from("Self"), resolved.text.clone());
 
-                                if let ParserInnerType::Struct(obj) = new_data_type.data_type {
-                                    if obj == resolved.text {
-                                        dependant = true;
+                let mut statements = Vec::new();
+
+                for var in variables {
+                    let mut iden = String::new();
+                    let mut dependant = false;
+                    let dec = Node {
+                        span: var.span,
+                        node_type: match var.node_type {
+                            NodeType::VariableDeclaration {
+                                var_type,
+                                identifier,
+                                value,
+                                data_type,
+                            } => {
+                                iden = identifier.to_string();
+                                let resolved_iden =
+                                    format!("{}::{}", resolved, identifier.to_string());
+
+                                dependant = match &value.node_type {
+                                    NodeType::FunctionDeclaration { header, body } => {
+                                        if let Some(PotentialNewType::DataType(param)) =
+                                            header.parameters.first().map(|x| x.1.clone())
+                                        {
+                                            if let ParserInnerType::Struct(x) = self
+                                                .resolve_data_type(scope, param)
+                                                .unwrap_all_refs()
+                                                .data_type
+                                            {
+                                                x.trim() == resolved.trim()
+                                            } else {
+                                                false
+                                            }
+                                        } else {
+                                            false
+                                        }
                                     }
+                                    _ => false,
+                                };
+
+                                NodeType::VariableDeclaration {
+                                    var_type,
+                                    identifier: PotentialDollarIdentifier::Identifier(
+                                        ParserText::from(resolved_iden),
+                                    ),
+                                    value,
+                                    data_type,
                                 }
                             }
-                        };
+                            _ => unreachable!(),
+                        },
+                    };
 
-                        self.objects
-                            .get_mut(&resolved.text)
-                            .unwrap()
-                            .functions
-                            .insert(iden.to_string(), (func, location, dependant));
-                    }
+                    let dec = self.evaluate(scope, dec)?;
+                    let new_name = match &dec.node_type {
+                        MiddleNodeType::VariableDeclaration { identifier, .. } => {
+                            identifier.text.clone()
+                        }
+                        _ => unreachable!(),
+                    };
+                    self.objects
+                        .get_mut(&resolved.text)
+                        .unwrap()
+                        .variables
+                        .insert(iden, (new_name, dependant));
+                    statements.push(dec);
+                }
+
+                if let Some(prev) = previous_self {
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .mappings
+                        .insert(String::from("Self"), prev);
                 }
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::EmptyLine,
+                    node_type: MiddleNodeType::ScopeDeclaration {
+                        body: statements,
+                        create_new_scope: false,
+                        is_temp: false,
+                    },
                     span: node.span,
                 })
             }
@@ -1410,10 +1576,27 @@ impl MiddleEnvironment {
                     } else {
                         return Err(MiddleErr::Object(identifier.to_string()));
                     };
+                let value = self.resolve_dollar_ident_only(scope, &value).unwrap();
+
+                if let Some(object) = self.objects.get(&identifier.text) {
+                    let var = object.variables.get(&value.text).map(|x| x.0.clone());
+
+                    if let Some(var) = var {
+                        return self.evaluate(
+                            scope,
+                            Node::new_from_type(NodeType::Identifier(
+                                PotentialGenericTypeIdentifier::Identifier(
+                                    ParserText::from(var).into(),
+                                ),
+                            )),
+                        );
+                    }
+                }
+
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::EnumExpression {
-                        identifier: identifier.clone(),
-                        value: self.resolve_dollar_ident_only(scope, &value).unwrap(),
+                        identifier,
+                        value,
                         data: if let Some(data) = data {
                             Some(Box::new(self.evaluate(scope, *data)?))
                         } else {

@@ -168,8 +168,9 @@ impl VM {
                             let _ = self.registry.functions.remove(&func);
                         }
                         VarName::Var(var) => {
-                            // TODO recursively drop all members/elements
-                            let _ = self.variables.remove(&var);
+                            if let Some(var) = self.variables.remove(&var) {
+                                let _ = self.move_saveable_into_runtime_var(var);
+                            }
                         }
                         _ => {}
                     }
@@ -180,14 +181,14 @@ impl VM {
                         VarName::Func(func) => {
                             if let Some(func) = self.registry.functions.remove(&func) {
                                 stack.push(RuntimeValue::Function {
-                                    name: func.name.clone(),
-                                    captures: func.captures.clone(),
+                                    name: func.name,
+                                    captures: func.captures,
                                 });
                             }
                         }
                         VarName::Var(var) => {
                             if let Some(var) = self.variables.remove(&var) {
-                                stack.push(var.clone());
+                                stack.push(self.move_saveable_into_runtime_var(var));
                             }
                         }
                         _ => {}
@@ -206,7 +207,7 @@ impl VM {
                         }
                         VarName::Var(var) => {
                             if let Some(var) = self.variables.get(&var) {
-                                stack.push(var.clone());
+                                stack.push(self.copy_saveable_into_runtime_var(var.clone()));
                             }
                         }
                         _ => {}
@@ -216,18 +217,15 @@ impl VM {
                     let name = block.local_strings.get(*x as usize).unwrap();
                     stack.push(RuntimeValue::Ref(name.clone()))
                 }
-                VMInstruction::DeclareVar(x) => {
+                VMInstruction::DeclareVar(x) | VMInstruction::SetVar(x) => {
                     let name = block.local_strings.get(*x as usize).unwrap();
-                    // TODO recursively add all members/elements of this var to the variables hashmap as references
-                    self.variables
-                        .insert(name.to_string(), stack.pop().unwrap());
-                }
-                VMInstruction::SetVar(x) => {
-                    let name = block.local_strings.get(*x as usize).unwrap();
-                    // TODO recursively remove all members from the previous var
-                    // TODO recursively add all members/elements of this var to the variables hashmap as references
-                    self.variables
-                        .insert(name.to_string(), stack.pop().unwrap());
+
+                    if let Some(var) = self.variables.remove(name) {
+                        let _ = stack.push(self.move_saveable_into_runtime_var(var.clone()));
+                    }
+
+                    let value = self.convert_runtime_var_into_saveable(stack.pop().unwrap());
+                    self.variables.insert(name.to_string(), value);
                 }
                 VMInstruction::List(count) => {
                     let mut values = Vec::new();
@@ -308,7 +306,7 @@ impl VM {
                         RuntimeValue::Option(None) if name == "next" => RuntimeValue::Null,
                         RuntimeValue::Result(Ok(x)) if name == "next" => *x,
                         RuntimeValue::Result(Err(x)) if name == "next" => *x,
-                        _ => panic!(),
+                        x => panic!("{}.{}", x.to_string(), name),
                     });
                 }
                 VMInstruction::SetMember(x) => {
