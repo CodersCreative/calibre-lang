@@ -9,16 +9,13 @@ use calibre_parser::ast::{
     comparison::{BooleanOperator, ComparisonOperator},
 };
 use rand::random_range;
-use std::{
-    collections::HashMap,
-    ffi::FromBytesWithNulError,
-    fmt::{Display, format},
-};
+use rustc_hash::FxHashMap;
+use std::fmt::{Display, format};
 
 #[derive(Debug, Clone, Default)]
 pub struct VMRegistry {
-    pub functions: HashMap<String, VMFunction>,
-    pub globals: HashMap<String, VMGlobal>,
+    pub functions: FxHashMap<String, VMFunction>,
+    pub globals: FxHashMap<String, VMGlobal>,
 }
 
 impl Display for VMRegistry {
@@ -39,13 +36,13 @@ impl Display for VMRegistry {
 
 impl From<LirRegistry> for VMRegistry {
     fn from(value: LirRegistry) -> Self {
-        let mut functions = HashMap::new();
+        let mut functions = FxHashMap::default();
 
         for (k, func) in value.functions {
             functions.insert(k, func.into());
         }
 
-        let mut globals = HashMap::new();
+        let mut globals = FxHashMap::default();
 
         for (k, v) in value.globals {
             globals.insert(k, v.into());
@@ -89,12 +86,12 @@ pub struct VMFunction {
     pub captures: Vec<String>,
     pub returns_value: bool,
     pub blocks: Vec<VMBlock>,
-    pub renamed: HashMap<String, String>,
+    pub renamed: FxHashMap<String, String>,
     pub is_async: bool,
 }
 
 impl VMFunction {
-    pub fn rename(mut self, mut declared: HashMap<String, String>) -> Self {
+    pub fn rename(mut self, mut declared: FxHashMap<String, String>) -> Self {
         for param in self.params.iter_mut() {
             let new_name = format!("{}->{}", param, random_range(0..10000000));
             declared.insert(param.to_string(), new_name.clone());
@@ -180,7 +177,7 @@ impl From<LirFunction> for VMFunction {
             captures: value.captures.into_iter().map(|x| x.0).collect(),
             returns_value: value.return_type.data_type != ParserInnerType::Null,
             blocks: value.blocks.into_iter().map(|x| x.into()).collect(),
-            renamed: HashMap::new(),
+            renamed: FxHashMap::default(),
             is_async: value.is_async,
         }
     }

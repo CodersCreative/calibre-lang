@@ -4,7 +4,8 @@ use calibre_parser::{
     lexer::Tokenizer,
 };
 use calibre_std::{get_globals_path, get_stdlib_path};
-use std::{collections::HashMap, fs, path::PathBuf};
+use rustc_hash::FxHashMap;
+use std::{fs, path::PathBuf};
 
 use crate::environment::{MiddleEnvironment, MiddleScope, MiddleVariable, get_disamubiguous_name};
 
@@ -21,13 +22,13 @@ impl MiddleEnvironment {
 
         self.add_scope(MiddleScope {
             id: 0,
-            macros: HashMap::new(),
-            macro_args: HashMap::new(),
+            macros: FxHashMap::default(),
+            macro_args: FxHashMap::default(),
             namespace: namespace.unwrap_or(&counter.to_string()).to_string(),
             parent,
-            children: HashMap::new(),
+            children: FxHashMap::default(),
             path: path.clone(),
-            mappings: HashMap::new(),
+            mappings: FxHashMap::default(),
             defined: Vec::new(),
             defers: Vec::new(),
         });

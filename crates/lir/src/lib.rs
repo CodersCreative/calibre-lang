@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::fmt::Display;
 
 use calibre_mir::environment::{MiddleEnvironment, MiddleTypeDefType};
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
@@ -7,11 +7,12 @@ use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, Default)]
 pub struct LirRegistry {
-    pub functions: HashMap<String, LirFunction>,
-    pub globals: HashMap<String, LirGlobal>,
+    pub functions: FxHashMap<String, LirFunction>,
+    pub globals: FxHashMap<String, LirGlobal>,
 }
 
 impl LirRegistry {

@@ -227,6 +227,7 @@ dependencies = [
  "calibre-mir",
  "calibre-mir-ty",
  "calibre-parser",
+ "rustc-hash",
 ]
 
 [[package]]
@@ -238,6 +239,7 @@ dependencies = [
  "calibre-std",
  "miette",
  "rand",
+ "rustc-hash",
  "thiserror",
 ]
 
@@ -269,6 +271,7 @@ dependencies = [
  "calibre-mir-ty",
  "calibre-parser",
  "rand",
+ "rustc-hash",
  "rustyline",
  "thiserror",
 ]

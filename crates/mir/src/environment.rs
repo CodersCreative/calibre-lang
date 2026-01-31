@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, path::PathBuf, str::FromStr};
+use std::{fs, path::PathBuf, str::FromStr};
 
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
@@ -13,6 +13,7 @@ use calibre_parser::{
     lexer::{Location, Span, Tokenizer},
 };
 use rand::random_range;
+use rustc_hash::FxHashMap;
 
 use crate::errors::MiddleErr;
 
@@ -26,7 +27,7 @@ pub enum MiddleTypeDefType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleObject {
     pub object_type: MiddleTypeDefType,
-    pub variables: HashMap<String, (String, bool)>,
+    pub variables: FxHashMap<String, (String, bool)>,
     pub traits: Vec<String>,
     pub location: Option<Location>,
 }
@@ -71,12 +72,12 @@ impl FromStr for Operator {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleEnvironment {
     pub scope_counter: u64,
-    pub scopes: HashMap<u64, MiddleScope>,
-    pub variables: HashMap<String, MiddleVariable>,
+    pub scopes: FxHashMap<u64, MiddleScope>,
+    pub variables: FxHashMap<String, MiddleVariable>,
     pub resolved_variables: Vec<String>,
     pub overloads: Vec<MiddleOverload>,
     pub func_defers: Vec<Node>,
-    pub objects: HashMap<String, MiddleObject>,
+    pub objects: FxHashMap<String, MiddleObject>,
     pub current_location: Option<Location>,
 }
 
@@ -92,10 +93,10 @@ pub struct ScopeMacro {
 pub struct MiddleScope {
     pub id: u64,
     pub parent: Option<u64>,
-    pub mappings: HashMap<String, String>,
-    pub macros: HashMap<String, ScopeMacro>,
-    pub macro_args: HashMap<String, Node>,
-    pub children: HashMap<String, u64>,
+    pub mappings: FxHashMap<String, String>,
+    pub macros: FxHashMap<String, ScopeMacro>,
+    pub macro_args: FxHashMap<String, Node>,
+    pub children: FxHashMap<String, u64>,
     pub namespace: String,
     pub path: PathBuf,
     pub defined: Vec<String>,
@@ -126,10 +127,10 @@ impl MiddleEnvironment {
             func_defers: Vec::new(),
             overloads: Vec::new(),
             scope_counter: 0,
-            scopes: HashMap::new(),
+            scopes: FxHashMap::default(),
             resolved_variables: Vec::new(),
-            variables: HashMap::new(),
-            objects: HashMap::new(),
+            variables: FxHashMap::default(),
+            objects: FxHashMap::default(),
             current_location: None,
         }
     }
@@ -337,7 +338,7 @@ impl MiddleEnvironment {
                     new_name.clone(),
                     MiddleObject {
                         object_type: type_def,
-                        variables: HashMap::new(),
+                        variables: FxHashMap::default(),
                         traits: Vec::new(),
                         location: self.current_location.clone(),
                     },
@@ -635,15 +636,15 @@ impl MiddleEnvironment {
     ) -> u64 {
         if let Some(parent) = parent {
             let scope = MiddleScope {
-                macros: HashMap::new(),
-                macro_args: HashMap::new(),
+                macros: FxHashMap::default(),
+                macro_args: FxHashMap::default(),
                 id: self.scope_counter,
                 namespace: namespace
                     .unwrap_or(&self.scope_counter.to_string())
                     .to_string(),
                 parent: Some(parent),
-                children: HashMap::new(),
-                mappings: HashMap::new(),
+                children: FxHashMap::default(),
+                mappings: FxHashMap::default(),
                 defined: Vec::new(),
                 defers: Vec::new(),
                 path,

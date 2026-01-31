@@ -10,7 +10,8 @@ use calibre_parser::{
     },
     lexer::Span,
 };
-use std::{collections::HashMap, str::FromStr};
+use rustc_hash::FxHashMap;
+use std::str::FromStr;
 
 use crate::errors::MiddleErr;
 use environment::*;
@@ -608,7 +609,7 @@ impl MiddleEnvironment {
                     new_name.clone(),
                     MiddleObject {
                         object_type: object,
-                        variables: HashMap::new(),
+                        variables: FxHashMap::default(),
                         traits: Vec::new(),
                         location: self.current_location.clone(),
                     },
@@ -1967,10 +1968,10 @@ impl MiddleEnvironment {
                         let mut args: Vec<Node> = args.into_iter().map(|x| x.into()).collect();
                         args.append(&mut reverse_args);
 
-                        let mut map = HashMap::new();
+                        let mut map = Vec::new();
 
                         for (i, arg) in args.into_iter().enumerate() {
-                            map.insert(i.to_string(), self.evaluate(scope, arg)?);
+                            map.push((i.to_string(), self.evaluate(scope, arg)?));
                         }
 
                         return Ok(MiddleNode {
@@ -1987,12 +1988,12 @@ impl MiddleEnvironment {
                         .map(|x| x.clone())
                     {
                         if self.objects.contains_key(&caller.text) {
-                            let mut map = HashMap::new();
+                            let mut map = Vec::new();
                             let mut args: Vec<Node> = args.into_iter().map(|x| x.into()).collect();
                             args.append(&mut reverse_args);
 
                             for (i, arg) in args.into_iter().enumerate() {
-                                map.insert(i.to_string(), self.evaluate(scope, arg)?);
+                                map.push((i.to_string(), self.evaluate(scope, arg)?));
                             }
 
                             return Ok(MiddleNode {
@@ -2249,7 +2250,7 @@ impl MiddleEnvironment {
             }
             NodeType::PipeExpression(mut path) if !path.is_empty() => {
                 let mut value = path.remove(0).into();
-                let mut prior_mappings = HashMap::new();
+                let mut prior_mappings = FxHashMap::default();
 
                 prior_mappings.insert(
                     "$".to_string(),

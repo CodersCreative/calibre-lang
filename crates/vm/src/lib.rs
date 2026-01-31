@@ -1,7 +1,8 @@
-use std::{collections::HashMap, error::Error};
+use std::error::Error;
 
 use calibre_lir::BlockId;
 use calibre_parser::ast::ObjectMap;
+use rustc_hash::FxHashMap;
 
 use crate::{
     conversion::{VMBlock, VMFunction, VMGlobal, VMInstruction, VMRegistry},
@@ -19,7 +20,7 @@ pub mod value;
 
 #[derive(Debug, Clone, Default)]
 pub struct VM {
-    pub variables: HashMap<String, RuntimeValue>,
+    pub variables: FxHashMap<String, RuntimeValue>,
     pub registry: VMRegistry,
     pub mappings: Vec<String>,
 }
@@ -27,7 +28,7 @@ pub struct VM {
 impl From<VMRegistry> for VM {
     fn from(value: VMRegistry) -> Self {
         Self {
-            variables: HashMap::new(),
+            variables: FxHashMap::default(),
             mappings: Vec::new(),
             registry: value,
         }
@@ -39,7 +40,7 @@ impl VM {
         let mut vm = Self {
             registry,
             mappings,
-            variables: HashMap::new(),
+            variables: FxHashMap::default(),
         };
 
         vm.setup_global();
@@ -79,7 +80,7 @@ impl VM {
         let mut block = global.blocks.first().unwrap();
 
         loop {
-            match self.run_block(block, &mut stack, &HashMap::new())? {
+            match self.run_block(block, &mut stack, &FxHashMap::default())? {
                 TerminateValue::Jump(x) => block = global.blocks.get(x.0 as usize).unwrap(),
                 TerminateValue::Return(x) => match x {
                     RuntimeValue::Null => break,
@@ -160,7 +161,7 @@ impl VM {
         &mut self,
         block: &VMBlock,
         stack: &mut Vec<RuntimeValue>,
-        declared: &HashMap<String, String>,
+        declared: &FxHashMap<String, String>,
     ) -> Result<TerminateValue, RuntimeError> {
         for instruction in &block.instructions {
             match instruction {

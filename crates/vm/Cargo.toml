@@ -10,3 +10,4 @@ calibre-parser = {path = "../parser"}
 rand = "0.9.1"
 rustyline = "16.0.0"
 thiserror = "2.0.12"
+rustc-hash = "2.1.1"
