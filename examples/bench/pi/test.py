@@ -11,6 +11,6 @@ def calculate_pi(n_terms):
     return pi
 
 if __name__ == "__main__":
-    n = 10_000
+    n = 100
     result = calculate_pi(n)
     print(result)

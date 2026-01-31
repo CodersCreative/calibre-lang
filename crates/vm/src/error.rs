@@ -1,4 +1,5 @@
 use calibre_parser::ast::{
+    ParserDataType, ParserInnerType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
@@ -11,4 +12,5 @@ pub enum RuntimeError {
     Comparison(RuntimeValue, RuntimeValue, ComparisonOperator),
     Binary(RuntimeValue, RuntimeValue, BinaryOperator),
     UnexpectedType(RuntimeValue),
+    CantConvert(RuntimeValue, ParserInnerType),
 }

@@ -9,6 +9,7 @@ use crate::{
     native::{self, NativeFunction},
 };
 
+pub mod conversion;
 pub mod operation;
 
 #[derive(Debug, Clone, Default)]

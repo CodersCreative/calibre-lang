@@ -507,8 +507,8 @@ impl VMBlock {
             }
             LirNodeType::Assign { .. } => todo!(),
             LirNodeType::Index(value, index) => {
-                self.translate(*value);
                 self.translate(*index);
+                self.translate(*value);
                 self.instructions.push(VMInstruction::Index);
             }
             LirNodeType::Member(value, member) => {

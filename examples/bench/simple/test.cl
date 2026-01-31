@@ -1,4 +1,4 @@
-const main = fn () => {
+/*const main = fn () => {
     let mut a = 0;
     for => {
         a += 10;
@@ -7,4 +7,15 @@ const main = fn () => {
             return;
         };
     }
+};*/
+
+type Thing = struct {
+    name : str,
+};
+
+const main = fn () => {
+    let a = [10, 20, 450];
+    print(a[0]);
+    let thing = Thing {name : "Ty"};
+    print(thing.name);
 };

@@ -168,6 +168,7 @@ impl VM {
                             let _ = self.registry.functions.remove(&func);
                         }
                         VarName::Var(var) => {
+                            // TODO recursively drop all members/elements
                             let _ = self.variables.remove(&var);
                         }
                         _ => {}
@@ -217,11 +218,14 @@ impl VM {
                 }
                 VMInstruction::DeclareVar(x) => {
                     let name = block.local_strings.get(*x as usize).unwrap();
+                    // TODO recursively add all members/elements of this var to the variables hashmap as references
                     self.variables
                         .insert(name.to_string(), stack.pop().unwrap());
                 }
                 VMInstruction::SetVar(x) => {
                     let name = block.local_strings.get(*x as usize).unwrap();
+                    // TODO recursively remove all members from the previous var
+                    // TODO recursively add all members/elements of this var to the variables hashmap as references
                     self.variables
                         .insert(name.to_string(), stack.pop().unwrap());
                 }
@@ -274,7 +278,38 @@ impl VM {
                 }
                 VMInstruction::LoadMember(x) => {
                     let name = block.local_strings.get(*x as usize).unwrap();
-                    // TODO Load Member
+                    let mut value = stack.pop().unwrap();
+
+                    stack.push(match value {
+                        RuntimeValue::Ref(x) => match self.variables.get(&x).unwrap() {
+                            RuntimeValue::Aggregate(None, map) => {
+                                map.0.get(name.parse::<usize>().unwrap()).unwrap().1.clone()
+                            }
+                            RuntimeValue::Aggregate(Some(key), map) => {
+                                map.0.iter().find(|x| &x.0 == name).unwrap().1.clone()
+                            }
+                            RuntimeValue::Enum(_, _, Some(x)) if name == "next" => *x.clone(),
+                            RuntimeValue::Enum(_, _, None) if name == "next" => RuntimeValue::Null,
+                            RuntimeValue::Option(Some(x)) if name == "next" => *x.clone(),
+                            RuntimeValue::Option(None) if name == "next" => RuntimeValue::Null,
+                            RuntimeValue::Result(Ok(x)) if name == "next" => *x.clone(),
+                            RuntimeValue::Result(Err(x)) if name == "next" => *x.clone(),
+                            _ => panic!(),
+                        },
+                        RuntimeValue::Aggregate(None, mut map) => {
+                            map.0.remove(name.parse().unwrap()).1
+                        }
+                        RuntimeValue::Aggregate(Some(key), map) => {
+                            map.0.into_iter().find(|x| &x.0 == name).unwrap().1
+                        }
+                        RuntimeValue::Enum(_, _, Some(x)) if name == "next" => *x,
+                        RuntimeValue::Enum(_, _, None) if name == "next" => RuntimeValue::Null,
+                        RuntimeValue::Option(Some(x)) if name == "next" => *x,
+                        RuntimeValue::Option(None) if name == "next" => RuntimeValue::Null,
+                        RuntimeValue::Result(Ok(x)) if name == "next" => *x,
+                        RuntimeValue::Result(Err(x)) if name == "next" => *x,
+                        _ => panic!(),
+                    });
                 }
                 VMInstruction::SetMember(x) => {
                     let name = block.local_strings.get(*x as usize).unwrap();
@@ -341,7 +376,17 @@ impl VM {
                     stack.push(value);
                 }
                 VMInstruction::As(data_type) => {
-                    // TODO
+                    let value = stack.pop().unwrap();
+                    println!("value : {}", value.to_string());
+                    let value = value.convert(self, &data_type.data_type);
+
+                    stack.push(match value {
+                        Ok(x) => RuntimeValue::Result(Ok(Box::new(x))),
+                        Err(e) => RuntimeValue::Result(Err(Box::new(RuntimeValue::Str(format!(
+                            "{:?}",
+                            e
+                        ))))),
+                    });
                 }
             }
         }
