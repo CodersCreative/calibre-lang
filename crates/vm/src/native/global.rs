@@ -103,6 +103,28 @@ impl NativeFunction for Len {
     }
 }
 
+pub struct MinOrZero();
+
+impl NativeFunction for MinOrZero {
+    fn name(&self) -> String {
+        String::from("min_or_zero")
+    }
+
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        if let Some(mut x) = args.get(0) {
+            while let RuntimeValue::Ref(r) = x {
+                x = env.variables.get(r).unwrap();
+            }
+            Ok(RuntimeValue::Int(match x {
+                RuntimeValue::Range(from, _) => *from,
+                _ => 0,
+            }))
+        } else {
+            Ok(RuntimeValue::Null)
+        }
+    }
+}
+
 pub struct Trim();
 
 impl NativeFunction for Trim {

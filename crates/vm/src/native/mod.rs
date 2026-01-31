@@ -73,6 +73,7 @@ impl VM {
             "panic",
             "tuple",
             "discriminant",
+            "min_or_zero",
         ];
 
         let map = RuntimeValue::natives();

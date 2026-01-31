@@ -58,12 +58,18 @@ impl From<LirRegistry> for VMRegistry {
 #[derive(Debug, Clone)]
 pub struct VMGlobal {
     pub name: String,
-    pub initial_value: LirNodeType,
+    pub blocks: Vec<VMBlock>,
 }
 
 impl Display for VMGlobal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CONST {} = {};", self.name, self.initial_value)
+        let mut txt = format!("CONST {}", self.name);
+
+        for block in &self.blocks {
+            txt.push_str(&format!("\n{}", block).replace("\n", "\n\t"));
+        }
+
+        write!(f, "{}", txt)
     }
 }
 
@@ -71,7 +77,7 @@ impl From<LirGlobal> for VMGlobal {
     fn from(value: LirGlobal) -> Self {
         Self {
             name: value.name,
-            initial_value: value.initial_value,
+            blocks: value.blocks.into_iter().map(VMBlock::from).collect(),
         }
     }
 }

@@ -63,6 +63,7 @@ impl MiddleEnvironment {
             "panic",
             "tuple",
             "discriminant",
+            "min_or_zero",
         ];
 
         let map = ParserDataType::natives();

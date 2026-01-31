@@ -4,7 +4,7 @@ use calibre_lir::BlockId;
 use calibre_parser::ast::ObjectMap;
 
 use crate::{
-    conversion::{VMBlock, VMFunction, VMInstruction, VMRegistry},
+    conversion::{VMBlock, VMFunction, VMGlobal, VMInstruction, VMRegistry},
     error::RuntimeError,
     value::{
         RuntimeValue, TerminateValue,
@@ -56,6 +56,50 @@ pub enum VarName {
 }
 
 impl VM {
+    pub fn run(
+        &mut self,
+        function: &VMFunction,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
+        let _ = self.run_globals()?;
+
+        self.run_function(function, args)
+    }
+
+    pub fn run_globals(&mut self) -> Result<(), RuntimeError> {
+        for global in self.registry.globals.clone().into_iter() {
+            let _ = self.run_global(&global.1)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn run_global(&mut self, global: &VMGlobal) -> Result<RuntimeValue, RuntimeError> {
+        let mut stack = Vec::new();
+        let mut block = global.blocks.first().unwrap();
+
+        loop {
+            match self.run_block(block, &mut stack, &HashMap::new())? {
+                TerminateValue::Jump(x) => block = global.blocks.get(x.0 as usize).unwrap(),
+                TerminateValue::Return(x) => match x {
+                    RuntimeValue::Null => break,
+                    x => return Ok(x),
+                },
+                TerminateValue::None => break,
+            }
+        }
+
+        loop {
+            match stack.pop() {
+                None => break,
+                Some(RuntimeValue::Null) => {}
+                Some(x) => return Ok(x),
+            }
+        }
+
+        Ok(RuntimeValue::Null)
+    }
+
     pub fn run_function(
         &mut self,
         function: &VMFunction,
@@ -133,7 +177,7 @@ impl VM {
                 VMInstruction::Boolean(x) => {
                     let right = stack.pop().unwrap();
                     let left = stack.pop().unwrap();
-                    stack.push(boolean(&x, &left, &right)?);
+                    stack.push(boolean(&x, left, right)?);
                 }
                 VMInstruction::Jump(x) => return Ok(TerminateValue::Jump(*x)),
                 VMInstruction::Branch(x, y) => {
@@ -221,7 +265,7 @@ impl VM {
                     let name = block.local_strings.get(*x as usize).unwrap();
 
                     if let Some(var) = self.variables.remove(name) {
-                        let _ = stack.push(self.move_saveable_into_runtime_var(var.clone()));
+                        let _ = self.move_saveable_into_runtime_var(var.clone());
                     }
 
                     let value = self.convert_runtime_var_into_saveable(stack.pop().unwrap());

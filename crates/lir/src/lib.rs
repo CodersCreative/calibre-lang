@@ -42,16 +42,18 @@ impl Display for LirRegistry {
 pub struct LirGlobal {
     pub name: String,
     pub data_type: ParserDataType,
-    pub initial_value: LirNodeType,
+    pub blocks: Vec<LirBlock>,
 }
 
 impl Display for LirGlobal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "const {} : {} = {};",
-            self.name, self.data_type, self.initial_value
-        )
+        let mut txt = format!("const {} : {} =", self.name, self.data_type);
+
+        for block in &self.blocks {
+            txt.push_str(&format!("\n{}", block).replace("\n", "\n\t"));
+        }
+
+        write!(f, "{}", txt)
     }
 }
 
@@ -549,13 +551,18 @@ impl<'a> LirEnvironment<'a> {
                                 is_async,
                             } => {}
                             _ => {
-                                let val = self.lower_node(*value);
+                                let mut sub_lowerer = LirEnvironment::new(self.env);
+
+                                let body_val = sub_lowerer.lower_node(stmt);
+
+                                self.registry.append(sub_lowerer.registry);
+
                                 self.registry.globals.insert(
                                     identifier.to_string(),
                                     LirGlobal {
                                         name: identifier.to_string(),
-                                        data_type: data_type,
-                                        initial_value: val,
+                                        data_type,
+                                        blocks: sub_lowerer.blocks,
                                     },
                                 );
                                 continue;

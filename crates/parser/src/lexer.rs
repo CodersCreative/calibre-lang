@@ -419,7 +419,9 @@ impl Tokenizer {
                         let mut number = String::new();
                         let mut is_int = true;
 
-                        while buffer.len() > 0 && (buffer[0].is_numeric() || buffer[0] == '.') {
+                        while buffer.len() > 0
+                            && (buffer[0].is_numeric() || buffer[0] == '.' || buffer[0] == '_')
+                        {
                             if buffer[0] == '.' {
                                 if buffer[1] == '.' {
                                     break;
@@ -437,11 +439,14 @@ impl Tokenizer {
                             is_int = false;
                         }
 
-                        if is_int {
-                            Some(self.new_token(TokenType::Integer, number.trim()))
+                        let mut token = if is_int {
+                            self.new_token(TokenType::Integer, number.trim())
                         } else {
-                            Some(self.new_token(TokenType::Float, number.trim()))
-                        }
+                            self.new_token(TokenType::Float, number.trim())
+                        };
+
+                        token.value = number.replace("_", "");
+                        Some(token)
                     } else if first.is_alphabetic()
                         || first == &'_'
                         || first.to_uppercase().to_string().trim()

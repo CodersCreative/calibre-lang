@@ -48,6 +48,7 @@ impl ParserDataType {
                 "some",
                 ParserInnerType::Option(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
             ),
+            ("min_or_zero", ParserInnerType::Int),
             ("len", ParserInnerType::Int),
             ("panic", ParserInnerType::Null),
             ("tuple", ParserInnerType::Dynamic),

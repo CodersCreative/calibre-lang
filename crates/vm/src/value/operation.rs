@@ -26,67 +26,40 @@ pub fn comparison(
     left: RuntimeValue,
     right: RuntimeValue,
 ) -> Result<RuntimeValue, RuntimeError> {
-    match left {
-        RuntimeValue::Int(x) => match right {
-            RuntimeValue::Int(y) => Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y))),
-            right => Err(RuntimeError::Comparison(
-                RuntimeValue::Int(x),
-                right,
-                op.clone(),
-            )),
-        },
-        RuntimeValue::Float(x) => match right {
-            RuntimeValue::Float(y) => Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y))),
-            right => Err(RuntimeError::Comparison(
-                RuntimeValue::Float(x),
-                right,
-                op.clone(),
-            )),
-        },
-        RuntimeValue::Char(x) => match right {
-            RuntimeValue::Char(y) => Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y))),
-            right => Err(RuntimeError::Comparison(
-                RuntimeValue::Char(x),
-                right,
-                op.clone(),
-            )),
-        },
-        RuntimeValue::Str(x) => match right {
-            RuntimeValue::Str(y) => Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y))),
-            right => Err(RuntimeError::Comparison(
-                RuntimeValue::Str(x),
-                right,
-                op.clone(),
-            )),
-        },
-        _ => Err(RuntimeError::Comparison(left, right, op.clone())),
+    match (left, right, op) {
+        (RuntimeValue::Int(x), RuntimeValue::Int(y), op) => {
+            Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
+        }
+        (RuntimeValue::Float(x), RuntimeValue::Float(y), op) => {
+            Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
+        }
+        (RuntimeValue::Bool(x), RuntimeValue::Bool(y), op) => {
+            Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
+        }
+        (RuntimeValue::Char(x), RuntimeValue::Char(y), op) => {
+            Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
+        }
+        (RuntimeValue::Str(x), RuntimeValue::Str(y), op) => {
+            Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
+        }
+        (left, right, op) => Err(RuntimeError::Comparison(left, right, op.clone())),
     }
 }
 
 pub fn boolean(
     op: &BooleanOperator,
-    left: &RuntimeValue,
-    right: &RuntimeValue,
+    left: RuntimeValue,
+    right: RuntimeValue,
 ) -> Result<RuntimeValue, RuntimeError> {
-    if let RuntimeValue::Bool(x) = left {
-        if *x && op == &BooleanOperator::Or {
-            return Ok(RuntimeValue::Bool(true));
-        } else if !x && op == &BooleanOperator::And {
-            return Ok(RuntimeValue::Bool(false));
+    match (left, right, op) {
+        (RuntimeValue::Bool(x), RuntimeValue::Bool(y), BooleanOperator::And) => {
+            Ok(RuntimeValue::Bool(x && y))
         }
-        if let RuntimeValue::Bool(y) = right {
-            return Ok(RuntimeValue::Bool(match op {
-                BooleanOperator::And => *x && *y,
-                BooleanOperator::Or => *x || *y,
-            }));
+        (RuntimeValue::Bool(x), RuntimeValue::Bool(y), BooleanOperator::Or) => {
+            Ok(RuntimeValue::Bool(x || y))
         }
+        (left, right, op) => Err(RuntimeError::Boolean(left, right, op.clone())),
     }
-
-    Err(RuntimeError::Boolean(
-        left.clone(),
-        right.clone(),
-        op.clone(),
-    ))
 }
 
 macro_rules! handle_bitwise {

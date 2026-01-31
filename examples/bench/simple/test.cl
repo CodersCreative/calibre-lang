@@ -20,6 +20,8 @@ type ThingEnum = enum {
     Nothing,
 };
 
+const global_thing : ThingEnum = ThingEnum.Nothing;
+
 impl ThingEnum {
     const age = 90;
     
@@ -31,11 +33,13 @@ impl ThingEnum {
 
 const main = fn () => {
     let a = [10, 20, 450];
+    for i in a => "a : " & i |> print;
     print(a[0]);
     let thing = Thing {name : "Ty"};
     print(thing.name);
     let thing = ThingEnum.Person : thing;
     print(thing);
+    print(global_thing.name());
     print("mentioned object : " & ThingEnum.name(thing));
     print("object inferred : " & thing.name());
     print("static from object : " & ThingEnum.age);

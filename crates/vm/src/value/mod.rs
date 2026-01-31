@@ -61,6 +61,7 @@ impl RuntimeValue {
             ("discriminant", Rc::new(native::global::DiscriminantFn())),
             ("tuple", Rc::new(native::global::TupleFn())),
             ("panic", Rc::new(native::global::PanicFn())),
+            ("min_or_zero", Rc::new(native::global::MinOrZero())),
             ("console.out", Rc::new(native::stdlib::console::Out())),
             ("console.input", Rc::new(native::stdlib::console::Input())),
             ("console.err", Rc::new(native::stdlib::console::ErrFn())),

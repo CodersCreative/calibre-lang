@@ -57,7 +57,7 @@ fn file(path: &PathBuf, verbose: bool, args: Vec<MiddleNode>) -> Result<()> {
     }
 
     let main = vm.registry.functions.get(&name).unwrap().clone();
-    vm.run_function(&main, Vec::new()).unwrap();
+    vm.run(&main, Vec::new()).unwrap();
 
     Ok(())
 }

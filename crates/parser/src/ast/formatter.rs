@@ -197,7 +197,7 @@ impl Formatter {
                             txt.push_str(&format!("{val},"));
                         }
 
-                        let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                        txt = txt.trim_end().trim_end_matches(",").to_string();
                         txt.push_str(")");
                     } else {
                         txt.push_str(&get_module(&module));
@@ -383,7 +383,7 @@ impl Formatter {
                         }
                     }
 
-                    let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                    txt = txt.trim_end().trim_end_matches(",").to_string();
                     txt.push(')');
                 };
 
@@ -880,7 +880,7 @@ impl Formatter {
             });
             txt.push_str(&format!("{},\n", &self.fmt_txt_with_tab(&temp, 1, true)));
         }
-        let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+        txt = txt.trim_end().trim_end_matches(",").to_string();
         txt.push_str("\n}");
         txt
     }
@@ -980,7 +980,7 @@ impl Formatter {
                         txt.push_str(", ");
                     }
 
-                    let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                    txt = txt.trim_end().trim_end_matches(",").to_string();
 
                     txt.push_str(&format!(
                         ") -> {} {}",
@@ -1052,7 +1052,7 @@ impl Formatter {
                     ));
                 }
 
-                let mut txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, true);
+                txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, true);
 
                 txt.push_str("\n}");
                 txt
@@ -1068,7 +1068,7 @@ impl Formatter {
                     ));
                 }
 
-                let mut txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
+                txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
 
                 txt.push_str(")");
                 txt
@@ -1157,7 +1157,7 @@ impl Formatter {
                     txt.push_str(&self.fmt_txt_with_tab(&temp.unwrap(), 1, false));
                 }
 
-                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push_str(&format!("{}}}", if allow_new_line { "\n" } else { "" }));
                 txt
             }
@@ -1171,7 +1171,7 @@ impl Formatter {
                     txt.push_str(&self.fmt_txt_with_tab(&format!("{}, ", temp), 1, false));
                 }
 
-                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
                 txt
             }
