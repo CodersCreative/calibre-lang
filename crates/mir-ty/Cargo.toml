@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 calibre-parser = {path = "../parser"}
 rand = "0.9.1"
+rustc-hash = "2.1.1"

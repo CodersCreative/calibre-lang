@@ -1,15 +1,14 @@
-use std::{collections::HashMap, fmt::Display};
-
 use calibre_parser::{
     ast::{
         CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
-        ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText, PotentialNewType,
-        RefMutability, VarType,
+        ObjectMap, ObjectType, ParserDataType, ParserText, RefMutability, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
     lexer::Span,
 };
+use std::fmt::Display;
+pub mod hm;
 pub mod identifiers;
 pub mod renaming;
 

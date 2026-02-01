@@ -1,4 +1,7 @@
-use calibre_mir_ty::{MiddleNode, MiddleNodeType};
+use calibre_mir_ty::{
+    MiddleNode, MiddleNodeType,
+    hm::{self, Type, TypeGenerator, TypeScheme},
+};
 use calibre_parser::{
     ast::{
         CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node,
@@ -13,11 +16,12 @@ use calibre_parser::{
 use rustc_hash::FxHashMap;
 use std::str::FromStr;
 
-use crate::errors::MiddleErr;
+use crate::{errors::MiddleErr, infer::infer_node_hm};
 use environment::*;
 
 pub mod environment;
 pub mod errors;
+pub mod infer;
 pub mod native;
 
 impl MiddleEnvironment {
@@ -49,7 +53,6 @@ impl MiddleEnvironment {
                         let val = self.resolve_macro_arg(scope, &x).unwrap().clone();
                         return self.evaluate(scope, val);
                     } else {
-                        // x.to_string().into()
                         return Err(MiddleErr::Variable(x.to_string()));
                     },
                 ),
@@ -500,7 +503,7 @@ impl MiddleEnvironment {
                                 .defined
                                 .clone()
                                 .into_iter()
-                                .filter(|x| !in_return.contains(&&x))
+                                .filter(|x| !in_return.contains(x))
                             {
                                 lst.push(MiddleNode::new_from_type(MiddleNodeType::Drop(
                                     value.into(),
@@ -547,7 +550,9 @@ impl MiddleEnvironment {
                 let new_name =
                     get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type));
 
-                let data_type = if data_type.is_auto() {
+                let original_value_node = *value.clone();
+
+                let mut data_type = if data_type.is_auto() {
                     self.resolve_type_from_node(scope, &value)
                         .unwrap_or(self.resolve_potential_new_type(scope, data_type))
                 } else {
@@ -574,11 +579,119 @@ impl MiddleEnvironment {
                     .mappings
                     .insert(identifier.text, new_name.clone());
 
-                let value = if let Some(x) = val {
+                if let NodeType::FunctionDeclaration { ref header, .. } =
+                    original_value_node.node_type
+                {
+                    let mut tg = TypeGenerator::default();
+
+                    let ret_pd = self.resolve_potential_new_type(scope, header.return_type.clone());
+                    let mut ret_hm = if matches!(ret_pd.data_type, ParserInnerType::Auto(_)) {
+                        tg.fresh()
+                    } else {
+                        hm::from_parser_data_type(&ret_pd, &mut tg)
+                    };
+
+                    for param in header.parameters.iter().rev() {
+                        let p_pd = self.resolve_potential_new_type(scope, param.1.clone());
+                        let p_hm = if matches!(p_pd.data_type, ParserInnerType::Auto(_)) {
+                            tg.fresh()
+                        } else {
+                            hm::from_parser_data_type(&p_pd, &mut tg)
+                        };
+
+                        ret_hm = Type::TArrow(Box::new(p_hm), Box::new(ret_hm));
+                    }
+
+                    self.hm_env
+                        .insert(new_name.clone(), TypeScheme::new(Vec::new(), ret_hm));
+                }
+
+                let mut value = if let Some(x) = val {
                     x
                 } else {
-                    self.evaluate(scope, *value)?
+                    if let NodeType::FunctionDeclaration { ref header, .. } =
+                        original_value_node.node_type
+                    {
+                        let new_scope = self.new_scope_from_parent_shallow(*scope);
+
+                        for param in header.parameters.iter() {
+                            let og_name = self.resolve_dollar_ident_only(scope, &param.0).unwrap();
+                            let new_name = get_disamubiguous_name(
+                                scope,
+                                Some(og_name.trim()),
+                                Some(&VarType::Mutable),
+                            );
+                            let data_type = self.resolve_potential_new_type(scope, param.1.clone());
+
+                            self.variables.insert(
+                                new_name.clone(),
+                                MiddleVariable {
+                                    data_type: data_type.clone(),
+                                    var_type: VarType::Mutable,
+                                    location: self.current_location.clone(),
+                                },
+                            );
+
+                            self.scopes
+                                .get_mut(&new_scope)
+                                .unwrap()
+                                .mappings
+                                .insert(og_name.text.clone(), new_name.clone());
+
+                            self.scopes
+                                .get_mut(&new_scope)
+                                .unwrap()
+                                .defined
+                                .push(new_name.clone());
+                        }
+
+                        self.evaluate(&new_scope, *value)?
+                    } else {
+                        self.evaluate(scope, *value)?
+                    }
                 };
+
+                if data_type.is_auto() {
+                    if let Some((hm_t, subst)) = infer_node_hm(self, scope, &original_value_node) {
+                        let t_applied = hm::apply_subst(&subst, &hm_t);
+
+                        let mut tenv: FxHashMap<String, hm::TypeScheme> = FxHashMap::default();
+                        for (k, s) in self.hm_env.iter() {
+                            tenv.insert(k.clone(), s.clone());
+                        }
+
+                        let scheme = hm::generalize(&tenv, &t_applied);
+                        self.hm_env.insert(new_name.clone(), scheme);
+
+                        let parser_ty = hm::to_parser_data_type(&t_applied);
+                        if let Some(v) = self.variables.get_mut(&new_name) {
+                            v.data_type = parser_ty.clone();
+                            data_type = parser_ty.clone();
+
+                            if let MiddleNodeType::FunctionDeclaration {
+                                parameters: ref mut params,
+                                return_type: ref mut ret_type,
+                                ..
+                            } = value.node_type
+                            {
+                                if let ParserInnerType::Function {
+                                    return_type: inferred_ret,
+                                    parameters: inferred_params,
+                                    is_async: _,
+                                } = parser_ty.data_type
+                                {
+                                    for (i, (_name, p_ty)) in params.iter_mut().enumerate() {
+                                        if i < inferred_params.len() {
+                                            *p_ty = inferred_params[i].clone();
+                                        }
+                                    }
+
+                                    *ret_type = *inferred_ret.clone();
+                                }
+                            }
+                        }
+                    }
+                }
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::VariableDeclaration {
@@ -1945,15 +2058,57 @@ impl MiddleEnvironment {
                 };
                 self.func_defers.append(&mut old_func_defers);
 
-                Ok(MiddleNode {
+                let mut fn_node = MiddleNode {
                     node_type: MiddleNodeType::FunctionDeclaration {
-                        parameters: params,
-                        body: Box::new(body),
-                        return_type,
+                        parameters: params.clone(),
+                        body: Box::new(body.clone()),
+                        return_type: return_type.clone(),
                         is_async: header.is_async,
                     },
                     span: node.span,
-                })
+                };
+
+                let ast_node: Node = fn_node.clone().into();
+                for (p_name, _p_ty) in params.iter() {
+                    let full = p_name.text.clone();
+                    if let Some(idx) = full.rfind(':') {
+                        let short = full[idx + 1..].to_string();
+                        self.scopes
+                            .get_mut(&new_scope)
+                            .unwrap()
+                            .mappings
+                            .insert(short, full.clone());
+                    }
+                }
+
+                if let Some((hm_t, subst)) = infer_node_hm(self, &new_scope, &ast_node) {
+                    let t_applied = hm::apply_subst(&subst, &hm_t);
+                    let parser_ty = hm::to_parser_data_type(&t_applied);
+
+                    if let MiddleNodeType::FunctionDeclaration {
+                        parameters: ref mut params2,
+                        return_type: ref mut ret2,
+                        ..
+                    } = fn_node.node_type
+                    {
+                        if let calibre_parser::ast::ParserInnerType::Function {
+                            return_type: inferred_ret,
+                            parameters: inferred_params,
+                            is_async: _,
+                        } = parser_ty.data_type
+                        {
+                            for (i, (_name, p_ty)) in params2.iter_mut().enumerate() {
+                                if i < inferred_params.len() {
+                                    *p_ty = inferred_params[i].clone();
+                                }
+                            }
+
+                            *ret2 = *inferred_ret.clone();
+                        }
+                    }
+                }
+
+                Ok(fn_node)
             }
             NodeType::CallExpression {
                 string_fn,
