@@ -204,13 +204,14 @@ impl Compiler {
 
             if let Some(term) = lir_block.terminator {
                 match term {
-                    LirTerminator::Jump(target) => {
+                    LirTerminator::Jump { target, .. } => {
                         trans.builder.ins().jump(block_map[&target], &[]);
                     }
                     LirTerminator::Branch {
                         condition,
                         then_block,
                         else_block,
+                        ..
                     } => {
                         let cond_val = trans.translate(condition).value;
                         trans.builder.ins().brif(
@@ -221,9 +222,9 @@ impl Compiler {
                             &[],
                         );
                     }
-                    LirTerminator::Return(val) => {
+                    LirTerminator::Return { value, .. } => {
                         let mut ret_vals = Vec::new();
-                        if let Some(v) = val {
+                        if let Some(v) = value {
                             ret_vals.push(trans.translate(v).value);
                         }
                         trans.builder.ins().return_(&ret_vals);

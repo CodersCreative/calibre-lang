@@ -46,7 +46,7 @@ use std::{fmt::Debug, mem, path::PathBuf, str::FromStr};
 fn parse(text: String) -> (LirRegistry, MiddleEnvironment) {
     let mut parser = Parser::default();
     let mut tokenizer = Tokenizer::default();
-    let program = parser.produce_ast(tokenizer.tokenize(text).unwrap());
+    let program = parser.produce_ast(tokenizer.tokenize(&text).unwrap());
 
     let mut middle_result =
         MiddleEnvironment::new_and_evaluate(program, PathBuf::from_str("./main.cl").unwrap())

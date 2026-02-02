@@ -88,7 +88,7 @@ impl Parser {
 
             let args = args
                 .into_iter()
-                .map(|x| tokenizer.tokenize(x).unwrap())
+                .map(|x| tokenizer.tokenize(&x).unwrap())
                 .collect::<Vec<_>>();
 
             let mut original = Vec::new();

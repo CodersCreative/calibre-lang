@@ -2,7 +2,6 @@ use crate::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
-use miette::Diagnostic;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Display, path::PathBuf};
 use thiserror::Error;
@@ -49,20 +48,15 @@ pub struct Position {
 
 pub struct Tokenizer {
     pub include_comments: bool,
-    lines: Vec<String>,
     line: u32,
     col: u32,
 }
 
-#[derive(Error, Debug, Clone, Diagnostic)]
+#[derive(Error, Debug, Clone)]
 pub enum LexerError {
-    #[error("Unrecognized character : '{ch}'")]
-    #[diagnostic(code(lexer::unrecognized))]
+    #[error("Unrecognized character: '{ch}'")]
     Unrecognized {
-        #[source_code]
-        line: String,
-        #[label("here")]
-        span: (usize, usize),
+        span: Span,
         ch: char,
     },
 }
@@ -259,7 +253,6 @@ pub struct Token {
 impl Default for Tokenizer {
     fn default() -> Self {
         Self {
-            lines: Vec::new(),
             include_comments: false,
             line: 1,
             col: 1,
@@ -270,7 +263,6 @@ impl Default for Tokenizer {
 impl Tokenizer {
     pub fn new(include_comments: bool) -> Self {
         Self {
-            lines: Vec::new(),
             include_comments,
             line: 1,
             col: 1,
@@ -309,18 +301,25 @@ impl Tokenizer {
 
     fn get_unrecognized(&self, ch: char) -> LexerError {
         LexerError::Unrecognized {
-            line: self.lines.get(self.line as usize - 1).unwrap().clone(),
-            span: (self.col as usize, 1),
+            span: Span {
+                from: Position {
+                    line: self.line,
+                    col: self.col,
+                },
+                to: Position {
+                    line: self.line,
+                    col: self.col.saturating_add(1),
+                },
+            },
             ch,
         }
     }
 
-    pub fn tokenize(&mut self, txt: String) -> Result<Vec<Token>, LexerError> {
+    pub fn tokenize(&mut self, txt: &str) -> Result<Vec<Token>, LexerError> {
         let mut tokens: Vec<Token> = Vec::new();
         let mut buffer: Vec<char> = txt.chars().collect();
         self.line = 1;
         self.col = 1;
-        self.lines = txt.split('\n').map(|x| x.to_string()).collect();
 
         while buffer.len() > 0 {
             let first = buffer.first().unwrap();
@@ -563,6 +562,11 @@ impl Tokenizer {
                 .collect())
         }
     }
+}
+
+pub fn tokenize(input: impl AsRef<str>) -> Result<Vec<Token>, LexerError> {
+    let mut tokenizer = Tokenizer::default();
+    tokenizer.tokenize(input.as_ref())
 }
 
 #[cfg(test)]

@@ -36,11 +36,9 @@ impl MiddleEnvironment {
         self.setup_global(&scope);
         let mut parser = Parser::default();
         let mut tokenizer = Tokenizer::default();
-        let program = parser.produce_ast(
-            tokenizer
-                .tokenize(fs::read_to_string(get_globals_path()).unwrap())
-                .unwrap(),
-        );
+        let globals = fs::read_to_string(get_globals_path()).unwrap();
+        let program = parser
+            .produce_ast(tokenizer.tokenize(&globals).unwrap());
 
         let _ = self.evaluate(&scope, program);
 
@@ -102,14 +100,9 @@ impl MiddleEnvironment {
         let mut parser = Parser::default();
         let mut tokenizer = Tokenizer::default();
 
-        let program = parser.produce_ast(
-            tokenizer
-                .tokenize(
-                    fs::read_to_string(self.scopes.get(scope).unwrap().path.clone())
-                        .unwrap_or(String::new()),
-                )
-                .unwrap(),
-        );
+        let stdlib = fs::read_to_string(self.scopes.get(scope).unwrap().path.clone())
+            .unwrap_or(String::new());
+        let program = parser.produce_ast(tokenizer.tokenize(&stdlib).unwrap());
 
         let _ = self.evaluate(scope, program);
 

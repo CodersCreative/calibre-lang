@@ -16,7 +16,7 @@ pub trait NativeFunction {
         let name = env
             .mappings
             .iter()
-            .find(|x| x.split_once(":").unwrap().1 == name)
+            .find(|x| x.split_once(":").map(|v| v.1) == Some(name.as_str()))
             .map(|x| x.to_string())
             .unwrap_or(name);
 
@@ -78,9 +78,9 @@ impl VM {
 
         let map = RuntimeValue::natives();
 
-        let mut funcs = funcs
+        let mut funcs: Vec<(String, RuntimeValue)> = funcs
             .into_iter()
-            .map(|x| (String::from(x), map.get(x).unwrap().clone()))
+            .filter_map(|x| map.get(x).cloned().map(|v| (String::from(x), v)))
             .collect();
 
         let mut vars: Vec<(String, RuntimeValue)> =
@@ -91,7 +91,7 @@ impl VM {
             let name = self
                 .mappings
                 .iter()
-                .find(|x| x.split_once(":").unwrap().1 == var.0)
+                .find(|x| x.split_once(":").map(|v| v.1) == Some(var.0.as_str()))
                 .map(|x| x.to_string())
                 .unwrap_or(var.0);
 

@@ -287,7 +287,6 @@ dependencies = [
  "calibre-mir-ty",
  "calibre-parser",
  "calibre-std",
- "miette",
  "rand",
  "rustc-hash",
  "thiserror",
@@ -306,7 +305,6 @@ dependencies = [
 name = "calibre-parser"
 version = "0.1.0"
 dependencies = [
- "miette",
  "serde",
  "thiserror",
 ]

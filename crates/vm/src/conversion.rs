@@ -564,10 +564,10 @@ impl VMBlock {
     }
 
     pub fn translate_terminator(&mut self, node: LirTerminator) {
-        let span = Span::default();
         match node {
-            LirTerminator::Jump(x) => self.push_instr(VMInstruction::Jump(x), span),
+            LirTerminator::Jump { span, target } => self.push_instr(VMInstruction::Jump(target), span),
             LirTerminator::Branch {
+                span,
                 condition,
                 then_block,
                 else_block,
@@ -575,9 +575,9 @@ impl VMBlock {
                 self.translate(LirInstr::new(span, condition));
                 self.push_instr(VMInstruction::Branch(then_block, else_block), span);
             }
-            LirTerminator::Return(x) => {
-                let has_value = x.is_some();
-                if let Some(v) = x {
+            LirTerminator::Return { span, value } => {
+                let has_value = value.is_some();
+                if let Some(v) = value {
                     self.translate(LirInstr::new(span, v));
                 }
                 self.push_instr(VMInstruction::Return(has_value), span);

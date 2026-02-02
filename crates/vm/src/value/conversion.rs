@@ -48,7 +48,10 @@ impl RuntimeValue {
             (RuntimeValue::Char(x), ParserInnerType::Str) => Ok(RuntimeValue::Str(x.to_string())),
             (RuntimeValue::Str(x), ParserInnerType::Str) => Ok(RuntimeValue::Str(x)),
             (RuntimeValue::Str(x), ParserInnerType::Char) => {
-                Ok(RuntimeValue::Char(x.chars().next().unwrap()))
+                let ch = x.chars().next().ok_or_else(|| {
+                    RuntimeError::CantConvert(RuntimeValue::Str(x.clone()), ParserInnerType::Char)
+                })?;
+                Ok(RuntimeValue::Char(ch))
             }
             (RuntimeValue::Null, ParserInnerType::Null) => Ok(RuntimeValue::Null),
             (RuntimeValue::Aggregate(Some(x), z), ParserInnerType::Struct(y)) if &x == y => {

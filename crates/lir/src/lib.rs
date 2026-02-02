@@ -300,32 +300,40 @@ impl Display for LirLValue {
 
 #[derive(Debug, Clone)]
 pub enum LirTerminator {
-    Jump(BlockId),
+    Jump {
+        span: Span,
+        target: BlockId,
+    },
     Branch {
+        span: Span,
         condition: LirNodeType,
         then_block: BlockId,
         else_block: BlockId,
     },
-    Return(Option<LirNodeType>),
+    Return {
+        span: Span,
+        value: Option<LirNodeType>,
+    },
 }
 
 impl Display for LirTerminator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Jump(x) => write!(f, "jmp blk {}", x.0),
+            Self::Jump { target, .. } => write!(f, "jmp blk {}", target.0),
             Self::Branch {
                 condition,
                 then_block,
                 else_block,
+                ..
             } => write!(
                 f,
                 "{} ? jmp blk {} : jmp blk {}",
                 condition, then_block.0, else_block.0
             ),
-            Self::Return(x) => write!(
+            Self::Return { value, .. } => write!(
                 f,
                 "return{}",
-                if let Some(x) = x.as_ref() {
+                if let Some(x) = value.as_ref() {
                     format!(" {}", x)
                 } else {
                     String::new()
@@ -372,6 +380,26 @@ impl<'a> LirEnvironment<'a> {
     pub fn lower(env: &'a MiddleEnvironment, node: MiddleNode) -> LirRegistry {
         let mut this = Self::new(env);
         let node = this.lower_node(node);
+        this.registry
+    }
+
+    pub fn lower_with_root(
+        env: &'a MiddleEnvironment,
+        node: MiddleNode,
+        root_name: String,
+    ) -> LirRegistry {
+        let mut this = Self::new(env);
+        let _ = this.lower_node(node);
+        if !this.blocks.is_empty() {
+            this.registry.globals.insert(
+                root_name.clone(),
+                LirGlobal {
+                    name: root_name,
+                    data_type: ParserDataType::from(ParserInnerType::Dynamic),
+                    blocks: this.blocks.clone(),
+                },
+            );
+        }
         this.registry
     }
 
@@ -431,6 +459,7 @@ impl<'a> LirEnvironment<'a> {
     }
 
     pub fn lower_node(&mut self, node: MiddleNode) -> LirNodeType {
+        let span = node.span;
         match node.node_type {
             MiddleNodeType::IntLiteral(i) => LirNodeType::Literal(LirLiteral::Int(i)),
             MiddleNodeType::FloatLiteral(f) => LirNodeType::Literal(LirLiteral::Float(f)),
@@ -516,10 +545,19 @@ impl<'a> LirEnvironment<'a> {
                 };
                 let mut sub_lowerer = LirEnvironment::new(self.env);
 
+                let body_span = body.span;
                 let body_val = sub_lowerer.lower_node(*body);
 
-                if sub_lowerer.blocks.last().unwrap().terminator.is_none() {
-                    sub_lowerer.set_terminator(LirTerminator::Return(Some(body_val)));
+                if sub_lowerer
+                    .blocks
+                    .last()
+                    .map(|b| b.terminator.is_none())
+                    .unwrap_or(false)
+                {
+                    sub_lowerer.set_terminator(LirTerminator::Return {
+                        span: body_span,
+                        value: Some(body_val),
+                    });
                 }
 
                 self.registry.append(sub_lowerer.registry);
@@ -622,6 +660,7 @@ impl<'a> LirEnvironment<'a> {
 
                 let cond = self.lower_node(*comparison);
                 self.set_terminator(LirTerminator::Branch {
+                    span,
                     condition: cond,
                     then_block: then_id,
                     else_block: else_id,
@@ -629,13 +668,19 @@ impl<'a> LirEnvironment<'a> {
 
                 self.switch_to(then_id);
                 self.lower_and_add_node(*then);
-                self.set_terminator(LirTerminator::Jump(merge_id));
+                self.set_terminator(LirTerminator::Jump {
+                    span,
+                    target: merge_id,
+                });
 
                 self.switch_to(else_id);
                 if let Some(alt) = otherwise {
                     self.lower_and_add_node(*alt);
                 }
-                self.set_terminator(LirTerminator::Jump(merge_id));
+                self.set_terminator(LirTerminator::Jump {
+                    span,
+                    target: merge_id,
+                });
 
                 self.switch_to(merge_id);
                 LirNodeType::Literal(LirLiteral::Null)
@@ -648,33 +693,51 @@ impl<'a> LirEnvironment<'a> {
                 if let Some(s) = state {
                     self.lower_and_add_node(*s);
                 }
-                self.set_terminator(LirTerminator::Jump(header_id));
+                self.set_terminator(LirTerminator::Jump {
+                    span,
+                    target: header_id,
+                });
 
                 self.switch_to(header_id);
-                self.set_terminator(LirTerminator::Jump(body_id));
+                self.set_terminator(LirTerminator::Jump {
+                    span,
+                    target: body_id,
+                });
 
                 self.loop_stack.push((header_id, exit_id));
                 self.switch_to(body_id);
                 self.lower_and_add_node(*body);
-                self.set_terminator(LirTerminator::Jump(header_id));
+                self.set_terminator(LirTerminator::Jump {
+                    span,
+                    target: header_id,
+                });
                 self.loop_stack.pop();
 
                 self.switch_to(exit_id);
                 LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::Return { value } => {
-                let val = value.map(|v| self.lower_node(*v));
-                self.set_terminator(LirTerminator::Return(val));
+                let (ret_span, val) = match value {
+                    Some(v) => {
+                        let value_span = v.span;
+                        (value_span, Some(self.lower_node(*v)))
+                    }
+                    None => (span, None),
+                };
+                self.set_terminator(LirTerminator::Return {
+                    span: ret_span,
+                    value: val,
+                });
                 LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::Break => {
                 let (_, exit) = *self.loop_stack.last().expect("Break outside loop");
-                self.set_terminator(LirTerminator::Jump(exit));
+                self.set_terminator(LirTerminator::Jump { span, target: exit });
                 LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::Continue => {
                 let (header, _) = *self.loop_stack.last().expect("Continue outside loop");
-                self.set_terminator(LirTerminator::Jump(header));
+                self.set_terminator(LirTerminator::Jump { span, target: header });
                 LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::MemberExpression { path } => {

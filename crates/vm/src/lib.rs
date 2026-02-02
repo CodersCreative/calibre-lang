@@ -106,11 +106,18 @@ impl VM {
 
     pub fn run_global(&mut self, global: &VMGlobal) -> Result<RuntimeValue, RuntimeError> {
         let mut stack = Vec::new();
-        let mut block = global.blocks.first().unwrap();
+        let mut block = global
+            .blocks
+            .first()
+            .ok_or_else(|| RuntimeError::InvalidBytecode("global has no blocks".to_string()))?;
 
         loop {
             match self.run_block(block, &mut stack, &FxHashMap::default())? {
-                TerminateValue::Jump(x) => block = global.blocks.get(x.0 as usize).unwrap(),
+                TerminateValue::Jump(x) => {
+                    block = global.blocks.get(x.0 as usize).ok_or_else(|| {
+                        RuntimeError::InvalidBytecode(format!("invalid global block {}", x.0))
+                    })?
+                }
                 TerminateValue::Return(x) => match x {
                     RuntimeValue::Null => break,
                     x => return Ok(x),
@@ -136,7 +143,10 @@ impl VM {
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
         let mut stack = Vec::new();
-        let mut block = function.blocks.first().unwrap();
+        let mut block = function
+            .blocks
+            .first()
+            .ok_or_else(|| RuntimeError::InvalidBytecode("function has no blocks".to_string()))?;
 
         for param in function.params.clone().into_iter() {
             self.variables.insert(param, args.remove(0));
@@ -144,7 +154,11 @@ impl VM {
 
         loop {
             match self.run_block(block, &mut stack, &function.renamed)? {
-                TerminateValue::Jump(x) => block = function.blocks.get(x.0 as usize).unwrap(),
+                TerminateValue::Jump(x) => {
+                    block = function.blocks.get(x.0 as usize).ok_or_else(|| {
+                        RuntimeError::InvalidBytecode(format!("invalid function block {}", x.0))
+                    })?
+                }
                 TerminateValue::Return(x) => match x {
                     RuntimeValue::Null if function.returns_value => break,
                     x => return Ok(x),
@@ -271,7 +285,13 @@ impl VM {
                 ));
             }
             VMInstruction::Drop(x) => {
-                let name = block.local_strings.get(*x as usize).unwrap().to_string();
+                let name = block
+                    .local_strings
+                    .get(*x as usize)
+                    .ok_or_else(|| {
+                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
+                    })?
+                    .to_string();
                 match self.resolve_var_name(name) {
                     VarName::Func(func) => {
                         let _ = self.registry.functions.remove(&func);
@@ -285,7 +305,13 @@ impl VM {
                 }
             }
             VMInstruction::Move(x) => {
-                let name = block.local_strings.get(*x as usize).unwrap().to_string();
+                let name = block
+                    .local_strings
+                    .get(*x as usize)
+                    .ok_or_else(|| {
+                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
+                    })?
+                    .to_string();
                 match self.resolve_var_name(name) {
                     VarName::Func(func) => {
                         if let Some(func) = self.registry.functions.remove(&func) {
@@ -304,7 +330,13 @@ impl VM {
                 }
             }
             VMInstruction::LoadVar(x) => {
-                let name = block.local_strings.get(*x as usize).unwrap().to_string();
+                let name = block
+                    .local_strings
+                    .get(*x as usize)
+                    .ok_or_else(|| {
+                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
+                    })?
+                    .to_string();
                 match self.resolve_var_name(name.clone()) {
                     VarName::Func(func) => {
                         if let Some(func) = self.registry.functions.get(&func) {
@@ -349,7 +381,12 @@ impl VM {
                 }
             }
             VMInstruction::LoadVarRef(x) => {
-                let name = block.local_strings.get(*x as usize).unwrap();
+                let name = block
+                    .local_strings
+                    .get(*x as usize)
+                    .ok_or_else(|| {
+                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
+                    })?;
                 stack.push(RuntimeValue::Ref(name.clone()));
             }
             VMInstruction::Deref => {
@@ -370,7 +407,12 @@ impl VM {
                 stack.push(RuntimeValue::Ref(name));
             }
             VMInstruction::DeclareVar(x) | VMInstruction::SetVar(x) => {
-                let name = block.local_strings.get(*x as usize).unwrap();
+                let name = block
+                    .local_strings
+                    .get(*x as usize)
+                    .ok_or_else(|| {
+                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
+                    })?;
 
                 if let Some(var) = self.variables.remove(name) {
                     let _ = self.move_saveable_into_runtime_var(var.clone());
@@ -459,7 +501,12 @@ impl VM {
                 });
             }
             VMInstruction::LoadMember(x) => {
-                let name = block.local_strings.get(*x as usize).unwrap();
+                let name = block
+                    .local_strings
+                    .get(*x as usize)
+                    .ok_or_else(|| {
+                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
+                    })?;
                 let value = stack.pop().ok_or(RuntimeError::StackUnderflow)?;
 
                 let tuple_index = name.parse::<usize>().ok();
@@ -525,7 +572,9 @@ impl VM {
                 return Err(RuntimeError::InvalidFunctionCall);
             }
             VMInstruction::Aggregate(x) => {
-                let layout = block.aggregate_layouts.get(*x as usize).unwrap();
+                let layout = block.aggregate_layouts.get(*x as usize).ok_or_else(|| {
+                    RuntimeError::InvalidBytecode(format!("missing aggregate layout {}", x))
+                })?;
                 let mut values = Vec::new();
                 for _ in 0..layout.members.len() {
                     values.push(stack.pop().ok_or(RuntimeError::StackUnderflow)?);
@@ -536,7 +585,13 @@ impl VM {
                     let mut map = Vec::new();
 
                     for (i, value) in values.into_iter().enumerate() {
-                        map.push((layout.members.get(i).unwrap().to_string(), value));
+                        let member = layout.members.get(i).ok_or_else(|| {
+                            RuntimeError::InvalidBytecode(format!(
+                                "missing aggregate member {} in {:?}",
+                                i, layout.name
+                            ))
+                        })?;
+                        map.push((member.to_string(), value));
                     }
 
                     ObjectMap(map)
@@ -559,7 +614,13 @@ impl VM {
                 has_payload,
             } => {
                 let value = RuntimeValue::Enum(
-                    block.local_strings.get(*name as usize).unwrap().to_string(),
+                    block
+                        .local_strings
+                        .get(*name as usize)
+                        .ok_or_else(|| {
+                            RuntimeError::InvalidBytecode(format!("missing string {}", name))
+                        })?
+                        .to_string(),
                     *variant as usize,
                     if *has_payload {
                         Some(Box::new(stack.pop().ok_or(RuntimeError::StackUnderflow)?))

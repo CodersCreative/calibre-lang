@@ -16,18 +16,18 @@ impl NativeFunction for Generate {
                 Ok(RuntimeValue::Float(random_range(start as f64..stop as f64)))
             } else {
                 let RuntimeValue::Float(amt) = args[0] else {
-                    panic!()
+                    return Err(RuntimeError::UnexpectedType(args[0].clone()));
                 };
 
                 Ok(RuntimeValue::Float(random_range(0.0..=amt)))
             }
         } else if args.len() == 2 {
             let RuntimeValue::Float(start) = args[0] else {
-                panic!()
+                return Err(RuntimeError::UnexpectedType(args[0].clone()));
             };
 
             let RuntimeValue::Float(stop) = args[1] else {
-                panic!()
+                return Err(RuntimeError::UnexpectedType(args[1].clone()));
             };
 
             Ok(RuntimeValue::Float(random_range(start..=stop)))
@@ -48,7 +48,7 @@ impl NativeFunction for Bool {
             Ok(RuntimeValue::Bool(random_bool(0.5)))
         } else if args.len() == 1 {
             let RuntimeValue::Float(amt) = args[0] else {
-                panic!()
+                return Err(RuntimeError::UnexpectedType(args[0].clone()));
             };
 
             Ok(RuntimeValue::Bool(random_bool(amt)))
@@ -69,17 +69,17 @@ impl NativeFunction for Ratio {
             Ok(RuntimeValue::Bool(random_ratio(1, 2)))
         } else if args.len() == 1 {
             let RuntimeValue::Int(amt) = args[0] else {
-                panic!()
+                return Err(RuntimeError::UnexpectedType(args[0].clone()));
             };
 
             Ok(RuntimeValue::Bool(random_ratio(1, amt as u32)))
         } else if args.len() == 2 {
             let RuntimeValue::Int(start) = args[0] else {
-                panic!()
+                return Err(RuntimeError::UnexpectedType(args[0].clone()));
             };
 
             let RuntimeValue::Int(stop) = args[1] else {
-                panic!()
+                return Err(RuntimeError::UnexpectedType(args[1].clone()));
             };
 
             if start > stop {

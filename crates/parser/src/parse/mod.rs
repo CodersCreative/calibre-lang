@@ -42,22 +42,10 @@ impl Parser {
 
     fn add_err(&mut self, err: SyntaxErr) {
         let prev = self.prev_token.clone().unwrap();
-        let mut input = prev.value.clone();
-
-        (0..4).into_iter().for_each(|x| {
-            let val = self
-                .tokens
-                .get(x)
-                .map(|x| x.value.clone())
-                .unwrap_or(String::new());
-            input.push_str(&format!(" {}", val));
-        });
 
         self.errors.push(ParserError::Syntax {
-            input: input.trim().to_string(),
             err,
             span: prev.span,
-            token: Some((0, prev.value.len() - 1)),
         })
     }
 

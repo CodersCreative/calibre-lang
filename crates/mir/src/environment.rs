@@ -306,7 +306,7 @@ impl MiddleEnvironment {
 
         let new_obj = self.substitute_type_def(&obj, &subst);
 
-        let decl_node = Node::new_from_type(NodeType::TypeDeclaration {
+        let decl_node = Node::new(self.current_span(), NodeType::TypeDeclaration {
             identifier: ParserText::from(specialized_name.clone()).into(),
             object: new_obj,
             overloads,
@@ -361,13 +361,13 @@ impl MiddleEnvironment {
         new_header.return_type =
             self.substitute_potential_new_type(&new_header.return_type, &subst);
 
-        let decl_node = Node::new_from_type(NodeType::VariableDeclaration {
+        let decl_node = Node::new(self.current_span(), NodeType::VariableDeclaration {
             var_type: VarType::Constant,
             identifier: ParserText::from(specialized_name.clone()).into(),
             data_type: PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(
                 None,
             ))),
-            value: Box::new(Node::new_from_type(NodeType::FunctionDeclaration {
+            value: Box::new(Node::new(self.current_span(), NodeType::FunctionDeclaration {
                 header: new_header,
                 body: Box::new(body.clone()),
             })),
@@ -594,12 +594,16 @@ impl MiddleEnvironment {
                     _ => {
                         let mut body = Vec::new();
                         body.append(&mut decls);
+                        let middle_span = middle.span;
                         body.push(middle);
-                        middle = MiddleNode::new_from_type(MiddleNodeType::ScopeDeclaration {
-                            body,
-                            create_new_scope: false,
-                            is_temp: false,
-                        });
+                        middle = MiddleNode::new(
+                            MiddleNodeType::ScopeDeclaration {
+                                body,
+                                create_new_scope: false,
+                                is_temp: false,
+                            },
+                            middle_span,
+                        );
                     }
                 }
             }
@@ -730,10 +734,11 @@ impl MiddleEnvironment {
                                         if let Some((mapped, _)) =
                                             obj.variables.get(&member_ident.text)
                                         {
-                                            *mn = MiddleNode::new_from_type(
+                                            *mn = MiddleNode::new(
                                                 MiddleNodeType::Identifier(ParserText::from(
                                                     mapped.clone(),
                                                 )),
+                                                self.current_span(),
                                             );
                                         }
                                     }
@@ -908,6 +913,21 @@ impl MiddleEnvironment {
             path: self.scopes.get(scope).unwrap().path.clone(),
             span,
         })
+    }
+
+    pub fn err_at_current(&self, err: MiddleErr) -> MiddleErr {
+        if let Some(location) = &self.current_location {
+            MiddleErr::At(location.span, Box::new(err))
+        } else {
+            err
+        }
+    }
+
+    pub fn current_span(&self) -> Span {
+        self.current_location
+            .as_ref()
+            .map(|loc| loc.span)
+            .unwrap_or_default()
     }
 
     pub fn resolve_str(&self, scope: &u64, iden: &str) -> Option<String> {
@@ -1348,7 +1368,7 @@ impl MiddleEnvironment {
                 }
             }
         }
-        Err(MiddleErr::Scope(namespace.to_string()))
+        Err(self.err_at_current(MiddleErr::Scope(namespace.to_string())))
     }
 
     pub fn new_scope_from_parent_shallow(&mut self, parent: u64) -> u64 {
@@ -1500,19 +1520,24 @@ impl MiddleEnvironment {
 
                     let build_node =
                         if let Some(scope) = self.new_build_scope_from_parent(current.id, key) {
-                            let program = parser.produce_ast(
-                                tokenizer
-                                    .tokenize(
-                                        fs::read_to_string(
-                                            self.scopes.get(&scope).unwrap().path.clone(),
-                                        )
-                                        .unwrap(),
-                                    )
-                                    .unwrap(),
-                            );
+                            let path = self.scopes.get(&scope).unwrap().path.clone();
+                            let source = fs::read_to_string(path.clone()).unwrap();
+                            let tokens = tokenizer.tokenize(&source).map_err(|error| {
+                                MiddleErr::LexerError {
+                                    path: path.clone(),
+                                    contents: source.clone(),
+                                    error,
+                                }
+                            })?;
+                            let program = parser.produce_ast(tokens);
 
                             if !parser.errors.is_empty() {
-                                return Err(parser.errors.into());
+                                let errors = std::mem::take(&mut parser.errors);
+                                return Err(MiddleErr::ParserErrors {
+                                    path,
+                                    contents: source,
+                                    errors,
+                                });
                             }
 
                             let program = match program.node_type {
@@ -1534,17 +1559,24 @@ impl MiddleEnvironment {
                         };
 
                     let scope = self.new_scope_from_parent(current.id, key);
-                    let program = parser.produce_ast(
-                        tokenizer
-                            .tokenize(
-                                fs::read_to_string(self.scopes.get(&scope).unwrap().path.clone())
-                                    .unwrap(),
-                            )
-                            .unwrap(),
-                    );
+                    let path = self.scopes.get(&scope).unwrap().path.clone();
+                    let source = fs::read_to_string(path.clone()).unwrap();
+                    let tokens = tokenizer.tokenize(&source).map_err(|error| {
+                        MiddleErr::LexerError {
+                            path: path.clone(),
+                            contents: source.clone(),
+                            error,
+                        }
+                    })?;
+                    let program = parser.produce_ast(tokens);
 
                     if !parser.errors.is_empty() {
-                        return Err(parser.errors.into());
+                        let errors = std::mem::take(&mut parser.errors);
+                        return Err(MiddleErr::ParserErrors {
+                            path,
+                            contents: source,
+                            errors,
+                        });
                     }
 
                     let node = self.evaluate(&scope, program)?;
@@ -1564,11 +1596,14 @@ impl MiddleEnvironment {
                             }
                         }
                         (_, Some(build_node)) => {
-                            MiddleNode::new_from_type(MiddleNodeType::ScopeDeclaration {
-                                body: vec![node, build_node],
-                                create_new_scope: false,
-                                is_temp: false,
-                            })
+                            MiddleNode::new(
+                                MiddleNodeType::ScopeDeclaration {
+                                    body: vec![node, build_node],
+                                    create_new_scope: false,
+                                    is_temp: false,
+                                },
+                                self.current_span(),
+                            )
                         }
                         _ => node,
                     };
@@ -1589,7 +1624,7 @@ impl MiddleEnvironment {
                 } else if let Some(s) = self.get_global_scope().children.get(key) {
                     s.clone()
                 } else {
-                    return Err(MiddleErr::Scope(key.to_string()));
+                    return Err(self.err_at_current(MiddleErr::Scope(key.to_string())));
                 }
             }
         })

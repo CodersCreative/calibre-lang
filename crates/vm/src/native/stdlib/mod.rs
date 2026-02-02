@@ -16,18 +16,17 @@ impl VM {
 
 pub fn setup_scope(env: &mut VM, name: &str, funcs: &[&'static str]) {
     let map: HashMap<String, RuntimeValue> = RuntimeValue::natives();
-    let funcs = funcs.into_iter().map(|x| {
-        (
-            String::from(*x),
-            map.get(&format!("{}.{}", name, x)).unwrap().clone(),
-        )
+    let funcs = funcs.into_iter().filter_map(|x| {
+        map.get(&format!("{}.{}", name, x))
+            .cloned()
+            .map(|value| (String::from(*x), value))
     });
 
     for var in funcs {
         let name = env
             .mappings
             .iter()
-            .find(|x| x.split_once(":").unwrap().1 == var.0)
+            .find(|x| x.split_once(":").map(|v| v.1) == Some(var.0.as_str()))
             .map(|x| x.to_string())
             .unwrap_or(var.0);
 

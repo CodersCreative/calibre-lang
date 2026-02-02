@@ -43,10 +43,19 @@ pub fn emit_parser_errors(path: &Path, contents: &str, errors: &[ParserError]) {
     for err in errors {
         let mut diagnostic = Diagnostic::error().with_message(err.to_string());
 
-        if let ParserError::Syntax { span, .. } = err {
-            let range = span_to_range(contents, span);
-            diagnostic =
-                diagnostic.with_labels(vec![Label::primary(file_id, range).with_message("here")]);
+        match err {
+            ParserError::Syntax { span, .. } => {
+                let range = span_to_range(contents, span);
+                diagnostic = diagnostic
+                    .with_labels(vec![Label::primary(file_id, range).with_message("here")]);
+            }
+            ParserError::Lexer(err) => {
+                if let calibre_parser::lexer::LexerError::Unrecognized { span, .. } = err {
+                    let range = span_to_range(contents, span);
+                    diagnostic = diagnostic
+                        .with_labels(vec![Label::primary(file_id, range).with_message("here")]);
+                }
+            }
         }
 
         let mut writer = writer.lock();
@@ -54,16 +63,44 @@ pub fn emit_parser_errors(path: &Path, contents: &str, errors: &[ParserError]) {
     }
 }
 
-pub fn emit_runtime_error(path: &Path, contents: &str, message: String, span: Span) {
+pub fn emit_error(path: &Path, contents: &str, message: String, span: Option<Span>) {
     let mut files = SimpleFiles::new();
     let file_id = files.add(path.to_string_lossy().to_string(), contents.to_string());
     let writer = StandardStream::stderr(ColorChoice::Auto);
     let config = term::Config::default();
 
-    let range = span_to_range(contents, &span);
-    let diagnostic = Diagnostic::error()
-        .with_message(message)
-        .with_labels(vec![Label::primary(file_id, range).with_message("here")]);
+    let mut diagnostic = Diagnostic::error().with_message(message);
+    if let Some(span) = span {
+        let range = span_to_range(contents, &span);
+        diagnostic =
+            diagnostic.with_labels(vec![Label::primary(file_id, range).with_message("here")]);
+    }
+
+    let mut writer = writer.lock();
+    let _ = term::emit(&mut writer, &config, &files, &diagnostic);
+}
+
+pub fn emit_runtime_error(
+    path: &Path,
+    contents: &str,
+    message: String,
+    span: Option<Span>,
+    help: Option<String>,
+) {
+    let mut files = SimpleFiles::new();
+    let file_id = files.add(path.to_string_lossy().to_string(), contents.to_string());
+    let writer = StandardStream::stderr(ColorChoice::Auto);
+    let config = term::Config::default();
+
+    let mut diagnostic = Diagnostic::error().with_message(message);
+    if let Some(span) = span {
+        let range = span_to_range(contents, &span);
+        diagnostic =
+            diagnostic.with_labels(vec![Label::primary(file_id, range).with_message("here")]);
+    }
+    if let Some(help) = help {
+        diagnostic = diagnostic.with_notes(vec![help]);
+    }
 
     let mut writer = writer.lock();
     let _ = term::emit(&mut writer, &config, &files, &diagnostic);

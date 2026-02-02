@@ -66,7 +66,7 @@ impl Formatter {
         range: Option<Span>,
     ) -> Result<String, Box<dyn Error>> {
         let mut tokenizer = Tokenizer::new(true);
-        let mut tokens = tokenizer.tokenize(text)?;
+        let mut tokens = tokenizer.tokenize(&text)?;
         if let Some(range) = range {
             tokens = tokens
                 .into_iter()
@@ -96,7 +96,7 @@ impl Formatter {
 
     pub fn get_imports(&self, contents: String) -> Result<Vec<Node>, Box<dyn Error>> {
         let mut tokenizer = Tokenizer::default();
-        let tokens = tokenizer.tokenize(contents)?;
+        let tokens = tokenizer.tokenize(&contents)?;
         let mut parser = Parser::default();
         let NodeType::ScopeDeclaration {
             body: Some(body), ..

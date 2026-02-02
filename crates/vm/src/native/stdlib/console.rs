@@ -3,6 +3,31 @@ use rustyline::DefaultEditor;
 
 pub struct Out();
 
+fn unescape_string(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            out.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('r') => out.push('\r'),
+            Some('\\') => out.push('\\'),
+            Some('"') => out.push('"'),
+            Some('\'') => out.push('\''),
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
 impl NativeFunction for Out {
     fn name(&self) -> String {
         String::from("out")
@@ -14,12 +39,21 @@ impl NativeFunction for Out {
         let mut handle = stdout.lock();
 
         for arg in args {
-            let s = arg.to_string();
+            let s = match arg {
+                RuntimeValue::Str(value) => unescape_string(&value),
+                other => other.to_string(),
+            };
 
-            handle.write_all(s.as_bytes()).unwrap();
+            handle
+                .write_all(s.as_bytes())
+                .map_err(|e| RuntimeError::Io(e.to_string()))?;
         }
-        handle.write_all(b"\n").unwrap();
-        handle.flush().unwrap();
+        handle
+            .write_all(b"\n")
+            .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        handle
+            .flush()
+            .map_err(|e| RuntimeError::Io(e.to_string()))?;
 
         Ok(RuntimeValue::Null)
     }
@@ -38,12 +72,21 @@ impl NativeFunction for ErrFn {
         let mut handle = stderr.lock();
 
         for arg in args {
-            let s = arg.to_string();
+            let s = match arg {
+                RuntimeValue::Str(value) => unescape_string(&value),
+                other => other.to_string(),
+            };
 
-            handle.write_all(s.as_bytes()).unwrap();
+            handle
+                .write_all(s.as_bytes())
+                .map_err(|e| RuntimeError::Io(e.to_string()))?;
         }
-        handle.write_all(b"\n").unwrap();
-        handle.flush().unwrap();
+        handle
+            .write_all(b"\n")
+            .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        handle
+            .flush()
+            .map_err(|e| RuntimeError::Io(e.to_string()))?;
 
         Ok(RuntimeValue::Null)
     }
@@ -57,7 +100,8 @@ impl NativeFunction for Input {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let mut editor = DefaultEditor::new().unwrap();
+        let mut editor =
+            DefaultEditor::new().map_err(|e| RuntimeError::Io(e.to_string()))?;
         let txt = match args.get(0) {
             Some(x) => x.clone(),
             None => RuntimeValue::Str("".to_string()),
