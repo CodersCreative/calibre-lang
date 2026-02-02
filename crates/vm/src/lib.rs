@@ -241,13 +241,24 @@ impl VM {
                 }
                 VMInstruction::LoadVar(x) => {
                     let name = block.local_strings.get(*x as usize).unwrap().to_string();
-                    match self.resolve_var_name(name) {
+                    match self.resolve_var_name(name.clone()) {
                         VarName::Func(func) => {
                             if let Some(func) = self.registry.functions.get(&func) {
                                 stack.push(RuntimeValue::Function {
                                     name: func.name.clone(),
                                     captures: func.captures.clone(),
                                 });
+                            } else {
+                                if let Some((_, short_name)) = name.rsplit_once(':') {
+                                    if let Some(func) = self.registry.functions.iter().find(|(k, _)| {
+                                        k.ends_with(&format!(":{}", short_name))
+                                    }) {
+                                        stack.push(RuntimeValue::Function {
+                                            name: func.1.name.clone(),
+                                            captures: func.1.captures.clone(),
+                                        });
+                                    }
+                                }
                             }
                         }
                         VarName::Var(var) => {
@@ -255,7 +266,18 @@ impl VM {
                                 stack.push(self.copy_saveable_into_runtime_var(var.clone()));
                             }
                         }
-                        _ => {}
+                        VarName::Global => {
+                            if let Some((_, short_name)) = name.rsplit_once(':') {
+                                if let Some(func) = self.registry.functions.iter().find(|(k, _)| {
+                                    k.ends_with(&format!(":{}", short_name))
+                                }) {
+                                    stack.push(RuntimeValue::Function {
+                                        name: func.1.name.clone(),
+                                        captures: func.1.captures.clone(),
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
                 VMInstruction::LoadVarRef(x) => {
@@ -284,31 +306,46 @@ impl VM {
                     let func = stack.pop().unwrap();
                     let mut args = Vec::new();
                     for i in 0..(*count as usize) {
-                        args.push(stack.pop().unwrap());
+                        if let Some(arg) = stack.pop() {
+                            args.push(arg);
+                        } else {
+                            return Err(RuntimeError::StackUnderflow);
+                        }
                     }
                     args.reverse();
 
                     match func {
-                        RuntimeValue::Function { name, captures } => {
-                            let func = if let Some(x) = self.registry.functions.get(&name) {
-                                x.clone()
-                            } else if let Some(x) = self
-                                .registry
-                                .functions
-                                .get(name.split_once("->").unwrap().0)
-                            {
-                                x.clone()
+                        RuntimeValue::Function { name, captures: _ } => {
+                            let func_opt = if let Some(x) = self.registry.functions.get(&name) {
+                                Some(x.clone())
+                            } else if let Some((prefix, _)) = name.split_once("->") {
+                                self.registry.functions
+                                    .iter()
+                                    .find(|(k, _)| k.starts_with(prefix))
+                                    .map(|(_, v)| v.clone())
                             } else {
-                                panic!()
+                                if let Some((_, short_name)) = name.rsplit_once(':') {
+                                    self.registry.functions
+                                        .iter()
+                                        .find(|(k, _)| k.ends_with(&format!(":{}", short_name)))
+                                        .map(|(_, v)| v.clone())
+                                } else {
+                                    None
+                                }
+                            };
+                            
+                            if let Some(func) = func_opt {
+                                let renamed_func = func.rename(declared.clone());
+                                let value = self.run_function(&renamed_func, args)?;
+                                stack.push(value);
+                            } else {
+                                return Err(RuntimeError::FunctionNotFound(name));
                             }
-                            .rename(declared.clone());
-                            let value = self.run_function(&func, args)?;
-                            stack.push(value);
                         }
                         RuntimeValue::NativeFunction(func) => {
                             stack.push(func.run(self, args)?);
                         }
-                        _ => panic!(),
+                        _ => return Err(RuntimeError::InvalidFunctionCall),
                     }
                 }
                 VMInstruction::Deref => {

@@ -2097,9 +2097,12 @@ impl MiddleEnvironment {
                             is_async: _,
                         } = parser_ty.data_type
                         {
-                            for (i, (_name, p_ty)) in params2.iter_mut().enumerate() {
+                            for (i, (name, p_ty)) in params2.iter_mut().enumerate() {
                                 if i < inferred_params.len() {
                                     *p_ty = inferred_params[i].clone();
+                                    if let Some(var) = self.variables.get_mut(&name.text) {
+                                        var.data_type = inferred_params[i].clone();
+                                    }
                                 }
                             }
 

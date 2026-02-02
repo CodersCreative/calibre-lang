@@ -13,4 +13,7 @@ pub enum RuntimeError {
     Binary(RuntimeValue, RuntimeValue, BinaryOperator),
     UnexpectedType(RuntimeValue),
     CantConvert(RuntimeValue, ParserInnerType),
+    StackUnderflow,
+    FunctionNotFound(String),
+    InvalidFunctionCall,
 }

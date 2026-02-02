@@ -142,10 +142,27 @@ fn ftv_scheme(s: &TypeScheme) -> FxHashSet<usize> {
 
 pub fn apply_subst(subst: &Subst, ty: &Type) -> Type {
     match ty {
-        Type::TVar(n) => match subst.get(n) {
-            Some(t) => apply_subst(subst, t),
-            None => Type::TVar(*n),
-        },
+        Type::TVar(n) => {
+            let mut visited = FxHashSet::default();
+            let mut current = *n;
+            visited.insert(current);
+
+            while let Some(t) = subst.get(&current) {
+                match t {
+                    Type::TVar(m) => {
+                        if visited.contains(m) {
+                            return Type::TVar(*n);
+                        }
+                        visited.insert(*m);
+                        current = *m;
+                    }
+                    _ => {
+                        return apply_subst(subst, t);
+                    }
+                }
+            }
+            Type::TVar(*n)
+        }
         Type::TCon(_) => ty.clone(),
         Type::TArrow(a, b) => Type::TArrow(
             Box::new(apply_subst(subst, a)),
