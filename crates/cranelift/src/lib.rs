@@ -1,6 +1,6 @@
 pub mod translator;
 pub mod values;
-use calibre_lir::{BlockId, LirBlock, LirFunction, LirNodeType, LirRegistry, LirTerminator};
+use calibre_lir::{BlockId, LirBlock, LirFunction, LirInstr, LirNodeType, LirRegistry, LirTerminator};
 use calibre_mir::environment::{MiddleEnvironment, MiddleObject};
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{Node, NodeType, ParserDataType, ParserInnerType, VarType};
@@ -11,6 +11,7 @@ use cranelift_object::object::read::{File as ObjectFile, RelocationKind, Relocat
 use cranelift_object::object::{Object, ObjectSection, ObjectSymbol, SectionKind};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use libc::{MAP_ANON, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE, mmap, mprotect, size_t};
+use rustc_hash::FxHashMap;
 use std::{collections::HashMap, error::Error, ffi::CString, ptr};
 
 use crate::translator::{FunctionTranslator, layout::create_layout};
@@ -72,7 +73,7 @@ impl Compiler {
         identifier: String,
         value: LirFunction,
         registry: &LirRegistry,
-        objects: &std::collections::HashMap<String, MiddleObject>,
+        objects: &FxHashMap<String, MiddleObject>,
     ) -> Result<*const u8, Box<dyn Error>> {
         let mut flag_builder = settings::builder();
         flag_builder.set("use_colocated_libcalls", "false").unwrap();
@@ -124,13 +125,13 @@ impl Compiler {
 
     fn translate(
         &mut self,
-        params: Vec<(String, ParserDataType<MiddleNode>)>,
-        return_type: ParserDataType<MiddleNode>,
+        params: Vec<(String, ParserDataType)>,
+        return_type: ParserDataType,
         body: Vec<LirBlock>,
         registry: &LirRegistry,
         module: &mut ObjectModule,
         ctx: &mut codegen::Context,
-        objects: &std::collections::HashMap<String, MiddleObject>,
+        objects: &FxHashMap<String, MiddleObject>,
     ) -> Result<(), Box<dyn Error>> {
         let ptr = module.target_config().pointer_type();
         let types = crate::translator::Types::new(ptr);
@@ -198,7 +199,7 @@ impl Compiler {
             }
 
             for instr in lir_block.instructions {
-                trans.translate(instr);
+                trans.translate(instr.node_type);
             }
 
             if let Some(term) = lir_block.terminator {

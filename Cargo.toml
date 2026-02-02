@@ -5,4 +5,5 @@ members = [
     "lsp",
     "crates/parser",
     "crates/cranelift", "fmt", "crates/mir", "crates/std",  "crates/mir-ty", "crates/lir", "crates/vm",
+    "crates/diagnostics",
 ]

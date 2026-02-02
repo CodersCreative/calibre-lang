@@ -8,3 +8,4 @@ calibre-mir = {path = "../mir"}
 calibre-mir-ty = {path = "../mir-ty"}
 calibre-parser = {path = "../parser"}
 rustc-hash = "2.1.1"
+serde = { version = "1.0.219", features = ["derive"] }

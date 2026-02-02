@@ -1,4 +1,4 @@
-use crate::environment::MiddleEnvironment;
+use crate::environment::{MiddleEnvironment, Operator};
 use calibre_mir_ty::hm::{self, Subst, Type, TypeCon, TypeEnv, TypeGenerator, TypeScheme};
 use calibre_parser::ast::{
     Node, NodeType, ParserDataType, ParserInnerType, PotentialNewType, binary::BinaryOperator,
@@ -51,10 +51,6 @@ fn visit(
         NodeType::CharLiteral(_) => Ok(Type::TCon(TypeCon::Char)),
         NodeType::Null => Ok(Type::TCon(TypeCon::Null)),
         NodeType::Identifier(id) => {
-            if let Some(pd) = env.resolve_potential_generic_ident_to_data_type(scope, id) {
-                return Ok(hm::from_parser_data_type(&pd, tg));
-            }
-
             if let Some(iden) = env.resolve_potential_generic_ident(scope, id) {
                 if let Some(scheme) = tenv.get(&iden.text) {
                     if scheme.vars.is_empty() {
@@ -63,7 +59,25 @@ fn visit(
                         return Ok(hm::instantiate(scheme, tg));
                     }
                 }
+
+                if env.objects.contains_key(&iden.text) {
+                    if let Some(pd) = env.resolve_potential_generic_ident_to_data_type(scope, id) {
+                        return Ok(hm::from_parser_data_type(&pd, tg));
+                    }
+
+                    return Ok(Type::TCon(TypeCon::Struct(iden.text)));
+                }
             }
+
+            let raw_name = id.to_string();
+            if let Some(scheme) = tenv.get(&raw_name) {
+                if scheme.vars.is_empty() {
+                    return Ok(scheme.ty.clone());
+                } else {
+                    return Ok(hm::instantiate(scheme, tg));
+                }
+            }
+
             Ok(Type::TCon(TypeCon::Dyn))
         }
         NodeType::ListLiteral(_, items) => {
@@ -116,27 +130,175 @@ fn visit(
             right,
             operator,
         } => {
-            let lt = visit(left, env, scope, tg, tenv, subst)?;
-            let rt = visit(right, env, scope, tg, tenv, subst)?;
-            let lt_applied = hm::apply_subst(subst, &lt);
-            let rt_applied = hm::apply_subst(subst, &rt);
+            fn try_unify(subst: &hm::Subst, a: &Type, b: &Type) -> Option<hm::Subst> {
+                hm::unify(subst.clone(), a, b).ok()
+            }
 
-            match operator {
-                BinaryOperator::Add
-                | BinaryOperator::Sub
-                | BinaryOperator::Mul
-                | BinaryOperator::Div
-                | BinaryOperator::Mod => {
-                    let int_t = Type::TCon(TypeCon::Int);
-                    *subst = hm::unify(subst.clone(), &lt_applied, &int_t).map_err(|e| e)?;
-                    *subst = hm::unify(subst.clone(), &rt_applied, &int_t).map_err(|e| e)?;
-                    Ok(int_t)
+            fn try_unify3(
+                subst: &hm::Subst,
+                a1: &Type,
+                b1: &Type,
+                a2: &Type,
+                b2: &Type,
+            ) -> Option<hm::Subst> {
+                let s1 = try_unify(subst, a1, b1)?;
+                try_unify(&s1, a2, b2)
+            }
+
+            fn infer_from_overloads(
+                env: &mut MiddleEnvironment,
+                scope: &u64,
+                tg: &mut TypeGenerator,
+                subst: &mut hm::Subst,
+                op: &BinaryOperator,
+                lt: &Type,
+                rt: &Type,
+            ) -> Option<Type> {
+                let lt_applied = hm::apply_subst(subst, lt);
+                let rt_applied = hm::apply_subst(subst, rt);
+
+                for overload in env.overloads.iter() {
+                    if overload.operator != Operator::Binary(op.clone()) {
+                        continue;
+                    }
+                    if overload.parameters.len() != 2 {
+                        continue;
+                    }
+
+                    let p0 = hm::from_parser_data_type(&overload.parameters[0], tg);
+                    let p1 = hm::from_parser_data_type(&overload.parameters[1], tg);
+                    let ret = hm::from_parser_data_type(&overload.return_type, tg);
+
+                    let subst_try = try_unify3(subst, &lt_applied, &p0, &rt_applied, &p1)?;
+                    *subst = subst_try;
+                    return Some(hm::apply_subst(subst, &ret));
                 }
-                _ => {
-                    *subst = hm::unify(subst.clone(), &lt_applied, &rt_applied).map_err(|e| e)?;
-                    Ok(hm::apply_subst(subst, &lt_applied))
+
+                let _ = scope;
+                None
+            }
+
+            fn infer_builtin(
+                subst: &mut hm::Subst,
+                tg: &mut TypeGenerator,
+                op: &BinaryOperator,
+                lt: &Type,
+                rt: &Type,
+            ) -> Result<Type, String> {
+                let lt_applied = hm::apply_subst(subst, lt);
+                let rt_applied = hm::apply_subst(subst, rt);
+
+                let int_t = Type::TCon(TypeCon::Int);
+                let float_t = Type::TCon(TypeCon::Float);
+                let bool_t = Type::TCon(TypeCon::Bool);
+                let str_t = Type::TCon(TypeCon::Str);
+                let char_t = Type::TCon(TypeCon::Char);
+
+                match op {
+                    BinaryOperator::Add
+                    | BinaryOperator::Sub
+                    | BinaryOperator::Mul
+                    | BinaryOperator::Div
+                    | BinaryOperator::Pow => {
+                        if let Some(s2) =
+                            try_unify3(subst, &lt_applied, &int_t, &rt_applied, &int_t)
+                        {
+                            *subst = s2;
+                            return Ok(int_t);
+                        }
+
+                        if let Some(s2) =
+                            try_unify3(subst, &lt_applied, &float_t, &rt_applied, &float_t)
+                        {
+                            *subst = s2;
+                            return Ok(float_t);
+                        }
+
+                        if let Some(s2) =
+                            try_unify3(subst, &lt_applied, &float_t, &rt_applied, &int_t)
+                        {
+                            *subst = s2;
+                            return Ok(float_t);
+                        }
+
+                        if let Some(s2) =
+                            try_unify3(subst, &lt_applied, &int_t, &rt_applied, &float_t)
+                        {
+                            *subst = s2;
+                            return Ok(float_t);
+                        }
+
+                        Err(format!("cannot infer numeric operator {:?}", op))
+                    }
+                    BinaryOperator::Mod => {
+                        *subst = hm::unify(subst.clone(), &lt_applied, &int_t).map_err(|e| e)?;
+                        *subst = hm::unify(subst.clone(), &rt_applied, &int_t).map_err(|e| e)?;
+                        Ok(int_t)
+                    }
+                    BinaryOperator::BitXor
+                    | BinaryOperator::BitOr
+                    | BinaryOperator::BitAnd
+                    | BinaryOperator::Shl
+                    | BinaryOperator::Shr => {
+                        if matches!(op, BinaryOperator::BitAnd) {
+                            if let Some(s2) = try_unify(subst, &lt_applied, &str_t) {
+                                *subst = s2;
+                                return Ok(str_t);
+                            }
+                            if let Some(s2) = try_unify(subst, &lt_applied, &char_t) {
+                                *subst = s2;
+                                return Ok(str_t);
+                            }
+                            if let Some(s2) = try_unify(subst, &rt_applied, &str_t) {
+                                *subst = s2;
+                                return Ok(str_t);
+                            }
+                            if let Some(s2) = try_unify(subst, &rt_applied, &char_t) {
+                                *subst = s2;
+                                return Ok(str_t);
+                            }
+                        }
+
+                        if let Some(s2) =
+                            try_unify3(subst, &lt_applied, &int_t, &rt_applied, &int_t)
+                        {
+                            *subst = s2;
+                            return Ok(int_t);
+                        }
+                        if let Some(s2) =
+                            try_unify3(subst, &lt_applied, &int_t, &rt_applied, &bool_t)
+                        {
+                            *subst = s2;
+                            return Ok(int_t);
+                        }
+                        if let Some(s2) =
+                            try_unify3(subst, &lt_applied, &bool_t, &rt_applied, &int_t)
+                        {
+                            *subst = s2;
+                            return Ok(int_t);
+                        }
+                        if let Some(s2) =
+                            try_unify3(subst, &lt_applied, &bool_t, &rt_applied, &bool_t)
+                        {
+                            *subst = s2;
+                            return Ok(int_t);
+                        }
+
+                        *subst =
+                            hm::unify(subst.clone(), &lt_applied, &rt_applied).map_err(|e| e)?;
+                        Ok(hm::apply_subst(subst, &lt_applied))
+                    }
                 }
             }
+
+            let lt = visit(left, env, scope, tg, tenv, subst)?;
+            let rt = visit(right, env, scope, tg, tenv, subst)?;
+
+            if let Some(t) = infer_from_overloads(env, scope, tg, subst, operator, &lt, &rt) {
+                return Ok(t);
+            }
+
+            infer_builtin(subst, tg, operator, &lt, &rt)
         }
         NodeType::ComparisonExpression {
             left,
@@ -191,6 +353,51 @@ fn visit(
         }
         NodeType::ParenExpression { value } => visit(value, env, scope, tg, tenv, subst),
         NodeType::FunctionDeclaration { header, body } => {
+            fn unify_returns(
+                node: &Node,
+                env: &mut MiddleEnvironment,
+                scope: &u64,
+                tg: &mut TypeGenerator,
+                tenv: &mut TypeEnv,
+                subst: &mut hm::Subst,
+                ret_t: &Type,
+                saw_return: &mut bool,
+            ) -> Result<(), String> {
+                match &node.node_type {
+                    NodeType::Return { value } => {
+                        *saw_return = true;
+                        let vt = if let Some(v) = value {
+                            visit(v, env, scope, tg, tenv, subst)?
+                        } else {
+                            Type::TCon(TypeCon::Null)
+                        };
+                        let vt_applied = hm::apply_subst(subst, &vt);
+                        let ret_applied = hm::apply_subst(subst, ret_t);
+                        *subst =
+                            hm::unify(subst.clone(), &ret_applied, &vt_applied).map_err(|e| e)?;
+                        Ok(())
+                    }
+                    NodeType::ScopeDeclaration { body, .. } => {
+                        if let Some(stmts) = body {
+                            for s in stmts.iter() {
+                                unify_returns(s, env, scope, tg, tenv, subst, ret_t, saw_return)?;
+                            }
+                        }
+                        Ok(())
+                    }
+                    NodeType::IfStatement {
+                        then, otherwise, ..
+                    } => {
+                        unify_returns(then, env, scope, tg, tenv, subst, ret_t, saw_return)?;
+                        if let Some(o) = otherwise {
+                            unify_returns(o, env, scope, tg, tenv, subst, ret_t, saw_return)?;
+                        }
+                        Ok(())
+                    }
+                    _ => Ok(()),
+                }
+            }
+
             let declared_ret_pd = match &header.return_type {
                 PotentialNewType::DataType(pd) => pd.clone(),
                 _ => ParserDataType::from(ParserInnerType::Auto(None)),
@@ -237,8 +444,28 @@ fn visit(
             }
 
             let body_t = visit(body, env, scope, tg, tenv, subst)?;
-            let body_t_applied = hm::apply_subst(subst, &body_t);
-            *subst = hm::unify(subst.clone(), &body_t_applied, &declared_ret_t).map_err(|e| e)?;
+
+            let mut saw_return = false;
+            unify_returns(
+                body,
+                env,
+                scope,
+                tg,
+                tenv,
+                subst,
+                &declared_ret_t,
+                &mut saw_return,
+            )?;
+
+            if !saw_return {
+                let null_t = Type::TCon(TypeCon::Null);
+                let ret_applied = hm::apply_subst(subst, &declared_ret_t);
+                *subst = hm::unify(subst.clone(), &ret_applied, &null_t).map_err(|e| e)?;
+            } else {
+                let body_t_applied = hm::apply_subst(subst, &body_t);
+                let ret_applied = hm::apply_subst(subst, &declared_ret_t);
+                *subst = hm::unify(subst.clone(), &body_t_applied, &ret_applied).map_err(|e| e)?;
+            }
 
             let mut fn_t = hm::apply_subst(subst, &declared_ret_t);
             for p_t in param_types.iter().rev() {
@@ -321,6 +548,11 @@ pub fn infer_node_hm(
                 if let Some(var) = env.variables.get_mut(k) {
                     var.data_type = hm::to_parser_data_type(&hm::apply_subst(&subst, orig_t));
                 }
+
+                env.hm_env.insert(
+                    k.clone(),
+                    TypeScheme::new(Vec::new(), hm::apply_subst(&subst, orig_t)),
+                );
             }
 
             Some((hm::apply_subst(&subst, &t), subst))

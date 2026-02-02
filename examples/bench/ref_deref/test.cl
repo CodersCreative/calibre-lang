@@ -1,0 +1,16 @@
+const sum_refs = fn(n : int) -> int => {
+    let xs = list:<int>[i for i in 0..n];
+    let mut acc : int = 0;
+
+    for i in 0..n => {
+        let x : &int = &xs[i];
+        acc += *x;
+    };
+
+    acc;
+};
+
+const main = fn() => {
+    let n : int = 2000;
+    print(sum_refs(n));
+};

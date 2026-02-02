@@ -1,27 +1,74 @@
+use calibre_diagnostics;
 use calibre_lir::LirEnvironment;
 use calibre_mir::{environment::MiddleEnvironment, errors::ReportWrapper};
 use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{ParserError, lexer::Tokenizer};
+use calibre_vm::error::RuntimeError;
 use calibre_vm::{VM, conversion::VMRegistry};
 use clap::Parser;
+use miette::Context;
 use miette::{IntoDiagnostic, Result};
-use std::{fs, path::PathBuf, process::Command, str::FromStr};
+use serde::{Deserialize, Serialize};
+use std::{path::PathBuf, process::Command, str::FromStr};
+use tokio::fs;
 
-fn file(path: &PathBuf, verbose: bool, args: Vec<MiddleNode>) -> Result<()> {
+#[derive(Serialize, Deserialize)]
+struct BytecodeCache {
+    main: String,
+    mappings: Vec<String>,
+    registry: VMRegistry,
+}
+
+async fn file(path: &PathBuf, cache: bool, verbose: bool, _args: Vec<MiddleNode>) -> Result<()> {
     let mut parser = calibre_parser::Parser::default();
     let mut tokenizer = Tokenizer::default();
-    let contents = fs::read_to_string(path).into_diagnostic()?;
+    let contents = fs::read_to_string(path).await.into_diagnostic()?;
+    let mut cache_path = None;
 
-    let program = parser.produce_ast(tokenizer.tokenize(contents)?);
+    if cache {
+        let cache_key = blake3::hash(contents.as_bytes());
+        let cache_dir = PathBuf::from("target")
+            .join("calibre")
+            .join(env!("CARGO_PKG_VERSION"));
+        let path = cache_dir.join(format!("{}.bin", cache_key.to_hex()));
+        if let Ok(bytes) = fs::read(&path).await {
+            if verbose {
+                println!("Loading Cache");
+            }
+            let cache_res =
+                tokio::task::spawn_blocking(move || bincode::deserialize::<BytecodeCache>(&bytes))
+                    .await
+                    .into_diagnostic()?;
+
+            if let Ok(cache) = cache_res {
+                println!("Starting vm...");
+                let mut vm: VM = VM::new(cache.registry, cache.mappings);
+
+                if verbose {
+                    println!("Bytecode:");
+                    println!("{}", vm.registry);
+                }
+
+                let main = vm.registry.functions.get(&cache.main).unwrap().clone();
+                vm.run(&main, Vec::new()).unwrap();
+                return Ok(());
+            }
+        }
+
+        cache_path = Some((cache_dir, path));
+    }
+
+    let program = parser.produce_ast(tokenizer.tokenize(contents.clone())?);
 
     if !parser.errors.is_empty() {
-        return Err(calibre_mir::errors::MiddleErr::from(parser.errors).into());
+        calibre_diagnostics::emit_parser_errors(path, &contents, &parser.errors);
+        return Err(miette::miette!("parse failed"));
     }
 
     let mut middle_result = MiddleEnvironment::new_and_evaluate(program, path.clone())?;
     println!("Starting comptime...");
 
-    let name = middle_result
+    let main_name = middle_result
         .0
         .resolve_str(&middle_result.1, "main")
         .map(|x| x.to_string())
@@ -41,23 +88,65 @@ fn file(path: &PathBuf, verbose: bool, args: Vec<MiddleNode>) -> Result<()> {
         println!("{}", lir_result);
     }
 
-    let mut vm: VM = VM::new(
-        VMRegistry::from(lir_result),
-        middle_result
-            .0
-            .variables
-            .iter()
-            .map(|x| x.0.to_string())
-            .collect(),
-    );
+    let mappings: Vec<String> = middle_result
+        .0
+        .variables
+        .iter()
+        .map(|x| x.0.to_string())
+        .collect();
+
+    let registry = VMRegistry::from(lir_result);
+    let cache_main = main_name.clone();
+
+    if let Some((cache_dir, cache_path)) = cache_path {
+        let cache = BytecodeCache {
+            main: cache_main,
+            mappings: mappings.clone(),
+            registry: registry.clone(),
+        };
+
+        fs::create_dir_all(&cache_dir)
+            .await
+            .into_diagnostic()
+            .wrap_err("creating cache dir")?;
+        let bytes_res = tokio::task::spawn_blocking(move || bincode::serialize(&cache))
+            .await
+            .into_diagnostic()?;
+        let bytes =
+            bytes_res.map_err(|e| miette::miette!("bytecode cache serialize failed: {e}"))?;
+        let _ = fs::write(&cache_path, bytes).await;
+    }
+
+    let mut vm: VM = VM::new(registry, mappings);
 
     if verbose {
         println!("Bytecode:");
         println!("{}", vm.registry);
     }
 
-    let main = vm.registry.functions.get(&name).unwrap().clone();
-    vm.run(&main, Vec::new()).unwrap();
+    let main = vm.registry.functions.get(&main_name).unwrap().clone();
+    let res = vm.run(&main, Vec::new());
+    if let Err(e) = res {
+        match e {
+            RuntimeError::At(span, inner) => {
+                calibre_diagnostics::emit_runtime_error(
+                    path,
+                    &contents,
+                    format!("{inner:?}"),
+                    span,
+                );
+            }
+            other => {
+                calibre_diagnostics::emit_runtime_error(
+                    path,
+                    &contents,
+                    format!("{other:?}"),
+                    calibre_parser::lexer::Span::default(),
+                );
+            }
+        }
+        return Err(miette::miette!("runtime error"));
+    }
 
     Ok(())
 }
@@ -67,13 +156,16 @@ fn file(path: &PathBuf, verbose: bool, args: Vec<MiddleNode>) -> Result<()> {
 struct Args {
     #[arg(index(1))]
     path: Option<String>,
+    #[arg(long)]
+    cache: bool,
     #[arg(short, long)]
     fmt: bool,
     #[arg(short, long)]
     verbose: bool,
 }
 
-fn main() -> Result<()> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
     let args = Args::parse();
 
     if let Some(path) = args.path {
@@ -85,9 +177,9 @@ fn main() -> Result<()> {
                 .into_diagnostic()?;
         }
         let path = PathBuf::from_str(&path)?;
-        file(&path, args.verbose, Vec::new())
+        file(&path, args.cache, args.verbose, Vec::new()).await
     } else {
-        //repl(None)
+        // TODO REPL
         Ok(())
     }
 }

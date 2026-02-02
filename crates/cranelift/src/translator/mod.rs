@@ -17,6 +17,7 @@ use cranelift::prelude::*;
 use cranelift_module::{DataDescription, FuncId, Linkage, Module};
 use cranelift_object::ObjectModule;
 use libc::NEW_TIME;
+use rustc_hash::FxHashMap;
 
 use crate::translator::layout::GetLayoutInfo;
 use crate::translator::memory::MemoryLoc;
@@ -31,7 +32,7 @@ pub struct FunctionTranslator<'a> {
     pub registry: &'a LirRegistry,
     pub variables: HashMap<String, (RuntimeType, Variable)>,
     pub module: &'a mut ObjectModule,
-    pub objects: &'a std::collections::HashMap<String, MiddleObject>,
+    pub objects: &'a FxHashMap<String, MiddleObject>,
     pub break_stack: Vec<BlockDetails>,
 }
 
@@ -88,7 +89,7 @@ impl Types {
             _ => self.ptr(),
         }
     }
-    pub fn get_type_from_parser_type(&self, t: &ParserDataType<MiddleNode>) -> Type {
+    pub fn get_type_from_parser_type(&self, t: &ParserDataType) -> Type {
         match t.data_type {
             ParserInnerType::Int => types::I64,
             ParserInnerType::Float => types::F64,

@@ -3,15 +3,16 @@ use crate::ast::{
     comparison::{BooleanOperator, ComparisonOperator},
 };
 use miette::Diagnostic;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Display, path::PathBuf};
 use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Location {
     pub path: PathBuf,
     pub span: Span,
 }
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 pub struct Span {
     pub from: Position,
     pub to: Position,
@@ -40,7 +41,7 @@ impl Span {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 pub struct Position {
     pub line: u32,
     pub col: u32,

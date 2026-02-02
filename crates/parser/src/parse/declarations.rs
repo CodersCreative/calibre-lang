@@ -795,7 +795,7 @@ impl Parser {
         );
 
         let return_type = if self.first().token_type == TokenType::FatArrow {
-            ParserDataType::from(ParserInnerType::Null).into()
+            ParserDataType::from(ParserInnerType::Auto(None)).into()
         } else {
             let _ = self.expect_eat(
                 &TokenType::Arrow,

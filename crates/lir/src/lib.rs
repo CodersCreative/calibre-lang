@@ -7,12 +7,32 @@ use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
+use calibre_parser::lexer::Span;
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default)]
 pub struct LirRegistry {
     pub functions: FxHashMap<String, LirFunction>,
     pub globals: FxHashMap<String, LirGlobal>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LirInstr {
+    pub span: Span,
+    pub node_type: LirNodeType,
+}
+
+impl LirInstr {
+    pub fn new(span: Span, node_type: LirNodeType) -> Self {
+        Self { span, node_type }
+    }
+}
+
+impl Display for LirInstr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.node_type)
+    }
 }
 
 impl LirRegistry {
@@ -83,7 +103,7 @@ impl Display for LirFunction {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BlockId(pub u32);
 
 #[derive(Debug, Clone, PartialEq)]
@@ -318,7 +338,7 @@ impl Display for LirTerminator {
 #[derive(Debug, Clone)]
 pub struct LirBlock {
     pub id: BlockId,
-    pub instructions: Vec<LirNodeType>,
+    pub instructions: Vec<LirInstr>,
     pub terminator: Option<LirTerminator>,
 }
 
@@ -378,7 +398,7 @@ impl<'a> LirEnvironment<'a> {
         name
     }
 
-    fn add_instr(&mut self, instr: LirNodeType) {
+    fn add_instr(&mut self, instr: LirInstr) {
         let idx = self.current_block.0 as usize;
         self.blocks[idx].instructions.push(instr);
     }
@@ -405,8 +425,9 @@ impl<'a> LirEnvironment<'a> {
     }
 
     pub fn lower_and_add_node(&mut self, node: MiddleNode) {
+        let span = node.span;
         let value = self.lower_node(node);
-        self.add_instr(value);
+        self.add_instr(LirInstr::new(span, value));
     }
 
     pub fn lower_node(&mut self, node: MiddleNode) -> LirNodeType {
@@ -446,20 +467,27 @@ impl<'a> LirEnvironment<'a> {
             } => {
                 self.last_ident = Some(identifier.to_string());
                 let val = self.lower_node(*value);
-                self.add_instr(LirNodeType::Declare {
-                    dest: identifier.to_string(),
-                    value: Box::new(val),
-                });
+                self.add_instr(LirInstr::new(
+                    identifier.span,
+                    LirNodeType::Declare {
+                        dest: identifier.to_string(),
+                        value: Box::new(val),
+                    },
+                ));
                 LirNodeType::Literal(LirLiteral::Null)
             }
 
             MiddleNodeType::AssignmentExpression { identifier, value } => {
                 let rhs = self.lower_node(*value);
+                let ident_span = identifier.span;
                 let lhs = self.lower_lvalue(*identifier);
-                self.add_instr(LirNodeType::Assign {
-                    dest: lhs,
-                    value: Box::new(rhs),
-                });
+                self.add_instr(LirInstr::new(
+                    ident_span,
+                    LirNodeType::Assign {
+                        dest: lhs,
+                        value: Box::new(rhs),
+                    },
+                ));
                 LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::FunctionDeclaration {
@@ -570,8 +598,7 @@ impl<'a> LirEnvironment<'a> {
                             }
                         }
                     }
-                    let val = self.lower_node(stmt);
-                    self.add_instr(val);
+                    self.lower_and_add_node(stmt);
                 }
 
                 LirNodeType::Literal(LirLiteral::Null)

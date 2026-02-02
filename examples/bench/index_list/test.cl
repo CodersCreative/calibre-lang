@@ -1,0 +1,13 @@
+const sum_index = fn(n : int) -> int => {
+    let xs = list:<int>[i for i in 0..n];
+    let mut acc : int = 0;
+
+    for i in 0..n => acc += xs[i];
+
+    acc;
+};
+
+const main = fn() => {
+    let n : int = 2000;
+    print(sum_index(n));
+};

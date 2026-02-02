@@ -547,10 +547,41 @@ impl MiddleEnvironment {
                 data_type,
             } => {
                 let identifier = self.resolve_dollar_ident_only(scope, &identifier).unwrap();
-                let new_name =
-                    get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type));
+                let new_name = if identifier.text.contains("->") {
+                    identifier.text.clone()
+                } else {
+                    self.resolve_str(scope, &identifier.text)
+                        .unwrap_or_else(|| {
+                            get_disamubiguous_name(
+                                scope,
+                                Some(identifier.text.trim()),
+                                Some(&var_type),
+                            )
+                        })
+                };
 
                 let original_value_node = *value.clone();
+
+                if let NodeType::FunctionDeclaration {
+                    ref header,
+                    ref body,
+                } = original_value_node.node_type
+                {
+                    if !header.generics.0.is_empty() {
+                        let base_name = new_name.clone();
+                        let template_params: Vec<String> = header
+                            .generics
+                            .0
+                            .iter()
+                            .map(|g| g.identifier.to_string())
+                            .collect();
+                        self.generic_fn_templates.entry(base_name).or_insert((
+                            template_params,
+                            header.clone(),
+                            (**body).clone(),
+                        ));
+                    }
+                }
 
                 let mut data_type = if data_type.is_auto() {
                     self.resolve_type_from_node(scope, &value)
@@ -602,8 +633,10 @@ impl MiddleEnvironment {
                         ret_hm = Type::TArrow(Box::new(p_hm), Box::new(ret_hm));
                     }
 
-                    self.hm_env
-                        .insert(new_name.clone(), TypeScheme::new(Vec::new(), ret_hm));
+                    if !self.hm_env.contains_key(&new_name) {
+                        self.hm_env
+                            .insert(new_name.clone(), TypeScheme::new(Vec::new(), ret_hm));
+                    }
                 }
 
                 let mut value = if let Some(x) = val {
@@ -651,7 +684,33 @@ impl MiddleEnvironment {
                     }
                 };
 
-                if data_type.is_auto() {
+                fn contains_auto(pd: &ParserDataType) -> bool {
+                    match &pd.data_type {
+                        ParserInnerType::Auto(_) => true,
+                        ParserInnerType::Tuple(xs) => xs.iter().any(|x| contains_auto(x)),
+                        ParserInnerType::List(x) => contains_auto(x),
+                        ParserInnerType::Option(x) => contains_auto(x),
+                        ParserInnerType::Result { ok, err } => {
+                            contains_auto(ok) || contains_auto(err)
+                        }
+                        ParserInnerType::Function {
+                            return_type,
+                            parameters,
+                            ..
+                        } => {
+                            contains_auto(return_type)
+                                || parameters.iter().any(|p| contains_auto(p))
+                        }
+                        ParserInnerType::Ref(x, _) => contains_auto(x),
+                        ParserInnerType::StructWithGenerics { generic_types, .. } => {
+                            generic_types.iter().any(|g| contains_auto(g))
+                        }
+                        ParserInnerType::Scope(xs) => xs.iter().any(|x| contains_auto(x)),
+                        _ => false,
+                    }
+                }
+
+                if data_type.is_auto() || contains_auto(&data_type) {
                     if let Some((hm_t, subst)) = infer_node_hm(self, scope, &original_value_node) {
                         let t_applied = hm::apply_subst(&subst, &hm_t);
 
@@ -660,10 +719,17 @@ impl MiddleEnvironment {
                             tenv.insert(k.clone(), s.clone());
                         }
 
-                        let scheme = hm::generalize(&tenv, &t_applied);
+                        let parser_ty = hm::to_parser_data_type(&t_applied);
+                        let scheme = match &parser_ty.data_type {
+                            calibre_parser::ast::ParserInnerType::Function { .. }
+                                if contains_auto(&parser_ty) =>
+                            {
+                                hm::TypeScheme::new(Vec::new(), t_applied.clone())
+                            }
+                            _ => hm::generalize(&tenv, &t_applied),
+                        };
                         self.hm_env.insert(new_name.clone(), scheme);
 
-                        let parser_ty = hm::to_parser_data_type(&t_applied);
                         if let Some(v) = self.variables.get_mut(&new_name) {
                             v.data_type = parser_ty.clone();
                             data_type = parser_ty.clone();
@@ -711,12 +777,47 @@ impl MiddleEnvironment {
                 object,
                 overloads,
             } => {
-                // TODO Handle generics
+                if let calibre_parser::ast::PotentialGenericTypeIdentifier::Generic {
+                    identifier: base_ident,
+                    generic_types,
+                } = identifier.clone()
+                {
+                    let base_ident = self.resolve_dollar_ident_only(scope, &base_ident).unwrap();
+                    let template_params: Vec<String> = generic_types
+                        .iter()
+                        .filter_map(|t| match t {
+                            PotentialNewType::DataType(ParserDataType {
+                                data_type: ParserInnerType::Struct(s),
+                                ..
+                            }) => Some(s.clone()),
+                            _ => None,
+                        })
+                        .collect();
+                    self.generic_type_templates
+                        .entry(base_ident.text.clone())
+                        .or_insert((template_params, object.clone(), overloads.clone()));
+
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .mappings
+                        .insert(base_ident.text.clone(), base_ident.text.clone());
+
+                    return Ok(MiddleNode {
+                        node_type: MiddleNodeType::EmptyLine,
+                        span: node.span,
+                    });
+                }
+
                 let identifier = self
                     .resolve_dollar_ident_potential_generic_only(scope, &identifier)
                     .unwrap();
                 let object = self.type_def_type_into(scope, object);
-                let new_name = get_disamubiguous_name(scope, Some(identifier.text.trim()), None);
+                let new_name = if identifier.text.contains("__") {
+                    identifier.text.clone()
+                } else {
+                    get_disamubiguous_name(scope, Some(identifier.text.trim()), None)
+                };
 
                 self.objects.insert(
                     new_name.clone(),
@@ -1666,8 +1767,41 @@ impl MiddleEnvironment {
             NodeType::StructLiteral { identifier, value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::AggregateExpression {
                     identifier: Some(
-                        self.resolve_potential_generic_ident(scope, &identifier)
-                            .unwrap(),
+                        {
+                            match &identifier {
+                                calibre_parser::ast::PotentialGenericTypeIdentifier::Generic {
+                                    identifier: base,
+                                    generic_types,
+                                } => {
+                                    let base = self.resolve_dollar_ident_only(scope, base).unwrap();
+                                    let concrete: Vec<ParserDataType> = generic_types
+                                        .iter()
+                                        .map(|g| self.resolve_potential_new_type(scope, g.clone()))
+                                        .collect();
+                                    if let Some((tpl_params, _, _)) =
+                                        self.generic_type_templates.get(&base.text)
+                                    {
+                                        let tpl_params = tpl_params.clone();
+                                        if let Some(spec) = self.ensure_specialized_type(
+                                            scope,
+                                            &base.text,
+                                            &tpl_params,
+                                            &concrete,
+                                        ) {
+                                            ParserText::from(spec)
+                                        } else {
+                                            ParserText::from(base.text)
+                                        }
+                                    } else {
+                                        ParserText::from(base.text)
+                                    }
+                                }
+                                _ => self
+                                    .resolve_potential_generic_ident(scope, &identifier)
+                                    .unwrap(),
+                            }
+                        }
+                        .into(),
                     ),
                     value: ObjectMap(match value {
                         ObjectType::Map(x) => {
@@ -2120,7 +2254,78 @@ impl MiddleEnvironment {
                 mut args,
                 mut reverse_args,
             } => {
-                // TODO Handle Generics
+                if let NodeType::Identifier(caller_ident) = &caller.node_type {
+                    if let Some(resolved_caller) =
+                        self.resolve_potential_generic_ident(scope, caller_ident)
+                    {
+                        let base_name = resolved_caller.text.clone();
+
+                        if let Some((tpl_params, header, _body)) =
+                            self.generic_fn_templates.get(&base_name).cloned()
+                        {
+                            let explicit_args: Vec<ParserDataType> = generic_types
+                                .iter()
+                                .map(|g| self.resolve_potential_new_type(scope, g.clone()))
+                                .collect();
+
+                            let concrete_args: Option<Vec<ParserDataType>> =
+                                if !explicit_args.is_empty() {
+                                    Some(explicit_args)
+                                } else {
+                                    // Infer from call-site argument types.
+                                    let mut all_args: Vec<Node> =
+                                        args.iter().cloned().map(|a| a.into()).collect();
+                                    all_args.append(&mut reverse_args.clone());
+                                    let arg_types: Vec<ParserDataType> = all_args
+                                        .iter()
+                                        .filter_map(|a| self.resolve_type_from_node(scope, a))
+                                        .collect();
+
+                                    let param_types: Vec<ParserDataType> = header
+                                        .parameters
+                                        .iter()
+                                        .filter_map(|(_n, p)| match p {
+                                            PotentialNewType::DataType(dt) => Some(dt.clone()),
+                                            _ => None,
+                                        })
+                                        .collect();
+
+                                    if param_types.len() == arg_types.len() {
+                                        self.infer_generic_args_from_call(
+                                            &tpl_params,
+                                            &param_types,
+                                            &arg_types,
+                                        )
+                                    } else {
+                                        None
+                                    }
+                                };
+
+                            if let Some(concrete_args) = concrete_args {
+                                if let Some(spec) = self.ensure_specialized_function(
+                                    scope,
+                                    &base_name,
+                                    &tpl_params,
+                                    &concrete_args,
+                                ) {
+                                    return self.evaluate(
+                                        scope,
+                                        Node::new_from_type(NodeType::CallExpression {
+                                            string_fn,
+                                            caller: Box::new(Node::new_from_type(
+                                                NodeType::Identifier(ParserText::from(spec).into()),
+                                            )),
+                                            generic_types: Vec::new(),
+                                            args,
+                                            reverse_args,
+                                        }),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if let NodeType::Identifier(caller) = &caller.node_type {
                     if "tuple" == &caller.to_string() {
                         let mut args: Vec<Node> = args.into_iter().map(|x| x.into()).collect();

@@ -3,7 +3,7 @@ use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Parser,
     ast::{
-        Node, NodeType, ObjectMap, ParserDataType, ParserInnerType, ParserText,
+        Node, NodeType, ObjectMap, Overload, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType,
         VarType,
         binary::BinaryOperator,
@@ -80,6 +80,12 @@ pub struct MiddleEnvironment {
     pub func_defers: Vec<Node>,
     pub objects: FxHashMap<String, MiddleObject>,
     pub hm_env: FxHashMap<String, hm::TypeScheme>,
+    pub generic_fn_templates:
+        FxHashMap<String, (Vec<String>, calibre_parser::ast::FunctionHeader, Node)>,
+    pub generic_type_templates: FxHashMap<String, (Vec<String>, TypeDefType, Vec<Overload>)>,
+    pub type_specializations: FxHashMap<String, String>,
+    pub fn_specializations: FxHashMap<String, String>,
+    pub specialization_decls_by_scope: FxHashMap<u64, Vec<MiddleNode>>,
     pub current_location: Option<Location>,
 }
 
@@ -134,8 +140,370 @@ impl MiddleEnvironment {
             variables: FxHashMap::default(),
             objects: FxHashMap::default(),
             hm_env: FxHashMap::default(),
+            generic_fn_templates: FxHashMap::default(),
+            generic_type_templates: FxHashMap::default(),
+            type_specializations: FxHashMap::default(),
+            fn_specializations: FxHashMap::default(),
+            specialization_decls_by_scope: FxHashMap::default(),
             current_location: None,
         }
+    }
+
+    fn canonical_type_key(dt: &ParserDataType) -> String {
+        match &dt.data_type {
+            ParserInnerType::Int => "int".to_string(),
+            ParserInnerType::Float => "float".to_string(),
+            ParserInnerType::Bool => "bool".to_string(),
+            ParserInnerType::Str => "str".to_string(),
+            ParserInnerType::Char => "char".to_string(),
+            ParserInnerType::Null => "null".to_string(),
+            ParserInnerType::Dynamic => "dyn".to_string(),
+            ParserInnerType::Range => "range".to_string(),
+            ParserInnerType::Struct(s) => format!("struct_{}", s),
+            ParserInnerType::List(x) => format!("list_{}", Self::canonical_type_key(x)),
+            ParserInnerType::Option(x) => format!("opt_{}", Self::canonical_type_key(x)),
+            ParserInnerType::Result { ok, err } => format!(
+                "res_{}_{}",
+                Self::canonical_type_key(err),
+                Self::canonical_type_key(ok)
+            ),
+            ParserInnerType::Tuple(xs) => {
+                let inner = xs
+                    .iter()
+                    .map(Self::canonical_type_key)
+                    .collect::<Vec<_>>()
+                    .join("_");
+                format!("tup_{}", inner)
+            }
+            ParserInnerType::Ref(x, m) => format!("ref{}_{}", m, Self::canonical_type_key(x)),
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } => {
+                let inner = generic_types
+                    .iter()
+                    .map(Self::canonical_type_key)
+                    .collect::<Vec<_>>()
+                    .join("_");
+                format!("gen_{}_{}", identifier, inner)
+            }
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+                is_async: _,
+            } => {
+                let params = parameters
+                    .iter()
+                    .map(Self::canonical_type_key)
+                    .collect::<Vec<_>>()
+                    .join("_");
+                format!(
+                    "fn_{}_ret_{}",
+                    params,
+                    Self::canonical_type_key(return_type)
+                )
+            }
+            ParserInnerType::Auto(_)
+            | ParserInnerType::DollarIdentifier(_)
+            | ParserInnerType::Scope(_)
+            | ParserInnerType::NativeFunction(_) => {
+                format!("other_{}", dt)
+            }
+        }
+    }
+
+    pub fn canonical_type_args_key(&self, args: &[ParserDataType]) -> String {
+        args.iter()
+            .map(Self::canonical_type_key)
+            .collect::<Vec<_>>()
+            .join("__")
+    }
+
+    pub fn substitute_potential_new_type(
+        &mut self,
+        pnt: &PotentialNewType,
+        subst: &FxHashMap<String, ParserDataType>,
+    ) -> PotentialNewType {
+        match pnt {
+            PotentialNewType::DataType(dt) => {
+                PotentialNewType::DataType(self.substitute_data_type(dt, subst))
+            }
+            _ => pnt.clone(),
+        }
+    }
+
+    pub fn substitute_type_def(
+        &mut self,
+        td: &TypeDefType,
+        subst: &FxHashMap<String, ParserDataType>,
+    ) -> TypeDefType {
+        match td {
+            TypeDefType::Struct(obj) => TypeDefType::Struct(match obj {
+                calibre_parser::ast::ObjectType::Map(xs) => calibre_parser::ast::ObjectType::Map(
+                    xs.iter()
+                        .map(|(k, v)| (k.clone(), self.substitute_potential_new_type(v, subst)))
+                        .collect(),
+                ),
+                calibre_parser::ast::ObjectType::Tuple(xs) => {
+                    calibre_parser::ast::ObjectType::Tuple(
+                        xs.iter()
+                            .map(|v| self.substitute_potential_new_type(v, subst))
+                            .collect(),
+                    )
+                }
+            }),
+            TypeDefType::Enum(xs) => TypeDefType::Enum(
+                xs.iter()
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            v.as_ref()
+                                .map(|p| self.substitute_potential_new_type(p, subst)),
+                        )
+                    })
+                    .collect(),
+            ),
+            TypeDefType::NewType(inner) => {
+                TypeDefType::NewType(Box::new(self.substitute_potential_new_type(inner, subst)))
+            }
+        }
+    }
+
+    pub fn ensure_specialized_type(
+        &mut self,
+        scope: &u64,
+        base: &str,
+        template_params: &[String],
+        concrete_args: &[ParserDataType],
+    ) -> Option<String> {
+        let decl_scope = self.get_root_scope().id;
+        if template_params.len() != concrete_args.len() {
+            return None;
+        }
+
+        let key = format!(
+            "type::{}::{}",
+            base,
+            self.canonical_type_args_key(concrete_args)
+        );
+        if let Some(existing) = self.type_specializations.get(&key) {
+            return Some(existing.clone());
+        }
+
+        let (tpl_params, obj, overloads) = self.generic_type_templates.get(base)?.clone();
+        if tpl_params.len() != template_params.len() {
+            return None;
+        }
+
+        let mut subst: FxHashMap<String, ParserDataType> = FxHashMap::default();
+        for (p, arg) in template_params.iter().zip(concrete_args.iter()) {
+            subst.insert(p.clone(), arg.clone());
+        }
+
+        let specialized_name = format!("{}->{}", base, self.canonical_type_args_key(concrete_args));
+        self.type_specializations
+            .insert(key, specialized_name.clone());
+
+        let new_obj = self.substitute_type_def(&obj, &subst);
+
+        let decl_node = Node::new_from_type(NodeType::TypeDeclaration {
+            identifier: ParserText::from(specialized_name.clone()).into(),
+            object: new_obj,
+            overloads,
+        });
+        let _ = self.evaluate(&decl_scope, decl_node);
+
+        Some(specialized_name)
+    }
+
+    pub fn ensure_specialized_function(
+        &mut self,
+        scope: &u64,
+        base: &str,
+        template_params: &[String],
+        concrete_args: &[ParserDataType],
+    ) -> Option<String> {
+        let decl_scope = self.get_root_scope().id;
+        if template_params.len() != concrete_args.len() {
+            return None;
+        }
+
+        let key = format!(
+            "fn::{}::{}",
+            base,
+            self.canonical_type_args_key(concrete_args)
+        );
+        if let Some(existing) = self.fn_specializations.get(&key) {
+            return Some(existing.clone());
+        }
+
+        let (tpl_params, header, body) = self.generic_fn_templates.get(base)?.clone();
+        if tpl_params.len() != template_params.len() {
+            return None;
+        }
+
+        let mut subst: FxHashMap<String, ParserDataType> = FxHashMap::default();
+        for (p, arg) in template_params.iter().zip(concrete_args.iter()) {
+            subst.insert(p.clone(), arg.clone());
+        }
+
+        let specialized_name = format!("{}->{}", base, self.canonical_type_args_key(concrete_args));
+        self.fn_specializations
+            .insert(key, specialized_name.clone());
+
+        let mut new_header = header.clone();
+        new_header.generics = calibre_parser::ast::GenericTypes::default();
+        new_header.parameters = new_header
+            .parameters
+            .iter()
+            .map(|(n, t)| (n.clone(), self.substitute_potential_new_type(t, &subst)))
+            .collect();
+        new_header.return_type =
+            self.substitute_potential_new_type(&new_header.return_type, &subst);
+
+        let decl_node = Node::new_from_type(NodeType::VariableDeclaration {
+            var_type: VarType::Constant,
+            identifier: ParserText::from(specialized_name.clone()).into(),
+            data_type: PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(
+                None,
+            ))),
+            value: Box::new(Node::new_from_type(NodeType::FunctionDeclaration {
+                header: new_header,
+                body: Box::new(body.clone()),
+            })),
+        });
+
+        if let Ok(mn) = self.evaluate(&decl_scope, decl_node) {
+            self.specialization_decls_by_scope
+                .entry(decl_scope)
+                .or_default()
+                .push(mn);
+        }
+
+        Some(specialized_name)
+    }
+
+    pub fn substitute_data_type(
+        &mut self,
+        dt: &ParserDataType,
+        subst: &FxHashMap<String, ParserDataType>,
+    ) -> ParserDataType {
+        let span = dt.span;
+        let data_type = match &dt.data_type {
+            ParserInnerType::Struct(s) if subst.contains_key(s) => {
+                subst.get(s).unwrap().data_type.clone()
+            }
+            ParserInnerType::Tuple(xs) => ParserInnerType::Tuple(
+                xs.iter()
+                    .map(|x| self.substitute_data_type(x, subst))
+                    .collect(),
+            ),
+            ParserInnerType::List(x) => {
+                ParserInnerType::List(Box::new(self.substitute_data_type(x, subst)))
+            }
+            ParserInnerType::Option(x) => {
+                ParserInnerType::Option(Box::new(self.substitute_data_type(x, subst)))
+            }
+            ParserInnerType::Result { ok, err } => ParserInnerType::Result {
+                ok: Box::new(self.substitute_data_type(ok, subst)),
+                err: Box::new(self.substitute_data_type(err, subst)),
+            },
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+                is_async,
+            } => ParserInnerType::Function {
+                return_type: Box::new(self.substitute_data_type(return_type, subst)),
+                parameters: parameters
+                    .iter()
+                    .map(|p| self.substitute_data_type(p, subst))
+                    .collect(),
+                is_async: *is_async,
+            },
+            ParserInnerType::Ref(x, m) => {
+                ParserInnerType::Ref(Box::new(self.substitute_data_type(x, subst)), m.clone())
+            }
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } => ParserInnerType::StructWithGenerics {
+                identifier: identifier.clone(),
+                generic_types: generic_types
+                    .iter()
+                    .map(|g| self.substitute_data_type(g, subst))
+                    .collect(),
+            },
+            _ => dt.data_type.clone(),
+        };
+
+        ParserDataType { data_type, span }
+    }
+
+    pub fn infer_generic_args_from_call(
+        &mut self,
+        template_params: &[String],
+        param_types: &[ParserDataType],
+        arg_types: &[ParserDataType],
+    ) -> Option<Vec<ParserDataType>> {
+        fn unify_pat(
+            env: &mut MiddleEnvironment,
+            template_params: &[String],
+            pat: &ParserDataType,
+            arg: &ParserDataType,
+            out: &mut FxHashMap<String, ParserDataType>,
+        ) -> bool {
+            match (&pat.data_type, &arg.data_type) {
+                (ParserInnerType::Struct(s), _) if template_params.contains(s) => {
+                    if let Some(existing) = out.get(s) {
+                        existing.data_type == arg.data_type
+                    } else {
+                        out.insert(s.clone(), env.resolve_data_type(&0, arg.clone()));
+                        true
+                    }
+                }
+                (ParserInnerType::List(p), ParserInnerType::List(a)) => {
+                    unify_pat(env, template_params, p, a, out)
+                }
+                (ParserInnerType::Option(p), ParserInnerType::Option(a)) => {
+                    unify_pat(env, template_params, p, a, out)
+                }
+                (
+                    ParserInnerType::Result { ok: pk, err: pe },
+                    ParserInnerType::Result { ok: ak, err: ae },
+                ) => {
+                    unify_pat(env, template_params, pe, ae, out)
+                        && unify_pat(env, template_params, pk, ak, out)
+                }
+                (ParserInnerType::Tuple(ps), ParserInnerType::Tuple(as_))
+                    if ps.len() == as_.len() =>
+                {
+                    ps.iter()
+                        .zip(as_.iter())
+                        .all(|(p, a)| unify_pat(env, template_params, p, a, out))
+                }
+                (ParserInnerType::Ref(p, _), ParserInnerType::Ref(a, _)) => {
+                    unify_pat(env, template_params, p, a, out)
+                }
+                _ => pat.data_type == arg.data_type,
+            }
+        }
+
+        if param_types.len() != arg_types.len() {
+            return None;
+        }
+
+        let mut mapping: FxHashMap<String, ParserDataType> = FxHashMap::default();
+        for (p, a) in param_types.iter().zip(arg_types.iter()) {
+            if !unify_pat(self, template_params, p, a, &mut mapping) {
+                return None;
+            }
+        }
+
+        let mut result = Vec::new();
+        for tp in template_params.iter() {
+            result.push(mapping.get(tp)?.clone());
+        }
+        Some(result)
     }
 
     pub fn type_def_type_into(&mut self, scope: &u64, value: TypeDefType) -> MiddleTypeDefType {
@@ -212,6 +580,31 @@ impl MiddleEnvironment {
             }
         }
 
+        env.apply_inferred_types_to_middlenode(&scope, &mut middle);
+
+        if let Some(mut decls) = env.specialization_decls_by_scope.remove(&scope) {
+            if !decls.is_empty() {
+                match &mut middle.node_type {
+                    MiddleNodeType::ScopeDeclaration { body, .. } => {
+                        let mut new_body = Vec::new();
+                        new_body.append(&mut decls);
+                        new_body.append(body);
+                        *body = new_body;
+                    }
+                    _ => {
+                        let mut body = Vec::new();
+                        body.append(&mut decls);
+                        body.push(middle);
+                        middle = MiddleNode::new_from_type(MiddleNodeType::ScopeDeclaration {
+                            body,
+                            create_new_scope: false,
+                            is_temp: false,
+                        });
+                    }
+                }
+            }
+        }
+
         Ok((env, scope, middle))
     }
 
@@ -239,7 +632,30 @@ impl MiddleEnvironment {
                 value,
                 ..
             } => {
-                if data_type.is_auto() {
+                fn contains_auto(dt: &ParserDataType) -> bool {
+                    match &dt.data_type {
+                        ParserInnerType::Auto(_) => true,
+                        ParserInnerType::Tuple(xs) => xs.iter().any(contains_auto),
+                        ParserInnerType::List(x) => contains_auto(x),
+                        ParserInnerType::Option(x) => contains_auto(x),
+                        ParserInnerType::Result { ok, err } => {
+                            contains_auto(ok) || contains_auto(err)
+                        }
+                        ParserInnerType::Function {
+                            return_type,
+                            parameters,
+                            ..
+                        } => contains_auto(return_type) || parameters.iter().any(contains_auto),
+                        ParserInnerType::Ref(x, _) => contains_auto(x),
+                        ParserInnerType::StructWithGenerics { generic_types, .. } => {
+                            generic_types.iter().any(contains_auto)
+                        }
+                        ParserInnerType::Scope(xs) => xs.iter().any(contains_auto),
+                        _ => false,
+                    }
+                }
+
+                if data_type.is_auto() || contains_auto(data_type) {
                     if let Some(v) = self.variables.get(&identifier.text) {
                         *data_type = v.data_type.clone();
                     }
@@ -264,6 +680,10 @@ impl MiddleEnvironment {
                             for (i, (_n, p_ty)) in parameters.iter_mut().enumerate() {
                                 if i < inf_params.len() {
                                     *p_ty = inf_params[i].clone();
+
+                                    if let Some(var) = self.variables.get_mut(&_n.text) {
+                                        var.data_type = inf_params[i].clone();
+                                    }
                                 }
                             }
                             *return_type = *inf_ret.clone();
@@ -341,10 +761,70 @@ impl MiddleEnvironment {
             }
             MiddleNodeType::CallExpression { caller, args } => {
                 if let MiddleNodeType::Identifier(caller_ident) = &caller.node_type {
-                    if let Some(scheme) = self.hm_env.get(&caller_ident.text).cloned() {
+                    let base = caller_ident
+                        .text
+                        .rsplit(':')
+                        .next()
+                        .unwrap_or(&caller_ident.text)
+                        .to_string();
+
+                    let resolved_key = self
+                        .resolve_str(scope, &base)
+                        .unwrap_or_else(|| caller_ident.text.clone());
+
+                    let scheme = self
+                        .hm_env
+                        .get(&resolved_key)
+                        .cloned()
+                        .or_else(|| self.hm_env.get(&caller_ident.text).cloned())
+                        .or_else(|| {
+                            self.hm_env
+                                .iter()
+                                .find(|(k, _)| k.rsplit(':').next() == Some(base.as_str()))
+                                .map(|(_, v)| v.clone())
+                        });
+
+                    if let Some(scheme) = scheme {
                         let mut tg = TypeGenerator::default();
                         let mut subst = Subst::default();
-                        let mut inst = hm::instantiate(&scheme, &mut tg);
+                        fn contains_auto(dt: &calibre_parser::ast::ParserDataType) -> bool {
+                            match &dt.data_type {
+                                calibre_parser::ast::ParserInnerType::Auto(_) => true,
+                                calibre_parser::ast::ParserInnerType::Tuple(xs) => {
+                                    xs.iter().any(contains_auto)
+                                }
+                                calibre_parser::ast::ParserInnerType::List(x) => contains_auto(x),
+                                calibre_parser::ast::ParserInnerType::Option(x) => contains_auto(x),
+                                calibre_parser::ast::ParserInnerType::Result { ok, err } => {
+                                    contains_auto(ok) || contains_auto(err)
+                                }
+                                calibre_parser::ast::ParserInnerType::Function {
+                                    return_type,
+                                    parameters,
+                                    ..
+                                } => {
+                                    contains_auto(return_type)
+                                        || parameters.iter().any(contains_auto)
+                                }
+                                calibre_parser::ast::ParserInnerType::Ref(x, _) => contains_auto(x),
+                                calibre_parser::ast::ParserInnerType::StructWithGenerics {
+                                    generic_types,
+                                    ..
+                                } => generic_types.iter().any(contains_auto),
+                                calibre_parser::ast::ParserInnerType::Scope(xs) => {
+                                    xs.iter().any(contains_auto)
+                                }
+                                _ => false,
+                            }
+                        }
+
+                        let scheme_is_unresolved =
+                            contains_auto(&hm::to_parser_data_type(&scheme.ty));
+                        let mut inst = if scheme_is_unresolved {
+                            scheme.ty.clone()
+                        } else {
+                            hm::instantiate(&scheme, &mut tg)
+                        };
 
                         for arg in args.iter() {
                             let arg_node: Node = arg.clone().into();
@@ -692,6 +1172,21 @@ impl MiddleEnvironment {
                 let mut resolved_gens: Vec<ParserDataType> = Vec::new();
                 for g in generic_types {
                     resolved_gens.push(self.resolve_data_type(scope, g));
+                }
+
+                if let Some((tpl_params, _, _)) = self.generic_type_templates.get(&id).cloned() {
+                    if tpl_params.len() == resolved_gens.len()
+                        && !resolved_gens.iter().any(|g| g.is_auto())
+                    {
+                        if let Some(spec) =
+                            self.ensure_specialized_type(scope, &id, &tpl_params, &resolved_gens)
+                        {
+                            return ParserDataType {
+                                data_type: ParserInnerType::Struct(spec),
+                                span: data_type.span,
+                            };
+                        }
+                    }
                 }
 
                 ParserDataType {
@@ -1224,10 +1719,39 @@ impl MiddleEnvironment {
             NodeType::EnumExpression { identifier, .. }
             | NodeType::StructLiteral { identifier, .. } => Some(ParserDataType {
                 span: *identifier.span(),
-                data_type: ParserInnerType::Struct(
-                    self.resolve_potential_generic_ident(scope, identifier)?
-                        .to_string(),
-                ),
+                data_type: match identifier {
+                    PotentialGenericTypeIdentifier::Generic {
+                        identifier: base,
+                        generic_types,
+                    } => {
+                        let base = self.resolve_dollar_ident_only(scope, base)?;
+                        let concrete: Vec<ParserDataType> = generic_types
+                            .iter()
+                            .map(|g| self.resolve_potential_new_type(scope, g.clone()))
+                            .collect();
+
+                        if let Some((tpl_params, _, _)) =
+                            self.generic_type_templates.get(&base.text).cloned()
+                        {
+                            if let Some(spec) = self.ensure_specialized_type(
+                                scope,
+                                &base.text,
+                                &tpl_params,
+                                &concrete,
+                            ) {
+                                ParserInnerType::Struct(spec)
+                            } else {
+                                ParserInnerType::Struct(base.text)
+                            }
+                        } else {
+                            ParserInnerType::Struct(base.text)
+                        }
+                    }
+                    _ => ParserInnerType::Struct(
+                        self.resolve_potential_generic_ident(scope, identifier)?
+                            .to_string(),
+                    ),
+                },
             }),
             NodeType::FunctionDeclaration { header, .. }
             | NodeType::FnMatchDeclaration { header, .. } => Some(ParserDataType {
@@ -1479,7 +2003,41 @@ impl MiddleEnvironment {
                 if path.len() == 1 {
                     return self.resolve_type_from_node(scope, &path[0].0);
                 }
-                // TODO resolve the type
+
+                if path.len() == 2 {
+                    if let (NodeType::Identifier(base_ident), NodeType::Identifier(field_ident)) =
+                        (&path[0].0.node_type, &path[1].0.node_type)
+                    {
+                        let field_name = match field_ident {
+                            PotentialGenericTypeIdentifier::Identifier(x) => x.to_string(),
+                            PotentialGenericTypeIdentifier::Generic { identifier, .. } => {
+                                identifier.to_string()
+                            }
+                        };
+
+                        if let Some(base_ty) = self.resolve_type_from_node(scope, &path[0].0) {
+                            let base_ty = self.resolve_data_type(scope, base_ty).unwrap_all_refs();
+                            let struct_name_opt = match base_ty.data_type {
+                                ParserInnerType::Struct(s) => Some(s),
+                                ParserInnerType::StructWithGenerics { identifier, .. } => {
+                                    Some(identifier)
+                                }
+                                _ => None,
+                            };
+
+                            if let Some(struct_name) = struct_name_opt {
+                                if let Some(obj) = self.objects.get(&struct_name) {
+                                    if let MiddleTypeDefType::Struct(map) = &obj.object_type {
+                                        if let Some(field_ty) = map.get(&field_name) {
+                                            return Some(field_ty.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Some(ParserDataType::from(ParserInnerType::Dynamic))
             }
             NodeType::PipeExpression(path) => {

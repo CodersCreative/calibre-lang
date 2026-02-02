@@ -3,6 +3,15 @@ name = "calibre-cranelift"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+cli = []
+
+[[bin]]
+name = "calibre-cranelift"
+path = "src/main.rs"
+required-features = ["cli"]
+
 [dependencies]
 cranelift = "0.123.2"
 cranelift-module = "0.123.2"
@@ -14,3 +23,4 @@ calibre-lir = {path = "../lir"}
 calibre-mir-ty = {path = "../mir-ty"}
 rand = "0.9.2"
 libc = "0.2"
+rustc-hash = "2.1.1"

@@ -16,8 +16,9 @@ use std::{
     str::FromStr,
     string::ParseError,
 };
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum RefMutability {
     Value,
     Ref,
@@ -69,7 +70,7 @@ pub enum LoopType {
     Loop,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParserDataType {
     pub data_type: ParserInnerType,
     pub span: Span,
@@ -97,7 +98,7 @@ impl Deref for ParserDataType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ParserInnerType {
     Float,
     Int,
@@ -433,13 +434,13 @@ impl FromStr for ParserInnerType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObjectType<T> {
     Map(Vec<(String, T)>),
     Tuple(Vec<T>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ObjectMap<T>(pub Vec<(String, T)>);
 
 impl<T> ObjectMap<T> {
