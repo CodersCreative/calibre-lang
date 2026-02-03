@@ -1,5 +1,5 @@
+use crate::ast::hm::{self, Subst, Type, TypeCon, TypeEnv, TypeGenerator, TypeScheme};
 use crate::environment::{MiddleEnvironment, Operator};
-use calibre_mir_ty::hm::{self, Subst, Type, TypeCon, TypeEnv, TypeGenerator, TypeScheme};
 use calibre_parser::ast::{
     Node, NodeType, ParserDataType, ParserInnerType, PotentialNewType, binary::BinaryOperator,
 };
@@ -180,7 +180,7 @@ fn visit(
 
             fn infer_builtin(
                 subst: &mut hm::Subst,
-                tg: &mut TypeGenerator,
+                _tg: &mut TypeGenerator,
                 op: &BinaryOperator,
                 lt: &Type,
                 rt: &Type,

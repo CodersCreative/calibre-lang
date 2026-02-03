@@ -212,7 +212,6 @@ dependencies = [
  "calibre-diagnostics",
  "calibre-lir",
  "calibre-mir",
- "calibre-mir-ty",
  "calibre-parser",
  "calibre-vm",
  "clap",
@@ -250,7 +249,6 @@ version = "0.1.0"
 dependencies = [
  "calibre-lir",
  "calibre-mir",
- "calibre-mir-ty",
  "calibre-parser",
  "cranelift",
  "cranelift-module",
@@ -274,7 +272,6 @@ name = "calibre-lir"
 version = "0.1.0"
 dependencies = [
  "calibre-mir",
- "calibre-mir-ty",
  "calibre-parser",
  "rustc-hash",
  "serde",
@@ -284,21 +281,11 @@ dependencies = [
 name = "calibre-mir"
 version = "0.1.0"
 dependencies = [
- "calibre-mir-ty",
  "calibre-parser",
  "calibre-std",
  "rand",
  "rustc-hash",
  "thiserror",
-]
-
-[[package]]
-name = "calibre-mir-ty"
-version = "0.1.0"
-dependencies = [
- "calibre-parser",
- "rand",
- "rustc-hash",
 ]
 
 [[package]]
@@ -318,7 +305,6 @@ name = "calibre-vm"
 version = "0.1.0"
 dependencies = [
  "calibre-lir",
- "calibre-mir-ty",
  "calibre-parser",
  "rand",
  "rustc-hash",
@@ -400,12 +386,13 @@ dependencies = [
 
 [[package]]
 name = "codespan-reporting"
-version = "0.11.1"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3538270d33cc669650c4b093848450d380def10c331d38c768e34cac80576e6e"
+checksum = "af491d569909a7e4dee0ad7db7f5341fef5c614d5b8ec8cf765732aba3cff681"
 dependencies = [
+ "serde",
  "termcolor",
- "unicode-width 0.1.14",
+ "unicode-width 0.2.1",
 ]
 
 [[package]]

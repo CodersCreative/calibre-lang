@@ -1,4 +1,3 @@
-use calibre_parser::Parser;
 use std::{cmp::Ordering, fmt::Debug};
 
 use crate::{VM, error::RuntimeError, value::RuntimeValue};

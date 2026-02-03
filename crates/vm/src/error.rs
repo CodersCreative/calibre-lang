@@ -1,5 +1,5 @@
 use calibre_parser::ast::{
-    ParserDataType, ParserInnerType,
+    ParserInnerType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };

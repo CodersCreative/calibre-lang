@@ -109,12 +109,12 @@ impl MiddleNode {
                 x => todo!("{}", x),
             },
             MiddleNodeType::FunctionDeclaration {
-                parameters,
+                parameters: _,
                 body,
                 return_type: _,
                 is_async: _,
             } => {
-                let mut amt = body.identifiers_used();
+                let amt = body.identifiers_used();
 
                 amt
             }

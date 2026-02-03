@@ -1,8 +1,16 @@
 [package]
 name = "cal-fmt"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+publish.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 
 [dependencies]
 clap = { version = "4.5.40", features = ["derive"] }
-calibre-parser = {path = "../crates/parser"}
+calibre-parser = { workspace = true }

@@ -50,16 +50,15 @@ pub fn emit_parser_errors(path: &Path, contents: &str, errors: &[ParserError]) {
                     .with_labels(vec![Label::primary(file_id, range).with_message("here")]);
             }
             ParserError::Lexer(err) => {
-                if let calibre_parser::lexer::LexerError::Unrecognized { span, .. } = err {
-                    let range = span_to_range(contents, span);
-                    diagnostic = diagnostic
-                        .with_labels(vec![Label::primary(file_id, range).with_message("here")]);
-                }
+                let calibre_parser::lexer::LexerError::Unrecognized { span, .. } = err;
+                let range = span_to_range(contents, span);
+                diagnostic = diagnostic
+                    .with_labels(vec![Label::primary(file_id, range).with_message("here")]);
             }
         }
 
         let mut writer = writer.lock();
-        let _ = term::emit(&mut writer, &config, &files, &diagnostic);
+        let _ = term::emit_to_io_write(&mut writer, &config, &files, &diagnostic);
     }
 }
 
@@ -77,7 +76,7 @@ pub fn emit_error(path: &Path, contents: &str, message: String, span: Option<Spa
     }
 
     let mut writer = writer.lock();
-    let _ = term::emit(&mut writer, &config, &files, &diagnostic);
+    let _ = term::emit_to_io_write(&mut writer, &config, &files, &diagnostic);
 }
 
 pub fn emit_runtime_error(
@@ -103,5 +102,5 @@ pub fn emit_runtime_error(
     }
 
     let mut writer = writer.lock();
-    let _ = term::emit(&mut writer, &config, &files, &diagnostic);
+    let _ = term::emit_to_io_write(&mut writer, &config, &files, &diagnostic);
 }

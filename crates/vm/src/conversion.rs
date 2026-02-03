@@ -2,7 +2,6 @@ use calibre_lir::{
     BlockId, LirBlock, LirFunction, LirGlobal, LirInstr, LirLValue, LirLiteral, LirNodeType,
     LirRegistry, LirTerminator,
 };
-use calibre_mir_ty::{MiddleNode, renaming::AlphaRenameState};
 use calibre_parser::ast::{
     ParserDataType, ParserInnerType,
     binary::BinaryOperator,
@@ -12,7 +11,7 @@ use calibre_parser::lexer::Span;
 use rand::random_range;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, format};
+use std::fmt::Display;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VMRegistry {
@@ -128,7 +127,7 @@ impl VMFunction {
 
             for literal in block.local_literals.iter_mut() {
                 match literal {
-                    VMLiteral::Closure { label, captures } => {
+                    VMLiteral::Closure { label, captures: _ } => {
                         if let Some(x) = declared.get(label) {
                             *label = x.to_string();
                         }
@@ -243,7 +242,7 @@ impl Display for VMLiteral {
             Self::Float(x) => write!(f, "{x}f"),
             Self::Char(x) => write!(f, "'{x}'"),
             Self::String(x) => write!(f, "{x:?}"),
-            Self::Closure { label, captures } => write!(f, "CLOSURE {}", label),
+            Self::Closure { label, captures: _ } => write!(f, "CLOSURE {}", label),
             Self::Null => write!(f, "null"),
         }
     }
@@ -409,7 +408,7 @@ impl VMBlock {
             }
             LirNodeType::List {
                 elements,
-                data_type,
+                data_type: _,
             } => {
                 let count = elements.len();
                 for item in elements {
@@ -522,11 +521,14 @@ impl VMBlock {
                     self.translate(LirInstr::new(span, *payload));
                 }
 
-                self.push_instr(VMInstruction::Enum {
-                    name,
-                    variant: variant as u8,
-                    has_payload,
-                }, span);
+                self.push_instr(
+                    VMInstruction::Enum {
+                        name,
+                        variant: variant as u8,
+                        has_payload,
+                    },
+                    span,
+                );
             }
             LirNodeType::Assign {
                 dest: LirLValue::Var(dest),
@@ -565,7 +567,9 @@ impl VMBlock {
 
     pub fn translate_terminator(&mut self, node: LirTerminator) {
         match node {
-            LirTerminator::Jump { span, target } => self.push_instr(VMInstruction::Jump(target), span),
+            LirTerminator::Jump { span, target } => {
+                self.push_instr(VMInstruction::Jump(target), span)
+            }
             LirTerminator::Branch {
                 span,
                 condition,

@@ -1,9 +1,0 @@
-[package]
-name = "calibre-mir-ty"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-calibre-parser = {path = "../parser"}
-rand = "0.9.1"
-rustc-hash = "2.1.1"

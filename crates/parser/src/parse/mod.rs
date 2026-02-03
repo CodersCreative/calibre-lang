@@ -7,12 +7,12 @@ pub mod r#type;
 use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{
-        LoopType, Node, NodeType, ParserDataType, ParserInnerType, PotentialDollarIdentifier,
+        Node, NodeType, ParserDataType, ParserInnerType, PotentialDollarIdentifier,
         PotentialNewType, RefMutability, comparison::ComparisonOperator,
     },
     lexer::{Bracket, Span, StopValue, Token, TokenType},
 };
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 
 impl Parser {
     fn first(&self) -> &Token {

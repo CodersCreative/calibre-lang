@@ -1,4 +1,4 @@
-use calibre_mir_ty::{
+use ast::{
     MiddleNode, MiddleNodeType,
     hm::{self, Type, TypeGenerator, TypeScheme},
 };
@@ -22,6 +22,7 @@ use environment::*;
 pub mod environment;
 pub mod errors;
 pub mod infer;
+pub mod ast;
 pub mod native;
 
 impl MiddleEnvironment {
@@ -1441,8 +1442,9 @@ impl MiddleEnvironment {
                 let mut statements = Vec::new();
 
                 for var in variables {
-                    let mut iden = String::new();
-                    let mut dependant = false;
+                    #[allow(unused_assignments)]
+                    let (mut iden, mut dependant) = (String::new(), false);
+
                     let dec = Node {
                         span: var.span,
                         node_type: match var.node_type {
@@ -1454,10 +1456,10 @@ impl MiddleEnvironment {
                             } => {
                                 iden = identifier.to_string();
                                 let resolved_iden =
-                                    format!("{}::{}", resolved, identifier.to_string());
+                                    format!("{}::{}", resolved, identifier);
 
                                 dependant = match &value.node_type {
-                                    NodeType::FunctionDeclaration { header, body } => {
+                                    NodeType::FunctionDeclaration { header, body: _ } => {
                                         if let Some(PotentialNewType::DataType(param)) =
                                             header.parameters.first().map(|x| x.1.clone())
                                         {

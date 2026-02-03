@@ -1,5 +1,5 @@
-use calibre_mir_ty::hm::{self, Subst, Type, TypeGenerator};
-use calibre_mir_ty::{MiddleNode, MiddleNodeType};
+use crate::ast::hm::{self, Subst, Type, TypeGenerator};
+use crate::ast::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Parser,
     ast::{
@@ -271,7 +271,7 @@ impl MiddleEnvironment {
 
     pub fn ensure_specialized_type(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         base: &str,
         template_params: &[String],
         concrete_args: &[ParserDataType],
@@ -306,11 +306,14 @@ impl MiddleEnvironment {
 
         let new_obj = self.substitute_type_def(&obj, &subst);
 
-        let decl_node = Node::new(self.current_span(), NodeType::TypeDeclaration {
-            identifier: ParserText::from(specialized_name.clone()).into(),
-            object: new_obj,
-            overloads,
-        });
+        let decl_node = Node::new(
+            self.current_span(),
+            NodeType::TypeDeclaration {
+                identifier: ParserText::from(specialized_name.clone()).into(),
+                object: new_obj,
+                overloads,
+            },
+        );
         let _ = self.evaluate(&decl_scope, decl_node);
 
         Some(specialized_name)
@@ -318,7 +321,7 @@ impl MiddleEnvironment {
 
     pub fn ensure_specialized_function(
         &mut self,
-        scope: &u64,
+        _scope: &u64,
         base: &str,
         template_params: &[String],
         concrete_args: &[ParserDataType],
@@ -361,17 +364,23 @@ impl MiddleEnvironment {
         new_header.return_type =
             self.substitute_potential_new_type(&new_header.return_type, &subst);
 
-        let decl_node = Node::new(self.current_span(), NodeType::VariableDeclaration {
-            var_type: VarType::Constant,
-            identifier: ParserText::from(specialized_name.clone()).into(),
-            data_type: PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(
-                None,
-            ))),
-            value: Box::new(Node::new(self.current_span(), NodeType::FunctionDeclaration {
-                header: new_header,
-                body: Box::new(body.clone()),
-            })),
-        });
+        let decl_node = Node::new(
+            self.current_span(),
+            NodeType::VariableDeclaration {
+                var_type: VarType::Constant,
+                identifier: ParserText::from(specialized_name.clone()).into(),
+                data_type: PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(
+                    None,
+                ))),
+                value: Box::new(Node::new(
+                    self.current_span(),
+                    NodeType::FunctionDeclaration {
+                        header: new_header,
+                        body: Box::new(body.clone()),
+                    },
+                )),
+            },
+        );
 
         if let Ok(mn) = self.evaluate(&decl_scope, decl_node) {
             self.specialization_decls_by_scope
@@ -1561,13 +1570,14 @@ impl MiddleEnvironment {
                     let scope = self.new_scope_from_parent(current.id, key);
                     let path = self.scopes.get(&scope).unwrap().path.clone();
                     let source = fs::read_to_string(path.clone()).unwrap();
-                    let tokens = tokenizer.tokenize(&source).map_err(|error| {
-                        MiddleErr::LexerError {
-                            path: path.clone(),
-                            contents: source.clone(),
-                            error,
-                        }
-                    })?;
+                    let tokens =
+                        tokenizer
+                            .tokenize(&source)
+                            .map_err(|error| MiddleErr::LexerError {
+                                path: path.clone(),
+                                contents: source.clone(),
+                                error,
+                            })?;
                     let program = parser.produce_ast(tokens);
 
                     if !parser.errors.is_empty() {
@@ -1595,16 +1605,14 @@ impl MiddleEnvironment {
                                 ..node
                             }
                         }
-                        (_, Some(build_node)) => {
-                            MiddleNode::new(
-                                MiddleNodeType::ScopeDeclaration {
-                                    body: vec![node, build_node],
-                                    create_new_scope: false,
-                                    is_temp: false,
-                                },
-                                self.current_span(),
-                            )
-                        }
+                        (_, Some(build_node)) => MiddleNode::new(
+                            MiddleNodeType::ScopeDeclaration {
+                                body: vec![node, build_node],
+                                create_new_scope: false,
+                                is_temp: false,
+                            },
+                            self.current_span(),
+                        ),
                         _ => node,
                     };
 
@@ -2040,7 +2048,7 @@ impl MiddleEnvironment {
                 }
 
                 if path.len() == 2 {
-                    if let (NodeType::Identifier(base_ident), NodeType::Identifier(field_ident)) =
+                    if let (NodeType::Identifier(_base_ident), NodeType::Identifier(field_ident)) =
                         (&path[0].0.node_type, &path[1].0.node_type)
                     {
                         let field_name = match field_ident {

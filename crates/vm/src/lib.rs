@@ -1,6 +1,4 @@
-use std::error::Error;
 
-use calibre_lir::BlockId;
 use calibre_parser::ast::ObjectMap;
 use rustc_hash::FxHashMap;
 
@@ -89,7 +87,7 @@ impl VM {
     pub fn run(
         &mut self,
         function: &VMFunction,
-        mut args: Vec<RuntimeValue>,
+        args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
         let _ = self.run_globals()?;
 
@@ -207,11 +205,7 @@ impl VM {
         declared: &FxHashMap<String, String>,
     ) -> Result<TerminateValue, RuntimeError> {
         for (ip, instruction) in block.instructions.iter().enumerate() {
-            let span = block
-                .instruction_spans
-                .get(ip)
-                .cloned()
-                .unwrap_or_default();
+            let span = block.instruction_spans.get(ip).cloned().unwrap_or_default();
 
             let step = self
                 .run_instruction(instruction, block, stack, declared)
@@ -257,7 +251,9 @@ impl VM {
             }
             VMInstruction::Jump(x) => return Ok(TerminateValue::Jump(*x)),
             VMInstruction::Branch(x, y) => {
-                let RuntimeValue::Bool(comparison) = stack.pop().ok_or(RuntimeError::StackUnderflow)? else {
+                let RuntimeValue::Bool(comparison) =
+                    stack.pop().ok_or(RuntimeError::StackUnderflow)?
+                else {
                     return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
                 };
 
@@ -288,9 +284,7 @@ impl VM {
                 let name = block
                     .local_strings
                     .get(*x as usize)
-                    .ok_or_else(|| {
-                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
-                    })?
+                    .ok_or_else(|| RuntimeError::InvalidBytecode(format!("missing string {}", x)))?
                     .to_string();
                 match self.resolve_var_name(name) {
                     VarName::Func(func) => {
@@ -308,9 +302,7 @@ impl VM {
                 let name = block
                     .local_strings
                     .get(*x as usize)
-                    .ok_or_else(|| {
-                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
-                    })?
+                    .ok_or_else(|| RuntimeError::InvalidBytecode(format!("missing string {}", x)))?
                     .to_string();
                 match self.resolve_var_name(name) {
                     VarName::Func(func) => {
@@ -333,9 +325,7 @@ impl VM {
                 let name = block
                     .local_strings
                     .get(*x as usize)
-                    .ok_or_else(|| {
-                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
-                    })?
+                    .ok_or_else(|| RuntimeError::InvalidBytecode(format!("missing string {}", x)))?
                     .to_string();
                 match self.resolve_var_name(name.clone()) {
                     VarName::Func(func) => {
@@ -381,12 +371,9 @@ impl VM {
                 }
             }
             VMInstruction::LoadVarRef(x) => {
-                let name = block
-                    .local_strings
-                    .get(*x as usize)
-                    .ok_or_else(|| {
-                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
-                    })?;
+                let name = block.local_strings.get(*x as usize).ok_or_else(|| {
+                    RuntimeError::InvalidBytecode(format!("missing string {}", x))
+                })?;
                 stack.push(RuntimeValue::Ref(name.clone()));
             }
             VMInstruction::Deref => {
@@ -407,12 +394,9 @@ impl VM {
                 stack.push(RuntimeValue::Ref(name));
             }
             VMInstruction::DeclareVar(x) | VMInstruction::SetVar(x) => {
-                let name = block
-                    .local_strings
-                    .get(*x as usize)
-                    .ok_or_else(|| {
-                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
-                    })?;
+                let name = block.local_strings.get(*x as usize).ok_or_else(|| {
+                    RuntimeError::InvalidBytecode(format!("missing string {}", x))
+                })?;
 
                 if let Some(var) = self.variables.remove(name) {
                     let _ = self.move_saveable_into_runtime_var(var.clone());
@@ -477,7 +461,8 @@ impl VM {
             }
             VMInstruction::Index => {
                 let value = stack.pop().ok_or(RuntimeError::StackUnderflow)?;
-                let RuntimeValue::Int(index) = stack.pop().ok_or(RuntimeError::StackUnderflow)? else {
+                let RuntimeValue::Int(index) = stack.pop().ok_or(RuntimeError::StackUnderflow)?
+                else {
                     return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
                 };
 
@@ -501,12 +486,9 @@ impl VM {
                 });
             }
             VMInstruction::LoadMember(x) => {
-                let name = block
-                    .local_strings
-                    .get(*x as usize)
-                    .ok_or_else(|| {
-                        RuntimeError::InvalidBytecode(format!("missing string {}", x))
-                    })?;
+                let name = block.local_strings.get(*x as usize).ok_or_else(|| {
+                    RuntimeError::InvalidBytecode(format!("missing string {}", x))
+                })?;
                 let value = stack.pop().ok_or(RuntimeError::StackUnderflow)?;
 
                 let tuple_index = name.parse::<usize>().ok();
@@ -635,10 +617,9 @@ impl VM {
                 let value = value.convert(self, &data_type.data_type);
                 stack.push(match value {
                     Ok(x) => RuntimeValue::Result(Ok(Box::new(x))),
-                    Err(e) => RuntimeValue::Result(Err(Box::new(RuntimeValue::Str(format!(
-                        "{:?}",
-                        e
-                    ))))),
+                    Err(e) => {
+                        RuntimeValue::Result(Err(Box::new(RuntimeValue::Str(format!("{:?}", e)))))
+                    }
                 });
             }
         }

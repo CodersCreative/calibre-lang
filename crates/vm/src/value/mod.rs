@@ -1,8 +1,12 @@
-use std::{collections::{HashMap, HashSet}, f64::consts::PI, fmt::Display, rc::Rc};
+use std::{
+    collections::HashMap,
+    f64::consts::PI,
+    fmt::{Debug, Display},
+    rc::Rc,
+};
 
 use calibre_lir::BlockId;
-use calibre_mir_ty::MiddleNode;
-use calibre_parser::ast::{ObjectMap, ParserDataType};
+use calibre_parser::ast::ObjectMap;
 
 use crate::{
     VM,
@@ -101,11 +105,11 @@ impl From<VMLiteral> for RuntimeValue {
     }
 }
 
-fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {
+fn print_list<T: Display>(data: &Vec<T>, open: char, close: char) -> String {
     let mut txt = String::from(open);
 
     for val in data.iter() {
-        txt.push_str(&format!("{}, ", val.to_string()));
+        txt.push_str(&format!("{}, ", val));
     }
 
     txt = txt.trim().trim_end_matches(",").trim().to_string();
@@ -114,29 +118,52 @@ fn print_list<T: ToString>(data: &Vec<T>, open: char, close: char) -> String {
     txt
 }
 
-impl ToString for RuntimeValue {
-    fn to_string(&self) -> String {
+impl Display for RuntimeValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Null => String::from("null"),
-            Self::Float(x) => x.to_string(),
-            Self::Int(x) => x.to_string(),
-            Self::Enum(x, y, z) => format!("{:?}({:?}) -> {:?}", x, y, z),
-            Self::Range(from, to) => format!("{}..{}", from, to),
-            Self::Ref(ty) => format!("link -> {:?}", ty),
-            Self::Bool(x) => x.to_string(),
-            Self::Aggregate(x, y) => format!("{y:?} = {x:?}"),
-            Self::NativeFunction(_) => format!("native function"),
-            Self::List(data) => print_list(data, '[', ']'),
-            Self::Option(x) => format!("{:?}", x),
-            Self::Result(x) => format!("{:?}", x),
-            Self::Str(x) => x.to_string(),
-            Self::Char(x) => x.to_string(),
-            Self::Function { name, captures } => {
-                format!("fn {}(..)", name)
+            Self::Null => write!(f, "null"),
+            Self::Float(x) => write!(f, "{}f", x),
+            Self::Int(x) => write!(f, "{}", x),
+            Self::Enum(x, y, Some(z)) => write!(f, "{}[{}] : {}", x, y, z),
+            Self::Enum(x, y, _) => write!(f, "{}[{}]", x, y),
+            Self::Range(from, to) => write!(f, "{}..{}", from, to),
+            Self::Ref(x) => write!(f, "ref -> {}", x),
+            Self::Bool(x) => write!(f, "{}", if *x { "true" } else { "false" }),
+            Self::Aggregate(x, data) => {
+                if x.is_none() {
+                    write!(
+                        f,
+                        "{}",
+                        print_list(&data.0.iter().map(|x| &x.1).collect(), '(', ')')
+                    )
+                } else if data.is_empty() {
+                    write!(f, "{}{{}}", x.as_ref().unwrap())
+                } else {
+                    let mut txt = format!("{}{{\n", x.as_ref().unwrap());
+
+                    for val in data.iter() {
+                        txt.push_str(&format!("\t{} : {},\n", val.0, val.1));
+                    }
+
+                    txt = txt.trim().trim_end_matches(",").trim().to_string();
+                    txt.push('}');
+
+                    write!(f, "{}", txt)
+                }
             }
+            Self::List(x) => write!(f, "{}", print_list(&x, '[', ']')),
+            Self::NativeFunction(x) => write!(f, "fn {} ...", x.name()),
+            Self::Option(Some(x)) => write!(f, "Some : {}", x),
+            Self::Option(_) => write!(f, "None"),
+            Self::Result(Ok(x)) => write!(f, "Ok : {}", x),
+            Self::Result(Err(x)) => write!(f, "Err : {}", x),
+            Self::Str(x) => write!(f, "{}", x),
+            Self::Char(x) => write!(f, "{}", x),
+            Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
         }
     }
 }
+
 pub enum TerminateValue {
     None,
     Jump(BlockId),

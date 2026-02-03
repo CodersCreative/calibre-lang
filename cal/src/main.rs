@@ -44,10 +44,7 @@ async fn run_source(
             if verbose {
                 println!("Loading Cache");
             }
-            let cache_res =
-                tokio::task::spawn_blocking(move || bincode::deserialize::<BytecodeCache>(&bytes))
-                    .await
-                    .into_diagnostic()?;
+            let cache_res = bincode::deserialize::<BytecodeCache>(&bytes);
 
             if let Ok(cache) = cache_res {
                 if emit_status {
@@ -104,7 +101,7 @@ async fn run_source(
         return Err(miette::miette!("parse failed"));
     }
 
-    let mut middle_result = match MiddleEnvironment::new_and_evaluate(program, path.to_path_buf()) {
+    let middle_result = match MiddleEnvironment::new_and_evaluate(program, path.to_path_buf()) {
         Ok(result) => result,
         Err(err) => {
             match err {
@@ -195,9 +192,7 @@ async fn run_source(
             .await
             .into_diagnostic()
             .wrap_err("creating cache dir")?;
-        let bytes_res = tokio::task::spawn_blocking(move || bincode::serialize(&cache))
-            .await
-            .into_diagnostic()?;
+        let bytes_res = bincode::serialize(&cache);
         let bytes =
             bytes_res.map_err(|e| miette::miette!("bytecode cache serialize failed: {e}"))?;
         let _ = fs::write(&cache_path, bytes).await;
@@ -268,7 +263,7 @@ async fn run_repl_source(contents: String, path: &Path) -> Result<Option<Runtime
         return Err(miette::miette!("parse failed"));
     }
 
-    let mut middle_result = match MiddleEnvironment::new_and_evaluate(program, path.to_path_buf()) {
+    let middle_result = match MiddleEnvironment::new_and_evaluate(program, path.to_path_buf()) {
         Ok(result) => result,
         Err(err) => {
             match err {

@@ -1,15 +1,16 @@
-use std::fmt::Display;
-
-use calibre_mir::environment::{MiddleEnvironment, MiddleTypeDefType};
-use calibre_mir_ty::{MiddleNode, MiddleNodeType};
+use calibre_mir::{
+    ast::{MiddleNode, MiddleNodeType},
+    environment::{MiddleEnvironment, MiddleTypeDefType},
+};
 use calibre_parser::ast::{
-    ObjectMap, ParserDataType, ParserInnerType, ParserText,
+    ObjectMap, ParserDataType, ParserInnerType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
 use calibre_parser::lexer::Span;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 #[derive(Debug, Clone, Default)]
 pub struct LirRegistry {
@@ -216,8 +217,8 @@ impl Display for LirNodeType {
                     txt.push_str("]");
                     txt
                 }
-                Self::Aggregate { name, fields } => {
-                    let mut txt = if let Some(name) = name {
+                Self::Aggregate { name, fields: _ } => {
+                    let txt = if let Some(name) = name {
                         name.to_string()
                     } else {
                         String::new()
@@ -379,7 +380,7 @@ pub struct LirEnvironment<'a> {
 impl<'a> LirEnvironment<'a> {
     pub fn lower(env: &'a MiddleEnvironment, node: MiddleNode) -> LirRegistry {
         let mut this = Self::new(env);
-        let node = this.lower_node(node);
+        let _node = this.lower_node(node);
         this.registry
     }
 
@@ -604,7 +605,7 @@ impl<'a> LirEnvironment<'a> {
             } => {
                 for stmt in body {
                     if let MiddleNodeType::VariableDeclaration {
-                        var_type,
+                        var_type: _,
                         identifier,
                         value,
                         data_type,
@@ -612,15 +613,15 @@ impl<'a> LirEnvironment<'a> {
                     {
                         match value.node_type {
                             MiddleNodeType::FunctionDeclaration {
-                                parameters,
-                                body,
-                                return_type,
-                                is_async,
+                                parameters: _,
+                                body: _,
+                                return_type: _,
+                                is_async: _,
                             } => {}
                             _ => {
                                 let mut sub_lowerer = LirEnvironment::new(self.env);
 
-                                let body_val = sub_lowerer.lower_node(stmt);
+                                let _body_val = sub_lowerer.lower_node(stmt);
 
                                 self.registry.append(sub_lowerer.registry);
 
@@ -642,7 +643,7 @@ impl<'a> LirEnvironment<'a> {
                 LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::ScopeDeclaration { mut body, .. } => {
-                let mut last = body.pop();
+                let last = body.pop();
                 for stmt in body {
                     self.lower_and_add_node(stmt);
                 }
@@ -737,7 +738,10 @@ impl<'a> LirEnvironment<'a> {
             }
             MiddleNodeType::Continue => {
                 let (header, _) = *self.loop_stack.last().expect("Continue outside loop");
-                self.set_terminator(LirTerminator::Jump { span, target: header });
+                self.set_terminator(LirTerminator::Jump {
+                    span,
+                    target: header,
+                });
                 LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::MemberExpression { path } => {
@@ -795,7 +799,7 @@ impl<'a> LirEnvironment<'a> {
             },
             MiddleNodeType::CallExpression { caller, args } => {
                 let l_caller = self.lower_node(*caller);
-                let mut l_args: Vec<LirNodeType> =
+                let l_args: Vec<LirNodeType> =
                     args.into_iter().map(|a| self.lower_node(a)).collect();
 
                 LirNodeType::Call {

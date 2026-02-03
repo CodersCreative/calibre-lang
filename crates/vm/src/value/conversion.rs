@@ -1,4 +1,4 @@
-use calibre_parser::ast::{ParserDataType, ParserInnerType};
+use calibre_parser::ast::ParserInnerType;
 
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
 
@@ -98,7 +98,7 @@ impl RuntimeValue {
                     Ok(RuntimeValue::Result(Err(Box::new(x))))
                 }
             },
-            (x, ParserInnerType::Result { ok, err }) => {
+            (x, ParserInnerType::Result { ok, err: _ }) => {
                 let x = x.convert(env, &ok)?;
                 Ok(RuntimeValue::Result(Ok(Box::new(x))))
             }

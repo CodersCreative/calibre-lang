@@ -1,12 +1,19 @@
 [package]
 name = "calibre-mir"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+publish.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 
 [dependencies]
-thiserror = "2.0.12"
-calibre-parser = {path = "../parser"}
-calibre-mir-ty = {path = "../mir-ty"}
-calibre-std = {path = "../std"}
-rustc-hash = "2.1.1"
-rand = "0.9.2"
+thiserror = { workspace = true }
+calibre-parser = { workspace = true }
+calibre-std = { workspace = true }
+rustc-hash = { workspace = true }
+rand = { workspace = true }
