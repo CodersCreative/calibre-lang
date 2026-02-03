@@ -109,9 +109,9 @@ impl NativeFunction for Input {
 
         let readline = editor.readline(&txt.to_string());
         match readline {
-            Ok(line) => Ok(RuntimeValue::Option(Some(Box::new(RuntimeValue::Str(
-                line,
-            ))))),
+            Ok(line) => Ok(RuntimeValue::Option(Some(dumpster::sync::Gc::new(
+                RuntimeValue::Str(line),
+            )))),
             _ => Ok(RuntimeValue::Option(None)),
         }
     }

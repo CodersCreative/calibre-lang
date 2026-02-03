@@ -19,3 +19,4 @@ rustyline = { workspace = true }
 thiserror = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
+dumpster = "2.0.0"

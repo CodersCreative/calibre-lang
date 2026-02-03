@@ -26,6 +26,93 @@ pub mod ast;
 pub mod native;
 
 impl MiddleEnvironment {
+    fn collect_defers_chain(&self, scope: &u64) -> Vec<Node> {
+        let mut out = Vec::new();
+        let mut current = Some(*scope);
+        while let Some(id) = current {
+            if let Some(s) = self.scopes.get(&id) {
+                out.extend(s.defers.clone());
+                current = s.parent;
+            } else {
+                break;
+            }
+        }
+        out
+    }
+    fn insert_auto_drops(
+        &self,
+        stmts: &mut Vec<MiddleNode>,
+        defined: &[String],
+        protected_extra: &[String],
+    ) {
+        use rustc_hash::FxHashMap;
+        use rustc_hash::FxHashSet;
+        let mut last_use: FxHashMap<String, usize> = FxHashMap::default();
+        let mut protected: FxHashSet<String> = FxHashSet::default();
+        for ident in protected_extra {
+            protected.insert(ident.clone());
+        }
+
+        for (idx, stmt) in stmts.iter().enumerate() {
+            if let MiddleNodeType::Return { value: Some(val) } = &stmt.node_type {
+                for ident in val.identifiers_used() {
+                    protected.insert(ident.to_string());
+                }
+            }
+            if let MiddleNodeType::FunctionDeclaration { .. } = &stmt.node_type {
+                for ident in stmt.captured() {
+                    protected.insert(ident.to_string());
+                }
+            }
+            for ident in stmt.identifiers_used() {
+                last_use.insert(ident.to_string(), idx);
+            }
+            if let MiddleNodeType::Drop(name) = &stmt.node_type {
+                last_use.insert(name.to_string(), idx);
+            }
+        }
+
+        let mut inserts: Vec<(usize, String)> = Vec::new();
+        for name in defined {
+            if protected.contains(name) {
+                continue;
+            }
+            if let Some(&idx) = last_use.get(name) {
+                if idx >= stmts.len() {
+                    continue;
+                }
+                if let Some(stmt) = stmts.get(idx) {
+                    if matches!(
+                        stmt.node_type,
+                        MiddleNodeType::Return { .. }
+                            | MiddleNodeType::Break
+                            | MiddleNodeType::Continue
+                    ) {
+                        continue;
+                    }
+                    if let MiddleNodeType::Drop(drop_name) = &stmt.node_type {
+                        if drop_name.text == *name {
+                            continue;
+                        }
+                    }
+                }
+                let insert_idx = (idx + 1).min(stmts.len());
+                inserts.push((insert_idx, name.clone()));
+            } else {
+                inserts.push((stmts.len(), name.clone()));
+            }
+        }
+
+        inserts.sort_by(|a, b| b.0.cmp(&a.0));
+        for (idx, name) in inserts {
+            if idx <= stmts.len() {
+                stmts.insert(
+                    idx,
+                    MiddleNode::new(MiddleNodeType::Drop(name.into()), self.current_span()),
+                );
+            }
+        }
+    }
     pub fn evaluate(&mut self, scope: &u64, node: Node) -> Result<MiddleNode, MiddleErr> {
         self.current_location = self.get_location(scope, node.span);
 
@@ -414,7 +501,7 @@ impl MiddleEnvironment {
                     // TODO find a way to get all defers since the last loop was created
                     let mut lst = Vec::new();
 
-                    for x in self.scopes.get(scope).unwrap().defers.clone() {
+                    for x in self.collect_defers_chain(scope) {
                         lst.push(self.evaluate(scope, x)?);
                     }
 
@@ -441,7 +528,7 @@ impl MiddleEnvironment {
                 node_type: if self.scopes.get(scope).unwrap().defers.is_empty() {
                     let mut lst = Vec::new();
 
-                    for x in self.scopes.get(scope).unwrap().defers.clone() {
+                    for x in self.collect_defers_chain(scope) {
                         lst.push(self.evaluate(scope, x)?);
                     }
 
@@ -471,8 +558,8 @@ impl MiddleEnvironment {
             NodeType::Return { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::Return {
                     value: {
-                        // TODO get all defers in the function body
-                        if self.scopes.get(scope).unwrap().defers.is_empty() {
+                        let chain_defers = self.collect_defers_chain(scope);
+                        if chain_defers.is_empty() && self.func_defers.is_empty() {
                             if let Some(value) = value {
                                 Some(Box::new(self.evaluate(scope, *value)?))
                             } else {
@@ -495,7 +582,7 @@ impl MiddleEnvironment {
                                 None
                             };
 
-                            for x in self.scopes.get(scope).unwrap().defers.clone() {
+                            for x in chain_defers {
                                 lst.push(self.evaluate(scope, x)?);
                             }
 
@@ -559,14 +646,11 @@ impl MiddleEnvironment {
                 let new_name = if identifier.text.contains("->") {
                     identifier.text.clone()
                 } else {
-                    self.resolve_str(scope, &identifier.text)
-                        .unwrap_or_else(|| {
-                            get_disamubiguous_name(
-                                scope,
-                                Some(identifier.text.trim()),
-                                Some(&var_type),
-                            )
-                        })
+                    get_disamubiguous_name(
+                        scope,
+                        Some(identifier.text.trim()),
+                        Some(&var_type),
+                    )
                 };
 
                 let original_value_node = *value.clone();
@@ -599,26 +683,6 @@ impl MiddleEnvironment {
                     self.resolve_potential_new_type(scope, data_type)
                 };
 
-                let val = if self.resolve_str(scope, &identifier.text).is_some() {
-                    Some(self.evaluate(scope, *value.clone())?)
-                } else {
-                    None
-                };
-                self.variables.insert(
-                    new_name.clone(),
-                    MiddleVariable {
-                        data_type: data_type.clone(),
-                        var_type: var_type.clone(),
-                        location: self.current_location.clone(),
-                    },
-                );
-
-                self.scopes
-                    .get_mut(scope)
-                    .unwrap()
-                    .mappings
-                    .insert(identifier.text, new_name.clone());
-
                 if let NodeType::FunctionDeclaration { ref header, .. } =
                     original_value_node.node_type
                 {
@@ -648,50 +712,78 @@ impl MiddleEnvironment {
                     }
                 }
 
-                let mut value = if let Some(x) = val {
-                    x
-                } else {
-                    if let NodeType::FunctionDeclaration { ref header, .. } =
-                        original_value_node.node_type
-                    {
-                        let new_scope = self.new_scope_from_parent_shallow(*scope);
+                let mut value = if let NodeType::FunctionDeclaration { ref header, .. } =
+                    original_value_node.node_type
+                {
+                    self.variables.insert(
+                        new_name.clone(),
+                        MiddleVariable {
+                            data_type: data_type.clone(),
+                            var_type: var_type.clone(),
+                            location: self.current_location.clone(),
+                        },
+                    );
 
-                        for param in header.parameters.iter() {
-                            let og_name = self.resolve_dollar_ident_only(scope, &param.0).unwrap();
-                            let new_name = get_disamubiguous_name(
-                                scope,
-                                Some(og_name.trim()),
-                                Some(&VarType::Mutable),
-                            );
-                            let data_type = self.resolve_potential_new_type(scope, param.1.clone());
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .mappings
+                        .insert(identifier.text.clone(), new_name.clone());
 
-                            self.variables.insert(
-                                new_name.clone(),
-                                MiddleVariable {
-                                    data_type: data_type.clone(),
-                                    var_type: VarType::Mutable,
-                                    location: self.current_location.clone(),
-                                },
-                            );
+                    let new_scope = self.new_scope_from_parent_shallow(*scope);
 
-                            self.scopes
-                                .get_mut(&new_scope)
-                                .unwrap()
-                                .mappings
-                                .insert(og_name.text.clone(), new_name.clone());
+                    for param in header.parameters.iter() {
+                        let og_name = self.resolve_dollar_ident_only(scope, &param.0).unwrap();
+                        let new_name = get_disamubiguous_name(
+                            scope,
+                            Some(og_name.trim()),
+                            Some(&VarType::Mutable),
+                        );
+                        let data_type = self.resolve_potential_new_type(scope, param.1.clone());
 
-                            self.scopes
-                                .get_mut(&new_scope)
-                                .unwrap()
-                                .defined
-                                .push(new_name.clone());
-                        }
+                        self.variables.insert(
+                            new_name.clone(),
+                            MiddleVariable {
+                                data_type: data_type.clone(),
+                                var_type: VarType::Mutable,
+                                location: self.current_location.clone(),
+                            },
+                        );
 
-                        self.evaluate(&new_scope, *value)?
-                    } else {
-                        self.evaluate(scope, *value)?
+                        self.scopes
+                            .get_mut(&new_scope)
+                            .unwrap()
+                            .mappings
+                            .insert(og_name.text.clone(), new_name.clone());
+
+                        self.scopes
+                            .get_mut(&new_scope)
+                            .unwrap()
+                            .defined
+                            .push(new_name.clone());
                     }
+
+                    self.evaluate(&new_scope, *value)?
+                } else {
+                    self.evaluate(scope, *value)?
                 };
+
+                if !matches!(original_value_node.node_type, NodeType::FunctionDeclaration { .. }) {
+                    self.variables.insert(
+                        new_name.clone(),
+                        MiddleVariable {
+                            data_type: data_type.clone(),
+                            var_type: var_type.clone(),
+                            location: self.current_location.clone(),
+                        },
+                    );
+
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .mappings
+                        .insert(identifier.text, new_name.clone());
+                }
 
                 fn contains_auto(pd: &ParserDataType) -> bool {
                     match &pd.data_type {
@@ -1765,10 +1857,48 @@ impl MiddleEnvironment {
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::ScopeDeclaration {
-                        body: stmts
-                            .into_iter()
-                            .filter(|x| x.node_type != MiddleNodeType::EmptyLine)
-                            .collect(),
+                        body: {
+                            let mut body: Vec<MiddleNode> = stmts
+                                .into_iter()
+                                .filter(|x| x.node_type != MiddleNodeType::EmptyLine)
+                                .collect();
+                            let defined = self
+                                .scopes
+                                .get(&new_scope)
+                                .map(|s| s.defined.clone())
+                                .unwrap_or_default();
+                            let defers_empty = self
+                                .scopes
+                                .get(&new_scope)
+                                .map(|s| s.defers.is_empty())
+                                .unwrap_or(true);
+                            if defers_empty {
+                                let mut protected_tail = Vec::new();
+                                if is_temp {
+                                    if let Some(last) = body.last() {
+                                        protected_tail = last
+                                            .identifiers_used()
+                                            .into_iter()
+                                            .map(|x| x.to_string())
+                                            .collect();
+                                    }
+                                }
+                                self.insert_auto_drops(&mut body, &defined, &protected_tail);
+                            }
+                            if is_temp && body.len() > 1 {
+                                let mut trailing = Vec::new();
+                                while matches!(body.last().map(|n| &n.node_type), Some(MiddleNodeType::Drop(_))) {
+                                    trailing.push(body.pop().unwrap());
+                                }
+                                if !trailing.is_empty() {
+                                    let insert_at = body.len().saturating_sub(1);
+                                    for drop_node in trailing.into_iter().rev() {
+                                        body.insert(insert_at, drop_node);
+                                    }
+                                }
+                            }
+                            body
+                        },
                         is_temp,
                         create_new_scope: og_create_new_scope.unwrap(),
                     },
@@ -2195,9 +2325,75 @@ impl MiddleEnvironment {
                     is_temp,
                 } = body.node_type
                 {
-                    let last = scope_body.pop();
+                    let mut last = scope_body.pop();
                     for defer in func_defers {
                         scope_body.push(self.evaluate(scope, defer)?);
+                    }
+
+                    if return_type.data_type != ParserInnerType::Null {
+                        if let Some(last_node) = last.take() {
+                            if matches!(last_node.node_type, MiddleNodeType::Return { .. }) {
+                                last = Some(last_node);
+                            } else {
+                                let simple_return = matches!(
+                                    last_node.node_type,
+                                    MiddleNodeType::Identifier(_)
+                                        | MiddleNodeType::IntLiteral(_)
+                                        | MiddleNodeType::FloatLiteral(_)
+                                        | MiddleNodeType::StringLiteral(_)
+                                        | MiddleNodeType::CharLiteral(_)
+                                        | MiddleNodeType::Null
+                                        | MiddleNodeType::MemberExpression { .. }
+                                );
+                                if simple_return {
+                                    last = Some(MiddleNode::new(
+                                        MiddleNodeType::Return {
+                                            value: Some(Box::new(last_node)),
+                                        },
+                                        self.current_span(),
+                                    ));
+                                } else {
+                                    let last_node = match last_node.node_type {
+                                        MiddleNodeType::IfStatement {
+                                            comparison,
+                                            then,
+                                            otherwise,
+                                        } => {
+                                            let wrap = |node: Box<MiddleNode>| {
+                                                if matches!(node.node_type, MiddleNodeType::Return { .. }) {
+                                                    node
+                                                } else {
+                                                    Box::new(MiddleNode::new(
+                                                        MiddleNodeType::Return {
+                                                            value: Some(node),
+                                                        },
+                                                        self.current_span(),
+                                                    ))
+                                                }
+                                            };
+                                            let then = wrap(then);
+                                            let otherwise = match otherwise {
+                                                Some(other) => Some(wrap(other)),
+                                                None => Some(Box::new(MiddleNode::new(
+                                                    MiddleNodeType::Return { value: None },
+                                                    self.current_span(),
+                                                ))),
+                                            };
+                                            MiddleNode {
+                                                span: last_node.span,
+                                                node_type: MiddleNodeType::IfStatement {
+                                                    comparison,
+                                                    then,
+                                                    otherwise,
+                                                },
+                                            }
+                                        }
+                                        _ => last_node,
+                                    };
+                                    last = Some(last_node);
+                                }
+                            }
+                        }
                     }
 
                     if let Some(last) = last {
@@ -2209,7 +2405,7 @@ impl MiddleEnvironment {
                         node_type: MiddleNodeType::ScopeDeclaration {
                             body: scope_body,
                             create_new_scope,
-                            is_temp,
+                            is_temp: true || is_temp,
                         },
                     }
                 } else {
@@ -2539,7 +2735,11 @@ impl MiddleEnvironment {
                     let mut lst = Vec::new();
 
                     for val in values {
-                        lst.push(self.resolve_potential_dollar_ident(scope, &val).unwrap());
+                        if val.to_string() == "*" {
+                            lst.push(ParserText::new(*val.span(), val.to_string()));
+                        }else{
+                            lst.push(self.resolve_potential_dollar_ident(scope, &val).unwrap());
+                        }
                     }
 
                     lst

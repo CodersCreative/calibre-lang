@@ -1,6 +1,7 @@
 use calibre_parser::ast::ParserInnerType;
 
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
+use dumpster::sync::Gc;
 
 impl RuntimeValue {
     pub fn convert(
@@ -66,41 +67,41 @@ impl RuntimeValue {
             (RuntimeValue::List(data), ParserInnerType::List(t)) => {
                 let mut lst = Vec::new();
 
-                for d in data {
+                for d in data.as_ref().0.iter().cloned() {
                     lst.push(d.convert(env, &t.data_type)?);
                 }
 
-                Ok(RuntimeValue::List(lst))
+                Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(lst))))
             }
             (x, ParserInnerType::List(t)) => {
                 let x = x.convert(env, &t)?;
-                Ok(RuntimeValue::List(vec![x]))
+                Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(vec![x]))))
             }
             (RuntimeValue::Option(x), ParserInnerType::Option(t)) => {
                 if let Some(x) = x {
-                    let x = x.convert(env, &t)?;
-                    Ok(RuntimeValue::Option(Some(Box::new(x))))
+                    let x = x.as_ref().clone().convert(env, &t)?;
+                    Ok(RuntimeValue::Option(Some(Gc::new(x))))
                 } else {
                     Ok(RuntimeValue::Option(None))
                 }
             }
             (x, ParserInnerType::Option(t)) => {
                 let x = x.convert(env, &t)?;
-                Ok(RuntimeValue::Option(Some(Box::new(x))))
+                Ok(RuntimeValue::Option(Some(Gc::new(x))))
             }
             (RuntimeValue::Result(x), ParserInnerType::Result { ok, err }) => match x {
                 Ok(x) => {
-                    let x = x.convert(env, &ok)?;
-                    Ok(RuntimeValue::Result(Ok(Box::new(x))))
+                    let x = x.as_ref().clone().convert(env, &ok)?;
+                    Ok(RuntimeValue::Result(Ok(Gc::new(x))))
                 }
                 Err(x) => {
-                    let x = x.convert(env, &err)?;
-                    Ok(RuntimeValue::Result(Err(Box::new(x))))
+                    let x = x.as_ref().clone().convert(env, &err)?;
+                    Ok(RuntimeValue::Result(Err(Gc::new(x))))
                 }
             },
             (x, ParserInnerType::Result { ok, err: _ }) => {
                 let x = x.convert(env, &ok)?;
-                Ok(RuntimeValue::Result(Ok(Box::new(x))))
+                Ok(RuntimeValue::Result(Ok(Gc::new(x))))
             }
             (x, t) => Err(RuntimeError::CantConvert(x, t.clone())),
         }

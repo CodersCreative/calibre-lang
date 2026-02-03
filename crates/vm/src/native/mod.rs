@@ -5,7 +5,7 @@ use crate::{VM, error::RuntimeError, value::RuntimeValue};
 pub mod global;
 pub mod stdlib;
 
-pub trait NativeFunction {
+pub trait NativeFunction: Send + Sync {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError>;
 
     fn name(&self) -> String;
@@ -94,7 +94,7 @@ impl VM {
                 .map(|x| x.to_string())
                 .unwrap_or(var.0);
 
-            let _ = self.variables.insert(name.clone(), var.1);
+            let _ = self.variables.insert(name, var.1);
         }
     }
 }

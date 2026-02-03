@@ -66,7 +66,7 @@ async fn run_source(
                     );
                     return Err(miette::miette!("runtime error"));
                 };
-                if let Err(err) = vm.run(&main, Vec::new()) {
+                if let Err(err) = vm.run(main.as_ref(), Vec::new()) {
                     let (span, inner) = err.innermost();
                     calibre_diagnostics::emit_runtime_error(
                         &path,
@@ -206,7 +206,7 @@ async fn run_source(
     }
 
     if let Some(main) = vm.registry.functions.get(&main_name).cloned() {
-        if let Err(err) = vm.run(&main, Vec::new()) {
+        if let Err(err) = vm.run(main.as_ref(), Vec::new()) {
             let (span, inner) = err.innermost();
             calibre_diagnostics::emit_runtime_error(
                 path,

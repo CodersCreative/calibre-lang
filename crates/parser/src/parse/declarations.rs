@@ -459,6 +459,11 @@ impl Parser {
                     SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
                 );
                 values
+            } else if self.first().token_type == TokenType::BinaryOperator(BinaryOperator::Mul) {
+                let value = self.eat();
+                vec![PotentialDollarIdentifier::Identifier(ParserText::from(
+                    value,
+                ))]
             } else {
                 vec![self.expect_potential_dollar_ident()]
             };

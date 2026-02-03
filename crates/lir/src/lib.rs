@@ -130,6 +130,7 @@ impl Display for LirLiteral {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LirNodeType {
+    Noop,
     Closure {
         label: String,
         captures: Vec<String>,
@@ -196,6 +197,7 @@ impl Display for LirNodeType {
             f,
             "{}",
             match self {
+                Self::Noop => "noop".to_string(),
                 Self::List {
                     elements,
                     data_type,
@@ -427,6 +429,33 @@ impl<'a> LirEnvironment<'a> {
         name
     }
 
+    fn lower_member_lvalue(&mut self, path: Vec<(MiddleNode, bool)>) -> LirNodeType {
+        let (base_node, _) = &path[0];
+        let mut current = match &base_node.node_type {
+            MiddleNodeType::Identifier(name) => {
+                LirNodeType::Ref(Box::new(LirNodeType::Load(name.to_string())))
+            }
+            _ => self.lower_node(base_node.clone()),
+        };
+
+        for (step, is_dynamic) in path.iter().skip(1) {
+            if *is_dynamic {
+                let idx = self.lower_node(step.clone());
+                current = LirNodeType::Index(Box::new(current), Box::new(idx));
+            } else {
+                let field = match &step.node_type {
+                    MiddleNodeType::Identifier(name) => name.to_string(),
+                    MiddleNodeType::IntLiteral(x) => x.to_string(),
+                    MiddleNodeType::FloatLiteral(x) => x.to_string(),
+                    x => panic!("Invalid field identifier : {}", x),
+                };
+                current = LirNodeType::Member(Box::new(current), field);
+            }
+        }
+
+        current
+    }
+
     fn add_instr(&mut self, instr: LirInstr) {
         let idx = self.current_block.0 as usize;
         self.blocks[idx].instructions.push(instr);
@@ -454,6 +483,10 @@ impl<'a> LirEnvironment<'a> {
     }
 
     pub fn lower_and_add_node(&mut self, node: MiddleNode) {
+        if matches!(node.node_type, MiddleNodeType::Return { .. }) {
+            let _ = self.lower_node(node);
+            return;
+        }
         let span = node.span;
         let value = self.lower_node(node);
         self.add_instr(LirInstr::new(span, value));
@@ -488,7 +521,7 @@ impl<'a> LirEnvironment<'a> {
                     fields: ObjectMap(lowered_fields),
                 }
             }
-            MiddleNodeType::EmptyLine => LirNodeType::Literal(LirLiteral::Null),
+            MiddleNodeType::EmptyLine => LirNodeType::Noop,
             MiddleNodeType::Drop(name) => LirNodeType::Drop(name.to_string()),
             MiddleNodeType::Move(name) => LirNodeType::Move(name.to_string()),
             MiddleNodeType::Identifier(name) => LirNodeType::Load(name.to_string()),
@@ -547,13 +580,38 @@ impl<'a> LirEnvironment<'a> {
                 let mut sub_lowerer = LirEnvironment::new(self.env);
 
                 let body_span = body.span;
-                let body_val = sub_lowerer.lower_node(*body);
+                let fallback_expr = match &body.node_type {
+                    MiddleNodeType::ScopeDeclaration { body, .. } => body.last().cloned(),
+                    _ => None,
+                };
+                let mut body_val = sub_lowerer.lower_node(*body);
+                let mut has_body_value = !matches!(body_val, LirNodeType::Literal(LirLiteral::Null));
+
+                if !has_body_value {
+                    if let Some(expr) = fallback_expr {
+                        let simple_fallback = matches!(
+                            expr.node_type,
+                            MiddleNodeType::Identifier(_)
+                                | MiddleNodeType::IntLiteral(_)
+                                | MiddleNodeType::FloatLiteral(_)
+                                | MiddleNodeType::StringLiteral(_)
+                                | MiddleNodeType::CharLiteral(_)
+                                | MiddleNodeType::Null
+                                | MiddleNodeType::MemberExpression { .. }
+                        );
+                        if simple_fallback {
+                            body_val = sub_lowerer.lower_node(expr);
+                            has_body_value = true;
+                        }
+                    }
+                }
 
                 if sub_lowerer
                     .blocks
                     .last()
                     .map(|b| b.terminator.is_none())
                     .unwrap_or(false)
+                    && has_body_value
                 {
                     sub_lowerer.set_terminator(LirTerminator::Return {
                         span: body_span,
@@ -718,18 +776,58 @@ impl<'a> LirEnvironment<'a> {
                 LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::Return { value } => {
-                let (ret_span, val) = match value {
-                    Some(v) => {
-                        let value_span = v.span;
-                        (value_span, Some(self.lower_node(*v)))
+                if let Some(v) = value {
+                    if let MiddleNodeType::IfStatement {
+                        comparison,
+                        then,
+                        otherwise,
+                    } = v.node_type
+                    {
+                        let then_id = self.create_block();
+                        let else_id = self.create_block();
+                        let merge_id = self.create_block();
+
+                        let cond = self.lower_node(*comparison);
+                        self.set_terminator(LirTerminator::Branch {
+                            span,
+                            condition: cond,
+                            then_block: then_id,
+                            else_block: else_id,
+                        });
+
+                        self.switch_to(then_id);
+                        let then_return = MiddleNode::new(
+                            MiddleNodeType::Return {
+                                value: Some(then),
+                            },
+                            span,
+                        );
+                        let _ = self.lower_node(then_return);
+
+                        self.switch_to(else_id);
+                        let else_return = MiddleNode::new(
+                            MiddleNodeType::Return {
+                                value: otherwise.map(|o| o),
+                            },
+                            span,
+                        );
+                        let _ = self.lower_node(else_return);
+
+                        self.switch_to(merge_id);
+                        return LirNodeType::Literal(LirLiteral::Null);
                     }
-                    None => (span, None),
-                };
-                self.set_terminator(LirTerminator::Return {
-                    span: ret_span,
-                    value: val,
-                });
-                LirNodeType::Literal(LirLiteral::Null)
+
+                    let value_span = v.span;
+                    let val = self.lower_node(*v);
+                    self.set_terminator(LirTerminator::Return {
+                        span: value_span,
+                        value: Some(val),
+                    });
+                    LirNodeType::Literal(LirLiteral::Null)
+                } else {
+                    self.set_terminator(LirTerminator::Return { span, value: None });
+                    LirNodeType::Literal(LirLiteral::Null)
+                }
             }
             MiddleNodeType::Break => {
                 let (_, exit) = *self.loop_stack.last().expect("Break outside loop");
@@ -842,12 +940,8 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::DerefStatement { value } => {
                 LirLValue::Ptr(Box::new(self.lower_node(*value)))
             }
-            MiddleNodeType::MemberExpression { .. } => {
-                if let LirNodeType::Deref(addr) = self.lower_node(node) {
-                    LirLValue::Ptr(addr)
-                } else {
-                    panic!("Member expression must resolve to a pointer address")
-                }
+            MiddleNodeType::MemberExpression { path } => {
+                LirLValue::Ptr(Box::new(self.lower_member_lvalue(path)))
             }
             _ => panic!("Invalid L-Value: Assignment target must be a variable or memory location"),
         }

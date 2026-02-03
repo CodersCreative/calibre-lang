@@ -1,10 +1,12 @@
 use calibre_parser::ast::{
+    ObjectMap,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
 
 use crate::{error::RuntimeError, value::RuntimeValue};
+use dumpster::sync::Gc;
 
 fn comparison_value_handle<T: PartialEq + PartialOrd>(
     op: &ComparisonOperator,
@@ -206,14 +208,16 @@ impl RuntimeValue {
 
     fn special_shr(self, rhs: Self) -> Result<RuntimeValue, RuntimeError> {
         match rhs {
-            Self::Aggregate(None, mut data) => {
+            Self::Aggregate(None, data) => {
+                let mut data = data.as_ref().0 .0.clone();
                 let key = (data.len() - 1).to_string();
                 data.push((key, self));
-                Ok(Self::Aggregate(None, data))
+                Ok(Self::Aggregate(None, Gc::new(crate::value::GcMap(ObjectMap(data)))))
             }
-            Self::List(mut data) => {
+            Self::List(data) => {
+                let mut data = data.as_ref().0.clone();
                 data.push(self);
-                Ok(Self::List(data))
+                Ok(Self::List(Gc::new(crate::value::GcVec(data))))
             }
             _ => match rhs {
                 _ => self.panic_operator(&rhs, &BinaryOperator::Shl),
@@ -223,14 +227,16 @@ impl RuntimeValue {
 
     fn special_shl(self, rhs: Self) -> Result<RuntimeValue, RuntimeError> {
         match self {
-            Self::Aggregate(None, mut data) => {
+            Self::Aggregate(None, data) => {
+                let mut data = data.as_ref().0 .0.clone();
                 let key = (data.len() - 1).to_string();
                 data.push((key, rhs));
-                Ok(Self::Aggregate(None, data))
+                Ok(Self::Aggregate(None, Gc::new(crate::value::GcMap(ObjectMap(data)))))
             }
-            Self::List(mut data) => {
+            Self::List(data) => {
+                let mut data = data.as_ref().0.clone();
                 data.push(rhs);
-                Ok(Self::List(data))
+                Ok(Self::List(Gc::new(crate::value::GcVec(data))))
             }
             _ => match rhs {
                 _ => self.panic_operator(&rhs, &BinaryOperator::Shl),

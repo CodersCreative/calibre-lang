@@ -11,12 +11,13 @@ use calibre_parser::lexer::Span;
 use rand::random_range;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::fmt::Display;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VMRegistry {
-    #[serde(with = "crate::serde_fxhashmap")]
-    pub functions: FxHashMap<String, VMFunction>,
+    #[serde(with = "crate::serde_fxhashmap_rc")]
+    pub functions: FxHashMap<String, Arc<VMFunction>>,
     #[serde(with = "crate::serde_fxhashmap")]
     pub globals: FxHashMap<String, VMGlobal>,
 }
@@ -30,7 +31,7 @@ impl Display for VMRegistry {
         }
 
         for func in &self.functions {
-            txt.push_str(&format!("{}\n\n", func.1));
+            txt.push_str(&format!("{}\n\n", func.1.as_ref()));
         }
 
         write!(f, "{}", txt)
@@ -42,7 +43,7 @@ impl From<LirRegistry> for VMRegistry {
         let mut functions = FxHashMap::default();
 
         for (k, func) in value.functions {
-            functions.insert(k, func.into());
+            functions.insert(k, Arc::new(func.into()));
         }
 
         let mut globals = FxHashMap::default();
@@ -307,6 +308,8 @@ impl VMInstruction {
             Self::Index => "INDEX".to_string(),
             Self::LoadMember(x) => format!("LOADMEMBER {}", strings[*x as usize]),
             Self::SetMember(x) => format!("SETMEMBER {}", strings[*x as usize]),
+            Self::SetIndex => String::from("SETINDEX"),
+            Self::SetRef => String::from("SETREF"),
             Self::As(x) => format!("AS {}", x),
             Self::Enum {
                 name,
@@ -346,6 +349,8 @@ pub enum VMInstruction {
     Index,
     LoadMember(StringIndex),
     SetMember(StringIndex),
+    SetIndex,
+    SetRef,
     Enum {
         name: StringIndex,
         variant: u8,
@@ -391,6 +396,7 @@ impl VMBlock {
     pub fn translate(&mut self, node: LirInstr) {
         let span = node.span;
         match node.node_type {
+            LirNodeType::Noop => {}
             LirNodeType::Literal(x) => {
                 self.local_literals.push(x.into());
                 self.push_instr(
@@ -490,15 +496,6 @@ impl VMBlock {
                         let name = self.add_string(name);
                         self.push_instr(VMInstruction::LoadVarRef(name), span);
                     }
-                    LirNodeType::Member(x, member) => match *x {
-                        LirNodeType::Load(name) => {
-                            let name = self.add_string(name);
-                            let member = self.add_string(member);
-                            self.push_instr(VMInstruction::LoadVarRef(name), span);
-                            self.push_instr(VMInstruction::LoadMember(member), span);
-                        }
-                        _ => unimplemented!(),
-                    },
                     other => {
                         self.translate(LirInstr::new(span, other));
                         self.push_instr(VMInstruction::MakeRef, span);
@@ -543,7 +540,28 @@ impl VMBlock {
                 let dest = self.add_string(dest);
                 self.push_instr(VMInstruction::DeclareVar(dest), span);
             }
-            LirNodeType::Assign { .. } => todo!(),
+            LirNodeType::Assign {
+                dest: LirLValue::Ptr(ptr),
+                value,
+            } => match *ptr {
+                LirNodeType::Member(base, member) => {
+                    self.translate(LirInstr::new(span, *base));
+                    self.translate(LirInstr::new(span, *value));
+                    let member = self.add_string(member);
+                    self.push_instr(VMInstruction::SetMember(member), span);
+                }
+                LirNodeType::Index(base, index) => {
+                    self.translate(LirInstr::new(span, *index));
+                    self.translate(LirInstr::new(span, *base));
+                    self.translate(LirInstr::new(span, *value));
+                    self.push_instr(VMInstruction::SetIndex, span);
+                }
+                other => {
+                    self.translate(LirInstr::new(span, other));
+                    self.translate(LirInstr::new(span, *value));
+                    self.push_instr(VMInstruction::SetRef, span);
+                }
+            },
             LirNodeType::Index(value, index) => {
                 self.translate(LirInstr::new(span, *index));
                 self.translate(LirInstr::new(span, *value));

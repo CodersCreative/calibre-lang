@@ -30,6 +30,6 @@ pub fn setup_scope(env: &mut VM, name: &str, funcs: &[&'static str]) {
             .map(|x| x.to_string())
             .unwrap_or(var.0);
 
-        let _ = env.variables.insert(name.clone(), var.1);
+        let _ = env.variables.insert(name, var.1);
     }
 }

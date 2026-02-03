@@ -2,11 +2,13 @@ use std::{
     collections::HashMap,
     f64::consts::PI,
     fmt::{Debug, Display},
-    rc::Rc,
+    sync::Arc,
 };
 
 use calibre_lir::BlockId;
 use calibre_parser::ast::ObjectMap;
+use dumpster::{TraceWith, Visitor};
+use dumpster::sync::Gc;
 
 use crate::{
     VM,
@@ -16,6 +18,30 @@ use crate::{
 
 pub mod conversion;
 pub mod operation;
+
+#[derive(Debug, Clone)]
+pub struct GcVec(pub Vec<RuntimeValue>);
+
+#[derive(Debug, Clone)]
+pub struct GcMap(pub ObjectMap<RuntimeValue>);
+
+unsafe impl<V: Visitor> TraceWith<V> for GcVec {
+    fn accept(&self, visitor: &mut V) -> Result<(), ()> {
+        for item in self.0.iter() {
+            item.accept(visitor)?;
+        }
+        Ok(())
+    }
+}
+
+unsafe impl<V: Visitor> TraceWith<V> for GcMap {
+    fn accept(&self, visitor: &mut V) -> Result<(), ()> {
+        for (_, value) in self.0 .0.iter() {
+            value.accept(visitor)?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 pub enum RuntimeValue {
@@ -27,18 +53,34 @@ pub enum RuntimeValue {
     Bool(bool),
     Str(String),
     Char(char),
-    Aggregate(Option<String>, ObjectMap<RuntimeValue>),
-    Enum(String, usize, Option<Box<RuntimeValue>>),
+    Aggregate(Option<String>, Gc<GcMap>),
+    Enum(String, usize, Option<Gc<RuntimeValue>>),
     Ref(String),
-    List(Vec<RuntimeValue>),
-    Option(Option<Box<RuntimeValue>>),
-    Result(Result<Box<RuntimeValue>, Box<RuntimeValue>>),
-    NativeFunction(Rc<dyn NativeFunction>),
+    SlotRef(usize),
+    List(Gc<GcVec>),
+    Option(Option<Gc<RuntimeValue>>),
+    Result(Result<Gc<RuntimeValue>, Gc<RuntimeValue>>),
+    NativeFunction(Arc<dyn NativeFunction>),
     Function {
         name: String,
         captures: Vec<String>,
     },
 }
+
+unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
+    fn accept(&self, visitor: &mut V) -> Result<(), ()> {
+        match self {
+            RuntimeValue::Aggregate(_, map) => map.accept(visitor),
+            RuntimeValue::Enum(_, _, Some(x)) => x.accept(visitor),
+            RuntimeValue::List(x) => x.accept(visitor),
+            RuntimeValue::Option(Some(x)) => x.accept(visitor),
+            RuntimeValue::Result(Ok(x)) => x.accept(visitor),
+            RuntimeValue::Result(Err(x)) => x.accept(visitor),
+            _ => Ok(()),
+        }
+    }
+}
+
 
 impl RuntimeValue {
     pub fn constants() -> HashMap<String, Self> {
@@ -55,28 +97,28 @@ impl RuntimeValue {
     }
 
     pub fn natives() -> HashMap<String, Self> {
-        let lst: Vec<(&'static str, Rc<dyn NativeFunction>)> = vec![
-            ("print", Rc::new(native::stdlib::console::Out())),
-            ("ok", Rc::new(native::global::OkFn())),
-            ("err", Rc::new(native::global::ErrFn())),
-            ("some", Rc::new(native::global::SomeFn())),
-            ("len", Rc::new(native::global::Len())),
-            ("trim", Rc::new(native::global::Trim())),
-            ("discriminant", Rc::new(native::global::DiscriminantFn())),
-            ("tuple", Rc::new(native::global::TupleFn())),
-            ("panic", Rc::new(native::global::PanicFn())),
-            ("min_or_zero", Rc::new(native::global::MinOrZero())),
-            ("console.out", Rc::new(native::stdlib::console::Out())),
-            ("console.input", Rc::new(native::stdlib::console::Input())),
-            ("console.err", Rc::new(native::stdlib::console::ErrFn())),
-            ("console.clear", Rc::new(native::stdlib::console::Clear())),
-            ("thread.wait", Rc::new(native::stdlib::thread::Wait())),
+        let lst: Vec<(&'static str, Arc<dyn NativeFunction>)> = vec![
+            ("print", Arc::new(native::stdlib::console::Out())),
+            ("ok", Arc::new(native::global::OkFn())),
+            ("err", Arc::new(native::global::ErrFn())),
+            ("some", Arc::new(native::global::SomeFn())),
+            ("len", Arc::new(native::global::Len())),
+            ("trim", Arc::new(native::global::Trim())),
+            ("discriminant", Arc::new(native::global::DiscriminantFn())),
+            ("tuple", Arc::new(native::global::TupleFn())),
+            ("panic", Arc::new(native::global::PanicFn())),
+            ("min_or_zero", Arc::new(native::global::MinOrZero())),
+            ("console.out", Arc::new(native::stdlib::console::Out())),
+            ("console.input", Arc::new(native::stdlib::console::Input())),
+            ("console.err", Arc::new(native::stdlib::console::ErrFn())),
+            ("console.clear", Arc::new(native::stdlib::console::Clear())),
+            ("thread.wait", Arc::new(native::stdlib::thread::Wait())),
             (
                 "random.generate",
-                Rc::new(native::stdlib::random::Generate()),
+                Arc::new(native::stdlib::random::Generate()),
             ),
-            ("random.bool", Rc::new(native::stdlib::random::Bool())),
-            ("random.ratio", Rc::new(native::stdlib::random::Ratio())),
+            ("random.bool", Arc::new(native::stdlib::random::Bool())),
+            ("random.ratio", Arc::new(native::stdlib::random::Ratio())),
         ];
 
         let mut map = HashMap::new();
@@ -105,7 +147,7 @@ impl From<VMLiteral> for RuntimeValue {
     }
 }
 
-fn print_list<T: Display>(data: &Vec<T>, open: char, close: char) -> String {
+fn print_list<T: Display>(data: &[T], open: char, close: char) -> String {
     let mut txt = String::from(open);
 
     for val in data.iter() {
@@ -124,24 +166,35 @@ impl Display for RuntimeValue {
             Self::Null => write!(f, "null"),
             Self::Float(x) => write!(f, "{}f", x),
             Self::Int(x) => write!(f, "{}", x),
-            Self::Enum(x, y, Some(z)) => write!(f, "{}[{}] : {}", x, y, z),
+            Self::Enum(x, y, Some(z)) => write!(f, "{}[{}] : {}", x, y, z.as_ref()),
             Self::Enum(x, y, _) => write!(f, "{}[{}]", x, y),
             Self::Range(from, to) => write!(f, "{}..{}", from, to),
             Self::Ref(x) => write!(f, "ref -> {}", x),
+            Self::SlotRef(x) => write!(f, "slotref -> {}", x),
             Self::Bool(x) => write!(f, "{}", if *x { "true" } else { "false" }),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
                     write!(
                         f,
                         "{}",
-                        print_list(&data.0.iter().map(|x| &x.1).collect(), '(', ')')
+                        print_list(
+                            &data
+                                .as_ref()
+                                .0
+                                .0
+                                .iter()
+                                .map(|x| &x.1)
+                                .collect::<Vec<_>>(),
+                            '(',
+                            ')'
+                        )
                     )
-                } else if data.is_empty() {
+                } else if data.as_ref().0.is_empty() {
                     write!(f, "{}{{}}", x.as_ref().unwrap())
                 } else {
                     let mut txt = format!("{}{{\n", x.as_ref().unwrap());
 
-                    for val in data.iter() {
+                    for val in data.as_ref().0.iter() {
                         txt.push_str(&format!("\t{} : {},\n", val.0, val.1));
                     }
 
@@ -151,12 +204,12 @@ impl Display for RuntimeValue {
                     write!(f, "{}", txt)
                 }
             }
-            Self::List(x) => write!(f, "{}", print_list(&x, '[', ']')),
+            Self::List(x) => write!(f, "{}", print_list(&x.as_ref().0, '[', ']')),
             Self::NativeFunction(x) => write!(f, "fn {} ...", x.name()),
-            Self::Option(Some(x)) => write!(f, "Some : {}", x),
+            Self::Option(Some(x)) => write!(f, "Some : {}", x.as_ref()),
             Self::Option(_) => write!(f, "None"),
-            Self::Result(Ok(x)) => write!(f, "Ok : {}", x),
-            Self::Result(Err(x)) => write!(f, "Err : {}", x),
+            Self::Result(Ok(x)) => write!(f, "Ok : {}", x.as_ref()),
+            Self::Result(Err(x)) => write!(f, "Err : {}", x.as_ref()),
             Self::Str(x) => write!(f, "{}", x),
             Self::Char(x) => write!(f, "{}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
@@ -178,6 +231,7 @@ impl VM {
                 .get(&pointer)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ref(pointer)),
+            RuntimeValue::SlotRef(slot) => self.get_slot_value(slot),
             other => other,
         }
     }
@@ -189,6 +243,7 @@ impl VM {
                 .get(&pointer)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ref(pointer)),
+            RuntimeValue::SlotRef(slot) => self.get_slot_value(slot),
             other => other,
         }
     }
@@ -196,9 +251,10 @@ impl VM {
     pub fn convert_runtime_var_into_saveable(&mut self, value: RuntimeValue) -> RuntimeValue {
         fn transform(env: &mut VM, val: RuntimeValue) -> RuntimeValue {
             match val {
-                RuntimeValue::Aggregate(x, ObjectMap(map)) => {
+                RuntimeValue::SlotRef(slot) => transform(env, env.get_slot_value(slot)),
+                RuntimeValue::Aggregate(x, map) => {
                     let mut new_map = Vec::new();
-                    for (k, v) in map {
+                    for (k, v) in map.as_ref().0 .0.iter().cloned() {
                         let inner_val = transform(env, v);
                         match inner_val {
                             RuntimeValue::Ref(name) => {
@@ -211,11 +267,11 @@ impl VM {
                             }
                         }
                     }
-                    RuntimeValue::Aggregate(x, ObjectMap(new_map))
+                    RuntimeValue::Aggregate(x, Gc::new(GcMap(ObjectMap(new_map))))
                 }
                 RuntimeValue::List(data) => {
                     let mut lst = Vec::new();
-                    for v in data {
+                    for v in data.as_ref().0.iter().cloned() {
                         let inner_val = transform(env, v);
                         match inner_val {
                             RuntimeValue::Ref(name) => {
@@ -228,57 +284,57 @@ impl VM {
                             }
                         }
                     }
-                    RuntimeValue::List(lst)
+                    RuntimeValue::List(Gc::new(GcVec(lst)))
                 }
                 RuntimeValue::Enum(x, y, Some(data)) => {
-                    let inner_val = transform(env, *data);
+                    let inner_val = transform(env, data.as_ref().clone());
                     match inner_val {
                         RuntimeValue::Ref(name) => {
-                            RuntimeValue::Enum(x, y, Some(Box::new(RuntimeValue::Ref(name))))
+                            RuntimeValue::Enum(x, y, Some(Gc::new(RuntimeValue::Ref(name))))
                         }
                         other => {
                             let name = env.alloc_ref_id();
                             env.variables.insert(name.clone(), other);
-                            RuntimeValue::Enum(x, y, Some(Box::new(RuntimeValue::Ref(name))))
+                            RuntimeValue::Enum(x, y, Some(Gc::new(RuntimeValue::Ref(name))))
                         }
                     }
                 }
                 RuntimeValue::Option(Some(data)) => {
-                    let inner_val = transform(env, *data);
+                    let inner_val = transform(env, data.as_ref().clone());
                     match inner_val {
                         RuntimeValue::Ref(name) => {
-                            RuntimeValue::Option(Some(Box::new(RuntimeValue::Ref(name))))
+                            RuntimeValue::Option(Some(Gc::new(RuntimeValue::Ref(name))))
                         }
                         other => {
                             let name = env.alloc_ref_id();
                             env.variables.insert(name.clone(), other);
-                            RuntimeValue::Option(Some(Box::new(RuntimeValue::Ref(name))))
+                            RuntimeValue::Option(Some(Gc::new(RuntimeValue::Ref(name))))
                         }
                     }
                 }
                 RuntimeValue::Result(Ok(data)) => {
-                    let inner_val = transform(env, *data);
+                    let inner_val = transform(env, data.as_ref().clone());
                     match inner_val {
                         RuntimeValue::Ref(name) => {
-                            RuntimeValue::Result(Ok(Box::new(RuntimeValue::Ref(name))))
+                            RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Ref(name))))
                         }
                         other => {
                             let name = env.alloc_ref_id();
                             env.variables.insert(name.clone(), other);
-                            RuntimeValue::Result(Ok(Box::new(RuntimeValue::Ref(name))))
+                            RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Ref(name))))
                         }
                     }
                 }
                 RuntimeValue::Result(Err(data)) => {
-                    let inner_val = transform(env, *data);
+                    let inner_val = transform(env, data.as_ref().clone());
                     match inner_val {
                         RuntimeValue::Ref(name) => {
-                            RuntimeValue::Result(Err(Box::new(RuntimeValue::Ref(name))))
+                            RuntimeValue::Result(Err(Gc::new(RuntimeValue::Ref(name))))
                         }
                         other => {
                             let name = env.alloc_ref_id();
                             env.variables.insert(name.clone(), other);
-                            RuntimeValue::Result(Err(Box::new(RuntimeValue::Ref(name))))
+                            RuntimeValue::Result(Err(Gc::new(RuntimeValue::Ref(name))))
                         }
                     }
                 }

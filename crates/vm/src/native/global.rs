@@ -1,4 +1,5 @@
 use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
+use dumpster::sync::Gc;
 
 pub struct ErrFn();
 
@@ -9,9 +10,9 @@ impl NativeFunction for ErrFn {
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         Ok(if let Some(x) = args.get(0) {
-            RuntimeValue::Result(Err(Box::new(x.clone())))
+            RuntimeValue::Result(Err(Gc::new(x.clone())))
         } else {
-            RuntimeValue::Result(Err(Box::new(RuntimeValue::Str(String::from(
+            RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(String::from(
                 "Add parameter",
             )))))
         })
@@ -26,9 +27,9 @@ impl NativeFunction for OkFn {
     }
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         Ok(if let Some(x) = args.get(0) {
-            RuntimeValue::Result(Ok(Box::new(x.clone())))
+            RuntimeValue::Result(Ok(Gc::new(x.clone())))
         } else {
-            RuntimeValue::Result(Err(Box::new(RuntimeValue::Str(String::from(
+            RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(String::from(
                 "Add parameter",
             )))))
         })
@@ -46,7 +47,7 @@ impl NativeFunction for TupleFn {
         for arg in args {
             tple.push(arg.clone());
         }
-        Ok(RuntimeValue::Aggregate(None, tple.into()))
+        Ok(RuntimeValue::Aggregate(None, Gc::new(crate::value::GcMap(tple.into()))))
     }
 }
 
@@ -58,7 +59,7 @@ impl NativeFunction for SomeFn {
     }
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         Ok(if let Some(x) = args.get(0) {
-            RuntimeValue::Option(Some(Box::new(x.clone())))
+            RuntimeValue::Option(Some(Gc::new(x.clone())))
         } else {
             RuntimeValue::Option(None)
         })
@@ -89,8 +90,8 @@ impl NativeFunction for Len {
                 x = env.variables.get(r).ok_or(RuntimeError::DanglingRef(r.clone()))?;
             }
             Ok(RuntimeValue::Int(match x {
-                RuntimeValue::List(data) => data.len() as i64,
-                RuntimeValue::Aggregate(_, data) => data.len() as i64,
+                RuntimeValue::List(data) => data.as_ref().0.len() as i64,
+                RuntimeValue::Aggregate(_, data) => data.as_ref().0 .0.len() as i64,
                 RuntimeValue::Range(_, x) => *x,
                 RuntimeValue::Str(x) => x.len() as i64,
                 RuntimeValue::Int(x) => *x,
