@@ -8,15 +8,15 @@ use crate::{
 };
 use binary::BinaryOperator;
 use comparison::ComparisonOperator;
+use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
-    collections::HashMap,
     fmt::{Debug, Display},
     ops::{Deref, DerefMut},
     str::FromStr,
     string::ParseError,
 };
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum RefMutability {
@@ -130,6 +130,7 @@ pub enum ParserInnerType {
         generic_types: Vec<ParserDataType>,
     },
     NativeFunction(Box<ParserDataType>),
+    Ptr(Box<ParserDataType>),
 }
 
 impl ParserDataType {
@@ -232,6 +233,7 @@ impl Display for ParserInnerType {
             Self::Result { err, ok } => write!(f, "{}!{}", err, ok),
             Self::Option(x) => write!(f, "{}?", x),
             Self::NativeFunction(x) => write!(f, "native -> {}", x),
+            Self::Ptr(x) => write!(f, "ptr<{}>", x),
             Self::Struct(x) => write!(f, "{}", x),
             Self::StructWithGenerics {
                 identifier,
@@ -441,6 +443,12 @@ pub enum ObjectType<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DestructurePattern {
+    Tuple(Vec<Option<(VarType, PotentialDollarIdentifier)>>),
+    Struct(Vec<(String, VarType, PotentialDollarIdentifier)>),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ObjectMap<T>(pub Vec<(String, T)>);
 
 impl<T> ObjectMap<T> {
@@ -458,8 +466,8 @@ impl<T> ObjectMap<T> {
     }
 }
 
-impl<T> From<HashMap<String, T>> for ObjectMap<T> {
-    fn from(value: HashMap<String, T>) -> Self {
+impl<T> From<FxHashMap<String, T>> for ObjectMap<T> {
+    fn from(value: FxHashMap<String, T>) -> Self {
         Self(value.into_iter().collect())
     }
 }
@@ -505,7 +513,7 @@ impl<T> DerefMut for ObjectMap<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VarType {
     Mutable,
     Immutable,
@@ -548,7 +556,7 @@ pub struct Node {
     pub span: Span,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ParserText {
     pub text: String,
     pub span: Span,
@@ -559,7 +567,7 @@ impl From<Token> for ParserText {
         Self::new(value.span, value.value)
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum PotentialDollarIdentifier {
     DollarIdentifier(ParserText),
     Identifier(ParserText),
@@ -661,6 +669,7 @@ pub enum MatchArmType {
         value: PotentialDollarIdentifier,
         var_type: VarType,
         name: Option<PotentialDollarIdentifier>,
+        destructure: Option<DestructurePattern>,
     },
     Let {
         var_type: VarType,
@@ -721,6 +730,7 @@ pub struct FunctionHeader {
     pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
     pub return_type: PotentialNewType,
     pub is_async: bool,
+    pub param_destructures: Vec<(PotentialDollarIdentifier, DestructurePattern)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -757,6 +767,9 @@ pub enum NodeType {
     },
     Drop(PotentialDollarIdentifier),
     Move(PotentialDollarIdentifier),
+    MoveExpression {
+        value: Box<Node>,
+    },
     Defer {
         value: Box<Node>,
         function: bool,
@@ -784,6 +797,9 @@ pub enum NodeType {
         value: PotentialDollarIdentifier,
         data: Option<Box<Node>>,
     },
+    TupleLiteral {
+        values: Vec<Node>,
+    },
     ScopeAlias {
         identifier: PotentialDollarIdentifier,
         value: NamedScope,
@@ -808,8 +824,25 @@ pub enum NodeType {
         header: FunctionHeader,
         body: Box<Node>,
     },
+    ExternFunctionDeclaration {
+        abi: String,
+        identifier: PotentialDollarIdentifier,
+        parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
+        return_type: PotentialNewType,
+        library: String,
+        symbol: Option<String>,
+    },
     AssignmentExpression {
         identifier: Box<Node>,
+        value: Box<Node>,
+    },
+    DestructureDeclaration {
+        var_type: VarType,
+        pattern: DestructurePattern,
+        value: Box<Node>,
+    },
+    DestructureAssignment {
+        pattern: DestructurePattern,
         value: Box<Node>,
     },
     NotExpression {

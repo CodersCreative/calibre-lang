@@ -4,8 +4,8 @@ pub mod memory;
 use std::{collections::HashMap, error::Error};
 
 use calibre_lir::{LirGlobal, LirLValue, LirLiteral, LirNodeType, LirRegistry};
+use calibre_mir::ast::{MiddleNode, MiddleNodeType};
 use calibre_mir::environment::MiddleObject;
-use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::binary::BinaryOperator;
 use calibre_parser::ast::{
     Node, NodeType, ObjectType, ParserDataType, ParserInnerType, TypeDefType, VarType,

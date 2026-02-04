@@ -3,9 +3,9 @@ use crate::ast::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Parser,
     ast::{
-        Node, NodeType, ObjectMap, Overload, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType,
-        VarType,
+        FunctionHeader, Node, NodeType, ObjectMap, Overload, ParserDataType, ParserInnerType,
+        ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
+        TypeDefType, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
@@ -161,6 +161,7 @@ impl MiddleEnvironment {
             ParserInnerType::Range => "range".to_string(),
             ParserInnerType::Struct(s) => format!("struct_{}", s),
             ParserInnerType::List(x) => format!("list_{}", Self::canonical_type_key(x)),
+            ParserInnerType::Ptr(x) => format!("ptr_{}", Self::canonical_type_key(x)),
             ParserInnerType::Option(x) => format!("opt_{}", Self::canonical_type_key(x)),
             ParserInnerType::Result { ok, err } => format!(
                 "res_{}_{}",
@@ -375,7 +376,10 @@ impl MiddleEnvironment {
                 value: Box::new(Node::new(
                     self.current_span(),
                     NodeType::FunctionDeclaration {
-                        header: new_header,
+                        header: FunctionHeader {
+                            param_destructures: Vec::new(),
+                            ..new_header
+                        },
                         body: Box::new(body.clone()),
                     },
                 )),
@@ -409,6 +413,9 @@ impl MiddleEnvironment {
             ),
             ParserInnerType::List(x) => {
                 ParserInnerType::List(Box::new(self.substitute_data_type(x, subst)))
+            }
+            ParserInnerType::Ptr(x) => {
+                ParserInnerType::Ptr(Box::new(self.substitute_data_type(x, subst)))
             }
             ParserInnerType::Option(x) => {
                 ParserInnerType::Option(Box::new(self.substitute_data_type(x, subst)))
@@ -471,6 +478,9 @@ impl MiddleEnvironment {
                     }
                 }
                 (ParserInnerType::List(p), ParserInnerType::List(a)) => {
+                    unify_pat(env, template_params, p, a, out)
+                }
+                (ParserInnerType::Ptr(p), ParserInnerType::Ptr(a)) => {
                     unify_pat(env, template_params, p, a, out)
                 }
                 (ParserInnerType::Option(p), ParserInnerType::Option(a)) => {
@@ -650,6 +660,7 @@ impl MiddleEnvironment {
                         ParserInnerType::Auto(_) => true,
                         ParserInnerType::Tuple(xs) => xs.iter().any(contains_auto),
                         ParserInnerType::List(x) => contains_auto(x),
+                        ParserInnerType::Ptr(x) => contains_auto(x),
                         ParserInnerType::Option(x) => contains_auto(x),
                         ParserInnerType::Result { ok, err } => {
                             contains_auto(ok) || contains_auto(err)
@@ -808,6 +819,7 @@ impl MiddleEnvironment {
                                     xs.iter().any(contains_auto)
                                 }
                                 calibre_parser::ast::ParserInnerType::List(x) => contains_auto(x),
+                                calibre_parser::ast::ParserInnerType::Ptr(x) => contains_auto(x),
                                 calibre_parser::ast::ParserInnerType::Option(x) => contains_auto(x),
                                 calibre_parser::ast::ParserInnerType::Result { ok, err } => {
                                     contains_auto(ok) || contains_auto(err)
@@ -1101,7 +1113,8 @@ impl MiddleEnvironment {
                     },
                     _ => None,
                 })
-                .flatten(),
+                .flatten()
+                .or_else(|| Some(x.clone())),
         }
     }
 
@@ -1277,6 +1290,10 @@ impl MiddleEnvironment {
                 data_type: ParserInnerType::List(Box::new(self.resolve_data_type(scope, *x))),
                 span: data_type.span,
             },
+            ParserInnerType::Ptr(x) => ParserDataType {
+                data_type: ParserInnerType::Ptr(Box::new(self.resolve_data_type(scope, *x))),
+                span: data_type.span,
+            },
             ParserInnerType::Option(x) => ParserDataType {
                 data_type: ParserInnerType::Option(Box::new(self.resolve_data_type(scope, *x))),
                 span: data_type.span,
@@ -1300,14 +1317,16 @@ impl MiddleEnvironment {
                     span: data_type.span,
                 }
             }
-            ParserInnerType::DollarIdentifier(x) => {
-                let NodeType::DataType { data_type } =
-                    self.resolve_macro_arg(scope, &x).unwrap().node_type.clone()
-                else {
-                    unimplemented!()
-                };
+            ParserInnerType::DollarIdentifier(ref x) => {
+                if let Some(node) = self.resolve_macro_arg(scope, x) {
+                    let NodeType::DataType { data_type } = node.node_type.clone() else {
+                        unimplemented!()
+                    };
 
-                self.resolve_potential_new_type(scope, data_type.clone())
+                    self.resolve_potential_new_type(scope, data_type.clone())
+                } else {
+                    data_type
+                }
             }
             _ => data_type,
         }
@@ -1677,9 +1696,12 @@ impl MiddleEnvironment {
             | NodeType::VariableDeclaration { .. }
             | NodeType::ImplDeclaration { .. }
             | NodeType::TypeDeclaration { .. }
+            | NodeType::ExternFunctionDeclaration { .. }
             | NodeType::Return { .. }
             | NodeType::ImportStatement { .. }
             | NodeType::AssignmentExpression { .. }
+            | NodeType::DestructureDeclaration { .. }
+            | NodeType::DestructureAssignment { .. }
             | NodeType::LoopDeclaration { .. }
             | NodeType::ScopeDeclaration { define: true, .. }
             | NodeType::ScopeAlias { .. }
@@ -1692,6 +1714,17 @@ impl MiddleEnvironment {
                 let ident = self.resolve_potential_dollar_ident(scope, x)?.text;
 
                 Some(self.variables.get(&ident)?.data_type.clone())
+            }
+            NodeType::MoveExpression { value } => self.resolve_type_from_node(scope, value),
+            NodeType::TupleLiteral { values } => {
+                let mut types = Vec::new();
+                for value in values {
+                    types.push(
+                        self.resolve_type_from_node(scope, value)
+                            .unwrap_or(ParserDataType::from(ParserInnerType::Auto(None))),
+                    );
+                }
+                Some(ParserDataType::from(ParserInnerType::Tuple(types)))
             }
             NodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
@@ -2107,6 +2140,7 @@ impl MiddleEnvironment {
                     ParserInnerType::Auto(_) => true,
                     ParserInnerType::Tuple(xs) => xs.iter().any(|x| contains_auto(x)),
                     ParserInnerType::List(x) => contains_auto(x),
+                    ParserInnerType::Ptr(x) => contains_auto(x),
                     ParserInnerType::Option(x) => contains_auto(x),
                     ParserInnerType::Result { ok, err } => contains_auto(ok) || contains_auto(err),
                     ParserInnerType::Function {

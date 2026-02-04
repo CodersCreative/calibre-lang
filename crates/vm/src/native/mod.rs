@@ -62,6 +62,13 @@ impl PartialOrd for dyn NativeFunction {
 
 impl VM {
     pub fn setup_global(&mut self) {
+        fn scope_id(name: &str) -> Option<u64> {
+            let mut parts = name.splitn(3, '-');
+            let _prefix = parts.next()?;
+            let scope = parts.next()?;
+            scope.parse::<u64>().ok()
+        }
+
         let funcs: Vec<&str> = vec![
             "ok",
             "err",
@@ -87,12 +94,25 @@ impl VM {
         vars.append(&mut funcs);
 
         for var in vars {
-            let name = self
+            let mut matches: Vec<&String> = self
                 .mappings
                 .iter()
-                .find(|x| x.split_once(":").map(|v| v.1) == Some(var.0.as_str()))
-                .map(|x| x.to_string())
-                .unwrap_or(var.0);
+                .filter(|x| x.split_once(":").map(|v| v.1) == Some(var.0.as_str()))
+                .collect();
+
+            matches.sort();
+
+            let name = if let Some(found) = matches
+                .iter()
+                .find(|x| scope_id(x.as_str()) == Some(0))
+                .cloned()
+            {
+                found.to_string()
+            } else if matches.len() == 1 {
+                matches[0].to_string()
+            } else {
+                var.0
+            };
 
             let _ = self.variables.insert(name, var.1);
         }

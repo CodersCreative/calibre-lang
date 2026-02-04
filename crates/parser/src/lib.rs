@@ -74,10 +74,7 @@ pub enum ParserError {
     #[error(transparent)]
     Lexer(LexerError),
     #[error("{err} at {span}")]
-    Syntax {
-        err: SyntaxErr,
-        span: Span,
-    },
+    Syntax { err: SyntaxErr, span: Span },
 }
 
 #[derive(Error, Debug, Clone)]

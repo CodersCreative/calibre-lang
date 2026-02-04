@@ -35,11 +35,10 @@ const BASIC_CODE: &str = r#"
     
 "#;
 
-use calibre_comptime::ComptimeEnvironment;
 use calibre_cranelift::Compiler;
 use calibre_lir::{LirEnvironment, LirNodeType, LirRegistry};
+use calibre_mir::ast::MiddleNode;
 use calibre_mir::environment::MiddleEnvironment;
-use calibre_mir_ty::MiddleNode;
 use calibre_parser::{Parser, lexer::Tokenizer};
 use std::{fmt::Debug, mem, path::PathBuf, str::FromStr};
 
@@ -51,9 +50,6 @@ fn parse(text: String) -> (LirRegistry, MiddleEnvironment) {
     let mut middle_result =
         MiddleEnvironment::new_and_evaluate(program, PathBuf::from_str("./main.cl").unwrap())
             .unwrap();
-    println!("Starting comptime...");
-    middle_result.2 =
-        ComptimeEnvironment::new_and_evaluate(middle_result.2, &middle_result.0).unwrap();
     println!("Lowering...");
     let lir_result = LirEnvironment::lower(&middle_result.0, middle_result.2);
     println!("Starting jit...");

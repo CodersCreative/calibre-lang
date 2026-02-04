@@ -100,8 +100,7 @@ impl NativeFunction for Input {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let mut editor =
-            DefaultEditor::new().map_err(|e| RuntimeError::Io(e.to_string()))?;
+        let mut editor = DefaultEditor::new().map_err(|e| RuntimeError::Io(e.to_string()))?;
         let txt = match args.get(0) {
             Some(x) => x.clone(),
             None => RuntimeValue::Str("".to_string()),

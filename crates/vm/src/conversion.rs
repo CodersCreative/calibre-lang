@@ -9,10 +9,10 @@ use calibre_parser::ast::{
 };
 use calibre_parser::lexer::Span;
 use rand::random_range;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::fmt::Display;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VMRegistry {
@@ -141,6 +141,109 @@ impl VMFunction {
         self.renamed = declared;
         self
     }
+
+    pub fn lower_slots(&self) -> Self {
+        let mut slot_map: FxHashMap<String, u16> = FxHashMap::default();
+        let captures: FxHashSet<String> = self.captures.iter().cloned().collect();
+        let mut next_slot: u16 = 0;
+
+        for param in &self.params {
+            slot_map.insert(param.clone(), next_slot);
+            next_slot = next_slot.saturating_add(1);
+        }
+
+        for block in &self.blocks {
+            for instr in &block.instructions {
+                match instr {
+                    VMInstruction::DeclareVar(idx) | VMInstruction::SetVar(idx) => {
+                        if let Some(name) = block.local_strings.get(*idx as usize) {
+                            if captures.contains(name) {
+                                continue;
+                            }
+                            if !slot_map.contains_key(name) {
+                                slot_map.insert(name.clone(), next_slot);
+                                next_slot = next_slot.saturating_add(1);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut blocks = Vec::with_capacity(self.blocks.len());
+        for block in &self.blocks {
+            let mut new_block = block.clone();
+            new_block.instructions = block
+                .instructions
+                .iter()
+                .map(|instr| match instr {
+                    VMInstruction::DeclareVar(idx) | VMInstruction::SetVar(idx) => {
+                        if let Some(name) = block.local_strings.get(*idx as usize) {
+                            if !captures.contains(name) {
+                                if let Some(slot) = slot_map.get(name) {
+                                    return VMInstruction::StoreSlot(*slot);
+                                }
+                            }
+                        }
+                        instr.clone()
+                    }
+                    VMInstruction::LoadVar(idx) => {
+                        if let Some(name) = block.local_strings.get(*idx as usize) {
+                            if !captures.contains(name) {
+                                if let Some(slot) = slot_map.get(name) {
+                                    return VMInstruction::LoadSlot(*slot);
+                                }
+                            }
+                        }
+                        instr.clone()
+                    }
+                    VMInstruction::LoadVarRef(idx) => {
+                        if let Some(name) = block.local_strings.get(*idx as usize) {
+                            if !captures.contains(name) {
+                                if let Some(slot) = slot_map.get(name) {
+                                    return VMInstruction::LoadSlotRef(*slot);
+                                }
+                            }
+                        }
+                        instr.clone()
+                    }
+                    VMInstruction::Move(idx) => {
+                        if let Some(name) = block.local_strings.get(*idx as usize) {
+                            if !captures.contains(name) {
+                                if let Some(slot) = slot_map.get(name) {
+                                    return VMInstruction::MoveSlot(*slot);
+                                }
+                            }
+                        }
+                        instr.clone()
+                    }
+                    VMInstruction::Drop(idx) => {
+                        if let Some(name) = block.local_strings.get(*idx as usize) {
+                            if !captures.contains(name) {
+                                if let Some(slot) = slot_map.get(name) {
+                                    return VMInstruction::DropSlot(*slot);
+                                }
+                            }
+                        }
+                        instr.clone()
+                    }
+                    _ => instr.clone(),
+                })
+                .collect();
+            blocks.push(new_block);
+        }
+
+        Self {
+            name: self.name.clone(),
+            params: self.params.clone(),
+            captures: self.captures.clone(),
+            returns_value: self.returns_value,
+            blocks,
+            renamed: self.renamed.clone(),
+            is_async: self.is_async,
+        }
+    }
 }
 
 impl Display for VMFunction {
@@ -233,6 +336,13 @@ pub enum VMLiteral {
         label: String,
         captures: Vec<String>,
     },
+    ExternFunction {
+        abi: String,
+        library: String,
+        symbol: String,
+        parameters: Vec<ParserDataType>,
+        return_type: ParserDataType,
+    },
     Null,
 }
 
@@ -244,6 +354,25 @@ impl Display for VMLiteral {
             Self::Char(x) => write!(f, "'{x}'"),
             Self::String(x) => write!(f, "{x:?}"),
             Self::Closure { label, captures: _ } => write!(f, "CLOSURE {}", label),
+            Self::ExternFunction {
+                abi,
+                library,
+                symbol,
+                parameters,
+                return_type,
+            } => {
+                let mut txt = format!("EXTERN \"{}\" {}(", abi, symbol);
+                for (i, param) in parameters.iter().enumerate() {
+                    if i > 0 {
+                        txt.push_str(", ");
+                    }
+                    txt.push_str(&param.to_string());
+                }
+                txt.push_str(") -> ");
+                txt.push_str(&return_type.to_string());
+                txt.push_str(&format!(" from {}", library));
+                write!(f, "{}", txt)
+            }
             Self::Null => write!(f, "null"),
         }
     }
@@ -279,19 +408,24 @@ impl VMInstruction {
             ),
             Self::Return(x) => format!("RETURN {}", if *x { "WITH 1" } else { "null" }),
             Self::LoadLiteral(x) => format!("LOAD {}", literals[*x as usize]),
+            Self::LoadSlot(x) => format!("LOADSLOT {}", x),
+            Self::LoadSlotRef(x) => format!("REFSLOT {}", x),
             Self::LoadVar(x) => format!("LOADVAR {}", strings[*x as usize]),
             Self::LoadVarRef(x) => format!("REF {}", strings[*x as usize]),
             Self::Deref => format!("DEREF"),
             Self::MakeRef => "MAKEREF".to_string(),
             Self::SetVar(x) => format!("SETVAR {}", strings[*x as usize]),
             Self::DeclareVar(x) => format!("DECLAREVAR {}", strings[*x as usize]),
+            Self::StoreSlot(x) => format!("STORESLOT {}", x),
             Self::Binary(x) => format!("BINARY {}", x),
             Self::Comparison(x) => format!("COMPARE {}", x),
             Self::Boolean(x) => format!("BOOLEAN {}", x),
             Self::List(x) => format!("LIST WITH {}", x),
             Self::Call(x) => format!("CALL WITH {}", x),
             Self::Move(x) => format!("MOVE {}", strings[*x as usize]),
+            Self::MoveSlot(x) => format!("MOVESLOT {}", x),
             Self::Drop(x) => format!("DROP {}", strings[*x as usize]),
+            Self::DropSlot(x) => format!("DROPSLOT {}", x),
             Self::Aggregate(x) => {
                 let layout = aggregate.get(*x as usize).unwrap();
                 format!(
@@ -331,14 +465,19 @@ pub enum VMInstruction {
     Branch(BlockId, BlockId),
     Return(bool),
     LoadLiteral(u8),
+    LoadSlot(u16),
+    LoadSlotRef(u16),
     Move(StringIndex),
+    MoveSlot(u16),
     Drop(StringIndex),
+    DropSlot(u16),
     LoadVar(StringIndex),
     LoadVarRef(StringIndex),
     Deref,
     MakeRef,
     DeclareVar(StringIndex),
     SetVar(StringIndex),
+    StoreSlot(u16),
     Binary(BinaryOperator),
     Comparison(ComparisonOperator),
     Boolean(BooleanOperator),
@@ -575,6 +714,25 @@ impl VMBlock {
             LirNodeType::Closure { label, captures } => {
                 self.local_literals
                     .push(VMLiteral::Closure { label, captures });
+                self.push_instr(
+                    VMInstruction::LoadLiteral((self.local_literals.len() - 1) as u8),
+                    span,
+                );
+            }
+            LirNodeType::ExternFunction {
+                abi,
+                library,
+                symbol,
+                parameters,
+                return_type,
+            } => {
+                self.local_literals.push(VMLiteral::ExternFunction {
+                    abi,
+                    library,
+                    symbol,
+                    parameters,
+                    return_type,
+                });
                 self.push_instr(
                     VMInstruction::LoadLiteral((self.local_literals.len() - 1) as u8),
                     span,

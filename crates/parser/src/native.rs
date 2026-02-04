@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
 use crate::ast::{ParserDataType, ParserInnerType};
+use rustc_hash::FxHashMap;
 
 impl ParserDataType {
-    pub fn constants() -> std::collections::HashMap<String, Self> {
+    pub fn constants() -> FxHashMap<String, Self> {
         let lst: Vec<(&'static str, ParserInnerType)> = vec![
             ("PI", ParserInnerType::Float),
             ("FLOAT_MAX", ParserInnerType::Float),
@@ -18,7 +17,7 @@ impl ParserDataType {
             ),
         ];
 
-        let mut map = HashMap::new();
+        let mut map = FxHashMap::default();
 
         for val in lst {
             map.insert(val.0.to_string(), ParserDataType::from(val.1));
@@ -27,7 +26,7 @@ impl ParserDataType {
         map
     }
 
-    pub fn natives() -> HashMap<String, ParserDataType> {
+    pub fn natives() -> FxHashMap<String, ParserDataType> {
         let lst: Vec<(&'static str, ParserInnerType)> = vec![
             ("print", ParserInnerType::Null),
             (
@@ -64,7 +63,7 @@ impl ParserDataType {
             ("random.ratio", ParserInnerType::Bool),
         ];
 
-        let mut map = HashMap::new();
+        let mut map = FxHashMap::default();
 
         for val in lst {
             map.insert(

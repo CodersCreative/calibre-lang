@@ -55,10 +55,7 @@ pub struct Tokenizer {
 #[derive(Error, Debug, Clone)]
 pub enum LexerError {
     #[error("Unrecognized character: '{ch}'")]
-    Unrecognized {
-        span: Span,
-        ch: char,
-    },
+    Unrecognized { span: Span, ch: char },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -143,6 +140,7 @@ pub enum TokenType {
     Drop,
     Move,
     Defer,
+    Extern,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
@@ -182,6 +180,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("import"), TokenType::Import),
         (String::from("from"), TokenType::From),
         (String::from("type"), TokenType::Type),
+        (String::from("extern"), TokenType::Extern),
     ])
 }
 

@@ -18,6 +18,7 @@ pub enum RuntimeError {
     StackUnderflow,
     FunctionNotFound(String),
     InvalidFunctionCall,
+    Ffi(String),
     DanglingRef(String),
     InvalidBytecode(String),
     Io(String),
@@ -44,6 +45,7 @@ impl std::fmt::Display for RuntimeError {
             RuntimeError::StackUnderflow => write!(f, "Stack underflow"),
             RuntimeError::FunctionNotFound(name) => write!(f, "Function not found: {name}"),
             RuntimeError::InvalidFunctionCall => write!(f, "Invalid function call"),
+            RuntimeError::Ffi(msg) => write!(f, "FFI error: {msg}"),
             RuntimeError::DanglingRef(name) => write!(f, "Dangling reference: {name}"),
             RuntimeError::InvalidBytecode(msg) => write!(f, "Invalid bytecode: {msg}"),
             RuntimeError::Io(msg) => write!(f, "I/O error: {msg}"),
@@ -82,6 +84,7 @@ impl RuntimeError {
             RuntimeError::StackUnderflow => "Internal runtime error: stack underflow".to_string(),
             RuntimeError::FunctionNotFound(name) => format!("Function not found: {name}"),
             RuntimeError::InvalidFunctionCall => "Invalid function call".to_string(),
+            RuntimeError::Ffi(msg) => format!("FFI error: {msg}"),
             RuntimeError::DanglingRef(name) => format!("Dangling reference: {name}"),
             RuntimeError::InvalidBytecode(msg) => format!("Invalid bytecode: {msg}"),
             RuntimeError::Io(msg) => format!("I/O error: {msg}"),
@@ -96,46 +99,46 @@ impl RuntimeError {
                 "Ensure both operands are booleans (true/false) when using boolean operators."
                     .to_string(),
             ),
-            RuntimeError::Comparison(_, _, _) => Some(
-                "Check that both sides of the comparison are compatible types.".to_string(),
-            ),
-            RuntimeError::Binary(_, _, _) => Some(
-                "Check that both operands support this arithmetic operator.".to_string(),
-            ),
+            RuntimeError::Comparison(_, _, _) => {
+                Some("Check that both sides of the comparison are compatible types.".to_string())
+            }
+            RuntimeError::Binary(_, _, _) => {
+                Some("Check that both operands support this arithmetic operator.".to_string())
+            }
             RuntimeError::UnexpectedType(_) => Some(
                 "Verify the value you're using matches the expected type in this context."
                     .to_string(),
             ),
             RuntimeError::CantConvert(_, _) => Some(
-                "Use an explicit conversion or adjust the value to a compatible type."
-                    .to_string(),
+                "Use an explicit conversion or adjust the value to a compatible type.".to_string(),
             ),
             RuntimeError::StackUnderflow => Some(
                 "This is likely a compiler/runtime bug. Please report this with a repro."
                     .to_string(),
             ),
             RuntimeError::FunctionNotFound(_) => Some(
-                "Make sure the function is defined, imported, and spelled correctly."
-                    .to_string(),
+                "Make sure the function is defined, imported, and spelled correctly.".to_string(),
             ),
             RuntimeError::InvalidFunctionCall => Some(
                 "Check that you are calling a function value and passing the right arguments."
                     .to_string(),
             ),
-            RuntimeError::DanglingRef(_) => Some(
-                "This value was freed or went out of scope before use.".to_string(),
+            RuntimeError::Ffi(_) => Some(
+                "Verify the library path, symbol name, and FFI types match the external function."
+                    .to_string(),
             ),
+            RuntimeError::DanglingRef(_) => {
+                Some("This value was freed or went out of scope before use.".to_string())
+            }
             RuntimeError::InvalidBytecode(_) => Some(
                 "This is likely a compiler/runtime bug. Please report this with a repro."
                     .to_string(),
             ),
             RuntimeError::Io(_) => Some(
-                "Check file permissions, terminal availability, or input/output state."
-                    .to_string(),
+                "Check file permissions, terminal availability, or input/output state.".to_string(),
             ),
             RuntimeError::Panic => Some(
-                "A panic was triggered. If this is unexpected, inspect the call stack."
-                    .to_string(),
+                "A panic was triggered. If this is unexpected, inspect the call stack.".to_string(),
             ),
         }
     }

@@ -31,6 +31,7 @@ pub enum TypeApp {
     Result,
     NativeFn,
     Scope,
+    Ptr,
     StructWithGenerics(String),
 }
 
@@ -58,6 +59,7 @@ impl fmt::Debug for Type {
                     TypeApp::Result => "Result".to_string(),
                     TypeApp::NativeFn => "NativeFn".to_string(),
                     TypeApp::Scope => "Scope".to_string(),
+                    TypeApp::Ptr => "Ptr".to_string(),
                     TypeApp::StructWithGenerics(id) => id.clone(),
                 };
 
@@ -260,6 +262,7 @@ pub fn from_parser_data_type(pd: &ParserDataType, tg: &mut TypeGenerator) -> Typ
         ParserInnerType::Char => Type::TCon(TypeCon::Char),
         ParserInnerType::Dynamic => Type::TCon(TypeCon::Dyn),
         ParserInnerType::List(x) => Type::TList(Box::new(from_parser_data_type(x, tg))),
+        ParserInnerType::Ptr(x) => Type::TApp(TypeApp::Ptr, vec![from_parser_data_type(x, tg)]),
         ParserInnerType::Tuple(types) => Type::TApp(
             TypeApp::Tuple,
             types.iter().map(|t| from_parser_data_type(t, tg)).collect(),
@@ -334,6 +337,9 @@ pub fn to_parser_data_type(ty: &Type) -> ParserDataType {
                 args.iter().map(|a| to_parser_data_type(a)).collect(),
             )),
             TypeApp::Option => ParserDataType::from(ParserInnerType::Option(Box::new(
+                to_parser_data_type(&args[0]),
+            ))),
+            TypeApp::Ptr => ParserDataType::from(ParserInnerType::Ptr(Box::new(
                 to_parser_data_type(&args[0]),
             ))),
             TypeApp::Result => ParserDataType::from(ParserInnerType::Result {

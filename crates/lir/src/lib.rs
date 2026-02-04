@@ -189,6 +189,13 @@ pub enum LirNodeType {
         dest: String,
         value: Box<LirNodeType>,
     },
+    ExternFunction {
+        abi: String,
+        library: String,
+        symbol: String,
+        parameters: Vec<ParserDataType>,
+        return_type: ParserDataType,
+    },
 }
 
 impl Display for LirNodeType {
@@ -232,6 +239,25 @@ impl Display for LirNodeType {
                 Self::As(node, data_type) => format!("{} as {}", node, data_type),
                 Self::Declare { dest, value } => format!("let {} = {}", dest, value),
                 Self::Assign { dest, value } => format!("{} = {}", dest, value),
+                Self::ExternFunction {
+                    abi,
+                    library,
+                    symbol,
+                    parameters,
+                    return_type,
+                } => {
+                    let mut txt = format!("extern \"{}\" {}(", abi, symbol);
+                    for (i, param) in parameters.iter().enumerate() {
+                        if i > 0 {
+                            txt.push_str(", ");
+                        }
+                        txt.push_str(&param.to_string());
+                    }
+                    txt.push_str(") -> ");
+                    txt.push_str(&return_type.to_string());
+                    txt.push_str(&format!(" from {}", library));
+                    txt
+                }
                 Self::Range {
                     from,
                     to,
@@ -560,8 +586,15 @@ impl<'a> LirEnvironment<'a> {
                 is_async,
             } => {
                 let mut captures = Vec::new();
+                let param_names: rustc_hash::FxHashSet<String> = parameters
+                    .iter()
+                    .map(|(name, _)| name.text.clone())
+                    .collect();
 
                 for cap in body.captured() {
+                    if param_names.contains(cap) {
+                        continue;
+                    }
                     let cap_type = self
                         .env
                         .variables
@@ -573,7 +606,11 @@ impl<'a> LirEnvironment<'a> {
                 }
 
                 let internal_name = if let Some(x) = &self.last_ident {
-                    x.clone()
+                    if x.contains("__curry_capture_") {
+                        self.get_temp()
+                    } else {
+                        x.clone()
+                    }
                 } else {
                     self.get_temp()
                 };
@@ -585,7 +622,8 @@ impl<'a> LirEnvironment<'a> {
                     _ => None,
                 };
                 let mut body_val = sub_lowerer.lower_node(*body);
-                let mut has_body_value = !matches!(body_val, LirNodeType::Literal(LirLiteral::Null));
+                let mut has_body_value =
+                    !matches!(body_val, LirNodeType::Literal(LirLiteral::Null));
 
                 if !has_body_value {
                     if let Some(expr) = fallback_expr {
@@ -641,6 +679,19 @@ impl<'a> LirEnvironment<'a> {
                     captures: capture_names,
                 }
             }
+            MiddleNodeType::ExternFunction {
+                abi,
+                library,
+                symbol,
+                parameters,
+                return_type,
+            } => LirNodeType::ExternFunction {
+                abi,
+                library,
+                symbol,
+                parameters,
+                return_type,
+            },
 
             MiddleNodeType::EnumExpression {
                 identifier,
@@ -796,12 +847,8 @@ impl<'a> LirEnvironment<'a> {
                         });
 
                         self.switch_to(then_id);
-                        let then_return = MiddleNode::new(
-                            MiddleNodeType::Return {
-                                value: Some(then),
-                            },
-                            span,
-                        );
+                        let then_return =
+                            MiddleNode::new(MiddleNodeType::Return { value: Some(then) }, span);
                         let _ = self.lower_node(then_return);
 
                         self.switch_to(else_id);

@@ -44,6 +44,7 @@ impl MiddleNode {
             | MiddleNodeType::EnumExpression {
                 data: Some(value), ..
             } => value.identifiers_used(),
+            MiddleNodeType::ExternFunction { .. } => Vec::new(),
             MiddleNodeType::BinaryExpression {
                 left,
                 right,
@@ -271,6 +272,7 @@ impl MiddleNode {
 
                 amt
             }
+            MiddleNodeType::ExternFunction { .. } => Vec::new(),
             MiddleNodeType::LoopDeclaration { body, .. } => body.identifiers_declared(),
             MiddleNodeType::IfStatement {
                 comparison,

@@ -1,18 +1,14 @@
-use calibre_parser::ast::ObjectMap;
-use rustc_hash::FxHashMap;
-
 use crate::{
-    conversion::{VMBlock, VMFunction, VMGlobal, VMInstruction, VMRegistry},
+    conversion::{VMBlock, VMFunction, VMGlobal, VMInstruction, VMLiteral, VMRegistry},
     error::RuntimeError,
     value::{
         RuntimeValue, TerminateValue,
         operation::{binary, boolean, comparison},
     },
 };
-use calibre_parser::ast::binary::BinaryOperator;
-use calibre_parser::ast::comparison::{BooleanOperator, ComparisonOperator};
+use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
-
+use rustc_hash::{FxHashMap, FxHashSet};
 pub mod conversion;
 pub mod error;
 pub mod native;
@@ -95,6 +91,7 @@ pub struct VM {
     pub next_ref_id: u64,
     frames: Vec<VMFrame>,
     call_cache: FxHashMap<String, std::sync::Arc<VMFunction>>,
+    lowered_cache: FxHashMap<String, std::sync::Arc<VMFunction>>,
     resolved_cache: FxHashMap<String, std::sync::Arc<ResolvedFunctionCache>>,
     current_resolved: Option<std::sync::Arc<ResolvedFunctionCache>>,
 }
@@ -108,6 +105,7 @@ impl From<VMRegistry> for VM {
             next_ref_id: 0,
             frames: vec![VMFrame::default()],
             call_cache: FxHashMap::default(),
+            lowered_cache: FxHashMap::default(),
             resolved_cache: FxHashMap::default(),
             current_resolved: None,
         }
@@ -115,6 +113,132 @@ impl From<VMRegistry> for VM {
 }
 
 impl VM {
+    fn find_unique_function_by_suffix(
+        &self,
+        short_name: &str,
+    ) -> Option<std::sync::Arc<crate::conversion::VMFunction>> {
+        let mut found: Option<std::sync::Arc<crate::conversion::VMFunction>> = None;
+        let suffix = format!(":{}", short_name);
+        for (name, func) in self.registry.functions.iter() {
+            if name.ends_with(&suffix) {
+                if found.is_some() {
+                    return None;
+                }
+                found = Some(func.clone());
+            }
+        }
+        found
+    }
+
+    fn resolve_library_candidates(name: &str) -> Vec<String> {
+        let has_path = name.contains('/') || name.contains('\\');
+        let lower = name.to_ascii_lowercase();
+        let has_ext =
+            lower.ends_with(".so") || lower.ends_with(".dylib") || lower.ends_with(".dll");
+
+        if has_path || has_ext {
+            return vec![name.to_string()];
+        }
+
+        let base = match name {
+            "c" | "libc" => "c",
+            other => other,
+        };
+
+        let mut out = Vec::new();
+
+        #[cfg(target_os = "linux")]
+        {
+            if base == "c" {
+                out.push("libc.so.6".to_string());
+            }
+            out.push(format!("lib{}.so", base));
+            out.push(format!("{}.so", base));
+            out.push(base.to_string());
+        }
+        #[cfg(target_os = "macos")]
+        {
+            if base == "c" {
+                out.push("libc.dylib".to_string());
+                out.push("/usr/lib/libc.dylib".to_string());
+            }
+            out.push(format!("lib{}.dylib", base));
+            out.push(format!("{}.dylib", base));
+            out.push(base.to_string());
+        }
+        #[cfg(target_os = "windows")]
+        {
+            if base == "c" {
+                out.push("msvcrt.dll".to_string());
+            }
+            out.push(format!("{}.dll", base));
+            out.push(format!("lib{}.dll", base));
+            out.push(base.to_string());
+        }
+
+        out.into_iter()
+            .filter(|c| !c.is_empty())
+            .collect::<Vec<_>>()
+    }
+    fn capture_value(&self, name: &str, seen: &mut FxHashSet<String>) -> RuntimeValue {
+        match self.resolve_var_name(name) {
+            VarName::Var(var) => self
+                .variables
+                .get(&var)
+                .cloned()
+                .map(|v| self.copy_saveable_into_runtime_var(v))
+                .unwrap_or(RuntimeValue::Null),
+            VarName::Slot(slot) => self.get_slot_value(slot),
+            VarName::Func(func) => self
+                .registry
+                .functions
+                .get(&func)
+                .map(|f| self.make_runtime_function_inner(f, seen))
+                .unwrap_or(RuntimeValue::Null),
+            VarName::Global => {
+                if let Some((_, short_name)) = name.rsplit_once(':') {
+                    if let Some(func) = self.find_unique_function_by_suffix(short_name) {
+                        return self.make_runtime_function_inner(func.as_ref(), seen);
+                    }
+                }
+                RuntimeValue::Null
+            }
+        }
+    }
+
+    fn capture_values(
+        &self,
+        captures: &[String],
+        seen: &mut FxHashSet<String>,
+    ) -> Vec<(String, RuntimeValue)> {
+        captures
+            .iter()
+            .map(|name| (name.clone(), self.capture_value(name, seen)))
+            .collect()
+    }
+
+    fn make_runtime_function(&self, func: &VMFunction) -> RuntimeValue {
+        let mut seen = FxHashSet::default();
+        self.make_runtime_function_inner(func, &mut seen)
+    }
+
+    fn make_runtime_function_inner(
+        &self,
+        func: &VMFunction,
+        seen: &mut FxHashSet<String>,
+    ) -> RuntimeValue {
+        if !seen.insert(func.name.clone()) {
+            return RuntimeValue::Function {
+                name: func.name.clone(),
+                captures: Vec::new(),
+            };
+        }
+        RuntimeValue::Function {
+            name: func.name.clone(),
+            captures: self.capture_values(&func.captures, seen),
+        }
+    }
+
     pub fn new(registry: VMRegistry, mappings: Vec<String>) -> Self {
         let mut vm = Self {
             registry,
@@ -123,6 +247,7 @@ impl VM {
             next_ref_id: 0,
             frames: vec![VMFrame::default()],
             call_cache: FxHashMap::default(),
+            lowered_cache: FxHashMap::default(),
             resolved_cache: FxHashMap::default(),
             current_resolved: None,
         };
@@ -163,8 +288,7 @@ impl VM {
 
     fn build_resolved_cache(&self, function: &VMFunction) -> ResolvedFunctionCache {
         let mut slot_map: FxHashMap<String, usize> = FxHashMap::default();
-        let captures: std::collections::HashSet<String> =
-            function.captures.iter().cloned().collect();
+        let captures: FxHashSet<String> = function.captures.iter().cloned().collect();
         let mut slot_names: Vec<String> = Vec::new();
         for (i, param) in function.params.iter().enumerate() {
             slot_map.insert(param.clone(), i);
@@ -227,11 +351,49 @@ impl VM {
         }
     }
 
+    fn lowered_function(&mut self, function: &VMFunction) -> std::sync::Arc<VMFunction> {
+        if let Some(existing) = self.lowered_cache.get(&function.name) {
+            return existing.clone();
+        }
+        let lowered = std::sync::Arc::new(function.lower_slots());
+        self.lowered_cache
+            .insert(function.name.clone(), lowered.clone());
+        lowered
+    }
+
     fn resolved_name_for(&self, block: &VMBlock, idx: u8) -> Option<ResolvedName> {
         self.current_resolved
             .as_ref()
             .and_then(|cache| cache.block_resolved.get(&block.id))
             .and_then(|v| v.get(idx as usize).copied())
+    }
+
+    #[inline]
+    fn local_string<'a>(&self, block: &'a VMBlock, idx: u8) -> Result<&'a str, RuntimeError> {
+        let idx = idx as usize;
+        if idx >= block.local_strings.len() {
+            return Err(RuntimeError::InvalidBytecode(format!(
+                "missing string {}",
+                idx
+            )));
+        }
+        Ok(unsafe { block.local_strings.get_unchecked(idx).as_str() })
+    }
+
+    #[inline]
+    fn local_string_owned<'a>(
+        &self,
+        block: &'a VMBlock,
+        idx: u8,
+    ) -> Result<&'a String, RuntimeError> {
+        let idx = idx as usize;
+        if idx >= block.local_strings.len() {
+            return Err(RuntimeError::InvalidBytecode(format!(
+                "missing string {}",
+                idx
+            )));
+        }
+        Ok(unsafe { block.local_strings.get_unchecked(idx) })
     }
 
     fn ensure_slot(&mut self, name: &str) -> usize {
@@ -309,7 +471,7 @@ impl VM {
     ) -> Result<RuntimeValue, RuntimeError> {
         let _ = self.run_globals()?;
 
-        self.run_function(function, args)
+        self.run_function(function, args, Vec::new())
     }
 
     pub fn run_globals(&mut self) -> Result<(), RuntimeError> {
@@ -357,7 +519,9 @@ impl VM {
         &mut self,
         function: &VMFunction,
         mut args: Vec<RuntimeValue>,
+        captures: Vec<(String, RuntimeValue)>,
     ) -> Result<RuntimeValue, RuntimeError> {
+        let lowered = self.lowered_function(function);
         let cache = if let Some(existing) = self.resolved_cache.get(&function.name) {
             existing.clone()
         } else {
@@ -369,9 +533,15 @@ impl VM {
         let prev_resolved = self.current_resolved.take();
         self.current_resolved = Some(cache.clone());
         self.push_frame();
+        let mut restore_vars = Vec::new();
+        for (name, value) in captures {
+            let old = self.variables.get(&name).cloned();
+            restore_vars.push((name.clone(), old));
+            self.variables.insert(name, value);
+        }
         let result = (|| {
             let mut stack = VMStack::new();
-            let mut block = function.blocks.first().ok_or_else(|| {
+            let mut block = lowered.blocks.first().ok_or_else(|| {
                 RuntimeError::InvalidBytecode("function has no blocks".to_string())
             })?;
 
@@ -403,7 +573,7 @@ impl VM {
             loop {
                 match self.run_block(block, &mut stack)? {
                     TerminateValue::Jump(x) => {
-                        block = function.blocks.get(x.0 as usize).ok_or_else(|| {
+                        block = lowered.blocks.get(x.0 as usize).ok_or_else(|| {
                             RuntimeError::InvalidBytecode(format!("invalid function block {}", x.0))
                         })?
                     }
@@ -440,6 +610,13 @@ impl VM {
                 Ok(RuntimeValue::Null)
             }
         })();
+        for (name, value) in restore_vars {
+            if let Some(value) = value {
+                self.variables.insert(name, value);
+            } else {
+                self.variables.remove(&name);
+            }
+        }
         self.pop_frame();
         self.current_resolved = prev_resolved;
         result
@@ -476,11 +653,13 @@ impl VM {
         stack: &mut VMStack,
     ) -> Result<TerminateValue, RuntimeError> {
         for (ip, instruction) in block.instructions.iter().enumerate() {
-            let span = block.instruction_spans.get(ip).cloned().unwrap_or_default();
-
-            let step = self
-                .run_instruction(instruction, block, stack)
-                .map_err(|e| RuntimeError::At(span, Box::new(e)))?;
+            let step = match self.run_instruction(instruction, block, stack) {
+                Ok(step) => step,
+                Err(e) => {
+                    let span = block.instruction_spans.get(ip).cloned().unwrap_or_default();
+                    return Err(RuntimeError::At(span, Box::new(e)));
+                }
+            };
 
             match step {
                 TerminateValue::None => {}
@@ -545,20 +724,78 @@ impl VM {
                 return Ok(TerminateValue::Return(value));
             }
             VMInstruction::LoadLiteral(x) => {
-                stack.push(RuntimeValue::from(
-                    block
-                        .local_literals
-                        .get(*x as usize)
-                        .ok_or(RuntimeError::StackUnderflow)?
-                        .clone(),
-                ));
+                let idx = *x as usize;
+                if idx >= block.local_literals.len() {
+                    return Err(RuntimeError::InvalidBytecode(format!(
+                        "missing literal {}",
+                        x
+                    )));
+                }
+                let literal = unsafe { block.local_literals.get_unchecked(idx).clone() };
+                match literal {
+                    VMLiteral::Closure { label, captures } => {
+                        let mut seen = FxHashSet::default();
+                        let captured = self.capture_values(&captures, &mut seen);
+                        stack.push(RuntimeValue::Function {
+                            name: label,
+                            captures: captured,
+                        });
+                    }
+                    VMLiteral::ExternFunction {
+                        abi,
+                        library,
+                        symbol,
+                        parameters,
+                        return_type,
+                    } => {
+                        let abi_lower = abi.to_ascii_lowercase();
+                        if abi_lower != "c" && abi_lower != "zig" {
+                            return Err(RuntimeError::Ffi(format!("unsupported ABI \"{}\"", abi)));
+                        }
+
+                        let mut last_err = None;
+                        let mut handle_opt = None;
+                        for candidate in Self::resolve_library_candidates(&library) {
+                            match unsafe { libloading::Library::new(candidate.clone()) } {
+                                Ok(h) => {
+                                    handle_opt = Some(h);
+                                    break;
+                                }
+                                Err(e) => {
+                                    last_err = Some(format!("{}: {}", candidate, e));
+                                }
+                            }
+                        }
+                        let handle = handle_opt.ok_or_else(|| {
+                            RuntimeError::Ffi(format!(
+                                "failed to load library {} ({})",
+                                library,
+                                last_err.unwrap_or_else(|| "no candidates".to_string())
+                            ))
+                        })?;
+                        let func = crate::value::ExternFunction {
+                            abi,
+                            library,
+                            symbol,
+                            parameters,
+                            return_type,
+                            handle: std::sync::Arc::new(handle),
+                        };
+                        stack.push(RuntimeValue::ExternFunction(std::sync::Arc::new(func)));
+                    }
+                    other => {
+                        stack.push(RuntimeValue::from(other));
+                    }
+                }
+            }
+            VMInstruction::LoadSlot(slot) => {
+                stack.push(self.get_slot_value(*slot as usize));
+            }
+            VMInstruction::LoadSlotRef(slot) => {
+                stack.push(RuntimeValue::SlotRef(*slot as usize));
             }
             VMInstruction::Drop(x) => {
-                let name = block
-                    .local_strings
-                    .get(*x as usize)
-                    .ok_or_else(|| RuntimeError::InvalidBytecode(format!("missing string {}", x)))?
-                    .as_str();
+                let name = self.local_string(block, *x)?;
                 if let Some(kind) = self.resolved_name_for(block, *x) {
                     match kind {
                         ResolvedName::Slot(slot) => {
@@ -588,12 +825,11 @@ impl VM {
                     _ => {}
                 }
             }
+            VMInstruction::DropSlot(slot) => {
+                self.set_slot_value(*slot as usize, RuntimeValue::Null);
+            }
             VMInstruction::Move(x) => {
-                let name = block
-                    .local_strings
-                    .get(*x as usize)
-                    .ok_or_else(|| RuntimeError::InvalidBytecode(format!("missing string {}", x)))?
-                    .as_str();
+                let name = self.local_string(block, *x)?;
                 if let Some(kind) = self.resolved_name_for(block, *x) {
                     match kind {
                         ResolvedName::Slot(slot) => {
@@ -605,15 +841,16 @@ impl VM {
                         ResolvedName::GlobalVar => {
                             if let Some(var) = self.variables.remove(name) {
                                 stack.push(self.move_saveable_into_runtime_var(var));
+                            } else if let Some(slot) = self.current_frame().slot_map.get(name) {
+                                let value = self.get_slot_value(*slot);
+                                self.set_slot_value(*slot, RuntimeValue::Null);
+                                stack.push(value);
                             }
                             return Ok(TerminateValue::None);
                         }
                         ResolvedName::Func => {
                             if let Some(func) = self.registry.functions.remove(name) {
-                                stack.push(RuntimeValue::Function {
-                                    name: func.name.clone(),
-                                    captures: func.captures.clone(),
-                                });
+                                stack.push(self.make_runtime_function(&func));
                             }
                             return Ok(TerminateValue::None);
                         }
@@ -623,10 +860,7 @@ impl VM {
                 match self.resolve_var_name(name) {
                     VarName::Func(func) => {
                         if let Some(func) = self.registry.functions.remove(&func) {
-                            stack.push(RuntimeValue::Function {
-                                name: func.name.clone(),
-                                captures: func.captures.clone(),
-                            });
+                            stack.push(self.make_runtime_function(&func));
                         }
                     }
                     VarName::Var(var) => {
@@ -637,12 +871,13 @@ impl VM {
                     _ => {}
                 }
             }
+            VMInstruction::MoveSlot(slot) => {
+                let value = self.get_slot_value(*slot as usize);
+                self.set_slot_value(*slot as usize, RuntimeValue::Null);
+                stack.push(value);
+            }
             VMInstruction::LoadVar(x) => {
-                let name = block
-                    .local_strings
-                    .get(*x as usize)
-                    .ok_or_else(|| RuntimeError::InvalidBytecode(format!("missing string {}", x)))?
-                    .as_str();
+                let name = self.local_string(block, *x)?;
                 if let Some(kind) = self.resolved_name_for(block, *x) {
                     match kind {
                         ResolvedName::Slot(slot) => {
@@ -651,33 +886,22 @@ impl VM {
                         }
                         ResolvedName::GlobalVar => {
                             if let Some(func) = self.registry.functions.get(name) {
-                                stack.push(RuntimeValue::Function {
-                                    name: func.name.clone(),
-                                    captures: func.captures.clone(),
-                                });
+                                stack.push(self.make_runtime_function(func));
                             } else if let Some(var) = self.variables.get(name) {
                                 stack.push(self.copy_saveable_into_runtime_var(var.clone()));
+                            } else if let Some(slot) = self.current_frame().slot_map.get(name) {
+                                stack.push(self.get_slot_value(*slot));
                             } else if let Some((_, short_name)) = name.rsplit_once(':') {
-                                if let Some(func) = self
-                                    .registry
-                                    .functions
-                                    .iter()
-                                    .find(|(k, _)| k.ends_with(&format!(":{}", short_name)))
+                                if let Some(func) = self.find_unique_function_by_suffix(short_name)
                                 {
-                                    stack.push(RuntimeValue::Function {
-                                        name: func.1.name.clone(),
-                                        captures: func.1.captures.clone(),
-                                    });
+                                    stack.push(self.make_runtime_function(func.as_ref()));
                                 }
                             }
                             return Ok(TerminateValue::None);
                         }
                         ResolvedName::Func => {
                             if let Some(func) = self.registry.functions.get(name) {
-                                stack.push(RuntimeValue::Function {
-                                    name: func.name.clone(),
-                                    captures: func.captures.clone(),
-                                });
+                                stack.push(self.make_runtime_function(func));
                             }
                             return Ok(TerminateValue::None);
                         }
@@ -687,21 +911,10 @@ impl VM {
                 match self.resolve_var_name(name) {
                     VarName::Func(func) => {
                         if let Some(func) = self.registry.functions.get(&func) {
-                            stack.push(RuntimeValue::Function {
-                                name: func.name.clone(),
-                                captures: func.captures.clone(),
-                            });
+                            stack.push(self.make_runtime_function(func));
                         } else if let Some((_, short_name)) = name.rsplit_once(':') {
-                            if let Some(func) = self
-                                .registry
-                                .functions
-                                .iter()
-                                .find(|(k, _)| k.ends_with(&format!(":{}", short_name)))
-                            {
-                                stack.push(RuntimeValue::Function {
-                                    name: func.1.name.clone(),
-                                    captures: func.1.captures.clone(),
-                                });
+                            if let Some(func) = self.find_unique_function_by_suffix(short_name) {
+                                stack.push(self.make_runtime_function(func.as_ref()));
                             }
                         }
                     }
@@ -721,19 +934,14 @@ impl VM {
                                 .iter()
                                 .find(|(k, _)| k.ends_with(&format!(":{}", short_name)))
                             {
-                                stack.push(RuntimeValue::Function {
-                                    name: func.1.name.clone(),
-                                    captures: func.1.captures.clone(),
-                                });
+                                stack.push(self.make_runtime_function(func.1));
                             }
                         }
                     }
                 }
             }
             VMInstruction::LoadVarRef(x) => {
-                let name = block.local_strings.get(*x as usize).ok_or_else(|| {
-                    RuntimeError::InvalidBytecode(format!("missing string {}", x))
-                })?;
+                let name = self.local_string_owned(block, *x)?;
                 if let Some(kind) = self.resolved_name_for(block, *x) {
                     match kind {
                         ResolvedName::Slot(slot) => {
@@ -789,9 +997,7 @@ impl VM {
                 }
             }
             VMInstruction::DeclareVar(x) | VMInstruction::SetVar(x) => {
-                let name = block.local_strings.get(*x as usize).ok_or_else(|| {
-                    RuntimeError::InvalidBytecode(format!("missing string {}", x))
-                })?;
+                let name = self.local_string(block, *x)?;
 
                 let value = self.convert_runtime_var_into_saveable(
                     stack.pop().ok_or(RuntimeError::StackUnderflow)?,
@@ -801,6 +1007,12 @@ impl VM {
                     _ => self.ensure_slot(name),
                 };
                 self.set_slot_value(slot, value);
+            }
+            VMInstruction::StoreSlot(slot) => {
+                let value = self.convert_runtime_var_into_saveable(
+                    stack.pop().ok_or(RuntimeError::StackUnderflow)?,
+                );
+                self.set_slot_value(*slot as usize, value);
             }
             VMInstruction::List(count) => {
                 let count = *count as usize;
@@ -819,7 +1031,7 @@ impl VM {
                 let args = stack.pop_n(count).ok_or(RuntimeError::StackUnderflow)?;
 
                 match func {
-                    RuntimeValue::Function { name, captures: _ } => {
+                    RuntimeValue::Function { name, captures } => {
                         let func_opt = if let Some(cached) = self.call_cache.get(&name) {
                             Some(cached.clone())
                         } else if let Some(x) = self.registry.functions.get(&name) {
@@ -837,22 +1049,18 @@ impl VM {
                             }
                             found
                         } else if let Some((_, short_name)) = name.rsplit_once(':') {
-                            let found = self
-                                .registry
-                                .functions
-                                .iter()
-                                .find(|(k, _)| k.ends_with(&format!(":{}", short_name)))
-                                .map(|(_, v)| v.clone());
-                            if let Some(ref func) = found {
-                                self.call_cache.insert(name.clone(), func.clone());
+                            if let Some(found) = self.find_unique_function_by_suffix(short_name) {
+                                self.call_cache.insert(name.clone(), found.clone());
+                                Some(found)
+                            } else {
+                                None
                             }
-                            found
                         } else {
                             None
                         };
 
                         if let Some(func) = func_opt {
-                            let value = self.run_function(func.as_ref(), args)?;
+                            let value = self.run_function(func.as_ref(), args, captures)?;
                             stack.push(value);
                         } else {
                             return Err(RuntimeError::FunctionNotFound(name));
@@ -860,6 +1068,10 @@ impl VM {
                     }
                     RuntimeValue::NativeFunction(func) => {
                         stack.push(func.run(self, args)?);
+                    }
+                    RuntimeValue::ExternFunction(func) => {
+                        let value = func.call(args)?;
+                        stack.push(value);
                     }
                     _ => return Err(RuntimeError::InvalidFunctionCall),
                 }
@@ -900,13 +1112,19 @@ impl VM {
                         .get(index as usize)
                         .ok_or(RuntimeError::StackUnderflow)?
                         .clone(),
+                    RuntimeValue::Aggregate(None, map) => map
+                        .as_ref()
+                        .0
+                        .0
+                        .get(index as usize)
+                        .ok_or(RuntimeError::StackUnderflow)?
+                        .1
+                        .clone(),
                     other => return Err(RuntimeError::UnexpectedType(other)),
                 });
             }
             VMInstruction::LoadMember(x) => {
-                let name = block.local_strings.get(*x as usize).ok_or_else(|| {
-                    RuntimeError::InvalidBytecode(format!("missing string {}", x))
-                })?;
+                let name = self.local_string(block, *x)?;
                 let value = stack.pop().ok_or(RuntimeError::StackUnderflow)?;
 
                 let tuple_index = name.parse::<usize>().ok();
@@ -1006,9 +1224,7 @@ impl VM {
                 });
             }
             VMInstruction::SetMember(_x) => {
-                let name = block.local_strings.get(*_x as usize).ok_or_else(|| {
-                    RuntimeError::InvalidBytecode(format!("missing string {}", _x))
-                })?;
+                let name = self.local_string(block, *_x)?;
                 let value = stack.pop().ok_or(RuntimeError::StackUnderflow)?;
                 let target = stack.pop().ok_or(RuntimeError::StackUnderflow)?;
 

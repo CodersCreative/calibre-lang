@@ -256,7 +256,21 @@ impl Parser {
                     NodeType::Identifier(value) => {
                         if self.first().token_type == TokenType::Colon {
                             let _ = self.eat();
-                            let data = self.parse_statement();
+                            let mut values = vec![self.parse_statement()];
+                            while self.first().token_type == TokenType::Comma {
+                                let _ = self.eat();
+                                values.push(self.parse_statement());
+                            }
+
+                            let data = if values.len() == 1 {
+                                values.pop().unwrap()
+                            } else {
+                                let span = Span::new_from_spans(
+                                    values.first().unwrap().span,
+                                    values.last().unwrap().span,
+                                );
+                                Node::new(span, NodeType::TupleLiteral { values })
+                            };
                             return Node::new(
                                 Span::new_from_spans(path[0].0.span, path[1].0.span),
                                 NodeType::EnumExpression {
@@ -328,6 +342,7 @@ impl Parser {
                             let _ =
                                 self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
                             defaulted = true;
+
                             self.parse_statement()
                         })
                     } else {

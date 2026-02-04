@@ -1,10 +1,12 @@
 use std::error::Error;
 
+use rustc_hash::FxHashMap;
+
 use crate::{
     Parser,
     ast::{
-        CallArg, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node, NodeType,
-        ObjectType, Overload, ParserInnerType, PipeSegment, PotentialDollarIdentifier,
+        CallArg, DestructurePattern, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node,
+        NodeType, ObjectType, Overload, ParserInnerType, PipeSegment, PotentialDollarIdentifier,
         PotentialNewType, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
@@ -169,6 +171,7 @@ impl Formatter {
             ),
             NodeType::Drop(x) => format!("drop {}", x),
             NodeType::Move(x) => format!("move {}", x),
+            NodeType::MoveExpression { value } => format!("move {}", self.format(value)),
             NodeType::ImportStatement {
                 module,
                 alias,
@@ -412,6 +415,15 @@ impl Formatter {
             } => {
                 format!("{}.{}", identifier, value)
             }
+            NodeType::TupleLiteral { values } => {
+                let mut txt = String::new();
+                for value in values {
+                    txt.push_str(&format!("{}, ", self.format(value)));
+                }
+
+                txt = txt.trim_end().trim_end_matches(",").to_string();
+                txt
+            }
             NodeType::RangeDeclaration {
                 from,
                 to,
@@ -487,9 +499,18 @@ impl Formatter {
                     }
                 }
 
+                let mut destructure_map = FxHashMap::default();
+                for (name, pattern) in header.param_destructures.iter() {
+                    destructure_map.insert(name.to_string(), pattern);
+                }
+
                 for params in &adjusted_params {
                     for id in params {
-                        txt.push_str(&format!("{} ", id.0));
+                        if let Some(pattern) = destructure_map.get(&id.0.to_string()) {
+                            txt.push_str(&format!("{} ", self.fmt_destructure_pattern(pattern)));
+                        } else {
+                            txt.push_str(&format!("{} ", id.0));
+                        }
                     }
 
                     let last = params.last().unwrap();
@@ -499,7 +520,7 @@ impl Formatter {
                     txt.push_str(", ");
                 }
 
-                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
+                txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
 
                 if header.return_type != PotentialNewType::DataType(ParserInnerType::Null.into()) {
@@ -511,6 +532,53 @@ impl Formatter {
 
                 txt.push_str(&format!(" {}", self.format(body)));
 
+                txt
+            }
+            NodeType::ExternFunctionDeclaration {
+                abi,
+                identifier,
+                parameters,
+                return_type,
+                library,
+                symbol,
+            } => {
+                let mut txt = format!("extern \"{}\" const {} = fn(", abi, identifier);
+                for (i, param) in parameters.iter().enumerate() {
+                    if i > 0 {
+                        txt.push_str(", ");
+                    }
+                    txt.push_str(&format!(
+                        "{}: {}",
+                        param.0,
+                        self.fmt_potential_new_type(&param.1)
+                    ));
+                }
+                txt.push(')');
+                if *return_type != PotentialNewType::DataType(ParserInnerType::Null.into()) {
+                    txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
+                }
+                txt.push_str(&format!(" from \"{}\"", library));
+                if let Some(sym) = symbol {
+                    txt.push_str(&format!(" as \"{}\"", sym));
+                }
+                txt
+            }
+            NodeType::DestructureDeclaration {
+                var_type,
+                pattern,
+                value,
+            } => {
+                let mut txt = format!("{}", var_type);
+                txt.push(' ');
+                txt.push_str(&self.fmt_destructure_pattern(pattern));
+                txt.push_str(" = ");
+                txt.push_str(&self.format(value));
+                txt
+            }
+            NodeType::DestructureAssignment { pattern, value } => {
+                let mut txt = self.fmt_destructure_pattern(pattern);
+                txt.push_str(" = ");
+                txt.push_str(&self.format(value));
                 txt
             }
             NodeType::LoopDeclaration {
@@ -552,11 +620,13 @@ impl Formatter {
                                 value: _,
                                 var_type: VarType::Immutable,
                                 name: Some(name),
+                                ..
                             } => txt.push_str(&format!(" : {}", name)),
                             MatchArmType::Enum {
                                 value: _,
                                 var_type,
                                 name: Some(name),
+                                ..
                             } => {
                                 txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name))
                             }
@@ -832,6 +902,50 @@ impl Formatter {
         }
     }
 
+    fn fmt_destructure_pattern(&self, pattern: &DestructurePattern) -> String {
+        match pattern {
+            DestructurePattern::Tuple(bindings) => {
+                let mut txt = String::from("(");
+                let mut first = true;
+                for binding in bindings {
+                    if !first {
+                        txt.push_str(", ");
+                    }
+                    first = false;
+                    match binding {
+                        None => txt.push_str(".."),
+                        Some((var_type, name)) => {
+                            if *var_type == VarType::Mutable {
+                                txt.push_str("mut ");
+                            }
+                            txt.push_str(&name.to_string());
+                        }
+                    }
+                }
+                txt.push(')');
+                txt
+            }
+            DestructurePattern::Struct(fields) => {
+                let mut txt = String::from("{");
+                let mut first = true;
+                for (field, var_type, name) in fields {
+                    if !first {
+                        txt.push_str(", ");
+                    }
+                    first = false;
+                    txt.push_str(field);
+                    txt.push_str(": ");
+                    if *var_type == VarType::Mutable {
+                        txt.push_str("mut ");
+                    }
+                    txt.push_str(&name.to_string());
+                }
+                txt.push('}');
+                txt
+            }
+        }
+    }
+
     pub fn fmt_match_body(&mut self, body: &[(MatchArmType, Vec<Node>, Box<Node>)]) -> String {
         let mut txt = String::from("{\n");
 
@@ -858,11 +972,13 @@ impl Formatter {
                         value: _,
                         var_type: VarType::Immutable,
                         name: Some(name),
+                        ..
                     } => txt.push_str(&format!(" : {}", name)),
                     MatchArmType::Enum {
                         value: _,
                         var_type,
                         name: Some(name),
+                        ..
                     } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
                     _ => {}
                 }
@@ -1181,13 +1297,20 @@ impl Formatter {
         match arm {
             MatchArmType::Enum {
                 value,
+                destructure: Some(pattern),
+                ..
+            } if write_name => format!(".{} : {}", value, self.fmt_destructure_pattern(pattern)),
+            MatchArmType::Enum {
+                value,
                 var_type: VarType::Immutable,
                 name: Some(name),
+                ..
             } if write_name => format!(".{} : {}", value, name),
             MatchArmType::Enum {
                 value,
                 var_type,
                 name: Some(name),
+                ..
             } if write_name => format!(".{} : {} {}", value, var_type.print_only_ends(), name),
             MatchArmType::Let { var_type, name } => format!("{} {}", var_type, name),
             MatchArmType::Enum { value, .. } => format!(".{}", value),
@@ -1211,11 +1334,13 @@ impl Formatter {
                         value: _,
                         var_type: VarType::Immutable,
                         name: Some(name),
+                        ..
                     } => txt.push_str(&format!(" : {}", name)),
                     MatchArmType::Enum {
                         value: _,
                         var_type,
                         name: Some(name),
+                        ..
                     } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
                     _ => {}
                 }

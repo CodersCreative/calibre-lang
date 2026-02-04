@@ -73,10 +73,8 @@ impl Parser {
                 type_def: self.parse_type_def_type(),
                 overloads: self.parse_overloads(),
             })
-        } else if let Some(x) = self.parse_type() {
-            Some(x.into())
         } else {
-            None
+            self.parse_type().map(|x| x.into())
         }
     }
 
@@ -85,7 +83,7 @@ impl Parser {
             x
         } else {
             self.add_err(SyntaxErr::ExpectedType);
-            ParserDataType::new(self.first().span.clone(), ParserInnerType::Auto(None)).into()
+            ParserDataType::new(self.first().span, ParserInnerType::Auto(None)).into()
         }
     }
 
@@ -94,7 +92,7 @@ impl Parser {
             x
         } else {
             self.add_err(SyntaxErr::ExpectedType);
-            ParserDataType::new(self.first().span.clone(), ParserInnerType::Auto(None))
+            ParserDataType::new(self.first().span, ParserInnerType::Auto(None))
         }
     }
 
@@ -118,7 +116,7 @@ impl Parser {
 
                 self.expect_potential_new_type()
             } else {
-                ParserDataType::new(self.first().span.clone(), ParserInnerType::Auto(None)).into()
+                ParserDataType::new(self.first().span, ParserInnerType::Auto(None)).into()
             };
 
             for key in keys {
@@ -244,11 +242,11 @@ impl Parser {
             );
 
             let span = if types.is_empty() {
-                self.first().span.clone()
+                self.first().span
             } else {
                 Span::new_from_spans(
-                    types.first().unwrap().span().clone(),
-                    types.last().unwrap().span().clone(),
+                    *types.first().unwrap().span(),
+                    *types.last().unwrap().span(),
                 )
             };
 
@@ -292,11 +290,11 @@ impl Parser {
             }
 
             let close = if ret.data_type != ParserInnerType::Null {
-                ret.span.clone()
+                ret.span
             } else if let Some(arg) = args.last() {
-                arg.span.clone()
+                arg.span
             } else {
-                open.span.clone()
+                open.span
             };
 
             Some(ParserDataType::new(
@@ -330,10 +328,40 @@ impl Parser {
                 Ok(x) => {
                     let mut path = Vec::new();
                     let open = self.eat().span;
-                    let mut close = open.clone();
-                    let x = ParserDataType::new(open.clone(), x);
+                    let mut close = open;
+                    let x = ParserDataType::new(open, x);
 
                     if let ParserInnerType::Struct(_) = x.data_type {
+                        if t.value == "ptr"
+                            && self.first().token_type
+                                == TokenType::Comparison(ComparisonOperator::Lesser)
+                        {
+                            let inner = self.parse_type_list(
+                                TokenType::Comparison(ComparisonOperator::Lesser),
+                                TokenType::Comparison(ComparisonOperator::Greater),
+                            );
+                            let span = if inner.is_empty() {
+                                open
+                            } else {
+                                Span::new_from_spans(
+                                    *inner.first().unwrap().span(),
+                                    *inner.last().unwrap().span(),
+                                )
+                            };
+                            let elem = inner.into_iter().next().unwrap_or(
+                                ParserDataType::from(ParserInnerType::Auto(None)).into(),
+                            );
+                            let elem = match elem {
+                                PotentialNewType::DataType(x) => x,
+                                PotentialNewType::NewType { .. } => {
+                                    ParserDataType::from(ParserInnerType::Auto(None))
+                                }
+                            };
+                            return Some(ParserDataType::new(
+                                Span::new_from_spans(open, span),
+                                ParserInnerType::Ptr(Box::new(elem)),
+                            ));
+                        }
                         path.push(x);
 
                         while self.first().token_type == TokenType::DoubleColon {
@@ -345,8 +373,6 @@ impl Parser {
                                 ParserInnerType::from_str(&value.value).unwrap(),
                             ));
                         }
-
-                        // TODO Handle generics
 
                         if path.len() == 1 {
                             Some(path.remove(0))
@@ -395,8 +421,15 @@ impl Parser {
             SyntaxErr::ExpectedOpeningBracket(Bracket::Paren),
         );
 
-        let value = self.parse_statement();
-        let span = value.span.clone();
+        let first = self.parse_statement();
+        let mut values = vec![first];
+        while self.first().token_type == TokenType::Comma {
+            let _ = self.eat();
+            if self.first().token_type == TokenType::Close(Bracket::Paren) {
+                break;
+            }
+            values.push(self.parse_statement());
+        }
 
         let _ = self.expect_eat(
             &TokenType::Close(Bracket::Paren),
@@ -411,14 +444,18 @@ impl Parser {
             Node {
                 span: Span::new_from_spans(open.span, otherwise.span),
                 node_type: NodeType::Ternary {
-                    comparison: Box::new(value),
+                    comparison: Box::new(values.remove(0)),
                     then: Box::new(then),
                     otherwise: Box::new(otherwise),
                 },
             }
+        } else if values.len() > 1 {
+            let span = Span::new_from_spans(open.span, values.last().unwrap().span);
+            Node::new(span, NodeType::TupleLiteral { values })
         } else {
+            let value = values.pop().unwrap();
             Node::new(
-                span,
+                value.span,
                 NodeType::ParenExpression {
                     value: Box::new(value),
                 },

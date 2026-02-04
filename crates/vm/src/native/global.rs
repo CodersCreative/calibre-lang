@@ -47,7 +47,10 @@ impl NativeFunction for TupleFn {
         for arg in args {
             tple.push(arg.clone());
         }
-        Ok(RuntimeValue::Aggregate(None, Gc::new(crate::value::GcMap(tple.into()))))
+        Ok(RuntimeValue::Aggregate(
+            None,
+            Gc::new(crate::value::GcMap(tple.into())),
+        ))
     }
 }
 
@@ -87,11 +90,14 @@ impl NativeFunction for Len {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         if let Some(mut x) = args.get(0) {
             while let RuntimeValue::Ref(r) = x {
-                x = env.variables.get(r).ok_or(RuntimeError::DanglingRef(r.clone()))?;
+                x = env
+                    .variables
+                    .get(r)
+                    .ok_or(RuntimeError::DanglingRef(r.clone()))?;
             }
             Ok(RuntimeValue::Int(match x {
                 RuntimeValue::List(data) => data.as_ref().0.len() as i64,
-                RuntimeValue::Aggregate(_, data) => data.as_ref().0 .0.len() as i64,
+                RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as i64,
                 RuntimeValue::Range(_, x) => *x,
                 RuntimeValue::Str(x) => x.len() as i64,
                 RuntimeValue::Int(x) => *x,
@@ -114,7 +120,10 @@ impl NativeFunction for MinOrZero {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         if let Some(mut x) = args.get(0) {
             while let RuntimeValue::Ref(r) = x {
-                x = env.variables.get(r).ok_or(RuntimeError::DanglingRef(r.clone()))?;
+                x = env
+                    .variables
+                    .get(r)
+                    .ok_or(RuntimeError::DanglingRef(r.clone()))?;
             }
             Ok(RuntimeValue::Int(match x {
                 RuntimeValue::Range(from, _) => *from,
@@ -135,7 +144,10 @@ impl NativeFunction for Trim {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         if let Some(mut x) = args.get(0) {
             while let RuntimeValue::Ref(r) = x {
-                x = env.variables.get(r).ok_or(RuntimeError::DanglingRef(r.clone()))?;
+                x = env
+                    .variables
+                    .get(r)
+                    .ok_or(RuntimeError::DanglingRef(r.clone()))?;
             }
             match x {
                 RuntimeValue::Str(s) => Ok(RuntimeValue::Str(s.trim().to_string())),
@@ -156,7 +168,10 @@ impl NativeFunction for DiscriminantFn {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         if let Some(mut x) = args.get(0) {
             while let RuntimeValue::Ref(r) = x {
-                x = env.variables.get(r).ok_or(RuntimeError::DanglingRef(r.clone()))?;
+                x = env
+                    .variables
+                    .get(r)
+                    .ok_or(RuntimeError::DanglingRef(r.clone()))?;
             }
 
             Ok(RuntimeValue::Int(match x {

@@ -1,8 +1,8 @@
 use crate::{
     Parser, SyntaxErr,
     ast::{
-        Node, ObjectType, PotentialDollarIdentifier, PotentialGenericTypeIdentifier, RefMutability,
-        comparison::BooleanOperator,
+        CallArg, DestructurePattern, Node, ObjectType, ParserText, PotentialDollarIdentifier,
+        PotentialGenericTypeIdentifier, RefMutability, VarType, comparison::BooleanOperator,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -12,6 +12,67 @@ use crate::{
 };
 
 impl Parser {
+    fn has_token_after_comma(&self, target: TokenType) -> bool {
+        let mut depth_paren = 0;
+        let mut depth_square = 0;
+        let mut depth_curly = 0;
+        let mut i = 0;
+
+        while let Some(tok) = self.nth(i) {
+            i += 1;
+            match tok.token_type {
+                TokenType::Open(Bracket::Paren) => depth_paren += 1,
+                TokenType::Open(Bracket::Square) => depth_square += 1,
+                TokenType::Open(Bracket::Curly) => depth_curly += 1,
+                TokenType::Close(Bracket::Paren) => {
+                    if depth_paren == 0 {
+                        return false;
+                    }
+                    depth_paren -= 1;
+                }
+                TokenType::Close(Bracket::Square) => {
+                    if depth_square == 0 {
+                        return false;
+                    }
+                    depth_square -= 1;
+                }
+                TokenType::Close(Bracket::Curly) => {
+                    if depth_curly == 0 {
+                        return false;
+                    }
+                    depth_curly -= 1;
+                }
+                TokenType::EOL | TokenType::EOF => return false,
+                TokenType::Dollar
+                    if target == TokenType::Equals
+                        && depth_paren == 0
+                        && depth_square == 0
+                        && depth_curly == 0 =>
+                {
+                    return false;
+                }
+                ref t
+                    if *t == target
+                        && depth_paren == 0
+                        && depth_square == 0
+                        && depth_curly == 0 =>
+                {
+                    return true;
+                }
+                TokenType::FatArrow | TokenType::Arrow | TokenType::Equals
+                    if depth_paren == 0 && depth_square == 0 && depth_curly == 0 =>
+                {
+                    if tok.token_type != target {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        false
+    }
+
     pub fn parse_primary_expression(&mut self) -> Node {
         let node = match &self.first().token_type {
             TokenType::If => self.parse_if_statement(),
@@ -92,12 +153,19 @@ impl Parser {
             }
             TokenType::Move => {
                 let open = self.eat();
-                let ident = self.expect_potential_dollar_ident();
-
-                Node::new(
-                    Span::new_from_spans(open.span, *ident.span()),
-                    NodeType::Move(ident),
-                )
+                let expr = self.parse_pipe_expression();
+                match expr.node_type {
+                    NodeType::Identifier(ident) => Node::new(
+                        Span::new_from_spans(open.span, *ident.span()),
+                        NodeType::Move(ident.into()),
+                    ),
+                    _ => Node::new(
+                        Span::new_from_spans(open.span, expr.span),
+                        NodeType::MoveExpression {
+                            value: Box::new(expr),
+                        },
+                    ),
+                }
             }
             TokenType::Defer => {
                 let open = self.eat();
@@ -329,7 +397,8 @@ impl Parser {
 
                     let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-                    properties.push((key.to_string(), self.parse_statement()));
+                    let value = self.parse_statement();
+                    properties.push((key.to_string(), value));
 
                     if self.first().token_type != TokenType::Close(Bracket::Curly) {
                         let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
@@ -365,6 +434,145 @@ impl Parser {
 
     pub fn parse_assignment_expression(&mut self) -> Node {
         let mut left: Node = self.parse_pipe_expression();
+
+        if matches!(
+            left.node_type,
+            NodeType::Identifier(ref id) if id.to_string() == "comp"
+        ) && self.first().token_type == TokenType::Comma
+            && self.has_token_after_comma(TokenType::FatArrow)
+        {
+            while self.first().token_type == TokenType::Comma {
+                let _ = self.eat();
+                let _ = self.parse_pipe_expression();
+            }
+
+            if self.first().token_type == TokenType::FatArrow {
+                let _ = self.eat();
+                return self.parse_statement();
+            }
+        }
+
+        if matches!(left.node_type, NodeType::Identifier(_))
+            && self.first().token_type == TokenType::Comma
+            && self.has_token_after_comma(TokenType::Equals)
+        {
+            let open = left.span;
+            let mut bindings = vec![left.clone()];
+            while self.first().token_type == TokenType::Comma {
+                let _ = self.eat();
+                let nxt = self.parse_pipe_expression();
+                bindings.push(nxt.clone());
+            }
+
+            if self.first().token_type == TokenType::Equals {
+                let _ = self.eat();
+                let mut values = vec![self.parse_statement()];
+                while self.first().token_type == TokenType::Comma {
+                    let _ = self.eat();
+                    values.push(self.parse_statement());
+                }
+
+                let value = if values.len() == 1 {
+                    values.pop().unwrap()
+                } else {
+                    let span = Span::new_from_spans(
+                        values.first().unwrap().span,
+                        values.last().unwrap().span,
+                    );
+                    Node::new(span, NodeType::TupleLiteral { values })
+                };
+
+                let mut bindings_out = Vec::new();
+                for bind in bindings.into_iter() {
+                    let NodeType::Identifier(ident) = bind.node_type else {
+                        bindings_out.push(None);
+                        continue;
+                    };
+                    bindings_out.push(Some((VarType::Immutable, ident.get_ident().clone())));
+                }
+
+                return Node::new(
+                    open,
+                    NodeType::DestructureAssignment {
+                        pattern: DestructurePattern::Tuple(bindings_out),
+                        value: Box::new(value),
+                    },
+                );
+            }
+        }
+
+        if let NodeType::CallExpression {
+            caller,
+            args,
+            string_fn: None,
+            generic_types,
+            reverse_args,
+        } = &left.node_type
+        {
+            if generic_types.is_empty() && reverse_args.is_empty() {
+                if let NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(id)) =
+                    &caller.node_type
+                {
+                    if id.to_string() == "tuple" && self.first().token_type == TokenType::Equals {
+                        let open = left.span;
+                        let _ = self.eat();
+                        let mut values = vec![self.parse_statement()];
+                        while self.first().token_type == TokenType::Comma {
+                            let _ = self.eat();
+                            values.push(self.parse_statement());
+                        }
+
+                        let value = if values.len() == 1 {
+                            values.pop().unwrap()
+                        } else {
+                            let span = Span::new_from_spans(
+                                values.first().unwrap().span,
+                                values.last().unwrap().span,
+                            );
+                            Node::new(
+                                span,
+                                NodeType::CallExpression {
+                                    string_fn: None,
+                                    generic_types: Vec::new(),
+                                    caller: Box::new(Node::new(
+                                        span,
+                                        NodeType::Identifier(
+                                            PotentialGenericTypeIdentifier::Identifier(
+                                                ParserText::from(String::from("tuple")).into(),
+                                            ),
+                                        ),
+                                    )),
+                                    args: values.into_iter().map(CallArg::Value).collect(),
+                                    reverse_args: Vec::new(),
+                                },
+                            )
+                        };
+
+                        let mut bindings_out = Vec::new();
+                        for bind in args.iter() {
+                            let CallArg::Value(Node {
+                                node_type: NodeType::Identifier(ident),
+                                ..
+                            }) = bind
+                            else {
+                                bindings_out.push(None);
+                                continue;
+                            };
+                            bindings_out
+                                .push(Some((VarType::Immutable, ident.get_ident().clone())));
+                        }
+
+                        return Node::new(
+                            open,
+                            NodeType::DestructureAssignment {
+                                pattern: DestructurePattern::Tuple(bindings_out),
+                                value: Box::new(value),
+                            },
+                        );
+                    }
+                }
+            }
+        }
 
         if let TokenType::BooleanAssign(op) = self.first().token_type.clone() {
             let open = self.eat();

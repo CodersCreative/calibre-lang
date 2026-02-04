@@ -1,13 +1,12 @@
-use std::collections::HashMap;
-
 use calibre_parser::ast::{ObjectMap, ParserText};
 use rand::random_range;
+use rustc_hash::FxHashMap;
 
 use crate::{MiddleNode, MiddleNodeType};
 
 #[derive(Default)]
 pub struct AlphaRenameState {
-    pub data: HashMap<String, String>,
+    pub data: FxHashMap<String, String>,
 }
 
 impl MiddleNode {
@@ -30,7 +29,8 @@ impl MiddleNodeType {
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::IntLiteral(_)
-            | MiddleNodeType::StringLiteral(_) => self,
+            | MiddleNodeType::StringLiteral(_)
+            | MiddleNodeType::ExternFunction { .. } => self,
             MiddleNodeType::RefStatement { mutability, value } => MiddleNodeType::RefStatement {
                 mutability,
                 value: Box::new(value.rename(state)),

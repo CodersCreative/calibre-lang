@@ -352,7 +352,22 @@ fn visit(
             }
         }
         NodeType::ParenExpression { value } => visit(value, env, scope, tg, tenv, subst),
-        NodeType::FunctionDeclaration { header, body } => {
+        NodeType::DestructureDeclaration { value, .. } => {
+            let _ = visit(value, env, scope, tg, tenv, subst)?;
+            Ok(Type::TCon(TypeCon::Null))
+        }
+        NodeType::DestructureAssignment { value, .. } => {
+            let _ = visit(value, env, scope, tg, tenv, subst)?;
+            Ok(Type::TCon(TypeCon::Null))
+        }
+        NodeType::MoveExpression { value } => visit(value, env, scope, tg, tenv, subst),
+        NodeType::TupleLiteral { values } => {
+            for value in values {
+                let _ = visit(value, env, scope, tg, tenv, subst)?;
+            }
+            Ok(Type::TCon(TypeCon::Dyn))
+        }
+        NodeType::FunctionDeclaration { header, body, .. } => {
             fn unify_returns(
                 node: &Node,
                 env: &mut MiddleEnvironment,
@@ -501,6 +516,7 @@ pub fn infer_node_hm(
                     ParserInnerType::Auto(_) => true,
                     ParserInnerType::Tuple(xs) => xs.iter().any(|x| contains_auto(x)),
                     ParserInnerType::List(x) => contains_auto(x),
+                    ParserInnerType::Ptr(x) => contains_auto(x),
                     ParserInnerType::Option(x) => contains_auto(x),
                     ParserInnerType::Result { ok, err } => contains_auto(ok) || contains_auto(err),
                     ParserInnerType::Function {

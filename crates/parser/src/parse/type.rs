@@ -83,6 +83,7 @@ impl Parser {
                     parameters,
                     return_type,
                     is_async,
+                    param_destructures: Vec::new(),
                 },
                 operator: operator.into(),
                 body: Box::new(block),

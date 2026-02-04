@@ -54,6 +54,8 @@ impl RuntimeValue {
                 })?;
                 Ok(RuntimeValue::Char(ch))
             }
+            (RuntimeValue::Int(x), ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Int(x)),
+            (RuntimeValue::Null, ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Int(0)),
             (RuntimeValue::Null, ParserInnerType::Null) => Ok(RuntimeValue::Null),
             (RuntimeValue::Aggregate(Some(x), z), ParserInnerType::Struct(y)) if &x == y => {
                 Ok(RuntimeValue::Aggregate(Some(x), z))

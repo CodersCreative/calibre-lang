@@ -10,8 +10,8 @@ use std::{fs, path::PathBuf};
 use crate::environment::{MiddleEnvironment, MiddleScope, MiddleVariable, get_disamubiguous_name};
 
 impl MiddleEnvironment {
-    pub fn new_scope_with_stdlib<'a>(
-        &'a mut self,
+    pub fn new_scope_with_stdlib(
+        &mut self,
         parent: Option<u64>,
         path: PathBuf,
         namespace: Option<&str>,
@@ -37,8 +37,7 @@ impl MiddleEnvironment {
         let mut parser = Parser::default();
         let mut tokenizer = Tokenizer::default();
         let globals = fs::read_to_string(get_globals_path()).unwrap();
-        let program = parser
-            .produce_ast(tokenizer.tokenize(&globals).unwrap());
+        let program = parser.produce_ast(tokenizer.tokenize(&globals).unwrap());
 
         let _ = self.evaluate(&scope, program);
 
@@ -117,7 +116,7 @@ impl MiddleEnvironment {
             self.scopes.get(parent).unwrap().path.clone(),
             Some(name),
         );
-        let map: std::collections::HashMap<String, ParserDataType> = ParserDataType::natives();
+        let map: FxHashMap<String, ParserDataType> = ParserDataType::natives();
 
         let funcs = funcs.into_iter().map(|x| {
             (

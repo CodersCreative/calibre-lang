@@ -1,7 +1,8 @@
 use calibre_parser::{
     ast::{
         CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
-        ObjectMap, ObjectType, ParserDataType, ParserText, RefMutability, VarType,
+        ObjectMap, ObjectType, ParserDataType, ParserText, PotentialNewType, RefMutability,
+        VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
@@ -67,6 +68,13 @@ pub enum MiddleNodeType {
         body: Box<MiddleNode>,
         return_type: ParserDataType,
         is_async: bool,
+    },
+    ExternFunction {
+        abi: String,
+        library: String,
+        symbol: String,
+        parameters: Vec<ParserDataType>,
+        return_type: ParserDataType,
     },
     AssignmentExpression {
         identifier: Box<MiddleNode>,
@@ -233,8 +241,32 @@ impl Into<NodeType> for MiddleNodeType {
                     },
                     return_type: return_type.into(),
                     is_async,
+                    param_destructures: Vec::new(),
                 },
                 body: Box::new((*body).into()),
+            },
+            Self::ExternFunction {
+                abi,
+                library,
+                symbol,
+                parameters,
+                return_type,
+            } => NodeType::ExternFunctionDeclaration {
+                abi,
+                identifier: ParserText::from(symbol).into(),
+                parameters: parameters
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, p)| {
+                        (
+                            ParserText::from(format!("arg{}", i)).into(),
+                            PotentialNewType::DataType(p),
+                        )
+                    })
+                    .collect(),
+                return_type: PotentialNewType::DataType(return_type),
+                library,
+                symbol: None,
             },
             Self::AssignmentExpression { identifier, value } => NodeType::AssignmentExpression {
                 identifier: Box::new((*identifier).into()),
