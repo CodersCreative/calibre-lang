@@ -3207,13 +3207,8 @@ impl MiddleEnvironment {
                     get_disamubiguous_name(scope, Some(ident.trim()), Some(&VarType::Constant));
 
                 let mut params = Vec::new();
-                for (_name, ty) in parameters.iter() {
-                    let resolved = match ty {
-                        PotentialNewType::DataType(dt) => self.resolve_data_type(scope, dt.clone()),
-                        PotentialNewType::NewType { .. } => {
-                            ParserDataType::from(ParserInnerType::Auto(None))
-                        }
-                    };
+                for ty in parameters.iter() {
+                    let resolved = self.resolve_data_type(scope, ty.clone());
                     params.push(resolved);
                 }
 

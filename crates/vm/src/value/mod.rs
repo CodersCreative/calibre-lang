@@ -399,6 +399,7 @@ impl ExternFunction {
             ParserInnerType::Float => Some(FfiType::Float),
             ParserInnerType::Bool => Some(FfiType::Bool),
             ParserInnerType::Char => Some(FfiType::Char),
+            ParserInnerType::Str => Some(FfiType::Ptr),
             ParserInnerType::Null => Some(FfiType::Void),
             ParserInnerType::Ptr(_) => Some(FfiType::Ptr),
             _ => None,
@@ -449,6 +450,13 @@ impl ExternFunction {
                     } else {
                         Err(RuntimeError::InvalidFunctionCall)
                     }
+                }
+                _ => Err(RuntimeError::InvalidFunctionCall),
+            },
+            ParserInnerType::Str => match value {
+                RuntimeValue::Str(s) => {
+                    let c = CString::new(s).map_err(|_| RuntimeError::InvalidFunctionCall)?;
+                    Ok(FfiArg::CString(c))
                 }
                 _ => Err(RuntimeError::InvalidFunctionCall),
             },

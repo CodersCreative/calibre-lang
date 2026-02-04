@@ -827,7 +827,7 @@ pub enum NodeType {
     ExternFunctionDeclaration {
         abi: String,
         identifier: PotentialDollarIdentifier,
-        parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
+        parameters: Vec<ParserDataType>,
         return_type: PotentialNewType,
         library: String,
         symbol: Option<String>,

@@ -543,16 +543,11 @@ impl Formatter {
                 symbol,
             } => {
                 let mut txt = format!("extern \"{}\" const {} = fn(", abi, identifier);
-                for (i, param) in parameters.iter().enumerate() {
-                    if i > 0 {
-                        txt.push_str(", ");
-                    }
-                    txt.push_str(&format!(
-                        "{}: {}",
-                        param.0,
-                        self.fmt_potential_new_type(&param.1)
-                    ));
+                for param in parameters {
+                    txt.push_str(&format!("{}, ", param,));
                 }
+
+                txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
                 if *return_type != PotentialNewType::DataType(ParserInnerType::Null.into()) {
                     txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));

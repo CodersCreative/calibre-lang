@@ -254,16 +254,7 @@ impl Into<NodeType> for MiddleNodeType {
             } => NodeType::ExternFunctionDeclaration {
                 abi,
                 identifier: ParserText::from(symbol).into(),
-                parameters: parameters
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, p)| {
-                        (
-                            ParserText::from(format!("arg{}", i)).into(),
-                            PotentialNewType::DataType(p),
-                        )
-                    })
-                    .collect(),
+                parameters,
                 return_type: PotentialNewType::DataType(return_type),
                 library,
                 symbol: None,

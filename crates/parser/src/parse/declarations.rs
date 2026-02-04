@@ -52,10 +52,17 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("fn")),
         );
 
-        let parameters = self.parse_key_type_list_ordered_with_ref(
-            TokenType::Open(Bracket::Paren),
-            TokenType::Close(Bracket::Paren),
-        );
+        let parameters: Vec<ParserDataType> = self
+            .parse_type_list(
+                TokenType::Open(Bracket::Paren),
+                TokenType::Close(Bracket::Paren),
+            )
+            .into_iter()
+            .map(|x| match x {
+                PotentialNewType::DataType(x) => x,
+                _ => panic!(),
+            })
+            .collect();
 
         let return_type = if self.first().token_type == TokenType::Arrow {
             let _ = self.eat();
