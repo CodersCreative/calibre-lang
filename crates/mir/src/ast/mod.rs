@@ -1,7 +1,7 @@
 use calibre_parser::{
     ast::{
         CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
-        ObjectMap, ObjectType, ParserDataType, ParserText, PotentialNewType, RefMutability,
+        ObjectMap, ObjectType, ParserDataType, ParserText, PotentialFfiDataType, RefMutability,
         VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
@@ -73,8 +73,8 @@ pub enum MiddleNodeType {
         abi: String,
         library: String,
         symbol: String,
-        parameters: Vec<ParserDataType>,
-        return_type: ParserDataType,
+        parameters: Vec<PotentialFfiDataType>,
+        return_type: PotentialFfiDataType,
     },
     AssignmentExpression {
         identifier: Box<MiddleNode>,
@@ -255,7 +255,7 @@ impl Into<NodeType> for MiddleNodeType {
                 abi,
                 identifier: ParserText::from(symbol).into(),
                 parameters,
-                return_type: PotentialNewType::DataType(return_type),
+                return_type,
                 library,
                 symbol: None,
             },

@@ -71,6 +71,151 @@ pub enum LoopType {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ParserFfiDataType {
+    pub data_type: ParserFfiInnerType,
+    pub span: Span,
+}
+
+impl Display for ParserFfiDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.data_type)
+    }
+}
+
+impl From<ParserFfiInnerType> for ParserFfiDataType {
+    fn from(value: ParserFfiInnerType) -> Self {
+        Self {
+            data_type: value,
+            span: Span::default(),
+        }
+    }
+}
+
+impl ParserFfiDataType {
+    pub fn new(span: Span, data_type: ParserFfiInnerType) -> Self {
+        Self { data_type, span }
+    }
+}
+
+impl Deref for ParserFfiDataType {
+    type Target = ParserFfiInnerType;
+    fn deref(&self) -> &Self::Target {
+        &self.data_type
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ParserFfiInnerType {
+    F32,
+    F64,
+    LongDouble,
+    U8,
+    I8,
+    U16,
+    I16,
+    U32,
+    I32,
+    U64,
+    I64,
+    USize,
+    ISize,
+    SChar,
+    UChar,
+    Int,
+    UInt,
+    Short,
+    UShort,
+    Long,
+    ULong,
+    LongLong,
+    ULongLong,
+}
+
+impl Into<ParserInnerType> for ParserFfiInnerType {
+    fn into(self) -> ParserInnerType {
+        match self {
+            Self::F32 | Self::F64 | Self::LongDouble => ParserInnerType::Float,
+            Self::SChar | Self::UChar => ParserInnerType::Char,
+            Self::U16
+            | Self::U8
+            | Self::U32
+            | Self::U64
+            | Self::USize
+            | Self::UInt
+            | Self::UShort
+            | Self::ULong
+            | Self::ULongLong => ParserInnerType::UInt,
+            _ => ParserInnerType::Int,
+        }
+    }
+}
+
+impl Display for ParserFfiInnerType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "@{}",
+            match self {
+                Self::U8 => "u8",
+                Self::I8 => "i8",
+                Self::U16 => "u16",
+                Self::I16 => "i16",
+                Self::U32 => "u32",
+                Self::I32 => "i32",
+                Self::U64 => "u64",
+                Self::I64 => "i64",
+                Self::USize => "usize",
+                Self::ISize => "isize",
+                Self::UInt => "uint",
+                Self::Int => "int",
+                Self::UShort => "ushort",
+                Self::Short => "short",
+                Self::ULong => "ulong",
+                Self::Long => "long",
+                Self::ULongLong => "ulonglong",
+                Self::LongLong => "longlong",
+                Self::LongDouble => "longdouble",
+                Self::F32 => "f32",
+                Self::F64 => "f64",
+                Self::SChar => "schar",
+                Self::UChar => "uchar",
+            }
+        )
+    }
+}
+
+impl FromStr for ParserFfiInnerType {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.trim_start_matches("@") {
+            "u8" => Self::U8,
+            "i8" => Self::I8,
+            "u16" => Self::U16,
+            "i16" => Self::I16,
+            "u32" => Self::U32,
+            "i32" => Self::I32,
+            "u64" => Self::U64,
+            "i64" => Self::I64,
+            "usize" => Self::USize,
+            "isize" => Self::ISize,
+            "uint" => Self::UInt,
+            "int" => Self::Int,
+            "ushort" => Self::UShort,
+            "short" => Self::Short,
+            "ulong" => Self::ULong,
+            "long" => Self::Long,
+            "ulonglong" => Self::ULongLong,
+            "longlong" => Self::LongLong,
+            "f32" => Self::F32,
+            "f64" => Self::F64,
+            "schar" => Self::SChar,
+            "uchar" => Self::UChar,
+            _ => return Err(()),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParserDataType {
     pub data_type: ParserInnerType,
     pub span: Span,
@@ -101,6 +246,7 @@ impl Deref for ParserDataType {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ParserInnerType {
     Float,
+    UInt,
     Int,
     Null,
     Bool,
@@ -141,6 +287,16 @@ impl ParserDataType {
         }
     }
 }
+
+impl From<ParserFfiDataType> for ParserDataType {
+    fn from(value: ParserFfiDataType) -> Self {
+        Self {
+            span: value.span,
+            data_type: value.data_type.into(),
+        }
+    }
+}
+
 impl ParserInnerType {
     pub fn unwrap_all_refs(self) -> Self {
         match self {
@@ -162,6 +318,45 @@ impl ParserInnerType {
             Self::Ref(x, _) => x.is_list(),
             _ => false,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PotentialNewTypeFfiType {
+    DataType(PotentialNewType),
+    Ffi(ParserFfiDataType),
+}
+
+impl PotentialNewTypeFfiType {
+    pub fn is_auto(&self) -> bool {
+        match self {
+            Self::DataType(x) => x.is_auto(),
+            _ => false,
+        }
+    }
+}
+
+impl Display for PotentialNewTypeFfiType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DataType(x) => write!(f, "{}", x),
+            Self::Ffi(x) => write!(f, "@{}", x),
+        }
+    }
+}
+
+impl PotentialNewTypeFfiType {
+    pub fn span(&self) -> &Span {
+        match self {
+            Self::Ffi(x) => &x.span,
+            Self::DataType(x) => x.span(),
+        }
+    }
+}
+
+impl From<ParserDataType> for PotentialNewTypeFfiType {
+    fn from(value: ParserDataType) -> Self {
+        Self::DataType(value.into())
     }
 }
 
@@ -219,6 +414,7 @@ impl Display for ParserInnerType {
         match self {
             Self::Float => write!(f, "float"),
             Self::Int => write!(f, "int"),
+            Self::UInt => write!(f, "uint"),
             Self::Null => write!(f, "null"),
             Self::Dynamic => write!(f, "dyn"),
             Self::Bool => write!(f, "bool"),
@@ -334,6 +530,21 @@ pub enum PotentialGenericTypeIdentifier {
         identifier: PotentialDollarIdentifier,
         generic_types: Vec<PotentialNewType>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PotentialFfiDataType {
+    Ffi(ParserFfiDataType),
+    Normal(ParserDataType),
+}
+
+impl Display for PotentialFfiDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ffi(x) => write!(f, "@{}", x),
+            Self::Normal(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 impl Display for PotentialGenericTypeIdentifier {
@@ -827,8 +1038,8 @@ pub enum NodeType {
     ExternFunctionDeclaration {
         abi: String,
         identifier: PotentialDollarIdentifier,
-        parameters: Vec<ParserDataType>,
-        return_type: PotentialNewType,
+        parameters: Vec<PotentialFfiDataType>,
+        return_type: PotentialFfiDataType,
         library: String,
         symbol: Option<String>,
     },

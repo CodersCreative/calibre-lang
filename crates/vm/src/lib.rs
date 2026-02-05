@@ -147,7 +147,16 @@ impl VM {
 
         let mut out = Vec::new();
 
-        #[cfg(target_os = "linux")]
+        #[cfg(target_os = "android")]
+        {
+            if base == "c" {
+                out.push("libc.so".to_string());
+            }
+            out.push(format!("lib{}.so", base));
+            out.push(format!("{}.so", base));
+            out.push(base.to_string());
+        }
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         {
             if base == "c" {
                 out.push("libc.so.6".to_string());

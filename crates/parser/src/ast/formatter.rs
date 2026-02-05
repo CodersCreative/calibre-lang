@@ -7,7 +7,7 @@ use crate::{
     ast::{
         CallArg, DestructurePattern, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node,
         NodeType, ObjectType, Overload, ParserInnerType, PipeSegment, PotentialDollarIdentifier,
-        PotentialNewType, TypeDefType, VarType,
+        PotentialFfiDataType, PotentialNewType, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -549,8 +549,8 @@ impl Formatter {
 
                 txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
-                if *return_type != PotentialNewType::DataType(ParserInnerType::Null.into()) {
-                    txt.push_str(&format!(" -> {}", self.fmt_potential_new_type(return_type)));
+                if *return_type != PotentialFfiDataType::Normal(ParserInnerType::Null.into()) {
+                    txt.push_str(&format!(" -> {}", return_type));
                 }
                 txt.push_str(&format!(" from \"{}\"", library));
                 if let Some(sym) = symbol {

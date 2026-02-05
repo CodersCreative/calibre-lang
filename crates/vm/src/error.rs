@@ -1,3 +1,5 @@
+use std::num::{ParseFloatError, ParseIntError};
+
 use calibre_parser::ast::{
     ParserInnerType,
     binary::BinaryOperator,
@@ -14,6 +16,8 @@ pub enum RuntimeError {
     Comparison(RuntimeValue, RuntimeValue, ComparisonOperator),
     Binary(RuntimeValue, RuntimeValue, BinaryOperator),
     UnexpectedType(RuntimeValue),
+    ParseFloat(ParseFloatError),
+    ParseInt(ParseIntError),
     CantConvert(RuntimeValue, ParserInnerType),
     StackUnderflow,
     FunctionNotFound(String),
@@ -25,24 +29,36 @@ pub enum RuntimeError {
     Panic,
 }
 
+impl From<ParseFloatError> for RuntimeError {
+    fn from(value: ParseFloatError) -> Self {
+        Self::ParseFloat(value)
+    }
+}
+
+impl From<ParseIntError> for RuntimeError {
+    fn from(value: ParseIntError) -> Self {
+        Self::ParseInt(value)
+    }
+}
+
 impl std::fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RuntimeError::At(_, inner) => write!(f, "{inner}"),
+            RuntimeError::At(_, inner) => write!(f, "{}", inner),
             RuntimeError::Boolean(left, right, op) => {
-                write!(f, "Invalid boolean operation: {left:?} {op:?} {right:?}")
+                write!(f, "Invalid boolean operation: {left} {op} {right}")
             }
             RuntimeError::Comparison(left, right, op) => {
-                write!(f, "Invalid comparison: {left:?} {op:?} {right:?}")
+                write!(f, "Invalid comparison: {left} {op} {right}")
             }
             RuntimeError::Binary(left, right, op) => {
-                write!(f, "Invalid binary operation: {left:?} {op:?} {right:?}")
+                write!(f, "Invalid binary operation: {left} {op} {right}")
             }
-            RuntimeError::UnexpectedType(value) => write!(f, "Unexpected type: {value:?}"),
-            RuntimeError::CantConvert(value, ty) => {
-                write!(f, "Cannot convert {value:?} to {ty:?}")
-            }
-            RuntimeError::StackUnderflow => write!(f, "Stack underflow"),
+            RuntimeError::UnexpectedType(value) => write!(f, "Unexpected value type: {value:?}"),
+            RuntimeError::ParseFloat(x) => write!(f, "{x}"),
+            RuntimeError::ParseInt(x) => write!(f, "{x}"),
+            RuntimeError::CantConvert(value, ty) => write!(f, "Cannot convert {value:?} to {ty:?}"),
+            RuntimeError::StackUnderflow => write!(f, "Internal runtime error: stack underflow"),
             RuntimeError::FunctionNotFound(name) => write!(f, "Function not found: {name}"),
             RuntimeError::InvalidFunctionCall => write!(f, "Invalid function call"),
             RuntimeError::Ffi(msg) => write!(f, "FFI error: {msg}"),
@@ -65,31 +81,6 @@ impl RuntimeError {
         }
 
         (span, current)
-    }
-
-    pub fn user_message(&self) -> String {
-        match self {
-            RuntimeError::At(_, inner) => inner.user_message(),
-            RuntimeError::Boolean(left, right, op) => {
-                format!("Invalid boolean operation: {left:?} {op:?} {right:?}")
-            }
-            RuntimeError::Comparison(left, right, op) => {
-                format!("Invalid comparison: {left:?} {op:?} {right:?}")
-            }
-            RuntimeError::Binary(left, right, op) => {
-                format!("Invalid binary operation: {left:?} {op:?} {right:?}")
-            }
-            RuntimeError::UnexpectedType(value) => format!("Unexpected value type: {value:?}"),
-            RuntimeError::CantConvert(value, ty) => format!("Cannot convert {value:?} to {ty:?}"),
-            RuntimeError::StackUnderflow => "Internal runtime error: stack underflow".to_string(),
-            RuntimeError::FunctionNotFound(name) => format!("Function not found: {name}"),
-            RuntimeError::InvalidFunctionCall => "Invalid function call".to_string(),
-            RuntimeError::Ffi(msg) => format!("FFI error: {msg}"),
-            RuntimeError::DanglingRef(name) => format!("Dangling reference: {name}"),
-            RuntimeError::InvalidBytecode(msg) => format!("Invalid bytecode: {msg}"),
-            RuntimeError::Io(msg) => format!("I/O error: {msg}"),
-            RuntimeError::Panic => "panic".to_string(),
-        }
     }
 
     pub fn help(&self) -> Option<String> {
@@ -123,6 +114,8 @@ impl RuntimeError {
                 "Check that you are calling a function value and passing the right arguments."
                     .to_string(),
             ),
+            RuntimeError::ParseFloat(x) => Some(x.to_string()),
+            RuntimeError::ParseInt(x) => Some(x.to_string()),
             RuntimeError::Ffi(_) => Some(
                 "Verify the library path, symbol name, and FFI types match the external function."
                     .to_string(),

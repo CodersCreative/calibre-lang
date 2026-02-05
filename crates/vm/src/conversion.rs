@@ -3,7 +3,7 @@ use calibre_lir::{
     LirRegistry, LirTerminator,
 };
 use calibre_parser::ast::{
-    ParserDataType, ParserInnerType,
+    ParserDataType, ParserInnerType, PotentialFfiDataType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
@@ -340,8 +340,8 @@ pub enum VMLiteral {
         abi: String,
         library: String,
         symbol: String,
-        parameters: Vec<ParserDataType>,
-        return_type: ParserDataType,
+        parameters: Vec<PotentialFfiDataType>,
+        return_type: PotentialFfiDataType,
     },
     Null,
 }

@@ -7,8 +7,9 @@ pub mod r#type;
 use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{
-        Node, NodeType, ParserDataType, ParserInnerType, PotentialDollarIdentifier,
-        PotentialNewType, RefMutability, comparison::ComparisonOperator,
+        Node, NodeType, ParserDataType, ParserFfiDataType, ParserFfiInnerType, ParserInnerType,
+        PotentialDollarIdentifier, PotentialFfiDataType, PotentialNewType, RefMutability,
+        comparison::ComparisonOperator,
     },
     lexer::{Bracket, Span, StopValue, Token, TokenType},
 };
@@ -60,6 +61,32 @@ impl Parser {
             }
         } else {
             token
+        }
+    }
+
+    fn parse_potential_ffi_type(&mut self) -> Option<PotentialFfiDataType> {
+        if self.first().token_type == TokenType::At {
+            let _ = self.eat();
+            let ty = self.expect_potential_dollar_ident();
+
+            Some(PotentialFfiDataType::Ffi(ParserFfiDataType {
+                span: *ty.span(),
+                data_type: ParserFfiInnerType::from_str(&ty.to_string()).unwrap(),
+            }))
+        } else {
+            self.parse_type()
+                .map(|x| PotentialFfiDataType::Normal(x.into()))
+        }
+    }
+
+    fn expect_potential_ffi_type(&mut self) -> PotentialFfiDataType {
+        if let Some(x) = self.parse_potential_ffi_type() {
+            x
+        } else {
+            self.add_err(SyntaxErr::ExpectedType);
+            PotentialFfiDataType::Normal(
+                ParserDataType::new(self.first().span, ParserInnerType::Auto(None)).into(),
+            )
         }
     }
 

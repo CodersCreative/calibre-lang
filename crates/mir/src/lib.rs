@@ -6,8 +6,8 @@ use calibre_parser::{
     ast::{
         CallArg, DestructurePattern, FunctionHeader, GenericTypes, IfComparisonType, LoopType,
         MatchArmType, Node, NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType,
-        ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
-        RefMutability, VarType,
+        ParserText, PotentialDollarIdentifier, PotentialFfiDataType,
+        PotentialGenericTypeIdentifier, PotentialNewType, RefMutability, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
@@ -3207,21 +3207,26 @@ impl MiddleEnvironment {
                     get_disamubiguous_name(scope, Some(ident.trim()), Some(&VarType::Constant));
 
                 let mut params = Vec::new();
-                for ty in parameters.iter() {
-                    let resolved = self.resolve_data_type(scope, ty.clone());
+                for ty in parameters {
+                    let resolved = self.resolve_potential_ffi_type(scope, ty);
                     params.push(resolved);
                 }
 
-                let ret = match return_type {
-                    PotentialNewType::DataType(dt) => self.resolve_data_type(scope, dt),
-                    PotentialNewType::NewType { .. } => {
-                        ParserDataType::from(ParserInnerType::Auto(None))
-                    }
-                };
+                let return_type = self.resolve_potential_ffi_type(scope, return_type);
 
                 let fn_type = ParserDataType::from(ParserInnerType::Function {
-                    return_type: Box::new(ret.clone()),
-                    parameters: params.clone(),
+                    return_type: Box::new(match return_type.clone() {
+                        PotentialFfiDataType::Normal(x) => x,
+                        PotentialFfiDataType::Ffi(x) => ParserDataType::from(x),
+                    }),
+                    parameters: params
+                        .clone()
+                        .into_iter()
+                        .map(|x| match x {
+                            PotentialFfiDataType::Normal(x) => x,
+                            PotentialFfiDataType::Ffi(x) => ParserDataType::from(x),
+                        })
+                        .collect(),
                     is_async: false,
                 });
 
@@ -3250,7 +3255,7 @@ impl MiddleEnvironment {
                                 library,
                                 symbol: symbol.unwrap_or_else(|| ident.text.clone()),
                                 parameters: params,
-                                return_type: ret,
+                                return_type,
                             },
                             self.current_span(),
                         )),

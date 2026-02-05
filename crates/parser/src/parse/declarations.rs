@@ -3,8 +3,8 @@ use crate::{
     ast::{
         DestructurePattern, FunctionHeader, GenericType, GenericTypes, IfComparisonType, LoopType,
         MatchArmType, NamedScope, Node, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialNewType, TryCatch, VarType, binary::BinaryOperator,
-        comparison::ComparisonOperator,
+        PotentialDollarIdentifier, PotentialFfiDataType, PotentialNewType, TryCatch, VarType,
+        binary::BinaryOperator, comparison::ComparisonOperator,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -52,24 +52,36 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("fn")),
         );
 
-        let parameters: Vec<ParserDataType> = self
-            .parse_type_list(
-                TokenType::Open(Bracket::Paren),
-                TokenType::Close(Bracket::Paren),
-            )
-            .into_iter()
-            .map(|x| match x {
-                PotentialNewType::DataType(x) => x,
-                _ => panic!(),
-            })
-            .collect();
+        let _ = self.expect_eat(
+            &TokenType::Open(Bracket::Paren),
+            SyntaxErr::ExpectedOpeningBracket(Bracket::Paren),
+        );
+
+        let mut parameters: Vec<PotentialFfiDataType> = Vec::new();
+
+        while self.first().token_type != TokenType::Close(Bracket::Paren) {
+            let ty = self.expect_potential_ffi_type();
+
+            if self.first().token_type == TokenType::Comma {
+                let _ = self.eat();
+            }
+
+            parameters.push(ty);
+        }
+
+        let _ = self.expect_eat(
+            &TokenType::Close(Bracket::Paren),
+            SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
+        );
 
         let return_type = if self.first().token_type == TokenType::Arrow {
             let _ = self.eat();
-            self.parse_potential_new_type()
-                .unwrap_or(ParserDataType::from(ParserInnerType::Null).into())
+            self.parse_potential_ffi_type()
+                .unwrap_or(PotentialFfiDataType::Normal(
+                    ParserDataType::from(ParserInnerType::Null).into(),
+                ))
         } else {
-            ParserDataType::from(ParserInnerType::Null).into()
+            PotentialFfiDataType::Normal(ParserDataType::from(ParserInnerType::Null).into())
         };
 
         let mut library = String::new();

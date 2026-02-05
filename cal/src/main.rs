@@ -71,7 +71,7 @@ async fn run_source(
                     calibre_diagnostics::emit_runtime_error(
                         &path,
                         &contents,
-                        inner.user_message(),
+                        inner.to_string(),
                         span,
                         inner.help(),
                     );
@@ -211,7 +211,7 @@ async fn run_source(
             calibre_diagnostics::emit_runtime_error(
                 path,
                 &contents,
-                inner.user_message(),
+                inner.to_string(),
                 span,
                 inner.help(),
             );
@@ -223,7 +223,7 @@ async fn run_source(
             calibre_diagnostics::emit_runtime_error(
                 path,
                 &contents,
-                inner.user_message(),
+                inner.to_string(),
                 span,
                 inner.help(),
             );
@@ -320,7 +320,7 @@ async fn run_repl_source(contents: String, path: &Path) -> Result<Option<Runtime
             calibre_diagnostics::emit_runtime_error(
                 path,
                 &contents,
-                inner.user_message(),
+                inner.to_string(),
                 span,
                 inner.help(),
             );
@@ -340,7 +340,7 @@ async fn run_repl_source(contents: String, path: &Path) -> Result<Option<Runtime
             calibre_diagnostics::emit_runtime_error(
                 path,
                 &contents,
-                inner.user_message(),
+                inner.to_string(),
                 span,
                 inner.help(),
             );

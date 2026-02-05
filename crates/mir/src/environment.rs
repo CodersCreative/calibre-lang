@@ -1,5 +1,6 @@
 use crate::ast::hm::{self, Subst, Type, TypeGenerator};
 use crate::ast::{MiddleNode, MiddleNodeType};
+use calibre_parser::ast::PotentialFfiDataType;
 use calibre_parser::{
     Parser,
     ast::{
@@ -151,14 +152,6 @@ impl MiddleEnvironment {
 
     fn canonical_type_key(dt: &ParserDataType) -> String {
         match &dt.data_type {
-            ParserInnerType::Int => "int".to_string(),
-            ParserInnerType::Float => "float".to_string(),
-            ParserInnerType::Bool => "bool".to_string(),
-            ParserInnerType::Str => "str".to_string(),
-            ParserInnerType::Char => "char".to_string(),
-            ParserInnerType::Null => "null".to_string(),
-            ParserInnerType::Dynamic => "dyn".to_string(),
-            ParserInnerType::Range => "range".to_string(),
             ParserInnerType::Struct(s) => format!("struct_{}", s),
             ParserInnerType::List(x) => format!("list_{}", Self::canonical_type_key(x)),
             ParserInnerType::Ptr(x) => format!("ptr_{}", Self::canonical_type_key(x)),
@@ -210,6 +203,7 @@ impl MiddleEnvironment {
             | ParserInnerType::NativeFunction(_) => {
                 format!("other_{}", dt)
             }
+            other => other.to_string(),
         }
     }
 
@@ -812,19 +806,17 @@ impl MiddleEnvironment {
                     if let Some(scheme) = scheme {
                         let mut tg = TypeGenerator::default();
                         let mut subst = Subst::default();
-                        fn contains_auto(dt: &calibre_parser::ast::ParserDataType) -> bool {
+                        fn contains_auto(dt: &ParserDataType) -> bool {
                             match &dt.data_type {
-                                calibre_parser::ast::ParserInnerType::Auto(_) => true,
-                                calibre_parser::ast::ParserInnerType::Tuple(xs) => {
-                                    xs.iter().any(contains_auto)
-                                }
-                                calibre_parser::ast::ParserInnerType::List(x) => contains_auto(x),
-                                calibre_parser::ast::ParserInnerType::Ptr(x) => contains_auto(x),
-                                calibre_parser::ast::ParserInnerType::Option(x) => contains_auto(x),
-                                calibre_parser::ast::ParserInnerType::Result { ok, err } => {
+                                ParserInnerType::Auto(_) => true,
+                                ParserInnerType::Tuple(xs) => xs.iter().any(contains_auto),
+                                ParserInnerType::List(x) => contains_auto(x),
+                                ParserInnerType::Ptr(x) => contains_auto(x),
+                                ParserInnerType::Option(x) => contains_auto(x),
+                                ParserInnerType::Result { ok, err } => {
                                     contains_auto(ok) || contains_auto(err)
                                 }
-                                calibre_parser::ast::ParserInnerType::Function {
+                                ParserInnerType::Function {
                                     return_type,
                                     parameters,
                                     ..
@@ -832,14 +824,11 @@ impl MiddleEnvironment {
                                     contains_auto(return_type)
                                         || parameters.iter().any(contains_auto)
                                 }
-                                calibre_parser::ast::ParserInnerType::Ref(x, _) => contains_auto(x),
-                                calibre_parser::ast::ParserInnerType::StructWithGenerics {
-                                    generic_types,
-                                    ..
-                                } => generic_types.iter().any(contains_auto),
-                                calibre_parser::ast::ParserInnerType::Scope(xs) => {
-                                    xs.iter().any(contains_auto)
+                                ParserInnerType::Ref(x, _) => contains_auto(x),
+                                ParserInnerType::StructWithGenerics { generic_types, .. } => {
+                                    generic_types.iter().any(contains_auto)
                                 }
+                                ParserInnerType::Scope(xs) => xs.iter().any(contains_auto),
                                 _ => false,
                             }
                         }
@@ -1115,6 +1104,19 @@ impl MiddleEnvironment {
                 })
                 .flatten()
                 .or_else(|| Some(x.clone())),
+        }
+    }
+
+    pub fn resolve_potential_ffi_type(
+        &mut self,
+        scope: &u64,
+        data_type: PotentialFfiDataType,
+    ) -> PotentialFfiDataType {
+        match data_type {
+            PotentialFfiDataType::Normal(x) => {
+                PotentialFfiDataType::Normal(self.resolve_data_type(scope, x))
+            }
+            x => x,
         }
     }
 

@@ -3,7 +3,7 @@ use calibre_mir::{
     environment::{MiddleEnvironment, MiddleTypeDefType},
 };
 use calibre_parser::ast::{
-    ObjectMap, ParserDataType, ParserInnerType,
+    ObjectMap, ParserDataType, ParserInnerType, PotentialFfiDataType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
@@ -193,8 +193,8 @@ pub enum LirNodeType {
         abi: String,
         library: String,
         symbol: String,
-        parameters: Vec<ParserDataType>,
-        return_type: ParserDataType,
+        parameters: Vec<PotentialFfiDataType>,
+        return_type: PotentialFfiDataType,
     },
 }
 

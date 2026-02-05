@@ -5,7 +5,9 @@ use std::{
 };
 
 use calibre_lir::BlockId;
-use calibre_parser::ast::{ObjectMap, ParserDataType, ParserInnerType};
+use calibre_parser::ast::{
+    ObjectMap, ParserDataType, ParserFfiInnerType, ParserInnerType, PotentialFfiDataType,
+};
 use dumpster::sync::Gc;
 use dumpster::{TraceWith, Visitor};
 use libffi::middle::{Arg, Cif, CodePtr, Type};
@@ -54,6 +56,7 @@ pub enum RuntimeValue {
     Null,
     Float(f64),
     Int(i64),
+    UInt(u64),
     Range(i64, i64),
     Bool(bool),
     Str(String),
@@ -99,19 +102,9 @@ pub struct ExternFunction {
     pub abi: String,
     pub library: String,
     pub symbol: String,
-    pub parameters: Vec<ParserDataType>,
-    pub return_type: ParserDataType,
+    pub parameters: Vec<PotentialFfiDataType>,
+    pub return_type: PotentialFfiDataType,
     pub handle: Arc<Library>,
-}
-
-#[derive(Debug, Clone)]
-enum FfiType {
-    Int,
-    Float,
-    Bool,
-    Char,
-    Ptr,
-    Void,
 }
 
 #[derive(Debug)]
@@ -216,6 +209,7 @@ impl Display for RuntimeValue {
         match self {
             Self::Null => write!(f, "null"),
             Self::Float(x) => write!(f, "{}f", x),
+            Self::UInt(x) => write!(f, "{}", x),
             Self::Int(x) => write!(f, "{}", x),
             Self::Enum(x, y, Some(z)) => write!(f, "{}[{}] : {}", x, y, z.as_ref()),
             Self::Enum(x, y, _) => write!(f, "{}[{}]", x, y),
@@ -393,75 +387,18 @@ impl VM {
 }
 
 impl ExternFunction {
-    fn ffi_type_from_parser(typ: &ParserDataType) -> Option<FfiType> {
-        match &typ.data_type {
-            ParserInnerType::Int => Some(FfiType::Int),
-            ParserInnerType::Float => Some(FfiType::Float),
-            ParserInnerType::Bool => Some(FfiType::Bool),
-            ParserInnerType::Char => Some(FfiType::Char),
-            ParserInnerType::Str => Some(FfiType::Ptr),
-            ParserInnerType::Null => Some(FfiType::Void),
-            ParserInnerType::Ptr(_) => Some(FfiType::Ptr),
-            _ => None,
-        }
-    }
-
-    fn ffi_type_to_libffi(typ: &FfiType) -> Type {
+    fn type_to_libffi_type(typ: &PotentialFfiDataType) -> Type {
         match typ {
-            FfiType::Int => Type::i64(),
-            FfiType::Float => Type::f64(),
-            FfiType::Bool => Type::u8(),
-            FfiType::Char => Type::u8(),
-            FfiType::Ptr => Type::pointer(),
-            FfiType::Void => Type::void(),
-        }
-    }
-
-    fn build_arg(expected: &ParserDataType, value: RuntimeValue) -> Result<FfiArg, RuntimeError> {
-        match expected.data_type.clone().unwrap_all_refs() {
-            ParserInnerType::Int => match value {
-                RuntimeValue::Int(x) => Ok(FfiArg::Int(x)),
-                RuntimeValue::Bool(x) => Ok(FfiArg::Int(if x { 1 } else { 0 })),
-                RuntimeValue::Char(x) => Ok(FfiArg::Int(x as i64)),
-                RuntimeValue::Float(x) => Ok(FfiArg::Int(x as i64)),
-                _ => Err(RuntimeError::InvalidFunctionCall),
+            PotentialFfiDataType::Normal(x) => match x.data_type {
+                ParserInnerType::Int => Type::i64(),
+                ParserInnerType::Float => Type::f64(),
+                ParserInnerType::Bool => Type::u8(),
+                ParserInnerType::Char => Type::u8(),
+                ParserInnerType::Ptr(_) => Type::pointer(),
+                ParserInnerType::Null => Type::void(),
+                _ => todo!(),
             },
-            ParserInnerType::Float => match value {
-                RuntimeValue::Float(x) => Ok(FfiArg::Float(x)),
-                RuntimeValue::Int(x) => Ok(FfiArg::Float(x as f64)),
-                _ => Err(RuntimeError::InvalidFunctionCall),
-            },
-            ParserInnerType::Bool => match value {
-                RuntimeValue::Bool(x) => Ok(FfiArg::Bool(if x { 1 } else { 0 })),
-                RuntimeValue::Int(x) => Ok(FfiArg::Bool(if x != 0 { 1 } else { 0 })),
-                _ => Err(RuntimeError::InvalidFunctionCall),
-            },
-            ParserInnerType::Char => match value {
-                RuntimeValue::Char(x) => Ok(FfiArg::Char(x as u8)),
-                RuntimeValue::Int(x) => Ok(FfiArg::Char(x as u8)),
-                _ => Err(RuntimeError::InvalidFunctionCall),
-            },
-            ParserInnerType::Ptr(inner) => match value {
-                RuntimeValue::Int(x) => Ok(FfiArg::Ptr(x as usize as *const c_void)),
-                RuntimeValue::Str(s) => {
-                    if matches!(inner.data_type, ParserInnerType::Char) {
-                        let c = CString::new(s).map_err(|_| RuntimeError::InvalidFunctionCall)?;
-                        Ok(FfiArg::CString(c))
-                    } else {
-                        Err(RuntimeError::InvalidFunctionCall)
-                    }
-                }
-                _ => Err(RuntimeError::InvalidFunctionCall),
-            },
-            ParserInnerType::Str => match value {
-                RuntimeValue::Str(s) => {
-                    let c = CString::new(s).map_err(|_| RuntimeError::InvalidFunctionCall)?;
-                    Ok(FfiArg::CString(c))
-                }
-                _ => Err(RuntimeError::InvalidFunctionCall),
-            },
-            ParserInnerType::Null => Ok(FfiArg::Int(0)),
-            _ => Err(RuntimeError::InvalidFunctionCall),
+            PotentialFfiDataType::Ffi(x) => todo!(),
         }
     }
 
@@ -475,62 +412,103 @@ impl ExternFunction {
         }
 
         for (param, value) in self.parameters.iter().zip(args.into_iter()) {
-            let ffi_type =
-                Self::ffi_type_from_parser(param).ok_or(RuntimeError::InvalidFunctionCall)?;
-            arg_types.push(Self::ffi_type_to_libffi(&ffi_type));
-            ffi_args.push(Self::build_arg(param, value)?);
-        }
-
-        for arg in ffi_args.iter_mut() {
-            match arg {
-                FfiArg::Int(x) => libffi_args.push(Arg::new(x)),
-                FfiArg::Float(x) => libffi_args.push(Arg::new(x)),
-                FfiArg::Bool(x) => libffi_args.push(Arg::new(x)),
-                FfiArg::Char(x) => libffi_args.push(Arg::new(x)),
-                FfiArg::Ptr(x) => libffi_args.push(Arg::new(x)),
-                FfiArg::CString(c) => {
-                    let ptr = c.as_ptr() as *const c_void;
-                    libffi_args.push(Arg::new(&ptr));
-                }
+            match param {
+                PotentialFfiDataType::Normal(x) => match (value, &x.data_type) {
+                    (RuntimeValue::Str(x), ParserInnerType::Str) => {
+                        let ptr = x.as_ptr() as *const c_void;
+                        libffi_args.push(Arg::new(&ptr));
+                    }
+                    (RuntimeValue::UInt(x), ParserInnerType::UInt) => {
+                        libffi_args.push(Arg::new(&x));
+                    }
+                    (RuntimeValue::UInt(x), ParserInnerType::Int) => {
+                        libffi_args.push(Arg::new(&(x as i64)));
+                    }
+                    (RuntimeValue::UInt(x), ParserInnerType::Float) => {
+                        libffi_args.push(Arg::new(&(x as f64)));
+                    }
+                    (RuntimeValue::Int(x), ParserInnerType::Int) => {
+                        libffi_args.push(Arg::new(&x));
+                    }
+                    (RuntimeValue::Int(x), ParserInnerType::Float) => {
+                        libffi_args.push(Arg::new(&(x as f64)));
+                    }
+                    (RuntimeValue::Int(x), ParserInnerType::UInt) => {
+                        libffi_args.push(Arg::new(&(x as u64)));
+                    }
+                    (RuntimeValue::Float(x), ParserInnerType::Float) => {
+                        libffi_args.push(Arg::new(&x));
+                    }
+                    (RuntimeValue::Float(x), ParserInnerType::UInt) => {
+                        libffi_args.push(Arg::new(&(x as u64)));
+                    }
+                    (RuntimeValue::Float(x), ParserInnerType::Int) => {
+                        libffi_args.push(Arg::new(&(x as i64)));
+                    }
+                    (RuntimeValue::Char(x), ParserInnerType::Char) => {
+                        libffi_args.push(Arg::new(&(x as u8)));
+                    }
+                    (RuntimeValue::Bool(x), ParserInnerType::Bool) => {
+                        libffi_args.push(Arg::new(&(x as u8)));
+                    }
+                    (RuntimeValue::Bool(x), ParserInnerType::UInt) => {
+                        libffi_args.push(Arg::new(&(x as u64)));
+                    }
+                    (RuntimeValue::Bool(x), ParserInnerType::Int) => {
+                        libffi_args.push(Arg::new(&(x as i64)));
+                    }
+                    _ => todo!(),
+                },
+                PotentialFfiDataType::Ffi(x) => match &x.data_type {
+                    ParserFfiInnerType::U8 => match value {
+                        RuntimeValue::Float(x) => libffi_args.push(Arg::new(&(x as u8))),
+                        _ => todo!(),
+                    },
+                    _ => todo!(),
+                },
             }
         }
 
-        let ret_type = Self::ffi_type_from_parser(&self.return_type)
-            .ok_or(RuntimeError::InvalidFunctionCall)?;
-        let cif = Cif::new(arg_types, Self::ffi_type_to_libffi(&ret_type));
+        let cif = Cif::new(arg_types, Self::type_to_libffi_type(&self.return_type));
+
         let symbol = unsafe {
             self.handle
                 .get::<*const c_void>(self.symbol.as_bytes())
                 .map_err(|_| RuntimeError::InvalidFunctionCall)?
         };
+
         let code = CodePtr::from_ptr(*symbol as *mut c_void);
 
         unsafe {
-            match ret_type {
-                FfiType::Void => {
-                    let _: () = cif.call(code, &mut libffi_args);
-                    Ok(RuntimeValue::Null)
-                }
-                FfiType::Int => {
-                    let res: i64 = cif.call(code, &mut libffi_args);
-                    Ok(RuntimeValue::Int(res))
-                }
-                FfiType::Float => {
-                    let res: f64 = cif.call(code, &mut libffi_args);
-                    Ok(RuntimeValue::Float(res))
-                }
-                FfiType::Bool => {
-                    let res: u8 = cif.call(code, &mut libffi_args);
-                    Ok(RuntimeValue::Bool(res != 0))
-                }
-                FfiType::Char => {
-                    let res: u8 = cif.call(code, &mut libffi_args);
-                    Ok(RuntimeValue::Char(res as char))
-                }
-                FfiType::Ptr => {
-                    let res: usize = cif.call(code, &mut libffi_args);
-                    Ok(RuntimeValue::Int(res as i64))
-                }
+            match &self.return_type {
+                PotentialFfiDataType::Normal(x) => match x.data_type {
+                    ParserInnerType::Float => {
+                        Ok(RuntimeValue::Float(cif.call(code, &mut libffi_args)))
+                    }
+                    ParserInnerType::UInt => {
+                        Ok(RuntimeValue::UInt(cif.call(code, &mut libffi_args)))
+                    }
+                    ParserInnerType::Int => Ok(RuntimeValue::Int(cif.call(code, &mut libffi_args))),
+                    ParserInnerType::Bool => {
+                        let res: u8 = cif.call(code, &mut libffi_args);
+                        Ok(RuntimeValue::Bool(res != 0))
+                    }
+                    ParserInnerType::Null => {
+                        let _: () = cif.call(code, &mut libffi_args);
+                        Ok(RuntimeValue::Null)
+                    }
+                    ParserInnerType::Char => {
+                        let res: u8 = cif.call(code, &mut libffi_args);
+                        Ok(RuntimeValue::Char(res as char))
+                    }
+                    ParserInnerType::Ptr(_) => {
+                        Ok(RuntimeValue::UInt(cif.call(code, &mut libffi_args)))
+                    }
+                    _ => todo!(),
+                },
+                PotentialFfiDataType::Ffi(x) => match x.data_type {
+                    _ => todo!(),
+                },
             }
         }
     }

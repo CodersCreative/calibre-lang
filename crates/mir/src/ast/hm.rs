@@ -5,6 +5,7 @@ use std::fmt;
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum TypeCon {
     Int,
+    UInt,
     Float,
     Bool,
     Str,
@@ -41,6 +42,7 @@ impl fmt::Debug for Type {
             Type::TVar(n) => write!(f, "t{}", n),
             Type::TCon(tc) => match tc {
                 TypeCon::Int => write!(f, "Int"),
+                TypeCon::UInt => write!(f, "UInt"),
                 TypeCon::Float => write!(f, "Float"),
                 TypeCon::Bool => write!(f, "Bool"),
                 TypeCon::Str => write!(f, "Str"),
@@ -256,6 +258,7 @@ pub fn from_parser_data_type(pd: &ParserDataType, tg: &mut TypeGenerator) -> Typ
     match &pd.data_type {
         ParserInnerType::Float => Type::TCon(TypeCon::Float),
         ParserInnerType::Int => Type::TCon(TypeCon::Int),
+        ParserInnerType::UInt => Type::TCon(TypeCon::UInt),
         ParserInnerType::Null => Type::TCon(TypeCon::Null),
         ParserInnerType::Bool => Type::TCon(TypeCon::Bool),
         ParserInnerType::Str => Type::TCon(TypeCon::Str),
@@ -320,6 +323,7 @@ pub fn to_parser_data_type(ty: &Type) -> ParserDataType {
         Type::TVar(_) => ParserDataType::from(ParserInnerType::Auto(None)),
         Type::TCon(tc) => match tc {
             TypeCon::Int => ParserDataType::from(ParserInnerType::Int),
+            TypeCon::UInt => ParserDataType::from(ParserInnerType::UInt),
             TypeCon::Float => ParserDataType::from(ParserInnerType::Float),
             TypeCon::Bool => ParserDataType::from(ParserInnerType::Bool),
             TypeCon::Str => ParserDataType::from(ParserInnerType::Str),
