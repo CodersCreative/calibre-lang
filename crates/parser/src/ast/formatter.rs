@@ -100,11 +100,11 @@ impl Formatter {
         let mut tokenizer = Tokenizer::default();
         let tokens = tokenizer.tokenize(&contents)?;
         let mut parser = Parser::default();
-        let NodeType::ScopeDeclaration {
-            body: Some(body), ..
-        } = parser.produce_ast(tokens).node_type
-        else {
-            unreachable!()
+        let NodeType::ScopeDeclaration { body, .. } = parser.produce_ast(tokens).node_type else {
+            return Err("Expected scope declaration".into());
+        };
+        let Some(body) = body else {
+            return Ok(Vec::new());
         };
 
         Ok(body
@@ -128,28 +128,40 @@ macro_rules! handle_comment {
 }
 
 impl Formatter {
+    fn should_wrap(&self, text: &str) -> bool {
+        text.contains('\n') || text.len() > self.max_width
+    }
+
+    fn wrap_if_long(&self, single: String, multiline: &str) -> String {
+        if self.should_wrap(&single) {
+            multiline.to_string()
+        } else {
+            single
+        }
+    }
+
     pub(crate) fn get_scope_lines(&mut self, nodes: &[Node]) -> Vec<String> {
         let mut last_line: Option<u32> = None;
         let mut lines = Vec::new();
 
         for node in nodes {
+            let leading = self.get_potential_comment(&node.span);
+            let trailing = self.get_trailing_comment(&node.span);
+            let formatted = handle_comment!(leading, self.format(&node));
+            let formatted = if let Some(trailing) = trailing {
+                format!("{} {}", formatted, trailing)
+            } else {
+                formatted
+            };
+
             if let Some(line) = last_line {
                 if (node.span.from.line as i32 - line as i32).abs() > 1 {
-                    lines.push(format!(
-                        "\n{};\n",
-                        handle_comment!(self.get_potential_comment(&node.span), self.format(&node))
-                    ));
+                    lines.push(format!("\n{};\n", formatted));
                 } else {
-                    lines.push(format!(
-                        "{};\n",
-                        handle_comment!(self.get_potential_comment(&node.span), self.format(&node))
-                    ));
+                    lines.push(format!("{};\n", formatted));
                 }
             } else {
-                lines.push(format!(
-                    "{};\n",
-                    handle_comment!(self.get_potential_comment(&node.span), self.format(&node))
-                ));
+                lines.push(format!("{};\n", formatted));
             }
 
             last_line = Some(node.span.to.line.clone());
@@ -319,7 +331,13 @@ impl Formatter {
                     operator,
                     self.format(&right)
                 ),
-                _ => format!("{} = {}", self.format(identifier), self.format(value)),
+                _ => {
+                    let lhs = self.format(identifier);
+                    let rhs = self.format(value);
+                    let single = format!("{} = {}", lhs, rhs);
+                    let multi = format!("{} =\n{}", lhs, self.fmt_txt_with_tab(&rhs, 1, true));
+                    self.wrap_if_long(single, &multi)
+                }
             },
             NodeType::VariableDeclaration {
                 var_type,
@@ -333,9 +351,10 @@ impl Formatter {
                     txt.push_str(&format!(" : {}", self.fmt_potential_new_type(&data_type)));
                 }
 
-                txt.push_str(&format!(" = {}", self.format(value)));
-
-                txt
+                let rhs = self.format(value);
+                let single = format!("{} = {}", txt, rhs);
+                let multi = format!("{} =\n{}", txt, self.fmt_txt_with_tab(&rhs, 1, true));
+                self.wrap_if_long(single, &multi)
             }
             NodeType::AsExpression { value, data_type } => {
                 format!(
@@ -377,17 +396,23 @@ impl Formatter {
                 } else {
                     txt.push('(');
 
+                    let mut arg_txt = Vec::new();
                     for arg in args {
                         match arg {
-                            CallArg::Value(x) => txt.push_str(&format!("{}, ", self.format(x))),
+                            CallArg::Value(x) => arg_txt.push(self.format(x)),
                             CallArg::Named(x, y) => {
-                                txt.push_str(&format!("{} = {}, ", x, self.format(y)))
+                                arg_txt.push(format!("{} = {}", x, self.format(y)))
                             }
                         }
                     }
-
-                    txt = txt.trim_end().trim_end_matches(",").to_string();
-                    txt.push(')');
+                    let single = format!("{}{})", txt, arg_txt.join(", "));
+                    let multi = format!(
+                        "{}\n{}\n{})",
+                        txt,
+                        self.fmt_txt_with_tab(&arg_txt.join(",\n"), 1, true),
+                        self.tab.get_tab_from_amt(0)
+                    );
+                    txt = self.wrap_if_long(single, &multi);
                 };
 
                 if !reverse_args.is_empty() {
@@ -491,9 +516,17 @@ impl Formatter {
                     .unwrap_or(Vec::new());
 
                 for param in header.parameters.iter().skip(1) {
-                    let last = adjusted_params.last().unwrap().first().unwrap();
-                    if last.1 == param.1 {
-                        adjusted_params.last_mut().unwrap().push(param);
+                    let should_group = adjusted_params
+                        .last()
+                        .and_then(|v| v.first())
+                        .map(|last| last.1 == param.1)
+                        .unwrap_or(false);
+                    if should_group {
+                        if let Some(group) = adjusted_params.last_mut() {
+                            group.push(param);
+                        } else {
+                            adjusted_params.push(vec![param]);
+                        }
                     } else {
                         adjusted_params.push(vec![param]);
                     }
@@ -504,24 +537,31 @@ impl Formatter {
                     destructure_map.insert(name.to_string(), pattern);
                 }
 
+                let mut param_txt = Vec::new();
                 for params in &adjusted_params {
+                    let mut chunk = String::new();
                     for id in params {
                         if let Some(pattern) = destructure_map.get(&id.0.to_string()) {
-                            txt.push_str(&format!("{} ", self.fmt_destructure_pattern(pattern)));
+                            chunk.push_str(&format!("{} ", self.fmt_destructure_pattern(pattern)));
                         } else {
-                            txt.push_str(&format!("{} ", id.0));
+                            chunk.push_str(&format!("{} ", id.0));
                         }
                     }
 
-                    let last = params.last().unwrap();
-
-                    txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
-
-                    txt.push_str(", ");
+                    if let Some(last) = params.last() {
+                        chunk.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
+                    }
+                    param_txt.push(chunk.trim_end().to_string());
                 }
 
-                txt = txt.trim_end().trim_end_matches(",").to_string();
-                txt.push(')');
+                let single = format!("{}{})", txt, param_txt.join(", "));
+                let multi = format!(
+                    "{}\n{}\n{})",
+                    txt,
+                    self.fmt_txt_with_tab(&param_txt.join(",\n"), 1, true),
+                    self.tab.get_tab_from_amt(0)
+                );
+                txt = self.wrap_if_long(single, &multi);
 
                 if header.return_type != PotentialNewType::DataType(ParserInnerType::Null.into()) {
                     txt.push_str(&format!(
@@ -543,12 +583,15 @@ impl Formatter {
                 symbol,
             } => {
                 let mut txt = format!("extern \"{}\" const {} = fn(", abi, identifier);
-                for param in parameters {
-                    txt.push_str(&format!("{}, ", param,));
-                }
-
-                txt = txt.trim_end().trim_end_matches(",").to_string();
-                txt.push(')');
+                let params: Vec<String> = parameters.iter().map(|p| p.to_string()).collect();
+                let single = format!("{}{})", txt, params.join(", "));
+                let multi = format!(
+                    "{}\n{}\n{})",
+                    txt,
+                    self.fmt_txt_with_tab(&params.join(",\n"), 1, true),
+                    self.tab.get_tab_from_amt(0)
+                );
+                txt = self.wrap_if_long(single, &multi);
                 if *return_type != PotentialFfiDataType::Normal(ParserInnerType::Null.into()) {
                     txt.push_str(&format!(" -> {}", return_type));
                 }
@@ -682,26 +725,36 @@ impl Formatter {
                 txt
             }
             NodeType::ScopeMemberExpression { path } => {
-                let mut txt = self.format(&path[0]);
-
+                let base = self.format(&path[0]);
+                let mut parts = Vec::new();
                 for node in path.iter().skip(1) {
-                    txt.push_str(&format!(":{}", self.format(&node)));
+                    parts.push(format!(":{}", self.format(&node)));
                 }
-
-                txt
+                let single = format!("{}{}", base, parts.join(""));
+                let multi = format!(
+                    "{}\n{}",
+                    base,
+                    self.fmt_txt_with_tab(&parts.join("\n"), 1, true)
+                );
+                self.wrap_if_long(single, &multi)
             }
             NodeType::MemberExpression { path } => {
-                let mut txt = self.format(&path[0].0);
-
+                let base = self.format(&path[0].0);
+                let mut parts = Vec::new();
                 for node in path.iter().skip(1) {
                     if node.1 {
-                        txt.push_str(&format!("[{}]", self.format(&node.0)));
+                        parts.push(format!("[{}]", self.format(&node.0)));
                     } else {
-                        txt.push_str(&format!(".{}", self.format(&node.0)));
+                        parts.push(format!(".{}", self.format(&node.0)));
                     }
                 }
-
-                txt
+                let single = format!("{}{}", base, parts.join(""));
+                let multi = format!(
+                    "{}\n{}",
+                    base,
+                    self.fmt_txt_with_tab(&parts.join("\n"), 1, true)
+                );
+                self.wrap_if_long(single, &multi)
             }
             NodeType::Identifier(x) => x.to_string(),
             NodeType::IntLiteral(x) => x.to_string(),
@@ -796,7 +849,7 @@ impl Formatter {
 
                 if let Some(body) = &body {
                     if !body.is_empty() {
-                        let create_new_scope = create_new_scope.clone().unwrap();
+                        let create_new_scope = create_new_scope.clone().unwrap_or(false);
                         if body.len() > 1 || create_new_scope {
                             txt.push_str(" {");
                             if !create_new_scope {
@@ -846,7 +899,7 @@ impl Formatter {
 
             NodeType::ScopeDeclaration { body, .. } => {
                 let mut txt = String::new();
-                let Some(body) = body else { unreachable!() };
+                let Some(body) = body else { return txt };
 
                 if !body.is_empty() {
                     let lines = self.get_scope_lines(&body);
@@ -861,7 +914,11 @@ impl Formatter {
                 }
 
                 while !self.comments.is_empty() {
-                    txt.push_str(&format!("{}\n\n", self.fmt_next_comment().unwrap()));
+                    if let Some(next) = self.fmt_next_comment() {
+                        txt.push_str(&format!("{}\n\n", next));
+                    } else {
+                        break;
+                    }
                 }
 
                 txt.trim_end().trim_end_matches("\n").to_string()
@@ -879,7 +936,24 @@ impl Formatter {
                     }
                 }
 
-                txt
+                if self.should_wrap(&txt) {
+                    let mut parts = Vec::new();
+                    for value in values.iter().skip(1) {
+                        match value {
+                            PipeSegment::Unnamed(x) => parts.push(format!("|> {}", self.format(x))),
+                            PipeSegment::Named { identifier, node } => {
+                                parts.push(format!("|: {} > {}", identifier, self.format(node)))
+                            }
+                        }
+                    }
+                    format!(
+                        "{}\n{}",
+                        self.format(values[0].get_node()),
+                        self.fmt_txt_with_tab(&parts.join("\n"), 1, true)
+                    )
+                } else {
+                    txt
+                }
             }
             NodeType::ParenExpression { value } => format!("({})", self.format(&*value)),
             NodeType::TypeDeclaration {
@@ -947,9 +1021,17 @@ impl Formatter {
         let mut adjusted_body = body.get(0).map(|x| vec![vec![x]]).unwrap_or(Vec::new());
 
         for arm in body.iter().skip(1) {
-            let last = adjusted_body.last().unwrap().first().unwrap();
-            if last.1 == arm.1 && last.2 == arm.2 {
-                adjusted_body.last_mut().unwrap().push(arm);
+            let should_group = adjusted_body
+                .last()
+                .and_then(|v| v.first())
+                .map(|last| last.1 == arm.1 && last.2 == arm.2)
+                .unwrap_or(false);
+            if should_group {
+                if let Some(group) = adjusted_body.last_mut() {
+                    group.push(arm);
+                } else {
+                    adjusted_body.push(vec![arm]);
+                }
             } else {
                 adjusted_body.push(vec![arm]);
             }
@@ -1007,10 +1089,13 @@ impl Formatter {
             let mut comments = vec![self.comments.remove(0)];
 
             while let Some(comment) = self.comments.first() {
-                if (comment.span.from.line as i32 - comments.last().unwrap().span.to.line as i32)
-                    .abs()
-                    <= 1
-                {
+                let close_enough = comments
+                    .last()
+                    .map(|last| {
+                        (comment.span.from.line as i32 - last.span.to.line as i32).abs() <= 1
+                    })
+                    .unwrap_or(false);
+                if close_enough {
                     comments.push(self.comments.remove(0));
                 } else {
                     break;
@@ -1071,9 +1156,17 @@ impl Formatter {
                         .unwrap_or(Vec::new());
 
                     for param in func.header.parameters.iter().skip(1) {
-                        let last = adjusted_params.last().unwrap().first().unwrap();
-                        if last.1 == param.1 {
-                            adjusted_params.last_mut().unwrap().push(param);
+                        let should_group = adjusted_params
+                            .last()
+                            .and_then(|v| v.first())
+                            .map(|last| last.1 == param.1)
+                            .unwrap_or(false);
+                        if should_group {
+                            if let Some(group) = adjusted_params.last_mut() {
+                                group.push(param);
+                            } else {
+                                adjusted_params.push(vec![param]);
+                            }
                         } else {
                             adjusted_params.push(vec![param]);
                         }
@@ -1084,9 +1177,9 @@ impl Formatter {
                             txt.push_str(&format!("{} ", id.0));
                         }
 
-                        let last = params.last().unwrap();
-
-                        txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
+                        if let Some(last) = params.last() {
+                            txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
+                        }
 
                         txt.push_str(", ");
                     }
@@ -1138,7 +1231,10 @@ impl Formatter {
     pub fn get_potential_comment(&mut self, span: &Span) -> Option<String> {
         let mut comments = Vec::new();
         while let Some(first) = self.comments.first() {
-            if first.span.to.line <= span.from.line {
+            let is_before_line = first.span.to.line < span.from.line;
+            let is_same_line_before =
+                first.span.to.line == span.from.line && first.span.to.col < span.from.col;
+            if is_before_line || is_same_line_before {
                 comments.push(self.comments.remove(0));
             } else {
                 break;
@@ -1152,21 +1248,43 @@ impl Formatter {
         }
     }
 
+    pub fn get_trailing_comment(&mut self, span: &Span) -> Option<String> {
+        if let Some(first) = self.comments.first() {
+            let is_same_line_after =
+                first.span.from.line == span.to.line && first.span.from.col >= span.to.col;
+            if is_same_line_after {
+                let comment = self.comments.remove(0);
+                return Some(Formatter::fmt_comments(vec![comment]));
+            }
+        }
+        None
+    }
+
     fn fmt_new_type_obj(&mut self, obj: &ObjectType<PotentialNewType>) -> String {
         match obj {
             ObjectType::Map(x) => {
-                let mut txt = String::from("{\n");
+                let mut single = String::from("{ ");
                 for (key, value) in x {
-                    txt.push_str(&handle_comment!(
+                    single.push_str(&format!(
+                        "{} : {}, ",
+                        key,
+                        self.fmt_potential_new_type(value)
+                    ));
+                }
+                single = single.trim_end().trim_end_matches(",").to_string();
+                single.push_str(" }");
+
+                let mut multi = String::from("{\n");
+                for (key, value) in x {
+                    multi.push_str(&handle_comment!(
                         self.get_potential_comment(value.span()),
                         format!("{} : {},\n", key, self.fmt_potential_new_type(value))
                     ));
                 }
+                multi = self.fmt_txt_with_tab(multi.trim_end().trim_end_matches(","), 1, true);
+                multi.push_str("\n}");
 
-                txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, true);
-
-                txt.push_str("\n}");
-                txt
+                self.wrap_if_long(single, &multi)
             }
 
             ObjectType::Tuple(x) => {
@@ -1191,10 +1309,24 @@ impl Formatter {
         let mut txt = String::new();
         match type_def {
             TypeDefType::Enum(values) => {
-                txt.push_str("enum {\n");
-
+                let mut single = String::from("enum { ");
                 for arm in values {
-                    txt.push_str(&handle_comment!(
+                    if let Some(x) = &arm.1 {
+                        single.push_str(&format!(
+                            "{} : {}, ",
+                            arm.0,
+                            self.fmt_potential_new_type(x)
+                        ));
+                    } else {
+                        single.push_str(&format!("{}, ", arm.0));
+                    }
+                }
+                single = single.trim_end().trim_end_matches(",").to_string();
+                single.push_str(" }");
+
+                let mut multi = String::from("enum {\n");
+                for arm in values {
+                    multi.push_str(&handle_comment!(
                         self.get_potential_comment(arm.0.span()),
                         if let Some(x) = &arm.1 {
                             format!("{} : {},\n", arm.0, self.fmt_potential_new_type(x))
@@ -1204,8 +1336,9 @@ impl Formatter {
                     ));
                 }
 
-                txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
-                txt.push_str("\n}");
+                multi = self.fmt_txt_with_tab(multi.trim_end().trim_end_matches(","), 1, false);
+                multi.push_str("\n}");
+                txt.push_str(&self.wrap_if_long(single, &multi));
             }
             TypeDefType::NewType(x) => txt.push_str(&self.fmt_potential_new_type(&x)),
             TypeDefType::Struct(x) => {
@@ -1237,6 +1370,19 @@ impl Formatter {
         let allow_new_line = false;
         match object_type {
             ObjectType::Map(map) => {
+                let mut single = String::from("{ ");
+                for (key, value) in map.iter() {
+                    if let NodeType::Identifier(x) = &value.node_type {
+                        if &x.to_string() == key {
+                            single.push_str(&format!("{}, ", key));
+                            continue;
+                        }
+                    }
+                    single.push_str(&format!("{} : {}, ", key, self.format(value)));
+                }
+                single = single.trim_end().trim_end_matches(",").to_string();
+                single.push_str(" }");
+
                 let mut txt = format!("{{{}", if allow_new_line { "\n" } else { "" });
                 for (key, value) in map.iter() {
                     let mut temp = None;
@@ -1265,12 +1411,14 @@ impl Formatter {
                         ));
                     }
 
-                    txt.push_str(&self.fmt_txt_with_tab(&temp.unwrap(), 1, false));
+                    if let Some(temp) = temp {
+                        txt.push_str(&self.fmt_txt_with_tab(&temp, 1, false));
+                    }
                 }
 
                 txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push_str(&format!("{}}}", if allow_new_line { "\n" } else { "" }));
-                txt
+                self.wrap_if_long(single, &txt)
             }
             ObjectType::Tuple(lst) => {
                 let mut txt = String::from("(");
@@ -1284,7 +1432,12 @@ impl Formatter {
 
                 txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(')');
-                txt
+                let mut single_vals = Vec::new();
+                for v in lst.iter() {
+                    single_vals.push(self.format(v));
+                }
+                let single = format!("({})", single_vals.join(", "));
+                self.wrap_if_long(single, &txt)
             }
         }
     }

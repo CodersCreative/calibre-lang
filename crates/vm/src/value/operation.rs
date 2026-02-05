@@ -29,6 +29,21 @@ pub fn comparison(
     right: RuntimeValue,
 ) -> Result<RuntimeValue, RuntimeError> {
     match (left, right, op) {
+        (RuntimeValue::Enum(a_name, a_idx, _), RuntimeValue::Enum(b_name, b_idx, _), op) => {
+            match op {
+                ComparisonOperator::Equal => {
+                    Ok(RuntimeValue::Bool(a_name == b_name && a_idx == b_idx))
+                }
+                ComparisonOperator::NotEqual => {
+                    Ok(RuntimeValue::Bool(a_name != b_name || a_idx != b_idx))
+                }
+                _ => Err(RuntimeError::Comparison(
+                    RuntimeValue::Enum(a_name, a_idx, None),
+                    RuntimeValue::Enum(b_name, b_idx, None),
+                    op.clone(),
+                )),
+            }
+        }
         (RuntimeValue::Int(x), RuntimeValue::Int(y), op) => {
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
@@ -149,6 +164,18 @@ macro_rules! handle_binop_numeric {
     ($op_trait:ident, $op:tt, $rhs:ident, $self:ident) => {
         match ($self, $rhs) {
             (RuntimeValue::Float(x), RuntimeValue::Float(y)) => Ok(RuntimeValue::Float(x $op y)),
+            (RuntimeValue::Float(x), RuntimeValue::Int(y)) => {
+                Ok(RuntimeValue::Float(x $op y as f64))
+            }
+            (RuntimeValue::Int(x), RuntimeValue::Float(y)) => {
+                Ok(RuntimeValue::Float((x as f64) $op y))
+            }
+            (RuntimeValue::Float(x), RuntimeValue::UInt(y)) => {
+                Ok(RuntimeValue::Float(x $op y as f64))
+            }
+            (RuntimeValue::UInt(x), RuntimeValue::Float(y)) => {
+                Ok(RuntimeValue::Float((x as f64) $op y))
+            }
             (RuntimeValue::Int(x), RuntimeValue::Int(y)) => Ok(RuntimeValue::Int(x $op y)),
             (RuntimeValue::UInt(x), RuntimeValue::UInt(y)) => Ok(RuntimeValue::UInt(x $op y)),
             (x, y) => x.panic_operator(&y, &BinaryOperator::$op_trait),

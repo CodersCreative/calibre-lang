@@ -108,7 +108,14 @@ impl Parser {
             );
         }
 
-        if library.is_empty() {
+        if !library.is_empty() {
+            if let Some(base) = self.source_path.as_ref().and_then(|p| p.parent()) {
+                let candidate = base.join(&library);
+                if candidate.exists() {
+                    library = candidate.to_string_lossy().to_string();
+                }
+            }
+        } else {
             self.add_err(SyntaxErr::ExpectedToken(TokenType::String));
         }
 

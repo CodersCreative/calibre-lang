@@ -16,7 +16,6 @@ impl MiddleEnvironment {
         path: PathBuf,
         namespace: Option<&str>,
     ) -> u64 {
-        // TODO finish this
         let scope = 0;
         let counter = self.scope_counter;
 
@@ -36,10 +35,12 @@ impl MiddleEnvironment {
         self.setup_global(&scope);
         let mut parser = Parser::default();
         let mut tokenizer = Tokenizer::default();
-        let globals = fs::read_to_string(get_globals_path()).unwrap();
-        let program = parser.produce_ast(tokenizer.tokenize(&globals).unwrap());
-
-        let _ = self.evaluate(&scope, program);
+        if let Ok(globals) = fs::read_to_string(get_globals_path()) {
+            if let Ok(tokens) = tokenizer.tokenize(&globals) {
+                let program = parser.produce_ast(tokens);
+                let _ = self.evaluate(&scope, program);
+            }
+        }
 
         let std = self.new_scope(Some(scope), get_stdlib_path(), Some("std"));
 
@@ -68,7 +69,7 @@ impl MiddleEnvironment {
 
         let mut funcs = funcs
             .into_iter()
-            .map(|x| (String::from(x), map.get(x).unwrap().clone()))
+            .filter_map(|x| map.get(x).cloned().map(|t| (String::from(x), t)))
             .collect();
 
         let mut vars: Vec<(String, ParserDataType)> =
@@ -87,11 +88,9 @@ impl MiddleEnvironment {
                 },
             );
 
-            self.scopes
-                .get_mut(&scope)
-                .unwrap()
-                .mappings
-                .insert(var.0, name);
+            if let Some(scope_ref) = self.scopes.get_mut(&scope) {
+                scope_ref.mappings.insert(var.0, name);
+            }
         }
     }
 
@@ -99,11 +98,14 @@ impl MiddleEnvironment {
         let mut parser = Parser::default();
         let mut tokenizer = Tokenizer::default();
 
-        let stdlib = fs::read_to_string(self.scopes.get(scope).unwrap().path.clone())
-            .unwrap_or(String::new());
-        let program = parser.produce_ast(tokenizer.tokenize(&stdlib).unwrap());
-
-        let _ = self.evaluate(scope, program);
+        if let Some(scope_ref) = self.scopes.get(scope) {
+            if let Ok(stdlib) = fs::read_to_string(scope_ref.path.clone()) {
+                if let Ok(tokens) = tokenizer.tokenize(&stdlib) {
+                    let program = parser.produce_ast(tokens);
+                    let _ = self.evaluate(scope, program);
+                }
+            }
+        }
 
         self.setup_std_scope(scope, "thread", &["wait"]);
         self.setup_std_scope(scope, "console", &["out", "input", "err", "clear"]);
@@ -111,18 +113,18 @@ impl MiddleEnvironment {
     }
 
     pub fn setup_std_scope(&mut self, parent: &u64, name: &str, funcs: &[&'static str]) {
-        let scope = self.new_scope(
-            Some(*parent),
-            self.scopes.get(parent).unwrap().path.clone(),
-            Some(name),
-        );
+        let scope_path = self
+            .scopes
+            .get(parent)
+            .map(|s| s.path.clone())
+            .unwrap_or_default();
+        let scope = self.new_scope(Some(*parent), scope_path, Some(name));
         let map: FxHashMap<String, ParserDataType> = ParserDataType::natives();
 
-        let funcs = funcs.into_iter().map(|x| {
-            (
-                String::from(*x),
-                map.get(&format!("{}.{}", name, x)).clone().unwrap(),
-            )
+        let funcs = funcs.into_iter().filter_map(|x| {
+            map.get(&format!("{}.{}", name, x))
+                .cloned()
+                .map(|ty| (String::from(*x), ty))
         });
 
         for var in funcs {
@@ -136,11 +138,9 @@ impl MiddleEnvironment {
                 },
             );
 
-            self.scopes
-                .get_mut(&scope)
-                .unwrap()
-                .mappings
-                .insert(var.0, name);
+            if let Some(scope_ref) = self.scopes.get_mut(&scope) {
+                scope_ref.mappings.insert(var.0, name);
+            }
         }
     }
 }

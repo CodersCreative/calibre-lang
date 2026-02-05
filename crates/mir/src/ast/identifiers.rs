@@ -106,8 +106,11 @@ impl MiddleNode {
                 amt
             }
             MiddleNodeType::MemberExpression { path } => match path.len() {
-                1 | 2 | 3 => path.first().unwrap().0.identifiers_used(),
-                x => todo!("{}", x),
+                1 | 2 | 3 => path
+                    .first()
+                    .map(|x| x.0.identifiers_used())
+                    .unwrap_or_default(),
+                _ => Vec::new(),
             },
             MiddleNodeType::FunctionDeclaration {
                 parameters: _,
@@ -258,8 +261,11 @@ impl MiddleNode {
                 amt
             }
             MiddleNodeType::MemberExpression { path } => match path.len() {
-                1 | 2 | 3 => path.first().unwrap().0.identifiers_declared(),
-                _ => todo!(),
+                1 | 2 | 3 => path
+                    .first()
+                    .map(|x| x.0.identifiers_declared())
+                    .unwrap_or_default(),
+                _ => Vec::new(),
             },
             MiddleNodeType::FunctionDeclaration {
                 parameters,

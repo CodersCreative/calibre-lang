@@ -6,11 +6,21 @@ use dumpster::sync::Gc;
 impl RuntimeValue {
     pub fn convert(
         self,
-        env: &VM,
+        env: &mut VM,
         data_type: &ParserInnerType,
     ) -> Result<RuntimeValue, RuntimeError> {
         if data_type == &ParserInnerType::Dynamic {
             return Ok(self);
+        }
+
+        if let RuntimeValue::Ref(name) = &self {
+            if let Some(value) = env.variables.get(name).cloned() {
+                return value.convert(env, data_type);
+            }
+        }
+        if let RuntimeValue::SlotRef(slot) = &self {
+            let value = env.get_slot_value(*slot);
+            return value.convert(env, data_type);
         }
 
         match (self, data_type) {
@@ -78,8 +88,18 @@ impl RuntimeValue {
                 })?;
                 Ok(RuntimeValue::Char(ch))
             }
-            (RuntimeValue::Int(x), ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Int(x)),
-            (RuntimeValue::Null, ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Int(0)),
+            (RuntimeValue::Ptr(id), ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Ptr(id)),
+            (RuntimeValue::Null, ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Ptr(0)),
+            (value, ParserInnerType::Ptr(inner)) => {
+                let converted = if inner.data_type == ParserInnerType::Null {
+                    value
+                } else {
+                    value.convert(env, &inner.data_type)?
+                };
+                let id = env.alloc_ptr_id();
+                env.ptr_heap.insert(id, converted);
+                Ok(RuntimeValue::Ptr(id))
+            }
             (RuntimeValue::Null, ParserInnerType::Null) => Ok(RuntimeValue::Null),
             (RuntimeValue::Aggregate(Some(x), z), ParserInnerType::Struct(y)) if &x == y => {
                 Ok(RuntimeValue::Aggregate(Some(x), z))
@@ -128,6 +148,12 @@ impl RuntimeValue {
             (x, ParserInnerType::Result { ok, err: _ }) => {
                 let x = x.convert(env, &ok)?;
                 Ok(RuntimeValue::Result(Ok(Gc::new(x))))
+            }
+            (RuntimeValue::Ptr(id), t) => {
+                if let Some(value) = env.ptr_heap.get(&id).cloned() {
+                    return value.convert(env, t);
+                }
+                Err(RuntimeError::CantConvert(RuntimeValue::Ptr(id), t.clone()))
             }
             (x, t) => Err(RuntimeError::CantConvert(x, t.clone())),
         }

@@ -473,7 +473,7 @@ impl<'a> LirEnvironment<'a> {
                     MiddleNodeType::Identifier(name) => name.to_string(),
                     MiddleNodeType::IntLiteral(x) => x.to_string(),
                     MiddleNodeType::FloatLiteral(x) => x.to_string(),
-                    x => panic!("Invalid field identifier : {}", x),
+                    _ => "<invalid>".to_string(),
                 };
                 current = LirNodeType::Member(Box::new(current), field);
             }
@@ -902,7 +902,7 @@ impl<'a> LirEnvironment<'a> {
                             MiddleNodeType::Identifier(name) => name.to_string(),
                             MiddleNodeType::IntLiteral(x) => x.to_string(),
                             MiddleNodeType::FloatLiteral(x) => x.to_string(),
-                            x => panic!("Invalid field identifier : {}", x),
+                            _ => "<invalid>".to_string(),
                         };
                         current = LirNodeType::Member(Box::new(current), field);
                     }
@@ -990,7 +990,7 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::MemberExpression { path } => {
                 LirLValue::Ptr(Box::new(self.lower_member_lvalue(path)))
             }
-            _ => panic!("Invalid L-Value: Assignment target must be a variable or memory location"),
+            _ => LirLValue::Var("<invalid>".to_string()),
         }
     }
 

@@ -320,8 +320,10 @@ impl Tokenizer {
         self.line = 1;
         self.col = 1;
 
-        while buffer.len() > 0 {
-            let first = buffer.first().unwrap();
+        while !buffer.is_empty() {
+            let Some(first) = buffer.first() else {
+                break;
+            };
 
             let get_token = |c: char| -> Option<TokenType> {
                 match c {
@@ -337,16 +339,16 @@ impl Tokenizer {
                     '&' => Some(TokenType::Ref),
                     '$' => Some(TokenType::Dollar),
                     '?' => Some(TokenType::Question),
-                    '<' | '>' => Some(TokenType::Comparison(
-                        ComparisonOperator::from_operator(&c.to_string()).unwrap(),
-                    )),
+                    '<' | '>' => {
+                        ComparisonOperator::from_operator(&c.to_string()).map(TokenType::Comparison)
+                    }
                     '.' => Some(TokenType::FullStop),
                     ':' => Some(TokenType::Colon),
                     '=' => Some(TokenType::Equals),
                     '!' => Some(TokenType::Not),
-                    '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(
-                        BinaryOperator::from_symbol(&c.to_string()).unwrap(),
-                    )),
+                    '+' | '-' | '*' | '/' | '^' | '%' => {
+                        BinaryOperator::from_symbol(&c.to_string()).map(TokenType::BinaryOperator)
+                    }
                     ';' => Some(TokenType::EOL),
                     _ if c.is_whitespace() => Some(TokenType::WhiteSpace),
                     _ => None,
@@ -363,17 +365,13 @@ impl Tokenizer {
                     TokenType::FullStop => {
                         self.increment_line_col(first);
                         let value = buffer.remove(0).to_string();
+                        let needs_space = tokens
+                            .last()
+                            .map(|t| t.token_type == TokenType::WhiteSpace)
+                            .unwrap_or(false);
                         Some(self.new_token(
                             t,
-                            &format!(
-                                "{}{}",
-                                if tokens.last().unwrap().token_type == TokenType::WhiteSpace {
-                                    String::from(" ")
-                                } else {
-                                    String::new()
-                                },
-                                value.trim()
-                            ),
+                            &format!("{}{}", if needs_space { " " } else { "" }, value.trim()),
                         ))
                     }
                     t => {

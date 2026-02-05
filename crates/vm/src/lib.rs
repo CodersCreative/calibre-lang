@@ -89,6 +89,8 @@ pub struct VM {
     pub registry: VMRegistry,
     pub mappings: Vec<String>,
     pub next_ref_id: u64,
+    pub next_ptr_id: u64,
+    pub ptr_heap: FxHashMap<u64, RuntimeValue>,
     frames: Vec<VMFrame>,
     call_cache: FxHashMap<String, std::sync::Arc<VMFunction>>,
     lowered_cache: FxHashMap<String, std::sync::Arc<VMFunction>>,
@@ -103,6 +105,8 @@ impl From<VMRegistry> for VM {
             mappings: Vec::new(),
             registry: value,
             next_ref_id: 0,
+            next_ptr_id: 1,
+            ptr_heap: FxHashMap::default(),
             frames: vec![VMFrame::default()],
             call_cache: FxHashMap::default(),
             lowered_cache: FxHashMap::default(),
@@ -113,6 +117,11 @@ impl From<VMRegistry> for VM {
 }
 
 impl VM {
+    pub fn alloc_ptr_id(&mut self) -> u64 {
+        let id = self.next_ptr_id;
+        self.next_ptr_id = self.next_ptr_id.saturating_add(1).max(1);
+        id
+    }
     fn find_unique_function_by_suffix(
         &self,
         short_name: &str,
@@ -254,6 +263,8 @@ impl VM {
             mappings,
             variables: FxHashMap::default(),
             next_ref_id: 0,
+            next_ptr_id: 1,
+            ptr_heap: FxHashMap::default(),
             frames: vec![VMFrame::default()],
             call_cache: FxHashMap::default(),
             lowered_cache: FxHashMap::default(),
@@ -771,7 +782,7 @@ impl VM {
                                     break;
                                 }
                                 Err(e) => {
-                                    last_err = Some(format!("{}: {}", candidate, e));
+                                    last_err = Some(e.to_string());
                                 }
                             }
                         }
@@ -1079,7 +1090,7 @@ impl VM {
                         stack.push(func.run(self, args)?);
                     }
                     RuntimeValue::ExternFunction(func) => {
-                        let value = func.call(args)?;
+                        let value = func.call(self, args)?;
                         stack.push(value);
                     }
                     _ => return Err(RuntimeError::InvalidFunctionCall),

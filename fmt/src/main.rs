@@ -12,6 +12,8 @@ struct Args {
     output: Option<String>,
     #[arg(short, long)]
     all: bool,
+    #[arg(long, default_value_t = 200)]
+    max_width: usize,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -22,7 +24,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     } else {
         PathBuf::from_str("./main.cl")?
     };
-    let mut formatter = Formatter::default();
+    let mut formatter = Formatter {
+        max_width: args.max_width,
+        ..Default::default()
+    };
 
     if args.all {
         format_all(&mut formatter, &path)

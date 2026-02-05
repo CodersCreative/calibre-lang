@@ -383,7 +383,7 @@ impl Display for PotentialNewType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::DataType(x) => write!(f, "{}", x),
-            _ => unimplemented!(),
+            Self::NewType { identifier, .. } => write!(f, "type {}", identifier),
         }
     }
 }
@@ -429,7 +429,7 @@ impl Display for ParserInnerType {
             Self::Result { err, ok } => write!(f, "{}!{}", err, ok),
             Self::Option(x) => write!(f, "{}?", x),
             Self::NativeFunction(x) => write!(f, "native -> {}", x),
-            Self::Ptr(x) => write!(f, "ptr<{}>", x),
+            Self::Ptr(x) => write!(f, "ptr:<{}>", x),
             Self::Struct(x) => write!(f, "{}", x),
             Self::StructWithGenerics {
                 identifier,
@@ -1207,12 +1207,12 @@ impl Into<Node> for PipeSegment {
 impl NodeType {
     pub fn unwrap(self) -> NodeType {
         match self {
-            NodeType::ParenExpression { value } => value.node_type.unwrap(),
+            NodeType::ParenExpression { value } => value.node_type,
             NodeType::ScopeDeclaration {
                 body: Some(mut body),
                 create_new_scope: Some(false),
                 ..
-            } if body.len() == 1 => body.remove(0).node_type.unwrap(),
+            } if body.len() == 1 => body.remove(0).node_type,
             _ => self,
         }
     }

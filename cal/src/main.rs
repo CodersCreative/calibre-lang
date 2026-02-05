@@ -28,9 +28,9 @@ async fn run_source(
     cache: bool,
     verbose: bool,
     entry_name: Option<String>,
-    emit_status: bool,
 ) -> Result<()> {
     let mut parser = calibre_parser::Parser::default();
+    parser.set_source_path(Some(path.to_path_buf()));
     let mut tokenizer = Tokenizer::default();
     let mut cache_path = None;
 
@@ -47,12 +47,10 @@ async fn run_source(
             let cache_res = bincode::deserialize::<BytecodeCache>(&bytes);
 
             if let Ok(cache) = cache_res {
-                if emit_status {
-                    println!("Starting vm...");
-                }
                 let mut vm: VM = VM::new(cache.registry, cache.mappings);
 
                 if verbose {
+                    println!("Starting vm...");
                     println!("Bytecode:");
                     println!("{}", vm.registry);
                 }
@@ -132,9 +130,6 @@ async fn run_source(
             return Err(miette::miette!("compile failed"));
         }
     };
-    if emit_status {
-        println!("Starting comptime...");
-    }
 
     let entry_name = entry_name;
     let main_name = if let Some(ref entry_name) = entry_name {
@@ -150,9 +145,6 @@ async fn run_source(
     if verbose {
         println!("Mir:");
         println!("{}", middle_result.2);
-    }
-
-    if emit_status {
         println!("Starting vm...");
     }
 
@@ -457,7 +449,7 @@ async fn main() -> Result<()> {
             let session = contents.lines().skip(1).map(|x| x.to_string()).collect();
             repl(session).await
         } else {
-            run_source(contents, &path, args.cache, args.verbose, None, true).await
+            run_source(contents, &path, args.cache, args.verbose, None).await
         }
     } else {
         repl(Vec::new()).await

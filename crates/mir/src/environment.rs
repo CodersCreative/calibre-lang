@@ -66,7 +66,7 @@ impl FromStr for Operator {
         } else if let Some(x) = BooleanOperator::from_operator(s) {
             Ok(Self::Boolean(x))
         } else {
-            panic!()
+            Err(MiddleErr::Scope(format!("unknown operator {s}")))
         }
     }
 }
@@ -88,6 +88,22 @@ pub struct MiddleEnvironment {
     pub fn_specializations: FxHashMap<String, String>,
     pub specialization_decls_by_scope: FxHashMap<u64, Vec<MiddleNode>>,
     pub current_location: Option<Location>,
+}
+
+fn empty_scope() -> &'static MiddleScope {
+    static EMPTY: std::sync::OnceLock<MiddleScope> = std::sync::OnceLock::new();
+    EMPTY.get_or_init(|| MiddleScope {
+        id: 0,
+        parent: None,
+        mappings: FxHashMap::default(),
+        macros: FxHashMap::default(),
+        macro_args: FxHashMap::default(),
+        children: FxHashMap::default(),
+        namespace: "empty".to_string(),
+        path: PathBuf::new(),
+        defined: Vec::new(),
+        defers: Vec::new(),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1501,7 +1517,22 @@ impl MiddleEnvironment {
 
             self.scope_counter - 1
         } else {
-            todo!()
+            let scope = MiddleScope {
+                macros: FxHashMap::default(),
+                macro_args: FxHashMap::default(),
+                id: self.scope_counter,
+                namespace: namespace
+                    .unwrap_or(&self.scope_counter.to_string())
+                    .to_string(),
+                parent: None,
+                children: FxHashMap::default(),
+                mappings: FxHashMap::default(),
+                defined: Vec::new(),
+                defers: Vec::new(),
+                path,
+            };
+            let _ = self.add_scope(scope);
+            self.scope_counter - 1
         }
     }
 
@@ -1552,6 +1583,7 @@ impl MiddleEnvironment {
                         if let Some(scope) = self.new_build_scope_from_parent(current.id, key) {
                             let path = self.scopes.get(&scope).unwrap().path.clone();
                             let source = fs::read_to_string(path.clone()).unwrap();
+                            parser.set_source_path(Some(path.clone()));
                             let tokens = tokenizer.tokenize(&source).map_err(|error| {
                                 MiddleErr::LexerError {
                                     path: path.clone(),
@@ -1591,6 +1623,7 @@ impl MiddleEnvironment {
                     let scope = self.new_scope_from_parent(current.id, key);
                     let path = self.scopes.get(&scope).unwrap().path.clone();
                     let source = fs::read_to_string(path.clone()).unwrap();
+                    parser.set_source_path(Some(path.clone()));
                     let tokens =
                         tokenizer
                             .tokenize(&source)
@@ -1660,7 +1693,7 @@ impl MiddleEnvironment {
     }
 
     pub fn get_global_scope<'a>(&'a self) -> &'a MiddleScope {
-        self.scopes.get(&0).unwrap()
+        self.scopes.get(&0).unwrap_or_else(|| empty_scope())
     }
 
     pub fn get_root_scope<'a>(&'a self) -> &'a MiddleScope {
@@ -1672,7 +1705,7 @@ impl MiddleEnvironment {
             }
         }
 
-        todo!()
+        self.scopes.get(&0).unwrap_or_else(|| empty_scope())
     }
 
     pub fn quick_resolve_potential_scope_member(
@@ -2130,7 +2163,9 @@ impl MiddleEnvironment {
                     Some(typ)
                 }
             }
-            NodeType::ScopeMemberExpression { .. } => todo!(),
+            NodeType::ScopeMemberExpression { .. } => {
+                Some(ParserDataType::from(ParserInnerType::Dynamic))
+            }
             NodeType::ScopeDeclaration { .. } => unreachable!(),
         };
 

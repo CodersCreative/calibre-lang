@@ -427,7 +427,9 @@ impl VMInstruction {
             Self::Drop(x) => format!("DROP {}", strings[*x as usize]),
             Self::DropSlot(x) => format!("DROPSLOT {}", x),
             Self::Aggregate(x) => {
-                let layout = aggregate.get(*x as usize).unwrap();
+                let Some(layout) = aggregate.get(*x as usize) else {
+                    return "STRUCT <missing> LAST 0".to_string();
+                };
                 format!(
                     "STRUCT {} LAST {}",
                     if let Some(x) = &layout.name {

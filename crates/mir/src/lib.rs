@@ -455,49 +455,50 @@ impl MiddleEnvironment {
                     });
                 }
 
-                if let NodeType::Identifier(x) = &path[0].0.node_type {
-                    if let Some(Some(object)) = self
-                        .resolve_potential_generic_ident(scope, x)
-                        .map(|x| self.objects.get(&x.text))
-                    {
-                        match (&object.object_type, &path[1].0.node_type) {
-                            (MiddleTypeDefType::Enum(_), NodeType::Identifier(y))
-                                if path.len() == 2 =>
-                            {
-                                return self.evaluate(
-                                    scope,
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::EnumExpression {
-                                            identifier: x.clone(),
-                                            value: y.clone().into(),
-                                            data: None,
-                                        },
-                                    ),
-                                );
-                            }
-                            (
-                                _,
-                                NodeType::CallExpression {
-                                    string_fn,
-                                    caller,
-                                    generic_types,
-                                    args,
-                                    reverse_args,
-                                },
-                            ) => {
-                                let static_fn =
-                                    if let NodeType::Identifier(second) = &caller.node_type {
-                                        object
-                                            .variables
-                                            .get(&second.to_string())
-                                            .map(|x| x.0.clone())
-                                    } else {
-                                        None
-                                    };
-
-                                if let Some(static_fn) = static_fn {
+                if path.len() > 1 {
+                    if let NodeType::Identifier(x) = &path[0].0.node_type {
+                        if let Some(Some(object)) = self
+                            .resolve_potential_generic_ident(scope, x)
+                            .map(|x| self.objects.get(&x.text))
+                        {
+                            match (&object.object_type, &path[1].0.node_type) {
+                                (MiddleTypeDefType::Enum(_), NodeType::Identifier(y))
+                                    if path.len() == 2 =>
+                                {
                                     return self.evaluate(
+                                        scope,
+                                        Node::new(
+                                            self.current_span(),
+                                            NodeType::EnumExpression {
+                                                identifier: x.clone(),
+                                                value: y.clone().into(),
+                                                data: None,
+                                            },
+                                        ),
+                                    );
+                                }
+                                (
+                                    _,
+                                    NodeType::CallExpression {
+                                        string_fn,
+                                        caller,
+                                        generic_types,
+                                        args,
+                                        reverse_args,
+                                    },
+                                ) => {
+                                    let static_fn =
+                                        if let NodeType::Identifier(second) = &caller.node_type {
+                                            object
+                                                .variables
+                                                .get(&second.to_string())
+                                                .map(|x| x.0.clone())
+                                        } else {
+                                            None
+                                        };
+
+                                    if let Some(static_fn) = static_fn {
+                                        return self.evaluate(
                                         scope,
                                         Node::new(
                                             self.current_span(),
@@ -517,32 +518,33 @@ impl MiddleEnvironment {
                                             },
                                         ),
                                     );
-                                }
-                            }
-                            (_, NodeType::Identifier(ident)) => {
-                                let ident =
-                                    self.resolve_dollar_ident_potential_generic_only(scope, ident);
-
-                                if let Some(ident) = ident {
-                                    let var =
-                                        object.variables.get(&ident.text).map(|x| x.0.clone());
-
-                                    if let Some(var) = var {
-                                        return self.evaluate(
-                                            scope,
-                                            Node::new(
-                                                self.current_span(),
-                                                NodeType::Identifier(
-                                                    PotentialGenericTypeIdentifier::Identifier(
-                                                        ParserText::from(var).into(),
-                                                    ),
-                                                ),
-                                            ),
-                                        );
                                     }
                                 }
+                                (_, NodeType::Identifier(ident)) => {
+                                    let ident = self
+                                        .resolve_dollar_ident_potential_generic_only(scope, ident);
+
+                                    if let Some(ident) = ident {
+                                        let var =
+                                            object.variables.get(&ident.text).map(|x| x.0.clone());
+
+                                        if let Some(var) = var {
+                                            return self.evaluate(
+                                                scope,
+                                                Node::new(
+                                                    self.current_span(),
+                                                    NodeType::Identifier(
+                                                        PotentialGenericTypeIdentifier::Identifier(
+                                                            ParserText::from(var).into(),
+                                                        ),
+                                                    ),
+                                                ),
+                                            );
+                                        }
+                                    }
+                                }
+                                _ => {}
                             }
-                            _ => {}
                         }
                     }
                 }
@@ -673,7 +675,19 @@ impl MiddleEnvironment {
                                     }
                                 }
 
-                                panic!("{:?}", struct_name)
+                                return self.evaluate(
+                                    scope,
+                                    Node::new(
+                                        self.current_span(),
+                                        NodeType::CallExpression {
+                                            string_fn: None,
+                                            caller,
+                                            generic_types,
+                                            args,
+                                            reverse_args,
+                                        },
+                                    ),
+                                );
                             }
                             _ => self.evaluate(scope, item.0)?,
                         },
