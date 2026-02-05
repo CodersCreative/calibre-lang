@@ -1,0 +1,59 @@
+extern "c" const c_abs = fn(@int) -> @int from "libc" as "abs";
+extern "c" const c_strlen = fn(str) -> @usize from "libc" as "strlen";
+extern "c" const c_strerror = fn(@int) -> str from "libc" as "strerror";
+extern "c" const c_memcmp = fn(ptr:<@u8>, ptr:<@u8>, @usize) -> int from "libc" as "memcmp";
+extern "c" const bytes_sum = fn(Bytes) -> @i64 from "libcalffi.so" as "bytes_sum";
+extern "c" const bytes_equal = fn(Bytes, Bytes) -> @int from "libcalffi.so" as "bytes_equal";
+
+type Bytes = struct {
+    first: @i64,
+    second: @i64,
+    third: @i64,
+};
+
+const main = fn() => {
+    let value = c_abs(-7);
+    print(value);
+    let value = c_strlen("hello");
+    print(value);
+    let value = c_strerror(0);
+    print(value);
+
+    let bytes = Bytes { first: 255, second: 512, third: 1024 };
+    let bytes2 = Bytes { first: 255, second: 512, third: 1024 };
+    print(bytes.first);
+    print(bytes.second);
+
+    const to_u8 = fn(v: int) -> int => v & 255;
+    const to_u16_bytes = fn(v: int) -> list:<int> => [to_u8(v), to_u8(v >> 8)];
+    const to_u32_bytes = fn(v: int) -> list:<int> => [
+        to_u8(v),
+        to_u8(v >> 8),
+        to_u8(v >> 16),
+        to_u8(v >> 24),
+    ];
+
+    const bytes_to_list = fn(v: Bytes) -> list:<int> => {
+        let u16 = to_u16_bytes(v.second);
+        let u32 = to_u32_bytes(v.third);
+        return [
+            v.first,
+            u16[0],
+            u16[1],
+            u32[0],
+            u32[1],
+            u32[2],
+            u32[3],
+        ];
+    };
+
+    const buf1 = bytes_to_list(bytes);
+    const buf2 = bytes_to_list(bytes2);
+    const byte_size = 1 + 2 + 4;
+    const diff = c_memcmp(buf1, buf2, byte_size);
+    print(diff == 0);
+
+    let sum = bytes_sum(bytes);
+    print(sum);
+    print(bytes_equal(bytes, bytes2) == 1);
+};

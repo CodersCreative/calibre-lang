@@ -1,8 +1,10 @@
 pub mod translator;
 pub mod values;
-use calibre_lir::{BasicBlock, BlockId, LirFunction, LirNodeType, LirRegistry, Terminator};
+use calibre_lir::{
+    BlockId, LirBlock, LirFunction, LirInstr, LirNodeType, LirRegistry, LirTerminator,
+};
+use calibre_mir::ast::{MiddleNode, MiddleNodeType};
 use calibre_mir::environment::{MiddleEnvironment, MiddleObject};
-use calibre_mir_ty::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{Node, NodeType, ParserDataType, ParserInnerType, VarType};
 use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::*;
@@ -11,6 +13,7 @@ use cranelift_object::object::read::{File as ObjectFile, RelocationKind, Relocat
 use cranelift_object::object::{Object, ObjectSection, ObjectSymbol, SectionKind};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use libc::{MAP_ANON, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE, mmap, mprotect, size_t};
+use rustc_hash::FxHashMap;
 use std::{collections::HashMap, error::Error, ffi::CString, ptr};
 
 use crate::translator::{FunctionTranslator, layout::create_layout};
@@ -72,7 +75,7 @@ impl Compiler {
         identifier: String,
         value: LirFunction,
         registry: &LirRegistry,
-        objects: &std::collections::HashMap<String, MiddleObject>,
+        objects: &FxHashMap<String, MiddleObject>,
     ) -> Result<*const u8, Box<dyn Error>> {
         let mut flag_builder = settings::builder();
         flag_builder.set("use_colocated_libcalls", "false").unwrap();
@@ -124,13 +127,13 @@ impl Compiler {
 
     fn translate(
         &mut self,
-        params: Vec<(String, ParserDataType<MiddleNode>)>,
-        return_type: ParserDataType<MiddleNode>,
-        body: Vec<BasicBlock>,
+        params: Vec<(String, ParserDataType)>,
+        return_type: ParserDataType,
+        body: Vec<LirBlock>,
         registry: &LirRegistry,
         module: &mut ObjectModule,
         ctx: &mut codegen::Context,
-        objects: &std::collections::HashMap<String, MiddleObject>,
+        objects: &FxHashMap<String, MiddleObject>,
     ) -> Result<(), Box<dyn Error>> {
         let ptr = module.target_config().pointer_type();
         let types = crate::translator::Types::new(ptr);
@@ -198,18 +201,19 @@ impl Compiler {
             }
 
             for instr in lir_block.instructions {
-                trans.translate(instr);
+                trans.translate(instr.node_type);
             }
 
             if let Some(term) = lir_block.terminator {
                 match term {
-                    Terminator::Jump(target) => {
+                    LirTerminator::Jump { target, .. } => {
                         trans.builder.ins().jump(block_map[&target], &[]);
                     }
-                    Terminator::Branch {
+                    LirTerminator::Branch {
                         condition,
                         then_block,
                         else_block,
+                        ..
                     } => {
                         let cond_val = trans.translate(condition).value;
                         trans.builder.ins().brif(
@@ -220,9 +224,9 @@ impl Compiler {
                             &[],
                         );
                     }
-                    Terminator::Return(val) => {
+                    LirTerminator::Return { value, .. } => {
                         let mut ret_vals = Vec::new();
-                        if let Some(v) = val {
+                        if let Some(v) = value {
                             ret_vals.push(trans.translate(v).value);
                         }
                         trans.builder.ins().return_(&ret_vals);

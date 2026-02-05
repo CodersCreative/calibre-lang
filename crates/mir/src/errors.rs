@@ -1,15 +1,16 @@
-use std::fmt::Display;
+use std::path::PathBuf;
 
 use calibre_parser::{
     ParserError,
     ast::{NodeType, ParserDataType},
-    lexer::LexerError,
+    lexer::{LexerError, Span},
 };
-use miette::{Diagnostic, LabeledSpan};
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone, Diagnostic)]
+#[derive(Error, Debug, Clone)]
 pub enum MiddleErr {
+    #[error("{0}")]
+    At(Span, Box<MiddleErr>),
     #[error("Expected {0} operation.")]
     ExpectedOperation(String),
     #[error("Expected only functions.")]
@@ -35,66 +36,17 @@ pub enum MiddleErr {
     #[error("Enum Variant does not exist : {0:?}")]
     EnumVariant(String),
     #[error("Cannot perform enum style pattern matching on type : {0}")]
-    CantMatch(String),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Miette(#[from] ReportWrapper),
-}
-#[derive(Debug, Error, Diagnostic, Clone)]
-#[error("")]
-pub struct ParserVec(#[label(collection, "related to this")] Vec<LabeledSpan>);
-
-#[derive(Debug, Error, Diagnostic)]
-#[diagnostic(transparent)]
-pub struct ReportWrapper(miette::Report);
-
-impl Display for ReportWrapper {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-impl Clone for ReportWrapper {
-    fn clone(&self) -> Self {
-        Self(miette::Report::msg("Cloned"))
-    }
-}
-
-impl From<miette::Report> for ReportWrapper {
-    fn from(value: miette::Report) -> Self {
-        Self(value)
-    }
-}
-
-impl From<Vec<ParserError>> for MiddleErr {
-    fn from(value: Vec<ParserError>) -> Self {
-        let mut output = String::new();
-        let mut errors = Vec::new();
-
-        // return Self::Parser2 { errors: value };
-
-        for val in value {
-            match val {
-                ParserError::Lexer(x) => match x {
-                    LexerError::Unrecognized { .. } => {
-                        errors.push(LabeledSpan::new_with_span(Some(x.to_string()), (0, 1)));
-                    }
-                },
-                ParserError::Syntax {
-                    input,
-                    err,
-                    token,
-                    span,
-                } => {
-                    errors.push(LabeledSpan::new_with_span(
-                        Some(format!("{} at {}", err, span)),
-                        (output.len() + token.unwrap().0, token.unwrap().1),
-                    ));
-                    output.push_str(&format!("{}\n", input));
-                }
-            }
-        }
-        let report: miette::Report = ParserVec(errors).into();
-        Self::Miette(ReportWrapper(report.with_source_code(output)))
-    }
+    CantMatch(ParserDataType),
+    #[error("Parser error in {path:?}")]
+    ParserErrors {
+        path: PathBuf,
+        contents: String,
+        errors: Vec<ParserError>,
+    },
+    #[error("Lexer error in {path:?}")]
+    LexerError {
+        path: PathBuf,
+        contents: String,
+        error: LexerError,
+    },
 }

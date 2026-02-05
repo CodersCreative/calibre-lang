@@ -1,0 +1,21 @@
+type Pair = struct {
+    a : int,
+    b : int,
+};
+
+const sum_pairs = fn(n : int) -> int => {
+    let pairs = list:<Pair>[Pair{a : i, b : i + 1} for i in 0..n];
+    let mut acc : int = 0;
+
+    for i in 0..n => {
+        let p : &Pair = &pairs[i];
+        acc += p.a + p.b;
+    };
+
+    acc;
+};
+
+const main = fn() => {
+    let n : int = 2000;
+    print(sum_pairs(n));
+};

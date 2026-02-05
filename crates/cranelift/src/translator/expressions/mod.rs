@@ -2,7 +2,7 @@ use crate::{
     translator::FunctionTranslator,
     values::{RuntimeType, RuntimeValue},
 };
-use calibre_parser::ast::{binary::BinaryOperator, comparison::Comparison};
+use calibre_parser::ast::{binary::BinaryOperator, comparison::ComparisonOperator};
 use cranelift::prelude::*;
 
 pub mod lists;
@@ -92,7 +92,7 @@ impl<'a> FunctionTranslator<'a> {
         &mut self,
         left: RuntimeValue,
         right: RuntimeValue,
-        operator: Comparison,
+        operator: ComparisonOperator,
     ) -> RuntimeValue {
         if left.data_type != right.data_type {
             panic!()
@@ -103,22 +103,24 @@ impl<'a> FunctionTranslator<'a> {
                 let left = left.value;
                 let right = right.value;
                 match operator {
-                    Comparison::Equal => self.builder.ins().icmp(IntCC::Equal, left, right),
-                    Comparison::NotEqual => self.builder.ins().icmp(IntCC::NotEqual, left, right),
-                    Comparison::Lesser => {
+                    ComparisonOperator::Equal => self.builder.ins().icmp(IntCC::Equal, left, right),
+                    ComparisonOperator::NotEqual => {
+                        self.builder.ins().icmp(IntCC::NotEqual, left, right)
+                    }
+                    ComparisonOperator::Lesser => {
                         self.builder.ins().icmp(IntCC::SignedLessThan, left, right)
                     }
-                    Comparison::LesserEqual => {
+                    ComparisonOperator::LesserEqual => {
                         self.builder
                             .ins()
                             .icmp(IntCC::SignedLessThanOrEqual, left, right)
                     }
-                    Comparison::Greater => {
+                    ComparisonOperator::Greater => {
                         self.builder
                             .ins()
                             .icmp(IntCC::SignedGreaterThan, left, right)
                     }
-                    Comparison::GreaterEqual => {
+                    ComparisonOperator::GreaterEqual => {
                         self.builder
                             .ins()
                             .icmp(IntCC::SignedGreaterThan, left, right)
@@ -129,18 +131,24 @@ impl<'a> FunctionTranslator<'a> {
                 let left = left.value;
                 let right = right.value;
                 match operator {
-                    Comparison::Equal => self.builder.ins().fcmp(FloatCC::Equal, left, right),
-                    Comparison::NotEqual => self.builder.ins().fcmp(FloatCC::NotEqual, left, right),
-                    Comparison::Lesser => self.builder.ins().fcmp(FloatCC::LessThan, left, right),
-                    Comparison::LesserEqual => {
+                    ComparisonOperator::Equal => {
+                        self.builder.ins().fcmp(FloatCC::Equal, left, right)
+                    }
+                    ComparisonOperator::NotEqual => {
+                        self.builder.ins().fcmp(FloatCC::NotEqual, left, right)
+                    }
+                    ComparisonOperator::Lesser => {
+                        self.builder.ins().fcmp(FloatCC::LessThan, left, right)
+                    }
+                    ComparisonOperator::LesserEqual => {
                         self.builder
                             .ins()
                             .fcmp(FloatCC::LessThanOrEqual, left, right)
                     }
-                    Comparison::Greater => {
+                    ComparisonOperator::Greater => {
                         self.builder.ins().fcmp(FloatCC::GreaterThan, left, right)
                     }
-                    Comparison::GreaterEqual => {
+                    ComparisonOperator::GreaterEqual => {
                         self.builder.ins().fcmp(FloatCC::GreaterThan, left, right)
                     }
                 }

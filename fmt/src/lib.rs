@@ -14,9 +14,11 @@ pub fn format_file(
 }
 
 pub fn format_all(formatter: &mut Formatter, path: &PathBuf) -> Result<(), Box<dyn Error>> {
-    let imports = formatter.get_imports(fs::read_to_string(&path)?)?;
+    let imports = formatter.get_imports(fs::read_to_string(path)?)?;
 
-    let base = path.parent().unwrap();
+    let Some(base) = path.parent() else {
+        return Ok(());
+    };
 
     for import in imports {
         let NodeType::ImportStatement {
@@ -25,19 +27,19 @@ pub fn format_all(formatter: &mut Formatter, path: &PathBuf) -> Result<(), Box<d
             values: _,
         } = import.node_type
         else {
-            unreachable!()
+            continue;
         };
 
         if module.len() == 1 {
-            let path = base.join(&format!("{}.cl", module[0]));
+            let path = base.join(format!("{}.cl", module[0]));
             if path.exists() {
                 format_all(formatter, &path)?;
             } else {
-                let path = base.join(&format!("{}/mod.cl", module[0]));
+                let path = base.join(format!("{}/mod.cl", module[0]));
                 if path.exists() {
                     format_all(formatter, &path)?;
                 } else {
-                    let path = base.join(&format!("{}/main.cl", module[0]));
+                    let path = base.join(format!("{}/main.cl", module[0]));
                     if path.exists() {
                         format_all(formatter, &path)?;
                     }

@@ -1,0 +1,12 @@
+const add1 = fn(x : int) -> int => x + 1;
+
+const loop_call = fn(n : int) -> int => {
+    let mut x : int = 0;
+    for _ in 0..n => x = add1(x);
+    x;
+};
+
+const main = fn() => {
+    let n : int = 2000;
+    print(loop_call(n));
+};

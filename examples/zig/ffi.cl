@@ -1,0 +1,21 @@
+extern "zig" const zig_add = fn(@i32, @i32) -> @i32 from "./libzigffi.so" as "zig_add";
+extern "zig" const zig_dot = fn(Point) -> @i64 from "./libzigffi.so" as "zig_dot";
+extern "zig" const zig_sum_bytes = fn(ptr:<@u8>, @usize) -> @i64 from "./libzigffi.so" as "zig_sum_bytes";
+
+type Point = struct {
+    x: @i64,
+    y: @i64,
+};
+
+const main = fn() => {
+    let value = zig_add(40, 2);
+    print(value);
+
+    let pt = Point { x: 6, y: 7 };
+    let dot = zig_dot(pt);
+    print(dot);
+
+    let nums = [1, 2, 3, 4, 5, 6];
+    let total = zig_sum_bytes(nums, len(nums));
+    print(total);
+};

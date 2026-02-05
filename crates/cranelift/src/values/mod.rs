@@ -1,6 +1,5 @@
 pub mod cast;
 
-use calibre_mir_ty::MiddleNode;
 use calibre_parser::ast::{ParserDataType, ParserInnerType};
 use cranelift::prelude::Value;
 
@@ -22,8 +21,8 @@ pub struct MemberType {
     pub ty: RuntimeType,
 }
 
-impl<T> From<ParserDataType<T>> for RuntimeType {
-    fn from(value: ParserDataType<T>) -> Self {
+impl From<ParserDataType> for RuntimeType {
+    fn from(value: ParserDataType) -> Self {
         match value.data_type {
             ParserInnerType::Null => RuntimeType::Null,
             ParserInnerType::Bool => RuntimeType::Bool,

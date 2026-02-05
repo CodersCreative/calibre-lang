@@ -7,16 +7,26 @@ pub mod r#type;
 use crate::{
     Parser, ParserError, SyntaxErr,
     ast::{
-        LoopType, Node, NodeType, ParserDataType, ParserInnerType, PotentialDollarIdentifier,
-        PotentialNewType, RefMutability, comparison::Comparison,
+        Node, NodeType, ParserDataType, ParserFfiDataType, ParserFfiInnerType, ParserInnerType,
+        PotentialDollarIdentifier, PotentialFfiDataType, PotentialNewType, RefMutability,
+        comparison::ComparisonOperator,
     },
     lexer::{Bracket, Span, StopValue, Token, TokenType},
 };
-use std::{collections::HashMap, str::FromStr};
+use std::{str::FromStr, sync::OnceLock};
+
+fn eof_token() -> &'static Token {
+    static EOF_TOKEN: OnceLock<Token> = OnceLock::new();
+    EOF_TOKEN.get_or_init(|| Token {
+        value: String::new(),
+        token_type: TokenType::EOF,
+        span: Span::default(),
+    })
+}
 
 impl Parser {
     fn first(&self) -> &Token {
-        self.tokens.first().unwrap()
+        self.tokens.first().unwrap_or_else(|| eof_token())
     }
 
     fn second(&self) -> &Token {
@@ -33,7 +43,11 @@ impl Parser {
 
     fn eat(&mut self) -> Token {
         if self.is_eof() {
-            return self.tokens.last().unwrap().clone();
+            return self
+                .tokens
+                .last()
+                .cloned()
+                .unwrap_or_else(|| eof_token().clone());
         }
         let token = self.tokens.remove(0);
         self.prev_token = Some(token.clone());
@@ -41,30 +55,22 @@ impl Parser {
     }
 
     fn add_err(&mut self, err: SyntaxErr) {
-        let prev = self.prev_token.clone().unwrap();
-        let mut input = prev.value.clone();
+        let span = if let Some(prev) = self.prev_token.clone() {
+            prev.span
+        } else {
+            self.first().span
+        };
+        self.errors.push(ParserError::Syntax { err, span })
+    }
 
-        (0..4).into_iter().for_each(|x| {
-            let val = self
-                .tokens
-                .get(x)
-                .map(|x| x.value.clone())
-                .unwrap_or(String::new());
-            input.push_str(&format!(" {}", val));
-        });
-
-        self.errors.push(ParserError::Syntax {
-            input: input.trim().to_string(),
-            err,
-            span: prev.span,
-            token: Some((0, prev.value.len() - 1)),
-        })
+    fn add_err_at(&mut self, err: SyntaxErr, span: Span) {
+        self.errors.push(ParserError::Syntax { err, span })
     }
 
     fn expect_eat(&mut self, t: &TokenType, err: SyntaxErr) -> Token {
         let token = self.eat();
         if &token.token_type != t {
-            self.add_err(err);
+            self.add_err_at(err, token.span);
             if &self.first().token_type == t {
                 self.eat()
             } else {
@@ -72,6 +78,38 @@ impl Parser {
             }
         } else {
             token
+        }
+    }
+
+    fn parse_potential_ffi_type(&mut self) -> Option<PotentialFfiDataType> {
+        if self.first().token_type == TokenType::At {
+            let _ = self.eat();
+            let ty = self.expect_potential_dollar_ident();
+
+            match ParserFfiInnerType::from_str(&ty.to_string()) {
+                Ok(data_type) => Some(PotentialFfiDataType::Ffi(ParserFfiDataType {
+                    span: *ty.span(),
+                    data_type,
+                })),
+                Err(_) => {
+                    self.add_err_at(SyntaxErr::ExpectedType, *ty.span());
+                    None
+                }
+            }
+        } else {
+            self.parse_type()
+                .map(|x| PotentialFfiDataType::Normal(x.into()))
+        }
+    }
+
+    fn expect_potential_ffi_type(&mut self) -> PotentialFfiDataType {
+        if let Some(x) = self.parse_potential_ffi_type() {
+            x
+        } else {
+            self.add_err(SyntaxErr::ExpectedType);
+            PotentialFfiDataType::Normal(
+                ParserDataType::new(self.first().span, ParserInnerType::Auto(None)).into(),
+            )
         }
     }
 
@@ -85,10 +123,19 @@ impl Parser {
                 type_def: self.parse_type_def_type(),
                 overloads: self.parse_overloads(),
             })
-        } else if let Some(x) = self.parse_type() {
-            Some(x.into())
         } else {
-            None
+            self.parse_type().map(|x| x.into())
+        }
+    }
+
+    fn coerce_data_type(&mut self, typ: PotentialNewType) -> ParserDataType {
+        match typ {
+            PotentialNewType::DataType(x) => x,
+            PotentialNewType::NewType { .. } => {
+                let span = *typ.span();
+                self.add_err_at(SyntaxErr::ExpectedType, span);
+                ParserDataType::new(span, ParserInnerType::Auto(None))
+            }
         }
     }
 
@@ -97,16 +144,16 @@ impl Parser {
             x
         } else {
             self.add_err(SyntaxErr::ExpectedType);
-            ParserDataType::new(self.first().span.clone(), ParserInnerType::Dynamic).into()
+            ParserDataType::new(self.first().span, ParserInnerType::Auto(None)).into()
         }
     }
 
-    fn expect_type(&mut self) -> ParserDataType<Node> {
+    fn expect_type(&mut self) -> ParserDataType {
         if let Some(x) = self.parse_type() {
             x
         } else {
             self.add_err(SyntaxErr::ExpectedType);
-            ParserDataType::new(self.first().span.clone(), ParserInnerType::Dynamic)
+            ParserDataType::new(self.first().span, ParserInnerType::Auto(None))
         }
     }
 
@@ -130,7 +177,7 @@ impl Parser {
 
                 self.expect_potential_new_type()
             } else {
-                ParserDataType::new(self.first().span.clone(), ParserInnerType::Dynamic).into()
+                ParserDataType::new(self.first().span, ParserInnerType::Auto(None)).into()
             };
 
             for key in keys {
@@ -151,8 +198,8 @@ impl Parser {
         &mut self,
         open_token: TokenType,
         close_token: TokenType,
-    ) -> HashMap<String, PotentialNewType> {
-        let mut properties = HashMap::new();
+    ) -> Vec<(String, PotentialNewType)> {
+        let mut properties = Vec::new();
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         while !self.is_eof() && self.first().token_type != close_token {
@@ -162,7 +209,7 @@ impl Parser {
 
             let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
 
-            properties.insert(key, self.expect_potential_new_type());
+            properties.push((key, self.expect_potential_new_type()));
 
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
@@ -221,7 +268,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_type(&mut self) -> Option<ParserDataType<Node>> {
+    pub fn parse_type(&mut self) -> Option<ParserDataType> {
         let t = self.first().clone();
         let mutability = RefMutability::from(t.token_type.clone());
 
@@ -231,10 +278,27 @@ impl Parser {
             Some(ParserDataType::new(
                 Span::new_from_spans(not.span, typ.span),
                 ParserInnerType::Result {
-                    err: Box::new(ParserDataType::new(not.span, ParserInnerType::Dynamic)),
+                    err: Box::new(ParserDataType::new(not.span, ParserInnerType::Auto(None))),
                     ok: Box::new(typ),
                 },
             ))
+        } else if t.token_type == TokenType::At {
+            let at = self.eat();
+            let ty = self.expect_potential_dollar_ident();
+            let ffi = ParserFfiInnerType::from_str(&ty.to_string());
+            match ffi {
+                Ok(inner) => Some(ParserDataType::new(
+                    Span::new_from_spans(at.span, *ty.span()),
+                    inner.into(),
+                )),
+                Err(_) => {
+                    self.add_err(SyntaxErr::ExpectedType);
+                    Some(ParserDataType::new(
+                        Span::new_from_spans(at.span, *ty.span()),
+                        ParserInnerType::Auto(None),
+                    ))
+                }
+            }
         } else if t.token_type == TokenType::Dollar {
             let open = self.eat();
             let ident = self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
@@ -249,19 +313,16 @@ impl Parser {
                 Span::new_from_spans(mutability_token.span, typ.span),
                 ParserInnerType::Ref(Box::new(typ), mutability.clone()),
             ))
-        } else if t.token_type == TokenType::Comparison(Comparison::Lesser) {
+        } else if t.token_type == TokenType::Comparison(ComparisonOperator::Lesser) {
             let types = self.parse_type_list(
-                TokenType::Comparison(Comparison::Lesser),
-                TokenType::Comparison(Comparison::Greater),
+                TokenType::Comparison(ComparisonOperator::Lesser),
+                TokenType::Comparison(ComparisonOperator::Greater),
             );
 
-            let span = if types.is_empty() {
-                self.first().span.clone()
+            let span = if let (Some(first), Some(last)) = (types.first(), types.last()) {
+                Span::new_from_spans(*first.span(), *last.span())
             } else {
-                Span::new_from_spans(
-                    types.first().unwrap().span().clone(),
-                    types.last().unwrap().span().clone(),
-                )
+                self.first().span
             };
 
             Some(ParserDataType::new(
@@ -269,10 +330,7 @@ impl Parser {
                 ParserInnerType::Tuple(
                     types
                         .into_iter()
-                        .map(|x| match x {
-                            PotentialNewType::DataType(x) => x,
-                            PotentialNewType::NewType { .. } => panic!(),
-                        })
+                        .map(|x| self.coerce_data_type(x))
                         .collect(),
                 ),
             ))
@@ -285,16 +343,13 @@ impl Parser {
                 false
             };
 
-            let args: Vec<ParserDataType<Node>> = self
+            let args: Vec<ParserDataType> = self
                 .parse_type_list(
                     TokenType::Open(Bracket::Paren),
                     TokenType::Close(Bracket::Paren),
                 )
                 .into_iter()
-                .map(|x| match x {
-                    PotentialNewType::DataType(x) => x,
-                    _ => panic!(),
-                })
+                .map(|x| self.coerce_data_type(x))
                 .collect();
             let mut ret = ParserDataType::from(ParserInnerType::Null);
 
@@ -304,11 +359,11 @@ impl Parser {
             }
 
             let close = if ret.data_type != ParserInnerType::Null {
-                ret.span.clone()
+                ret.span
             } else if let Some(arg) = args.last() {
-                arg.span.clone()
+                arg.span
             } else {
-                open.span.clone()
+                open.span
             };
 
             Some(ParserDataType::new(
@@ -329,8 +384,8 @@ impl Parser {
             let t = self.expect_type();
 
             let close = self.expect_eat(
-                &TokenType::Comparison(Comparison::Greater),
-                SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
+                &TokenType::Comparison(ComparisonOperator::Greater),
+                SyntaxErr::ExpectedToken(TokenType::Comparison(ComparisonOperator::Greater)),
             );
 
             Some(ParserDataType::new(
@@ -342,23 +397,68 @@ impl Parser {
                 Ok(x) => {
                     let mut path = Vec::new();
                     let open = self.eat().span;
-                    let mut close = open.clone();
-                    let x = ParserDataType::new(open.clone(), x);
+                    let mut close = open;
+                    let x = ParserDataType::new(open, x);
 
                     if let ParserInnerType::Struct(_) = x.data_type {
+                        if t.value == "ptr" {
+                            if self.first().token_type == TokenType::ColonAngled
+                                || self.first().token_type
+                                    == TokenType::Comparison(ComparisonOperator::Lesser)
+                            {
+                                let (open_token, close_token) =
+                                    if self.first().token_type == TokenType::ColonAngled {
+                                        (
+                                            TokenType::ColonAngled,
+                                            TokenType::Comparison(ComparisonOperator::Greater),
+                                        )
+                                    } else {
+                                        (
+                                            TokenType::Comparison(ComparisonOperator::Lesser),
+                                            TokenType::Comparison(ComparisonOperator::Greater),
+                                        )
+                                    };
+
+                                let inner = self.parse_type_list(open_token, close_token);
+                                let span = if let (Some(first), Some(last)) =
+                                    (inner.first(), inner.last())
+                                {
+                                    Span::new_from_spans(*first.span(), *last.span())
+                                } else {
+                                    open
+                                };
+                                let elem = inner.into_iter().next().unwrap_or(
+                                    ParserDataType::from(ParserInnerType::Auto(None)).into(),
+                                );
+                                let elem = match elem {
+                                    PotentialNewType::DataType(x) => x,
+                                    PotentialNewType::NewType { .. } => {
+                                        ParserDataType::from(ParserInnerType::Auto(None))
+                                    }
+                                };
+                                return Some(ParserDataType::new(
+                                    Span::new_from_spans(open, span),
+                                    ParserInnerType::Ptr(Box::new(elem)),
+                                ));
+                            }
+
+                            return Some(ParserDataType::new(
+                                open,
+                                ParserInnerType::Ptr(Box::new(ParserDataType::from(
+                                    ParserInnerType::Null,
+                                ))),
+                            ));
+                        }
                         path.push(x);
 
                         while self.first().token_type == TokenType::DoubleColon {
                             let value = self.eat();
                             close = value.span;
 
-                            path.push(ParserDataType::new(
-                                value.span,
-                                ParserInnerType::from_str(&value.value).unwrap(),
-                            ));
+                            let inner = ParserInnerType::from_str(&value.value)
+                                .unwrap_or(ParserInnerType::Auto(None));
+                            path.push(ParserDataType::new(value.span, inner));
                         }
-
-                        // TODO Handle generics
 
                         if path.len() == 1 {
                             Some(path.remove(0))
@@ -378,7 +478,7 @@ impl Parser {
 
         if self.first().token_type == TokenType::Question {
             let close = self.eat();
-            let typ2: ParserDataType<Node> = typ?;
+            let typ2: ParserDataType = typ?;
             typ = Some(ParserDataType::new(
                 Span::new_from_spans(typ2.span, close.span),
                 ParserInnerType::Option(Box::new(typ2)),
@@ -388,7 +488,7 @@ impl Parser {
         if self.first().token_type == TokenType::Not {
             let _ = self.eat();
             let t = self.parse_type()?;
-            let typ2: ParserDataType<Node> = typ?;
+            let typ2: ParserDataType = typ?;
             typ = Some(ParserDataType::new(
                 Span::new_from_spans(typ2.span, t.span),
                 ParserInnerType::Result {
@@ -407,8 +507,15 @@ impl Parser {
             SyntaxErr::ExpectedOpeningBracket(Bracket::Paren),
         );
 
-        let value = self.parse_statement();
-        let span = value.span.clone();
+        let first = self.parse_statement();
+        let mut values = vec![first];
+        while self.first().token_type == TokenType::Comma {
+            let _ = self.eat();
+            if self.first().token_type == TokenType::Close(Bracket::Paren) {
+                break;
+            }
+            values.push(self.parse_statement());
+        }
 
         let _ = self.expect_eat(
             &TokenType::Close(Bracket::Paren),
@@ -423,14 +530,23 @@ impl Parser {
             Node {
                 span: Span::new_from_spans(open.span, otherwise.span),
                 node_type: NodeType::Ternary {
-                    comparison: Box::new(value),
+                    comparison: Box::new(values.remove(0)),
                     then: Box::new(then),
                     otherwise: Box::new(otherwise),
                 },
             }
+        } else if values.len() > 1 {
+            let span = values
+                .last()
+                .map(|v| Span::new_from_spans(open.span, v.span))
+                .unwrap_or(open.span);
+            Node::new(span, NodeType::TupleLiteral { values })
         } else {
+            let value = values
+                .pop()
+                .unwrap_or_else(|| Node::new(open.span, NodeType::Null));
             Node::new(
-                span,
+                value.span,
                 NodeType::ParenExpression {
                     value: Box::new(value),
                 },
@@ -452,8 +568,8 @@ impl Parser {
                 let t = self.expect_potential_new_type();
 
                 let _ = self.expect_eat(
-                    &TokenType::Comparison(Comparison::Greater),
-                    SyntaxErr::ExpectedToken(TokenType::Comparison(Comparison::Greater)),
+                    &TokenType::Comparison(ComparisonOperator::Greater),
+                    SyntaxErr::ExpectedToken(TokenType::Comparison(ComparisonOperator::Greater)),
                 );
                 Some(t)
             } else {
@@ -461,7 +577,10 @@ impl Parser {
             }
         } else {
             None
-        };
+        }
+        .unwrap_or(PotentialNewType::DataType(ParserDataType::from(
+            ParserInnerType::Auto(None),
+        )));
 
         let open = self.expect_eat(
             &TokenType::Open(Bracket::Square),

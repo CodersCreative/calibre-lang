@@ -2,7 +2,6 @@ use crate::{
     ast::{Node, NodeType},
     lexer::{Bracket, LexerError, Span, Token, TokenType},
 };
-use miette::Diagnostic;
 use thiserror::Error;
 
 pub mod ast;
@@ -15,9 +14,13 @@ pub struct Parser {
     tokens: Vec<Token>,
     pub errors: Vec<ParserError>,
     prev_token: Option<Token>,
+    source_path: Option<std::path::PathBuf>,
 }
 
 impl Parser {
+    pub fn set_source_path(&mut self, path: Option<std::path::PathBuf>) {
+        self.source_path = path;
+    }
     fn is_eof(&self) -> bool {
         if let Some(token) = self.tokens.first() {
             token.token_type == TokenType::EOF
@@ -41,8 +44,8 @@ impl Parser {
             .filter(|x| x.node_type != NodeType::EmptyLine)
             .collect();
 
-        let span = if body.len() > 0 {
-            Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span)
+        let span = if let (Some(first), Some(last)) = (body.first(), body.last()) {
+            Span::new_from_spans(first.span, last.span)
         } else {
             Span::new(
                 lexer::Position { line: 1, col: 1 },
@@ -70,20 +73,12 @@ impl From<LexerError> for ParserError {
 }
 
 #[allow(unused_assignments)]
-#[derive(Error, Debug, Clone, Diagnostic)]
+#[derive(Error, Debug, Clone)]
 pub enum ParserError {
     #[error(transparent)]
-    #[diagnostic(transparent)]
     Lexer(LexerError),
     #[error("{err} at {span}")]
-    Syntax {
-        #[source_code]
-        input: String,
-        err: SyntaxErr,
-        span: Span,
-        #[label("here")]
-        token: Option<(usize, usize)>,
-    },
+    Syntax { err: SyntaxErr, span: Span },
 }
 
 #[derive(Error, Debug, Clone)]

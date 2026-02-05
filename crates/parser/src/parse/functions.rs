@@ -72,9 +72,7 @@ impl Parser {
 
             let mut parsed_args = vec![CallArg::Value(Node {
                 node_type: NodeType::ListLiteral(
-                    Some(PotentialNewType::DataType(ParserDataType::from(
-                        ParserInnerType::Str,
-                    ))),
+                    PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Str)),
                     {
                         let mut txts = Vec::new();
 
@@ -90,7 +88,7 @@ impl Parser {
 
             let args = args
                 .into_iter()
-                .map(|x| tokenizer.tokenize(x).unwrap())
+                .map(|x| tokenizer.tokenize(&x).unwrap())
                 .collect::<Vec<_>>();
 
             let mut original = Vec::new();
@@ -113,6 +111,25 @@ impl Parser {
             )
         };
 
+        let reverse_args = if self.first().token_type == TokenType::PipeParen {
+            let _ = self.eat();
+            let mut args = vec![self.parse_statement()];
+
+            while self.first().token_type == TokenType::Comma {
+                let _ = self.eat();
+                args.push(self.parse_statement());
+            }
+
+            let _ = self.expect_eat(
+                &TokenType::Close(Bracket::Paren),
+                SyntaxErr::ExpectedClosingBracket(Bracket::Paren),
+            );
+
+            args
+        } else {
+            Vec::new()
+        };
+
         let mut expression = Node::new(
             caller.span,
             NodeType::CallExpression {
@@ -120,6 +137,7 @@ impl Parser {
                 caller: Box::new(caller),
                 generic_types,
                 args,
+                reverse_args,
             },
         );
 
@@ -238,7 +256,21 @@ impl Parser {
                     NodeType::Identifier(value) => {
                         if self.first().token_type == TokenType::Colon {
                             let _ = self.eat();
-                            let data = self.parse_statement();
+                            let mut values = vec![self.parse_statement()];
+                            while self.first().token_type == TokenType::Comma {
+                                let _ = self.eat();
+                                values.push(self.parse_statement());
+                            }
+
+                            let data = if values.len() == 1 {
+                                values.pop().unwrap()
+                            } else {
+                                let span = Span::new_from_spans(
+                                    values.first().unwrap().span,
+                                    values.last().unwrap().span,
+                                );
+                                Node::new(span, NodeType::TupleLiteral { values })
+                            };
                             return Node::new(
                                 Span::new_from_spans(path[0].0.span, path[1].0.span),
                                 NodeType::EnumExpression {
@@ -256,7 +288,11 @@ impl Parser {
 
         if path.len() == 1 {
             if let NodeType::Identifier(identifier) = &path[0].0.node_type {
-                if self.first().token_type == TokenType::Open(Bracket::Curly) {
+                if self.first().token_type == TokenType::Open(Bracket::Curly)
+                    && self.second().token_type == TokenType::Identifier
+                    && (self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Colon)
+                        || self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Comma))
+                {
                     let data = self.parse_potential_key_value();
                     return Node::new(
                         path[0].0.span,
@@ -306,6 +342,7 @@ impl Parser {
                             let _ =
                                 self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
                             defaulted = true;
+
                             self.parse_statement()
                         })
                     } else {

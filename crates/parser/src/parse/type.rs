@@ -12,20 +12,7 @@ impl Parser {
         match &self.first().token_type {
             TokenType::Enum => self.parse_enum_declaration(),
             TokenType::Struct => self.parse_struct_declaration(),
-            _ => {
-                if let Some(t) = self.parse_type() {
-                    TypeDefType::NewType(Box::new(t.into()))
-                } else {
-                    self.add_err(SyntaxErr::ExpectedType);
-                    TypeDefType::NewType(Box::new(
-                        crate::ast::ParserDataType::new(
-                            self.first().span,
-                            crate::ast::ParserInnerType::Dynamic,
-                        )
-                        .into(),
-                    ))
-                }
-            }
+            _ => TypeDefType::NewType(Box::new(self.expect_type().into())),
         }
     }
 
@@ -76,7 +63,7 @@ impl Parser {
             );
 
             let return_type = if self.first().token_type == TokenType::FatArrow {
-                ParserDataType::from(ParserInnerType::Null).into()
+                ParserDataType::from(ParserInnerType::Auto(None)).into()
             } else {
                 let _ = self.expect_eat(
                     &TokenType::Arrow,
@@ -96,6 +83,7 @@ impl Parser {
                     parameters,
                     return_type,
                     is_async,
+                    param_destructures: Vec::new(),
                 },
                 operator: operator.into(),
                 body: Box::new(block),

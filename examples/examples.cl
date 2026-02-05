@@ -1,6 +1,33 @@
+const test_str = fn(splits : list:<str>, inputs : list:<str>, extra : bool, extra2 : int) => {
+	print(move splits);
+	print(move inputs);
+	print("extra : " & extra & " and " & extra2);
+};
+
 const main = fn () => {
+	let name = "Ty";
+	let age = "10";
+	test_str"Hello, my name is {name} and I'm {age} years old!" <(true, 900003);
+
+	match age {
+		"10" => print("match with value : 10"),
+		"Hi" => print("Hi"),
+	}
+
+	match {
+		age == "10" => print("match w/o value : " & age),
+		name == "Hi" => print("Hi"),
+	}
+
+	=> {
+		defer print("end of scope");
+		// Defers are only evaluated when performed so they wont capture values from this scope only the scope they're defered to.
+		defer return print("end of func");
+		// end of scope printed here
+	};
+
 	print(bmi(52.5, 1.65));
-	print(factorial(5));
+	print("fac -> " & factorial(5));
 	print(lock(3, 4,6));
 	a_fn();
 	a_two_fn();
@@ -8,7 +35,9 @@ const main = fn () => {
 	let tri = is_a_triangle(10f, 20f);
 	print(tri);
 	let tri = tri(10f);
-	print(tri);
+	print(move tri);
+	// end of func printed here
+	null;
 };
 
 const a_fn = fn() => {
@@ -39,8 +68,8 @@ const heron = fn (a b c : float) -> float => {
 	(p * (p - a) * (p - b) * (p - c)) ** 0.5;
 };
 
-const area_of_triangle = fn (a b c : float) -> float? => if is_a_triangle(a, b, c) => return heron(a, b, c) else => none;
+const area_of_triangle = fn (a b c : float) -> float? => if is_a_triangle(a, b, c) => some(heron(a, b, c)) else => none;
 
-const factorial = fn (x : int) -> int => if x <= 1 => return 1 else => x * factorial(x - 1);
+const factorial = fn (x : int) -> int => if x <= 1 => 1 else => x * factorial(x - 1);
 
 const lock = fn(c d e:  int) -> bool => if c*d> e => true else => false ;

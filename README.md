@@ -1,50 +1,56 @@
 # Calibre Language
 
-Calibre is a modern, statically-typed programming language designed for clarity, expressiveness, and extensibility. Built in Rust, Calibre aims to provide a robust interpreted experience, with future plans for JIT compilation via Cranelift and static compilation via LLVM (Inkwell). The language is ideal for both scripting and systems programming, and is designed with tooling in mind: a Tree-sitter grammar, formatter, and LSP support are all part of the roadmap.
+Calibre is a modern, statically-typed language built in Rust with a fast interpreter, a growing toolchain, and a pragmatic syntax for systems scripting. It emphasizes clear data modeling, expressive pattern matching, and straightforward FFI via `extern` with explicit C/Zig types.
 
 ---
 
 ## Features
 
 - **Statically Typed**: Type inference and explicit typing for safety and expressiveness.
-- **Pattern Matching**: Powerful match statements for enums and data structures.
-- **Enums & Structs**: Algebraic data types with tuple and hashmap-like variants.
+- **Pattern Matching**: Powerful `match` for enums, tuples, and structs.
+- **Enums & Structs**: Algebraic data types with tuple and map-like variants.
 - **Immutability by Default**: `let` for immutable, `let mut` for mutable variables.
 - **First-Class Functions**: Functions as values, with concise syntax.
-- **Modules & Imports**: Simple module system for code organization.
-- **Interpreted Execution**: Fast iteration with an interpreter backend.
-- **Planned AOT Compilation**: Cranelift static compilation in development.
-- **Tooling**: Tree-sitter grammar, formatter, and LSP (Language Server Protocol) support planned.
+- **FFI**: `extern "c"` / `extern "zig"` with `@`-typed signatures and `ptr:<T>` pointers.
+- **Interpreted Execution**: Fast iteration with a bytecode VM.
+- **Tooling**: Tree-sitter grammar, formatter (`fmt`) with max-width option, and LSP (in progress).
 
 ---
 
 ## Example
 
 ```cl
-type Language = enum {
-  FRENCH { data : int, code : int },
-  ENGLISH (int),
-  SPANISH,
-  ARABIC (Language, Language),
-}
+type Point = struct {
+  x: int,
+  y: int,
+};
 
-type Country = struct (Language)
+const dot = fn(p: Point) -> int => p.x * p.y;
 
-// Immutable variable with inferred type
-let language = Language.FRENCH{data : 10, code : 5};
+const classify = fn match &int {
+  .Ok : value => "ok: " & value,
+  .Err : msg => "err: " & msg,
+};
 
-// Mutable variable
-let mut recursive_language = Language.ARABIC(language, Language.SPANISH);
+const main = fn() => {
+  let p = Point { x: 6, y: 7 };
+  print(dot(p));
 
-// Pattern matching with mutation
-recursive_language |> match &mut {
-  data.Language.ARABIC(Language.FRENCH{_}, Language.ARABIC(Language.FRENCH{code})) => print("Code: " & code),
-  data.Language.ARABIC(Language.FRENCH{data}, Language.SPANISH) => {
-    print("Enum: " & data)
-    data = 5;
-    print("Enum Changed: " & data)
-  },
-}
+  let mut a, mut b = 10, 20;
+  print(a + b);
+};
+```
+
+### FFI (C/Zig)
+
+```cl
+extern "c" const c_strlen = fn(str) -> @usize from "..." as "strlen";
+extern "zig" const zig_add = fn(@i32, @i32) -> @i32 from "..." as "zig_add";
+
+const main = fn() => {
+  print(c_strlen("hello"));
+  print(zig_add(40, 2));
+};
 ```
 
 ---
@@ -59,12 +65,27 @@ recursive_language |> match &mut {
 
 2. **Run a REPL:**
    ```sh
-   cargo run
+   cargo run -p cal
    ```
 
 3. **Run an example:**
    ```sh
-   cargo run -- --path ../examples/showcase/main.cl
+   cargo run -p cal -- ../examples/examples.cl
+   ```
+
+4. **Format code (optional):**
+   ```sh
+   cargo run -p cal-fmt -- --max-width 100 --path ../examples/examples.cl
+   ```
+
+5. **Install cal**
+   ```sh
+   cargo install -p cal
+   ```
+
+6. **Install cal-fmt**
+   ```sh
+   cargo install -p cal-fmt
    ```
 
 ---
@@ -96,6 +117,6 @@ MIT License. See LICENSE for details.
 
 - `cal/`: Main interpreter frontend
 - `fmt/`: Formatter implementation
-- `crates/`: Core language crates (parser, interpreter, JIT, etc.)
-- `examples/`: Example Calibre programs
+- `crates/`: Core language crates (parser, interpreter, VM, etc.)
+- `examples/`: Example Calibre programs (including FFI and Zig)
 - `lsp/`: Language Server Protocol implementation (in progress)

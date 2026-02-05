@@ -3,21 +3,22 @@ pub mod comparison;
 pub mod formatter;
 
 use crate::{
-    ast::{comparison::BooleanOperation, formatter::Formatter},
+    ast::{comparison::BooleanOperator, formatter::Formatter},
     lexer::{Span, Token, TokenType},
 };
 use binary::BinaryOperator;
-use comparison::Comparison;
+use comparison::ComparisonOperator;
+use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
-    collections::HashMap,
     fmt::{Debug, Display},
     ops::{Deref, DerefMut},
     str::FromStr,
     string::ParseError,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum RefMutability {
     Value,
     Ref,
@@ -69,14 +70,20 @@ pub enum LoopType {
     Loop,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ParserDataType<T> {
-    pub data_type: ParserInnerType<T>,
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ParserFfiDataType {
+    pub data_type: ParserFfiInnerType,
     pub span: Span,
 }
 
-impl<T> From<ParserInnerType<T>> for ParserDataType<T> {
-    fn from(value: ParserInnerType<T>) -> Self {
+impl Display for ParserFfiDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.data_type)
+    }
+}
+
+impl From<ParserFfiInnerType> for ParserFfiDataType {
+    fn from(value: ParserFfiInnerType) -> Self {
         Self {
             data_type: value,
             span: Span::default(),
@@ -84,56 +91,195 @@ impl<T> From<ParserInnerType<T>> for ParserDataType<T> {
     }
 }
 
-impl<T> ParserDataType<T> {
-    pub fn new(span: Span, data_type: ParserInnerType<T>) -> Self {
+impl ParserFfiDataType {
+    pub fn new(span: Span, data_type: ParserFfiInnerType) -> Self {
         Self { data_type, span }
     }
 }
-impl<T> Deref for ParserDataType<T> {
-    type Target = ParserInnerType<T>;
+
+impl Deref for ParserFfiDataType {
+    type Target = ParserFfiInnerType;
     fn deref(&self) -> &Self::Target {
         &self.data_type
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParserInnerType<T> {
-    Float,
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ParserFfiInnerType {
+    F32,
+    F64,
+    LongDouble,
+    U8,
+    I8,
+    U16,
+    I16,
+    U32,
+    I32,
+    U64,
+    I64,
+    USize,
+    ISize,
+    SChar,
+    UChar,
     Int,
-    Dynamic,
+    UInt,
+    Short,
+    UShort,
+    Long,
+    ULong,
+    LongLong,
+    ULongLong,
+}
+
+impl Into<ParserInnerType> for ParserFfiInnerType {
+    fn into(self) -> ParserInnerType {
+        match self {
+            Self::F32 | Self::F64 | Self::LongDouble => ParserInnerType::Float,
+            Self::SChar | Self::UChar => ParserInnerType::Char,
+            Self::U16
+            | Self::U8
+            | Self::U32
+            | Self::U64
+            | Self::USize
+            | Self::UInt
+            | Self::UShort
+            | Self::ULong
+            | Self::ULongLong => ParserInnerType::UInt,
+            _ => ParserInnerType::Int,
+        }
+    }
+}
+
+impl Display for ParserFfiInnerType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "@{}",
+            match self {
+                Self::U8 => "u8",
+                Self::I8 => "i8",
+                Self::U16 => "u16",
+                Self::I16 => "i16",
+                Self::U32 => "u32",
+                Self::I32 => "i32",
+                Self::U64 => "u64",
+                Self::I64 => "i64",
+                Self::USize => "usize",
+                Self::ISize => "isize",
+                Self::UInt => "uint",
+                Self::Int => "int",
+                Self::UShort => "ushort",
+                Self::Short => "short",
+                Self::ULong => "ulong",
+                Self::Long => "long",
+                Self::ULongLong => "ulonglong",
+                Self::LongLong => "longlong",
+                Self::LongDouble => "longdouble",
+                Self::F32 => "f32",
+                Self::F64 => "f64",
+                Self::SChar => "schar",
+                Self::UChar => "uchar",
+            }
+        )
+    }
+}
+
+impl FromStr for ParserFfiInnerType {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.trim_start_matches("@") {
+            "u8" => Self::U8,
+            "i8" => Self::I8,
+            "u16" => Self::U16,
+            "i16" => Self::I16,
+            "u32" => Self::U32,
+            "i32" => Self::I32,
+            "u64" => Self::U64,
+            "i64" => Self::I64,
+            "usize" => Self::USize,
+            "isize" => Self::ISize,
+            "uint" => Self::UInt,
+            "int" => Self::Int,
+            "ushort" => Self::UShort,
+            "short" => Self::Short,
+            "ulong" => Self::ULong,
+            "long" => Self::Long,
+            "ulonglong" => Self::ULongLong,
+            "longlong" => Self::LongLong,
+            "f32" => Self::F32,
+            "f64" => Self::F64,
+            "schar" => Self::SChar,
+            "uchar" => Self::UChar,
+            _ => return Err(()),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ParserDataType {
+    pub data_type: ParserInnerType,
+    pub span: Span,
+}
+
+impl From<ParserInnerType> for ParserDataType {
+    fn from(value: ParserInnerType) -> Self {
+        Self {
+            data_type: value,
+            span: Span::default(),
+        }
+    }
+}
+
+impl ParserDataType {
+    pub fn new(span: Span, data_type: ParserInnerType) -> Self {
+        Self { data_type, span }
+    }
+}
+
+impl Deref for ParserDataType {
+    type Target = ParserInnerType;
+    fn deref(&self) -> &Self::Target {
+        &self.data_type
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ParserInnerType {
+    Float,
+    UInt,
+    Int,
     Null,
     Bool,
     Str,
     Char,
-    Tuple(Vec<ParserDataType<T>>),
-    List(Box<ParserDataType<T>>),
-    Scope(Vec<ParserDataType<T>>),
+    Dynamic,
+    Tuple(Vec<ParserDataType>),
+    List(Box<ParserDataType>),
+    Scope(Vec<ParserDataType>),
+    Auto(Option<u16>),
     Range,
     DollarIdentifier(String),
-    Option(Box<ParserDataType<T>>),
+    Option(Box<ParserDataType>),
     Result {
-        ok: Box<ParserDataType<T>>,
-        err: Box<ParserDataType<T>>,
+        ok: Box<ParserDataType>,
+        err: Box<ParserDataType>,
     },
     Function {
-        return_type: Box<ParserDataType<T>>,
-        parameters: Vec<ParserDataType<T>>,
+        return_type: Box<ParserDataType>,
+        parameters: Vec<ParserDataType>,
         is_async: bool,
     },
-    Ref(Box<ParserDataType<T>>, RefMutability),
+    Ref(Box<ParserDataType>, RefMutability),
     Struct(String),
     StructWithGenerics {
         identifier: String,
-        generic_types: Vec<ParserDataType<T>>,
+        generic_types: Vec<ParserDataType>,
     },
-    Comp {
-        stage: CompStage,
-        body: Box<T>,
-    },
-    NativeFunction(Box<ParserDataType<T>>),
+    NativeFunction(Box<ParserDataType>),
+    Ptr(Box<ParserDataType>),
 }
 
-impl<T> ParserDataType<T> {
+impl ParserDataType {
     pub fn unwrap_all_refs(self) -> Self {
         Self {
             data_type: self.data_type.unwrap_all_refs(),
@@ -141,11 +287,28 @@ impl<T> ParserDataType<T> {
         }
     }
 }
-impl<T> ParserInnerType<T> {
+
+impl From<ParserFfiDataType> for ParserDataType {
+    fn from(value: ParserFfiDataType) -> Self {
+        Self {
+            span: value.span,
+            data_type: value.data_type.into(),
+        }
+    }
+}
+
+impl ParserInnerType {
     pub fn unwrap_all_refs(self) -> Self {
         match self {
             Self::Ref(x, _) => x.data_type.unwrap_all_refs(),
             _ => self,
+        }
+    }
+
+    pub fn is_auto(&self) -> bool {
+        match self {
+            Self::Auto(_) => true,
+            _ => false,
         }
     }
 
@@ -159,20 +322,68 @@ impl<T> ParserInnerType<T> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum PotentialNewTypeFfiType {
+    DataType(PotentialNewType),
+    Ffi(ParserFfiDataType),
+}
+
+impl PotentialNewTypeFfiType {
+    pub fn is_auto(&self) -> bool {
+        match self {
+            Self::DataType(x) => x.is_auto(),
+            _ => false,
+        }
+    }
+}
+
+impl Display for PotentialNewTypeFfiType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DataType(x) => write!(f, "{}", x),
+            Self::Ffi(x) => write!(f, "@{}", x),
+        }
+    }
+}
+
+impl PotentialNewTypeFfiType {
+    pub fn span(&self) -> &Span {
+        match self {
+            Self::Ffi(x) => &x.span,
+            Self::DataType(x) => x.span(),
+        }
+    }
+}
+
+impl From<ParserDataType> for PotentialNewTypeFfiType {
+    fn from(value: ParserDataType) -> Self {
+        Self::DataType(value.into())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum PotentialNewType {
     NewType {
         identifier: PotentialDollarIdentifier,
         type_def: TypeDefType,
         overloads: Vec<Overload>,
     },
-    DataType(ParserDataType<Node>),
+    DataType(ParserDataType),
+}
+
+impl PotentialNewType {
+    pub fn is_auto(&self) -> bool {
+        match self {
+            Self::DataType(x) => x.is_auto(),
+            _ => false,
+        }
+    }
 }
 
 impl Display for PotentialNewType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::DataType(x) => write!(f, "{}", x),
-            _ => unimplemented!(),
+            Self::NewType { identifier, .. } => write!(f, "type {}", identifier),
         }
     }
 }
@@ -186,32 +397,31 @@ impl PotentialNewType {
     }
 }
 
-impl From<ParserDataType<Node>> for PotentialNewType {
-    fn from(value: ParserDataType<Node>) -> Self {
+impl From<ParserDataType> for PotentialNewType {
+    fn from(value: ParserDataType) -> Self {
         Self::DataType(value)
     }
 }
 
-impl<T: Display + PartialEq> Display for ParserDataType<T> {
+impl Display for ParserDataType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.data_type)
     }
 }
 
-impl<T: Display + PartialEq> Display for ParserInnerType<T>
-where
-    ParserDataType<T>: std::fmt::Display,
-{
+impl Display for ParserInnerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Float => write!(f, "float"),
             Self::Int => write!(f, "int"),
+            Self::UInt => write!(f, "uint"),
             Self::Null => write!(f, "null"),
             Self::Dynamic => write!(f, "dyn"),
             Self::Bool => write!(f, "bool"),
             Self::Str => write!(f, "str"),
             Self::Char => write!(f, "char"),
             Self::Range => write!(f, "range"),
+            Self::Auto(_) => write!(f, "auto"),
             Self::DollarIdentifier(x) => write!(f, "${}", x),
             Self::Ref(typ, mutability) => {
                 write!(f, "{}", mutability.fmt_with_val(&typ.to_string()))
@@ -219,6 +429,7 @@ where
             Self::Result { err, ok } => write!(f, "{}!{}", err, ok),
             Self::Option(x) => write!(f, "{}?", x),
             Self::NativeFunction(x) => write!(f, "native -> {}", x),
+            Self::Ptr(x) => write!(f, "ptr:<{}>", x),
             Self::Struct(x) => write!(f, "{}", x),
             Self::StructWithGenerics {
                 identifier,
@@ -299,7 +510,6 @@ where
 
                 write!(f, "{}", txt)
             }
-            Self::Comp { stage, body } => write!(f, "comp, {} {}", stage, body),
         }
     }
 }
@@ -320,6 +530,21 @@ pub enum PotentialGenericTypeIdentifier {
         identifier: PotentialDollarIdentifier,
         generic_types: Vec<PotentialNewType>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PotentialFfiDataType {
+    Ffi(ParserFfiDataType),
+    Normal(ParserDataType),
+}
+
+impl Display for PotentialFfiDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ffi(x) => write!(f, "@{}", x),
+            Self::Normal(x) => write!(f, "{}", x),
+        }
+    }
 }
 
 impl Display for PotentialGenericTypeIdentifier {
@@ -405,7 +630,7 @@ impl PotentialGenericTypeIdentifier {
     }
 }
 
-impl<T> FromStr for ParserInnerType<T> {
+impl FromStr for ParserInnerType {
     type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
@@ -416,35 +641,63 @@ impl<T> FromStr for ParserInnerType<T> {
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
             "null" => Self::Null,
+            "auto" => Self::Auto(None),
             _ => Self::Struct(s.to_string()),
         })
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObjectType<T> {
-    Map(HashMap<String, T>),
+    Map(Vec<(String, T)>),
     Tuple(Vec<T>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ObjectMap<T>(pub HashMap<String, T>);
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DestructurePattern {
+    Tuple(Vec<Option<(VarType, PotentialDollarIdentifier)>>),
+    Struct(Vec<(String, VarType, PotentialDollarIdentifier)>),
+}
 
-impl<T> From<HashMap<String, T>> for ObjectMap<T> {
-    fn from(value: HashMap<String, T>) -> Self {
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ObjectMap<T>(pub Vec<(String, T)>);
+
+impl<T> ObjectMap<T> {
+    pub fn get(&self, key: &str) -> Option<&T> {
+        self.0.iter().find(|x| &x.0 == key).map(|x| &x.1)
+    }
+
+    pub fn remove(&mut self, key: &str) -> Option<T> {
+        let index = self.0.iter().position(|x| &x.0 == key)?;
+        Some(self.0.remove(index).1)
+    }
+
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.0.iter().find(|x| &x.0 == key).is_some()
+    }
+}
+
+impl<T> From<FxHashMap<String, T>> for ObjectMap<T> {
+    fn from(value: FxHashMap<String, T>) -> Self {
+        Self(value.into_iter().collect())
+    }
+}
+
+impl<T> From<Vec<(String, T)>> for ObjectMap<T> {
+    fn from(value: Vec<(String, T)>) -> Self {
         Self(value)
     }
 }
 
 impl<T> From<Vec<T>> for ObjectMap<T> {
     fn from(value: Vec<T>) -> Self {
-        let mut map = HashMap::new();
-
-        for (i, v) in value.into_iter().enumerate() {
-            map.insert(i.to_string(), v);
-        }
-
-        Self(map)
+        Self(
+            value
+                .into_iter()
+                .enumerate()
+                .map(|x| (x.0.to_string(), x.1))
+                .collect(),
+        )
     }
 }
 
@@ -458,7 +711,7 @@ impl<T> From<ObjectType<T>> for ObjectMap<T> {
 }
 
 impl<T> Deref for ObjectMap<T> {
-    type Target = HashMap<String, T>;
+    type Target = Vec<(String, T)>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -471,7 +724,7 @@ impl<T> DerefMut for ObjectMap<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VarType {
     Mutable,
     Immutable,
@@ -514,7 +767,7 @@ pub struct Node {
     pub span: Span,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ParserText {
     pub text: String,
     pub span: Span,
@@ -525,7 +778,7 @@ impl From<Token> for ParserText {
         Self::new(value.span, value.value)
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum PotentialDollarIdentifier {
     DollarIdentifier(ParserText),
     Identifier(ParserText),
@@ -627,6 +880,7 @@ pub enum MatchArmType {
         value: PotentialDollarIdentifier,
         var_type: VarType,
         name: Option<PotentialDollarIdentifier>,
+        destructure: Option<DestructurePattern>,
     },
     Let {
         var_type: VarType,
@@ -660,21 +914,6 @@ pub struct NamedScope {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum CompStage {
-    Wildcard,
-    Specific(usize),
-}
-
-impl Display for CompStage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Specific(x) => write!(f, "{}", x),
-            Self::Wildcard => write!(f, "_"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
 pub struct Overload {
     pub operator: ParserText,
     pub body: Box<Node>,
@@ -702,6 +941,7 @@ pub struct FunctionHeader {
     pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
     pub return_type: PotentialNewType,
     pub is_async: bool,
+    pub param_destructures: Vec<(PotentialDollarIdentifier, DestructurePattern)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -724,13 +964,10 @@ pub enum NodeType {
     Break,
     Continue,
     EmptyLine,
+    Null,
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
-    },
-    Comp {
-        stage: CompStage,
-        body: Box<Node>,
     },
     Identifier(PotentialGenericTypeIdentifier),
     DataType {
@@ -739,6 +976,15 @@ pub enum NodeType {
     DerefStatement {
         value: Box<Node>,
     },
+    Drop(PotentialDollarIdentifier),
+    Move(PotentialDollarIdentifier),
+    MoveExpression {
+        value: Box<Node>,
+    },
+    Defer {
+        value: Box<Node>,
+        function: bool,
+    },
     ParenExpression {
         value: Box<Node>,
     },
@@ -746,11 +992,11 @@ pub enum NodeType {
         var_type: VarType,
         identifier: PotentialDollarIdentifier,
         value: Box<Node>,
-        data_type: Option<PotentialNewType>,
+        data_type: PotentialNewType,
     },
     ImplDeclaration {
         identifier: PotentialGenericTypeIdentifier,
-        functions: Vec<Node>,
+        variables: Vec<Node>,
     },
     TypeDeclaration {
         identifier: PotentialGenericTypeIdentifier,
@@ -761,6 +1007,9 @@ pub enum NodeType {
         identifier: PotentialGenericTypeIdentifier,
         value: PotentialDollarIdentifier,
         data: Option<Box<Node>>,
+    },
+    TupleLiteral {
+        values: Vec<Node>,
     },
     ScopeAlias {
         identifier: PotentialDollarIdentifier,
@@ -775,7 +1024,7 @@ pub enum NodeType {
         define: bool,
     },
     MatchStatement {
-        value: Box<Node>,
+        value: Option<Box<Node>>,
         body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
     },
     FnMatchDeclaration {
@@ -786,8 +1035,25 @@ pub enum NodeType {
         header: FunctionHeader,
         body: Box<Node>,
     },
+    ExternFunctionDeclaration {
+        abi: String,
+        identifier: PotentialDollarIdentifier,
+        parameters: Vec<PotentialFfiDataType>,
+        return_type: PotentialFfiDataType,
+        library: String,
+        symbol: Option<String>,
+    },
     AssignmentExpression {
         identifier: Box<Node>,
+        value: Box<Node>,
+    },
+    DestructureDeclaration {
+        var_type: VarType,
+        pattern: DestructurePattern,
+        value: Box<Node>,
+    },
+    DestructureAssignment {
+        pattern: DestructurePattern,
         value: Box<Node>,
     },
     NotExpression {
@@ -813,7 +1079,7 @@ pub enum NodeType {
         inclusive: bool,
     },
     IterExpression {
-        data_type: Option<PotentialNewType>,
+        data_type: PotentialNewType,
         map: Box<Node>,
         loop_type: Box<LoopType>,
         conditionals: Vec<Node>,
@@ -835,7 +1101,7 @@ pub enum NodeType {
         condition: Box<Node>,
     },
     StringLiteral(ParserText),
-    ListLiteral(Option<PotentialNewType>, Vec<Node>),
+    ListLiteral(PotentialNewType, Vec<Node>),
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(i64),
@@ -850,6 +1116,7 @@ pub enum NodeType {
         caller: Box<Node>,
         generic_types: Vec<PotentialNewType>,
         args: Vec<CallArg>,
+        reverse_args: Vec<Node>,
     },
     BinaryExpression {
         left: Box<Node>,
@@ -859,13 +1126,13 @@ pub enum NodeType {
     ComparisonExpression {
         left: Box<Node>,
         right: Box<Node>,
-        operator: Comparison,
+        operator: ComparisonOperator,
     },
     PipeExpression(Vec<PipeSegment>),
     BooleanExpression {
         left: Box<Node>,
         right: Box<Node>,
-        operator: BooleanOperation,
+        operator: BooleanOperator,
     },
     IfStatement {
         comparison: Box<IfComparisonType>,
@@ -940,12 +1207,12 @@ impl Into<Node> for PipeSegment {
 impl NodeType {
     pub fn unwrap(self) -> NodeType {
         match self {
-            NodeType::ParenExpression { value } => value.node_type.unwrap(),
+            NodeType::ParenExpression { value } => value.node_type,
             NodeType::ScopeDeclaration {
                 body: Some(mut body),
                 create_new_scope: Some(false),
                 ..
-            } if body.len() == 1 => body.remove(0).node_type.unwrap(),
+            } if body.len() == 1 => body.remove(0).node_type,
             _ => self,
         }
     }
@@ -1065,8 +1332,8 @@ impl<T: PartialEq> PartialOrd for ObjectMap<T> {
 impl<T: PartialEq + ToString> ToString for ObjectMap<T> {
     fn to_string(&self) -> String {
         if !self.0.is_empty() {
-            if self.0.get("0").is_some() {
-                let lst: Vec<&T> = self.0.iter().map(|x| x.1).collect();
+            if self.get("0").is_some() {
+                let lst: Vec<&T> = self.0.iter().map(|x| &x.1).collect();
                 return print_list(&lst, '(', ')');
             }
         }

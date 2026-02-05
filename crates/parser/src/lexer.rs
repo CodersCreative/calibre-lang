@@ -1,17 +1,17 @@
 use crate::ast::{
     binary::BinaryOperator,
-    comparison::{BooleanOperation, Comparison},
+    comparison::{BooleanOperator, ComparisonOperator},
 };
-use miette::Diagnostic;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Display, path::PathBuf};
 use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Location {
     pub path: PathBuf,
     pub span: Span,
 }
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 pub struct Span {
     pub from: Position,
     pub to: Position,
@@ -40,7 +40,7 @@ impl Span {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 pub struct Position {
     pub line: u32,
     pub col: u32,
@@ -48,22 +48,14 @@ pub struct Position {
 
 pub struct Tokenizer {
     pub include_comments: bool,
-    lines: Vec<String>,
     line: u32,
     col: u32,
 }
 
-#[derive(Error, Debug, Clone, Diagnostic)]
+#[derive(Error, Debug, Clone)]
 pub enum LexerError {
-    #[error("Unrecognized character : '{ch}'")]
-    #[diagnostic(code(lexer::unrecognized))]
-    Unrecognized {
-        #[source_code]
-        line: String,
-        #[label("here")]
-        span: (usize, usize),
-        ch: char,
-    },
+    #[error("Unrecognized character: '{ch}'")]
+    Unrecognized { span: Span, ch: char },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -84,6 +76,7 @@ pub enum StopValue {
 pub enum TokenType {
     Float,
     Integer,
+    Null,
     String,
     Char,
     ColonAngled,
@@ -97,11 +90,11 @@ pub enum TokenType {
     DoubleColon,
     Comment,
     Comma,
-    Comparison(Comparison),
-    Boolean(BooleanOperation),
+    Comparison(ComparisonOperator),
+    Boolean(BooleanOperator),
     BinaryOperator(BinaryOperator),
     BinaryAssign(BinaryOperator),
-    BooleanAssign(BooleanOperation),
+    BooleanAssign(BooleanOperator),
     Stop(StopValue),
     Not,
     Ref,
@@ -135,27 +128,35 @@ pub enum TokenType {
     FullStop,
     EOL,
     EOF,
-    Comp,
     Struct,
     Else,
+    PipeParen,
     Pipe,
     From,
     Import,
     Type,
     WhiteSpace,
     Debug,
+    Drop,
+    Move,
+    Defer,
+    Extern,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("until"), TokenType::Stop(StopValue::Until)),
         (String::from("mut"), TokenType::Mut),
+        (String::from("null"), TokenType::Null),
         (String::from("const"), TokenType::Const),
         (String::from("let"), TokenType::Let),
         (String::from("enum"), TokenType::Enum),
         (String::from("match"), TokenType::Match),
         (String::from("obj"), TokenType::Object),
         (String::from("fn"), TokenType::Func),
+        (String::from("drop"), TokenType::Drop),
+        (String::from("move"), TokenType::Move),
+        (String::from("defer"), TokenType::Defer),
         (String::from("else"), TokenType::Else),
         (String::from("list"), TokenType::List),
         (String::from("debug"), TokenType::Debug),
@@ -179,7 +180,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("import"), TokenType::Import),
         (String::from("from"), TokenType::From),
         (String::from("type"), TokenType::Type),
-        (String::from("comp"), TokenType::Comp),
+        (String::from("extern"), TokenType::Extern),
     ])
 }
 
@@ -187,6 +188,7 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
     HashMap::from([
         (String::from("->"), TokenType::Arrow),
         (String::from("|>"), TokenType::Pipe),
+        (String::from("<("), TokenType::PipeParen),
         (String::from("|:"), TokenType::OrColon),
         (String::from("<-"), TokenType::LeftArrow),
         (String::from("=>"), TokenType::FatArrow),
@@ -215,27 +217,27 @@ pub fn special_keywords() -> HashMap<String, TokenType> {
         ),
         (
             String::from("&&="),
-            TokenType::BooleanAssign(BooleanOperation::And),
+            TokenType::BooleanAssign(BooleanOperator::And),
         ),
         (
             String::from("||="),
-            TokenType::BooleanAssign(BooleanOperation::Or),
+            TokenType::BooleanAssign(BooleanOperator::Or),
         ),
-        (
-            String::from("&&"),
-            TokenType::Boolean(BooleanOperation::And),
-        ),
-        (String::from("||"), TokenType::Boolean(BooleanOperation::Or)),
+        (String::from("&&"), TokenType::Boolean(BooleanOperator::And)),
+        (String::from("||"), TokenType::Boolean(BooleanOperator::Or)),
         (
             String::from("|="),
             TokenType::BinaryAssign(BinaryOperator::BitOr),
         ),
         (String::from("@overload"), TokenType::Overload),
         (String::from("&mut"), TokenType::RefMut),
-        (String::from("=="), TokenType::Comparison(Comparison::Equal)),
+        (
+            String::from("=="),
+            TokenType::Comparison(ComparisonOperator::Equal),
+        ),
         (
             String::from("!="),
-            TokenType::Comparison(Comparison::NotEqual),
+            TokenType::Comparison(ComparisonOperator::NotEqual),
         ),
     ])
 }
@@ -250,7 +252,6 @@ pub struct Token {
 impl Default for Tokenizer {
     fn default() -> Self {
         Self {
-            lines: Vec::new(),
             include_comments: false,
             line: 1,
             col: 1,
@@ -261,7 +262,6 @@ impl Default for Tokenizer {
 impl Tokenizer {
     pub fn new(include_comments: bool) -> Self {
         Self {
-            lines: Vec::new(),
             include_comments,
             line: 1,
             col: 1,
@@ -300,21 +300,30 @@ impl Tokenizer {
 
     fn get_unrecognized(&self, ch: char) -> LexerError {
         LexerError::Unrecognized {
-            line: self.lines.get(self.line as usize - 1).unwrap().clone(),
-            span: (self.col as usize, 1),
+            span: Span {
+                from: Position {
+                    line: self.line,
+                    col: self.col,
+                },
+                to: Position {
+                    line: self.line,
+                    col: self.col.saturating_add(1),
+                },
+            },
             ch,
         }
     }
 
-    pub fn tokenize(&mut self, txt: String) -> Result<Vec<Token>, LexerError> {
+    pub fn tokenize(&mut self, txt: &str) -> Result<Vec<Token>, LexerError> {
         let mut tokens: Vec<Token> = Vec::new();
         let mut buffer: Vec<char> = txt.chars().collect();
         self.line = 1;
         self.col = 1;
-        self.lines = txt.split('\n').map(|x| x.to_string()).collect();
 
-        while buffer.len() > 0 {
-            let first = buffer.first().unwrap();
+        while !buffer.is_empty() {
+            let Some(first) = buffer.first() else {
+                break;
+            };
 
             let get_token = |c: char| -> Option<TokenType> {
                 match c {
@@ -330,16 +339,16 @@ impl Tokenizer {
                     '&' => Some(TokenType::Ref),
                     '$' => Some(TokenType::Dollar),
                     '?' => Some(TokenType::Question),
-                    '<' | '>' => Some(TokenType::Comparison(
-                        Comparison::from_operator(&c.to_string()).unwrap(),
-                    )),
+                    '<' | '>' => {
+                        ComparisonOperator::from_operator(&c.to_string()).map(TokenType::Comparison)
+                    }
                     '.' => Some(TokenType::FullStop),
                     ':' => Some(TokenType::Colon),
                     '=' => Some(TokenType::Equals),
                     '!' => Some(TokenType::Not),
-                    '+' | '-' | '*' | '/' | '^' | '%' => Some(TokenType::BinaryOperator(
-                        BinaryOperator::from_symbol(&c.to_string()).unwrap(),
-                    )),
+                    '+' | '-' | '*' | '/' | '^' | '%' => {
+                        BinaryOperator::from_symbol(&c.to_string()).map(TokenType::BinaryOperator)
+                    }
                     ';' => Some(TokenType::EOL),
                     _ if c.is_whitespace() => Some(TokenType::WhiteSpace),
                     _ => None,
@@ -356,17 +365,13 @@ impl Tokenizer {
                     TokenType::FullStop => {
                         self.increment_line_col(first);
                         let value = buffer.remove(0).to_string();
+                        let needs_space = tokens
+                            .last()
+                            .map(|t| t.token_type == TokenType::WhiteSpace)
+                            .unwrap_or(false);
                         Some(self.new_token(
                             t,
-                            &format!(
-                                "{}{}",
-                                if tokens.last().unwrap().token_type == TokenType::WhiteSpace {
-                                    String::from(" ")
-                                } else {
-                                    String::new()
-                                },
-                                value.trim()
-                            ),
+                            &format!("{}{}", if needs_space { " " } else { "" }, value.trim()),
                         ))
                     }
                     t => {
@@ -411,7 +416,9 @@ impl Tokenizer {
                         let mut number = String::new();
                         let mut is_int = true;
 
-                        while buffer.len() > 0 && (buffer[0].is_numeric() || buffer[0] == '.') {
+                        while buffer.len() > 0
+                            && (buffer[0].is_numeric() || buffer[0] == '.' || buffer[0] == '_')
+                        {
                             if buffer[0] == '.' {
                                 if buffer[1] == '.' {
                                     break;
@@ -429,11 +436,14 @@ impl Tokenizer {
                             is_int = false;
                         }
 
-                        if is_int {
-                            Some(self.new_token(TokenType::Integer, number.trim()))
+                        let mut token = if is_int {
+                            self.new_token(TokenType::Integer, number.trim())
                         } else {
-                            Some(self.new_token(TokenType::Float, number.trim()))
-                        }
+                            self.new_token(TokenType::Float, number.trim())
+                        };
+
+                        token.value = number.replace("_", "");
+                        Some(token)
                     } else if first.is_alphabetic()
                         || first == &'_'
                         || first.to_uppercase().to_string().trim()
@@ -551,6 +561,11 @@ impl Tokenizer {
     }
 }
 
+pub fn tokenize(input: impl AsRef<str>) -> Result<Vec<Token>, LexerError> {
+    let mut tokenizer = Tokenizer::default();
+    tokenizer.tokenize(input.as_ref())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -565,7 +580,7 @@ mod tests {
             TokenType::Integer,
             TokenType::If,
             TokenType::Identifier,
-            TokenType::Comparison(Comparison::Greater),
+            TokenType::Comparison(ComparisonOperator::Greater),
             TokenType::Integer,
             TokenType::Open(Bracket::Curly),
             TokenType::Identifier,
@@ -630,11 +645,11 @@ mod tests {
         let fin_tokens = vec![
             TokenType::If,
             TokenType::Identifier,
-            TokenType::Comparison(Comparison::GreaterEqual),
+            TokenType::Comparison(ComparisonOperator::GreaterEqual),
             TokenType::Integer,
-            TokenType::Boolean(BooleanOperation::And),
+            TokenType::Boolean(BooleanOperator::And),
             TokenType::Identifier,
-            TokenType::Comparison(Comparison::LesserEqual),
+            TokenType::Comparison(ComparisonOperator::LesserEqual),
             TokenType::Integer,
             TokenType::Open(Bracket::Curly),
             TokenType::Stop(StopValue::Return),

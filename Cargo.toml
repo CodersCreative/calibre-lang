@@ -3,8 +3,39 @@ resolver = "2"
 members = [
     "cal",
     "lsp",
-    "crates/interpreter",
     "crates/parser",
-    "crates/cranelift",
-    "crates/common", "fmt", "crates/mir", "crates/std", "crates/comptime", "crates/mir-ty", "crates/lir",
+    "crates/cranelift", "fmt", "crates/mir", "crates/std", "crates/lir", "crates/vm",
+    "crates/diagnostics",
 ]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+authors = ["Creative Coders <officialccoders@gmail.com>"]
+description = "A high-level c-style language made entirely within rust."
+repository = "https://github.com/CodersCreative/calibre-lang"
+readme = "README.md"
+keywords = ["language", "scripting", "embed"]
+categories = ["parsing", "compilers"]
+license = "MIT"
+
+
+[workspace.dependencies]
+# Internal packages
+calibre-mir = {path="./crates/mir"}
+calibre-lir = {path="./crates/lir"}
+calibre-vm = {path="./crates/vm"}
+calibre-diagnostics = {path="./crates/diagnostics"}
+calibre-parser = {path="./crates/parser"}
+calibre-std = {path="./crates/std"}
+cal-fmt = {path = "./fmt"}
+
+# Other common packages
+rand = "0.9.2"
+rustc-hash = "2.1.1"
+codespan-reporting = "0.13.1"
+serde = {version = "1.0.219", features = ["derive"]}
+thiserror = "2.0.12"
+rustyline = "16.0.0"
+miette = { version = "7.6.0", features = ["fancy"] }
