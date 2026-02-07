@@ -22,6 +22,39 @@ struct BytecodeCache {
     registry: VMRegistry,
 }
 
+fn emit_middle_error(path: &Path, contents: &str, err: &MiddleErr) {
+    match err {
+        MiddleErr::Multiple(errors) => {
+            for err in errors {
+                emit_middle_error(path, contents, err);
+            }
+        }
+        MiddleErr::At(span, inner) => {
+            calibre_diagnostics::emit_error(path, contents, inner.to_string(), Some(*span));
+        }
+        MiddleErr::ParserErrors {
+            path: err_path,
+            contents,
+            errors,
+        } => {
+            calibre_diagnostics::emit_parser_errors(err_path, contents, errors);
+        }
+        MiddleErr::LexerError {
+            path: err_path,
+            contents,
+            error,
+        } => {
+            let span = match error {
+                calibre_parser::lexer::LexerError::Unrecognized { span, .. } => Some(*span),
+            };
+            calibre_diagnostics::emit_error(err_path, contents, error.to_string(), span);
+        }
+        other => {
+            calibre_diagnostics::emit_error(path, contents, other.to_string(), None);
+        }
+    }
+}
+
 async fn run_source(
     contents: String,
     path: &Path,
@@ -99,37 +132,16 @@ async fn run_source(
         return Err(miette::miette!("parse failed"));
     }
 
-    let middle_result = match MiddleEnvironment::new_and_evaluate(program, path.to_path_buf()) {
-        Ok(result) => result,
-        Err(err) => {
-            match err {
-                MiddleErr::At(span, inner) => {
-                    calibre_diagnostics::emit_error(path, &contents, inner.to_string(), Some(span));
-                }
-                MiddleErr::ParserErrors {
-                    path: err_path,
-                    contents,
-                    errors,
-                } => {
-                    calibre_diagnostics::emit_parser_errors(&err_path, &contents, &errors);
-                }
-                MiddleErr::LexerError {
-                    path: err_path,
-                    contents,
-                    error,
-                } => {
-                    let span = match &error {
-                        calibre_parser::lexer::LexerError::Unrecognized { span, .. } => Some(*span),
-                    };
-                    calibre_diagnostics::emit_error(&err_path, &contents, error.to_string(), span);
-                }
-                other => {
-                    calibre_diagnostics::emit_error(path, &contents, other.to_string(), None);
-                }
-            }
-            return Err(miette::miette!("compile failed"));
-        }
-    };
+    let (mut env, scope, middle_node) =
+        MiddleEnvironment::new_and_evaluate(program, path.to_path_buf());
+
+    let mir_errors = env.take_errors();
+    if !mir_errors.is_empty() {
+        emit_middle_error(path, &contents, &MiddleErr::Multiple(mir_errors));
+        return Err(miette::miette!("compile failed"));
+    }
+
+    let middle_result = (env, scope, middle_node);
 
     let entry_name = entry_name;
     let main_name = if let Some(ref entry_name) = entry_name {
@@ -255,37 +267,39 @@ async fn run_repl_source(contents: String, path: &Path) -> Result<Option<Runtime
         return Err(miette::miette!("parse failed"));
     }
 
-    let middle_result = match MiddleEnvironment::new_and_evaluate(program, path.to_path_buf()) {
-        Ok(result) => result,
-        Err(err) => {
-            match err {
-                MiddleErr::At(span, inner) => {
-                    calibre_diagnostics::emit_error(path, &contents, inner.to_string(), Some(span));
-                }
-                MiddleErr::ParserErrors {
-                    path: err_path,
-                    contents,
-                    errors,
-                } => {
-                    calibre_diagnostics::emit_parser_errors(&err_path, &contents, &errors);
-                }
-                MiddleErr::LexerError {
-                    path: err_path,
-                    contents,
-                    error,
-                } => {
-                    let span = match &error {
-                        calibre_parser::lexer::LexerError::Unrecognized { span, .. } => Some(*span),
-                    };
-                    calibre_diagnostics::emit_error(&err_path, &contents, error.to_string(), span);
-                }
-                other => {
-                    calibre_diagnostics::emit_error(path, &contents, other.to_string(), None);
-                }
+    let (mut env, scope, middle_node) =
+        MiddleEnvironment::new_and_evaluate(program, path.to_path_buf());
+
+    let mir_errors = env.take_errors();
+    if !mir_errors.is_empty() {
+        match MiddleErr::Multiple(mir_errors) {
+            MiddleErr::At(span, inner) => {
+                calibre_diagnostics::emit_error(path, &contents, inner.to_string(), Some(span));
             }
-            return Err(miette::miette!("compile failed"));
+            MiddleErr::ParserErrors {
+                path: err_path,
+                contents,
+                errors,
+            } => {
+                calibre_diagnostics::emit_parser_errors(&err_path, &contents, &errors);
+            }
+            MiddleErr::LexerError {
+                path: err_path,
+                contents,
+                error,
+            } => {
+                let span = match &error {
+                    calibre_parser::lexer::LexerError::Unrecognized { span, .. } => Some(*span),
+                };
+                calibre_diagnostics::emit_error(&err_path, &contents, error.to_string(), span);
+            }
+            other => {
+                calibre_diagnostics::emit_error(path, &contents, other.to_string(), None);
+            }
         }
-    };
+        return Err(miette::miette!("compile failed"));
+    }
+    let middle_result = (env, scope, middle_node);
 
     let lir_result = LirEnvironment::lower_with_root(
         &middle_result.0,

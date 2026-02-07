@@ -7,7 +7,7 @@ use calibre_parser::{
 };
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum MiddleErr {
     #[error("{0}")]
     At(Span, Box<MiddleErr>),
@@ -49,4 +49,6 @@ pub enum MiddleErr {
         contents: String,
         error: LexerError,
     },
+    #[error("Multiple middle errors")]
+    Multiple(Vec<MiddleErr>),
 }

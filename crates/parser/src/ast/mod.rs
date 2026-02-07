@@ -286,6 +286,10 @@ impl ParserDataType {
             span: self.span,
         }
     }
+
+    pub fn contains_auto(&self) -> bool {
+        self.data_type.contains_auto()
+    }
 }
 
 impl From<ParserFfiDataType> for ParserDataType {
@@ -316,6 +320,28 @@ impl ParserInnerType {
         match self {
             Self::List(_) => true,
             Self::Ref(x, _) => x.is_list(),
+            _ => false,
+        }
+    }
+
+    pub fn contains_auto(&self) -> bool {
+        match self {
+            ParserInnerType::Auto(_) => true,
+            ParserInnerType::Tuple(xs) => xs.iter().any(|x| x.contains_auto()),
+            ParserInnerType::List(x) => x.contains_auto(),
+            ParserInnerType::Ptr(x) => x.contains_auto(),
+            ParserInnerType::Option(x) => x.contains_auto(),
+            ParserInnerType::Result { ok, err } => ok.contains_auto() || err.contains_auto(),
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+                ..
+            } => return_type.contains_auto() || parameters.iter().any(|x| x.contains_auto()),
+            ParserInnerType::Ref(x, _) => x.contains_auto(),
+            ParserInnerType::StructWithGenerics { generic_types, .. } => {
+                generic_types.iter().any(|x| x.contains_auto())
+            }
+            ParserInnerType::Scope(x) => x.iter().any(|x| x.contains_auto()),
             _ => false,
         }
     }

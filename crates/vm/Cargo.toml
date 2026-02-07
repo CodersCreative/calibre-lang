@@ -20,5 +20,5 @@ thiserror = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 dumpster = "2.0.0"
-libloading = "0.8"
-libffi = "3.2.0"
+libloading = "0.9"
+libffi = "4"

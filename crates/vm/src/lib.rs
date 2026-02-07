@@ -12,8 +12,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 pub mod conversion;
 pub mod error;
 pub mod native;
-pub mod serde_fxhashmap;
-pub mod serde_fxhashmap_rc;
+pub mod serialization;
 pub mod value;
 
 pub struct VMStack {

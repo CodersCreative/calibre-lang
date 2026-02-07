@@ -71,7 +71,7 @@ impl FromStr for Operator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct MiddleEnvironment {
     pub scope_counter: u64,
     pub scopes: FxHashMap<u64, MiddleScope>,
@@ -88,6 +88,7 @@ pub struct MiddleEnvironment {
     pub fn_specializations: FxHashMap<String, String>,
     pub specialization_decls_by_scope: FxHashMap<u64, Vec<MiddleNode>>,
     pub current_location: Option<Location>,
+    pub errors: Vec<MiddleErr>,
 }
 
 fn empty_scope() -> &'static MiddleScope {
@@ -163,7 +164,18 @@ impl MiddleEnvironment {
             fn_specializations: FxHashMap::default(),
             specialization_decls_by_scope: FxHashMap::default(),
             current_location: None,
+            errors: Vec::new(),
         }
+    }
+
+    pub fn push_error(&mut self, err: MiddleErr) {
+        if !self.errors.contains(&err) {
+            self.errors.push(err);
+        }
+    }
+
+    pub fn take_errors(&mut self) -> Vec<MiddleErr> {
+        std::mem::take(&mut self.errors)
     }
 
     fn canonical_type_key(dt: &ParserDataType) -> String {
@@ -396,7 +408,9 @@ impl MiddleEnvironment {
             },
         );
 
-        if let Ok(mn) = self.evaluate(&decl_scope, decl_node) {
+        let errors_before = self.errors.len();
+        let mn = self.evaluate(&decl_scope, decl_node);
+        if self.errors.len() == errors_before {
             self.specialization_decls_by_scope
                 .entry(decl_scope)
                 .or_default()
@@ -568,14 +582,11 @@ impl MiddleEnvironment {
         }
     }
 
-    pub fn new_and_evaluate(
-        node: Node,
-        path: PathBuf,
-    ) -> Result<(Self, u64, MiddleNode), MiddleErr> {
+    pub fn new_and_evaluate(node: Node, path: PathBuf) -> (Self, u64, MiddleNode) {
         let mut env = Self::new();
         let scope = env.new_scope_with_stdlib(None, path, None);
         let mut same = 0;
-        let mut middle = env.evaluate(&scope, node.clone())?;
+        let mut middle = env.evaluate(&scope, node.clone());
 
         for _ in 0..5 {
             let before_vars: Vec<(String, calibre_parser::ast::ParserDataType)> = env
@@ -592,7 +603,7 @@ impl MiddleEnvironment {
                 .map(|(k, v)| (k.clone(), v.data_type.clone()))
                 .collect();
 
-            let new_middle = env.evaluate(&scope, node.clone())?;
+            let new_middle = env.evaluate(&scope, node.clone());
 
             let old_str = middle.to_string();
             let new_str = new_middle.to_string();
@@ -630,6 +641,7 @@ impl MiddleEnvironment {
                                 body,
                                 create_new_scope: false,
                                 is_temp: false,
+                                scope_id: scope,
                             },
                             middle_span,
                         );
@@ -638,7 +650,7 @@ impl MiddleEnvironment {
             }
         }
 
-        Ok((env, scope, middle))
+        (env, scope, middle)
     }
 
     fn apply_inferred_types_to_middlenode(&mut self, scope: &u64, node: &mut MiddleNode) {
@@ -1427,7 +1439,7 @@ impl MiddleEnvironment {
         let parent_name = path.file_name().unwrap();
         let folder = path.parent().unwrap().to_path_buf();
 
-        let extra = if parent_name == "main.cl" || parent_name == "mod.cl" {
+        let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
             String::new()
         } else {
             format!(
@@ -1437,7 +1449,7 @@ impl MiddleEnvironment {
         };
 
         let mut path1 = folder.clone();
-        path1 = path1.join(format!("{extra}{namespace}/build.cl"));
+        path1 = path1.join(format!("{extra}{namespace}/build.cal"));
 
         if path1.exists() {
             Some(self.new_scope(Some(parent), path1, Some(namespace)))
@@ -1455,7 +1467,7 @@ impl MiddleEnvironment {
         let parent_name = path.file_name().unwrap();
         let folder = path.parent().unwrap().to_path_buf();
 
-        let extra = if parent_name == "main.cl" || parent_name == "mod.cl" {
+        let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
             String::new()
         } else {
             format!(
@@ -1465,13 +1477,13 @@ impl MiddleEnvironment {
         };
 
         let mut path1 = folder.clone();
-        path1 = path1.join(format!("{extra}{namespace}.cl"));
+        path1 = path1.join(format!("{extra}{namespace}.cal"));
 
         let mut path2 = folder.clone();
-        path2 = path2.join(format!("{extra}{namespace}/main.cl"));
+        path2 = path2.join(format!("{extra}{namespace}/main.cal"));
 
         let mut path3 = folder.clone();
-        path3 = path3.join(format!("{extra}{namespace}/mod.cl"));
+        path3 = path3.join(format!("{extra}{namespace}/mod.cal"));
 
         if path1.exists() {
             self.new_scope(Some(parent), path1, Some(namespace))
@@ -1615,7 +1627,7 @@ impl MiddleEnvironment {
                                 },
                                 _ => program,
                             };
-                            Some(self.evaluate(&scope, program)?)
+                            Some(self.evaluate(&scope, program))
                         } else {
                             None
                         };
@@ -1643,7 +1655,7 @@ impl MiddleEnvironment {
                         });
                     }
 
-                    let node = self.evaluate(&scope, program)?;
+                    let node = self.evaluate(&scope, program);
 
                     let node = match (node.node_type.clone(), build_node) {
                         (MiddleNodeType::ScopeDeclaration { mut body, .. }, Some(build_node)) => {
@@ -1655,6 +1667,7 @@ impl MiddleEnvironment {
                                     },
                                     create_new_scope: true,
                                     is_temp: false,
+                                    scope_id: scope,
                                 },
                                 ..node
                             }
@@ -1664,6 +1677,7 @@ impl MiddleEnvironment {
                                 body: vec![node, build_node],
                                 create_new_scope: false,
                                 is_temp: false,
+                                scope_id: scope,
                             },
                             self.current_span(),
                         ),

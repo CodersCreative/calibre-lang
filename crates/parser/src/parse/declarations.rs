@@ -110,9 +110,16 @@ impl Parser {
 
         if !library.is_empty() {
             if let Some(base) = self.source_path.as_ref().and_then(|p| p.parent()) {
-                let candidate = base.join(&library);
-                if candidate.exists() {
-                    library = candidate.to_string_lossy().to_string();
+                let candidates = [
+                    base.join(&library),
+                    base.join(library.trim_start().trim_start_matches("./")),
+                ];
+
+                for candidate in candidates {
+                    if candidate.exists() {
+                        library = candidate.to_string_lossy().to_string();
+                        break;
+                    }
                 }
             }
         } else {

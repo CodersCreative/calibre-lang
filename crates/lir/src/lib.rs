@@ -95,11 +95,14 @@ impl Display for LirFunction {
         for param in &self.params {
             txt.push_str(&format!("{} : {}, ", param.0, param.1));
         }
+
         txt = txt.trim_end().trim_end_matches(",").to_string();
         txt.push_str(&format!(") -> {}:", self.return_type));
+
         for block in &self.blocks {
             txt.push_str(&format!("\n{}", block).replace("\n", "\n\t"));
         }
+
         write!(f, "{}", txt)
     }
 }
@@ -584,6 +587,7 @@ impl<'a> LirEnvironment<'a> {
                 body,
                 return_type,
                 is_async,
+                ..
             } => {
                 let mut captures = Vec::new();
                 let param_names: rustc_hash::FxHashSet<String> = parameters
@@ -692,7 +696,6 @@ impl<'a> LirEnvironment<'a> {
                 parameters,
                 return_type,
             },
-
             MiddleNodeType::EnumExpression {
                 identifier,
                 value,
@@ -721,12 +724,7 @@ impl<'a> LirEnvironment<'a> {
                     } = stmt.node_type.clone()
                     {
                         match value.node_type {
-                            MiddleNodeType::FunctionDeclaration {
-                                parameters: _,
-                                body: _,
-                                return_type: _,
-                                is_async: _,
-                            } => {}
+                            MiddleNodeType::FunctionDeclaration { .. } => {}
                             _ => {
                                 let mut sub_lowerer = LirEnvironment::new(self.env);
 
@@ -795,7 +793,7 @@ impl<'a> LirEnvironment<'a> {
                 self.switch_to(merge_id);
                 LirNodeType::Literal(LirLiteral::Null)
             }
-            MiddleNodeType::LoopDeclaration { state, body } => {
+            MiddleNodeType::LoopDeclaration { state, body, .. } => {
                 let header_id = self.create_block();
                 let body_id = self.create_block();
                 let exit_id = self.create_block();

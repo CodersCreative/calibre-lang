@@ -3,8 +3,7 @@ use crate::{
     values::{RuntimeType, RuntimeValue},
 };
 use calibre_lir::LirNodeType;
-use calibre_mir::ast::MiddleNode;
-use calibre_parser::ast::{Node, comparison::ComparisonOperator};
+use calibre_parser::ast::comparison::ComparisonOperator;
 use cranelift::{codegen::ir::BlockArg, prelude::*};
 
 impl<'a> FunctionTranslator<'a> {
