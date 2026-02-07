@@ -215,6 +215,56 @@ fn print_list<T: Display>(data: &[T], open: char, close: char) -> String {
     txt
 }
 
+impl RuntimeValue {
+    pub fn display(&self, vm: &VM) -> String {
+        match self {
+            Self::Ref(x) => vm.variables.get(x).unwrap().display(vm),
+            Self::SlotRef(x) => vm.current_frame().slots.get(*x).unwrap().display(vm),
+            Self::List(x) => {
+                let lst: Vec<String> = x.0.iter().map(|x| x.display(vm)).collect();
+                print_list(&lst, '[', ']')
+            }
+            Self::Option(Some(x)) => format!("Some : {}", x.display(vm)),
+            Self::Result(Ok(x)) => format!("Ok : {}", x.display(vm)),
+            Self::Result(Err(x)) => format!("Err : {}", x.display(vm)),
+            Self::Aggregate(x, data) => {
+                if x.is_none() {
+                    format!(
+                        "{}",
+                        print_list(
+                            &data
+                                .as_ref()
+                                .0
+                                .0
+                                .iter()
+                                .map(|x| x.1.display(vm))
+                                .collect::<Vec<_>>(),
+                            '(',
+                            ')'
+                        )
+                    )
+                } else if data.as_ref().0.is_empty() {
+                    let name = x.as_deref().unwrap_or("tuple");
+                    format!("{}{{}}", name)
+                } else {
+                    let name = x.as_deref().unwrap_or("tuple");
+                    let mut txt = format!("{}{{\n", name);
+
+                    for val in data.as_ref().0.iter() {
+                        txt.push_str(&format!("\t{} : {},\n", val.0, val.1.display(vm)));
+                    }
+
+                    txt = txt.trim().trim_end_matches(",").trim().to_string();
+                    txt.push('}');
+
+                    format!("{}", txt)
+                }
+            }
+            x => x.to_string(),
+        }
+    }
+}
+
 impl Display for RuntimeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

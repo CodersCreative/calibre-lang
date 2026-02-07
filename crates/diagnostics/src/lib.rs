@@ -1,5 +1,3 @@
-use std::{ops::Range, path::Path};
-
 use calibre_parser::{ParserError, lexer::Span};
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
@@ -7,6 +5,7 @@ use codespan_reporting::{
     term,
     term::termcolor::{ColorChoice, StandardStream},
 };
+use std::{ops::Range, path::Path};
 
 pub fn span_to_range(contents: &str, span: &Span) -> Range<usize> {
     let mut starts = vec![0usize];

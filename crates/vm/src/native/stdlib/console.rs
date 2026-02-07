@@ -33,7 +33,7 @@ impl NativeFunction for Out {
         String::from("out")
     }
 
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         use std::io::{self, Write};
         let stdout = io::stdout();
         let mut handle = stdout.lock();
@@ -41,7 +41,7 @@ impl NativeFunction for Out {
         for arg in args {
             let s = match arg {
                 RuntimeValue::Str(value) => unescape_string(&value),
-                other => other.to_string(),
+                other => other.display(env),
             };
 
             handle
@@ -66,7 +66,7 @@ impl NativeFunction for ErrFn {
         String::from("err")
     }
 
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         use std::io::{self, Write};
         let stderr = io::stderr();
         let mut handle = stderr.lock();
@@ -74,7 +74,7 @@ impl NativeFunction for ErrFn {
         for arg in args {
             let s = match arg {
                 RuntimeValue::Str(value) => unescape_string(&value),
-                other => other.to_string(),
+                other => other.display(env),
             };
 
             handle
