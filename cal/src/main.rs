@@ -2,7 +2,7 @@ use calibre_diagnostics;
 use calibre_lir::LirEnvironment;
 use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr};
 use calibre_parser::lexer::Tokenizer;
-use calibre_vm::{VM, conversion::VMRegistry, value::RuntimeValue};
+use calibre_vm::{VM, config::VMConfig, conversion::VMRegistry, value::RuntimeValue};
 use clap::Parser;
 use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;
@@ -80,7 +80,7 @@ async fn run_source(
             let cache_res = bincode::deserialize::<BytecodeCache>(&bytes);
 
             if let Ok(cache) = cache_res {
-                let mut vm: VM = VM::new(cache.registry, cache.mappings);
+                let mut vm: VM = VM::new(cache.registry, cache.mappings, VMConfig::default());
 
                 if verbose {
                     println!("Starting vm...");
@@ -198,7 +198,7 @@ async fn run_source(
         let _ = fs::write(&cache_path, bytes).await;
     }
 
-    let mut vm: VM = VM::new(registry, mappings);
+    let mut vm: VM = VM::new(registry, mappings, VMConfig::default());
 
     if verbose {
         println!("Bytecode:");
@@ -291,7 +291,7 @@ async fn run_repl_source(
         .collect();
 
     let registry = VMRegistry::from(lir_result);
-    let mut vm: VM = VM::new(registry.clone(), mappings);
+    let mut vm: VM = VM::new(registry.clone(), mappings, VMConfig::default());
 
     let mut globals = registry.globals.clone();
     let repl_global = globals.remove("__repl");
@@ -411,6 +411,7 @@ async fn repl(initial_session: Vec<String>) -> Result<(), Box<dyn Error>> {
         if !session.is_empty() {
             program.push_str(&session.join(";\n"));
             program.push_str(";\n");
+            program = program.replace("//", ";//").replace("/*", ";/*");
         }
         program.push_str(line);
 

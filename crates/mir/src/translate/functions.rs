@@ -182,7 +182,7 @@ impl MiddleEnvironment {
         let body = if let MiddleNodeType::ScopeDeclaration {
             body: mut scope_body,
             create_new_scope,
-            is_temp,
+            is_temp: _,
             scope_id,
         } = body.node_type
         {
@@ -264,7 +264,7 @@ impl MiddleEnvironment {
                 node_type: MiddleNodeType::ScopeDeclaration {
                     body: scope_body,
                     create_new_scope,
-                    is_temp,
+                    is_temp: false,
                     scope_id,
                 },
             }

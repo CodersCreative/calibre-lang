@@ -28,7 +28,13 @@ impl MiddleEnvironment {
     ) -> Result<MiddleNode, MiddleErr> {
         let identifier = self.resolve_dollar_ident_only(scope, &identifier).unwrap();
 
-        let new_name = if identifier.text.contains("->") {
+        let new_name = if let Some(existing) = self
+            .scopes
+            .get(scope)
+            .and_then(|s| s.mappings.get(&identifier.text))
+        {
+            existing.clone()
+        } else if identifier.text.contains("->") {
             identifier.text.clone()
         } else {
             get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))

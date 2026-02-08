@@ -1,11 +1,11 @@
 use calibre_parser::{
-    ast::{NamedScope, Node, PotentialDollarIdentifier},
+    ast::{NamedScope, Node, NodeType, PotentialDollarIdentifier},
     lexer::Span,
 };
 
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, ScopeMacro},
+    environment::{MiddleEnvironment, ScopeMacro, get_disamubiguous_name},
     errors::MiddleErr,
 };
 
@@ -155,6 +155,30 @@ impl MiddleEnvironment {
         }
 
         if let Some(mut body) = body {
+            for stmt in body.iter() {
+                if let NodeType::VariableDeclaration {
+                    var_type,
+                    identifier,
+                    value,
+                    ..
+                } = &stmt.node_type
+                    && matches!(value.node_type, NodeType::FunctionDeclaration { .. })
+                {
+                    let ident = self.resolve_dollar_ident_only(&new_scope, identifier).unwrap();
+                    let new_name = if ident.text.contains("->") {
+                        ident.text.clone()
+                    } else {
+                        get_disamubiguous_name(&new_scope, Some(ident.text.trim()), Some(var_type))
+                    };
+                    self.scopes
+                        .get_mut(&new_scope)
+                        .unwrap()
+                        .mappings
+                        .entry(ident.text.clone())
+                        .or_insert(new_name);
+                }
+            }
+
             if is_temp {
                 let last = body.pop();
                 for statement in body.into_iter() {
@@ -267,22 +291,26 @@ impl MiddleEnvironment {
                         .map(|s| s.defers.is_empty())
                         .unwrap_or(true);
                     if defers_empty {
-                        let mut protected_tail = Vec::new();
-                        if is_temp && let Some(last) = body.last() {
-                            protected_tail = last
-                                .identifiers_used()
-                                .into_iter()
-                                .map(|x| x.to_string())
-                                .collect();
-                        }
+                        let protected_tail = Vec::new();
                         self.insert_auto_drops(&mut body, &defined, &protected_tail);
                     }
                     if is_temp && body.len() > 1 {
+                        let last_used = body
+                            .last()
+                            .map(|n| {
+                                n.identifiers_used()
+                                    .into_iter()
+                                    .map(|x| x.to_string())
+                                    .collect::<rustc_hash::FxHashSet<String>>()
+                            })
+                            .unwrap_or_default();
                         let mut trailing = Vec::new();
-                        while matches!(
-                            body.last().map(|n| &n.node_type),
-                            Some(MiddleNodeType::Drop(_))
-                        ) {
+                        while let Some(MiddleNodeType::Drop(name)) =
+                            body.last().map(|n| &n.node_type)
+                        {
+                            if last_used.contains(&name.text) {
+                                break;
+                            }
                             trailing.push(body.pop().unwrap());
                         }
                         if !trailing.is_empty() {

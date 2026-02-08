@@ -406,6 +406,7 @@ pub struct LirEnvironment<'a> {
     pub current_block: BlockId,
     pub temp_count: usize,
     pub loop_stack: Vec<(BlockId, BlockId)>,
+    allow_global_hoist: bool,
 }
 
 impl<'a> LirEnvironment<'a> {
@@ -436,6 +437,10 @@ impl<'a> LirEnvironment<'a> {
     }
 
     pub fn new(env: &'a MiddleEnvironment) -> Self {
+        Self::new_with_hoist(env, true)
+    }
+
+    pub fn new_with_hoist(env: &'a MiddleEnvironment, allow_global_hoist: bool) -> Self {
         let entry_id = BlockId(0);
         Self {
             env,
@@ -449,6 +454,7 @@ impl<'a> LirEnvironment<'a> {
             current_block: entry_id,
             temp_count: 0,
             loop_stack: vec![],
+            allow_global_hoist,
         }
     }
 
@@ -618,9 +624,13 @@ impl<'a> LirEnvironment<'a> {
                 } else {
                     self.get_temp()
                 };
-                let mut sub_lowerer = LirEnvironment::new(self.env);
+                let mut sub_lowerer = LirEnvironment::new_with_hoist(self.env, false);
 
                 let body_span = body.span;
+                let is_temp_body = matches!(
+                    body.node_type,
+                    MiddleNodeType::ScopeDeclaration { is_temp: true, .. }
+                );
                 let fallback_expr = match &body.node_type {
                     MiddleNodeType::ScopeDeclaration { body, .. } => body.last().cloned(),
                     _ => None,
@@ -644,6 +654,8 @@ impl<'a> LirEnvironment<'a> {
                         if simple_fallback {
                             body_val = sub_lowerer.lower_node(expr);
                             has_body_value = true;
+                        } else if is_temp_body {
+                            sub_lowerer.lower_and_add_node(expr);
                         }
                     }
                 }
@@ -711,10 +723,19 @@ impl<'a> LirEnvironment<'a> {
                 }
             }
             MiddleNodeType::ScopeDeclaration {
-                body,
+                mut body,
                 is_temp: false,
                 ..
             } => {
+                if !self.allow_global_hoist {
+                    let last = body.pop();
+                    for stmt in body {
+                        self.lower_and_add_node(stmt);
+                    }
+                    return last
+                        .map(|x| self.lower_node(x))
+                        .unwrap_or(LirNodeType::Literal(LirLiteral::Null));
+                }
                 for stmt in body {
                     if let MiddleNodeType::VariableDeclaration {
                         var_type: _,
@@ -726,7 +747,7 @@ impl<'a> LirEnvironment<'a> {
                         match value.node_type {
                             MiddleNodeType::FunctionDeclaration { .. } => {}
                             _ => {
-                                let mut sub_lowerer = LirEnvironment::new(self.env);
+                                let mut sub_lowerer = LirEnvironment::new_with_hoist(self.env, false);
 
                                 let _body_val = sub_lowerer.lower_node(stmt);
 

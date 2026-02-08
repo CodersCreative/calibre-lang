@@ -314,6 +314,7 @@ impl MiddleEnvironment {
         use rustc_hash::FxHashSet;
         let mut last_use: FxHashMap<String, usize> = FxHashMap::default();
         let mut protected: FxHashSet<String> = FxHashSet::default();
+        let mut returned_idents: FxHashSet<String> = FxHashSet::default();
         for ident in protected_extra {
             protected.insert(ident.clone());
         }
@@ -321,7 +322,9 @@ impl MiddleEnvironment {
         for (idx, stmt) in stmts.iter().enumerate() {
             if let MiddleNodeType::Return { value: Some(val) } = &stmt.node_type {
                 for ident in val.identifiers_used() {
-                    protected.insert(ident.to_string());
+                    let ident = ident.to_string();
+                    protected.insert(ident.clone());
+                    returned_idents.insert(ident);
                 }
             }
             if let MiddleNodeType::FunctionDeclaration { .. } = &stmt.node_type {
@@ -342,28 +345,22 @@ impl MiddleEnvironment {
             if protected.contains(name) {
                 continue;
             }
+            let must_keep = returned_idents.contains(name);
             if let Some(&idx) = last_use.get(name) {
                 if idx >= stmts.len() {
                     continue;
-                }
-                if let Some(stmt) = stmts.get(idx) {
-                    if matches!(
-                        stmt.node_type,
+                } else if let Some(stmt) = stmts.get(idx) {
+                    match &stmt.node_type {
                         MiddleNodeType::Return { .. }
-                            | MiddleNodeType::Break
-                            | MiddleNodeType::Continue
-                    ) {
-                        continue;
-                    }
-                    if let MiddleNodeType::Drop(drop_name) = &stmt.node_type {
-                        if drop_name.text == *name {
-                            continue;
-                        }
+                        | MiddleNodeType::Break
+                        | MiddleNodeType::Continue => continue,
+                        MiddleNodeType::Drop(drop_name) if drop_name.text == *name => continue,
+                        _ => {}
                     }
                 }
                 let insert_idx = (idx + 1).min(stmts.len());
                 inserts.push((insert_idx, name.clone()));
-            } else {
+            } else if !must_keep {
                 inserts.push((stmts.len(), name.clone()));
             }
         }
