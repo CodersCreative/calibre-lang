@@ -215,6 +215,62 @@ fn print_list<T: Display>(data: &[T], open: char, close: char) -> String {
     txt
 }
 
+fn pretty_name(name: &str) -> &str {
+    name.rsplitn(2, ':').next().unwrap_or(name)
+}
+
+impl RuntimeValue {
+    pub fn display(&self, vm: &VM) -> String {
+        match self {
+            Self::Ref(x) => vm.variables.get(x).unwrap().display(vm),
+            Self::SlotRef(x) => vm.current_frame().slots.get(*x).unwrap().display(vm),
+            Self::List(x) => {
+                let lst: Vec<String> = x.0.iter().map(|x| x.display(vm)).collect();
+                print_list(&lst, '[', ']')
+            }
+            Self::Option(Some(x)) => format!("Some : {}", x.display(vm)),
+            Self::Result(Ok(x)) => format!("Ok : {}", x.display(vm)),
+            Self::Result(Err(x)) => format!("Err : {}", x.display(vm)),
+            Self::Enum(x, y, Some(z)) => format!("{}[{}] : {}", pretty_name(x), y, z.display(vm)),
+            Self::Enum(x, y, _) => format!("{}[{}]", pretty_name(x), y),
+            Self::Aggregate(x, data) => {
+                if x.is_none() {
+                    format!(
+                        "{}",
+                        print_list(
+                            &data
+                                .as_ref()
+                                .0
+                                .0
+                                .iter()
+                                .map(|x| x.1.display(vm))
+                                .collect::<Vec<_>>(),
+                            '(',
+                            ')'
+                        )
+                    )
+                } else if data.as_ref().0.is_empty() {
+                    let name = x.as_deref().unwrap_or("tuple");
+                    format!("{} {{}}", name)
+                } else {
+                    let name = pretty_name(x.as_deref().unwrap_or("tuple"));
+                    let mut txt = format!("{} {{\n", name);
+
+                    for val in data.as_ref().0.iter() {
+                        txt.push_str(&format!("\t{} : {},\n", val.0, val.1.display(vm)));
+                    }
+
+                    txt = txt.trim().trim_end_matches(",").trim().to_string();
+                    txt.push_str("\n}");
+
+                    format!("{}", txt)
+                }
+            }
+            x => x.to_string(),
+        }
+    }
+}
+
 impl Display for RuntimeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -305,92 +361,43 @@ impl VM {
     pub fn convert_runtime_var_into_saveable(&mut self, value: RuntimeValue) -> RuntimeValue {
         fn transform(env: &mut VM, val: RuntimeValue) -> RuntimeValue {
             match val {
+                RuntimeValue::Ref(name) => {
+                    if let Some(inner) = env.variables.get(&name).cloned() {
+                        transform(env, inner)
+                    } else {
+                        RuntimeValue::Null
+                    }
+                }
                 RuntimeValue::SlotRef(slot) => transform(env, env.get_slot_value(slot)),
                 RuntimeValue::Aggregate(x, map) => {
                     let mut new_map = Vec::new();
                     for (k, v) in map.as_ref().0.0.iter().cloned() {
-                        let inner_val = transform(env, v);
-                        match inner_val {
-                            RuntimeValue::Ref(name) => {
-                                new_map.push((k, RuntimeValue::Ref(name)));
-                            }
-                            other => {
-                                let name = env.alloc_ref_id();
-                                env.variables.insert(name.clone(), other);
-                                new_map.push((k, RuntimeValue::Ref(name)));
-                            }
-                        }
+                        new_map.push((k, transform(env, v)));
                     }
                     RuntimeValue::Aggregate(x, Gc::new(GcMap(ObjectMap(new_map))))
                 }
                 RuntimeValue::List(data) => {
                     let mut lst = Vec::new();
                     for v in data.as_ref().0.iter().cloned() {
-                        let inner_val = transform(env, v);
-                        match inner_val {
-                            RuntimeValue::Ref(name) => {
-                                lst.push(RuntimeValue::Ref(name));
-                            }
-                            other => {
-                                let name = env.alloc_ref_id();
-                                env.variables.insert(name.clone(), other);
-                                lst.push(RuntimeValue::Ref(name));
-                            }
-                        }
+                        lst.push(transform(env, v));
                     }
                     RuntimeValue::List(Gc::new(GcVec(lst)))
                 }
                 RuntimeValue::Enum(x, y, Some(data)) => {
                     let inner_val = transform(env, data.as_ref().clone());
-                    match inner_val {
-                        RuntimeValue::Ref(name) => {
-                            RuntimeValue::Enum(x, y, Some(Gc::new(RuntimeValue::Ref(name))))
-                        }
-                        other => {
-                            let name = env.alloc_ref_id();
-                            env.variables.insert(name.clone(), other);
-                            RuntimeValue::Enum(x, y, Some(Gc::new(RuntimeValue::Ref(name))))
-                        }
-                    }
+                    RuntimeValue::Enum(x, y, Some(Gc::new(inner_val)))
                 }
                 RuntimeValue::Option(Some(data)) => {
                     let inner_val = transform(env, data.as_ref().clone());
-                    match inner_val {
-                        RuntimeValue::Ref(name) => {
-                            RuntimeValue::Option(Some(Gc::new(RuntimeValue::Ref(name))))
-                        }
-                        other => {
-                            let name = env.alloc_ref_id();
-                            env.variables.insert(name.clone(), other);
-                            RuntimeValue::Option(Some(Gc::new(RuntimeValue::Ref(name))))
-                        }
-                    }
+                    RuntimeValue::Option(Some(Gc::new(inner_val)))
                 }
                 RuntimeValue::Result(Ok(data)) => {
                     let inner_val = transform(env, data.as_ref().clone());
-                    match inner_val {
-                        RuntimeValue::Ref(name) => {
-                            RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Ref(name))))
-                        }
-                        other => {
-                            let name = env.alloc_ref_id();
-                            env.variables.insert(name.clone(), other);
-                            RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Ref(name))))
-                        }
-                    }
+                    RuntimeValue::Result(Ok(Gc::new(inner_val)))
                 }
                 RuntimeValue::Result(Err(data)) => {
                     let inner_val = transform(env, data.as_ref().clone());
-                    match inner_val {
-                        RuntimeValue::Ref(name) => {
-                            RuntimeValue::Result(Err(Gc::new(RuntimeValue::Ref(name))))
-                        }
-                        other => {
-                            let name = env.alloc_ref_id();
-                            env.variables.insert(name.clone(), other);
-                            RuntimeValue::Result(Err(Gc::new(RuntimeValue::Ref(name))))
-                        }
-                    }
+                    RuntimeValue::Result(Err(Gc::new(inner_val)))
                 }
                 other => other,
             }

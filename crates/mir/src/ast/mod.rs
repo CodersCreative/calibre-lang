@@ -62,12 +62,14 @@ pub enum MiddleNodeType {
         body: Vec<MiddleNode>,
         create_new_scope: bool,
         is_temp: bool,
+        scope_id: u64,
     },
     FunctionDeclaration {
         parameters: Vec<(ParserText, ParserDataType)>,
         body: Box<MiddleNode>,
         return_type: ParserDataType,
         is_async: bool,
+        scope_id: u64,
     },
     ExternFunction {
         abi: String,
@@ -99,6 +101,7 @@ pub enum MiddleNodeType {
     LoopDeclaration {
         state: Option<Box<MiddleNode>>,
         body: Box<MiddleNode>,
+        scope_id: u64,
     },
     Return {
         value: Option<Box<MiddleNode>>,
@@ -208,6 +211,7 @@ impl Into<NodeType> for MiddleNodeType {
                 body,
                 create_new_scope,
                 is_temp,
+                scope_id: _,
             } => NodeType::ScopeDeclaration {
                 body: {
                     let mut lst = Vec::new();
@@ -228,6 +232,7 @@ impl Into<NodeType> for MiddleNodeType {
                 body,
                 return_type,
                 is_async,
+                scope_id: _,
             } => NodeType::FunctionDeclaration {
                 header: FunctionHeader {
                     generics: GenericTypes::default(),
@@ -298,7 +303,11 @@ impl Into<NodeType> for MiddleNodeType {
                 to: Box::new((*to).into()),
                 inclusive,
             },
-            Self::LoopDeclaration { state, body } => NodeType::ScopeDeclaration {
+            Self::LoopDeclaration {
+                state,
+                body,
+                scope_id: _,
+            } => NodeType::ScopeDeclaration {
                 body: {
                     let mut lst = Vec::new();
 

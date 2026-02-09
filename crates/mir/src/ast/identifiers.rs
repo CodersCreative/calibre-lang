@@ -117,6 +117,7 @@ impl MiddleNode {
                 body,
                 return_type: _,
                 is_async: _,
+                ..
             } => {
                 let amt = body.identifiers_used();
 
@@ -272,6 +273,7 @@ impl MiddleNode {
                 body,
                 return_type: _,
                 is_async: _,
+                ..
             } => {
                 let mut amt: Vec<&String> = parameters.iter().map(|x| &x.0.text).collect();
                 amt.append(&mut body.identifiers_declared());

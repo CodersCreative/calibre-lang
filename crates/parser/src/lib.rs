@@ -73,7 +73,7 @@ impl From<LexerError> for ParserError {
 }
 
 #[allow(unused_assignments)]
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParserError {
     #[error(transparent)]
     Lexer(LexerError),
@@ -81,7 +81,7 @@ pub enum ParserError {
     Syntax { err: SyntaxErr, span: Span },
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum SyntaxErr {
     #[error("Expected opening bracket, {0:?}.")]
     ExpectedOpeningBracket(Bracket),

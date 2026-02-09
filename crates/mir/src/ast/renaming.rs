@@ -88,16 +88,19 @@ impl MiddleNodeType {
                 body,
                 create_new_scope,
                 is_temp,
+                scope_id,
             } => MiddleNodeType::ScopeDeclaration {
                 body: body.into_iter().map(|x| x.rename(state)).collect(),
                 create_new_scope,
                 is_temp,
+                scope_id,
             },
             MiddleNodeType::FunctionDeclaration {
                 parameters,
                 body,
                 return_type,
                 is_async,
+                scope_id,
             } => MiddleNodeType::FunctionDeclaration {
                 parameters: parameters
                     .into_iter()
@@ -117,6 +120,7 @@ impl MiddleNodeType {
                 body: Box::new(body.rename(state)),
                 return_type,
                 is_async,
+                scope_id,
             },
             MiddleNodeType::AssignmentExpression { identifier, value } => {
                 MiddleNodeType::AssignmentExpression {
@@ -147,9 +151,14 @@ impl MiddleNodeType {
                 to: Box::new(to.rename(state)),
                 inclusive,
             },
-            MiddleNodeType::LoopDeclaration { state: s, body } => MiddleNodeType::LoopDeclaration {
+            MiddleNodeType::LoopDeclaration {
+                state: s,
+                body,
+                scope_id,
+            } => MiddleNodeType::LoopDeclaration {
                 state: s.map(|value| Box::new(value.rename(state))),
                 body: Box::new(body.rename(state)),
+                scope_id,
             },
             MiddleNodeType::Return { value } => MiddleNodeType::Return {
                 value: value.map(|value| Box::new(value.rename(state))),

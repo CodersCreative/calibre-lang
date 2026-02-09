@@ -17,11 +17,10 @@ rand = { workspace = true }
 rustyline = {workspace = true }
 tokio = { version = "1.43.0", features = ["rt-multi-thread", "macros", "fs"] }
 serde = { workspace = true }
-bincode = "1.3.3"
+bincode = "1"
 blake3 = "1.6.1"
 calibre-parser = {workspace = true}
 calibre-diagnostics = {workspace = true}
 calibre-mir = { workspace = true }
 calibre-lir = { workspace = true }
 calibre-vm = { workspace = true }
-miette = { workspace = true }

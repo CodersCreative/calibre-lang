@@ -1,11 +1,8 @@
 pub mod translator;
 pub mod values;
-use calibre_lir::{
-    BlockId, LirBlock, LirFunction, LirInstr, LirNodeType, LirRegistry, LirTerminator,
-};
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_lir::{LirBlock, LirFunction, LirRegistry, LirTerminator};
 use calibre_mir::environment::{MiddleEnvironment, MiddleObject};
-use calibre_parser::ast::{Node, NodeType, ParserDataType, ParserInnerType, VarType};
+use calibre_parser::ast::{ParserDataType, ParserInnerType};
 use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::*;
 use cranelift_module::{DataDescription, Linkage, Module};

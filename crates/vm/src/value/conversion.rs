@@ -96,7 +96,7 @@ impl RuntimeValue {
                 } else {
                     value.convert(env, &inner.data_type)?
                 };
-                let id = env.alloc_ptr_id();
+                let id = env.get_ref_id();
                 env.ptr_heap.insert(id, converted);
                 Ok(RuntimeValue::Ptr(id))
             }

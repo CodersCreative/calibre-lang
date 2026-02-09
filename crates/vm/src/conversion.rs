@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VMRegistry {
-    #[serde(with = "crate::serde_fxhashmap_rc")]
+    #[serde(with = "crate::serialization::serde_fxhashmap_rc")]
     pub functions: FxHashMap<String, Arc<VMFunction>>,
-    #[serde(with = "crate::serde_fxhashmap")]
+    #[serde(with = "crate::serialization::serde_fxhashmap")]
     pub globals: FxHashMap<String, VMGlobal>,
 }
 
@@ -90,7 +90,7 @@ pub struct VMFunction {
     pub captures: Vec<String>,
     pub returns_value: bool,
     pub blocks: Vec<VMBlock>,
-    #[serde(with = "crate::serde_fxhashmap")]
+    #[serde(with = "crate::serialization::serde_fxhashmap")]
     pub renamed: FxHashMap<String, String>,
     pub is_async: bool,
 }

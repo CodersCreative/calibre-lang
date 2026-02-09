@@ -3,25 +3,19 @@ pub mod memory;
 
 use std::{collections::HashMap, error::Error};
 
-use calibre_lir::{LirGlobal, LirLValue, LirLiteral, LirNodeType, LirRegistry};
-use calibre_mir::ast::{MiddleNode, MiddleNodeType};
+use calibre_lir::{LirLValue, LirLiteral, LirNodeType, LirRegistry};
 use calibre_mir::environment::MiddleObject;
-use calibre_parser::ast::binary::BinaryOperator;
-use calibre_parser::ast::{
-    Node, NodeType, ObjectType, ParserDataType, ParserInnerType, TypeDefType, VarType,
-};
-use calibre_parser::lexer::StopValue;
+use calibre_parser::ast::{ParserDataType, ParserInnerType};
 use cranelift::codegen::ir::{GlobalValue, types};
 use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::*;
-use cranelift_module::{DataDescription, FuncId, Linkage, Module};
+use cranelift_module::{DataDescription, Linkage, Module};
 use cranelift_object::ObjectModule;
-use libc::NEW_TIME;
 use rustc_hash::FxHashMap;
 
 use crate::translator::layout::GetLayoutInfo;
 use crate::translator::memory::MemoryLoc;
-use crate::values::{MemberType, RuntimeType, RuntimeValue};
+use crate::values::{RuntimeType, RuntimeValue};
 
 pub mod expressions;
 
@@ -268,7 +262,10 @@ impl<'a> FunctionTranslator<'a> {
                 let value = self.translate(*value);
                 self.get_aggregate_member(value, key)
             }
-            LirNodeType::Closure { label, captures } => todo!(),
+            LirNodeType::Closure {
+                label: _,
+                captures: _,
+            } => todo!(),
             LirNodeType::Call { caller, args } => {
                 let callee = self.translate(*caller);
 

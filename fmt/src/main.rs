@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let path = if let Some(p) = args.path {
         PathBuf::from_str(&p)?
     } else {
-        PathBuf::from_str("./main.cl")?
+        PathBuf::from_str("./main.cal")?
     };
     let mut formatter = Formatter {
         max_width: args.max_width,

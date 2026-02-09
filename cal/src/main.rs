@@ -2,13 +2,13 @@ use calibre_diagnostics;
 use calibre_lir::LirEnvironment;
 use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr};
 use calibre_parser::lexer::Tokenizer;
-use calibre_vm::{VM, conversion::VMRegistry, value::RuntimeValue};
+use calibre_vm::{VM, config::VMConfig, conversion::VMRegistry, value::RuntimeValue};
 use clap::Parser;
-use miette::Context;
-use miette::{IntoDiagnostic, Result};
 use rustyline::DefaultEditor;
+use rustyline::error::ReadlineError;
 use serde::{Deserialize, Serialize};
 use std::{
+    error::Error,
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
@@ -22,13 +22,46 @@ struct BytecodeCache {
     registry: VMRegistry,
 }
 
+fn emit_middle_error(path: &Path, contents: &str, err: &MiddleErr) {
+    match err {
+        MiddleErr::Multiple(errors) => {
+            for err in errors {
+                emit_middle_error(path, contents, err);
+            }
+        }
+        MiddleErr::At(span, inner) => {
+            calibre_diagnostics::emit_error(path, contents, inner.to_string(), Some(*span));
+        }
+        MiddleErr::ParserErrors {
+            path: err_path,
+            contents,
+            errors,
+        } => {
+            calibre_diagnostics::emit_parser_errors(err_path, contents, errors);
+        }
+        MiddleErr::LexerError {
+            path: err_path,
+            contents,
+            error,
+        } => {
+            let span = match error {
+                calibre_parser::lexer::LexerError::Unrecognized { span, .. } => Some(*span),
+            };
+            calibre_diagnostics::emit_error(err_path, contents, error.to_string(), span);
+        }
+        other => {
+            calibre_diagnostics::emit_error(path, contents, other.to_string(), None);
+        }
+    }
+}
+
 async fn run_source(
     contents: String,
     path: &Path,
     cache: bool,
     verbose: bool,
     entry_name: Option<String>,
-) -> Result<()> {
+) -> Result<(), Box<dyn Error>> {
     let mut parser = calibre_parser::Parser::default();
     parser.set_source_path(Some(path.to_path_buf()));
     let mut tokenizer = Tokenizer::default();
@@ -47,7 +80,7 @@ async fn run_source(
             let cache_res = bincode::deserialize::<BytecodeCache>(&bytes);
 
             if let Ok(cache) = cache_res {
-                let mut vm: VM = VM::new(cache.registry, cache.mappings);
+                let mut vm: VM = VM::new(cache.registry, cache.mappings, VMConfig::default());
 
                 if verbose {
                     println!("Starting vm...");
@@ -62,7 +95,7 @@ async fn run_source(
                         format!("Missing entry point: {}", cache.main),
                         None,
                     );
-                    return Err(miette::miette!("runtime error"));
+                    return Err(format!("runtime error").into());
                 };
                 if let Err(err) = vm.run(main.as_ref(), Vec::new()) {
                     let (span, inner) = err.innermost();
@@ -73,7 +106,7 @@ async fn run_source(
                         span,
                         inner.help(),
                     );
-                    return Err(miette::miette!("runtime error"));
+                    return Err(format!("runtime error").into());
                 }
                 return Ok(());
             }
@@ -89,47 +122,26 @@ async fn run_source(
                 calibre_parser::lexer::LexerError::Unrecognized { span, .. } => Some(*span),
             };
             calibre_diagnostics::emit_error(path, &contents, err.to_string(), span);
-            return Err(miette::miette!("lex failed"));
+            return Err(format!("lex failed").into());
         }
     };
     let program = parser.produce_ast(tokens);
 
     if !parser.errors.is_empty() {
         calibre_diagnostics::emit_parser_errors(path, &contents, &parser.errors);
-        return Err(miette::miette!("parse failed"));
+        return Err(format!("parse failed").into());
     }
 
-    let middle_result = match MiddleEnvironment::new_and_evaluate(program, path.to_path_buf()) {
-        Ok(result) => result,
-        Err(err) => {
-            match err {
-                MiddleErr::At(span, inner) => {
-                    calibre_diagnostics::emit_error(path, &contents, inner.to_string(), Some(span));
-                }
-                MiddleErr::ParserErrors {
-                    path: err_path,
-                    contents,
-                    errors,
-                } => {
-                    calibre_diagnostics::emit_parser_errors(&err_path, &contents, &errors);
-                }
-                MiddleErr::LexerError {
-                    path: err_path,
-                    contents,
-                    error,
-                } => {
-                    let span = match &error {
-                        calibre_parser::lexer::LexerError::Unrecognized { span, .. } => Some(*span),
-                    };
-                    calibre_diagnostics::emit_error(&err_path, &contents, error.to_string(), span);
-                }
-                other => {
-                    calibre_diagnostics::emit_error(path, &contents, other.to_string(), None);
-                }
-            }
-            return Err(miette::miette!("compile failed"));
-        }
-    };
+    let (mut env, scope, middle_node) =
+        MiddleEnvironment::new_and_evaluate(program, path.to_path_buf());
+
+    let mir_errors = env.take_errors();
+    if !mir_errors.is_empty() {
+        emit_middle_error(path, &contents, &MiddleErr::Multiple(mir_errors));
+        return Err(format!("compile failed").into());
+    }
+
+    let middle_result = (env, scope, middle_node);
 
     let entry_name = entry_name;
     let main_name = if let Some(ref entry_name) = entry_name {
@@ -180,17 +192,13 @@ async fn run_source(
             registry: registry.clone(),
         };
 
-        fs::create_dir_all(&cache_dir)
-            .await
-            .into_diagnostic()
-            .wrap_err("creating cache dir")?;
+        fs::create_dir_all(&cache_dir).await?;
         let bytes_res = bincode::serialize(&cache);
-        let bytes =
-            bytes_res.map_err(|e| miette::miette!("bytecode cache serialize failed: {e}"))?;
+        let bytes = bytes_res.map_err(|e| format!("bytecode cache serialize failed: {e}"))?;
         let _ = fs::write(&cache_path, bytes).await;
     }
 
-    let mut vm: VM = VM::new(registry, mappings);
+    let mut vm: VM = VM::new(registry, mappings, VMConfig::default());
 
     if verbose {
         println!("Bytecode:");
@@ -207,7 +215,7 @@ async fn run_source(
                 span,
                 inner.help(),
             );
-            return Err(miette::miette!("runtime error"));
+            return Err(format!("runtime error").into());
         }
     } else if entry_name.is_some() {
         if let Err(err) = vm.run_globals() {
@@ -219,7 +227,7 @@ async fn run_source(
                 span,
                 inner.help(),
             );
-            return Err(miette::miette!("runtime error"));
+            return Err(format!("runtime error").into());
         }
     } else {
         calibre_diagnostics::emit_error(
@@ -228,13 +236,16 @@ async fn run_source(
             format!("Missing entry point: {}", main_name),
             None,
         );
-        return Err(miette::miette!("runtime error"));
+        return Err(format!("runtime error").into());
     }
 
     Ok(())
 }
 
-async fn run_repl_source(contents: String, path: &Path) -> Result<Option<RuntimeValue>> {
+async fn run_repl_source(
+    contents: String,
+    path: &Path,
+) -> Result<(Option<RuntimeValue>, String), Box<dyn Error>> {
     let mut parser = calibre_parser::Parser::default();
     let mut tokenizer = Tokenizer::default();
 
@@ -245,47 +256,26 @@ async fn run_repl_source(contents: String, path: &Path) -> Result<Option<Runtime
                 calibre_parser::lexer::LexerError::Unrecognized { span, .. } => Some(*span),
             };
             calibre_diagnostics::emit_error(path, &contents, err.to_string(), span);
-            return Err(miette::miette!("lex failed"));
+            return Err(format!("lex failed").into());
         }
     };
     let program = parser.produce_ast(tokens);
 
     if !parser.errors.is_empty() {
         calibre_diagnostics::emit_parser_errors(path, &contents, &parser.errors);
-        return Err(miette::miette!("parse failed"));
+        return Err(format!("parse failed").into());
     }
 
-    let middle_result = match MiddleEnvironment::new_and_evaluate(program, path.to_path_buf()) {
-        Ok(result) => result,
-        Err(err) => {
-            match err {
-                MiddleErr::At(span, inner) => {
-                    calibre_diagnostics::emit_error(path, &contents, inner.to_string(), Some(span));
-                }
-                MiddleErr::ParserErrors {
-                    path: err_path,
-                    contents,
-                    errors,
-                } => {
-                    calibre_diagnostics::emit_parser_errors(&err_path, &contents, &errors);
-                }
-                MiddleErr::LexerError {
-                    path: err_path,
-                    contents,
-                    error,
-                } => {
-                    let span = match &error {
-                        calibre_parser::lexer::LexerError::Unrecognized { span, .. } => Some(*span),
-                    };
-                    calibre_diagnostics::emit_error(&err_path, &contents, error.to_string(), span);
-                }
-                other => {
-                    calibre_diagnostics::emit_error(path, &contents, other.to_string(), None);
-                }
-            }
-            return Err(miette::miette!("compile failed"));
-        }
-    };
+    let (mut env, scope, middle_node) =
+        MiddleEnvironment::new_and_evaluate(program, path.to_path_buf());
+
+    let mir_errors = env.take_errors();
+    if !mir_errors.is_empty() {
+        emit_middle_error(path, &contents, &MiddleErr::Multiple(mir_errors));
+        return Err(format!("compile failed").into());
+    }
+
+    let middle_result = (env, scope, middle_node);
 
     let lir_result = LirEnvironment::lower_with_root(
         &middle_result.0,
@@ -301,7 +291,7 @@ async fn run_repl_source(contents: String, path: &Path) -> Result<Option<Runtime
         .collect();
 
     let registry = VMRegistry::from(lir_result);
-    let mut vm: VM = VM::new(registry.clone(), mappings);
+    let mut vm: VM = VM::new(registry.clone(), mappings, VMConfig::default());
 
     let mut globals = registry.globals.clone();
     let repl_global = globals.remove("__repl");
@@ -316,13 +306,13 @@ async fn run_repl_source(contents: String, path: &Path) -> Result<Option<Runtime
                 span,
                 inner.help(),
             );
-            return Err(miette::miette!("runtime error"));
+            return Err(format!("runtime error").into());
         }
     }
 
     let Some(repl_global) = repl_global else {
         calibre_diagnostics::emit_error(path, &contents, "Missing REPL scope".to_string(), None);
-        return Err(miette::miette!("runtime error"));
+        return Err(format!("runtime error").into());
     };
 
     let value = match vm.run_global(&repl_global) {
@@ -336,13 +326,16 @@ async fn run_repl_source(contents: String, path: &Path) -> Result<Option<Runtime
                 span,
                 inner.help(),
             );
-            return Err(miette::miette!("runtime error"));
+            return Err(format!("runtime error").into());
         }
     };
 
     match value {
-        RuntimeValue::Null => Ok(None),
-        other => Ok(Some(other)),
+        RuntimeValue::Null => Ok((None, String::new())),
+        other => {
+            let txt = other.display(&vm);
+            Ok((Some(other), txt))
+        }
     }
 }
 
@@ -352,27 +345,44 @@ fn is_repl_file(contents: &str) -> bool {
 
 fn is_persistent_decl(line: &str) -> bool {
     let trimmed = line.trim_start();
-    let keywords = ["const ", "let ", "type ", "import ", "trait ", "impl "];
+    let keywords = [
+        "const ", "let ", "type ", "import ", "trait ", "impl ", "extern ",
+    ];
     keywords.iter().any(|k| trimmed.starts_with(k))
 }
 
-async fn repl(initial_session: Vec<String>) -> Result<()> {
+async fn repl(initial_session: Vec<String>) -> Result<(), Box<dyn Error>> {
     let mut session = initial_session;
     let repl_path = PathBuf::from("<repl>");
-    let mut editor = DefaultEditor::new().into_diagnostic()?;
+    let mut editor = DefaultEditor::new()?;
 
     loop {
         let input = match editor.readline(">>> ") {
-            Ok(line) => line,
-            Err(_) => break,
+            Ok(line) if line.eq_ignore_ascii_case("exit") || line.eq_ignore_ascii_case("quit") => {
+                println!("exitting");
+                break;
+            }
+            Ok(line) if line.is_empty() => continue,
+            Ok(line) => {
+                editor.add_history_entry(line.to_string())?;
+                line
+            }
+            Err(ReadlineError::Interrupted) => {
+                eprintln!("ctrl-d");
+                break;
+            }
+            Err(ReadlineError::Eof) => {
+                eprintln!("ctrl-c");
+                break;
+            }
+            Err(e) => {
+                eprintln!("Error : {}", e);
+                break;
+            }
         };
+
         let line = input.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if line.eq_ignore_ascii_case("exit") || line.eq_ignore_ascii_case("quit") {
-            break;
-        }
+
         if let Some(rest) = line.strip_prefix("save ") {
             let path = PathBuf::from(rest.trim());
             let mut out = format!("// REPL {}\n", env!("CARGO_PKG_VERSION"));
@@ -380,13 +390,14 @@ async fn repl(initial_session: Vec<String>) -> Result<()> {
                 out.push_str(&session.join("\n"));
                 out.push('\n');
             }
-            fs::write(&path, out).await.into_diagnostic()?;
+            fs::write(&path, out).await?;
             println!("Saved session to {}", path.display());
             continue;
         }
+
         if let Some(rest) = line.strip_prefix("load ") {
             let path = PathBuf::from(rest.trim());
-            let contents = fs::read_to_string(&path).await.into_diagnostic()?;
+            let contents = fs::read_to_string(&path).await?;
             if !is_repl_file(&contents) {
                 println!("Not a REPL file: {}", path.display());
                 continue;
@@ -398,20 +409,17 @@ async fn repl(initial_session: Vec<String>) -> Result<()> {
 
         let mut program = String::new();
         if !session.is_empty() {
-            program.push_str(&session.join("\n"));
-            program.push('\n');
+            program.push_str(&session.join(";\n"));
+            program.push_str(";\n");
+            program = program.replace("//", ";//").replace("/*", ";/*");
         }
+        program.push_str(line);
 
-        if is_persistent_decl(line) {
+        if let Ok((Some(_), txt)) = run_repl_source(program, &repl_path).await {
             session.push(line.to_string());
-            program.push_str(line);
-            program.push('\n');
-        } else {
-            program.push_str(line);
-        }
-
-        if let Ok(Some(value)) = run_repl_source(program, &repl_path).await {
-            println!("{}", value.to_string());
+            if !is_persistent_decl(line) {
+                println!("{}", txt);
+            }
         }
     }
 
@@ -432,19 +440,15 @@ struct Args {
 }
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
     if let Some(path) = args.path {
         if args.fmt {
-            Command::new("cal-fmt")
-                .arg("-a")
-                .arg(&path)
-                .output()
-                .into_diagnostic()?;
+            Command::new("cal-fmt").arg("-a").arg(&path).output()?;
         }
         let path = PathBuf::from_str(&path)?;
-        let contents = fs::read_to_string(&path).await.into_diagnostic()?;
+        let contents = fs::read_to_string(&path).await?;
         if is_repl_file(&contents) {
             let session = contents.lines().skip(1).map(|x| x.to_string()).collect();
             repl(session).await

@@ -13,7 +13,7 @@ const main = fn () => {
 		"10" => print("match with value : 10"),
 		"Hi" => print("Hi"),
 	}
-
+	
 	match {
 		age == "10" => print("match w/o value : " & age),
 		name == "Hi" => print("Hi"),

@@ -52,7 +52,7 @@ pub struct Tokenizer {
     col: u32,
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum LexerError {
     #[error("Unrecognized character: '{ch}'")]
     Unrecognized { span: Span, ch: char },
@@ -292,7 +292,7 @@ impl Tokenizer {
     fn increment_line_col(&mut self, c: &char) {
         if c == &'\n' {
             self.line += 1;
-            self.col = 0;
+            self.col = 1;
         } else {
             self.col += 1;
         }

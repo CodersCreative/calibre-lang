@@ -1,0 +1,17 @@
+type Node = struct {
+    id: int,
+    data: list:<int>,
+};
+
+const main = fn() => {
+    let mut i = 0;
+
+    for i in 1000000 => {
+        let temp = Node {
+            id: i,
+            data: [i, i + 1, i + 2],
+        };
+    };
+
+    print("Finished.");
+};
