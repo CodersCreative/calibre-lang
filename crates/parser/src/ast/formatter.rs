@@ -269,10 +269,11 @@ impl Formatter {
             }
             NodeType::DerefStatement { value } => format!("*{}", self.format(&*value)),
             NodeType::ImplDeclaration {
-                identifier,
+                generics,
+                target,
                 variables,
             } => {
-                let mut txt = format!("impl {} {{", identifier);
+                let mut txt = format!("impl{} {} {{", self.fmt_generic_types(generics), target);
 
                 if !variables.is_empty() {
                     for var in variables {
@@ -285,6 +286,103 @@ impl Formatter {
 
                     txt = txt.trim().to_string();
 
+                    txt.push_str("\n}");
+                } else {
+                    txt.push_str("}");
+                }
+
+                txt
+            }
+            NodeType::ImplTraitDeclaration {
+                generics,
+                trait_ident,
+                target,
+                variables,
+            } => {
+                let mut txt = format!(
+                    "impl{} {} for {} {{",
+                    self.fmt_generic_types(generics),
+                    trait_ident,
+                    target
+                );
+
+                if !variables.is_empty() {
+                    for var in variables {
+                        let temp = handle_comment!(
+                            self.get_potential_comment(&var.span),
+                            self.format(&var)
+                        );
+                        txt.push_str(&format!("\n{};\n", self.fmt_txt_with_tab(&temp, 1, true)));
+                    }
+
+                    txt = txt.trim().to_string();
+
+                    txt.push_str("\n}");
+                } else {
+                    txt.push_str("}");
+                }
+
+                txt
+            }
+            NodeType::TraitDeclaration {
+                identifier,
+                implied_traits,
+                members,
+            } => {
+                let mut txt = format!("trait {}", identifier);
+                if !implied_traits.is_empty() {
+                    txt.push_str(" : ");
+                    for imp in implied_traits {
+                        txt.push_str(&format!("{} + ", imp));
+                    }
+                    txt = txt.trim_end().trim_end_matches('+').trim().to_string();
+                }
+
+                txt.push_str(" {");
+                if !members.is_empty() {
+                    for member in members {
+                        let mut line = match member.kind {
+                            crate::ast::TraitMemberKind::Type => {
+                                format!("type {}", member.identifier)
+                            }
+                            crate::ast::TraitMemberKind::Const => {
+                                format!("const {}", member.identifier)
+                            }
+                        };
+
+                        match member.kind {
+                            crate::ast::TraitMemberKind::Type => {
+                                if let crate::ast::PotentialNewType::DataType(dt) =
+                                    &member.data_type
+                                {
+                                    if !dt.data_type.is_auto() {
+                                        line.push_str(&format!(" = {}", member.data_type));
+                                    }
+                                } else {
+                                    line.push_str(&format!(" = {}", member.data_type));
+                                }
+                            }
+                            crate::ast::TraitMemberKind::Const => {
+                                if let crate::ast::PotentialNewType::DataType(dt) =
+                                    &member.data_type
+                                {
+                                    if !dt.data_type.is_auto() {
+                                        line.push_str(&format!(" : {}", member.data_type));
+                                    }
+                                } else {
+                                    line.push_str(&format!(" : {}", member.data_type));
+                                }
+
+                                if let Some(value) = &member.value {
+                                    line.push_str(&format!(" = {}", self.format(value)));
+                                }
+                            }
+                        }
+
+                        txt.push_str(&format!("\n{};\n", self.fmt_txt_with_tab(&line, 1, true)));
+                    }
+
+                    txt = txt.trim().to_string();
                     txt.push_str("\n}");
                 } else {
                     txt.push_str("}");

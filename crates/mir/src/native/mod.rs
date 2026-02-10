@@ -3,7 +3,7 @@ use calibre_parser::{
     ast::{ParserDataType, VarType},
     lexer::Tokenizer,
 };
-use calibre_std::{get_globals_path, get_stdlib_path};
+use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
 use rustc_hash::FxHashMap;
 use std::{fs, path::PathBuf};
 
@@ -33,12 +33,14 @@ impl MiddleEnvironment {
         });
 
         self.setup_global(&scope);
+        self.stdlib_nodes.clear();
         let mut parser = Parser::default();
         let mut tokenizer = Tokenizer::default();
         if let Ok(globals) = fs::read_to_string(get_globals_path()) {
             if let Ok(tokens) = tokenizer.tokenize(&globals) {
                 let program = parser.produce_ast(tokens);
-                let _ = self.evaluate(&scope, program);
+                let middle = self.evaluate(&scope, program);
+                self.stdlib_nodes.push(middle);
             }
         }
 
@@ -57,6 +59,10 @@ impl MiddleEnvironment {
             "err",
             "some",
             "trim",
+            "str_split",
+            "str_contains",
+            "str_starts_with",
+            "str_ends_with",
             "print",
             "len",
             "panic",
@@ -77,7 +83,7 @@ impl MiddleEnvironment {
         vars.append(&mut funcs);
 
         for var in vars {
-            let name = get_disamubiguous_name(scope, Some(&var.0), None);
+            let name = var.0.clone();
 
             let _ = self.variables.insert(
                 name.clone(),
@@ -92,6 +98,8 @@ impl MiddleEnvironment {
                 scope_ref.mappings.insert(var.0, name);
             }
         }
+
+        // builtin types are resolved via ParserDataType rather than seeded objects
     }
 
     pub fn setup_std(&mut self, scope: &u64) {
@@ -102,23 +110,35 @@ impl MiddleEnvironment {
             if let Ok(stdlib) = fs::read_to_string(scope_ref.path.clone()) {
                 if let Ok(tokens) = tokenizer.tokenize(&stdlib) {
                     let program = parser.produce_ast(tokens);
-                    let _ = self.evaluate(scope, program);
+                    let middle = self.evaluate(scope, program);
+                    self.stdlib_nodes.push(middle);
                 }
             }
         }
 
-        self.setup_std_scope(scope, "thread", &["wait"]);
-        self.setup_std_scope(scope, "console", &["out", "input", "err", "clear"]);
-        self.setup_std_scope(scope, "random", &["generate", "bool", "ratio"]);
+        self.setup_std_module(scope, "thread", &[]);
+        self.setup_std_module(scope, "console", &[]);
+        self.setup_std_module(scope, "random", &[]);
+        self.setup_std_module(scope, "file", &[]);
+        self.setup_std_module(scope, "str", &[]);
+        self.setup_std_module(scope, "list", &[]);
+        self.setup_std_module(scope, "range", &[]);
     }
 
-    pub fn setup_std_scope(&mut self, parent: &u64, name: &str, funcs: &[&'static str]) {
-        let scope_path = self
-            .scopes
-            .get(parent)
-            .map(|s| s.path.clone())
-            .unwrap_or_default();
-        let scope = self.new_scope(Some(*parent), scope_path, Some(name));
+    pub fn setup_std_module(&mut self, parent: &u64, name: &str, funcs: &[&'static str]) {
+        let scope_path = get_stdlib_module_path(name);
+        let scope = self.new_scope(Some(*parent), scope_path.clone(), Some(name));
+
+        let mut parser = Parser::default();
+        let mut tokenizer = Tokenizer::default();
+        if let Ok(stdlib) = fs::read_to_string(scope_path) {
+            if let Ok(tokens) = tokenizer.tokenize(&stdlib) {
+                let program = parser.produce_ast(tokens);
+                let middle = self.evaluate(&scope, program);
+                self.stdlib_nodes.push(middle);
+            }
+        }
+
         let map: FxHashMap<String, ParserDataType> = ParserDataType::natives();
 
         let funcs = funcs.into_iter().filter_map(|x| {

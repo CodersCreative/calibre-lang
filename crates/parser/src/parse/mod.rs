@@ -452,16 +452,49 @@ impl Parser {
                         path.push(x);
 
                         while self.first().token_type == TokenType::DoubleColon {
-                            let value = self.eat();
-                            close = value.span;
+                            let _sep = self.eat();
 
-                            let inner = ParserInnerType::from_str(&value.value)
-                                .unwrap_or(ParserInnerType::Auto(None));
-                            path.push(ParserDataType::new(value.span, inner));
+                            let next = self
+                                .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedIdentifier);
+                            close = next.span;
+
+                            let inner = ParserInnerType::from_str(&next.value)
+                                .unwrap_or(ParserInnerType::Struct(next.value));
+                            path.push(ParserDataType::new(next.span, inner));
                         }
 
                         if path.len() == 1 {
-                            Some(path.remove(0))
+                            let mut typ = path.remove(0);
+                            if self.first().token_type == TokenType::ColonAngled {
+                                let types = self.parse_type_list(
+                                    TokenType::ColonAngled,
+                                    TokenType::Comparison(ComparisonOperator::Greater),
+                                );
+                                let span = if let (Some(_first), Some(last)) =
+                                    (types.first(), types.last())
+                                {
+                                    Span::new_from_spans(typ.span, *last.span())
+                                } else {
+                                    typ.span
+                                };
+                                let generic_types = types
+                                    .into_iter()
+                                    .map(|x| match x {
+                                        PotentialNewType::DataType(dt) => dt,
+                                        PotentialNewType::NewType { .. } => {
+                                            ParserDataType::from(ParserInnerType::Auto(None))
+                                        }
+                                    })
+                                    .collect();
+                                typ = ParserDataType::new(
+                                    span,
+                                    ParserInnerType::StructWithGenerics {
+                                        identifier: typ.to_string(),
+                                        generic_types,
+                                    },
+                                );
+                            }
+                            Some(typ)
                         } else {
                             Some(ParserDataType::new(
                                 Span::new_from_spans(open, close),

@@ -1,0 +1,18 @@
+const main = fn() => {
+    let mut dial = 50;
+
+}
+
+const handle_line = fn(line : str) -> int => {
+    let chars = try line as list:<char> => panic();
+    let mut num = "";
+
+    for i in 0..(len(chars) - 1) => num &= chars[i + 1];
+    let mut num = try num as int => panic();
+
+    if chars[0] == 'L' => num *= -1;
+
+    num;
+}
+
+

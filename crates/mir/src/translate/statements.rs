@@ -9,8 +9,8 @@ use crate::{
 };
 use calibre_parser::{
     ast::{
-        Node, NodeType, ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialNewType,
-        VarType,
+        Node, NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
+        PotentialNewType, VarType,
     },
     lexer::Span,
 };
@@ -63,12 +63,31 @@ impl MiddleEnvironment {
             ));
         }
 
+        let is_function_decl = matches!(
+            original_value_node.node_type,
+            NodeType::FunctionDeclaration { .. }
+        );
+
         let mut data_type = if data_type.is_auto() {
             self.resolve_type_from_node(scope, &value)
                 .unwrap_or(self.resolve_potential_new_type(scope, data_type))
         } else {
             self.resolve_potential_new_type(scope, data_type)
         };
+
+        if let NodeType::FunctionDeclaration { ref header, .. } = original_value_node.node_type {
+            data_type = ParserDataType::from(ParserInnerType::Function {
+                return_type: Box::new(
+                    self.resolve_potential_new_type(scope, header.return_type.clone()),
+                ),
+                parameters: header
+                    .parameters
+                    .iter()
+                    .map(|(_, t)| self.resolve_potential_new_type(scope, t.clone()))
+                    .collect(),
+                is_async: header.is_async,
+            });
+        }
 
         if let NodeType::FunctionDeclaration { ref header, .. } = original_value_node.node_type {
             let mut tg = TypeGenerator::default();
@@ -194,27 +213,31 @@ impl MiddleEnvironment {
             self.hm_env.insert(new_name.clone(), scheme);
 
             if let Some(v) = self.variables.get_mut(&new_name) {
-                v.data_type = parser_ty.clone();
-                data_type = parser_ty.clone();
+                if !is_function_decl {
+                    v.data_type = parser_ty.clone();
+                    data_type = parser_ty.clone();
 
-                if let MiddleNodeType::FunctionDeclaration {
-                    parameters: ref mut params,
-                    return_type: ref mut ret_type,
-                    ..
-                } = value.node_type
-                    && let ParserInnerType::Function {
-                        return_type: inferred_ret,
-                        parameters: inferred_params,
-                        is_async: _,
-                    } = parser_ty.data_type
-                {
-                    for (i, (_name, p_ty)) in params.iter_mut().enumerate() {
-                        if i < inferred_params.len() {
-                            *p_ty = inferred_params[i].clone();
+                    if let MiddleNodeType::FunctionDeclaration {
+                        parameters: ref mut params,
+                        return_type: ref mut ret_type,
+                        ..
+                    } = value.node_type
+                        && let ParserInnerType::Function {
+                            return_type: inferred_ret,
+                            parameters: inferred_params,
+                            is_async: _,
+                        } = parser_ty.data_type
+                    {
+                        for (i, (_name, p_ty)) in params.iter_mut().enumerate() {
+                            if i < inferred_params.len() && p_ty.contains_auto() {
+                                *p_ty = inferred_params[i].clone();
+                            }
+                        }
+
+                        if ret_type.contains_auto() {
+                            *ret_type = *inferred_ret.clone();
                         }
                     }
-
-                    *ret_type = *inferred_ret.clone();
                 }
             }
         }

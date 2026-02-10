@@ -24,6 +24,7 @@ pub enum MiddleTypeDefType {
     Enum(Vec<(ParserText, Option<ParserDataType>)>),
     Struct(ObjectMap<ParserDataType>),
     NewType(ParserDataType),
+    Trait,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,6 +33,29 @@ pub struct MiddleObject {
     pub variables: FxHashMap<String, (String, bool)>,
     pub traits: Vec<String>,
     pub location: Option<Location>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiddleImpl {
+    pub data_type: ParserDataType,
+    pub generic_params: Vec<String>,
+    pub variables: FxHashMap<String, (String, bool)>,
+    pub traits: Vec<String>,
+    pub assoc_types: FxHashMap<String, ParserDataType>,
+    pub location: Option<Location>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiddleTraitMember {
+    pub data_type: ParserDataType,
+    pub default: Option<Node>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiddleTrait {
+    pub implied_traits: Vec<String>,
+    pub members: FxHashMap<String, MiddleTraitMember>,
+    pub assoc_types: FxHashMap<String, ParserDataType>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,6 +104,9 @@ pub struct MiddleEnvironment {
     pub overloads: Vec<MiddleOverload>,
     pub func_defers: Vec<Node>,
     pub objects: FxHashMap<String, MiddleObject>,
+    pub impls: FxHashMap<ParserInnerType, MiddleImpl>,
+    pub type_aliases: FxHashMap<String, ParserDataType>,
+    pub trait_defs: FxHashMap<String, MiddleTrait>,
     pub hm_env: FxHashMap<String, hm::TypeScheme>,
     pub generic_fn_templates:
         FxHashMap<String, (Vec<String>, calibre_parser::ast::FunctionHeader, Node)>,
@@ -89,6 +116,33 @@ pub struct MiddleEnvironment {
     pub specialization_decls_by_scope: FxHashMap<u64, Vec<MiddleNode>>,
     pub current_location: Option<Location>,
     pub errors: Vec<MiddleErr>,
+    pub stdlib_nodes: Vec<MiddleNode>,
+}
+
+impl Default for MiddleEnvironment {
+    fn default() -> Self {
+        Self {
+            func_defers: Vec::new(),
+            overloads: Vec::new(),
+            scope_counter: 0,
+            scopes: FxHashMap::default(),
+            resolved_variables: Vec::new(),
+            variables: FxHashMap::default(),
+            objects: FxHashMap::default(),
+            impls: FxHashMap::default(),
+            type_aliases: FxHashMap::default(),
+            trait_defs: FxHashMap::default(),
+            hm_env: FxHashMap::default(),
+            generic_fn_templates: FxHashMap::default(),
+            generic_type_templates: FxHashMap::default(),
+            type_specializations: FxHashMap::default(),
+            fn_specializations: FxHashMap::default(),
+            specialization_decls_by_scope: FxHashMap::default(),
+            current_location: None,
+            errors: Vec::new(),
+            stdlib_nodes: Vec::new(),
+        }
+    }
 }
 
 fn empty_scope() -> &'static MiddleScope {
@@ -148,24 +202,168 @@ pub fn get_disamubiguous_name(
 }
 
 impl MiddleEnvironment {
-    pub fn new() -> MiddleEnvironment {
-        MiddleEnvironment {
-            func_defers: Vec::new(),
-            overloads: Vec::new(),
-            scope_counter: 0,
-            scopes: FxHashMap::default(),
-            resolved_variables: Vec::new(),
-            variables: FxHashMap::default(),
-            objects: FxHashMap::default(),
-            hm_env: FxHashMap::default(),
-            generic_fn_templates: FxHashMap::default(),
-            generic_type_templates: FxHashMap::default(),
-            type_specializations: FxHashMap::default(),
-            fn_specializations: FxHashMap::default(),
-            specialization_decls_by_scope: FxHashMap::default(),
-            current_location: None,
-            errors: Vec::new(),
+    pub fn type_key(&self, ty: &ParserDataType) -> String {
+        ty.clone().unwrap_all_refs().data_type.to_string()
+    }
+
+    pub fn impl_key(&self, ty: &ParserDataType) -> ParserInnerType {
+        ty.clone().unwrap_all_refs().data_type
+    }
+
+    pub(crate) fn impl_type_matches(
+        &self,
+        impl_ty: &ParserInnerType,
+        target: &ParserInnerType,
+        generic_params: &[String],
+    ) -> bool {
+        fn struct_base(name: &str) -> &str {
+            let short = name.rsplit(':').next().unwrap_or(name);
+            short.split("->").next().unwrap_or(short)
         }
+        match (impl_ty, target) {
+            (ParserInnerType::Struct(s), ParserInnerType::Int) if struct_base(s) == "int" => {
+                return true;
+            }
+            (ParserInnerType::Struct(s), ParserInnerType::Float) if struct_base(s) == "float" => {
+                return true;
+            }
+            (ParserInnerType::Struct(s), ParserInnerType::Bool) if struct_base(s) == "bool" => {
+                return true;
+            }
+            (ParserInnerType::Struct(s), ParserInnerType::Char) if struct_base(s) == "char" => {
+                return true;
+            }
+            (ParserInnerType::Struct(s), ParserInnerType::Str) if struct_base(s) == "str" => {
+                return true;
+            }
+            (ParserInnerType::Struct(s), ParserInnerType::Range) if struct_base(s) == "range" => {
+                return true;
+            }
+            _ => {}
+        }
+        match (impl_ty, target) {
+            (ParserInnerType::Struct(a), _) if generic_params.contains(a) => true,
+            (ParserInnerType::Struct(a), ParserInnerType::Struct(b))
+                if b == a
+                    || b.starts_with(&format!("{}->", a))
+                    || struct_base(a) == struct_base(b) =>
+            {
+                true
+            }
+            (
+                ParserInnerType::StructWithGenerics { identifier: a, .. },
+                ParserInnerType::Struct(b),
+            ) if b == a || b.starts_with(&format!("{}->", a)) || struct_base(b) == a => true,
+            (
+                ParserInnerType::Struct(a),
+                ParserInnerType::StructWithGenerics { identifier: b, .. },
+            ) => a == b || struct_base(a) == b,
+            (
+                ParserInnerType::StructWithGenerics {
+                    identifier: a,
+                    generic_types: ag,
+                },
+                ParserInnerType::StructWithGenerics {
+                    identifier: b,
+                    generic_types: bg,
+                },
+            ) => {
+                if a != b || ag.len() != bg.len() {
+                    return false;
+                }
+                ag.iter().zip(bg.iter()).all(|(x, y)| {
+                    self.impl_type_matches(&x.data_type, &y.data_type, generic_params)
+                })
+            }
+            (ParserInnerType::List(a), ParserInnerType::List(b)) => {
+                self.impl_type_matches(&a.data_type, &b.data_type, generic_params)
+            }
+            (ParserInnerType::Option(a), ParserInnerType::Option(b)) => {
+                self.impl_type_matches(&a.data_type, &b.data_type, generic_params)
+            }
+            (
+                ParserInnerType::Result { ok: ao, err: ae },
+                ParserInnerType::Result { ok: bo, err: be },
+            ) => {
+                self.impl_type_matches(&ao.data_type, &bo.data_type, generic_params)
+                    && self.impl_type_matches(&ae.data_type, &be.data_type, generic_params)
+            }
+            (ParserInnerType::Ptr(a), ParserInnerType::Ptr(b)) => {
+                self.impl_type_matches(&a.data_type, &b.data_type, generic_params)
+            }
+            (ParserInnerType::Ref(a, _), ParserInnerType::Ref(b, _)) => {
+                self.impl_type_matches(&a.data_type, &b.data_type, generic_params)
+            }
+            (ParserInnerType::Tuple(a), ParserInnerType::Tuple(b)) => {
+                if a.len() != b.len() {
+                    return false;
+                }
+                a.iter().zip(b.iter()).all(|(x, y)| {
+                    self.impl_type_matches(&x.data_type, &y.data_type, generic_params)
+                })
+            }
+            _ => impl_ty == target,
+        }
+    }
+
+    pub fn find_impl_for_type(&self, ty: &ParserDataType) -> Option<&MiddleImpl> {
+        let key = self.impl_key(ty);
+        if let Some(imp) = self.impls.get(&key) {
+            return Some(imp);
+        }
+        let target = ty.clone().unwrap_all_refs().data_type;
+        self.impls.values().find(|imp| {
+            self.impl_type_matches(&imp.data_type.data_type, &target, &imp.generic_params)
+        })
+    }
+
+    pub fn find_impl_for_type_mut(&mut self, ty: &ParserDataType) -> Option<&mut MiddleImpl> {
+        let key = self.impl_key(ty);
+        if self.impls.contains_key(&key) {
+            return self.impls.get_mut(&key);
+        }
+        let target = ty.clone().unwrap_all_refs().data_type;
+        let key = self
+            .impls
+            .iter()
+            .find(|(_, imp)| {
+                self.impl_type_matches(&imp.data_type.data_type, &target, &imp.generic_params)
+            })
+            .map(|(k, _)| k.clone())?;
+        self.impls.get_mut(&key)
+    }
+
+    pub fn resolve_associated_type(
+        &self,
+        base: &ParserDataType,
+        name: &str,
+    ) -> Option<ParserDataType> {
+        self.find_impl_for_type(base)
+            .and_then(|imp| imp.assoc_types.get(name).cloned())
+    }
+
+    pub fn get_or_create_impl(
+        &mut self,
+        ty: ParserDataType,
+        generic_params: Vec<String>,
+    ) -> ParserInnerType {
+        let key = self.impl_key(&ty);
+        if self.impls.contains_key(&key) {
+            return key;
+        }
+
+        self.impls.insert(
+            key.clone(),
+            MiddleImpl {
+                data_type: ty,
+                generic_params,
+                variables: FxHashMap::default(),
+                traits: Vec::new(),
+                assoc_types: FxHashMap::default(),
+                location: self.current_location.clone(),
+            },
+        );
+        key
     }
 
     pub fn push_error(&mut self, err: MiddleErr) {
@@ -583,10 +781,29 @@ impl MiddleEnvironment {
     }
 
     pub fn new_and_evaluate(node: Node, path: PathBuf) -> (Self, u64, MiddleNode) {
-        let mut env = Self::new();
+        let mut env = Self::default();
         let scope = env.new_scope_with_stdlib(None, path, None);
         let mut same = 0;
-        let mut middle = env.evaluate(&scope, node.clone());
+        let wrap = |env: &MiddleEnvironment, scope: u64, span: Span, inner: MiddleNode| {
+            if env.stdlib_nodes.is_empty() {
+                inner
+            } else {
+                let mut body = env.stdlib_nodes.clone();
+                body.push(inner);
+                MiddleNode {
+                    node_type: MiddleNodeType::ScopeDeclaration {
+                        body,
+                        create_new_scope: false,
+                        is_temp: false,
+                        scope_id: scope,
+                    },
+                    span,
+                }
+            }
+        };
+
+        let mut inner = env.evaluate(&scope, node.clone());
+        let mut middle = wrap(&env, scope, node.span, inner.clone());
 
         for _ in 0..5 {
             let before_vars: Vec<(String, calibre_parser::ast::ParserDataType)> = env
@@ -595,7 +812,7 @@ impl MiddleEnvironment {
                 .map(|(k, v)| (k.clone(), v.data_type.clone()))
                 .collect();
 
-            env.apply_inferred_types_to_middlenode(&scope, &mut middle);
+            env.apply_inferred_types_to_middlenode(&scope, &mut inner);
 
             let after_vars: Vec<(String, calibre_parser::ast::ParserDataType)> = env
                 .variables
@@ -603,11 +820,13 @@ impl MiddleEnvironment {
                 .map(|(k, v)| (k.clone(), v.data_type.clone()))
                 .collect();
 
-            let new_middle = env.evaluate(&scope, node.clone());
+            let new_inner = env.evaluate(&scope, node.clone());
+            let new_middle = wrap(&env, scope, node.span, new_inner.clone());
 
             let old_str = middle.to_string();
             let new_str = new_middle.to_string();
 
+            inner = new_inner;
             middle = new_middle;
 
             if before_vars == after_vars && old_str == new_str {
@@ -620,7 +839,8 @@ impl MiddleEnvironment {
             }
         }
 
-        env.apply_inferred_types_to_middlenode(&scope, &mut middle);
+        env.apply_inferred_types_to_middlenode(&scope, &mut inner);
+        middle = wrap(&env, scope, node.span, inner);
 
         if let Some(mut decls) = env.specialization_decls_by_scope.remove(&scope) {
             if !decls.is_empty() {
@@ -979,8 +1199,6 @@ impl MiddleEnvironment {
             Some(x.to_string())
         } else if let Some(parent) = scope.parent.as_ref() {
             self.resolve_str(parent, iden)
-        } else if iden.contains("-") {
-            Some(iden.to_string())
         } else {
             None
         }
@@ -1236,6 +1454,16 @@ impl MiddleEnvironment {
 
     pub fn resolve_data_type(&mut self, scope: &u64, data_type: ParserDataType) -> ParserDataType {
         match data_type.data_type {
+            ParserInnerType::Struct(identifier) => {
+                let id = self.resolve_str(scope, &identifier).unwrap_or(identifier);
+                if let Some(alias) = self.type_aliases.get(&id) {
+                    return alias.clone();
+                }
+                ParserDataType {
+                    data_type: ParserInnerType::Struct(id),
+                    span: data_type.span,
+                }
+            }
             ParserInnerType::StructWithGenerics {
                 identifier,
                 generic_types,
@@ -1281,14 +1509,6 @@ impl MiddleEnvironment {
                     span: data_type.span,
                 }
             }
-            ParserInnerType::Struct(x) => ParserDataType {
-                data_type: ParserInnerType::Struct(
-                    self.resolve_str(scope, &x)
-                        .map(|x| x.to_string())
-                        .unwrap_or(x),
-                ),
-                span: data_type.span,
-            },
             ParserInnerType::Function {
                 return_type,
                 parameters,
@@ -1340,6 +1560,15 @@ impl MiddleEnvironment {
 
                 for x in x {
                     lst.push(self.resolve_data_type(scope, x));
+                }
+
+                if lst.len() == 2 {
+                    if let ParserInnerType::Struct(name) = &lst[1].data_type {
+                        if let Some(resolved) = self.resolve_associated_type(&lst[0], name.as_str())
+                        {
+                            return resolved;
+                        }
+                    }
                 }
 
                 ParserDataType {
@@ -1744,6 +1973,8 @@ impl MiddleEnvironment {
             | NodeType::Continue
             | NodeType::VariableDeclaration { .. }
             | NodeType::ImplDeclaration { .. }
+            | NodeType::ImplTraitDeclaration { .. }
+            | NodeType::TraitDeclaration { .. }
             | NodeType::TypeDeclaration { .. }
             | NodeType::ExternFunctionDeclaration { .. }
             | NodeType::Return { .. }

@@ -11,7 +11,9 @@ pub struct Location {
     pub path: PathBuf,
     pub span: Span,
 }
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 pub struct Span {
     pub from: Position,
     pub to: Position,
@@ -40,7 +42,9 @@ impl Span {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 pub struct Position {
     pub line: u32,
     pub col: u32,
@@ -170,7 +174,6 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("try"), TokenType::Try),
         (String::from("if"), TokenType::If),
         (String::from("as"), TokenType::As),
-        (String::from("func"), TokenType::Func),
         (String::from("struct"), TokenType::Struct),
         (String::from("async"), TokenType::Async),
         (String::from("impl"), TokenType::Impl),

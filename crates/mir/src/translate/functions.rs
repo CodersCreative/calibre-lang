@@ -339,6 +339,26 @@ impl MiddleEnvironment {
         mut args: Vec<CallArg>,
         mut reverse_args: Vec<Node>,
     ) -> Result<MiddleNode, MiddleErr> {
+        if let NodeType::MemberExpression { mut path } = caller.node_type.clone() {
+            if let Some((last_node, is_dynamic)) = path.last_mut()
+                && !*is_dynamic
+                && matches!(last_node.node_type, NodeType::Identifier(_))
+            {
+                let call = Node::new(
+                    last_node.span,
+                    NodeType::CallExpression {
+                        string_fn: None,
+                        caller: Box::new(last_node.clone()),
+                        generic_types,
+                        args,
+                        reverse_args,
+                    },
+                );
+                *last_node = call;
+                return self.evaluate_member_expression(scope, span, path);
+            }
+        }
+
         if let NodeType::Identifier(caller_ident) = &caller.node_type {
             if let Some(resolved_caller) = self.resolve_potential_generic_ident(scope, caller_ident)
             {

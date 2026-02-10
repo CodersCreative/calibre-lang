@@ -1,5 +1,4 @@
 use std::{
-    f64::consts::PI,
     fmt::{Debug, Display},
     sync::Arc,
 };
@@ -17,7 +16,7 @@ use std::os::raw::c_void;
 
 use crate::{
     VM,
-    conversion::VMLiteral,
+    conversion::{Reg, VMLiteral},
     error::RuntimeError,
     native::{self, NativeFunction},
 };
@@ -64,7 +63,10 @@ pub enum RuntimeValue {
     Aggregate(Option<String>, Gc<GcMap>),
     Enum(String, usize, Option<Gc<RuntimeValue>>),
     Ref(String),
-    SlotRef(usize),
+    RegRef {
+        frame: usize,
+        reg: Reg,
+    },
     List(Gc<GcVec>),
     Option(Option<Gc<RuntimeValue>>),
     Result(Result<Gc<RuntimeValue>, Gc<RuntimeValue>>),
@@ -131,14 +133,10 @@ enum FfiArg {
 impl RuntimeValue {
     pub fn constants() -> FxHashMap<String, Self> {
         let lst = [
-            ("PI", RuntimeValue::Float(PI)),
-            ("FLOAT_MAX", RuntimeValue::Float(f64::MAX)),
-            ("INT_MAX", RuntimeValue::Int(i64::MAX)),
-            ("FLOAT_MIN", RuntimeValue::Float(f64::MIN)),
-            ("INT_MIN", RuntimeValue::Int(i64::MIN)),
             ("true", RuntimeValue::Bool(true)),
             ("false", RuntimeValue::Bool(false)),
             ("none", RuntimeValue::Option(None)),
+            ("INT_MIN", RuntimeValue::Int(i64::MIN)),
         ];
 
         let mut map = FxHashMap::default();
@@ -152,27 +150,19 @@ impl RuntimeValue {
 
     pub fn natives() -> FxHashMap<String, Self> {
         let lst: Vec<(&'static str, Arc<dyn NativeFunction>)> = vec![
-            ("print", Arc::new(native::stdlib::console::Out())),
             ("ok", Arc::new(native::global::OkFn())),
             ("err", Arc::new(native::global::ErrFn())),
             ("some", Arc::new(native::global::SomeFn())),
             ("len", Arc::new(native::global::Len())),
             ("trim", Arc::new(native::global::Trim())),
+            ("str_split", Arc::new(native::global::StrSplit())),
+            ("str_contains", Arc::new(native::global::StrContains())),
+            ("str_starts_with", Arc::new(native::global::StrStartsWith())),
+            ("str_ends_with", Arc::new(native::global::StrEndsWith())),
             ("discriminant", Arc::new(native::global::DiscriminantFn())),
             ("tuple", Arc::new(native::global::TupleFn())),
             ("panic", Arc::new(native::global::PanicFn())),
             ("min_or_zero", Arc::new(native::global::MinOrZero())),
-            ("console.out", Arc::new(native::stdlib::console::Out())),
-            ("console.input", Arc::new(native::stdlib::console::Input())),
-            ("console.err", Arc::new(native::stdlib::console::ErrFn())),
-            ("console.clear", Arc::new(native::stdlib::console::Clear())),
-            ("thread.wait", Arc::new(native::stdlib::thread::Wait())),
-            (
-                "random.generate",
-                Arc::new(native::stdlib::random::Generate()),
-            ),
-            ("random.bool", Arc::new(native::stdlib::random::Bool())),
-            ("random.ratio", Arc::new(native::stdlib::random::Ratio())),
         ];
 
         let mut map = FxHashMap::default();
@@ -223,7 +213,7 @@ impl RuntimeValue {
     pub fn display(&self, vm: &VM) -> String {
         match self {
             Self::Ref(x) => vm.variables.get(x).unwrap().display(vm),
-            Self::SlotRef(x) => vm.current_frame().slots.get(*x).unwrap().display(vm),
+            Self::RegRef { frame, reg } => vm.get_reg_value_in_frame(*frame, *reg).display(vm),
             Self::List(x) => {
                 let lst: Vec<String> = x.0.iter().map(|x| x.display(vm)).collect();
                 print_list(&lst, '[', ']')
@@ -283,7 +273,7 @@ impl Display for RuntimeValue {
             Self::Enum(x, y, _) => write!(f, "{}[{}]", x, y),
             Self::Range(from, to) => write!(f, "{}..{}", from, to),
             Self::Ref(x) => write!(f, "ref -> {}", x),
-            Self::SlotRef(x) => write!(f, "slotref -> {}", x),
+            Self::RegRef { frame, reg } => write!(f, "regref -> {}:{}", frame, reg),
             Self::Bool(x) => write!(f, "{}", if *x { "true" } else { "false" }),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
@@ -341,7 +331,7 @@ impl VM {
                 .get(&pointer)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ref(pointer)),
-            RuntimeValue::SlotRef(slot) => self.get_slot_value(slot),
+            RuntimeValue::RegRef { frame, reg } => self.get_reg_value_in_frame(frame, reg),
             other => other,
         }
     }
@@ -353,7 +343,7 @@ impl VM {
                 .get(&pointer)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ref(pointer)),
-            RuntimeValue::SlotRef(slot) => self.get_slot_value(slot),
+            RuntimeValue::RegRef { frame, reg } => self.get_reg_value_in_frame(frame, reg),
             other => other,
         }
     }
@@ -368,7 +358,9 @@ impl VM {
                         RuntimeValue::Null
                     }
                 }
-                RuntimeValue::SlotRef(slot) => transform(env, env.get_slot_value(slot)),
+                RuntimeValue::RegRef { frame, reg } => {
+                    transform(env, env.get_reg_value_in_frame(frame, reg))
+                }
                 RuntimeValue::Aggregate(x, map) => {
                     let mut new_map = Vec::new();
                     for (k, v) in map.as_ref().0.0.iter().cloned() {
@@ -415,7 +407,7 @@ impl ExternFunction {
                 .get(&name)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ref(name)),
-            RuntimeValue::SlotRef(slot) => env.get_slot_value(slot),
+            RuntimeValue::RegRef { frame, reg } => env.get_reg_value_in_frame(frame, reg),
             RuntimeValue::Ptr(id) => env
                 .ptr_heap
                 .get(&id)

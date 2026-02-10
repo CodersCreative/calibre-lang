@@ -3,8 +3,9 @@ use crate::{
     ast::{
         DestructurePattern, FunctionHeader, GenericType, GenericTypes, IfComparisonType, LoopType,
         MatchArmType, NamedScope, Node, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialFfiDataType, PotentialNewType, TryCatch, VarType,
-        binary::BinaryOperator, comparison::ComparisonOperator,
+        PotentialDollarIdentifier, PotentialFfiDataType, PotentialGenericTypeIdentifier,
+        PotentialNewType, TryCatch, VarType, binary::BinaryOperator,
+        comparison::ComparisonOperator,
     },
     lexer::{Bracket, Span, StopValue},
 };
@@ -14,7 +15,7 @@ impl Parser {
     pub fn parse_statement(&mut self) -> Node {
         let node = match &self.first().token_type {
             TokenType::Let | TokenType::Const => self.parse_variable_declaration(),
-            TokenType::Trait => self.parse_if_statement(),
+            TokenType::Trait => self.parse_trait_declaration(),
             TokenType::Impl => self.parse_impl_declaration(),
             TokenType::Import => self.parse_import_declaration(),
             TokenType::Type => self.parse_type_decaration(),
@@ -582,7 +583,15 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("impl")),
         );
 
-        let identifier = self.expect_potential_dollar_ident();
+        let generics = self.parse_generic_types_with_constraints();
+
+        let target_type = self.expect_potential_new_type();
+        let target = if self.first().token_type == TokenType::For {
+            let _ = self.eat();
+            Some(self.expect_potential_new_type())
+        } else {
+            None
+        };
 
         let mut variables = Vec::new();
 
@@ -592,7 +601,11 @@ impl Parser {
         );
 
         while self.first().token_type != TokenType::Close(Bracket::Curly) {
-            let decl = self.parse_variable_declaration();
+            let decl = if self.first().token_type == TokenType::Type {
+                self.parse_type_decaration()
+            } else {
+                self.parse_variable_declaration()
+            };
 
             let _ = self.parse_delimited();
 
@@ -600,7 +613,8 @@ impl Parser {
                 NodeType::VariableDeclaration {
                     var_type: VarType::Constant,
                     ..
-                } => {
+                }
+                | NodeType::TypeDeclaration { .. } => {
                     variables.push(decl);
                 }
                 _ => self.add_err(SyntaxErr::ExpectedFunctions),
@@ -612,11 +626,136 @@ impl Parser {
             SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
         );
 
+        if let Some(target) = target {
+            let trait_ident = match target_type {
+                PotentialNewType::DataType(ParserDataType {
+                    data_type: ParserInnerType::Struct(name),
+                    span,
+                }) => PotentialGenericTypeIdentifier::Identifier(
+                    PotentialDollarIdentifier::Identifier(ParserText { text: name, span }),
+                ),
+                PotentialNewType::DataType(ParserDataType {
+                    data_type: ParserInnerType::StructWithGenerics { identifier, .. },
+                    span,
+                }) => PotentialGenericTypeIdentifier::Identifier(
+                    PotentialDollarIdentifier::Identifier(ParserText {
+                        text: identifier,
+                        span,
+                    }),
+                ),
+                _ => {
+                    self.add_err(SyntaxErr::ExpectedIdentifier);
+                    PotentialGenericTypeIdentifier::Identifier(
+                        PotentialDollarIdentifier::Identifier(ParserText::from(String::from(
+                            "Invalid",
+                        ))),
+                    )
+                }
+            };
+
+            Node::new(
+                *target.span(),
+                NodeType::ImplTraitDeclaration {
+                    generics,
+                    trait_ident,
+                    target,
+                    variables,
+                },
+            )
+        } else {
+            Node::new(
+                *target_type.span(),
+                NodeType::ImplDeclaration {
+                    generics,
+                    target: target_type,
+                    variables,
+                },
+            )
+        }
+    }
+
+    pub fn parse_trait_declaration(&mut self) -> Node {
+        let open = self.expect_eat(
+            &TokenType::Trait,
+            SyntaxErr::ExpectedKeyword(String::from("trait")),
+        );
+
+        let identifier = self.expect_potential_generic_type_ident();
+        let mut implied_traits = Vec::new();
+
+        if self.first().token_type == TokenType::Colon {
+            let _ = self.eat();
+            implied_traits.push(self.expect_potential_dollar_ident());
+
+            while self.first().token_type == TokenType::BinaryOperator(BinaryOperator::Add) {
+                let _ = self.eat();
+                implied_traits.push(self.expect_potential_dollar_ident());
+            }
+        }
+
+        let _ = self.expect_eat(
+            &TokenType::Open(Bracket::Curly),
+            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
+        );
+
+        let mut members = Vec::new();
+
+        while self.first().token_type != TokenType::Close(Bracket::Curly) && !self.is_eof() {
+            let kind = if self.first().token_type == TokenType::Type {
+                let _ = self.eat();
+                crate::ast::TraitMemberKind::Type
+            } else {
+                let _ = self.expect_eat(
+                    &TokenType::Const,
+                    SyntaxErr::ExpectedKeyword(String::from("const")),
+                );
+                crate::ast::TraitMemberKind::Const
+            };
+
+            let member_ident = self.expect_potential_dollar_ident();
+
+            let mut data_type =
+                PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(None)));
+
+            if self.first().token_type == TokenType::Colon {
+                let _ = self.eat();
+                data_type = self.expect_potential_new_type();
+            } else if matches!(kind, crate::ast::TraitMemberKind::Type)
+                && self.first().token_type == TokenType::Equals
+            {
+                let _ = self.eat();
+                data_type = self.expect_potential_new_type();
+            }
+
+            let mut value = None;
+            if matches!(kind, crate::ast::TraitMemberKind::Const)
+                && self.first().token_type == TokenType::Equals
+            {
+                let _ = self.eat();
+                value = Some(Box::new(self.parse_statement()));
+            }
+
+            let _ = self.parse_delimited();
+
+            members.push(crate::ast::TraitMember {
+                kind,
+                identifier: member_ident,
+                data_type,
+                value,
+            });
+        }
+
+        let _ = self.expect_eat(
+            &TokenType::Close(Bracket::Curly),
+            SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
+        );
+
         Node::new(
-            *identifier.span(),
-            NodeType::ImplDeclaration {
-                identifier: identifier.into(),
-                variables,
+            Span::new_from_spans(open.span, *identifier.span()),
+            NodeType::TraitDeclaration {
+                identifier,
+                implied_traits,
+                members,
             },
         )
     }

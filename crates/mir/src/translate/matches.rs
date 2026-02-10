@@ -21,31 +21,30 @@ impl MiddleEnvironment {
         value: Option<Box<Node>>,
         body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let tmp_name = format!("__match_tmp_{}_{}", span.from.line, span.from.col);
-
-        let tmp_ident = Node::new(
-            self.current_span(),
-            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                ParserText::from(tmp_name.clone()).into(),
-            )),
-        );
-
-        let tmp_decl = Node::new(
-            self.current_span(),
-            NodeType::VariableDeclaration {
-                var_type: VarType::Mutable,
-                identifier: ParserText::from(tmp_name).into(),
-                data_type: PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(
-                    None,
-                ))),
-                value: Box::new(Node::new(self.current_span(), NodeType::Null)),
-            },
-        );
-
-        let resolved_data_type = if let Some(value) = value.as_ref() {
-            self.resolve_type_from_node(scope, value)
+        let (resolved_data_type, decl, value) = if let Some(value) = value {
+            let tmp_name = format!("__match_tmp_{}_{}", span.from.line, span.from.col);
+            (
+                self.resolve_type_from_node(scope, &value),
+                Some(Node::new(
+                    self.current_span(),
+                    NodeType::VariableDeclaration {
+                        var_type: VarType::Mutable,
+                        identifier: ParserText::from(tmp_name.clone()).into(),
+                        data_type: PotentialNewType::DataType(ParserDataType::from(
+                            ParserInnerType::Auto(None),
+                        )),
+                        value,
+                    },
+                )),
+                Some(Node::new(
+                    self.current_span(),
+                    NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                        ParserText::from(tmp_name).into(),
+                    )),
+                )),
+            )
         } else {
-            None
+            (None, None, None)
         };
 
         let mut ifs: Vec<Node> = Vec::new();
@@ -101,19 +100,13 @@ impl MiddleEnvironment {
             let (Some(value), Some(resolved_data_type)) =
                 (value.clone(), resolved_data_type.as_ref())
             else {
-                if let Some(match_value) = value.clone() {
+                if let Some(value) = value.clone() {
                     match pattern.0 {
                         MatchArmType::Wildcard(_) => ifs.push(Node::new(
                             self.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(conditionals)),
-                                then: Box::new(Node::new(
-                                    self.current_span(),
-                                    NodeType::AssignmentExpression {
-                                        identifier: Box::new(tmp_ident.clone()),
-                                        value: pattern.2,
-                                    },
-                                )),
+                                then: pattern.2,
                                 otherwise: None,
                             },
                         )),
@@ -126,7 +119,7 @@ impl MiddleEnvironment {
                                         left: Box::new(Node::new(
                                             self.current_span(),
                                             NodeType::ComparisonExpression {
-                                                left: match_value.clone(),
+                                                left: Box::new(value.clone()),
                                                 right: Box::new(x),
                                                 operator: ComparisonOperator::Equal,
                                             },
@@ -135,59 +128,10 @@ impl MiddleEnvironment {
                                         operator: BooleanOperator::And,
                                     },
                                 ))),
-                                then: Box::new(Node::new(
-                                    self.current_span(),
-                                    NodeType::AssignmentExpression {
-                                        identifier: Box::new(tmp_ident.clone()),
-                                        value: pattern.2,
-                                    },
-                                )),
+                                then: pattern.2,
                                 otherwise: None,
                             },
                         )),
-                        _ => unreachable!(),
-                    }
-                } else {
-                    match pattern.0 {
-                        MatchArmType::Wildcard(_) => ifs.push(Node::new(
-                            self.current_span(),
-                            NodeType::IfStatement {
-                                comparison: Box::new(IfComparisonType::If(conditionals)),
-                                then: Box::new(Node::new(
-                                    self.current_span(),
-                                    NodeType::AssignmentExpression {
-                                        identifier: Box::new(tmp_ident.clone()),
-                                        value: pattern.2,
-                                    },
-                                )),
-                                otherwise: None,
-                            },
-                        )),
-                        MatchArmType::Value(x) => {
-                            conditionals = Node::new(
-                                self.current_span(),
-                                NodeType::BooleanExpression {
-                                    left: Box::new(x),
-                                    right: Box::new(conditionals),
-                                    operator: BooleanOperator::And,
-                                },
-                            );
-
-                            ifs.push(Node::new(
-                                self.current_span(),
-                                NodeType::IfStatement {
-                                    comparison: Box::new(IfComparisonType::If(conditionals)),
-                                    then: Box::new(Node::new(
-                                        self.current_span(),
-                                        NodeType::AssignmentExpression {
-                                            identifier: Box::new(tmp_ident.clone()),
-                                            value: pattern.2,
-                                        },
-                                    )),
-                                    otherwise: None,
-                                },
-                            ))
-                        }
                         _ => unreachable!(),
                     }
                 }
@@ -200,13 +144,7 @@ impl MiddleEnvironment {
                     self.current_span(),
                     NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(conditionals)),
-                        then: Box::new(Node::new(
-                            self.current_span(),
-                            NodeType::AssignmentExpression {
-                                identifier: Box::new(tmp_ident.clone()),
-                                value: pattern.2,
-                            },
-                        )),
+                        then: pattern.2,
                         otherwise: None,
                     },
                 )),
@@ -219,7 +157,7 @@ impl MiddleEnvironment {
                                 left: Box::new(Node::new(
                                     self.current_span(),
                                     NodeType::ComparisonExpression {
-                                        left: value.clone(),
+                                        left: Box::new(value),
                                         right: Box::new(x),
                                         operator: ComparisonOperator::Equal,
                                     },
@@ -228,13 +166,7 @@ impl MiddleEnvironment {
                                 operator: BooleanOperator::And,
                             },
                         ))),
-                        then: Box::new(Node::new(
-                            self.current_span(),
-                            NodeType::AssignmentExpression {
-                                identifier: Box::new(tmp_ident.clone()),
-                                value: pattern.2,
-                            },
-                        )),
+                        then: pattern.2,
                         otherwise: None,
                     },
                 )),
@@ -251,17 +183,11 @@ impl MiddleEnvironment {
                                         NodeType::VariableDeclaration {
                                             var_type,
                                             identifier: name,
-                                            value: value.clone(),
+                                            value: Box::new(value.clone()),
                                             data_type: resolved_data_type.clone().into(),
                                         },
                                     ),
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::AssignmentExpression {
-                                            identifier: Box::new(tmp_ident.clone()),
-                                            value: pattern.2,
-                                        },
-                                    ),
+                                    *pattern.2,
                                 ]),
                                 create_new_scope: Some(true),
                                 define: false,
@@ -331,7 +257,7 @@ impl MiddleEnvironment {
                                                             .into(),
                                                         ),
                                                     )),
-                                                    args: vec![CallArg::Value(*value.clone())],
+                                                    args: vec![CallArg::Value(value.clone())],
                                                     reverse_args: Vec::new(),
                                                 },
                                             )),
@@ -365,7 +291,7 @@ impl MiddleEnvironment {
                                                             self.current_span(),
                                                             NodeType::MemberExpression {
                                                                 path: vec![
-                                                                    (*value.clone(), false),
+                                                                    (value, false),
                                                                     (
                                                                         Node::new(
                                                                             self.current_span(),
@@ -390,7 +316,7 @@ impl MiddleEnvironment {
                                                     self.current_span(),
                                                     NodeType::MemberExpression {
                                                         path: vec![
-                                                            (*value.clone(), false),
+                                                            (value, false),
                                                             (
                                                                 Node::new(
                                                                     self.current_span(),
@@ -422,13 +348,7 @@ impl MiddleEnvironment {
                                         ));
                                     }
 
-                                    body_nodes.push(Node::new(
-                                        self.current_span(),
-                                        NodeType::AssignmentExpression {
-                                            identifier: Box::new(tmp_ident.clone()),
-                                            value: pattern.2,
-                                        },
-                                    ));
+                                    body_nodes.push(*pattern.2);
 
                                     Node::new(
                                         self.current_span(),
@@ -441,13 +361,7 @@ impl MiddleEnvironment {
                                         },
                                     )
                                 } else {
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::AssignmentExpression {
-                                            identifier: Box::new(tmp_ident.clone()),
-                                            value: pattern.2,
-                                        },
-                                    )
+                                    *pattern.2
                                 })
                             },
                             otherwise: None,
@@ -475,17 +389,22 @@ impl MiddleEnvironment {
             cur_if
         };
 
-        let scope_node = Node::new(
-            self.current_span(),
-            NodeType::ScopeDeclaration {
-                body: Some(vec![tmp_decl, ifs, tmp_ident]),
-                named: None,
-                is_temp: true,
-                create_new_scope: Some(true),
-                define: false,
+        self.evaluate_inner(
+            scope,
+            if let Some(decl) = decl {
+                Node::new(
+                    self.current_span(),
+                    NodeType::ScopeDeclaration {
+                        body: Some(vec![decl, ifs]),
+                        named: None,
+                        is_temp: true,
+                        create_new_scope: Some(true),
+                        define: false,
+                    },
+                )
+            } else {
+                ifs
             },
-        );
-
-        self.evaluate_inner(scope, scope_node)
+        )
     }
 }

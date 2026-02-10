@@ -1,10 +1,9 @@
 use crate::{
     config::VMConfig,
-    conversion::{VMBlock, VMFunction, VMInstruction, VMRegistry},
+    conversion::{Reg, VMBlock, VMFunction, VMRegistry},
     error::RuntimeError,
     value::RuntimeValue,
 };
-use calibre_lir::BlockId;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     fmt::Debug,
@@ -22,71 +21,23 @@ pub mod native;
 pub mod serialization;
 pub mod value;
 
-pub struct VMStack {
-    items: Vec<RuntimeValue>,
-    top: Option<RuntimeValue>,
-}
-
-impl VMStack {
-    fn new() -> Self {
-        Self {
-            items: Vec::new(),
-            top: None,
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.items.len() + if self.top.is_some() { 1 } else { 0 }
-    }
-
-    fn push(&mut self, value: RuntimeValue) {
-        if let Some(top) = self.top.take() {
-            self.items.push(top);
-        }
-        self.top = Some(value);
-    }
-
-    fn pop(&mut self) -> Option<RuntimeValue> {
-        if let Some(top) = self.top.take() {
-            return Some(top);
-        }
-        self.items.pop()
-    }
-
-    fn pop_n(&mut self, count: usize) -> Option<Vec<RuntimeValue>> {
-        if self.len() < count {
-            return None;
-        }
-        let mut values = Vec::with_capacity(count);
-        for _ in 0..count {
-            values.push(self.pop()?);
-        }
-        values.reverse();
-        Some(values)
-    }
-}
-
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct VMFrame {
-    slots: Vec<RuntimeValue>,
-    slot_map: FxHashMap<String, usize>,
-    slot_names: Vec<String>,
+    regs: Vec<RuntimeValue>,
+    local_map: FxHashMap<String, Reg>,
+    func_ptr: usize,
+    acc: RuntimeValue,
 }
 
-#[derive(Copy, Clone, Debug)]
-enum ResolvedName {
-    Slot(usize),
-    GlobalVar,
-    Func,
-    Unknown,
-}
-
-#[derive(Debug, Clone, Default)]
-struct ResolvedFunctionCache {
-    slots_len: usize,
-    param_slots: FxHashMap<String, usize>,
-    slot_names: Vec<String>,
-    block_resolved: FxHashMap<BlockId, Vec<ResolvedName>>,
+impl Default for VMFrame {
+    fn default() -> Self {
+        Self {
+            regs: Vec::new(),
+            local_map: FxHashMap::default(),
+            func_ptr: 0,
+            acc: RuntimeValue::Null,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -97,6 +48,7 @@ pub struct VM {
     pub counter: u64,
     pub ptr_heap: FxHashMap<u64, RuntimeValue>,
     frames: Vec<VMFrame>,
+    frame_pool: Vec<VMFrame>,
     caches: VMCaches,
     gc: VMGC,
 }
@@ -104,9 +56,7 @@ pub struct VM {
 #[derive(Debug, Clone, Default)]
 pub struct VMCaches {
     call: FxHashMap<String, Arc<VMFunction>>,
-    lowered: FxHashMap<String, Arc<VMFunction>>,
-    resolved: FxHashMap<String, Arc<ResolvedFunctionCache>>,
-    current_resolved: Option<Arc<ResolvedFunctionCache>>,
+    globals: FxHashMap<String, RuntimeValue>,
 }
 
 #[derive(Debug, Clone)]
@@ -135,6 +85,7 @@ impl From<VMRegistry> for VM {
             counter: 0,
             ptr_heap: FxHashMap::default(),
             frames: vec![VMFrame::default()],
+            frame_pool: Vec::new(),
             caches: VMCaches::default(),
             gc: VMGC::default(),
         }
@@ -153,17 +104,6 @@ impl VM {
         None
     }
 
-    fn find_unique_slot_by_suffix(&self, short_name: &str) -> Option<usize> {
-        let suffix = format!(":{}", short_name);
-        for (name, slot) in self.current_frame().slot_map.iter() {
-            if name.ends_with(&suffix) {
-                return Some(*slot);
-            }
-        }
-
-        None
-    }
-
     fn find_unique_var_by_suffix(&self, short_name: &str) -> Option<String> {
         let suffix = format!(":{}", short_name);
         for name in self.variables.keys() {
@@ -172,6 +112,16 @@ impl VM {
             }
         }
 
+        None
+    }
+
+    fn find_unique_local_by_suffix(&self, short_name: &str) -> Option<Reg> {
+        let suffix = format!(":{}", short_name);
+        for (name, reg) in self.current_frame().local_map.iter() {
+            if name.ends_with(&suffix) {
+                return Some(*reg);
+            }
+        }
         None
     }
 
@@ -236,6 +186,15 @@ impl VM {
     }
 
     fn capture_value(&self, name: &str, seen: &mut FxHashSet<String>) -> RuntimeValue {
+        if let Some(reg) = self.current_frame().local_map.get(name).copied() {
+            return self.get_reg_value(reg);
+        }
+        if let Some((_, short)) = name.rsplit_once(':') {
+            if let Some(reg) = self.find_unique_local_by_suffix(short) {
+                return self.get_reg_value(reg);
+            }
+        }
+
         match self.resolve_var_name(name) {
             VarName::Var(var) => self
                 .variables
@@ -243,7 +202,6 @@ impl VM {
                 .cloned()
                 .map(|v| self.copy_saveable_into_runtime_var(v))
                 .unwrap_or(RuntimeValue::Null),
-            VarName::Slot(slot) => self.get_slot_value(slot),
             VarName::Func(func) => self
                 .registry
                 .functions
@@ -302,6 +260,7 @@ impl VM {
             counter: 0,
             ptr_heap: FxHashMap::default(),
             frames: vec![VMFrame::default()],
+            frame_pool: Vec::new(),
             caches: VMCaches::default(),
             gc: VMGC::default(),
         };
@@ -312,7 +271,6 @@ impl VM {
 
         vm.setup_global();
         vm.setup_stdlib();
-
         vm
     }
 
@@ -322,20 +280,33 @@ impl VM {
         id
     }
 
-    fn push_frame(&mut self) {
-        self.frames.push(VMFrame::default());
+    fn push_frame(&mut self, reg_count: usize, func_ptr: usize) {
+        if let Some(mut frame) = self.frame_pool.pop() {
+            frame.regs.clear();
+            frame.regs.resize(reg_count, RuntimeValue::Null);
+            frame.local_map.clear();
+            frame.func_ptr = func_ptr;
+            frame.acc = RuntimeValue::Null;
+            self.frames.push(frame);
+        } else {
+            self.frames.push(VMFrame {
+                regs: vec![RuntimeValue::Null; reg_count],
+                local_map: FxHashMap::default(),
+                func_ptr,
+                acc: RuntimeValue::Null,
+            });
+        }
     }
 
     fn pop_frame(&mut self) {
         if self.frames.len() <= 1 {
-            let _ = self.frames.pop();
+            if let Some(frame) = self.frames.pop() {
+                self.frame_pool.push(frame);
+            }
             return;
         }
-
         if let Some(frame) = self.frames.pop() {
-            for name in frame.slot_names {
-                let _ = self.variables.remove(&name);
-            }
+            self.frame_pool.push(frame);
         }
     }
 
@@ -349,159 +320,55 @@ impl VM {
         self.frames.last().expect("vm should always have a frame")
     }
 
-    fn build_resolved_cache(&self, function: &VMFunction) -> ResolvedFunctionCache {
-        let mut slot_map: FxHashMap<String, usize> = FxHashMap::default();
-        let captures: FxHashSet<String> = function.captures.iter().cloned().collect();
-        let mut slot_names: Vec<String> = Vec::new();
-        let mut block_resolved: FxHashMap<BlockId, Vec<ResolvedName>> = FxHashMap::default();
+    #[inline(always)]
+    pub(crate) fn get_reg_value(&self, reg: Reg) -> RuntimeValue {
+        let frame = self.current_frame();
+        let idx = reg as usize;
+        if idx < frame.regs.len() {
+            unsafe { frame.regs.get_unchecked(idx).clone() }
+        } else {
+            RuntimeValue::Null
+        }
+    }
 
-        for (i, param) in function.params.iter().enumerate() {
-            slot_map.insert(param.clone(), i);
-            if slot_names.len() <= i {
-                slot_names.resize(i + 1, String::new());
+    #[inline(always)]
+    pub(crate) fn get_reg_value_in_frame(&self, frame_idx: usize, reg: Reg) -> RuntimeValue {
+        if let Some(frame) = self.frames.get(frame_idx) {
+            let idx = reg as usize;
+            if idx < frame.regs.len() {
+                return frame.regs[idx].clone();
             }
-            slot_names[i] = param.clone();
         }
+        RuntimeValue::Null
+    }
 
-        let mut next_slot = slot_map.len();
+    #[inline(always)]
+    pub(crate) fn set_reg_value(&mut self, reg: Reg, value: RuntimeValue) {
+        let _ = self.replace_reg_value(reg, value);
+    }
 
-        for block in &function.blocks {
-            for instr in &block.instructions {
-                match instr {
-                    VMInstruction::DeclareVar(idx) | VMInstruction::SetVar(idx) => {
-                        if let Some(name) = block.local_strings.get(*idx as usize) {
-                            if captures.contains(name) {
-                                continue;
-                            }
-                            if !slot_map.contains_key(name) {
-                                slot_map.insert(name.clone(), next_slot);
-                                if slot_names.len() <= next_slot {
-                                    slot_names.resize(next_slot + 1, String::new());
-                                }
-                                slot_names[next_slot] = name.clone();
-                                next_slot += 1;
-                            }
-                        }
-                    }
-                    _ => {}
-                }
+    pub(crate) fn set_reg_value_in_frame(
+        &mut self,
+        frame_idx: usize,
+        reg: Reg,
+        value: RuntimeValue,
+    ) {
+        if let Some(frame) = self.frames.get_mut(frame_idx) {
+            let idx = reg as usize;
+            if idx < frame.regs.len() {
+                frame.regs[idx] = value;
             }
-
-            let mut resolved = Vec::with_capacity(block.local_strings.len());
-
-            for name in &block.local_strings {
-                let kind = if captures.contains(name) {
-                    ResolvedName::GlobalVar
-                } else if let Some(slot) = slot_map.get(name).copied() {
-                    ResolvedName::Slot(slot)
-                } else if self.variables.contains_key(name) {
-                    ResolvedName::GlobalVar
-                } else if self.registry.functions.contains_key(name) {
-                    ResolvedName::Func
-                } else {
-                    ResolvedName::Unknown
-                };
-                resolved.push(kind);
-            }
-
-            block_resolved.insert(block.id, resolved);
-        }
-
-        ResolvedFunctionCache {
-            slots_len: next_slot,
-            param_slots: slot_map,
-            slot_names,
-            block_resolved,
         }
     }
 
-    fn lowered_function(&mut self, function: &VMFunction) -> Arc<VMFunction> {
-        if let Some(existing) = self.caches.lowered.get(&function.name) {
-            return existing.clone();
-        }
-        let lowered = std::sync::Arc::new(function.lower_slots());
-        self.caches
-            .lowered
-            .insert(function.name.clone(), lowered.clone());
-        lowered
-    }
-
-    fn resolved_name_for(&self, block: &VMBlock, idx: u8) -> Option<ResolvedName> {
-        self.caches
-            .current_resolved
-            .as_ref()
-            .and_then(|cache| cache.block_resolved.get(&block.id))
-            .and_then(|v| v.get(idx as usize).copied())
-    }
-
-    #[inline]
-    fn local_string<'a>(&self, block: &'a VMBlock, idx: u8) -> Result<&'a str, RuntimeError> {
-        let idx = idx as usize;
-        if idx >= block.local_strings.len() {
-            return Err(RuntimeError::InvalidBytecode(format!(
-                "missing string {}",
-                idx
-            )));
-        }
-        Ok(unsafe { block.local_strings.get_unchecked(idx).as_str() })
-    }
-
-    #[inline]
-    fn local_string_owned<'a>(
-        &self,
-        block: &'a VMBlock,
-        idx: u8,
-    ) -> Result<&'a String, RuntimeError> {
-        let idx = idx as usize;
-        if idx >= block.local_strings.len() {
-            return Err(RuntimeError::InvalidBytecode(format!(
-                "missing string {}",
-                idx
-            )));
-        }
-        Ok(unsafe { block.local_strings.get_unchecked(idx) })
-    }
-
-    fn ensure_slot(&mut self, name: &str) -> usize {
+    #[inline(always)]
+    pub(crate) fn replace_reg_value(&mut self, reg: Reg, value: RuntimeValue) -> RuntimeValue {
         let frame = self.current_frame_mut();
-        if let Some(slot) = frame.slot_map.get(name) {
-            return *slot;
+        if reg as usize >= frame.regs.len() {
+            frame.regs.resize(reg as usize + 1, RuntimeValue::Null);
         }
-        let slot = frame.slots.len();
-        frame.slots.push(RuntimeValue::Null);
-        frame.slot_names.push(name.to_string());
-        frame.slot_map.insert(name.to_string(), slot);
-        slot
-    }
-
-    pub(crate) fn get_slot_value(&self, slot: usize) -> RuntimeValue {
-        self.current_frame()
-            .slots
-            .get(slot)
-            .cloned()
-            .unwrap_or(RuntimeValue::Null)
-    }
-
-    pub(crate) fn set_slot_value(&mut self, slot: usize, value: RuntimeValue) {
-        let _ = self.replace_slot_value(slot, value);
-    }
-
-    pub(crate) fn replace_slot_value(&mut self, slot: usize, value: RuntimeValue) -> RuntimeValue {
-        let (name, stored, old) = {
-            let frame = self.current_frame_mut();
-            if slot >= frame.slots.len() {
-                frame.slots.resize(slot + 1, RuntimeValue::Null);
-                frame.slot_names.resize(slot + 1, String::from("<slot>"));
-            }
-            let old = frame.slots[slot].clone();
-            frame.slots[slot] = value;
-            let name = frame.slot_names.get(slot).cloned();
-            let stored = frame.slots[slot].clone();
-            (name, stored, old)
-        };
-        if let Some(name) = name {
-            self.variables.insert(name, stored);
-        }
+        let old = frame.regs[reg as usize].clone();
+        frame.regs[reg as usize] = value;
         old
     }
 
@@ -527,66 +394,7 @@ impl VM {
         });
     }
 
-    pub(crate) fn drop_runtime_value(&mut self, value: RuntimeValue) {
-        let mut seen = FxHashSet::default();
-        let mut seen_slots = FxHashSet::default();
-        self.drop_runtime_value_inner(value, &mut seen, &mut seen_slots);
-    }
-
-    fn drop_runtime_value_inner(
-        &mut self,
-        value: RuntimeValue,
-        seen: &mut FxHashSet<String>,
-        seen_slots: &mut FxHashSet<usize>,
-    ) {
-        match value {
-            RuntimeValue::Ref(name) => {
-                if !seen.insert(name.clone()) {
-                    return;
-                }
-                if let Some(inner) = self.variables.remove(&name) {
-                    self.drop_runtime_value_inner(inner, seen, seen_slots);
-                }
-            }
-            RuntimeValue::SlotRef(slot) => {
-                if !seen_slots.insert(slot) {
-                    return;
-                }
-                let inner = self.get_slot_value(slot);
-                self.set_slot_value(slot, RuntimeValue::Null);
-                self.drop_runtime_value_inner(inner, seen, seen_slots);
-            }
-            RuntimeValue::Aggregate(_, map) => {
-                for (_, value) in map.as_ref().0.0.iter().cloned() {
-                    self.drop_runtime_value_inner(value, seen, seen_slots);
-                }
-            }
-            RuntimeValue::List(list) => {
-                for value in list.as_ref().0.iter().cloned() {
-                    self.drop_runtime_value_inner(value, seen, seen_slots);
-                }
-            }
-            RuntimeValue::Enum(_, _, Some(value)) => {
-                self.drop_runtime_value_inner(value.as_ref().clone(), seen, seen_slots);
-            }
-            RuntimeValue::Option(Some(value)) => {
-                self.drop_runtime_value_inner(value.as_ref().clone(), seen, seen_slots);
-            }
-            RuntimeValue::Result(Ok(value)) => {
-                self.drop_runtime_value_inner(value.as_ref().clone(), seen, seen_slots);
-            }
-            RuntimeValue::Result(Err(value)) => {
-                self.drop_runtime_value_inner(value.as_ref().clone(), seen, seen_slots);
-            }
-            RuntimeValue::Function { captures, .. } => {
-                for (_, value) in captures {
-                    self.drop_runtime_value_inner(value, seen, seen_slots);
-                }
-            }
-            _ => {}
-        }
-    }
-
+    #[inline(always)]
     fn resolve_value_for_op(&self, value: RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
         let mut current = value;
 
@@ -599,8 +407,8 @@ impl VM {
                         .cloned()
                         .ok_or(RuntimeError::DanglingRef(pointer))?;
                 }
-                RuntimeValue::SlotRef(slot) => {
-                    current = self.get_slot_value(slot);
+                RuntimeValue::RegRef { frame, reg } => {
+                    current = self.get_reg_value_in_frame(frame, reg);
                 }
                 other => return Ok(other),
             }
@@ -608,11 +416,125 @@ impl VM {
 
         Err(RuntimeError::DanglingRef("<ref-depth-limit>".to_string()))
     }
+
+    fn drop_runtime_value(&mut self, value: RuntimeValue) {
+        let mut seen = FxHashSet::default();
+        let mut seen_regs = FxHashSet::default();
+        self.drop_runtime_value_inner(value, &mut seen, &mut seen_regs);
+    }
+
+    fn drop_runtime_value_inner(
+        &mut self,
+        value: RuntimeValue,
+        seen: &mut FxHashSet<String>,
+        seen_regs: &mut FxHashSet<usize>,
+    ) {
+        match value {
+            RuntimeValue::Ref(name) => {
+                if !seen.insert(name.clone()) {
+                    return;
+                }
+                if let Some(inner) = self.variables.remove(&name) {
+                    self.drop_runtime_value_inner(inner, seen, seen_regs);
+                }
+            }
+            RuntimeValue::RegRef { frame, reg } => {
+                let key = (frame << 16) ^ reg as usize;
+                if !seen_regs.insert(key) {
+                    return;
+                }
+                let inner = self.get_reg_value_in_frame(frame, reg);
+                self.set_reg_value_in_frame(frame, reg, RuntimeValue::Null);
+                self.drop_runtime_value_inner(inner, seen, seen_regs);
+            }
+            RuntimeValue::List(list) => {
+                for item in list.as_ref().0.iter().cloned() {
+                    self.drop_runtime_value_inner(item, seen, seen_regs);
+                }
+            }
+            RuntimeValue::Aggregate(_, data) => {
+                for (_, value) in data.as_ref().0.0.iter().cloned() {
+                    self.drop_runtime_value_inner(value, seen, seen_regs);
+                }
+            }
+            RuntimeValue::Option(Some(x)) => {
+                self.drop_runtime_value_inner(x.as_ref().clone(), seen, seen_regs);
+            }
+            RuntimeValue::Result(Ok(x)) => {
+                self.drop_runtime_value_inner(x.as_ref().clone(), seen, seen_regs);
+            }
+            RuntimeValue::Result(Err(x)) => {
+                self.drop_runtime_value_inner(x.as_ref().clone(), seen, seen_regs);
+            }
+            RuntimeValue::Enum(_, _, payload) => {
+                if let Some(val) = payload {
+                    self.drop_runtime_value_inner(val.as_ref().clone(), seen, seen_regs);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
-pub enum VarName {
-    Func(String),
+#[derive(Debug, Clone)]
+enum VarName {
     Var(String),
-    Slot(usize),
+    Func(String),
     Global,
+}
+
+impl VM {
+    fn resolve_var_name(&self, name: &str) -> VarName {
+        if self.variables.contains_key(name) {
+            return VarName::Var(name.to_string());
+        }
+        if self.registry.functions.contains_key(name) {
+            return VarName::Func(name.to_string());
+        }
+        if name.contains("::") {
+            if let Some((_prefix, short)) = name.split_once("::") {
+                if let Some(var) = self.find_unique_var_by_suffix(short) {
+                    return VarName::Var(var);
+                }
+                if let Some(func) = self.find_unique_function_by_suffix(short) {
+                    return VarName::Func(func.name.clone());
+                }
+            }
+        } else if let Some((_, short_name)) = name.rsplit_once(':') {
+            if let Some(var) = self.find_unique_var_by_suffix(short_name) {
+                return VarName::Var(var);
+            }
+            if let Some(func) = self.find_unique_function_by_suffix(short_name) {
+                return VarName::Func(func.name.clone());
+            }
+        }
+
+        VarName::Global
+    }
+
+    fn local_string<'a>(&self, block: &'a VMBlock, idx: u8) -> Result<&'a str, RuntimeError> {
+        let idx = idx as usize;
+        if idx >= block.local_strings.len() {
+            return Err(RuntimeError::InvalidBytecode(format!(
+                "missing string {}",
+                idx
+            )));
+        }
+        Ok(unsafe { block.local_strings.get_unchecked(idx).as_str() })
+    }
+
+    fn local_string_owned<'a>(
+        &self,
+        block: &'a VMBlock,
+        idx: u8,
+    ) -> Result<&'a String, RuntimeError> {
+        let idx = idx as usize;
+        if idx >= block.local_strings.len() {
+            return Err(RuntimeError::InvalidBytecode(format!(
+                "missing string {}",
+                idx
+            )));
+        }
+        Ok(unsafe { block.local_strings.get_unchecked(idx) })
+    }
 }

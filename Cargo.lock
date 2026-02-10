@@ -285,6 +285,7 @@ dependencies = [
  "rustc-hash",
  "rustyline",
  "serde",
+ "smallvec",
  "thiserror",
 ]
 

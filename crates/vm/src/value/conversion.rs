@@ -18,8 +18,8 @@ impl RuntimeValue {
                 return value.convert(env, data_type);
             }
         }
-        if let RuntimeValue::SlotRef(slot) = &self {
-            let value = env.get_slot_value(*slot);
+        if let RuntimeValue::RegRef { frame, reg } = &self {
+            let value = env.get_reg_value_in_frame(*frame, *reg);
             return value.convert(env, data_type);
         }
 

@@ -2,14 +2,14 @@
 name = "calibre-vm"
 version.workspace = true
 edition.workspace = true
+publish.workspace = true
 authors.workspace = true
 description.workspace = true
-publish.workspace = true
+repository.workspace = true
+readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
 license.workspace = true
-repository.workspace = true
-readme.workspace = true
 
 [dependencies]
 calibre-lir = { workspace = true }
@@ -19,6 +19,7 @@ rustyline = { workspace = true }
 thiserror = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
+smallvec = { workspace = true }
 dumpster = "2.0.0"
 libloading = "0.9"
 libffi = "4"

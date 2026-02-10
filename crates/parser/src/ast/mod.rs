@@ -215,7 +215,7 @@ impl FromStr for ParserFfiInnerType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ParserDataType {
     pub data_type: ParserInnerType,
     pub span: Span,
@@ -243,7 +243,7 @@ impl Deref for ParserDataType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ParserInnerType {
     Float,
     UInt,
@@ -547,6 +547,20 @@ pub struct GenericTypes(pub Vec<GenericType>);
 pub struct GenericType {
     pub identifier: PotentialDollarIdentifier,
     pub trait_constraints: Vec<PotentialDollarIdentifier>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TraitMemberKind {
+    Const,
+    Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraitMember {
+    pub kind: TraitMemberKind,
+    pub identifier: PotentialDollarIdentifier,
+    pub data_type: PotentialNewType,
+    pub value: Option<Box<Node>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1021,8 +1035,20 @@ pub enum NodeType {
         data_type: PotentialNewType,
     },
     ImplDeclaration {
-        identifier: PotentialGenericTypeIdentifier,
+        generics: GenericTypes,
+        target: PotentialNewType,
         variables: Vec<Node>,
+    },
+    ImplTraitDeclaration {
+        generics: GenericTypes,
+        trait_ident: PotentialGenericTypeIdentifier,
+        target: PotentialNewType,
+        variables: Vec<Node>,
+    },
+    TraitDeclaration {
+        identifier: PotentialGenericTypeIdentifier,
+        implied_traits: Vec<PotentialDollarIdentifier>,
+        members: Vec<TraitMember>,
     },
     TypeDeclaration {
         identifier: PotentialGenericTypeIdentifier,

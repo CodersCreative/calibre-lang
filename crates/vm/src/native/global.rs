@@ -88,25 +88,137 @@ impl NativeFunction for Len {
     }
 
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        if let Some(mut x) = args.get(0) {
-            while let RuntimeValue::Ref(r) = x {
-                x = env
-                    .variables
-                    .get(r)
-                    .ok_or(RuntimeError::DanglingRef(r.clone()))?;
+        if let Some(x) = args.get(0) {
+            let mut current = x.clone();
+            for _ in 0..64 {
+                match current {
+                    RuntimeValue::Ref(ref r) => {
+                        current = env
+                            .variables
+                            .get(r)
+                            .cloned()
+                            .ok_or(RuntimeError::DanglingRef(r.clone()))?;
+                    }
+                    RuntimeValue::RegRef { frame, reg } => {
+                        current = env.get_reg_value_in_frame(frame, reg);
+                    }
+                    _ => break,
+                }
             }
-            Ok(RuntimeValue::Int(match x {
+            Ok(RuntimeValue::Int(match current {
                 RuntimeValue::List(data) => data.as_ref().0.len() as i64,
                 RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as i64,
-                RuntimeValue::Range(_, x) => *x,
+                RuntimeValue::Range(_, x) => x,
                 RuntimeValue::Str(x) => x.len() as i64,
-                RuntimeValue::Int(x) => *x,
-                RuntimeValue::Float(x) => *x as i64,
-                _ => return Err(RuntimeError::UnexpectedType(x.clone())),
+                RuntimeValue::Int(x) => x,
+                RuntimeValue::Float(x) => x as i64,
+                other => return Err(RuntimeError::UnexpectedType(other)),
             }))
         } else {
             Ok(RuntimeValue::Null)
         }
+    }
+}
+
+pub struct StrSplit();
+
+impl NativeFunction for StrSplit {
+    fn name(&self) -> String {
+        String::from("str_split")
+    }
+
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let Some(RuntimeValue::Str(text)) = args.get(0) else {
+            return Err(RuntimeError::UnexpectedType(
+                args.get(0).cloned().unwrap_or(RuntimeValue::Null),
+            ));
+        };
+        let Some(RuntimeValue::Str(delim)) = args.get(1) else {
+            return Err(RuntimeError::UnexpectedType(
+                args.get(1).cloned().unwrap_or(RuntimeValue::Null),
+            ));
+        };
+
+        let parts = if delim.is_empty() {
+            text.chars()
+                .map(|c| RuntimeValue::Str(c.to_string()))
+                .collect::<Vec<_>>()
+        } else {
+            text.split(delim)
+                .map(|s| RuntimeValue::Str(s.to_string()))
+                .collect::<Vec<_>>()
+        };
+
+        Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(parts))))
+    }
+}
+
+pub struct StrContains();
+
+impl NativeFunction for StrContains {
+    fn name(&self) -> String {
+        String::from("str_contains")
+    }
+
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let Some(RuntimeValue::Str(text)) = args.get(0) else {
+            return Err(RuntimeError::UnexpectedType(
+                args.get(0).cloned().unwrap_or(RuntimeValue::Null),
+            ));
+        };
+        let Some(RuntimeValue::Str(needle)) = args.get(1) else {
+            return Err(RuntimeError::UnexpectedType(
+                args.get(1).cloned().unwrap_or(RuntimeValue::Null),
+            ));
+        };
+
+        Ok(RuntimeValue::Bool(text.contains(needle)))
+    }
+}
+
+pub struct StrStartsWith();
+
+impl NativeFunction for StrStartsWith {
+    fn name(&self) -> String {
+        String::from("str_starts_with")
+    }
+
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let Some(RuntimeValue::Str(text)) = args.get(0) else {
+            return Err(RuntimeError::UnexpectedType(
+                args.get(0).cloned().unwrap_or(RuntimeValue::Null),
+            ));
+        };
+        let Some(RuntimeValue::Str(prefix)) = args.get(1) else {
+            return Err(RuntimeError::UnexpectedType(
+                args.get(1).cloned().unwrap_or(RuntimeValue::Null),
+            ));
+        };
+
+        Ok(RuntimeValue::Bool(text.starts_with(prefix)))
+    }
+}
+
+pub struct StrEndsWith();
+
+impl NativeFunction for StrEndsWith {
+    fn name(&self) -> String {
+        String::from("str_ends_with")
+    }
+
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let Some(RuntimeValue::Str(text)) = args.get(0) else {
+            return Err(RuntimeError::UnexpectedType(
+                args.get(0).cloned().unwrap_or(RuntimeValue::Null),
+            ));
+        };
+        let Some(RuntimeValue::Str(suffix)) = args.get(1) else {
+            return Err(RuntimeError::UnexpectedType(
+                args.get(1).cloned().unwrap_or(RuntimeValue::Null),
+            ));
+        };
+
+        Ok(RuntimeValue::Bool(text.ends_with(suffix)))
     }
 }
 
@@ -166,16 +278,26 @@ impl NativeFunction for DiscriminantFn {
         String::from("discriminant")
     }
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        if let Some(mut x) = args.get(0) {
-            while let RuntimeValue::Ref(r) = x {
-                x = env
-                    .variables
-                    .get(r)
-                    .ok_or(RuntimeError::DanglingRef(r.clone()))?;
+        if let Some(x) = args.get(0) {
+            let mut current = x.clone();
+            for _ in 0..64 {
+                match current {
+                    RuntimeValue::Ref(ref r) => {
+                        current = env
+                            .variables
+                            .get(r)
+                            .cloned()
+                            .ok_or(RuntimeError::DanglingRef(r.clone()))?;
+                    }
+                    RuntimeValue::RegRef { frame, reg } => {
+                        current = env.get_reg_value_in_frame(frame, reg);
+                    }
+                    _ => break,
+                }
             }
 
-            Ok(RuntimeValue::Int(match x {
-                RuntimeValue::Enum(_, index, _) => *index as i64,
+            Ok(RuntimeValue::Int(match current {
+                RuntimeValue::Enum(_, index, _) => index as i64,
                 RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0 as i64,
                 RuntimeValue::Option(None) | RuntimeValue::Result(Err(_)) => 1,
                 _ => 0,

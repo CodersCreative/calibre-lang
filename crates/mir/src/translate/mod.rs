@@ -1,7 +1,8 @@
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::{
-        MiddleEnvironment, MiddleObject, MiddleOverload, Operator, get_disamubiguous_name,
+        MiddleEnvironment, MiddleObject, MiddleOverload, MiddleTrait, MiddleTraitMember,
+        MiddleTypeDefType, Operator, get_disamubiguous_name,
     },
     errors::MiddleErr,
 };
@@ -60,7 +61,7 @@ impl MiddleEnvironment {
                     if let Some(x) = self.resolve_potential_generic_ident(scope, &x) {
                         x
                     } else if let PotentialDollarIdentifier::DollarIdentifier(x) = x.get_ident() {
-                        let val = self.resolve_macro_arg(scope, &x).unwrap().clone();
+                        let val = self.resolve_macro_arg(scope, x).unwrap().clone();
                         return self.evaluate_inner(scope, val);
                     } else {
                         return Err(MiddleErr::At(
@@ -502,6 +503,24 @@ impl MiddleEnvironment {
                 object,
                 overloads,
             } => {
+                if let calibre_parser::ast::TypeDefType::NewType(inner) = &object {
+                    let identifier = self
+                        .resolve_dollar_ident_potential_generic_only(scope, &identifier)
+                        .unwrap();
+                    let resolved = self.resolve_potential_new_type(scope, *inner.clone());
+                    self.type_aliases
+                        .insert(identifier.text.clone(), resolved.clone());
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .mappings
+                        .insert(identifier.text.clone(), identifier.text.clone());
+
+                    return Ok(MiddleNode {
+                        node_type: MiddleNodeType::EmptyLine,
+                        span: node.span,
+                    });
+                }
                 if let calibre_parser::ast::PotentialGenericTypeIdentifier::Generic {
                     identifier: base_ident,
                     generic_types,
@@ -761,63 +780,63 @@ impl MiddleEnvironment {
                     scope,
                     Node {
                         node_type: NodeType::MatchStatement  {
-                            value: Some(value),
-                            body: match resolved_type {
-                                Some(ParserDataType { data_type: ParserInnerType::Option(_), span: _ }) => vec![
-                                    (
-                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Some")).into(), name: Some(ParserText::from(String::from("anon_ok_value")).into()), destructure: None },
-                                        Vec::new(),
-                                        Box::new(Node {
-                                            node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value")).into()),
-                                            span: Span::default(),
-                                        }),
-                                    ),
-                                    if let Some(catch) = catch {
-                                        (
-                                            MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")).into(), name: catch.name, destructure: None },
-                                            Vec::new(),
-                                            catch.body,
-                                        )
-                                    }else {
-                                        (
-                                            MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")).into(), name: None, destructure: None },
-                                            Vec::new(),
-                                            Box::new(Node {
-                                                node_type: NodeType::Return { value: Some(Box::new(Node::new(self.current_span(), NodeType::CallExpression{string_fn : None,generic_types: Vec::new(),caller : Box::new(Node::new(self.current_span(), NodeType::Identifier(ParserText::from(String::from("none")).into()))), args : Vec::new(), reverse_args: Vec::new(),}))) },
-                                                span: Span::default(),
-                                            }),
-                                        )
+                                        value: Some(value),
+                                        body: match resolved_type {
+                                            Some(ParserDataType { data_type: ParserInnerType::Option(_), span: _ }) => vec![
+                                                (
+                                                    MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Some")).into(), name: Some(ParserText::from(String::from("anon_ok_value")).into()), destructure: None },
+                                                    Vec::new(),
+                                                    Box::new(Node {
+                                                        node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value")).into()),
+                                                        span: Span::default(),
+                                                    }),
+                                                ),
+                                                if let Some(catch) = catch {
+                                                    (
+                                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")).into(), name: catch.name, destructure: None },
+                                                        Vec::new(),
+                                                        catch.body,
+                                                    )
+                                                }else {
+                                                    (
+                                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("None")).into(), name: None, destructure: None },
+                                                        Vec::new(),
+                                                        Box::new(Node {
+                                                            node_type: NodeType::Return { value: Some(Box::new(Node::new(self.current_span(), NodeType::CallExpression{string_fn : None,generic_types: Vec::new(),caller : Box::new(Node::new(self.current_span(), NodeType::Identifier(ParserText::from(String::from("none")).into()))), args : Vec::new(), reverse_args: Vec::new(),}))) },
+                                                            span: Span::default(),
+                                                        }),
+                                                    )
+                                                },
+                                            ],
+                                            _ => vec![
+                                                (
+                                                    MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Ok")).into(), name: Some(ParserText::from(String::from("anon_ok_value")).into()), destructure: None },
+                                                    Vec::new(),
+                                                    Box::new(Node {
+                                                        node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value")).into()),
+                                                        span: Span::default(),
+                                                    }),
+                                                ),
+                                                if let Some(catch) = catch {
+                                                    (
+                                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")).into(), name: catch.name, destructure: None },
+                                                        Vec::new(),
+                                                        catch.body,
+                                                    )
+                                                }else {
+                                                    (
+                                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")).into(), name: Some(ParserText::from(String::from("anon_err_value")).into()), destructure: None },
+                                                        Vec::new(),
+                                                        Box::new(Node {
+                                                            node_type: NodeType::Return { value: Some(Box::new(Node::new(self.current_span(), NodeType::CallExpression{string_fn : None,generic_types: Vec::new(), caller : Box::new(Node::new(self.current_span(), NodeType::Identifier(ParserText::from(String::from("err")).into()))), args : vec![CallArg::Value(Node::new(self.current_span(), NodeType::Identifier(ParserText::from(String::from("anon_err_value")).into())))], reverse_args: Vec::new(),}))) },
+                                                            span: Span::default(),
+                                                        }),
+                                                    )
+                                                },
+                                            ]
+                                        },
                                     },
-                                ],
-                                _ => vec![
-                                    (
-                                        MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Ok")).into(), name: Some(ParserText::from(String::from("anon_ok_value")).into()), destructure: None },
-                                        Vec::new(),
-                                        Box::new(Node {
-                                            node_type: NodeType::Identifier(ParserText::from(String::from("anon_ok_value")).into()),
-                                            span: Span::default(),
-                                        }),
-                                    ),
-                                    if let Some(catch) = catch {
-                                        (
-                                            MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")).into(), name: catch.name, destructure: None },
-                                            Vec::new(),
-                                            catch.body,
-                                        )
-                                    }else {
-                                        (
-                                            MatchArmType::Enum { var_type : VarType::Immutable, value: ParserText::from(String::from("Err")).into(), name: Some(ParserText::from(String::from("anon_err_value")).into()), destructure: None },
-                                            Vec::new(),
-                                            Box::new(Node {
-                                                node_type: NodeType::Return { value: Some(Box::new(Node::new(self.current_span(), NodeType::CallExpression{string_fn : None,generic_types: Vec::new(), caller : Box::new(Node::new(self.current_span(), NodeType::Identifier(ParserText::from(String::from("err")).into()))), args : vec![CallArg::Value(Node::new(self.current_span(), NodeType::Identifier(ParserText::from(String::from("anon_err_value")).into())))], reverse_args: Vec::new(),}))) },
-                                                span: Span::default(),
-                                            }),
-                                        )
-                                    },
-                                ]
-                            },
-                        },
-                        span: node.span,
+                                    span: node.span,
                     },
                 )
             }
@@ -880,19 +899,37 @@ impl MiddleEnvironment {
                 }
             }
             NodeType::ImplDeclaration {
-                identifier,
+                generics,
+                target,
                 variables,
             } => {
                 let resolved = self
-                    .resolve_potential_generic_ident(scope, &identifier)
-                    .unwrap();
+                    .resolve_potential_new_type(scope, target)
+                    .unwrap_all_refs();
+                let target_key = self.type_key(&resolved);
+
+                let mut prev_generics = Vec::new();
+                if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                    for generic in generics.0.iter() {
+                        let name = generic.identifier.to_string();
+                        prev_generics.push((name.clone(), scope_ref.mappings.get(&name).cloned()));
+                        scope_ref.mappings.insert(name.clone(), name.clone());
+                    }
+                }
+
+                let generic_params: Vec<String> = generics
+                    .0
+                    .iter()
+                    .map(|g| g.identifier.to_string())
+                    .collect();
+                let impl_key = self.get_or_create_impl(resolved.clone(), generic_params);
 
                 let previous_self = self
                     .scopes
                     .get_mut(scope)
                     .unwrap()
                     .mappings
-                    .insert(String::from("Self"), resolved.text.clone());
+                    .insert(String::from("Self"), target_key.clone());
 
                 let mut statements = Vec::new();
 
@@ -910,7 +947,7 @@ impl MiddleEnvironment {
                                 data_type,
                             } => {
                                 iden = identifier.to_string();
-                                let resolved_iden = format!("{}::{}", resolved, identifier);
+                                let resolved_iden = format!("{}::{}", target_key, identifier);
 
                                 dependant = match &value.node_type {
                                     NodeType::FunctionDeclaration {
@@ -919,15 +956,14 @@ impl MiddleEnvironment {
                                         if let Some(PotentialNewType::DataType(param)) =
                                             header.parameters.first().map(|x| x.1.clone())
                                         {
-                                            if let ParserInnerType::Struct(x) = self
+                                            let param_type = self
                                                 .resolve_data_type(scope, param)
-                                                .unwrap_all_refs()
-                                                .data_type
-                                            {
-                                                x.trim() == resolved.trim()
-                                            } else {
-                                                false
-                                            }
+                                                .unwrap_all_refs();
+                                            self.impl_type_matches(
+                                                &resolved.data_type,
+                                                &param_type.data_type,
+                                                &self.impls.get(&impl_key).unwrap().generic_params,
+                                            )
                                         } else {
                                             false
                                         }
@@ -944,6 +980,9 @@ impl MiddleEnvironment {
                                     data_type,
                                 }
                             }
+                            NodeType::TypeDeclaration { .. } => {
+                                continue;
+                            }
                             _ => unreachable!(),
                         },
                     };
@@ -957,8 +996,8 @@ impl MiddleEnvironment {
                         _ => unreachable!(),
                     };
 
-                    self.objects
-                        .get_mut(&resolved.text)
+                    self.impls
+                        .get_mut(&impl_key)
                         .unwrap()
                         .variables
                         .insert(iden, (new_name, dependant));
@@ -973,6 +1012,15 @@ impl MiddleEnvironment {
                         .mappings
                         .insert(String::from("Self"), prev);
                 }
+                if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                    for (name, prev) in prev_generics {
+                        if let Some(prev) = prev {
+                            scope_ref.mappings.insert(name, prev);
+                        } else {
+                            scope_ref.mappings.remove(&name);
+                        }
+                    }
+                }
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::ScopeDeclaration {
@@ -981,6 +1029,325 @@ impl MiddleEnvironment {
                         is_temp: false,
                         scope_id: *scope,
                     },
+                    span: node.span,
+                })
+            }
+            NodeType::ImplTraitDeclaration {
+                generics,
+                trait_ident,
+                target,
+                variables,
+            } => {
+                let mut prev_generics = Vec::new();
+                if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                    for generic in generics.0.iter() {
+                        let name = generic.identifier.to_string();
+                        prev_generics.push((name.clone(), scope_ref.mappings.get(&name).cloned()));
+                        scope_ref.mappings.insert(name.clone(), name.clone());
+                    }
+                }
+
+                let resolved_trait = self
+                    .resolve_potential_generic_ident(scope, &trait_ident)
+                    .ok_or_else(|| {
+                        self.err_at_current(MiddleErr::Scope(trait_ident.to_string()))
+                    })?;
+
+                let resolved_target = self
+                    .resolve_potential_new_type(scope, target)
+                    .unwrap_all_refs();
+                let target_key = self.type_key(&resolved_target);
+
+                let trait_def = self.trait_defs.get(&resolved_trait.text).cloned();
+
+                let mut provided = std::collections::HashSet::new();
+                let mut assoc_types = Vec::new();
+                for var in &variables {
+                    match &var.node_type {
+                        NodeType::VariableDeclaration { identifier, .. } => {
+                            provided.insert(identifier.to_string());
+                        }
+                        NodeType::TypeDeclaration {
+                            identifier, object, ..
+                        } => {
+                            assoc_types.push((identifier.clone(), object.clone()));
+                        }
+                        _ => {}
+                    }
+                }
+
+                let mut all_vars = variables;
+                if let Some(trait_def) = trait_def {
+                    for (name, member) in trait_def.members {
+                        if member.default.is_none() || provided.contains(&name) {
+                            continue;
+                        }
+
+                        let default = member.default.unwrap();
+                        all_vars.push(Node::new(
+                            default.span,
+                            NodeType::VariableDeclaration {
+                                var_type: VarType::Constant,
+                                identifier: PotentialDollarIdentifier::Identifier(
+                                    ParserText::from(name.clone()),
+                                ),
+                                data_type: PotentialNewType::DataType(member.data_type.clone()),
+                                value: Box::new(default),
+                            },
+                        ));
+                    }
+                }
+
+                let previous_self = self
+                    .scopes
+                    .get_mut(scope)
+                    .unwrap()
+                    .mappings
+                    .insert(String::from("Self"), target_key.clone());
+
+                let generic_params: Vec<String> = generics
+                    .0
+                    .iter()
+                    .map(|g| g.identifier.to_string())
+                    .collect();
+                let impl_key = self.get_or_create_impl(resolved_target.clone(), generic_params);
+
+                for (identifier, object) in assoc_types {
+                    if let calibre_parser::ast::TypeDefType::NewType(inner) = object {
+                        let resolved_ty = self
+                            .resolve_potential_new_type(scope, *inner)
+                            .unwrap_all_refs();
+                        self.impls
+                            .get_mut(&impl_key)
+                            .unwrap()
+                            .assoc_types
+                            .insert(identifier.to_string(), resolved_ty);
+                    }
+                }
+
+                {
+                    let impl_ref = self.impls.get_mut(&impl_key).unwrap();
+                    for var in &all_vars {
+                        if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
+                            let resolved_iden = format!("{}::{}", target_key, identifier);
+                            impl_ref
+                                .variables
+                                .entry(identifier.to_string())
+                                .or_insert((resolved_iden, false));
+                        }
+                    }
+                }
+
+                let mut statements = Vec::new();
+
+                for var in all_vars {
+                    #[allow(unused_assignments)]
+                    let (mut iden, mut dependant) = (String::new(), false);
+
+                    let dec = Node {
+                        span: var.span,
+                        node_type: match var.node_type {
+                            NodeType::VariableDeclaration {
+                                var_type,
+                                identifier,
+                                value,
+                                data_type,
+                            } => {
+                                iden = identifier.to_string();
+                                let resolved_iden = format!("{}::{}", target_key, identifier);
+
+                                dependant = match &value.node_type {
+                                    NodeType::FunctionDeclaration {
+                                        header, body: _, ..
+                                    } => {
+                                        if let Some(PotentialNewType::DataType(param)) =
+                                            header.parameters.first().map(|x| x.1.clone())
+                                        {
+                                            let param_type = self
+                                                .resolve_data_type(scope, param)
+                                                .unwrap_all_refs();
+                                            self.impl_type_matches(
+                                                &resolved_target.data_type,
+                                                &param_type.data_type,
+                                                &self.impls.get(&impl_key).unwrap().generic_params,
+                                            )
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                    _ => false,
+                                };
+
+                                NodeType::VariableDeclaration {
+                                    var_type,
+                                    identifier: PotentialDollarIdentifier::Identifier(
+                                        ParserText::from(resolved_iden),
+                                    ),
+                                    value,
+                                    data_type,
+                                }
+                            }
+                            NodeType::TypeDeclaration { .. } => {
+                                continue;
+                            }
+                            _ => unreachable!(),
+                        },
+                    };
+
+                    let dec = self.evaluate(scope, dec);
+
+                    let new_name = match &dec.node_type {
+                        MiddleNodeType::VariableDeclaration { identifier, .. } => {
+                            identifier.text.clone()
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    let impl_ref = self.impls.get_mut(&impl_key).unwrap();
+                    impl_ref.variables.insert(iden, (new_name, dependant));
+                    if !impl_ref.traits.contains(&resolved_trait.text) {
+                        impl_ref.traits.push(resolved_trait.text.clone());
+                    }
+                    if let Some(trait_def) = self.trait_defs.get(&resolved_trait.text) {
+                        for implied in &trait_def.implied_traits {
+                            if !impl_ref.traits.contains(implied) {
+                                impl_ref.traits.push(implied.clone());
+                            }
+                        }
+                    }
+
+                    statements.push(dec);
+                }
+
+                if let Some(prev) = previous_self {
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .mappings
+                        .insert(String::from("Self"), prev);
+                }
+                if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                    for (name, prev) in prev_generics {
+                        if let Some(prev) = prev {
+                            scope_ref.mappings.insert(name, prev);
+                        } else {
+                            scope_ref.mappings.remove(&name);
+                        }
+                    }
+                }
+
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::ScopeDeclaration {
+                        body: statements,
+                        create_new_scope: false,
+                        is_temp: false,
+                        scope_id: *scope,
+                    },
+                    span: node.span,
+                })
+            }
+            NodeType::TraitDeclaration {
+                identifier,
+                implied_traits,
+                members,
+            } => {
+                let mut generic_names = Vec::new();
+                let base_name = match &identifier {
+                    PotentialGenericTypeIdentifier::Identifier(x) => x.to_string(),
+                    PotentialGenericTypeIdentifier::Generic {
+                        identifier,
+                        generic_types,
+                    } => {
+                        for t in generic_types {
+                            if let PotentialNewType::DataType(ParserDataType {
+                                data_type: ParserInnerType::Struct(s),
+                                ..
+                            }) = t
+                            {
+                                generic_names.push(s.clone());
+                            }
+                        }
+                        identifier.to_string()
+                    }
+                };
+
+                let new_name = get_disamubiguous_name(scope, Some(base_name.as_str()), None);
+
+                self.objects.insert(
+                    new_name.clone(),
+                    MiddleObject {
+                        object_type: MiddleTypeDefType::Trait,
+                        variables: FxHashMap::default(),
+                        traits: Vec::new(),
+                        location: self.current_location.clone(),
+                    },
+                );
+
+                if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                    scope_ref.mappings.insert(base_name, new_name.clone());
+                }
+
+                let mut prev_generics = Vec::new();
+                if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                    for name in &generic_names {
+                        prev_generics.push((name.clone(), scope_ref.mappings.get(name).cloned()));
+                        scope_ref.mappings.insert(name.clone(), name.clone());
+                    }
+                }
+
+                let mut trait_members = FxHashMap::default();
+                let mut assoc_types = FxHashMap::default();
+                for member in members {
+                    match member.kind {
+                        calibre_parser::ast::TraitMemberKind::Type => {
+                            let data_type =
+                                self.resolve_potential_new_type(scope, member.data_type);
+                            assoc_types.insert(member.identifier.to_string(), data_type);
+                        }
+                        calibre_parser::ast::TraitMemberKind::Const => {
+                            let data_type =
+                                self.resolve_potential_new_type(scope, member.data_type);
+                            trait_members.insert(
+                                member.identifier.to_string(),
+                                MiddleTraitMember {
+                                    data_type,
+                                    default: member.value.map(|x| *x),
+                                },
+                            );
+                        }
+                    }
+                }
+
+                let mut implied = Vec::new();
+                for imp in implied_traits {
+                    let resolved = self
+                        .resolve_dollar_ident_only(scope, &imp)
+                        .map(|x| x.text)
+                        .unwrap_or_else(|| imp.to_string());
+                    implied.push(resolved);
+                }
+
+                self.trait_defs.insert(
+                    new_name.clone(),
+                    MiddleTrait {
+                        implied_traits: implied,
+                        members: trait_members,
+                        assoc_types,
+                    },
+                );
+
+                if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                    for (name, prev) in prev_generics {
+                        if let Some(prev) = prev {
+                            scope_ref.mappings.insert(name, prev);
+                        } else {
+                            scope_ref.mappings.remove(&name);
+                        }
+                    }
+                }
+
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::EmptyLine,
                     span: node.span,
                 })
             }

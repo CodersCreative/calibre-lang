@@ -740,30 +740,25 @@ impl<'a> LirEnvironment<'a> {
                     if let MiddleNodeType::VariableDeclaration {
                         var_type: _,
                         identifier,
-                        value,
+                        value: _,
                         data_type,
                     } = stmt.node_type.clone()
                     {
-                        match value.node_type {
-                            MiddleNodeType::FunctionDeclaration { .. } => {}
-                            _ => {
-                                let mut sub_lowerer = LirEnvironment::new_with_hoist(self.env, false);
+                        let mut sub_lowerer = LirEnvironment::new_with_hoist(self.env, false);
 
-                                let _body_val = sub_lowerer.lower_node(stmt);
+                        let _body_val = sub_lowerer.lower_node(stmt);
 
-                                self.registry.append(sub_lowerer.registry);
+                        self.registry.append(sub_lowerer.registry);
 
-                                self.registry.globals.insert(
-                                    identifier.to_string(),
-                                    LirGlobal {
-                                        name: identifier.to_string(),
-                                        data_type,
-                                        blocks: sub_lowerer.blocks,
-                                    },
-                                );
-                                continue;
-                            }
-                        }
+                        self.registry.globals.insert(
+                            identifier.to_string(),
+                            LirGlobal {
+                                name: identifier.to_string(),
+                                data_type,
+                                blocks: sub_lowerer.blocks,
+                            },
+                        );
+                        continue;
                     }
                     self.lower_and_add_node(stmt);
                 }
@@ -962,9 +957,24 @@ impl<'a> LirEnvironment<'a> {
                 operator,
             },
             MiddleNodeType::CallExpression { caller, args } => {
-                let l_caller = self.lower_node(*caller);
-                let l_args: Vec<LirNodeType> =
+                let caller_node = *caller;
+                let l_caller = self.lower_node(caller_node.clone());
+                let mut l_args: Vec<LirNodeType> =
                     args.into_iter().map(|a| self.lower_node(a)).collect();
+
+                if let MiddleNodeType::Identifier(name) = &caller_node.node_type
+                    && let Some(var) = self.env.variables.get(&name.text)
+                    && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
+                    && let Some(first) = parameters.first()
+                    && matches!(first.data_type, ParserInnerType::Ref(_, _))
+                    && let Some(first_arg) = l_args.get_mut(0)
+                    && matches!(first_arg, LirNodeType::Load(_))
+                {
+                    *first_arg = LirNodeType::Ref(Box::new(std::mem::replace(
+                        first_arg,
+                        LirNodeType::Literal(LirLiteral::Null),
+                    )));
+                }
 
                 LirNodeType::Call {
                     caller: Box::new(l_caller),

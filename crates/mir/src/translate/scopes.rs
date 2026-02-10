@@ -164,7 +164,9 @@ impl MiddleEnvironment {
                 } = &stmt.node_type
                     && matches!(value.node_type, NodeType::FunctionDeclaration { .. })
                 {
-                    let ident = self.resolve_dollar_ident_only(&new_scope, identifier).unwrap();
+                    let ident = self
+                        .resolve_dollar_ident_only(&new_scope, identifier)
+                        .unwrap();
                     let new_name = if ident.text.contains("->") {
                         ident.text.clone()
                     } else {

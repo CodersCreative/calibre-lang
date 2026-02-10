@@ -4,17 +4,13 @@ use rustc_hash::FxHashMap;
 impl ParserDataType {
     pub fn constants() -> FxHashMap<String, Self> {
         let lst: Vec<(&'static str, ParserInnerType)> = vec![
-            ("PI", ParserInnerType::Float),
-            ("FLOAT_MAX", ParserInnerType::Float),
-            ("INT_MAX", ParserInnerType::Int),
-            ("FLOAT_MIN", ParserInnerType::Float),
-            ("INT_MIN", ParserInnerType::Int),
             ("true", ParserInnerType::Bool),
             ("false", ParserInnerType::Bool),
             (
                 "none",
                 ParserInnerType::Option(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
             ),
+            ("INT_MIN", ParserInnerType::Int),
         ];
 
         let mut map = FxHashMap::default();
@@ -28,7 +24,6 @@ impl ParserDataType {
 
     pub fn natives() -> FxHashMap<String, ParserDataType> {
         let lst: Vec<(&'static str, ParserInnerType)> = vec![
-            ("print", ParserInnerType::Null),
             (
                 "ok",
                 ParserInnerType::Result {
@@ -52,15 +47,14 @@ impl ParserDataType {
             ("panic", ParserInnerType::Null),
             ("tuple", ParserInnerType::Dynamic),
             ("trim", ParserInnerType::Str),
+            (
+                "str_split",
+                ParserInnerType::List(Box::new(ParserDataType::from(ParserInnerType::Str))),
+            ),
+            ("str_contains", ParserInnerType::Bool),
+            ("str_starts_with", ParserInnerType::Bool),
+            ("str_ends_with", ParserInnerType::Bool),
             ("discriminant", ParserInnerType::Int),
-            ("console.out", ParserInnerType::Null),
-            ("console.input", ParserInnerType::Str),
-            ("console.err", ParserInnerType::Null),
-            ("console.clear", ParserInnerType::Null),
-            ("thread.wait", ParserInnerType::Null),
-            ("random.generate", ParserInnerType::Float),
-            ("random.bool", ParserInnerType::Bool),
-            ("random.ratio", ParserInnerType::Bool),
         ];
 
         let mut map = FxHashMap::default();

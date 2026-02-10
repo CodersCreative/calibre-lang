@@ -26,6 +26,7 @@ license = "MIT"
 calibre-mir = {path="./crates/mir"}
 calibre-lir = {path="./crates/lir"}
 calibre-vm = {path="./crates/vm"}
+calibre-cranelift = {path="./crates/cranelift"}
 calibre-diagnostics = {path="./crates/diagnostics"}
 calibre-parser = {path="./crates/parser"}
 calibre-std = {path="./crates/std"}
@@ -38,3 +39,4 @@ codespan-reporting = "0.13.1"
 serde = {version = "1.0.219", features = ["derive"]}
 thiserror = "2.0.12"
 rustyline = "17"
+smallvec = "1.13.2"

@@ -1,3 +1,17 @@
+extern "c" const c_write = fn(@int, str, @usize) -> @isize from "libc" as "write";
+extern "c" const c_strlen = fn(str) -> @usize from "libc" as "strlen";
+
+const write_fd = fn(fd: int, msg) => {
+    let txt = "" & msg;
+    let len = c_strlen(txt);
+    c_write(fd, txt, len);
+};
+
+const print = fn() => fn(msg) => {
+    write_fd(1, ("" & msg) & "\n");
+    null;
+};
+
 const range = fn(start end : mut int, step : int, inclusive : bool) -> list:<int> => {
   if start != INT_MIN && end == INT_MIN => {
     end = start;
@@ -27,3 +41,179 @@ const fmt = fn(splits : list:<str>, inputs : list:<str>) -> str => {
 	
 	txt;
 };
+
+type ListIter:<T> = struct {
+	data : list:<T>,
+	index : int,
+};
+
+type RangeIter = struct {
+	range : range,
+	index : int,
+};
+
+type StrIter = struct {
+	data : list:<char>,
+	index : int,
+};
+
+trait Iter {
+	type Item;
+	const next: fn(&mut Self) -> Self::Item?;
+	const collect = fn(self: Self) -> list:<Self::Item> => {
+		let mut out = list:<Self::Item>[];
+		let mut it = self;
+		for => {
+			let v = it.next();
+			if v == none => break;
+			out <<= v.next;
+		};
+		out;
+	};
+	const map = fn<U>(self: Self, op: fn(Self::Item) -> U) -> ListIter:<U> => {
+		let mut out = list:<U>[];
+		let mut it = self;
+		for => {
+			let v = it.next();
+			if v == none => break;
+			out <<= op(v.next);
+		};
+		ListIter:<U>{data: out, index: 0};
+	};
+	const filter = fn(self: Self, pred: fn(Self::Item) -> bool) -> ListIter:<Self::Item> => {
+		let mut out = list:<Self::Item>[];
+		let mut it = self;
+		for => {
+			let v = it.next();
+			if v == none => break;
+			let value = v.next;
+			if pred(value) => out <<= value;
+		};
+		ListIter:<Self::Item>{data: out, index: 0};
+	};
+	const for_each = fn(self: Self, op: fn(Self::Item)) => {
+		let mut it = self;
+		for => {
+			let v = it.next();
+			if v == none => break;
+			op(v.next);
+		};
+	};
+	const fold = fn<U>(self: Self, init: U, op: fn(U, Self::Item) -> U) -> U => {
+		let mut acc = init;
+		let mut it = self;
+		for => {
+			let v = it.next();
+			if v == none => break;
+			acc = op(acc, v.next);
+		};
+		acc;
+	};
+	const any = fn(self: Self, pred: fn(Self::Item) -> bool) -> bool => {
+		let mut it = self;
+		for => {
+			let v = it.next();
+			if v == none => break;
+			if pred(v.next) => return true;
+		};
+		false;
+	};
+	const all = fn(self: Self, pred: fn(Self::Item) -> bool) -> bool => {
+		let mut it = self;
+		for => {
+			let v = it.next();
+			if v == none => break;
+			if !pred(v.next) => return false;
+		};
+		true;
+	};
+	const find = fn(self: Self, pred: fn(Self::Item) -> bool) -> Self::Item? => {
+		let mut it = self;
+		for => {
+			let v = it.next();
+			if v == none => break;
+			let value = v.next;
+			if pred(value) => return some(value);
+		};
+		none;
+	};
+	const count = fn(self: Self) -> int => {
+		let mut it = self;
+		let mut n = 0;
+		for => {
+			let v = it.next();
+			if v == none => break;
+			n = n + 1;
+		};
+		n;
+	};
+	const take = fn(self: Self, n: int) -> ListIter:<Self::Item> => {
+		let mut out = list:<Self::Item>[];
+		let mut it = self;
+		let mut i = 0;
+		for i < n => {
+			let v = it.next();
+			if v == none => break;
+			out <<= v.next;
+			i = i + 1;
+		};
+		ListIter:<Self::Item>{data: out, index: 0};
+	};
+	const skip = fn(self: Self, n: int) -> ListIter:<Self::Item> => {
+		let mut it = self;
+		let mut i = 0;
+		for i < n => {
+			let v = it.next();
+			if v == none => break;
+			i = i + 1;
+		};
+		let mut out = list:<Self::Item>[];
+		for => {
+			let v = it.next();
+			if v == none => break;
+			out <<= v.next;
+		};
+		ListIter:<Self::Item>{data: out, index: 0};
+	};
+}
+
+impl<T> Iter for ListIter:<T> {
+	type Item = T;
+	const next = fn(self: &mut ListIter:<T>) -> T? => {
+		if self.index >= len(self.data) => return none;
+		let value = self.data[self.index];
+		self.index = self.index + 1;
+		some(value);
+	};
+}
+
+impl Iter for RangeIter {
+	type Item = int;
+	const next = fn(self: &mut RangeIter) -> int? => {
+		let end = len(self.range);
+		let start = min_or_zero(self.range);
+		let current = start + self.index;
+		if current >= end => return none;
+		self.index = self.index + 1;
+		some(current);
+	};
+}
+
+impl Iter for StrIter {
+	type Item = char;
+	const next = fn(self: &mut StrIter) -> char? => {
+		if self.index >= len(self.data) => return none;
+		let value = self.data[self.index];
+		self.index = self.index + 1;
+		some(value);
+	};
+}
+
+
+const iter_list = fn<T>(data: list:<T>) -> ListIter:<T> => ListIter:<T>{data: data, index: 0};
+
+const iter_range = fn(rng: range) -> RangeIter => RangeIter{range: rng, index: 0};
+
+const iter_str = fn(txt: str) -> StrIter => StrIter{data: try txt as list:<char> => panic(), index: 0};
+
+

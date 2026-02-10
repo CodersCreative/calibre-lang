@@ -249,6 +249,7 @@ impl ServerState {
                 format!("enum {{ {items} }}")
             }
             MiddleTypeDefType::NewType(inner) => format!("type = {inner}"),
+            MiddleTypeDefType::Trait => String::from("trait"),
         }
     }
 
