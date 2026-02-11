@@ -1,71 +1,49 @@
-/* Future generic type syntax pseudocode
-type SmthType<T> = struct {
-	value : T
-} @overload {
-	fn "+" (self: SmthType<T>, value : T) -> T => {
-		return self.value + value;
+/* Future thread system pseudocode
+// This language feature will be heavily inspired by goroutines from go as I think it's probably the best async programming syntax
+// Firstly I need to remove the async keyword from the lexer and parser as I'm no longer going down the async/aswait route
+
+// Importing wait groups and channels into the scope;
+import (WaitGroup, Channel) from std::async;
+
+// A non-mut reference to a channel means that you can only receive data not send it
+// But a mut reference allows you to do both
+const reader = fn (id : int, ch : &Channel:<int>, wg : &mut WaitGroup) => {
+	// wg.add(1) should also be allowed
+	wg.increment();
+	// defer return wg.done() would also work in this context
+	defer wg.done();
+
+	for !ch.closed() => {
+		if let .Some(val) <- ch.get() => fmt"Reader {id} received {val}" |> print;
 	}
 
-	// Type specific override
-	fn "/" (self: SmthType<int>, value : int) -> int => {
-		return self.value / value;
+	fmt"Reader {id} closing" |> print;
+}
+
+const main = fn () => {
+	// Use of in built generics syntax to avoid the syntax feeling disconnected from the language
+	let mut ch : Channel:<int> = Channel:<int>.new();
+	let mut wg : WaitGroup = WaitGroup.new();
+	
+	// The following code would not be run in sync
+	// Also my language will allow scopes to just be used in this syntax, allowing you to not have to create a new function call
+	spawn => print("1");
+	spawn => print("2");
+	spawn => print("3");
+	
+	for i in 0..100 => spawn reader(i, &ch, &mut wg);
+
+	for i in 0..10000 => {
+		// To send data into a channel its just a function call :
+		ch.send(90);
+		// Pipes are also valid
+		// 90 |> ch.send	
 	}
-}
-
-const generic = fn<T>(smth : SmthType<T>, other : T) -> T => {
-	let res : T = smth + other;
-	res;
-};
-
-const main = fn() => {
-	// Atleast at this stage of the language's development we'll just force people to type generics with minimal to no inference for compiler simplicity.
-	// However I'll try to make it infer at var declarations and operator overrides...
-	let res = generic:<int>(SmthType<int>{value : 10}, 10);
-	print(res);	
-};
-
-trait Person {
-	// This doesn't have a default implementation it only specifies the type of the function that must be implemented.
-	const name : fn(&Self) -> str;
-
-	// Default implementation
-	const planet = fn() -> str => {
-		"Earth";	
-	};
-
-	// This can use other functions that need to be implied by the trait
-	const name_and_planet = fn(self: &Self) -> <str, str> => {
-		tuple(self.name(), Self.planet());
-	};
-}
-
-trait Student : Person {
-	const university : fn(&Self) -> str;
-
-	// You can use functions defined in implied traits
-	const greeting = fn(self : &Self) -> str => {
-		"Hello, I'm " & self.name() & " and I learn at " & self.university() & " which is on planet " & self.planet() & "."; 
-	};
-}
-
-trait Programmer {
-	const fav_language : fn(&Self) -> str;
-}
-
-// Anytime CompSciStudent is used it will automatically assume that Programmer and Student are implemented instead of constantly having to mention Programmer + Student
-trait CompSciStudent : Programmer + Student {
-	const git_username : fn(&Self) -> str;
+	
+	ch.close();
+	wg.wait();
 }
 */
-
-// Other potential configs
-// For intaking a variety of different types
-// const fmt = fn(splits : list<str>, ..inputs : list<dyn>) -> str => ...
-// Or for taking advantage of generics
-// const fmt = fn<T>(splits : list<str>, ..inputs : list<T>) -> str => ...
-// It will also allow for all the inputs to be individually wriiten like this:
-// const fmt = fn(splits : list<str>, num : int, txt : str) -> str => ...// 
-
 
 type NumType = struct {
 	num : int,
