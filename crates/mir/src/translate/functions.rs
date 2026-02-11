@@ -299,7 +299,7 @@ impl MiddleEnvironment {
 
         if let Some((hm_t, subst)) = infer_node_hm(self, &new_scope, &ast_node) {
             let t_applied = hm::apply_subst(&subst, &hm_t);
-            let parser_ty = hm::to_parser_data_type(&t_applied);
+            let parser_ty = hm::to_parser_data_type(&t_applied, &mut self.type_cache);
 
             if let MiddleNodeType::FunctionDeclaration {
                 parameters: ref mut params2,

@@ -24,6 +24,7 @@ impl ParserDataType {
 
     pub fn natives() -> FxHashMap<String, ParserDataType> {
         let lst: Vec<(&'static str, ParserInnerType)> = vec![
+            ("console_output", ParserInnerType::Null),
             (
                 "ok",
                 ParserInnerType::Result {

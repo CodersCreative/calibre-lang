@@ -66,6 +66,7 @@ async fn run_source(
     parser.set_source_path(Some(path.to_path_buf()));
     let mut tokenizer = Tokenizer::default();
     let mut cache_path = None;
+    let start = std::time::Instant::now();
 
     if cache {
         let cache_key = blake3::hash(contents.as_bytes());
@@ -75,7 +76,7 @@ async fn run_source(
         let path = cache_dir.join(format!("{}.bin", cache_key.to_hex()));
         if let Ok(bytes) = fs::read(&path).await {
             if verbose {
-                println!("Loading Cache");
+                println!("Loading Cache - elapsed {:.2}s", start.elapsed().as_secs());
             }
             let cache_res = bincode::deserialize::<BytecodeCache>(&bytes);
 
@@ -83,7 +84,7 @@ async fn run_source(
                 let mut vm: VM = VM::new(cache.registry, cache.mappings, VMConfig::default());
 
                 if verbose {
-                    println!("Starting vm...");
+                    println!("Starting vm... - elapsed {:.2}s", start.elapsed().as_secs());
                     println!("Bytecode:");
                     println!("{}", vm.registry);
                 }
@@ -155,7 +156,7 @@ async fn run_source(
     };
 
     if verbose {
-        println!("Mir:");
+        println!("Mir - elapsed {:.2}s:", start.elapsed().as_secs());
         println!("{}", middle_result.2);
         println!("Starting vm...");
     }
@@ -171,7 +172,7 @@ async fn run_source(
     };
 
     if verbose {
-        println!("Lir:");
+        println!("Lir - elapsed {:.2}s:", start.elapsed().as_secs());
         println!("{}", lir_result);
     }
 
@@ -201,7 +202,7 @@ async fn run_source(
     let mut vm: VM = VM::new(registry, mappings, VMConfig::default());
 
     if verbose {
-        println!("Bytecode:");
+        println!("Bytecode - elapsed {:.2}s:", start.elapsed().as_secs());
         println!("{}", vm.registry);
     }
 
@@ -237,6 +238,10 @@ async fn run_source(
             None,
         );
         return Err(format!("runtime error").into());
+    }
+
+    if verbose {
+        println!("Finished - elapsed {:.2}s", start.elapsed().as_secs());
     }
 
     Ok(())

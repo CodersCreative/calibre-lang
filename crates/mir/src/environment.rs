@@ -116,6 +116,7 @@ pub struct MiddleEnvironment {
     pub specialization_decls_by_scope: FxHashMap<u64, Vec<MiddleNode>>,
     pub current_location: Option<Location>,
     pub errors: Vec<MiddleErr>,
+    pub type_cache: FxHashMap<hm::Type, ParserDataType>,
     pub stdlib_nodes: Vec<MiddleNode>,
 }
 
@@ -141,6 +142,7 @@ impl Default for MiddleEnvironment {
             current_location: None,
             errors: Vec::new(),
             stdlib_nodes: Vec::new(),
+            type_cache: FxHashMap::default(),
         }
     }
 }
@@ -806,19 +808,24 @@ impl MiddleEnvironment {
         let mut middle = wrap(&env, scope, node.span, inner.clone());
 
         for _ in 0..5 {
-            let before_vars: Vec<(String, calibre_parser::ast::ParserDataType)> = env
-                .variables
-                .iter()
-                .map(|(k, v)| (k.clone(), v.data_type.clone()))
-                .collect();
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+
+            let mut hasher = DefaultHasher::new();
+            for (k, v) in env.variables.iter() {
+                k.hash(&mut hasher);
+                v.data_type.data_type.to_string().hash(&mut hasher);
+            }
+            let before_hash = hasher.finish();
 
             env.apply_inferred_types_to_middlenode(&scope, &mut inner);
 
-            let after_vars: Vec<(String, calibre_parser::ast::ParserDataType)> = env
-                .variables
-                .iter()
-                .map(|(k, v)| (k.clone(), v.data_type.clone()))
-                .collect();
+            let mut hasher2 = DefaultHasher::new();
+            for (k, v) in env.variables.iter() {
+                k.hash(&mut hasher2);
+                v.data_type.data_type.to_string().hash(&mut hasher2);
+            }
+            let after_hash = hasher2.finish();
 
             let new_inner = env.evaluate(&scope, node.clone());
             let new_middle = wrap(&env, scope, node.span, new_inner.clone());
@@ -829,7 +836,7 @@ impl MiddleEnvironment {
             inner = new_inner;
             middle = new_middle;
 
-            if before_vars == after_vars && old_str == new_str {
+            if before_hash == after_hash && old_str == new_str {
                 same += 1;
                 if same >= 2 {
                     break;
@@ -874,6 +881,16 @@ impl MiddleEnvironment {
     }
 
     fn apply_inferred_types_to_middlenode(&mut self, scope: &u64, node: &mut MiddleNode) {
+        let mut cache: FxHashMap<usize, ParserDataType> = FxHashMap::default();
+        self.apply_inferred_types_to_middlenode_inner(scope, node, &mut cache);
+    }
+
+    fn apply_inferred_types_to_middlenode_inner(
+        &mut self,
+        scope: &u64,
+        node: &mut MiddleNode,
+        cache: &mut FxHashMap<usize, ParserDataType>,
+    ) {
         match &mut node.node_type {
             MiddleNodeType::FunctionDeclaration {
                 parameters,
@@ -889,7 +906,7 @@ impl MiddleEnvironment {
                     }
                 }
 
-                self.apply_inferred_types_to_middlenode(scope, body);
+                self.apply_inferred_types_to_middlenode_inner(scope, body, cache);
             }
             MiddleNodeType::VariableDeclaration {
                 identifier,
@@ -935,7 +952,9 @@ impl MiddleEnvironment {
                 {
                     if let Some(scheme) = self.hm_env.get(&identifier.text) {
                         let applied = scheme.ty.clone();
-                        let parser_ty = hm::to_parser_data_type(&applied);
+                        let mut pd_cache: FxHashMap<hm::Type, calibre_parser::ast::ParserDataType> =
+                            FxHashMap::default();
+                        let parser_ty = hm::to_parser_data_type(&applied, &mut pd_cache);
 
                         if let ParserInnerType::Function {
                             return_type: inf_ret,
@@ -956,18 +975,18 @@ impl MiddleEnvironment {
                         }
                     }
 
-                    self.apply_inferred_types_to_middlenode(scope, value);
+                    self.apply_inferred_types_to_middlenode_inner(scope, value, cache);
                 } else {
-                    self.apply_inferred_types_to_middlenode(scope, value);
+                    self.apply_inferred_types_to_middlenode_inner(scope, value, cache);
                 }
             }
             MiddleNodeType::RangeDeclaration { from, to, .. } => {
-                self.apply_inferred_types_to_middlenode(scope, from);
-                self.apply_inferred_types_to_middlenode(scope, to);
+                self.apply_inferred_types_to_middlenode_inner(scope, from, cache);
+                self.apply_inferred_types_to_middlenode_inner(scope, to, cache);
             }
             MiddleNodeType::MemberExpression { path } => {
                 for (mn, _flag) in path.iter_mut() {
-                    self.apply_inferred_types_to_middlenode(scope, mn);
+                    self.apply_inferred_types_to_middlenode_inner(scope, mn, cache);
                 }
 
                 if path.len() >= 2 {
@@ -1012,7 +1031,7 @@ impl MiddleEnvironment {
             }
             MiddleNodeType::ScopeDeclaration { body, .. } => {
                 for stmt in body.iter_mut() {
-                    self.apply_inferred_types_to_middlenode(scope, stmt);
+                    self.apply_inferred_types_to_middlenode_inner(scope, stmt, cache);
                 }
             }
             MiddleNodeType::IfStatement {
@@ -1020,10 +1039,10 @@ impl MiddleEnvironment {
                 then,
                 otherwise,
             } => {
-                self.apply_inferred_types_to_middlenode(scope, comparison);
-                self.apply_inferred_types_to_middlenode(scope, then);
+                self.apply_inferred_types_to_middlenode_inner(scope, comparison, cache);
+                self.apply_inferred_types_to_middlenode_inner(scope, then, cache);
                 if let Some(o) = otherwise {
-                    self.apply_inferred_types_to_middlenode(scope, o);
+                    self.apply_inferred_types_to_middlenode_inner(scope, o, cache);
                 }
             }
             MiddleNodeType::CallExpression { caller, args } => {
@@ -1054,35 +1073,10 @@ impl MiddleEnvironment {
                     if let Some(scheme) = scheme {
                         let mut tg = TypeGenerator::default();
                         let mut subst = Subst::default();
-                        fn contains_auto(dt: &ParserDataType) -> bool {
-                            match &dt.data_type {
-                                ParserInnerType::Auto(_) => true,
-                                ParserInnerType::Tuple(xs) => xs.iter().any(contains_auto),
-                                ParserInnerType::List(x) => contains_auto(x),
-                                ParserInnerType::Ptr(x) => contains_auto(x),
-                                ParserInnerType::Option(x) => contains_auto(x),
-                                ParserInnerType::Result { ok, err } => {
-                                    contains_auto(ok) || contains_auto(err)
-                                }
-                                ParserInnerType::Function {
-                                    return_type,
-                                    parameters,
-                                    ..
-                                } => {
-                                    contains_auto(return_type)
-                                        || parameters.iter().any(contains_auto)
-                                }
-                                ParserInnerType::Ref(x, _) => contains_auto(x),
-                                ParserInnerType::StructWithGenerics { generic_types, .. } => {
-                                    generic_types.iter().any(contains_auto)
-                                }
-                                ParserInnerType::Scope(xs) => xs.iter().any(contains_auto),
-                                _ => false,
-                            }
-                        }
 
                         let scheme_is_unresolved =
-                            contains_auto(&hm::to_parser_data_type(&scheme.ty));
+                            hm::to_parser_data_type(&scheme.ty, &mut self.type_cache)
+                                .contains_auto();
                         let mut inst = if scheme_is_unresolved {
                             scheme.ty.clone()
                         } else {
@@ -1121,46 +1115,59 @@ impl MiddleEnvironment {
                             scheme.ty = hm::apply_subst(&subst, &scheme.ty);
                         }
 
-                        hm::recompute_scheme_vars_all(&mut self.hm_env);
+                        if !subst.is_empty() {
+                            hm::recompute_scheme_vars_all(&mut self.hm_env);
 
-                        for (k, v) in self.variables.iter_mut() {
-                            if let Some(scheme) = self.hm_env.get(k) {
-                                v.data_type = hm::to_parser_data_type(&scheme.ty);
+                            for (k, v) in self.variables.iter_mut() {
+                                if (v.data_type.is_auto() || v.data_type.contains_auto())
+                                    && let Some(scheme) = self.hm_env.get(k)
+                                {
+                                    v.data_type =
+                                        hm::to_parser_data_type(&scheme.ty, &mut self.type_cache);
+                                }
                             }
                         }
                     }
                 }
 
-                self.apply_inferred_types_to_middlenode(scope, caller);
+                self.apply_inferred_types_to_middlenode_inner(scope, caller, cache);
+
                 for a in args.iter_mut() {
-                    self.apply_inferred_types_to_middlenode(scope, a);
+                    let key = (a as *const MiddleNode) as usize;
+                    if !cache.contains_key(&key)
+                        && let Some(arg_ty) = self.resolve_type_from_node(scope, &a.clone().into())
+                    {
+                        cache.insert(key, arg_ty);
+                    }
+
+                    self.apply_inferred_types_to_middlenode_inner(scope, a, cache);
                 }
             }
             MiddleNodeType::Return { value: Some(value) } => {
-                self.apply_inferred_types_to_middlenode(scope, value);
+                self.apply_inferred_types_to_middlenode_inner(scope, value, cache);
             }
             MiddleNodeType::AggregateExpression { value, .. } => {
                 for (_, v) in value.0.iter_mut() {
-                    self.apply_inferred_types_to_middlenode(scope, v);
+                    self.apply_inferred_types_to_middlenode_inner(scope, v, cache);
                 }
             }
             MiddleNodeType::ListLiteral(_, items) => {
                 for it in items.iter_mut() {
-                    self.apply_inferred_types_to_middlenode(scope, it);
+                    self.apply_inferred_types_to_middlenode_inner(scope, it, cache);
                 }
             }
             MiddleNodeType::BinaryExpression { left, right, .. }
             | MiddleNodeType::ComparisonExpression { left, right, .. }
             | MiddleNodeType::BooleanExpression { left, right, .. } => {
-                self.apply_inferred_types_to_middlenode(scope, left);
-                self.apply_inferred_types_to_middlenode(scope, right);
+                self.apply_inferred_types_to_middlenode_inner(scope, left, cache);
+                self.apply_inferred_types_to_middlenode_inner(scope, right, cache);
             }
             MiddleNodeType::RefStatement { value, .. }
             | MiddleNodeType::DerefStatement { value }
             | MiddleNodeType::NegExpression { value }
             | MiddleNodeType::DebugExpression { value, .. }
             | MiddleNodeType::AsExpression { value, .. } => {
-                self.apply_inferred_types_to_middlenode(scope, value);
+                self.apply_inferred_types_to_middlenode_inner(scope, value, cache);
             }
             _ => {}
         }
@@ -2302,7 +2309,7 @@ impl MiddleEnvironment {
                         if let Some(scheme) = self.hm_env.get(&base_ident) {
                             let mut tg = TypeGenerator::default();
                             let inst = hm::instantiate(scheme, &mut tg);
-                            let p = hm::to_parser_data_type(&inst);
+                            let p = hm::to_parser_data_type(&inst, &mut self.type_cache);
                             caller_type = Some(self.resolve_data_type(scope, p));
                         } else if let Some(var) = self.variables.get(&base_ident) {
                             caller_type = Some(var.data_type.clone());
@@ -2344,7 +2351,7 @@ impl MiddleEnvironment {
                     if let Some(scheme) = self.hm_env.get(&iden.text) {
                         let mut tg = TypeGenerator::default();
                         let inst = hm::instantiate(scheme, &mut tg);
-                        let p = hm::to_parser_data_type(&inst);
+                        let p = hm::to_parser_data_type(&inst, &mut self.type_cache);
                         return Some(self.resolve_data_type(scope, p));
                     }
 

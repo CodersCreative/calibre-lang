@@ -1,16 +1,5 @@
-extern "c" const c_write = fn(@int, str, @usize) -> @isize from "libc" as "write";
-extern "c" const c_strlen = fn(str) -> @usize from "libc" as "strlen";
 
-const write_fd = fn(fd: int, msg) => {
-    let txt = "" & msg;
-    let len = c_strlen(txt);
-    c_write(fd, txt, len);
-};
-
-const print = fn() => fn(msg) => {
-    write_fd(1, ("" & msg) & "\n");
-    null;
-};
+const print = fn(msg: dyn) => console_output(1, "" & msg & "\n");
 
 const range = fn(start end : mut int, step : int, inclusive : bool) -> list:<int> => {
   if start != INT_MIN && end == INT_MIN => {

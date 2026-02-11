@@ -201,7 +201,7 @@ impl MiddleEnvironment {
                 tenv.insert(k.clone(), s.clone());
             }
 
-            let parser_ty = hm::to_parser_data_type(&t_applied);
+            let parser_ty = hm::to_parser_data_type(&t_applied, &mut self.type_cache);
             let scheme = match &parser_ty.data_type {
                 calibre_parser::ast::ParserInnerType::Function { .. }
                     if parser_ty.contains_auto() =>

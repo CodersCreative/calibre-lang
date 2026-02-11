@@ -1,6 +1,86 @@
 use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
 use dumpster::sync::Gc;
 
+pub struct ConsoleOutput();
+
+fn unescape_string(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            out.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('r') => out.push('\r'),
+            Some('\\') => out.push('\\'),
+            Some('"') => out.push('"'),
+            Some('\'') => out.push('\''),
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+impl NativeFunction for ConsoleOutput {
+    fn name(&self) -> String {
+        String::from("console_output")
+    }
+
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        use std::io::{self, Write};
+        let RuntimeValue::Int(handle_type) = args.remove(0) else {
+            panic!()
+        };
+
+        if handle_type != 2 {
+            let stdout = io::stdout();
+            let mut handle = stdout.lock();
+
+            for arg in args {
+                let s = match arg {
+                    RuntimeValue::Str(value) => unescape_string(&value),
+                    other => other.display(env),
+                };
+
+                handle
+                    .write_all(s.as_bytes())
+                    .map_err(|e| RuntimeError::Io(e.to_string()))?;
+            }
+
+            handle
+                .flush()
+                .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        } else {
+            let stdout = io::stderr();
+            let mut handle = stdout.lock();
+
+            for arg in args {
+                let s = match arg {
+                    RuntimeValue::Str(value) => unescape_string(&value),
+                    other => other.display(env),
+                };
+
+                handle
+                    .write_all(s.as_bytes())
+                    .map_err(|e| RuntimeError::Io(e.to_string()))?;
+            }
+
+            handle
+                .flush()
+                .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        }
+
+        Ok(RuntimeValue::Null)
+    }
+}
+
 pub struct ErrFn();
 
 impl NativeFunction for ErrFn {

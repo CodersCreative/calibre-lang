@@ -70,6 +70,7 @@ impl VM {
         }
 
         let funcs: Vec<&str> = vec![
+            "console_output",
             "ok",
             "err",
             "some",

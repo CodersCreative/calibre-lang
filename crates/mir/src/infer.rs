@@ -31,7 +31,10 @@ pub fn infer_node_type(
     }
 
     match visit(node, env, scope, &mut tg, &mut tenv, &mut subst) {
-        Ok(t) => Some(hm::to_parser_data_type(&hm::apply_subst(&subst, &t))),
+        Ok(t) => Some(hm::to_parser_data_type(
+            &hm::apply_subst(&subst, &t),
+            &mut env.type_cache,
+        )),
         Err(_) => None,
     }
 }
@@ -555,18 +558,21 @@ pub fn infer_node_hm(
             }
 
             for (k, v) in env.variables.iter_mut() {
-                if let Some(scheme) = env.hm_env.get(k) {
-                    if v.data_type.contains_auto() {
-                        v.data_type = hm::to_parser_data_type(&scheme.ty);
-                    }
+                if let Some(scheme) = env.hm_env.get(k)
+                    && v.data_type.contains_auto()
+                {
+                    v.data_type = hm::to_parser_data_type(&scheme.ty, &mut env.type_cache);
                 }
             }
 
             for (k, orig_t) in var_types.iter() {
-                if let Some(var) = env.variables.get_mut(k) {
-                    if var.data_type.contains_auto() {
-                        var.data_type = hm::to_parser_data_type(&hm::apply_subst(&subst, orig_t));
-                    }
+                if let Some(var) = env.variables.get_mut(k)
+                    && var.data_type.contains_auto()
+                {
+                    var.data_type = hm::to_parser_data_type(
+                        &hm::apply_subst(&subst, orig_t),
+                        &mut env.type_cache,
+                    );
                 }
 
                 env.hm_env.insert(

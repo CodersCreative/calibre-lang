@@ -5,19 +5,22 @@ extern "c" const c_fgets = fn(ptr:<@u8>, @int, ptr:<@u8>) -> str from "libc" as 
 extern "c" const c_malloc = fn(@usize) -> ptr:<@u8> from "libc" as "malloc";
 extern "c" const c_free = fn(ptr:<@u8>) -> null from "libc" as "free";
 
-const out = fn(msg) => print(msg);
-
-const err = fn(msg) => {
-    write_fd(2, ("" & msg) & "\n");
-    null;
+const write_fd = fn(fd: int, msg : dyn) => {
+    let txt = "" & msg;
+    let len = c_strlen(txt);
+    c_write(fd, txt, len);
 };
+
+const out = fn(msg: dyn) => console_output(1, msg);
+
+const err = fn(msg: dyn) => console_output(2, msg);
 
 const clear = fn() => {
     out("\x1b[2J\x1b[1;1H");
     null;
 };
 
-const input = fn(prompt) -> str => {
+const input = fn(prompt : dyn) -> str => {
     if prompt != null => {
         out(prompt);
     } else => null;

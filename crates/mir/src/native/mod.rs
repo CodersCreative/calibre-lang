@@ -55,6 +55,7 @@ impl MiddleEnvironment {
 
     pub fn setup_global(&mut self, scope: &u64) {
         let funcs: Vec<&str> = vec![
+            "console_output",
             "ok",
             "err",
             "some",
