@@ -345,7 +345,7 @@ impl Into<NodeType> for MiddleNodeType {
             }),
             Self::CharLiteral(x) => NodeType::CharLiteral(x),
             Self::FloatLiteral(x) => NodeType::FloatLiteral(x),
-            Self::IntLiteral(x) => NodeType::IntLiteral(x),
+            Self::IntLiteral(x) => NodeType::IntLiteral(x.to_string()),
             Self::MemberExpression { path } => NodeType::MemberExpression {
                 path: {
                     let mut lst = Vec::new();

@@ -263,7 +263,7 @@ impl MiddleEnvironment {
                                             )),
                                             right: Box::new(Node::new(
                                                 self.current_span(),
-                                                NodeType::IntLiteral(index),
+                                                NodeType::IntLiteral(index.to_string()),
                                             )),
                                             operator: ComparisonOperator::Equal,
                                         },

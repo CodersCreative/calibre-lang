@@ -72,10 +72,22 @@ impl MiddleEnvironment {
                 ),
                 span: node.span,
             }),
-            NodeType::IntLiteral(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::IntLiteral(x),
-                span: node.span,
-            }),
+            NodeType::IntLiteral(number) => {
+                let number = if let Some((_, x)) = number.split_once("x") {
+                    i64::from_str_radix(x, 16).unwrap()
+                } else if let Some((_, x)) = number.split_once("o") {
+                    i64::from_str_radix(x, 8).unwrap()
+                } else if let Some((_, x)) = number.split_once("b") {
+                    i64::from_str_radix(x, 2).unwrap()
+                } else {
+                    number.parse().unwrap()
+                };
+
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::IntLiteral(number),
+                    span: node.span,
+                })
+            }
             NodeType::FloatLiteral(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::FloatLiteral(x),
                 span: node.span,

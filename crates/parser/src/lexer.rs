@@ -419,7 +419,17 @@ impl Tokenizer {
                         let mut number = String::new();
                         let mut is_int = true;
 
-                        while buffer.len() > 0
+                        if first == &'0' && ['x', 'o', 'b'].contains(&buffer[1]) {
+                            let c = buffer.remove(0);
+                            self.increment_line_col(&c);
+                            number.push(c);
+
+                            let c = buffer.remove(0);
+                            self.increment_line_col(&c);
+                            number.push(c);
+                        }
+
+                        while !buffer.is_empty()
                             && (buffer[0].is_numeric() || buffer[0] == '.' || buffer[0] == '_')
                         {
                             if buffer[0] == '.' {

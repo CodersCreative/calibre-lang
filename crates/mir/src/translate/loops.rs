@@ -333,7 +333,7 @@ impl MiddleEnvironment {
                                 )),
                                 right: Box::new(Node::new(
                                     self.current_span(),
-                                    NodeType::IntLiteral(1),
+                                    NodeType::IntLiteral(String::from("1")),
                                 )),
                                 operator: BinaryOperator::Add,
                             },

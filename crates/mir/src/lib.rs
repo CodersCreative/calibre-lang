@@ -49,7 +49,7 @@ impl MiddleEnvironment {
                 for (idx, entry) in head.into_iter().enumerate() {
                     if let Some((var_type, name)) = entry {
                         let member = if has_tail {
-                            let index_node = Node::new(span, NodeType::IntLiteral(idx as i64));
+                            let index_node = Node::new(span, NodeType::IntLiteral(idx.to_string()));
                             Node::new(
                                 span,
                                 NodeType::MemberExpression {
@@ -165,7 +165,10 @@ impl MiddleEnvironment {
                             span,
                             NodeType::BinaryExpression {
                                 left: Box::new(len_call),
-                                right: Box::new(Node::new(span, NodeType::IntLiteral(offset))),
+                                right: Box::new(Node::new(
+                                    span,
+                                    NodeType::IntLiteral(offset.to_string()),
+                                )),
                                 operator: BinaryOperator::Sub,
                             },
                         );

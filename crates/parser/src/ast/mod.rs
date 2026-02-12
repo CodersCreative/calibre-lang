@@ -1156,7 +1156,7 @@ pub enum NodeType {
     ListLiteral(PotentialNewType, Vec<Node>),
     CharLiteral(char),
     FloatLiteral(f64),
-    IntLiteral(i64),
+    IntLiteral(String),
     MemberExpression {
         path: Vec<(Node, bool)>,
     },
