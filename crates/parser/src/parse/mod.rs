@@ -336,12 +336,6 @@ impl Parser {
             ))
         } else if t.token_type == TokenType::Func {
             let open = self.eat();
-            let is_async = if self.first().token_type == TokenType::Async {
-                let _ = self.eat();
-                true
-            } else {
-                false
-            };
 
             let args: Vec<ParserDataType> = self
                 .parse_type_list(
@@ -371,7 +365,6 @@ impl Parser {
                 ParserInnerType::Function {
                     return_type: Box::new(ret),
                     parameters: args,
-                    is_async,
                 },
             ))
         } else if t.token_type == TokenType::List {

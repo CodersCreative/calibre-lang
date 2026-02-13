@@ -21,9 +21,7 @@ const clear = fn() => {
 };
 
 const input = fn(prompt : dyn) -> str => {
-    if prompt != null => {
-        out(prompt);
-    } else => null;
+    out(prompt);
     let handle = c_fdopen(0, "r");
     let size = 4096;
     let buf = c_malloc(size as usize);

@@ -118,6 +118,7 @@ pub struct MiddleEnvironment {
     pub errors: Vec<MiddleErr>,
     pub type_cache: FxHashMap<hm::Type, ParserDataType>,
     pub stdlib_nodes: Vec<MiddleNode>,
+    pub suppress_curry: bool,
 }
 
 impl Default for MiddleEnvironment {
@@ -143,6 +144,7 @@ impl Default for MiddleEnvironment {
             errors: Vec::new(),
             stdlib_nodes: Vec::new(),
             type_cache: FxHashMap::default(),
+            suppress_curry: false,
         }
     }
 }
@@ -270,7 +272,7 @@ impl MiddleEnvironment {
                     generic_types: bg,
                 },
             ) => {
-                if a != b || ag.len() != bg.len() {
+                if struct_base(a) != struct_base(b) || ag.len() != bg.len() {
                     return false;
                 }
                 ag.iter().zip(bg.iter()).all(|(x, y)| {
@@ -412,7 +414,6 @@ impl MiddleEnvironment {
             ParserInnerType::Function {
                 return_type,
                 parameters,
-                is_async: _,
             } => {
                 let params = parameters
                     .iter()
@@ -651,14 +652,12 @@ impl MiddleEnvironment {
             ParserInnerType::Function {
                 return_type,
                 parameters,
-                is_async,
             } => ParserInnerType::Function {
                 return_type: Box::new(self.substitute_data_type(return_type, subst)),
                 parameters: parameters
                     .iter()
                     .map(|p| self.substitute_data_type(p, subst))
                     .collect(),
-                is_async: *is_async,
             },
             ParserInnerType::Ref(x, m) => {
                 ParserInnerType::Ref(Box::new(self.substitute_data_type(x, subst)), m.clone())
@@ -1267,7 +1266,9 @@ impl MiddleEnvironment {
     ) -> Option<ParserDataType> {
         match iden {
             PotentialGenericTypeIdentifier::Identifier(x) => {
-                let resolved = self.resolve_potential_dollar_ident(scope, x)?;
+                let resolved = self
+                    .resolve_potential_dollar_ident(scope, x)
+                    .unwrap_or_else(|| ParserText::from(x.to_string()));
                 Some(ParserDataType {
                     data_type: ParserInnerType::Struct(resolved.text.to_string()),
                     span: resolved.span,
@@ -1277,7 +1278,9 @@ impl MiddleEnvironment {
                 identifier,
                 generic_types,
             } => {
-                let base = self.resolve_potential_dollar_ident(scope, identifier)?;
+                let base = self
+                    .resolve_potential_dollar_ident(scope, identifier)
+                    .unwrap_or_else(|| ParserText::from(identifier.to_string()));
 
                 let mut gens: Vec<ParserDataType> = Vec::new();
                 for g in generic_types.iter() {
@@ -1519,7 +1522,6 @@ impl MiddleEnvironment {
             ParserInnerType::Function {
                 return_type,
                 parameters,
-                is_async,
             } => ParserDataType {
                 data_type: ParserInnerType::Function {
                     return_type: Box::new(self.resolve_data_type(scope, *return_type)),
@@ -1532,7 +1534,6 @@ impl MiddleEnvironment {
 
                         params
                     },
-                    is_async,
                 },
                 span: data_type.span,
             },
@@ -1993,16 +1994,14 @@ impl MiddleEnvironment {
             | NodeType::ScopeDeclaration { define: true, .. }
             | NodeType::ScopeAlias { .. }
             | NodeType::DataType { .. }
-            | NodeType::Until { .. } => None,
+            | NodeType::Until { .. }
+            | NodeType::Spawn { .. } => None,
             NodeType::Null | NodeType::Defer { .. } | NodeType::Drop(_) | NodeType::EmptyLine => {
                 Some(ParserDataType::from(ParserInnerType::Null))
             }
-            NodeType::Move(x) => {
-                let ident = self.resolve_potential_dollar_ident(scope, x)?.text;
-
-                Some(self.variables.get(&ident)?.data_type.clone())
+            NodeType::MoveExpression { value } | NodeType::ParenExpression { value } => {
+                self.resolve_type_from_node(scope, value)
             }
-            NodeType::MoveExpression { value } => self.resolve_type_from_node(scope, value),
             NodeType::TupleLiteral { values } => {
                 let mut types = Vec::new();
                 for value in values {
@@ -2020,7 +2019,6 @@ impl MiddleEnvironment {
                 ),
                 span: node.span,
             }),
-            NodeType::ParenExpression { value } => self.resolve_type_from_node(scope, value),
             NodeType::ScopeDeclaration {
                 body: Some(body), ..
             } => self.resolve_type_from_node(scope, body.last()?),
@@ -2131,7 +2129,6 @@ impl MiddleEnvironment {
 
                         params
                     },
-                    is_async: header.is_async,
                 },
                 span: node.span,
             }),
@@ -2323,7 +2320,6 @@ impl MiddleEnvironment {
                     ParserInnerType::Function {
                         return_type,
                         parameters,
-                        is_async,
                     } if parameters.len() > args.len() => Some(ParserDataType {
                         data_type: ParserInnerType::Function {
                             return_type,
@@ -2333,14 +2329,12 @@ impl MiddleEnvironment {
                                 .filter(|(i, _)| i >= &args.len())
                                 .map(|x| x.1.clone())
                                 .collect(),
-                            is_async,
                         },
                         span: node.span,
                     }),
                     ParserInnerType::Function {
                         return_type,
                         parameters: _,
-                        is_async: _,
                     } => Some(*return_type.clone()),
                     ParserInnerType::NativeFunction(x) => Some(*x),
                     _ => return None,

@@ -50,7 +50,6 @@ impl MiddleEnvironment {
                     PotentialFfiDataType::Ffi(x) => ParserDataType::from(x),
                 })
                 .collect(),
-            is_async: false,
         });
 
         self.variables.insert(
@@ -278,7 +277,6 @@ impl MiddleEnvironment {
                 parameters: params.clone(),
                 body: Box::new(body.clone()),
                 return_type: return_type.clone(),
-                is_async: header.is_async,
                 scope_id: new_scope,
             },
             span,
@@ -310,7 +308,6 @@ impl MiddleEnvironment {
                 if let calibre_parser::ast::ParserInnerType::Function {
                     return_type: inferred_ret,
                     parameters: inferred_params,
-                    is_async: _,
                 } = parser_ty.data_type
                 {
                     for (i, (name, p_ty)) in params2.iter_mut().enumerate() {
@@ -338,6 +335,7 @@ impl MiddleEnvironment {
         generic_types: Vec<PotentialNewType>,
         mut args: Vec<CallArg>,
         mut reverse_args: Vec<Node>,
+        allow_curry: bool,
     ) -> Result<MiddleNode, MiddleErr> {
         if let NodeType::MemberExpression { mut path } = caller.node_type.clone() {
             if let Some((last_node, is_dynamic)) = path.last_mut()
@@ -482,7 +480,6 @@ impl MiddleEnvironment {
                     Some(ParserInnerType::Function {
                         return_type,
                         parameters,
-                        is_async,
                     }) if (parameters.len() < args.len() + reverse_args.len()
                         || parameters.len() == args.len() + reverse_args.len() + 1)
                         && parameters
@@ -529,8 +526,10 @@ impl MiddleEnvironment {
                     Some(ParserInnerType::Function {
                         return_type,
                         parameters,
-                        is_async,
-                    }) if parameters.len() > args.len() + reverse_args.len() => {
+                    }) if allow_curry
+                        && !self.suppress_curry
+                        && parameters.len() > args.len() + reverse_args.len() =>
+                    {
                         let provided_len = args.len();
                         let mut capture_decls = Vec::new();
                         let mut captured_args: Vec<CallArg> = Vec::new();
@@ -602,7 +601,6 @@ impl MiddleEnvironment {
                                         })
                                         .collect(),
                                     return_type: (*return_type).into(),
-                                    is_async,
                                     param_destructures: Vec::new(),
                                 },
                                 body: Box::new(Node::new(

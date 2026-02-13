@@ -1,6 +1,11 @@
 use std::{
+    cell::UnsafeCell,
+    collections::VecDeque,
     fmt::{Debug, Display},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, AtomicIsize, Ordering},
+        Arc, Condvar, Mutex,
+    },
 };
 
 use calibre_lir::BlockId;
@@ -29,6 +34,114 @@ pub struct GcVec(pub Vec<RuntimeValue>);
 
 #[derive(Debug, Clone)]
 pub struct GcMap(pub ObjectMap<RuntimeValue>);
+
+#[derive(Debug)]
+pub struct ChannelInner {
+    pub queue: Mutex<VecDeque<RuntimeValue>>,
+    pub closed: AtomicBool,
+    pub cvar: Condvar,
+}
+
+impl ChannelInner {
+    pub fn new() -> Self {
+        Self {
+            queue: Mutex::new(VecDeque::new()),
+            closed: AtomicBool::new(false),
+            cvar: Condvar::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct WaitGroupInner {
+    pub count: AtomicIsize,
+    pub mutex: Mutex<()>,
+    pub cvar: Condvar,
+}
+
+impl WaitGroupInner {
+    pub fn new() -> Self {
+        Self {
+            count: AtomicIsize::new(0),
+            mutex: Mutex::new(()),
+            cvar: Condvar::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MutexInner {
+    locked: AtomicBool,
+    mutex: Mutex<()>,
+    cvar: Condvar,
+    value: UnsafeCell<RuntimeValue>,
+}
+
+unsafe impl Send for MutexInner {}
+unsafe impl Sync for MutexInner {}
+
+impl MutexInner {
+    pub fn new(value: RuntimeValue) -> Self {
+        Self {
+            locked: AtomicBool::new(false),
+            mutex: Mutex::new(()),
+            cvar: Condvar::new(),
+            value: UnsafeCell::new(value),
+        }
+    }
+
+    pub fn lock(self: &Arc<Self>) -> MutexGuardInner {
+        let mut guard = self.mutex.lock().unwrap_or_else(|e| e.into_inner());
+        while self.locked.load(Ordering::Acquire) {
+            guard = self.cvar.wait(guard).unwrap_or_else(|e| e.into_inner());
+        }
+        self.locked.store(true, Ordering::Release);
+        drop(guard);
+        MutexGuardInner {
+            inner: self.clone(),
+            released: AtomicBool::new(false),
+        }
+    }
+
+    fn unlock(&self) {
+        self.locked.store(false, Ordering::Release);
+        self.cvar.notify_one();
+    }
+
+    fn get_clone(&self) -> RuntimeValue {
+        unsafe { (*self.value.get()).clone() }
+    }
+
+    fn set_value(&self, value: RuntimeValue) {
+        unsafe {
+            *self.value.get() = value;
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MutexGuardInner {
+    inner: Arc<MutexInner>,
+    released: AtomicBool,
+}
+
+impl MutexGuardInner {
+    pub fn get_clone(&self) -> RuntimeValue {
+        self.inner.get_clone()
+    }
+
+    pub fn set_value(&self, value: RuntimeValue) {
+        self.inner.set_value(value);
+    }
+}
+
+impl Drop for MutexGuardInner {
+    fn drop(&mut self) {
+        if !self.released.swap(true, Ordering::AcqRel) {
+            self.inner.unlock();
+        }
+    }
+}
 
 unsafe impl<V: Visitor> TraceWith<V> for GcVec {
     fn accept(&self, visitor: &mut V) -> Result<(), ()> {
@@ -70,6 +183,10 @@ pub enum RuntimeValue {
     List(Gc<GcVec>),
     Option(Option<Gc<RuntimeValue>>),
     Result(Result<Gc<RuntimeValue>, Gc<RuntimeValue>>),
+    Channel(Arc<ChannelInner>),
+    WaitGroup(Arc<WaitGroupInner>),
+    Mutex(Arc<MutexInner>),
+    MutexGuard(Arc<MutexGuardInner>),
     NativeFunction(Arc<dyn NativeFunction>),
     ExternFunction(Arc<ExternFunction>),
     Function {
@@ -87,6 +204,20 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
             RuntimeValue::Option(Some(x)) => x.accept(visitor),
             RuntimeValue::Result(Ok(x)) => x.accept(visitor),
             RuntimeValue::Result(Err(x)) => x.accept(visitor),
+            RuntimeValue::Channel(ch) => {
+                if let Ok(queue) = ch.queue.lock() {
+                    for item in queue.iter() {
+                        item.accept(visitor)?;
+                    }
+                }
+                Ok(())
+            }
+            RuntimeValue::WaitGroup(_) => Ok(()),
+            RuntimeValue::Mutex(m) => {
+                let guard = m.lock();
+                guard.get_clone().accept(visitor)
+            }
+            RuntimeValue::MutexGuard(guard) => guard.get_clone().accept(visitor),
             RuntimeValue::Function { captures, .. } => {
                 for (_, value) in captures {
                     value.accept(visitor)?;
@@ -137,6 +268,7 @@ impl RuntimeValue {
             ("false", RuntimeValue::Bool(false)),
             ("none", RuntimeValue::Option(None)),
             ("INT_MIN", RuntimeValue::Int(i64::MIN)),
+            ("INT_MAX", RuntimeValue::Int(i64::MAX)),
         ];
 
         let mut map = FxHashMap::default();
@@ -164,6 +296,49 @@ impl RuntimeValue {
             ("tuple", Arc::new(native::global::TupleFn())),
             ("panic", Arc::new(native::global::PanicFn())),
             ("min_or_zero", Arc::new(native::global::MinOrZero())),
+            (
+                "channel_new",
+                Arc::new(native::r#async::ChannelNew()),
+            ),
+            (
+                "channel_send",
+                Arc::new(native::r#async::ChannelSend()),
+            ),
+            ("channel_get", Arc::new(native::r#async::ChannelGet())),
+            (
+                "channel_close",
+                Arc::new(native::r#async::ChannelClose()),
+            ),
+            (
+                "channel_closed",
+                Arc::new(native::r#async::ChannelClosed()),
+            ),
+            (
+                "waitgroup_new",
+                Arc::new(native::r#async::WaitGroupNew()),
+            ),
+            (
+                "waitgroup_add",
+                Arc::new(native::r#async::WaitGroupAdd()),
+            ),
+            (
+                "waitgroup_done",
+                Arc::new(native::r#async::WaitGroupDone()),
+            ),
+            (
+                "waitgroup_wait",
+                Arc::new(native::r#async::WaitGroupWait()),
+            ),
+            (
+                "waitgroup_count",
+                Arc::new(native::r#async::WaitGroupCount()),
+            ),
+            ("mutex_new", Arc::new(native::r#async::MutexNew())),
+            ("mutex_get", Arc::new(native::r#async::MutexGet())),
+            ("mutex_set", Arc::new(native::r#async::MutexSet())),
+            ("mutex_with", Arc::new(native::r#async::MutexWith())),
+            ("mutex_write", Arc::new(native::r#async::MutexWrite())),
+            
         ];
 
         let mut map = FxHashMap::default();
@@ -215,6 +390,10 @@ impl RuntimeValue {
         match self {
             Self::Ref(x) => vm.variables.get(x).unwrap().display(vm),
             Self::RegRef { frame, reg } => vm.get_reg_value_in_frame(*frame, *reg).display(vm),
+            Self::Channel(_) => String::from("Channel"),
+            Self::WaitGroup(_) => String::from("WaitGroup"),
+            Self::Mutex(_) => String::from("Mutex"),
+            Self::MutexGuard(_) => String::from("MutexGuard"),
             Self::List(x) => {
                 let lst: Vec<String> = x.0.iter().map(|x| x.display(vm)).collect();
                 print_list(&lst, '[', ']')
@@ -311,6 +490,10 @@ impl Display for RuntimeValue {
             Self::Option(_) => write!(f, "None"),
             Self::Result(Ok(x)) => write!(f, "Ok : {}", x.as_ref()),
             Self::Result(Err(x)) => write!(f, "Err : {}", x.as_ref()),
+            Self::Channel(_) => write!(f, "Channel"),
+            Self::WaitGroup(_) => write!(f, "WaitGroup"),
+            Self::Mutex(_) => write!(f, "Mutex"),
+            Self::MutexGuard(_) => write!(f, "MutexGuard"),
             Self::Str(x) => write!(f, "{}", x),
             Self::Char(x) => write!(f, "{}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
@@ -322,6 +505,11 @@ pub enum TerminateValue {
     None,
     Jump(BlockId),
     Return(RuntimeValue),
+    Yield {
+        block: BlockId,
+        ip: usize,
+        prev_block: Option<BlockId>,
+    },
 }
 
 impl VM {
@@ -414,6 +602,7 @@ impl ExternFunction {
                 .get(&id)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ptr(id)),
+            RuntimeValue::MutexGuard(guard) => guard.get_clone(),
             other => other,
         }
     }

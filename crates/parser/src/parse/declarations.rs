@@ -20,11 +20,66 @@ impl Parser {
             TokenType::Import => self.parse_import_declaration(),
             TokenType::Type => self.parse_type_decaration(),
             TokenType::For => self.parse_loop_declaration(),
+            TokenType::Spawn => self.parse_spawn_statement(),
             TokenType::Extern => self.parse_extern_function_declaration(),
             _ => self.parse_assignment_expression(),
         };
 
         self.parse_potential_member(node)
+    }
+
+    pub fn parse_spawn_statement(&mut self) -> Node {
+        let open = self.expect_eat(
+            &TokenType::Spawn,
+            SyntaxErr::ExpectedKeyword(String::from("spawn")),
+        );
+
+        let value = if self.first().token_type == TokenType::FatArrow {
+            let block = self.parse_scope_declaration(false);
+            Node::new(
+                Span::new_from_spans(open.span, block.span),
+                NodeType::FunctionDeclaration {
+                    header: FunctionHeader {
+                        generics: GenericTypes::default(),
+                        parameters: Vec::new(),
+                        return_type: ParserDataType::from(ParserInnerType::Auto(None)).into(),
+                        param_destructures: Vec::new(),
+                    },
+                    body: Box::new(block),
+                },
+            )
+        } else {
+            let expr = self.parse_assignment_expression();
+            let scope = Node::new(
+                Span::new_from_spans(expr.span, expr.span),
+                NodeType::ScopeDeclaration {
+                    body: Some(vec![expr]),
+                    named: None,
+                    is_temp: true,
+                    create_new_scope: Some(true),
+                    define: false,
+                },
+            );
+            Node::new(
+                Span::new_from_spans(open.span, scope.span),
+                NodeType::FunctionDeclaration {
+                    header: FunctionHeader {
+                        generics: GenericTypes::default(),
+                        parameters: Vec::new(),
+                        return_type: ParserDataType::from(ParserInnerType::Auto(None)).into(),
+                        param_destructures: Vec::new(),
+                    },
+                    body: Box::new(scope),
+                },
+            )
+        };
+
+        Node::new(
+            Span::new_from_spans(open.span, value.span),
+            NodeType::Spawn {
+                value: Box::new(value),
+            },
+        )
     }
 
     pub fn parse_extern_function_declaration(&mut self) -> Node {
@@ -301,7 +356,7 @@ impl Parser {
             )
         } else {
             let body = vec![self.parse_statement()];
-            let close = body.last().unwrap().span.clone();
+            let close = body.last().unwrap().span;
 
             Node::new(
                 Span::new_from_spans(open.span, close),
@@ -815,7 +870,11 @@ impl Parser {
         let get_module = |this: &mut Parser| -> Vec<PotentialDollarIdentifier> {
             let mut module = vec![this.expect_potential_dollar_ident()];
 
-            while this.first().token_type == TokenType::Colon {
+            while matches!(
+                this.first().token_type,
+                TokenType::Colon | TokenType::DoubleColon
+            ) {
+                let _ = this.eat();
                 module.push(this.expect_potential_dollar_ident());
             }
 
@@ -1160,12 +1219,6 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("match")),
         );
 
-        let is_async = self.first().token_type == TokenType::Async;
-
-        if is_async {
-            let _ = self.eat();
-        };
-
         let generic_types = self.parse_generic_types_with_constraints();
 
         let typ = if self.first().token_type != TokenType::Open(Bracket::Curly) {
@@ -1210,7 +1263,6 @@ impl Parser {
                         ),
                     )],
                     return_type,
-                    is_async,
                     param_destructures: Vec::new(),
                 },
                 body: patterns,
@@ -1289,12 +1341,6 @@ impl Parser {
             return self.parse_fnmatch_declaration();
         }
 
-        let is_async = self.first().token_type == TokenType::Async;
-
-        if is_async {
-            let _ = self.eat();
-        }
-
         let generic_types = self.parse_generic_types_with_constraints();
 
         let (parameters, destructures) = self.parse_function_params_with_destructure();
@@ -1319,7 +1365,6 @@ impl Parser {
                     generics: generic_types,
                     parameters,
                     return_type,
-                    is_async,
                     param_destructures: destructures,
                 },
                 body: Box::new(block),

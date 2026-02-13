@@ -153,19 +153,13 @@ impl Parser {
             }
             TokenType::Move => {
                 let open = self.eat();
-                let expr = self.parse_pipe_expression();
-                match expr.node_type {
-                    NodeType::Identifier(ident) => Node::new(
-                        Span::new_from_spans(open.span, *ident.span()),
-                        NodeType::Move(ident.into()),
-                    ),
-                    _ => Node::new(
-                        Span::new_from_spans(open.span, expr.span),
-                        NodeType::MoveExpression {
-                            value: Box::new(expr),
-                        },
-                    ),
-                }
+                let value = self.parse_pipe_expression();
+                Node::new(
+                    Span::new_from_spans(open.span, value.span),
+                    NodeType::MoveExpression {
+                        value: Box::new(value),
+                    },
+                )
             }
             TokenType::Defer => {
                 let open = self.eat();

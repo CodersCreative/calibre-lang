@@ -90,39 +90,30 @@ impl MiddleEnvironment {
                             && let Some(static_fn) =
                                 self.resolve_impl_member(&ty, &second.to_string())
                         {
-                            let mut self_arg_node = Node::new(
-                                self.current_span(),
-                                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                    ParserText::from(x.to_string()).into(),
-                                )),
-                            );
-
+                            let mut new_args = args.clone();
                             if let Some(var) = self.variables.get(&static_fn) {
                                 if let ParserInnerType::Function { parameters, .. } =
                                     &var.data_type.data_type
                                     && let Some(first) = parameters.first()
                                     && let ParserInnerType::Ref(_, mutability) = &first.data_type
                                 {
-                                    self_arg_node = Node::new(
+                                    let self_arg_node = Node::new(
                                         self.current_span(),
                                         NodeType::RefStatement {
                                             mutability: mutability.clone(),
-                                            value: Box::new(self_arg_node),
+                                            value: Box::new(Node::new(
+                                                self.current_span(),
+                                                NodeType::Identifier(
+                                                    PotentialGenericTypeIdentifier::Identifier(
+                                                        ParserText::from(x.to_string()).into(),
+                                                    ),
+                                                ),
+                                            )),
                                         },
                                     );
+                                    new_args.insert(0, CallArg::Value(self_arg_node));
                                 }
-                            } else {
-                                self_arg_node = Node::new(
-                                    self.current_span(),
-                                    NodeType::RefStatement {
-                                        mutability: calibre_parser::ast::RefMutability::MutRef,
-                                        value: Box::new(self_arg_node),
-                                    },
-                                );
                             }
-
-                            let mut new_args = args.clone();
-                            new_args.insert(0, CallArg::Value(self_arg_node));
 
                             return self.evaluate_inner(
                                 scope,

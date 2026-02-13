@@ -86,7 +86,6 @@ pub struct LirFunction {
     pub captures: Vec<(String, ParserDataType)>,
     pub return_type: ParserDataType,
     pub blocks: Vec<LirBlock>,
-    pub is_async: bool,
 }
 
 impl Display for LirFunction {
@@ -134,6 +133,9 @@ impl Display for LirLiteral {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LirNodeType {
     Noop,
+    Spawn {
+        callee: Box<LirNodeType>,
+    },
     Closure {
         label: String,
         captures: Vec<String>,
@@ -208,6 +210,7 @@ impl Display for LirNodeType {
             "{}",
             match self {
                 Self::Noop => "noop".to_string(),
+                Self::Spawn { callee } => format!("spawn {}", callee),
                 Self::List {
                     elements,
                     data_type,
@@ -412,7 +415,7 @@ pub struct LirEnvironment<'a> {
 impl<'a> LirEnvironment<'a> {
     pub fn lower(env: &'a MiddleEnvironment, node: MiddleNode) -> LirRegistry {
         let mut this = Self::new(env);
-        let _node = this.lower_node(node);
+        this.lower_and_add_node(node);
         this.registry
     }
 
@@ -422,7 +425,7 @@ impl<'a> LirEnvironment<'a> {
         root_name: String,
     ) -> LirRegistry {
         let mut this = Self::new(env);
-        let _ = this.lower_node(node);
+        this.lower_and_add_node(node);
         if !this.blocks.is_empty() {
             this.registry.globals.insert(
                 root_name.clone(),
@@ -557,13 +560,26 @@ impl<'a> LirEnvironment<'a> {
                 }
             }
             MiddleNodeType::EmptyLine => LirNodeType::Noop,
+            MiddleNodeType::Spawn { value } => {
+                LirNodeType::Spawn {
+                    callee: Box::new(self.lower_node(*value)),
+                }
+            }
             MiddleNodeType::Drop(name) => LirNodeType::Drop(name.to_string()),
             MiddleNodeType::Move(name) => LirNodeType::Move(name.to_string()),
             MiddleNodeType::Identifier(name) => LirNodeType::Load(name.to_string()),
             MiddleNodeType::VariableDeclaration {
                 identifier, value, ..
             } => {
-                self.last_ident = Some(identifier.to_string());
+                let is_fn_literal = matches!(
+                    value.node_type,
+                    MiddleNodeType::FunctionDeclaration { .. }
+                );
+                if is_fn_literal {
+                    self.last_ident = Some(identifier.to_string());
+                } else {
+                    self.last_ident = None;
+                }
                 let val = self.lower_node(*value);
                 self.add_instr(LirInstr::new(
                     identifier.span,
@@ -592,7 +608,6 @@ impl<'a> LirEnvironment<'a> {
                 parameters,
                 body,
                 return_type,
-                is_async,
                 ..
             } => {
                 let mut captures = Vec::new();
@@ -615,11 +630,11 @@ impl<'a> LirEnvironment<'a> {
                     captures.push((cap.clone(), cap_type));
                 }
 
-                let internal_name = if let Some(x) = &self.last_ident {
+                let internal_name = if let Some(x) = self.last_ident.take() {
                     if x.contains("__curry_capture_") {
                         self.get_temp()
                     } else {
-                        x.clone()
+                        x
                     }
                 } else {
                     self.get_temp()
@@ -635,9 +650,27 @@ impl<'a> LirEnvironment<'a> {
                     MiddleNodeType::ScopeDeclaration { body, .. } => body.last().cloned(),
                     _ => None,
                 };
-                let mut body_val = sub_lowerer.lower_node(*body);
-                let mut has_body_value =
-                    !matches!(body_val, LirNodeType::Literal(LirLiteral::Null));
+                let mut body_val;
+                let mut has_body_value;
+                if let MiddleNodeType::IfStatement { .. } = &body.node_type {
+                    let ret = MiddleNode::new(
+                        MiddleNodeType::Return {
+                            value: Some(body.clone()),
+                        },
+                        body_span,
+                    );
+                    let _ = sub_lowerer.lower_node(ret);
+                    body_val = LirNodeType::Literal(LirLiteral::Null);
+                    has_body_value = false;
+                } else {
+                    body_val = sub_lowerer.lower_node(*body);
+                    has_body_value =
+                        !matches!(body_val, LirNodeType::Literal(LirLiteral::Null));
+                }
+                if is_temp_body {
+                    has_body_value = false;
+                    body_val = LirNodeType::Literal(LirLiteral::Null);
+                }
 
                 if !has_body_value {
                     if let Some(expr) = fallback_expr {
@@ -683,7 +716,6 @@ impl<'a> LirEnvironment<'a> {
                     captures,
                     return_type,
                     blocks: sub_lowerer.blocks,
-                    is_async,
                 };
 
                 self.registry
@@ -723,18 +755,15 @@ impl<'a> LirEnvironment<'a> {
                 }
             }
             MiddleNodeType::ScopeDeclaration {
-                mut body,
+                body,
                 is_temp: false,
                 ..
             } => {
                 if !self.allow_global_hoist {
-                    let last = body.pop();
                     for stmt in body {
                         self.lower_and_add_node(stmt);
                     }
-                    return last
-                        .map(|x| self.lower_node(x))
-                        .unwrap_or(LirNodeType::Literal(LirLiteral::Null));
+                    return LirNodeType::Literal(LirLiteral::Null);
                 }
                 for stmt in body {
                     if let MiddleNodeType::VariableDeclaration {
@@ -765,13 +794,29 @@ impl<'a> LirEnvironment<'a> {
 
                 LirNodeType::Literal(LirLiteral::Null)
             }
-            MiddleNodeType::ScopeDeclaration { mut body, .. } => {
+            MiddleNodeType::ScopeDeclaration { mut body, is_temp, .. } => {
                 let last = body.pop();
                 for stmt in body {
                     self.lower_and_add_node(stmt);
                 }
-                last.map(|x| self.lower_node(x))
-                    .unwrap_or(LirNodeType::Literal(LirLiteral::Null))
+                let Some(last) = last else {
+                    return LirNodeType::Literal(LirLiteral::Null);
+                };
+                if is_temp {
+                    let temp = self.get_temp();
+                    let lowered = self.lower_node(last);
+                    self.add_instr(LirInstr::new(
+                        span,
+                        LirNodeType::Declare {
+                            dest: temp.clone(),
+                            value: Box::new(lowered),
+                        },
+                    ));
+                    LirNodeType::Load(temp)
+                } else {
+                    self.lower_and_add_node(last);
+                    LirNodeType::Literal(LirLiteral::Null)
+                }
             }
             MiddleNodeType::IfStatement {
                 comparison,
@@ -782,6 +827,15 @@ impl<'a> LirEnvironment<'a> {
                 let else_id = self.create_block();
                 let merge_id = self.create_block();
 
+                let temp = self.get_temp();
+                self.add_instr(LirInstr::new(
+                    span,
+                    LirNodeType::Declare {
+                        dest: temp.clone(),
+                        value: Box::new(LirNodeType::Literal(LirLiteral::Null)),
+                    },
+                ));
+
                 let cond = self.lower_node(*comparison);
                 self.set_terminator(LirTerminator::Branch {
                     span,
@@ -791,23 +845,39 @@ impl<'a> LirEnvironment<'a> {
                 });
 
                 self.switch_to(then_id);
-                self.lower_and_add_node(*then);
+                let then_val = self.lower_node(*then);
+                self.add_instr(LirInstr::new(
+                    span,
+                    LirNodeType::Assign {
+                        dest: LirLValue::Var(temp.clone()),
+                        value: Box::new(then_val),
+                    },
+                ));
                 self.set_terminator(LirTerminator::Jump {
                     span,
                     target: merge_id,
                 });
 
                 self.switch_to(else_id);
-                if let Some(alt) = otherwise {
-                    self.lower_and_add_node(*alt);
-                }
+                let else_val = if let Some(alt) = otherwise {
+                    self.lower_node(*alt)
+                } else {
+                    LirNodeType::Literal(LirLiteral::Null)
+                };
+                self.add_instr(LirInstr::new(
+                    span,
+                    LirNodeType::Assign {
+                        dest: LirLValue::Var(temp.clone()),
+                        value: Box::new(else_val),
+                    },
+                ));
                 self.set_terminator(LirTerminator::Jump {
                     span,
                     target: merge_id,
                 });
 
                 self.switch_to(merge_id);
-                LirNodeType::Literal(LirLiteral::Null)
+                LirNodeType::Load(temp)
             }
             MiddleNodeType::LoopDeclaration { state, body, .. } => {
                 let header_id = self.create_block();

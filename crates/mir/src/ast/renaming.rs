@@ -31,6 +31,9 @@ impl MiddleNodeType {
             | MiddleNodeType::IntLiteral(_)
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::ExternFunction { .. } => self,
+            MiddleNodeType::Spawn { value } => MiddleNodeType::Spawn {
+                value: Box::new(value.rename(state)),
+            },
             MiddleNodeType::RefStatement { mutability, value } => MiddleNodeType::RefStatement {
                 mutability,
                 value: Box::new(value.rename(state)),
@@ -99,7 +102,6 @@ impl MiddleNodeType {
                 parameters,
                 body,
                 return_type,
-                is_async,
                 scope_id,
             } => MiddleNodeType::FunctionDeclaration {
                 parameters: parameters
@@ -119,7 +121,6 @@ impl MiddleNodeType {
                     .collect(),
                 body: Box::new(body.rename(state)),
                 return_type,
-                is_async,
                 scope_id,
             },
             MiddleNodeType::AssignmentExpression { identifier, value } => {

@@ -119,7 +119,6 @@ pub enum TokenType {
     OrColon,
     Object,
     Question,
-    Async,
     Func,
     If,
     In,
@@ -145,6 +144,7 @@ pub enum TokenType {
     Move,
     Defer,
     Extern,
+    Spawn,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
@@ -175,7 +175,6 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("if"), TokenType::If),
         (String::from("as"), TokenType::As),
         (String::from("struct"), TokenType::Struct),
-        (String::from("async"), TokenType::Async),
         (String::from("impl"), TokenType::Impl),
         (String::from("trait"), TokenType::Trait),
         (String::from("Self"), TokenType::This),
@@ -184,6 +183,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("from"), TokenType::From),
         (String::from("type"), TokenType::Type),
         (String::from("extern"), TokenType::Extern),
+        (String::from("spawn"), TokenType::Spawn),
     ])
 }
 

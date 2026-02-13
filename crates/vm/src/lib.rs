@@ -4,6 +4,7 @@ use crate::{
     error::RuntimeError,
     value::RuntimeValue,
 };
+use calibre_lir::BlockId;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     fmt::Debug,
@@ -18,6 +19,7 @@ pub mod conversion;
 pub mod error;
 pub mod evaluate;
 pub mod native;
+pub mod scheduler;
 pub mod serialization;
 pub mod value;
 
@@ -27,6 +29,13 @@ struct VMFrame {
     local_map: FxHashMap<String, Reg>,
     func_ptr: usize,
     acc: RuntimeValue,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TaskState {
+    pub block: Option<BlockId>,
+    pub ip: usize,
+    pub prev_block: Option<BlockId>,
 }
 
 impl Default for VMFrame {
@@ -47,10 +56,13 @@ pub struct VM {
     pub mappings: Vec<String>,
     pub counter: u64,
     pub ptr_heap: FxHashMap<u64, RuntimeValue>,
+    pub config: VMConfig,
     frames: Vec<VMFrame>,
     frame_pool: Vec<VMFrame>,
     caches: VMCaches,
     gc: VMGC,
+    scheduler: scheduler::SchedulerHandle,
+    task_state: TaskState,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -78,16 +90,21 @@ impl Default for VMGC {
 
 impl From<VMRegistry> for VM {
     fn from(value: VMRegistry) -> Self {
+        let config = VMConfig::default();
+        let scheduler = scheduler::SchedulerHandle::new(&config);
         Self {
             variables: FxHashMap::default(),
             mappings: Vec::new(),
             registry: value,
             counter: 0,
             ptr_heap: FxHashMap::default(),
+            config,
             frames: vec![VMFrame::default()],
             frame_pool: Vec::new(),
             caches: VMCaches::default(),
             gc: VMGC::default(),
+            scheduler,
+            task_state: TaskState::default(),
         }
     }
 }
@@ -253,16 +270,20 @@ impl VM {
     }
 
     pub fn new(registry: VMRegistry, mappings: Vec<String>, config: VMConfig) -> Self {
+        let scheduler = scheduler::SchedulerHandle::new(&config);
         let mut vm = Self {
             registry,
             mappings,
             variables: FxHashMap::default(),
             counter: 0,
             ptr_heap: FxHashMap::default(),
+            config: config.clone(),
             frames: vec![VMFrame::default()],
             frame_pool: Vec::new(),
             caches: VMCaches::default(),
             gc: VMGC::default(),
+            scheduler,
+            task_state: TaskState::default(),
         };
 
         if let Some(interval) = config.gc_interval {
@@ -272,6 +293,18 @@ impl VM {
         vm.setup_global();
         vm.setup_stdlib();
         vm
+    }
+
+    pub fn spawn_async_task(&self, func: RuntimeValue) {
+        self.scheduler.spawn(self, func);
+    }
+
+    pub fn take_task_state(&mut self) -> TaskState {
+        std::mem::take(&mut self.task_state)
+    }
+
+    pub fn store_task_state(&mut self, state: TaskState) {
+        self.task_state = state;
     }
 
     pub fn get_ref_id(&mut self) -> u64 {
@@ -395,7 +428,10 @@ impl VM {
     }
 
     #[inline(always)]
-    fn resolve_value_for_op(&self, value: RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
+    pub(crate) fn resolve_value_for_op(
+        &self,
+        value: RuntimeValue,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let mut current = value;
 
         for _ in 0..64 {
@@ -409,6 +445,9 @@ impl VM {
                 }
                 RuntimeValue::RegRef { frame, reg } => {
                     current = self.get_reg_value_in_frame(frame, reg);
+                }
+                RuntimeValue::MutexGuard(ref guard) => {
+                    current = guard.get_clone();
                 }
                 other => return Ok(other),
             }
@@ -471,6 +510,13 @@ impl VM {
                     self.drop_runtime_value_inner(val.as_ref().clone(), seen, seen_regs);
                 }
             }
+            RuntimeValue::Channel(ch) => {
+                if let Ok(mut queue) = ch.queue.lock() {
+                    while let Some(item) = queue.pop_front() {
+                        self.drop_runtime_value_inner(item, seen, seen_regs);
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -507,12 +553,19 @@ impl VM {
             if let Some(func) = self.find_unique_function_by_suffix(short_name) {
                 return VarName::Func(func.name.clone());
             }
+        } else {
+            if let Some(var) = self.find_unique_var_by_suffix(name) {
+                return VarName::Var(var);
+            }
+            if let Some(func) = self.find_unique_function_by_suffix(name) {
+                return VarName::Func(func.name.clone());
+            }
         }
 
         VarName::Global
     }
 
-    fn local_string<'a>(&self, block: &'a VMBlock, idx: u8) -> Result<&'a str, RuntimeError> {
+    fn local_string<'a>(&self, block: &'a VMBlock, idx: u16) -> Result<&'a str, RuntimeError> {
         let idx = idx as usize;
         if idx >= block.local_strings.len() {
             return Err(RuntimeError::InvalidBytecode(format!(
@@ -526,7 +579,7 @@ impl VM {
     fn local_string_owned<'a>(
         &self,
         block: &'a VMBlock,
-        idx: u8,
+        idx: u16,
     ) -> Result<&'a String, RuntimeError> {
         let idx = idx as usize;
         if idx >= block.local_strings.len() {

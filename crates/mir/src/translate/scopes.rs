@@ -293,7 +293,15 @@ impl MiddleEnvironment {
                         .map(|s| s.defers.is_empty())
                         .unwrap_or(true);
                     if defers_empty {
-                        let protected_tail = Vec::new();
+                        let protected_tail = body
+                            .last()
+                            .map(|n| {
+                                n.identifiers_used()
+                                    .into_iter()
+                                    .map(|x| x.to_string())
+                                    .collect::<Vec<String>>()
+                            })
+                            .unwrap_or_default();
                         self.insert_auto_drops(&mut body, &defined, &protected_tail);
                     }
                     if is_temp && body.len() > 1 {

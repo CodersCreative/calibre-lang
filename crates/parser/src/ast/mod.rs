@@ -267,7 +267,6 @@ pub enum ParserInnerType {
     Function {
         return_type: Box<ParserDataType>,
         parameters: Vec<ParserDataType>,
-        is_async: bool,
     },
     Ref(Box<ParserDataType>, RefMutability),
     Struct(String),
@@ -508,21 +507,15 @@ impl Display for ParserInnerType {
             Self::Function {
                 return_type,
                 parameters,
-                is_async,
             } => {
-                let mut txt = if *is_async {
-                    String::from("fn async")
-                } else {
-                    String::from("fn")
-                };
+                let mut txt = String::from("fn (");
 
-                txt.push_str(&format!(
-                    "({}",
-                    parameters
+                txt.push_str(
+                    &parameters
                         .get(0)
                         .map(|x| x.to_string())
-                        .unwrap_or(String::new())
-                ));
+                        .unwrap_or(String::new()),
+                );
 
                 for typ in parameters.iter().skip(1) {
                     txt.push_str(&format!(", {}", typ));
@@ -980,7 +973,6 @@ pub struct FunctionHeader {
     pub generics: GenericTypes,
     pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
     pub return_type: PotentialNewType,
-    pub is_async: bool,
     pub param_destructures: Vec<(PotentialDollarIdentifier, DestructurePattern)>,
 }
 
@@ -1005,6 +997,9 @@ pub enum NodeType {
     Continue,
     EmptyLine,
     Null,
+    Spawn {
+        value: Box<Node>,
+    },
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
@@ -1017,7 +1012,6 @@ pub enum NodeType {
         value: Box<Node>,
     },
     Drop(PotentialDollarIdentifier),
-    Move(PotentialDollarIdentifier),
     MoveExpression {
         value: Box<Node>,
     },

@@ -44,6 +44,9 @@ pub enum MiddleNodeType {
     },
     Drop(ParserText),
     Move(ParserText),
+    Spawn {
+        value: Box<MiddleNode>,
+    },
     DerefStatement {
         value: Box<MiddleNode>,
     },
@@ -68,7 +71,6 @@ pub enum MiddleNodeType {
         parameters: Vec<(ParserText, ParserDataType)>,
         body: Box<MiddleNode>,
         return_type: ParserDataType,
-        is_async: bool,
         scope_id: u64,
     },
     ExternFunction {
@@ -170,8 +172,13 @@ impl Into<Node> for MiddleNode {
 impl Into<NodeType> for MiddleNodeType {
     fn into(self) -> NodeType {
         match self {
+            Self::Spawn { value } => NodeType::Spawn {
+                value: Box::new((*value).into()),
+            },
             Self::Drop(x) => NodeType::Drop(x.into()),
-            Self::Move(x) => NodeType::Move(x.into()),
+            Self::Move(x) => NodeType::MoveExpression {
+                value: Box::new(Node::new_from_type(NodeType::Identifier(x.into()))),
+            },
             Self::Break => NodeType::Break,
             Self::Continue => NodeType::Continue,
             Self::EmptyLine => NodeType::EmptyLine,
@@ -231,7 +238,6 @@ impl Into<NodeType> for MiddleNodeType {
                 parameters,
                 body,
                 return_type,
-                is_async,
                 scope_id: _,
             } => NodeType::FunctionDeclaration {
                 header: FunctionHeader {
@@ -245,7 +251,6 @@ impl Into<NodeType> for MiddleNodeType {
                         lst
                     },
                     return_type: return_type.into(),
-                    is_async,
                     param_destructures: Vec::new(),
                 },
                 body: Box::new((*body).into()),

@@ -283,7 +283,6 @@ pub fn from_parser_data_type(pd: &ParserDataType, tg: &mut TypeGenerator) -> Typ
         ParserInnerType::Function {
             return_type,
             parameters,
-            is_async: _,
         } => {
             let mut arrow = from_parser_data_type(return_type, tg);
             for p in parameters.iter().rev() {
@@ -382,7 +381,6 @@ pub fn to_parser_data_type(
             ParserDataType::from(ParserInnerType::Function {
                 return_type: Box::new(ret.unwrap_or(ParserDataType::from(ParserInnerType::Null))),
                 parameters: params,
-                is_async: false,
             })
         }
     };

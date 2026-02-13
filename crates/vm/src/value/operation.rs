@@ -5,7 +5,7 @@ use calibre_parser::ast::{
 };
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
 
-use crate::{error::RuntimeError, value::RuntimeValue};
+use crate::{VM, error::RuntimeError, value::RuntimeValue};
 use dumpster::sync::Gc;
 
 fn comparison_value_handle<T: PartialEq + PartialOrd>(
@@ -28,7 +28,47 @@ pub fn comparison(
     left: RuntimeValue,
     right: RuntimeValue,
 ) -> Result<RuntimeValue, RuntimeError> {
+    fn eq_value(left: &RuntimeValue, right: &RuntimeValue) -> Option<bool> {
+        match (left, right) {
+            (RuntimeValue::Null, RuntimeValue::Null) => Some(true),
+            (RuntimeValue::Bool(a), RuntimeValue::Bool(b)) => Some(a == b),
+            (RuntimeValue::Int(a), RuntimeValue::Int(b)) => Some(a == b),
+            (RuntimeValue::UInt(a), RuntimeValue::UInt(b)) => Some(a == b),
+            (RuntimeValue::Float(a), RuntimeValue::Float(b)) => Some(a == b),
+            (RuntimeValue::Char(a), RuntimeValue::Char(b)) => Some(a == b),
+            (RuntimeValue::Str(a), RuntimeValue::Str(b)) => Some(a == b),
+            (RuntimeValue::Enum(a_name, a_idx, _), RuntimeValue::Enum(b_name, b_idx, _)) => {
+                Some(a_name == b_name && a_idx == b_idx)
+            }
+            (RuntimeValue::Option(a), RuntimeValue::Option(b)) => match (a, b) {
+                (None, None) => Some(true),
+                (Some(_), None) | (None, Some(_)) => Some(false),
+                (Some(a), Some(b)) => eq_value(a, b),
+            },
+            _ => None,
+        }
+    }
+
     match (left, right, op) {
+        (RuntimeValue::Option(a), RuntimeValue::Option(b), op) => match op {
+            ComparisonOperator::Equal | ComparisonOperator::NotEqual => {
+                let eq = match (a, b) {
+                    (None, None) => true,
+                    (Some(_), None) | (None, Some(_)) => false,
+                    (Some(a), Some(b)) => eq_value(&a, &b).unwrap_or(false),
+                };
+                Ok(RuntimeValue::Bool(if matches!(op, ComparisonOperator::Equal) {
+                    eq
+                } else {
+                    !eq
+                }))
+            }
+            _ => Err(RuntimeError::Comparison(
+                RuntimeValue::Option(a),
+                RuntimeValue::Option(b),
+                op.clone(),
+            )),
+        },
         (RuntimeValue::Enum(a_name, a_idx, _), RuntimeValue::Enum(b_name, b_idx, _), op) => {
             match op {
                 ComparisonOperator::Equal => {
@@ -118,6 +158,7 @@ impl_bitwise!(Shl, shl, <<);
 impl_bitwise!(Shr, shr, >>);
 
 pub fn binary(
+    vm: &VM,
     op: &BinaryOperator,
     left: RuntimeValue,
     right: RuntimeValue,
@@ -131,7 +172,7 @@ pub fn binary(
         BinaryOperator::Mod => left.modulus(right),
         BinaryOperator::BitXor => left ^ right,
         BinaryOperator::BitOr => left | right,
-        BinaryOperator::BitAnd => match left.special_and(right) {
+        BinaryOperator::BitAnd => match left.special_and(vm, right) {
             Ok(x) => Ok(x),
             Err((l, r)) => l & r,
         },
@@ -204,18 +245,29 @@ impl RuntimeValue {
         handle_binop_numeric!(Mul, %, rhs, self)
     }
 
-    fn special_and(self, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
+    fn special_and(self, vm : &VM, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match self {
             Self::Char(x) => {
                 let mut x = x.to_string();
-                x.push_str(&rhs.to_string());
+                x.push_str(&rhs.display(vm));
                 Ok(Self::Str(x))
             }
             Self::Str(mut x) => {
-                x.push_str(&rhs.to_string());
+                x.push_str(&rhs.display(vm));
                 Ok(Self::Str(x))
             }
-            _ => Err((self, rhs)),
+            lhs => match rhs {
+                Self::Char(x) => {
+                    let mut x = x.to_string();
+                    x.push_str(&lhs.display(vm));
+                    Ok(Self::Str(x))
+                }
+                Self::Str(mut x) => {
+                    x.push_str(&lhs.display(vm));
+                    Ok(Self::Str(x))
+                }
+                _ => Err((lhs, rhs)),
+            },
         }
     }
 

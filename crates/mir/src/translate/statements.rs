@@ -85,7 +85,6 @@ impl MiddleEnvironment {
                     .iter()
                     .map(|(_, t)| self.resolve_potential_new_type(scope, t.clone()))
                     .collect(),
-                is_async: header.is_async,
             });
         }
 
@@ -225,7 +224,6 @@ impl MiddleEnvironment {
                         && let ParserInnerType::Function {
                             return_type: inferred_ret,
                             parameters: inferred_params,
-                            is_async: _,
                         } = parser_ty.data_type
                     {
                         for (i, (_name, p_ty)) in params.iter_mut().enumerate() {

@@ -51,12 +51,6 @@ impl Parser {
                 SyntaxErr::ExpectedKeyword(String::from("fn")),
             );
 
-            let is_async = self.first().token_type == TokenType::Async;
-
-            if is_async {
-                let _ = self.eat();
-            }
-
             let parameters = self.parse_key_type_list_ordered_with_ref(
                 TokenType::Open(Bracket::Paren),
                 TokenType::Close(Bracket::Paren),
@@ -82,7 +76,6 @@ impl Parser {
                     generics: GenericTypes::default(),
                     parameters,
                     return_type,
-                    is_async,
                     param_destructures: Vec::new(),
                 },
                 operator: operator.into(),

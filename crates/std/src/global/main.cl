@@ -204,5 +204,3 @@ const iter_list = fn<T>(data: list:<T>) -> ListIter:<T> => ListIter:<T>{data: da
 const iter_range = fn(rng: range) -> RangeIter => RangeIter{range: rng, index: 0};
 
 const iter_str = fn(txt: str) -> StrIter => StrIter{data: try txt as list:<char> => panic(), index: 0};
-
-

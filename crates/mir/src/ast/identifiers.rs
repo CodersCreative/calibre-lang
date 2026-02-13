@@ -25,6 +25,7 @@ impl MiddleNode {
                 value,
             }
             | MiddleNodeType::DerefStatement { value }
+            | MiddleNodeType::Spawn { value }
             | MiddleNodeType::VariableDeclaration {
                 var_type: _,
                 identifier: _,
@@ -116,12 +117,10 @@ impl MiddleNode {
                 parameters: _,
                 body,
                 return_type: _,
-                is_async: _,
                 ..
             } => {
-                let amt = body.identifiers_used();
-
-                amt
+                let _ = body;
+                Vec::new()
             }
             MiddleNodeType::LoopDeclaration { body, .. } => body.identifiers_used(),
             MiddleNodeType::IfStatement {
@@ -178,6 +177,7 @@ impl MiddleNode {
             }
             | MiddleNodeType::DerefStatement { value }
             | MiddleNodeType::NegExpression { value }
+            | MiddleNodeType::Spawn { value }
             | MiddleNodeType::AsExpression {
                 value,
                 data_type: _,
@@ -272,13 +272,10 @@ impl MiddleNode {
                 parameters,
                 body,
                 return_type: _,
-                is_async: _,
                 ..
             } => {
-                let mut amt: Vec<&String> = parameters.iter().map(|x| &x.0.text).collect();
-                amt.append(&mut body.identifiers_declared());
-
-                amt
+                let _ = (parameters, body);
+                Vec::new()
             }
             MiddleNodeType::ExternFunction { .. } => Vec::new(),
             MiddleNodeType::LoopDeclaration { body, .. } => body.identifiers_declared(),

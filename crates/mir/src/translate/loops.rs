@@ -222,9 +222,13 @@ impl MiddleEnvironment {
 
             LoopType::For(name, range) => {
                 let range_dt = self.resolve_type_from_node(&scope, &range);
+                let idx_id_name = format!(
+                    "__anon_loop_index_{}_{}",
+                    self.current_span().from.line,
+                    self.current_span().from.col
+                );
                 let idx_id: PotentialDollarIdentifier =
-                    ParserText::from("anon_loop_index".to_string()).into();
-
+                    ParserText::from(idx_id_name).into();
                 let state = Some(Box::new(self.evaluate(
                     &scope,
                     Node::new(

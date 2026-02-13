@@ -181,8 +181,8 @@ impl Formatter {
                 if *function { "return " } else { "" },
                 self.format(&value)
             ),
+            NodeType::Spawn { value } => format!("spawn {}", self.format(value)),
             NodeType::Drop(x) => format!("drop {}", x),
-            NodeType::Move(x) => format!("move {}", x),
             NodeType::MoveExpression { value } => format!("move {}", self.format(value)),
             NodeType::ImportStatement {
                 module,
@@ -595,11 +595,7 @@ impl Formatter {
             }
 
             NodeType::FunctionDeclaration { header, body } => {
-                let mut txt = if header.is_async {
-                    String::from("fn async")
-                } else {
-                    String::from("fn")
-                };
+                let mut txt = String::from("fn");
 
                 if !header.generics.0.is_empty() {
                     txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
@@ -798,9 +794,6 @@ impl Formatter {
             }
             NodeType::FnMatchDeclaration { header, body } => {
                 let mut txt = String::from("match");
-                if header.is_async {
-                    txt.push_str(" async");
-                }
 
                 if !header.generics.0.is_empty() {
                     txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
@@ -1237,14 +1230,7 @@ impl Formatter {
 
             for func in overloads {
                 let func_txt = {
-                    let mut txt = format!("const \"{}\" = ", func.operator);
-                    txt.push_str(if func.header.is_async {
-                        "fn async"
-                    } else {
-                        "fn"
-                    });
-
-                    txt.push_str(" (");
+                    let mut txt = format!("const \"{}\" = fn (", func.operator);
 
                     let mut adjusted_params = func
                         .header

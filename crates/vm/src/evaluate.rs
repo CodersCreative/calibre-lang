@@ -65,6 +65,7 @@ impl VM {
                     RuntimeValue::Null => break,
                     x => return Ok(x),
                 },
+                TerminateValue::Yield { .. } => break,
                 TerminateValue::None => break,
             }
         }
@@ -81,6 +82,24 @@ impl VM {
     where
         I: IntoIterator<Item = RuntimeValue>,
     {
+        let mut state = crate::TaskState::default();
+        match self.run_function_with_budget(function, args, captures, usize::MAX, &mut state)? {
+            Some(value) => Ok(value),
+            None => Ok(RuntimeValue::Null),
+        }
+    }
+
+    pub fn run_function_with_budget<I>(
+        &mut self,
+        function: &VMFunction,
+        args: I,
+        captures: Vec<(String, RuntimeValue)>,
+        budget: usize,
+        state: &mut crate::TaskState,
+    ) -> Result<Option<RuntimeValue>, RuntimeError>
+    where
+        I: IntoIterator<Item = RuntimeValue>,
+    {
         let prev_vars: Vec<(String, Option<RuntimeValue>)> = captures
             .iter()
             .map(|(name, _)| (name.clone(), self.variables.get(name).cloned()))
@@ -89,44 +108,66 @@ impl VM {
             self.variables.insert(name, value);
         }
 
-        let func_ptr = function as *const VMFunction as usize;
-        self.push_frame(function.reg_count as usize, func_ptr);
-        for (reg, arg) in function.param_regs.iter().zip(args) {
-            self.set_reg_value(*reg, arg);
-        }
-        for (name, reg) in function
-            .params
-            .iter()
-            .zip(function.param_regs.iter().copied())
-        {
-            self.current_frame_mut().local_map.insert(name.clone(), reg);
+        if state.block.is_none() {
+            let func_ptr = function as *const VMFunction as usize;
+            self.push_frame(function.reg_count as usize, func_ptr);
+            for (reg, arg) in function.param_regs.iter().zip(args) {
+                self.set_reg_value(*reg, arg);
+            }
+            for (name, reg) in function
+                .params
+                .iter()
+                .zip(function.param_regs.iter().copied())
+            {
+                self.current_frame_mut().local_map.insert(name.clone(), reg);
+            }
+            state.block = Some(function.entry);
+            state.ip = 0;
+            state.prev_block = None;
         }
 
+        let mut block_id = state.block.unwrap_or(function.entry);
         let mut block = function
             .blocks
-            .get(*function.block_map.get(&function.entry).unwrap_or(&0))
+            .get(*function.block_map.get(&block_id).unwrap_or(&0))
             .ok_or_else(|| RuntimeError::InvalidBytecode("function has no blocks".to_string()))?;
-        let mut prev_block: Option<BlockId> = None;
+        let mut prev_block: Option<BlockId> = state.prev_block;
         let mut result = RuntimeValue::Null;
         let mut returned = false;
         loop {
-            match self.run_block(block, prev_block)? {
+            let slice_budget = if budget == usize::MAX {
+                None
+            } else {
+                Some(budget.max(1))
+            };
+
+            match self.run_block_with_budget(block, prev_block, state.ip, slice_budget)? {
                 TerminateValue::Jump(target) => {
                     prev_block = Some(block.id);
+                    block_id = target;
                     block = function
                         .blocks
-                        .get(*function.block_map.get(&target).unwrap_or(&0))
+                        .get(*function.block_map.get(&block_id).unwrap_or(&0))
                         .ok_or_else(|| {
                             RuntimeError::InvalidBytecode(format!(
                                 "invalid function block {}",
                                 target.0
                             ))
                         })?;
+                    state.ip = 0;
+                    state.block = Some(block_id);
+                    state.prev_block = prev_block;
                 }
                 TerminateValue::Return(x) => {
                     result = x;
                     returned = true;
                     break;
+                }
+                TerminateValue::Yield { block, ip, prev_block } => {
+                    state.block = Some(block);
+                    state.ip = ip;
+                    state.prev_block = prev_block;
+                    return Ok(None);
                 }
                 TerminateValue::None => break,
             }
@@ -148,7 +189,7 @@ impl VM {
             }
         }
 
-        Ok(result)
+        Ok(Some(result))
     }
 
     fn apply_phis(&mut self, block: &VMBlock, prev: Option<BlockId>) -> Result<(), RuntimeError> {
@@ -178,9 +219,20 @@ impl VM {
         block: &VMBlock,
         prev: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
+        self.run_block_with_budget(block, prev, 0, None)
+    }
+
+    pub fn run_block_with_budget(
+        &mut self,
+        block: &VMBlock,
+        prev: Option<BlockId>,
+        start_ip: usize,
+        budget: Option<usize>,
+    ) -> Result<TerminateValue, RuntimeError> {
         self.apply_phis(block, prev)?;
         let mut instr_exec_count: u64 = 0;
-        for (ip, instruction) in block.instructions.iter().enumerate() {
+        let mut fuel = budget.unwrap_or(usize::MAX);
+        for (ip, instruction) in block.instructions.iter().enumerate().skip(start_ip) {
             if (ip & 0x3f) == 0 {
                 self.maybe_collect_garbage();
             }
@@ -196,6 +248,17 @@ impl VM {
             match step {
                 TerminateValue::None => {}
                 x => return Ok(x),
+            }
+
+            if fuel != usize::MAX {
+                fuel = fuel.saturating_sub(1);
+                if fuel == 0 {
+                    return Ok(TerminateValue::Yield {
+                        block: block.id,
+                        ip: ip + 1,
+                        prev_block: prev,
+                    });
+                }
             }
         }
 
@@ -452,7 +515,7 @@ impl VM {
             } => {
                 let right = self.resolve_value_for_op(self.get_reg_value(*right))?;
                 let left = self.resolve_value_for_op(self.get_reg_value(*left))?;
-                self.set_reg_value(*dst, binary(op, left, right)?);
+                self.set_reg_value(*dst, binary(self, op, left, right)?);
             }
             VMInstruction::AccLoad { src } => {
                 let value = self.get_reg_value(*src);
@@ -465,7 +528,7 @@ impl VM {
             VMInstruction::AccBinary { op, right } => {
                 let right = self.resolve_value_for_op(self.get_reg_value(*right))?;
                 let left = self.resolve_value_for_op(self.current_frame().acc.clone())?;
-                self.current_frame_mut().acc = binary(op, left, right)?;
+                self.current_frame_mut().acc = binary(self, op, left, right)?;
             }
             VMInstruction::Comparison {
                 dst,
@@ -475,7 +538,8 @@ impl VM {
             } => {
                 let right = self.resolve_value_for_op(self.get_reg_value(*right))?;
                 let left = self.resolve_value_for_op(self.get_reg_value(*left))?;
-                self.set_reg_value(*dst, comparison(op, left, right)?);
+                let cmp_val = comparison(op, left, right)?;
+                self.set_reg_value(*dst, cmp_val);
             }
             VMInstruction::Boolean {
                 dst,
@@ -619,6 +683,29 @@ impl VM {
                         return Err(RuntimeError::InvalidFunctionCall);
                     }
                 }
+            }
+            VMInstruction::Spawn { callee } => {
+                let func = self.get_reg_value(*callee);
+                let resolved = self.resolve_value_for_op(func)?;
+                let to_spawn = match resolved {
+                    RuntimeValue::Function { name, captures } => {
+                        let resolved_caps = captures
+                            .into_iter()
+                            .map(|(k, v)| {
+                                let resolved = self
+                                    .resolve_value_for_op(v)
+                                    .unwrap_or(RuntimeValue::Null);
+                                (k, resolved)
+                            })
+                            .collect();
+                        RuntimeValue::Function {
+                            name,
+                            captures: resolved_caps,
+                        }
+                    }
+                    other => other,
+                };
+                self.spawn_async_task(to_spawn);
             }
             VMInstruction::LoadMember { dst, value, member } => {
                 let name = self.local_string(block, *member)?;
@@ -941,6 +1028,7 @@ impl VM {
                         .cloned()
                         .ok_or(RuntimeError::DanglingRef(x))?,
                     RuntimeValue::RegRef { frame, reg } => self.get_reg_value_in_frame(frame, reg),
+                    RuntimeValue::MutexGuard(guard) => guard.get_clone(),
                     other => other,
                 };
                 self.set_reg_value(*dst, out);
@@ -955,6 +1043,9 @@ impl VM {
                     RuntimeValue::RegRef { frame, reg } => {
                         self.set_reg_value_in_frame(frame, reg, value);
                     }
+                    RuntimeValue::MutexGuard(guard) => {
+                        guard.set_value(value);
+                    }
                     _ => return Err(RuntimeError::InvalidBytecode("invalid ref".to_string())),
                 }
             }
@@ -963,11 +1054,14 @@ impl VM {
                 cond,
                 then_block,
                 else_block,
-            } => match self.get_reg_value(*cond) {
-                RuntimeValue::Bool(true) => return Ok(TerminateValue::Jump(*then_block)),
-                RuntimeValue::Bool(false) => return Ok(TerminateValue::Jump(*else_block)),
-                x => return Err(RuntimeError::UnexpectedType(x)),
-            },
+            } => {
+                let cond_val = self.resolve_value_for_op(self.get_reg_value(*cond))?;
+                match cond_val {
+                    RuntimeValue::Bool(true) => return Ok(TerminateValue::Jump(*then_block)),
+                    RuntimeValue::Bool(false) => return Ok(TerminateValue::Jump(*else_block)),
+                    x => return Err(RuntimeError::UnexpectedType(x)),
+                }
+            }
             VMInstruction::Return { value } => {
                 return if let Some(reg) = value {
                     Ok(TerminateValue::Return(self.get_reg_value(*reg)))
