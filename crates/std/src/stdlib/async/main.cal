@@ -25,9 +25,9 @@ impl<T> Channel:<T> {
 
 impl WaitGroup {
 	const new = fn() -> WaitGroup => waitgroup_new();
-	const add = fn(self: &mut WaitGroup, value: int) => waitgroup_add(self, value);
-	const increment = fn(self: &mut WaitGroup) => waitgroup_add(self, 1);
-	const done = fn(self: &mut WaitGroup) => waitgroup_done(self);
+	const raw_add = fn(self: &mut WaitGroup, value: int) => waitgroup_raw_add(self, value);
+	const raw_done = fn(self: &mut WaitGroup) => waitgroup_raw_done(self);
+	const join = fn(self: &mut WaitGroup, other: WaitGroup) => waitgroup_join(self, other);
 	const wait = fn(self: &WaitGroup) => waitgroup_wait(self);
 	const count = fn(self: &WaitGroup) -> int => waitgroup_count(self);
 	const wait_until_zero = fn(self: &WaitGroup) => self.wait();

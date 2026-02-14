@@ -16,6 +16,9 @@ use calibre_parser::{
     lexer::Span,
 };
 use rustc_hash::FxHashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static SPAWN_FN_COUNTER: AtomicUsize = AtomicUsize::new(0);
 use std::str::FromStr;
 
 pub mod functions;
@@ -218,10 +221,12 @@ impl MiddleEnvironment {
                             },
                         );
 
+                        let id = SPAWN_FN_COUNTER.fetch_add(1, Ordering::Relaxed);
                         let fn_name = format!(
-                            "__spawn_fn_{}_{}",
+                            "__spawn_fn_{}_{}_{}",
                             self.current_span().from.line,
-                            self.current_span().from.col
+                            self.current_span().from.col,
+                            id
                         );
                         let fn_ident: PotentialDollarIdentifier = ParserText::from(fn_name).into();
 
@@ -256,11 +261,360 @@ impl MiddleEnvironment {
 
                         self.evaluate(scope, scope_node)
                     }
+                    NodeType::LoopDeclaration {
+                        loop_type,
+                        body,
+                        until,
+                        label,
+                        else_body,
+                    } => {
+                        let wg_name = format!("__spawn_wg_{}_{}", span.from.line, span.from.col);
+                        let wg_ident: PotentialDollarIdentifier =
+                            ParserText::from(wg_name.clone()).into();
+                        let start_name =
+                            format!("__spawn_start_{}_{}", span.from.line, span.from.col);
+                        let start_ident: PotentialDollarIdentifier =
+                            ParserText::from(start_name.clone()).into();
+                        let wg_ident_node = Node::new(
+                            span,
+                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                                wg_ident.clone().into(),
+                            )),
+                        );
+                        let start_ident_node = Node::new(
+                            span,
+                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                                start_ident.clone().into(),
+                            )),
+                        );
+
+                        let wg_new = Node::new(
+                            span,
+                            NodeType::CallExpression {
+                                caller: Box::new(Node::new(
+                                    span,
+                                    NodeType::MemberExpression {
+                                        path: vec![
+                                            (
+                                                Node::new(
+                                                    span,
+                                                    NodeType::Identifier(
+                                                        PotentialGenericTypeIdentifier::Identifier(
+                                                            ParserText::from(String::from("WaitGroup")).into(),
+                                                        ),
+                                                    ),
+                                                ),
+                                                false,
+                                            ),
+                                            (
+                                                Node::new(
+                                                    span,
+                                                    NodeType::Identifier(
+                                                        PotentialGenericTypeIdentifier::Identifier(
+                                                            ParserText::from(String::from("new")).into(),
+                                                        ),
+                                                    ),
+                                                ),
+                                                false,
+                                            ),
+                                        ],
+                                    },
+                                )),
+                                generic_types: Vec::new(),
+                                args: Vec::new(),
+                                reverse_args: Vec::new(),
+                                string_fn: None,
+                            },
+                        );
+                        let start_new = Node::new(
+                            span,
+                            NodeType::CallExpression {
+                                caller: Box::new(Node::new(
+                                    span,
+                                    NodeType::MemberExpression {
+                                        path: vec![
+                                            (
+                                                Node::new(
+                                                    span,
+                                                    NodeType::Identifier(
+                                                        PotentialGenericTypeIdentifier::Identifier(
+                                                            ParserText::from(String::from(
+                                                                "WaitGroup",
+                                                            ))
+                                                            .into(),
+                                                        ),
+                                                    ),
+                                                ),
+                                                false,
+                                            ),
+                                            (
+                                                Node::new(
+                                                    span,
+                                                    NodeType::Identifier(
+                                                        PotentialGenericTypeIdentifier::Identifier(
+                                                            ParserText::from(String::from("new"))
+                                                                .into(),
+                                                        ),
+                                                    ),
+                                                ),
+                                                false,
+                                            ),
+                                        ],
+                                    },
+                                )),
+                                generic_types: Vec::new(),
+                                args: Vec::new(),
+                                reverse_args: Vec::new(),
+                                string_fn: None,
+                            },
+                        );
+
+                        let wg_decl = Node::new(
+                            span,
+                            NodeType::VariableDeclaration {
+                                var_type: VarType::Mutable,
+                                identifier: wg_ident.clone(),
+                                data_type: PotentialNewType::DataType(ParserDataType::from(
+                                    ParserInnerType::Auto(None),
+                                )),
+                                value: Box::new(wg_new),
+                            },
+                        );
+                        let start_decl = Node::new(
+                            span,
+                            NodeType::VariableDeclaration {
+                                var_type: VarType::Mutable,
+                                identifier: start_ident.clone(),
+                                data_type: PotentialNewType::DataType(ParserDataType::from(
+                                    ParserInnerType::Auto(None),
+                                )),
+                                value: Box::new(start_new),
+                            },
+                        );
+                        let start_add = Node::new(
+                            span,
+                            NodeType::CallExpression {
+                                caller: Box::new(Node::new(
+                                    span,
+                                    NodeType::MemberExpression {
+                                        path: vec![
+                                            (start_ident_node.clone(), false),
+                                            (
+                                                Node::new(
+                                                    span,
+                                                    NodeType::Identifier(
+                                                        PotentialGenericTypeIdentifier::Identifier(
+                                                            ParserText::from(String::from(
+                                                                "raw_add",
+                                                            ))
+                                                            .into(),
+                                                        ),
+                                                    ),
+                                                ),
+                                                false,
+                                            ),
+                                        ],
+                                    },
+                                )),
+                                generic_types: Vec::new(),
+                                args: vec![CallArg::Value(Node::new(
+                                    span,
+                                    NodeType::IntLiteral(String::from("1")),
+                                ))],
+                                reverse_args: Vec::new(),
+                                string_fn: None,
+                            },
+                        );
+                        let start_done = Node::new(
+                            span,
+                            NodeType::CallExpression {
+                                caller: Box::new(Node::new(
+                                    span,
+                                    NodeType::MemberExpression {
+                                        path: vec![
+                                            (start_ident_node.clone(), false),
+                                            (
+                                                Node::new(
+                                                    span,
+                                                    NodeType::Identifier(
+                                                        PotentialGenericTypeIdentifier::Identifier(
+                                                            ParserText::from(String::from(
+                                                                "raw_done",
+                                                            ))
+                                                            .into(),
+                                                        ),
+                                                    ),
+                                                ),
+                                                false,
+                                            ),
+                                        ],
+                                    },
+                                )),
+                                generic_types: Vec::new(),
+                                args: Vec::new(),
+                                reverse_args: Vec::new(),
+                                string_fn: None,
+                            },
+                        );
+
+                        let spawn_inner = match &*loop_type {
+                            LoopType::For(name, _range) => {
+                                let loop_ident_node = Node::new(
+                                    span,
+                                    NodeType::Identifier(
+                                        PotentialGenericTypeIdentifier::Identifier(
+                                            name.clone().into(),
+                                        ),
+                                    ),
+                                );
+
+                                let body_node = (*body).clone();
+                                let mut body_nodes = match body_node.node_type {
+                                    NodeType::ScopeDeclaration { body: Some(b), .. } => b,
+                                    other => vec![Node::new(body_node.span, other)],
+                                };
+                                body_nodes.insert(
+                                    0,
+                                    Node::new(
+                                        span,
+                                        NodeType::CallExpression {
+                                            caller: Box::new(Node::new(
+                                                span,
+                                                NodeType::MemberExpression {
+                                                    path: vec![
+                                                        (start_ident_node.clone(), false),
+                                                        (
+                                                            Node::new(
+                                                                span,
+                                                                NodeType::Identifier(
+                                                                    PotentialGenericTypeIdentifier::Identifier(
+                                                                        ParserText::from(
+                                                                            String::from("wait"),
+                                                                        )
+                                                                        .into(),
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                            false,
+                                                        ),
+                                                    ],
+                                                },
+                                            )),
+                                            generic_types: Vec::new(),
+                                            args: Vec::new(),
+                                            reverse_args: Vec::new(),
+                                            string_fn: None,
+                                        },
+                                    ),
+                                );
+
+                                body_nodes.insert(
+                                    0,
+                                    Node::new(
+                                        span,
+                                        NodeType::VariableDeclaration {
+                                            var_type: VarType::Mutable,
+                                            identifier: name.clone(),
+                                            data_type: PotentialNewType::DataType(
+                                                ParserDataType::from(ParserInnerType::Auto(None)),
+                                            ),
+                                            value: Box::new(loop_ident_node),
+                                        },
+                                    ),
+                                );
+
+                                let scope_body = Node::new(
+                                    span,
+                                    NodeType::ScopeDeclaration {
+                                        body: Some(body_nodes),
+                                        named: None,
+                                        is_temp: true,
+                                        create_new_scope: Some(true),
+                                        define: false,
+                                    },
+                                );
+                                Node::new(span, NodeType::Spawn { value: Box::new(scope_body) })
+                            }
+                            _ => Node::new(span, NodeType::Spawn { value: body }),
+                        };
+                        let join_call = Node::new(
+                            span,
+                            NodeType::CallExpression {
+                                caller: Box::new(Node::new(
+                                    span,
+                                    NodeType::MemberExpression {
+                                        path: vec![
+                                            (wg_ident_node.clone(), false),
+                                            (
+                                                Node::new(
+                                                    span,
+                                                    NodeType::Identifier(
+                                                        PotentialGenericTypeIdentifier::Identifier(
+                                                            ParserText::from(String::from("join")).into(),
+                                                        ),
+                                                    ),
+                                                ),
+                                                false,
+                                            ),
+                                        ],
+                                    },
+                                )),
+                                generic_types: Vec::new(),
+                                args: vec![CallArg::Value(spawn_inner)],
+                                reverse_args: Vec::new(),
+                                string_fn: None,
+                            },
+                        );
+
+                        let loop_body = Node::new(
+                            span,
+                            NodeType::ScopeDeclaration {
+                                body: Some(vec![join_call]),
+                                named: None,
+                                is_temp: true,
+                                create_new_scope: Some(false),
+                                define: false,
+                            },
+                        );
+
+                        let loop_node = Node::new(
+                            span,
+                            NodeType::LoopDeclaration {
+                                loop_type,
+                                body: Box::new(loop_body),
+                                until,
+                                label,
+                                else_body,
+                            },
+                        );
+
+                        let scope_node = Node::new(
+                            span,
+                            NodeType::ScopeDeclaration {
+                                body: Some(vec![
+                                    wg_decl,
+                                    start_decl,
+                                    start_add,
+                                    loop_node,
+                                    start_done,
+                                    wg_ident_node,
+                                ]),
+                                named: None,
+                                is_temp: true,
+                                create_new_scope: Some(true),
+                                define: false,
+                            },
+                        );
+
+                        return Ok(self.evaluate(scope, scope_node));
+                    }
                     NodeType::FunctionDeclaration { header, body } => {
+                        let id = SPAWN_FN_COUNTER.fetch_add(1, Ordering::Relaxed);
                         let fn_ident: PotentialDollarIdentifier = ParserText::from(format!(
-                            "__spawn_fn_{}_{}",
+                            "__spawn_fn_{}_{}_{}",
                             self.current_span().from.line,
-                            self.current_span().from.col
+                            self.current_span().from.col,
+                            id
                         ))
                         .into();
 
@@ -306,6 +660,128 @@ impl MiddleEnvironment {
                     },
                     span,
                 ))
+            }
+            NodeType::SpawnBlock { items } => {
+                let span = node.span;
+                let wg_name = format!("__spawn_block_wg_{}_{}", span.from.line, span.from.col);
+                let wg_ident: PotentialDollarIdentifier = ParserText::from(wg_name.clone()).into();
+                let wg_ident_node = Node::new(
+                    span,
+                    NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                        wg_ident.clone().into(),
+                    )),
+                );
+
+                let wg_new = Node::new(
+                    span,
+                    NodeType::CallExpression {
+                        caller: Box::new(Node::new(
+                            span,
+                            NodeType::MemberExpression {
+                                path: vec![
+                                    (
+                                        Node::new(
+                                            span,
+                                            NodeType::Identifier(
+                                                PotentialGenericTypeIdentifier::Identifier(
+                                                    ParserText::from(String::from("WaitGroup")).into(),
+                                                ),
+                                            ),
+                                        ),
+                                        false,
+                                    ),
+                                    (
+                                        Node::new(
+                                            span,
+                                            NodeType::Identifier(
+                                                PotentialGenericTypeIdentifier::Identifier(
+                                                    ParserText::from(String::from("new")).into(),
+                                                ),
+                                            ),
+                                        ),
+                                        false,
+                                    ),
+                                ],
+                            },
+                        )),
+                        generic_types: Vec::new(),
+                        args: Vec::new(),
+                        reverse_args: Vec::new(),
+                        string_fn: None,
+                    },
+                );
+
+                let wg_decl = Node::new(
+                    span,
+                    NodeType::VariableDeclaration {
+                        var_type: VarType::Mutable,
+                        identifier: wg_ident.clone(),
+                        data_type: PotentialNewType::DataType(ParserDataType::from(
+                            ParserInnerType::Auto(None),
+                        )),
+                        value: Box::new(wg_new),
+                    },
+                );
+
+                let mut body_nodes = Vec::new();
+                body_nodes.push(wg_decl);
+
+                for item in items {
+                    let item = match item.node_type {
+                        NodeType::Spawn { .. } | NodeType::SpawnBlock { .. } => item,
+                        other => Node::new(
+                            item.span,
+                            NodeType::Spawn {
+                                value: Box::new(Node::new(item.span, other)),
+                            },
+                        ),
+                    };
+
+                    let join_call = Node::new(
+                        span,
+                        NodeType::CallExpression {
+                            caller: Box::new(Node::new(
+                                span,
+                                NodeType::MemberExpression {
+                                    path: vec![
+                                        (wg_ident_node.clone(), false),
+                                        (
+                                            Node::new(
+                                                span,
+                                                NodeType::Identifier(
+                                                    PotentialGenericTypeIdentifier::Identifier(
+                                                        ParserText::from(String::from("join")).into(),
+                                                    ),
+                                                ),
+                                            ),
+                                            false,
+                                        ),
+                                    ],
+                                },
+                            )),
+                            generic_types: Vec::new(),
+                            args: vec![CallArg::Value(item)],
+                            reverse_args: Vec::new(),
+                            string_fn: None,
+                        },
+                    );
+                    body_nodes.push(join_call);
+                }
+
+                body_nodes.push(wg_ident_node);
+
+                let scope_node = Node::new(
+                    span,
+                    NodeType::ScopeDeclaration {
+                        body: Some(body_nodes),
+                        named: None,
+                        is_temp: true,
+                        create_new_scope: Some(true),
+                        define: false,
+                    },
+                );
+
+                Ok(self.evaluate(scope, scope_node))
             }
             NodeType::Ternary {
                 comparison,

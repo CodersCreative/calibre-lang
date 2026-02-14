@@ -93,6 +93,7 @@ pub struct WaitGroupInner {
     pub count: AtomicIsize,
     pub mutex: Mutex<()>,
     pub cvar: Condvar,
+    pub joined: Mutex<Vec<Arc<WaitGroupInner>>>,
 }
 
 impl WaitGroupInner {
@@ -101,7 +102,36 @@ impl WaitGroupInner {
             count: AtomicIsize::new(0),
             mutex: Mutex::new(()),
             cvar: Condvar::new(),
+            joined: Mutex::new(Vec::new()),
         }
+    }
+
+    pub fn done(&self) {
+        let remaining = self.count.fetch_sub(1, Ordering::AcqRel) - 1;
+        if remaining <= 0 {
+            self.cvar.notify_all();
+        }
+    }
+
+    pub fn wait(&self) -> Result<(), RuntimeError> {
+        let mut guard = self
+            .mutex
+            .lock()
+            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+        while self.count.load(Ordering::Acquire) > 0 {
+            guard = self
+                .cvar
+                .wait(guard)
+                .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+        }
+        drop(guard);
+        let joined = self.joined.lock().map_err(|_| {
+            RuntimeError::UnexpectedType(RuntimeValue::Null)
+        })?;
+        for inner in joined.iter() {
+            inner.wait()?;
+        }
+        Ok(())
     }
 }
 
@@ -425,12 +455,16 @@ impl RuntimeValue {
                 Arc::new(stdlib::r#async::WaitGroupNew()),
             ),
             (
-                "async.waitgroup_add",
-                Arc::new(stdlib::r#async::WaitGroupAdd()),
+                "async.waitgroup_raw_add",
+                Arc::new(stdlib::r#async::WaitGroupRawAdd()),
             ),
             (
-                "async.waitgroup_done",
-                Arc::new(stdlib::r#async::WaitGroupDone()),
+                "async.waitgroup_raw_done",
+                Arc::new(stdlib::r#async::WaitGroupRawDone()),
+            ),
+            (
+                "async.waitgroup_join",
+                Arc::new(stdlib::r#async::WaitGroupJoin()),
             ),
             (
                 "async.waitgroup_wait",

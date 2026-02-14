@@ -2008,8 +2008,12 @@ impl MiddleEnvironment {
             | NodeType::DataType { .. }
             | NodeType::Until { .. }
             | NodeType::SelectStatement { .. }
-            | NodeType::Spawn { .. }
             | NodeType::Use { .. } => None,
+            NodeType::Spawn { .. } | NodeType::SpawnBlock { .. } => {
+                Some(ParserDataType::from(ParserInnerType::Struct(String::from(
+                    "WaitGroup",
+                ))))
+            }
             NodeType::Null | NodeType::Defer { .. } | NodeType::Drop(_) | NodeType::EmptyLine => {
                 Some(ParserDataType::from(ParserInnerType::Null))
             }

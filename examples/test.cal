@@ -151,24 +151,21 @@ const main = fn () => {
 	print(other);
 	
 	// for i in 0..5 => print(i);
-	let mut wg : WaitGroup = WaitGroup.new();
 	let mut sum_ch : Channel:<int> = Channel:<int>.new();
 	let mut fac_ch : Channel:<int> = Channel:<int>.new();
 
-	wg.add(2);
-	spawn => {
-		defer wg.done();
-		let mut s = 0;
-		for i in 0..1000 => s += i;
-		sum_ch.send(s);
+	let wg = spawn {
+		=> {
+			let mut s = 0;
+			for i in 0..1000 => s += i;
+			sum_ch.send(s);
+		},
+		=> {
+			let mut f = 1;
+			for i in 1..6 => f *= i;
+			fac_ch.send(f);
+		},
 	};
-	spawn => {
-		defer wg.done();
-		let mut f = 1;
-		for i in 1..6 => f *= i;
-		fac_ch.send(f);
-	};
-
 	wg.wait();
 	let sum = match sum_ch.get() { .Some : v => v, .None => 0 };
 	let fac = match fac_ch.get() { .Some : v => v, .None => 0 };

@@ -1,11 +1,18 @@
 use std::{
     collections::VecDeque,
-    sync::{Arc, Condvar, Mutex},
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     thread,
-    time::Duration,
 };
 
-use crate::{VM, config::VMConfig, conversion::VMFunction, value::RuntimeValue};
+use crate::{
+    VM,
+    config::VMConfig,
+    conversion::VMFunction,
+    value::{RuntimeValue, WaitGroupInner},
+};
 
 #[derive(Clone, Debug)]
 pub struct SchedulerHandle {
@@ -16,8 +23,6 @@ pub struct SchedulerHandle {
 struct SchedulerInner {
     max_per_thread: usize,
     quantum: usize,
-    max_idle_ticks: usize,
-    idle_wait: Duration,
     workers: Mutex<Vec<Arc<Worker>>>,
 }
 
@@ -26,12 +31,14 @@ struct Worker {
     queue: Mutex<VecDeque<Task>>,
     cvar: Condvar,
     quantum: usize,
+    tasks: AtomicUsize,
 }
 
 #[derive(Debug)]
 struct Task {
     vm: VM,
     func: RuntimeValue,
+    wait_group: Option<Arc<WaitGroupInner>>,
 }
 
 impl SchedulerHandle {
@@ -41,32 +48,54 @@ impl SchedulerHandle {
         let inner = Arc::new(SchedulerInner {
             max_per_thread,
             quantum,
-            max_idle_ticks: 20,
-            idle_wait: Duration::from_millis(50),
             workers: Mutex::new(Vec::new()),
         });
+        let worker_count = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
+
+        {
+            let mut workers = inner.workers.lock().unwrap();
+            for _ in 0..worker_count {
+                let worker = Arc::new(Worker {
+                    queue: Mutex::new(VecDeque::new()),
+                    cvar: Condvar::new(),
+                    quantum,
+                    tasks: AtomicUsize::new(0),
+                });
+                Self::start_worker(worker.clone(), inner.clone());
+                workers.push(worker);
+            }
+        }
 
         SchedulerHandle { inner }
     }
 
-    pub fn spawn(&self, base_vm: &VM, func: RuntimeValue) {
-        let mut workers = self.inner.workers.lock().unwrap();
-        let worker = workers
-            .iter()
-            .find(|w| w.queue.lock().unwrap().len() < self.inner.max_per_thread)
-            .cloned()
-            .unwrap_or_else(|| {
+    pub fn spawn(&self, base_vm: &VM, func: RuntimeValue, wait_group: Option<Arc<WaitGroupInner>>) {
+        let worker = {
+            let mut workers = self.inner.workers.lock().unwrap();
+            let mut selected = None;
+            let mut best_load = usize::MAX;
+            for candidate in workers.iter() {
+                let load = candidate.tasks.load(Ordering::Acquire);
+                if load < self.inner.max_per_thread && load < best_load {
+                    best_load = load;
+                    selected = Some(candidate.clone());
+                }
+            }
+            if selected.is_none() {
                 let worker = Arc::new(Worker {
                     queue: Mutex::new(VecDeque::new()),
                     cvar: Condvar::new(),
                     quantum: self.inner.quantum,
+                    tasks: AtomicUsize::new(0),
                 });
                 Self::start_worker(worker.clone(), self.inner.clone());
                 workers.push(worker.clone());
-                worker
-            });
-
-        drop(workers);
+                selected = Some(worker);
+            }
+            selected.expect("worker selection failed")
+        };
 
         let mut vm = VM::new(
             base_vm.registry.clone(),
@@ -77,39 +106,40 @@ impl SchedulerHandle {
         vm.ptr_heap = base_vm.ptr_heap.clone();
 
         let mut queue = worker.queue.lock().unwrap();
-        queue.push_back(Task { vm, func });
+        worker.tasks.fetch_add(1, Ordering::AcqRel);
+        queue.push_back(Task {
+            vm,
+            func,
+            wait_group,
+        });
         worker.cvar.notify_one();
     }
 
-    fn start_worker(worker: Arc<Worker>, scheduler: Arc<SchedulerInner>) {
+    fn start_worker(worker: Arc<Worker>, _scheduler: Arc<SchedulerInner>) {
         thread::spawn(move || {
-            let mut idle_ticks = 0usize;
             loop {
                 let mut task = {
                     let mut queue = worker.queue.lock().unwrap();
                     loop {
                         if let Some(task) = queue.pop_front() {
-                            idle_ticks = 0;
                             break task;
                         }
-                        let (guard, timeout) = worker
-                            .cvar
-                            .wait_timeout(queue, scheduler.idle_wait)
-                            .unwrap();
-                        queue = guard;
-                        if timeout.timed_out() {
-                            idle_ticks += 1;
-                            if idle_ticks >= scheduler.max_idle_ticks {
-                                return;
-                            }
-                        }
+                        queue = worker.cvar.wait(queue).unwrap();
                     }
                 };
 
                 if let Some(status) = run_task_slice(&mut task, worker.quantum) {
-                    if matches!(status, TaskStatus::Yielded) {
-                        let mut queue = worker.queue.lock().unwrap();
-                        queue.push_back(task);
+                    match status {
+                        TaskStatus::Yielded => {
+                            let mut queue = worker.queue.lock().unwrap();
+                            queue.push_back(task);
+                        }
+                        TaskStatus::Finished => {
+                            worker.tasks.fetch_sub(1, Ordering::AcqRel);
+                            if let Some(wg) = task.wait_group.take() {
+                                wg.done();
+                            }
+                        }
                     }
                 }
             }
@@ -161,17 +191,16 @@ fn resolve_function(vm: &VM, name: &str) -> Option<Arc<VMFunction>> {
 }
 
 fn run_task_slice(task: &mut Task, quantum: usize) -> Option<TaskStatus> {
-    let func = task.func.clone();
-    match func {
+    match &task.func {
         RuntimeValue::Function { name, captures } => {
-            let Some(func) = resolve_function(&task.vm, &name) else {
+            let Some(func) = resolve_function(&task.vm, name) else {
                 return Some(TaskStatus::Finished);
             };
             let mut state = task.vm.take_task_state();
             let status = task.vm.run_function_with_budget(
                 func.as_ref(),
                 Vec::<RuntimeValue>::new(),
-                captures,
+                captures.clone(),
                 quantum,
                 &mut state,
             );

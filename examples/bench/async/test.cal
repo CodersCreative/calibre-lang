@@ -5,9 +5,7 @@ const worker = fn(
     jobs: &Channel:<int>,
     results: &mut Channel:<int>,
     total: &mut Mutex:<int>,
-    wg : &mut WaitGroup,
 ) => {
-    defer wg.done();
     print("worker " & id & " start\n");
     let mut handled = 0;
     for !jobs.closed() => {
@@ -26,18 +24,16 @@ const main = fn() => {
     let mut jobs: Channel:<int> = Channel:<int>.new();
     let mut results: Channel:<int> = Channel:<int>.new();
     let mut total: Mutex:<int> = Mutex:<int>.new(0);
-    let mut wg: WaitGroup = WaitGroup.new();
-    defer wg.wait();
 
     print("start\n");
 
     let worker_count = 8;
     let total_jobs = 100000;
-    for i in 0..worker_count => {
-        wg.increment();
-        spawn worker(i, &jobs, &mut results, &mut total, &mut wg);
+    let wg = spawn for i in 0..worker_count => {
+        worker(i, &jobs, &mut results, &mut total);
         print("spawned worker " & i & "\n");
-    }
+    };
+    defer wg.wait();
 
     for i in 1..(total_jobs + 1) => jobs.send(i);
     

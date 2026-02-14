@@ -5,9 +5,7 @@ const worker = fn(
     jobs: &Channel:<int>,
     results: &mut Channel:<int>,
     total: &mut Mutex:<int>,
-    wg : &mut WaitGroup,
 ) => {
-    defer wg.done();
     print("worker " & id & " start");
     let mut handled = 0;
     for !jobs.closed() => {
@@ -26,18 +24,16 @@ const main = fn() => {
     let mut jobs: Channel:<int> = Channel:<int>.new();
     let mut results: Channel:<int> = Channel:<int>.new();
     let mut total: Mutex:<int> = Mutex:<int>.new(0);
-    let mut wg: WaitGroup = WaitGroup.new();
-    defer wg.wait();
 
     print("start");
 
-    let worker_count = 100;
-    let total_jobs = 5000;
-    for i in 0..worker_count => {
-        wg.increment();
-        spawn worker(i, &jobs, &mut results, &mut total, &mut wg);
+    let worker_count = 10;
+    let total_jobs = 100;
+    let wg = spawn for i in 0..worker_count => {
+        worker(i, &jobs, &mut results, &mut total);
         print("spawned worker " & i);
-    }
+    };
+    defer wg.wait();
 
     for i in 1..(total_jobs + 1) => jobs.send(i);
     
@@ -59,4 +55,20 @@ const main = fn() => {
 
     results.close();
     print("all done, total=" & total.get());
+
+    use spawn for i in 0..100 => {
+        if i % 2 == 0 => std::thread::Duration.from_ms(101 - i).sleep();
+        print("num => " & i);
+    };
+
+    use spawn {
+        => {
+            std::thread::Duration.from_ms(30).sleep();
+            print("spawn block => A");
+        },
+        => {
+            std::thread::Duration.from_ms(5).sleep();
+            print("spawn block => B");
+        },
+    };
 };

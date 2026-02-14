@@ -17,8 +17,7 @@ fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
                     current_buffer.push('{');
                     chars.next();
                 } else {
-                    normal_parts.push(current_buffer.clone());
-                    current_buffer.clear();
+                    normal_parts.push(std::mem::take(&mut current_buffer));
 
                     let mut extracted = String::new();
                     while let Some(&next_c) = chars.peek() {
@@ -91,10 +90,7 @@ impl Parser {
                 .map(|x| tokenizer.tokenize(&x).unwrap())
                 .collect::<Vec<_>>();
 
-            let mut original = Vec::new();
-            original.append(&mut self.tokens);
-
-            self.tokens.clear();
+            let original = std::mem::take(&mut self.tokens);
 
             for arg in args {
                 self.tokens = arg;

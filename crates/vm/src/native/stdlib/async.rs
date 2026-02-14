@@ -196,11 +196,11 @@ impl NativeFunction for WaitGroupNew {
     }
 }
 
-pub struct WaitGroupAdd();
+pub struct WaitGroupRawAdd();
 
-impl NativeFunction for WaitGroupAdd {
+impl NativeFunction for WaitGroupRawAdd {
     fn name(&self) -> String {
-        String::from("async.waitgroup_add")
+        String::from("async.waitgroup_raw_add")
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
@@ -222,11 +222,11 @@ impl NativeFunction for WaitGroupAdd {
     }
 }
 
-pub struct WaitGroupDone();
+pub struct WaitGroupRawDone();
 
-impl NativeFunction for WaitGroupDone {
+impl NativeFunction for WaitGroupRawDone {
     fn name(&self) -> String {
-        String::from("async.waitgroup_done")
+        String::from("async.waitgroup_raw_done")
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
@@ -236,12 +236,38 @@ impl NativeFunction for WaitGroupDone {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
 
-        let remaining = wg.count.fetch_sub(1, std::sync::atomic::Ordering::AcqRel) - 1;
+        wg.done();
 
-        if remaining <= 0 {
-            wg.cvar.notify_all();
-        }
+        Ok(RuntimeValue::Null)
+    }
+}
 
+pub struct WaitGroupJoin();
+
+impl NativeFunction for WaitGroupJoin {
+    fn name(&self) -> String {
+        String::from("async.waitgroup_join")
+    }
+
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let inner = args.pop().unwrap_or(RuntimeValue::Null);
+        let outer = args.pop().unwrap_or(RuntimeValue::Null);
+
+        let outer = env.resolve_value_for_op(outer)?;
+        let inner = env.resolve_value_for_op(inner)?;
+
+        let RuntimeValue::WaitGroup(outer) = outer else {
+            return Err(RuntimeError::UnexpectedType(outer));
+        };
+        let RuntimeValue::WaitGroup(inner) = inner else {
+            return Err(RuntimeError::UnexpectedType(inner));
+        };
+
+        let mut joined = outer
+            .joined
+            .lock()
+            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+        joined.push(inner);
         Ok(RuntimeValue::Null)
     }
 }
@@ -260,17 +286,7 @@ impl NativeFunction for WaitGroupWait {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
 
-        let mut guard = wg
-            .mutex
-            .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
-        while wg.count.load(std::sync::atomic::Ordering::Acquire) > 0 {
-            guard = wg
-                .cvar
-                .wait(guard)
-                .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
-        }
-        drop(guard);
+        wg.wait()?;
         Ok(RuntimeValue::Null)
     }
 }

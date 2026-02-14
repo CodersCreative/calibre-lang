@@ -1,7 +1,8 @@
 use calibre_parser::{
     ast::{
         CallArg, FunctionHeader, LoopType, NamedScope, Node, NodeType, ParserDataType,
-        ParserInnerType, PotentialDollarIdentifier, PotentialNewType,
+        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+        PotentialNewType,
     },
     lexer::Span,
 };
@@ -33,7 +34,70 @@ impl MiddleEnvironment {
             }
         };
 
-        let mut rest = if rest.is_empty() {
+        if matches!(value.node_type, NodeType::Spawn { .. }) {
+            let span = use_node.span;
+            let wg_ident = if let Some(first) = identifiers.first() {
+                first.clone()
+            } else {
+                ParserText::from(format!("__use_spawn_wg_{}_{}", span.from.line, span.from.col))
+                    .into()
+            };
+
+            let wg_decl = Node::new(
+                span,
+                NodeType::VariableDeclaration {
+                    var_type: calibre_parser::ast::VarType::Immutable,
+                    identifier: wg_ident.clone(),
+                    data_type: PotentialNewType::DataType(ParserDataType::from(
+                        ParserInnerType::Auto(None),
+                    )),
+                    value: Box::new(value),
+                },
+            );
+
+            let wg_ident_node = Node::new(
+                span,
+                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                    wg_ident.clone().into(),
+                )),
+            );
+
+            let wait_call = Node::new(
+                span,
+                NodeType::CallExpression {
+                    caller: Box::new(Node::new(
+                        span,
+                        NodeType::MemberExpression {
+                            path: vec![
+                                (wg_ident_node.clone(), false),
+                                (
+                                    Node::new(
+                                        span,
+                                        NodeType::Identifier(
+                                            PotentialGenericTypeIdentifier::Identifier(
+                                                ParserText::from(String::from("wait")).into(),
+                                            ),
+                                        ),
+                                    ),
+                                    false,
+                                ),
+                            ],
+                        },
+                    )),
+                    generic_types: Vec::new(),
+                    args: Vec::new(),
+                    reverse_args: Vec::new(),
+                    string_fn: None,
+                },
+            );
+
+            prefix.extend(self.desugar_use_chain(rest));
+            prefix.push(wg_decl);
+            prefix.push(wait_call);
+            return prefix;
+        }
+
+        let rest = if rest.is_empty() {
             vec![Node::new(use_node.span, NodeType::Null)]
         } else {
             self.desugar_use_chain(rest)

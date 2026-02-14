@@ -35,11 +35,46 @@ impl Parser {
             SyntaxErr::ExpectedKeyword(String::from("spawn")),
         );
 
+        if self.first().token_type == TokenType::Open(Bracket::Curly) {
+            let _ = self.eat();
+            let mut items = Vec::new();
+            while self.first().token_type != TokenType::Close(Bracket::Curly) && !self.is_eof() {
+                let item = if self.first().token_type == TokenType::FatArrow {
+                    self.parse_scope_declaration(false)
+                } else if self.first().token_type == TokenType::Func {
+                    let node = self.parse_function_declaration();
+                    self.parse_potential_member(node)
+                } else if self.first().token_type == TokenType::For {
+                    self.parse_loop_declaration()
+                } else if self.first().token_type == TokenType::Spawn {
+                    self.parse_spawn_statement()
+                } else {
+                    self.parse_call_member_expression()
+                };
+                if self.first().token_type == TokenType::Comma {
+                    let _ = self.eat();
+                } else {
+                    let _ = self.parse_delimited();
+                }
+                items.push(item);
+            }
+            let close = self.expect_eat(
+                &TokenType::Close(Bracket::Curly),
+                SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
+            );
+            return Node::new(
+                Span::new_from_spans(open.span, close.span),
+                NodeType::SpawnBlock { items },
+            );
+        }
+
         let value = if self.first().token_type == TokenType::FatArrow {
             self.parse_scope_declaration(false)
         } else if self.first().token_type == TokenType::Func {
             let node = self.parse_function_declaration();
             self.parse_potential_member(node)
+        } else if self.first().token_type == TokenType::For {
+            self.parse_loop_declaration()
         } else {
             self.parse_call_member_expression()
         };
@@ -57,6 +92,73 @@ impl Parser {
             &TokenType::Use,
             SyntaxErr::ExpectedKeyword(String::from("use")),
         );
+
+        if self.first().token_type == TokenType::Spawn {
+            let value = self.parse_spawn_statement();
+            let value_span = value.span;
+            let wg_name = format!("__use_spawn_wg_{}_{}", open.span.from.line, open.span.from.col);
+            let wg_ident: PotentialDollarIdentifier =
+                ParserText::from(wg_name.clone()).into();
+
+            let wg_decl = Node::new(
+                Span::new_from_spans(open.span, value.span),
+                NodeType::VariableDeclaration {
+                    var_type: VarType::Immutable,
+                    identifier: wg_ident.clone(),
+                    data_type: PotentialNewType::DataType(ParserDataType::from(
+                        ParserInnerType::Auto(None),
+                    )),
+                    value: Box::new(value),
+                },
+            );
+
+            let wg_ident_node = Node::new(
+                open.span,
+                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                    wg_ident.clone().into(),
+                )),
+            );
+
+            let wait_call = Node::new(
+                Span::new_from_spans(open.span, open.span),
+                NodeType::CallExpression {
+                    caller: Box::new(Node::new(
+                        open.span,
+                        NodeType::MemberExpression {
+                            path: vec![
+                                (wg_ident_node, false),
+                                (
+                                    Node::new(
+                                        open.span,
+                                        NodeType::Identifier(
+                                            PotentialGenericTypeIdentifier::Identifier(
+                                                ParserText::from(String::from("wait")).into(),
+                                            ),
+                                        ),
+                                    ),
+                                    false,
+                                ),
+                            ],
+                        },
+                    )),
+                    generic_types: Vec::new(),
+                    args: Vec::new(),
+                    reverse_args: Vec::new(),
+                    string_fn: None,
+                },
+            );
+
+            return Node::new(
+                Span::new_from_spans(open.span, value_span),
+                NodeType::ScopeDeclaration {
+                    body: Some(vec![wg_decl, wait_call]),
+                    named: None,
+                    is_temp: false,
+                    create_new_scope: Some(false),
+                    define: false,
+                },
+            );
+        }
 
         let mut identifiers = Vec::new();
         if self.first().token_type != TokenType::LeftArrow {

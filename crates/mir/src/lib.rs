@@ -497,6 +497,30 @@ impl MiddleEnvironment {
         path: Vec<Node>,
     ) -> Result<MiddleNode, MiddleErr> {
         let (s, node) = self.get_scope_member_scope_path(scope, path)?;
-        Ok(self.evaluate(&s, node))
+        match node.node_type {
+            NodeType::Identifier(ident) => {
+                let resolved = self
+                    .resolve_potential_generic_ident(&s, &ident)
+                    .unwrap_or(ident.to_string().into());
+                Ok(MiddleNode::new(MiddleNodeType::Identifier(resolved), node.span))
+            }
+            NodeType::MemberExpression { mut path } => {
+                if let Some((Node { node_type: NodeType::Identifier(first), .. }, _)) =
+                    path.first_mut()
+                {
+                    let resolved = self
+                        .resolve_potential_generic_ident(&s, first)
+                        .unwrap_or(first.to_string().into());
+                    *first = PotentialGenericTypeIdentifier::Identifier(
+                        PotentialDollarIdentifier::Identifier(resolved),
+                    );
+                }
+                Ok(self.evaluate(
+                    scope,
+                    Node::new(node.span, NodeType::MemberExpression { path }),
+                ))
+            }
+            other => Ok(self.evaluate(&s, Node::new(node.span, other))),
+        }
     }
 }

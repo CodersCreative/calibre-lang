@@ -1028,6 +1028,9 @@ pub enum NodeType {
     Spawn {
         value: Box<Node>,
     },
+    SpawnBlock {
+        items: Vec<Node>,
+    },
     Use {
         identifiers: Vec<PotentialDollarIdentifier>,
         value: Box<Node>,

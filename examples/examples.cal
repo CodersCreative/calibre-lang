@@ -28,16 +28,15 @@ const main = fn () => {
 		// end of scope printed here
 	};
 
-    let mut wg = WaitGroup.new();
     let mut bmi_ch : Channel:<float> = Channel.new();
     let mut fac_ch = Channel:<int>.new();
     let mut lock_ch : Channel:<bool> = Channel.new();
 
-    wg.add(3);
-    spawn => { defer wg.done(); bmi_ch.send(bmi(52.5, 1.65)); };
-    spawn => { defer wg.done(); fac_ch.send(factorial(5)); };
-    spawn => { defer wg.done(); lock_ch.send(lock(3, 4, 6)); };
-
+    let wg = spawn {
+        bmi_ch.send(bmi(52.5, 1.65)),
+        fac_ch.send(factorial(5)),
+        lock_ch.send(lock(3, 4, 6)),
+    };
     wg.wait();
     let bmi_val = match bmi_ch.get() { .Some : v => v, .None => 0.0 };
     let fac_val = match fac_ch.get() { .Some : v => v, .None => 0 };

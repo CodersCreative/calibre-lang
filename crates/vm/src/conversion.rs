@@ -42,12 +42,14 @@ impl Display for VMRegistry {
 
 impl From<LirRegistry> for VMRegistry {
     fn from(value: LirRegistry) -> Self {
-        let mut functions = FxHashMap::default();
+        let mut functions =
+            FxHashMap::with_capacity_and_hasher(value.functions.len(), Default::default());
         for (k, func) in value.functions {
             functions.insert(k, Arc::new(func.into()));
         }
 
-        let mut globals = FxHashMap::default();
+        let mut globals =
+            FxHashMap::with_capacity_and_hasher(value.globals.len(), Default::default());
         for (k, v) in value.globals {
             globals.insert(k, v.into());
         }
@@ -418,6 +420,7 @@ pub enum VMInstruction {
         args: Vec<Reg>,
     },
     Spawn {
+        dst: Reg,
         callee: Reg,
     },
     LoadMember {
@@ -529,7 +532,7 @@ impl Display for VMInstruction {
                 write!(f, "%r{dst} = ENUM {name}:{variant}")
             }
             VMInstruction::Call { dst, callee, .. } => write!(f, "%r{dst} = CALL %r{callee}"),
-            VMInstruction::Spawn { callee } => write!(f, "SPAWN %r{callee}"),
+            VMInstruction::Spawn { dst, callee } => write!(f, "SPAWN %r{dst}, %r{callee}"),
             VMInstruction::LoadMember { dst, value, member } => {
                 write!(f, "%r{dst} = LOADMEMBER %r{value}.{member}")
             }
@@ -1191,8 +1194,9 @@ impl<'a> BlockLoweringCtx<'a> {
             LirNodeType::Noop => self.null_reg,
             LirNodeType::Spawn { callee } => {
                 let callee = self.lower_node(*callee, span);
-                self.emit(VMInstruction::Spawn { callee }, span);
-                self.null_reg
+                let dst = self.alloc_reg();
+                self.emit(VMInstruction::Spawn { dst, callee }, span);
+                dst
             }
             LirNodeType::Literal(x) => {
                 if matches!(x, LirLiteral::Null) {
@@ -1204,16 +1208,6 @@ impl<'a> BlockLoweringCtx<'a> {
                 dst
             }
             LirNodeType::Call { caller, args } => {
-                if let LirNodeType::Load(name) = &*caller {
-                    let short = name.rsplit(':').next().unwrap_or(name);
-                    if short == "spawn" {
-                        if let Some(first) = args.into_iter().next() {
-                            let callee = self.lower_node(first, span);
-                            self.emit(VMInstruction::Spawn { callee }, span);
-                        }
-                        return self.null_reg;
-                    }
-                }
                 let mut arg_regs = Vec::with_capacity(args.len());
                 for arg in args {
                     arg_regs.push(self.lower_node(arg, span));

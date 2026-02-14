@@ -2,7 +2,7 @@ use crate::{
     config::VMConfig,
     conversion::{Reg, VMBlock, VMFunction, VMRegistry},
     error::RuntimeError,
-    value::RuntimeValue,
+    value::{RuntimeValue, WaitGroupInner},
 };
 use calibre_lir::BlockId;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -295,8 +295,8 @@ impl VM {
         vm
     }
 
-    pub fn spawn_async_task(&self, func: RuntimeValue) {
-        self.scheduler.spawn(self, func);
+    pub fn spawn_async_task(&self, func: RuntimeValue, wait_group: Option<Arc<WaitGroupInner>>) {
+        self.scheduler.spawn(self, func, wait_group);
     }
 
     pub fn take_task_state(&mut self) -> TaskState {

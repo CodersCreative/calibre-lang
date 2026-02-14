@@ -31,7 +31,7 @@ impl Tab {
     pub fn get_singular_tab(&self) -> String {
         let mut txt = String::new();
         for _ in 0..self.amt {
-            txt.push(self.character.clone());
+            txt.push(self.character);
         }
         txt
     }
@@ -164,7 +164,7 @@ impl Formatter {
                 lines.push(format!("{};\n", formatted));
             }
 
-            last_line = Some(node.span.to.line.clone());
+            last_line = Some(node.span.to.line);
         }
 
         lines
@@ -198,6 +198,13 @@ impl Formatter {
                 self.format(&value)
             ),
             NodeType::Spawn { value } => format!("spawn {}", self.format(value)),
+            NodeType::SpawnBlock { items } => {
+                let mut parts = Vec::new();
+                for item in items {
+                    parts.push(self.format(item));
+                }
+                format!("spawn {{ {} }}", parts.join(", "))
+            }
             NodeType::Use { identifiers, value } => {
                 if identifiers.is_empty() {
                     format!("use <- {}", self.format(value))
@@ -471,7 +478,7 @@ impl Formatter {
             NodeType::Until { condition } => format!("until {}", self.format(condition)),
             NodeType::Return { value: Some(value) } => format!("return {}", self.format(value)),
             NodeType::Return { value: _ } => String::from("return"),
-            NodeType::AssignmentExpression { identifier, value } => match value.node_type.clone() {
+            NodeType::AssignmentExpression { identifier, value } => match &value.node_type {
                 NodeType::BinaryExpression {
                     left,
                     right,
@@ -1011,7 +1018,7 @@ impl Formatter {
 
                 if let Some(body) = &body {
                     if !body.is_empty() {
-                        let create_new_scope = create_new_scope.clone().unwrap_or(false);
+                        let create_new_scope = create_new_scope.as_ref().copied().unwrap_or(false);
                         if body.len() > 1 || create_new_scope {
                             txt.push_str(" {");
                             if !create_new_scope {

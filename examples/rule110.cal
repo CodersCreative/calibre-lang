@@ -8,43 +8,39 @@ const main = fn() => {
   let mut cells = [(x > half_width) ? 1 : 0 for x in 0..=width];
 
   for step in steps => {
-    let mut wg : WaitGroup = WaitGroup.new();
     let mut line_ch : Channel:<str> = Channel:<str>.new();
     let mut next_ch : Channel:<list:<int>> = Channel:<list:<int>>.new();
 
-    wg.add(2);
-    spawn => {
-      defer wg.done();
-      let mut line = "";
-      for i in len(cells) => line &= (cells[i] == 1) ? "█" : " ";
-      line_ch.send(line);
-    };
+    let wg = spawn {
+      => {
+        let mut line = "";
+        for i in len(cells) => line &= (cells[i] == 1) ? "█" : " ";
+        line_ch.send(line);
+      },
+      => {
+        let mut next_cells = list:<int>[];
+        for i in 0..len(cells) => {
+          let left = (i > 0) ? cells[i-1] : 0;
+          let center = cells[i];
+          let right = (i < len(cells) - 1) ? cells[i+1] : 0;
 
-    spawn => {
-      defer wg.done();
-      let mut next_cells = list:<int>[];
-      for i in 0..len(cells) => {
-        let left = (i > 0) ? cells[i-1] : 0;
-        let center = cells[i];
-        let right = (i < len(cells) - 1) ? cells[i+1] : 0;
-
-        if left == 1 => {
-          if center == 1 => {
-            if right == 1 => next_cells <<= 0 else => next_cells <<= 1;
+          if left == 1 => {
+            if center == 1 => {
+              if right == 1 => next_cells <<= 0 else => next_cells <<= 1;
+            } else => {
+              if right == 1 => next_cells <<= 1 else => next_cells <<= 0;
+            }
           } else => {
-            if right == 1 => next_cells <<= 1 else => next_cells <<= 0;
-          }
-        } else => {
-          if center == 1 => {
-            if right == 1 => next_cells <<= 1 else => next_cells <<= 1;
-          } else => {
-            if right == 1 => next_cells <<= 1 else => next_cells <<= 0;
+            if center == 1 => {
+              if right == 1 => next_cells <<= 1 else => next_cells <<= 1;
+            } else => {
+              if right == 1 => next_cells <<= 1 else => next_cells <<= 0;
+            }
           }
         }
-      }
-      next_ch.send(next_cells);
+        next_ch.send(next_cells);
+      },
     };
-
     wg.wait();
     let line = match line_ch.get() { .Some : v => v, .None => "" };
     print(line);

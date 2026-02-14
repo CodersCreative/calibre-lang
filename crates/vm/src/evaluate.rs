@@ -11,19 +11,12 @@ use crate::{
     error::RuntimeError,
     value::{
         RuntimeValue, TerminateValue,
+        WaitGroupInner,
         operation::{binary, boolean, comparison},
     },
 };
 
 impl VM {
-    #[inline(always)]
-    fn materialize_arg(&mut self, value: RuntimeValue) -> RuntimeValue {
-        match value {
-            RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef { frame, reg },
-            other => other,
-        }
-    }
-
     pub fn run(
         &mut self,
         function: &VMFunction,
@@ -34,8 +27,12 @@ impl VM {
     }
 
     pub fn run_globals(&mut self) -> Result<(), RuntimeError> {
-        for global in self.registry.globals.clone().into_iter() {
-            let _ = self.run_global(&global.1)?;
+        if self.registry.globals.is_empty() {
+            return Ok(());
+        }
+        let globals: Vec<VMGlobal> = self.registry.globals.values().cloned().collect();
+        for global in globals {
+            let _ = self.run_global(&global)?;
         }
         Ok(())
     }
@@ -100,12 +97,17 @@ impl VM {
     where
         I: IntoIterator<Item = RuntimeValue>,
     {
-        let prev_vars: Vec<(String, Option<RuntimeValue>)> = captures
-            .iter()
-            .map(|(name, _)| (name.clone(), self.variables.get(name).cloned()))
-            .collect();
-        for (name, value) in captures {
-            self.variables.insert(name, value);
+        let mut prev_vars: Vec<(String, Option<RuntimeValue>)> = Vec::new();
+        if !captures.is_empty() {
+            prev_vars = Vec::with_capacity(captures.len());
+            prev_vars.extend(
+                captures
+                    .iter()
+                    .map(|(name, _)| (name.clone(), self.variables.get(name).cloned())),
+            );
+            for (name, value) in captures {
+                self.variables.insert(name, value);
+            }
         }
 
         if state.block.is_none() {
@@ -182,13 +184,15 @@ impl VM {
         }
 
         self.pop_frame();
-        for (name, old) in prev_vars {
-            match old {
-                Some(v) => {
-                    self.variables.insert(name, v);
-                }
-                None => {
-                    self.variables.remove(&name);
+        if !prev_vars.is_empty() {
+            for (name, old) in prev_vars {
+                match old {
+                    Some(v) => {
+                        self.variables.insert(name, v);
+                    }
+                    None => {
+                        self.variables.remove(&name);
+                    }
                 }
             }
         }
@@ -631,7 +635,7 @@ impl VM {
                             let frame = self.frames.len().saturating_sub(1);
                             RuntimeValue::RegRef { frame, reg: *reg }
                         }
-                        _ => self.materialize_arg(arg_val),
+                        _ => arg_val,
                     };
                     call_args.push(arg_to_pass);
                 }
@@ -688,7 +692,7 @@ impl VM {
                     }
                 }
             }
-            VMInstruction::Spawn { callee } => {
+            VMInstruction::Spawn { dst, callee } => {
                 let func = self.get_reg_value(*callee);
                 let resolved = self.resolve_value_for_op(func)?;
                 let to_spawn = match resolved {
@@ -708,7 +712,10 @@ impl VM {
                     }
                     other => other,
                 };
-                self.spawn_async_task(to_spawn);
+                let wg = Arc::new(WaitGroupInner::new());
+                wg.count.store(1, std::sync::atomic::Ordering::Release);
+                self.spawn_async_task(to_spawn, Some(wg.clone()));
+                self.set_reg_value(*dst, RuntimeValue::WaitGroup(wg));
             }
             VMInstruction::LoadMember { dst, value, member } => {
                 let name = self.local_string(block, *member)?;
