@@ -1,5 +1,6 @@
 use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
 use dumpster::sync::Gc;
+use std::io::{self, Write};
 
 pub struct ConsoleOutput();
 
@@ -34,7 +35,6 @@ impl NativeFunction for ConsoleOutput {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        use std::io::{self, Write};
         let RuntimeValue::Int(handle_type) = args.remove(0) else {
             panic!()
         };

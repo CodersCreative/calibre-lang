@@ -1896,14 +1896,14 @@ impl MiddleEnvironment {
                     None
                 };
 
-                let new_scope = if let Some(alias) = alias {
+                let (new_scope, build_node) = if let Some(alias) = alias {
                     if ["super", "root"].contains(&alias.as_str()) {
                         return Ok(MiddleNode {
                             node_type: MiddleNodeType::EmptyLine,
                             span: node.span,
                         });
                     }
-                    let new_scope_id = self.get_scope_list(
+                    let (new_scope_id, build_node) = self.import_scope_list(
                         *scope,
                         module.into_iter().map(|x| x.to_string()).collect(),
                     )?;
@@ -1913,12 +1913,16 @@ impl MiddleEnvironment {
                         .children
                         .insert(alias.to_string(), new_scope_id);
 
-                    return Ok(MiddleNode {
+                    return Ok(build_node.unwrap_or_else(|| MiddleNode {
                         node_type: MiddleNodeType::EmptyLine,
                         span: node.span,
-                    });
+                    }));
                 } else if !values.is_empty() {
-                    self.get_scope_list(*scope, module.iter().map(|x| x.to_string()).collect())?
+                    let (new_scope_id, build_node) = self.import_scope_list(
+                        *scope,
+                        module.iter().map(|x| x.to_string()).collect(),
+                    )?;
+                    (new_scope_id, build_node)
                 } else {
                     let (_, n) = self.import_scope_list(
                         *scope,
@@ -1945,11 +1949,20 @@ impl MiddleEnvironment {
                         .collect();
 
                     for (key, value) in vars {
-                        if !key.starts_with("__") {
-                            let scope = self.scopes.get_mut(scope).unwrap();
-                            if !scope.mappings.contains_key(&key) {
-                                scope.mappings.insert(key, value);
-                            }
+                        if key.starts_with("__") {
+                            continue;
+                        }
+                        let global_scope = self.get_global_scope();
+                        if self.variables.contains_key(&key)
+                            || self.objects.contains_key(&key)
+                            || global_scope.mappings.contains_key(&key)
+                            || self.resolve_str(scope, &key).is_some()
+                        {
+                            continue;
+                        }
+                        let scope = self.scopes.get_mut(scope).unwrap();
+                        if !scope.mappings.contains_key(&key) {
+                            scope.mappings.insert(key, value);
                         }
                     }
                 } else {
@@ -1976,10 +1989,10 @@ impl MiddleEnvironment {
                     }
                 }
 
-                Ok(MiddleNode {
+                Ok(build_node.unwrap_or_else(|| MiddleNode {
                     node_type: MiddleNodeType::EmptyLine,
                     span: node.span,
-                })
+                }))
             }
             NodeType::ScopeMemberExpression { path } => {
                 self.evaluate_scope_member_expression(scope, path)

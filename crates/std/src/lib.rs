@@ -7,13 +7,13 @@ pub fn get_path(path: String) -> String {
 }
 
 pub fn get_stdlib_path() -> PathBuf {
-    PathBuf::from_str(&get_path("stdlib/main.cl".to_string())).unwrap()
+    PathBuf::from_str(&get_path("stdlib/main.cal".to_string())).unwrap()
 }
 
 pub fn get_stdlib_module_path(name: &str) -> PathBuf {
-    PathBuf::from_str(&get_path(format!("stdlib/{}/main.cl", name))).unwrap()
+    PathBuf::from_str(&get_path(format!("stdlib/{}/main.cal", name))).unwrap()
 }
 
 pub fn get_globals_path() -> PathBuf {
-    PathBuf::from_str(&get_path("global/main.cl".to_string())).unwrap()
+    PathBuf::from_str(&get_path("global/main.cal".to_string())).unwrap()
 }

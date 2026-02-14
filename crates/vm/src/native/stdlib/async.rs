@@ -26,14 +26,11 @@ impl NativeFunction for ChannelSend {
         String::from("async.channel_send")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let value = args.pop().unwrap_or(RuntimeValue::Null);
+        let value = env.convert_runtime_var_into_saveable(value);
         let channel = args.remove(0);
-        let resolved = _env.resolve_value_for_op(channel)?;
+        let resolved = env.resolve_value_for_op(channel)?;
         let RuntimeValue::Channel(ch) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -58,13 +55,9 @@ impl NativeFunction for ChannelGet {
         String::from("async.channel_get")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let channel = args.remove(0);
-        let resolved = _env.resolve_value_for_op(channel)?;
+        let resolved = env.resolve_value_for_op(channel)?;
         let RuntimeValue::Channel(ch) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -98,13 +91,9 @@ impl NativeFunction for ChannelClose {
         String::from("async.channel_close")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let channel = args.remove(0);
-        let resolved = _env.resolve_value_for_op(channel)?;
+        let resolved = env.resolve_value_for_op(channel)?;
         let RuntimeValue::Channel(ch) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -122,13 +111,9 @@ impl NativeFunction for ChannelClosed {
         String::from("async.channel_closed")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let channel = args.remove(0);
-        let resolved = _env.resolve_value_for_op(channel)?;
+        let resolved = env.resolve_value_for_op(channel)?;
         let RuntimeValue::Channel(ch) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -162,11 +147,7 @@ impl NativeFunction for WaitGroupAdd {
         String::from("async.waitgroup_add")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let value = match args.pop() {
             Some(RuntimeValue::Int(v)) => v,
             Some(other) => return Err(RuntimeError::UnexpectedType(other)),
@@ -174,7 +155,7 @@ impl NativeFunction for WaitGroupAdd {
         };
 
         let wg_val = args.remove(0);
-        let resolved = _env.resolve_value_for_op(wg_val)?;
+        let resolved = env.resolve_value_for_op(wg_val)?;
         let RuntimeValue::WaitGroup(wg) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -192,13 +173,9 @@ impl NativeFunction for WaitGroupDone {
         String::from("async.waitgroup_done")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let wg_val = args.remove(0);
-        let resolved = _env.resolve_value_for_op(wg_val)?;
+        let resolved = env.resolve_value_for_op(wg_val)?;
         let RuntimeValue::WaitGroup(wg) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -220,13 +197,9 @@ impl NativeFunction for WaitGroupWait {
         String::from("async.waitgroup_wait")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let wg_val = args.remove(0);
-        let resolved = _env.resolve_value_for_op(wg_val)?;
+        let resolved = env.resolve_value_for_op(wg_val)?;
         let RuntimeValue::WaitGroup(wg) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -253,13 +226,9 @@ impl NativeFunction for WaitGroupCount {
         String::from("async.waitgroup_count")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let wg_val = args.remove(0);
-        let resolved = _env.resolve_value_for_op(wg_val)?;
+        let resolved = env.resolve_value_for_op(wg_val)?;
         let RuntimeValue::WaitGroup(wg) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -293,13 +262,9 @@ impl NativeFunction for MutexGet {
         String::from("async.mutex_get")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let mutex = args.remove(0);
-        let resolved = _env.resolve_value_for_op(mutex)?;
+        let resolved = env.resolve_value_for_op(mutex)?;
         let RuntimeValue::Mutex(m) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -315,14 +280,10 @@ impl NativeFunction for MutexSet {
         String::from("async.mutex_set")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let value = args.pop().unwrap_or(RuntimeValue::Null);
         let mutex = args.remove(0);
-        let resolved = _env.resolve_value_for_op(mutex)?;
+        let resolved = env.resolve_value_for_op(mutex)?;
         let RuntimeValue::Mutex(m) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -394,13 +355,9 @@ impl NativeFunction for MutexWrite {
         String::from("async.mutex_write")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let mutex = args.remove(0);
-        let resolved = _env.resolve_value_for_op(mutex)?;
+        let resolved = env.resolve_value_for_op(mutex)?;
         let RuntimeValue::Mutex(m) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };

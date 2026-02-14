@@ -838,14 +838,26 @@ impl Parser {
         );
 
         let get_module = |this: &mut Parser| -> Vec<PotentialDollarIdentifier> {
-            let mut module = vec![this.expect_potential_dollar_ident()];
+            let mut module = vec![match this.first().token_type {
+                TokenType::List | TokenType::Range => {
+                    let tok = this.eat();
+                    PotentialDollarIdentifier::Identifier(ParserText::from(tok))
+                }
+                _ => this.expect_potential_dollar_ident(),
+            }];
 
             while matches!(
                 this.first().token_type,
                 TokenType::Colon | TokenType::DoubleColon
             ) {
                 let _ = this.eat();
-                module.push(this.expect_potential_dollar_ident());
+                module.push(match this.first().token_type {
+                    TokenType::List | TokenType::Range => {
+                        let tok = this.eat();
+                        PotentialDollarIdentifier::Identifier(ParserText::from(tok))
+                    }
+                    _ => this.expect_potential_dollar_ident(),
+                });
             }
 
             module

@@ -1,0 +1,155 @@
+impl<T> list:<T> {
+	const len = fn(self: list:<T>) -> int => len(self);
+	const iter = fn(self: list:<T>) -> ListIter:<T> => iter_list(self);
+	const into_iter = fn(self: list:<T>) -> ListIter:<T> => iter_list(self);
+	const is_empty = fn(self: list:<T>) -> bool => len(self) == 0;
+	const first = fn(self: list:<T>) -> T? => if len(self) == 0 => none else => some(self[0]);
+	const last = fn(self: list:<T>) -> T? => {
+		let l = len(self);
+		if l == 0 => none else => some(self[l - 1]);
+	};
+	const get = fn(self: list:<T>, idx: int) -> T? => {
+		if idx < 0 || idx >= len(self) => none else => some(self[idx]);
+	};
+	const clone = fn(self: list:<T>) -> list:<T> => list:<T>[self[i] for i in 0..len(self)];
+	const contains = fn(self: list:<T>, needle: T) -> bool => {
+		for i in 0..len(self) => if self[i] == needle => return true;
+		false;
+	};
+	const index_of = fn(self: list:<T>, needle: T) -> int => {
+		for i in 0..len(self) => if self[i] == needle => return i;
+		-1;
+	};
+	const last_index_of = fn(self: list:<T>, needle: T) -> int => {
+		let mut i = len(self) - 1;
+		for i >= 0 => {
+			if self[i] == needle => return i;
+			i = i - 1;
+		};
+		-1;
+	};
+	const count = fn(self: list:<T>, needle: T) -> int => {
+		let mut n = 0;
+		for i in 0..len(self) => if self[i] == needle => n = n + 1;
+		n;
+	};
+	const slice = fn(self: list:<T>, start: int, end: int) -> list:<T> => {
+		let l = len(self);
+		let s = if start < 0 => 0 else => start;
+		let e = if end > l => l else => end;
+		let mut out = list:<T>[];
+		for i in s..e => out <<= self[i];
+		out;
+	};
+	const take = fn(self: list:<T>, n: int) -> list:<T> => {
+		let end = if n < 0 => 0 else => n;
+		self.slice(0, end);
+	};
+	const skip = fn(self: list:<T>, n: int) -> list:<T> => {
+		let start = if n < 0 => 0 else => n;
+		self.slice(start, len(self));
+	};
+	const reverse = fn(self: list:<T>) -> list:<T> => {
+		let mut out = list:<T>[];
+		let mut i = len(self) - 1;
+		for i >= 0 => {
+			out <<= self[i];
+			i = i - 1;
+		};
+		out;
+	};
+	const push = fn(self: &mut list:<T>, value: T) => { self <<= value; };
+	const pop = fn(self: &mut list:<T>) -> T? => {
+		let l = len(self);
+		if l == 0 => none;
+		let last = self[l - 1];
+		let mut out = list:<T>[self[i] for i in 0..(l - 1)];
+		self = move out;
+		some(last);
+	};
+	const clear = fn(self: &mut list:<T>) => {
+		self = move list:<T>[];
+	};
+	const remove = fn(self: &mut list:<T>, idx: int) -> T? => {
+		let l = len(self);
+		if idx < 0 || idx >= l => none;
+		let removed = self[idx];
+		let mut out = list:<T>[];
+		for i in 0..l => if i != idx => out <<= self[i];
+		self = move out;
+		some(removed);
+	};
+	const remove_value = fn(self: &mut list:<T>, needle: T) -> bool => {
+		let idx = self.index_of(needle);
+		if idx == -1 => false;
+		let _ = self.remove(idx);
+		true;
+	};
+	const insert = fn(self: &mut list:<T>, idx: int, value: T) -> bool => {
+		let l = len(self);
+		if idx < 0 || idx > l => false;
+		let mut out = list:<T>[];
+		for i in 0..(l + 1) => {
+			if i == idx => out <<= value;
+			if i < l => out <<= self[i];
+		};
+		self = move out;
+		true;
+	};
+	const extend = fn(self: &mut list:<T>, other: list:<T>) => {
+		for i in 0..len(other) => self <<= other[i];
+	};
+	const concat = fn(self: list:<T>, other: list:<T>) -> list:<T> => {
+		let mut out = list:<T>[self[i] for i in 0..len(self)];
+		for i in 0..len(other) => out <<= other[i];
+		out;
+	};
+	const join = fn(self: list:<str>, sep: str) -> str => {
+		let mut out = "";
+		for i in 0..len(self) => {
+			if i > 0 => out &= sep;
+			out &= self[i];
+		};
+		out;
+	};
+}
+
+impl list:<int> {
+	const sum = fn(self: list:<int>) -> int => {
+		let mut acc = 0;
+		for i in 0..len(self) => acc = acc + self[i];
+		acc;
+	};
+	const min = fn(self: list:<int>) -> int? => {
+		if len(self) == 0 => none;
+		let mut m = self[0];
+		for i in 1..len(self) => if self[i] < m => m = self[i];
+		some(m);
+	};
+	const max = fn(self: list:<int>) -> int? => {
+		if len(self) == 0 => none;
+		let mut m = self[0];
+		for i in 1..len(self) => if self[i] > m => m = self[i];
+		some(m);
+	};
+}
+
+impl list:<float> {
+	const sum = fn(self: list:<float>) -> float => {
+		let mut acc = 0.0;
+		for i in 0..len(self) => acc = acc + self[i];
+		acc;
+	};
+	const min = fn(self: list:<float>) -> float? => {
+		if len(self) == 0 => none;
+		let mut m = self[0];
+		for i in 1..len(self) => if self[i] < m => m = self[i];
+		some(m);
+	};
+	const max = fn(self: list:<float>) -> float? => {
+		if len(self) == 0 => none;
+		let mut m = self[0];
+		for i in 1..len(self) => if self[i] > m => m = self[i];
+		some(m);
+	};
+}

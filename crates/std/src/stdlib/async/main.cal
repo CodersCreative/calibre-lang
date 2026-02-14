@@ -8,6 +8,16 @@ impl<T> Channel:<T> {
 	const get = fn(self: &Channel:<T>) -> T? => channel_get(self);
 	const close = fn(self: &mut Channel:<T>) => channel_close(self);
 	const closed = fn(self: &Channel:<T>) -> bool => channel_closed(self);
+	const recv = fn(self: &Channel:<T>) -> T? => self.get();
+	const recv_or = fn(self: &Channel:<T>, default: T) -> T => {
+		match self.get() {
+			.Some : v => v,
+			.None => default,
+		}
+	};
+	const send_all = fn(self: &mut Channel:<T>, values: list:<T>) => {
+		for i in 0..len(values) => self.send(values[i]);
+	};
 }
 
 impl WaitGroup {
@@ -17,6 +27,7 @@ impl WaitGroup {
 	const done = fn(self: &mut WaitGroup) => waitgroup_done(self);
 	const wait = fn(self: &WaitGroup) => waitgroup_wait(self);
 	const count = fn(self: &WaitGroup) -> int => waitgroup_count(self);
+	const wait_until_zero = fn(self: &WaitGroup) => self.wait();
 }
 
 impl<T> Mutex:<T> {
@@ -25,4 +36,13 @@ impl<T> Mutex:<T> {
 	const set = fn(self: &mut Mutex:<T>, value: T) => mutex_set(self, value);
 	const with = fn<U>(self: &mut Mutex:<T>, op: fn(T) -> U) -> U => mutex_with(self, op);
 	const write = fn(self: &mut Mutex:<T>) -> &mut T => mutex_write(self);
+	const swap = fn(self: &mut Mutex:<T>, value: T) -> T => {
+		let current = self.get();
+		self.set(value);
+		current;
+	};
+	const update = fn(self: &mut Mutex:<T>, op: fn(T) -> T) => {
+		let current = self.get();
+		self.set(op(current));
+	};
 }

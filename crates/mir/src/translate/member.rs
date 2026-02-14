@@ -16,13 +16,24 @@ use crate::{
 
 impl MiddleEnvironment {
     fn resolve_impl_member(&self, data_type: &ParserDataType, member: &str) -> Option<String> {
-        if let Some(imp) = self.find_impl_for_type(data_type)
+        let target = data_type.clone().unwrap_all_refs();
+        let key = self.impl_key(&target);
+        if let Some(imp) = self.impls.get(&key)
             && let Some(found) = imp.variables.get(member)
         {
-            Some(found.0.clone())
-        } else {
-            None
+            return Some(found.0.clone());
         }
+
+        let target_inner = target.data_type;
+        for imp in self.impls.values() {
+            if self.impl_type_matches(&imp.data_type.data_type, &target_inner, &imp.generic_params)
+                && let Some(found) = imp.variables.get(member)
+            {
+                return Some(found.0.clone());
+            }
+        }
+
+        None
     }
 
     fn resolve_type_from_ident(
@@ -60,18 +71,23 @@ impl MiddleEnvironment {
                 .map(|x| self.objects.get(&x.text))
             {
                 match (&object.object_type, &path[1].0.node_type) {
-                    (MiddleTypeDefType::Enum(_), NodeType::Identifier(y)) if path.len() == 2 => {
-                        return self.evaluate_inner(
-                            scope,
-                            Node::new(
-                                self.current_span(),
-                                NodeType::EnumExpression {
-                                    identifier: x.clone(),
-                                    value: y.clone().into(),
-                                    data: None,
-                                },
-                            ),
-                        );
+                    (MiddleTypeDefType::Enum(variants), NodeType::Identifier(y))
+                        if path.len() == 2 =>
+                    {
+                        let variant_name = y.to_string();
+                        if variants.iter().any(|(name, _)| name.text == variant_name) {
+                            return self.evaluate_inner(
+                                scope,
+                                Node::new(
+                                    self.current_span(),
+                                    NodeType::EnumExpression {
+                                        identifier: x.clone(),
+                                        value: y.clone().into(),
+                                        data: None,
+                                    },
+                                ),
+                            );
+                        }
                     }
                     _ => {}
                 }
@@ -90,31 +106,7 @@ impl MiddleEnvironment {
                             && let Some(static_fn) =
                                 self.resolve_impl_member(&ty, &second.to_string())
                         {
-                            let mut new_args = args.clone();
-                            if let Some(var) = self.variables.get(&static_fn) {
-                                if let ParserInnerType::Function { parameters, .. } =
-                                    &var.data_type.data_type
-                                    && let Some(first) = parameters.first()
-                                    && let ParserInnerType::Ref(_, mutability) = &first.data_type
-                                {
-                                    let self_arg_node = Node::new(
-                                        self.current_span(),
-                                        NodeType::RefStatement {
-                                            mutability: mutability.clone(),
-                                            value: Box::new(Node::new(
-                                                self.current_span(),
-                                                NodeType::Identifier(
-                                                    PotentialGenericTypeIdentifier::Identifier(
-                                                        ParserText::from(x.to_string()).into(),
-                                                    ),
-                                                ),
-                                            )),
-                                        },
-                                    );
-                                    new_args.insert(0, CallArg::Value(self_arg_node));
-                                }
-                            }
-
+                            let new_args = args.clone();
                             return self.evaluate_inner(
                                 scope,
                                 Node::new(

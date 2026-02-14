@@ -26,3 +26,15 @@ const range = fn(min: int, max: int) -> int => {
         min + (c_rand() % span);
     };
 };
+
+const range_inclusive = fn(min: int, max: int) -> int => range(min, max + 1);
+
+const float_range = fn(min: float, max: float) -> float => {
+    if max <= min => min else => min + (ratio() * (max - min));
+};
+
+const choice = fn<T>(values: list:<T>) -> T? => {
+    if len(values) == 0 => none;
+    let idx = range(0, len(values));
+    some(values[idx]);
+};

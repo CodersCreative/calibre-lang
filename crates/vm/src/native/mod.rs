@@ -108,8 +108,6 @@ impl VM {
                 .cloned()
             {
                 found.to_string()
-            } else if matches.len() == 1 {
-                matches[0].to_string()
             } else {
                 var.0
             };

@@ -136,13 +136,15 @@ impl MiddleEnvironment {
         );
         self.setup_std_module(scope, "random", &[]);
         self.setup_std_module(scope, "file", &[]);
+        self.setup_std_module(scope, "list", &[]);
         self.setup_std_module(
             scope,
             "str",
             &["split", "contains", "starts_with", "ends_with"],
         );
-        self.setup_std_module(scope, "list", &[]);
         self.setup_std_module(scope, "range", &[]);
+        self.setup_std_module(scope, "option", &[]);
+        self.setup_std_module(scope, "result", &[]);
     }
 
     pub fn setup_std_module(&mut self, parent: &u64, name: &str, funcs: &[&'static str]) {

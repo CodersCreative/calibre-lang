@@ -2258,6 +2258,58 @@ impl MiddleEnvironment {
                 ..
             } => {
                 // TODO handle generics
+                if let NodeType::MemberExpression { path } = &caller.node_type {
+                    if path.len() >= 2 {
+                        let member_name = match &path.last().unwrap().0.node_type {
+                            NodeType::Identifier(id) => id.to_string(),
+                            _ => String::new(),
+                        };
+
+                        if !member_name.is_empty() {
+                            let base_ty = match &path[0].0.node_type {
+                                NodeType::Identifier(id) => {
+                                    if let Some(parsed) =
+                                        self.resolve_potential_generic_ident_to_data_type(scope, id)
+                                    {
+                                        Some(parsed)
+                                    } else if let Some(var) =
+                                        self.variables.get(&id.to_string())
+                                    {
+                                        Some(var.data_type.clone())
+                                    } else {
+                                        self.resolve_type_from_node(scope, &path[0].0)
+                                    }
+                                }
+                                _ => self.resolve_type_from_node(scope, &path[0].0),
+                            };
+
+                            if let Some(base_ty) = base_ty {
+                                if member_name == "new" {
+                                    return Some(base_ty);
+                                }
+                                if let Some(imp) = self.find_impl_for_type(&base_ty) {
+                                    if let Some((fn_name, _)) =
+                                        imp.variables.get(member_name.as_str())
+                                        && let Some(var) = self.variables.get(fn_name)
+                                    {
+                                        match &var.data_type.data_type {
+                                            ParserInnerType::Function { return_type, .. } => {
+                                                return Some(*return_type.clone());
+                                            }
+                                            ParserInnerType::NativeFunction(x) => {
+                                                return Some(*x.clone());
+                                            }
+                                            _ => {
+                                                return Some(var.data_type.clone());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 let caller = self
                     .quick_resolve_potential_scope_member(scope, *caller.clone())
                     .unwrap();
@@ -2401,6 +2453,48 @@ impl MiddleEnvironment {
                                             return Some(field_ty.clone());
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if path.len() >= 2 {
+                    if let NodeType::CallExpression { caller, .. } = &path.last().unwrap().0.node_type
+                        && let NodeType::Identifier(method_ident) = &caller.node_type
+                    {
+                        let base_ty = match &path[0].0.node_type {
+                            NodeType::Identifier(id) => {
+                                if let Some(parsed) =
+                                    self.resolve_potential_generic_ident_to_data_type(scope, id)
+                                {
+                                    Some(parsed)
+                                } else if let Some(var) = self.variables.get(&id.to_string()) {
+                                    Some(var.data_type.clone())
+                                } else {
+                                    self.resolve_type_from_node(scope, &path[0].0)
+                                }
+                            }
+                            _ => self.resolve_type_from_node(scope, &path[0].0),
+                        };
+
+                        if let Some(base_ty) = base_ty {
+                            if method_ident.to_string() == "new" {
+                                return Some(base_ty);
+                            }
+
+                            if let Some(imp) = self.find_impl_for_type(&base_ty) {
+                                if let Some((fn_name, _)) =
+                                    imp.variables.get(method_ident.to_string().as_str())
+                                    && let Some(var) = self.variables.get(fn_name)
+                                {
+                                    return match &var.data_type.data_type {
+                                        ParserInnerType::Function { return_type, .. } => {
+                                            Some(*return_type.clone())
+                                        }
+                                        ParserInnerType::NativeFunction(x) => Some(*x.clone()),
+                                        _ => Some(var.data_type.clone()),
+                                    };
                                 }
                             }
                         }
