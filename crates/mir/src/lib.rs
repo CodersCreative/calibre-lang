@@ -307,6 +307,23 @@ impl MiddleEnvironment {
         out
     }
 
+    fn collect_defers_until(&self, scope: &u64, stop_scope: u64) -> Vec<Node> {
+        let mut out = Vec::new();
+        let mut current = Some(*scope);
+        while let Some(id) = current {
+            if let Some(s) = self.scopes.get(&id) {
+                out.extend(s.defers.clone());
+                if id == stop_scope {
+                    break;
+                }
+                current = s.parent;
+            } else {
+                break;
+            }
+        }
+        out
+    }
+
     fn insert_auto_drops(
         &self,
         stmts: &mut Vec<MiddleNode>,
@@ -355,8 +372,8 @@ impl MiddleEnvironment {
                 } else if let Some(stmt) = stmts.get(idx) {
                     match &stmt.node_type {
                         MiddleNodeType::Return { .. }
-                        | MiddleNodeType::Break
-                        | MiddleNodeType::Continue => continue,
+                        | MiddleNodeType::Break { .. }
+                        | MiddleNodeType::Continue { .. } => continue,
                         MiddleNodeType::Drop(drop_name) if drop_name.text == *name => continue,
                         _ => {}
                     }

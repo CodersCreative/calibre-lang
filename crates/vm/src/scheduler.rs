@@ -1,16 +1,11 @@
 use std::{
     collections::VecDeque,
-    time::Duration,
-    sync::{Arc, Mutex, Condvar},
+    sync::{Arc, Condvar, Mutex},
     thread,
+    time::Duration,
 };
 
-use crate::{
-    VM,
-    config::VMConfig,
-    conversion::VMFunction,
-    value::RuntimeValue,
-};
+use crate::{VM, config::VMConfig, conversion::VMFunction, value::RuntimeValue};
 
 #[derive(Clone, Debug)]
 pub struct SchedulerHandle {

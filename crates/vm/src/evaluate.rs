@@ -163,7 +163,11 @@ impl VM {
                     returned = true;
                     break;
                 }
-                TerminateValue::Yield { block, ip, prev_block } => {
+                TerminateValue::Yield {
+                    block,
+                    ip,
+                    prev_block,
+                } => {
                     state.block = Some(block);
                     state.ip = ip;
                     state.prev_block = prev_block;
@@ -692,9 +696,8 @@ impl VM {
                         let resolved_caps = captures
                             .into_iter()
                             .map(|(k, v)| {
-                                let resolved = self
-                                    .resolve_value_for_op(v)
-                                    .unwrap_or(RuntimeValue::Null);
+                                let resolved =
+                                    self.resolve_value_for_op(v).unwrap_or(RuntimeValue::Null);
                                 (k, resolved)
                             })
                             .collect();

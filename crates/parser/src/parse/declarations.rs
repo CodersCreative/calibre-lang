@@ -19,7 +19,6 @@ impl Parser {
             TokenType::Impl => self.parse_impl_declaration(),
             TokenType::Import => self.parse_import_declaration(),
             TokenType::Type => self.parse_type_decaration(),
-            TokenType::For => self.parse_loop_declaration(),
             TokenType::Spawn => self.parse_spawn_statement(),
             TokenType::Extern => self.parse_extern_function_declaration(),
             _ => self.parse_assignment_expression(),
@@ -169,29 +168,31 @@ impl Parser {
 
         let name = self.expect_potential_dollar_ident();
 
-        let _ = self.expect_eat(
-            &TokenType::Open(Bracket::Square),
-            SyntaxErr::ExpectedOpeningBracket(Bracket::Square),
-        );
-
         let mut args = Vec::new();
 
-        while self.first().token_type != TokenType::Close(Bracket::Square) {
-            let _ = self.expect_eat(&TokenType::Dollar, SyntaxErr::ExpectedChar('$'));
-            let ident = self.expect_potential_dollar_ident();
-            let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
-            let value = self.parse_statement();
+        if self.first().token_type == TokenType::Open(Bracket::Square) {
+            let _ = self.expect_eat(
+                &TokenType::Open(Bracket::Square),
+                SyntaxErr::ExpectedOpeningBracket(Bracket::Square),
+            );
 
-            if self.first().token_type == TokenType::Comma {
-                let _ = self.eat();
+            while self.first().token_type != TokenType::Close(Bracket::Square) {
+                let _ = self.expect_eat(&TokenType::Dollar, SyntaxErr::ExpectedChar('$'));
+                let ident = self.expect_potential_dollar_ident();
+                let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
+                let value = self.parse_statement();
+
+                if self.first().token_type == TokenType::Comma {
+                    let _ = self.eat();
+                }
+
+                args.push((ident, value));
             }
-
-            args.push((ident, value));
+            let _ = self.expect_eat(
+                &TokenType::Close(Bracket::Square),
+                SyntaxErr::ExpectedClosingBracket(Bracket::Square),
+            );
         }
-        let _ = self.expect_eat(
-            &TokenType::Close(Bracket::Square),
-            SyntaxErr::ExpectedClosingBracket(Bracket::Square),
-        );
         NamedScope { name, args }
     }
 
@@ -1281,11 +1282,29 @@ impl Parser {
         } else {
             self.get_loop_type()
         };
-        let block = self.parse_scope_declaration(false);
+        let mut block = self.parse_scope_declaration(false);
+        let mut label = None;
+
+        if let NodeType::ScopeDeclaration { named, body, .. } = &mut block.node_type {
+            if let Some(named) = named
+                && named.args.is_empty()
+                && body.is_some()
+            {
+                label = Some(named.name.clone());
+            }
+            *named = None;
+        }
 
         let until = if self.first().token_type == TokenType::Stop(StopValue::Until) {
             let _ = self.eat();
             Some(Box::new(self.parse_statement()))
+        } else {
+            None
+        };
+
+        let else_body = if self.first().token_type == TokenType::Else {
+            let _ = self.eat();
+            Some(Box::new(self.parse_scope_declaration(false)))
         } else {
             None
         };
@@ -1296,6 +1315,8 @@ impl Parser {
                 loop_type: Box::new(typ),
                 body: Box::new(block),
                 until,
+                label,
+                else_body,
             },
         )
     }

@@ -34,8 +34,13 @@ impl MiddleNode {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
-    Break,
-    Continue,
+    Break {
+        label: Option<ParserText>,
+        value: Option<Box<MiddleNode>>,
+    },
+    Continue {
+        label: Option<ParserText>,
+    },
     EmptyLine,
     Null,
     RefStatement {
@@ -104,6 +109,7 @@ pub enum MiddleNodeType {
         state: Option<Box<MiddleNode>>,
         body: Box<MiddleNode>,
         scope_id: u64,
+        label: Option<ParserText>,
     },
     Return {
         value: Option<Box<MiddleNode>>,
@@ -179,8 +185,13 @@ impl Into<NodeType> for MiddleNodeType {
             Self::Move(x) => NodeType::MoveExpression {
                 value: Box::new(Node::new_from_type(NodeType::Identifier(x.into()))),
             },
-            Self::Break => NodeType::Break,
-            Self::Continue => NodeType::Continue,
+            Self::Break { label, value } => NodeType::Break {
+                label: label.map(Into::into),
+                value: value.map(|v| Box::new((*v).into())),
+            },
+            Self::Continue { label } => NodeType::Continue {
+                label: label.map(Into::into),
+            },
             Self::EmptyLine => NodeType::EmptyLine,
             Self::Null => NodeType::Null,
             Self::RefStatement { mutability, value } => NodeType::RefStatement {
@@ -312,6 +323,7 @@ impl Into<NodeType> for MiddleNodeType {
                 state,
                 body,
                 scope_id: _,
+                label,
             } => NodeType::ScopeDeclaration {
                 body: {
                     let mut lst = Vec::new();
@@ -324,6 +336,8 @@ impl Into<NodeType> for MiddleNodeType {
                         loop_type: Box::new(LoopType::Loop),
                         body: Box::new((*body).into()),
                         until: None,
+                        label: label.map(Into::into),
+                        else_body: None,
                     }));
 
                     Some(lst)

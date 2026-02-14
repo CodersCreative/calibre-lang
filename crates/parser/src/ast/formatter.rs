@@ -173,8 +173,24 @@ impl Formatter {
     pub fn format(&mut self, node: &Node) -> String {
         match &node.node_type {
             NodeType::Null => String::from("null"),
-            NodeType::Break => String::from("break"),
-            NodeType::Continue => String::from("continue"),
+            NodeType::Break { label, value } => {
+                let mut txt = String::from("break");
+                if let Some(label) = label {
+                    txt.push_str(&format!(" @{}", label));
+                }
+                if let Some(value) = value {
+                    txt.push(' ');
+                    txt.push_str(&self.format(value));
+                }
+                txt
+            }
+            NodeType::Continue { label } => {
+                let mut txt = String::from("continue");
+                if let Some(label) = label {
+                    txt.push_str(&format!(" @{}", label));
+                }
+                txt
+            }
             NodeType::EmptyLine => String::new(),
             NodeType::Defer { value, function } => format!(
                 "defer {}{}",
@@ -717,6 +733,8 @@ impl Formatter {
                 loop_type,
                 body,
                 until,
+                label,
+                else_body,
             } => {
                 let mut txt = format!(
                     "for {} {}",
@@ -726,6 +744,12 @@ impl Formatter {
 
                 if let Some(until) = until {
                     txt.push_str(&format!(" until {}", self.format(until)));
+                }
+                if let Some(label) = label {
+                    txt.push_str(&format!(" @{}", label));
+                }
+                if let Some(else_body) = else_body {
+                    txt.push_str(&format!(" else {}", self.format(else_body)));
                 }
 
                 txt

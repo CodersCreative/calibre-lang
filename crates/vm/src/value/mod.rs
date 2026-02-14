@@ -3,8 +3,8 @@ use std::{
     collections::VecDeque,
     fmt::{Debug, Display},
     sync::{
-        atomic::{AtomicBool, AtomicIsize, Ordering},
         Arc, Condvar, Mutex,
+        atomic::{AtomicBool, AtomicIsize, Ordering},
     },
 };
 
@@ -23,7 +23,7 @@ use crate::{
     VM,
     conversion::{Reg, VMLiteral},
     error::RuntimeError,
-    native::{self, NativeFunction},
+    native::{self, NativeFunction, stdlib},
 };
 
 pub mod conversion;
@@ -288,57 +288,53 @@ impl RuntimeValue {
             ("some", Arc::new(native::global::SomeFn())),
             ("len", Arc::new(native::global::Len())),
             ("trim", Arc::new(native::global::Trim())),
-            ("str_split", Arc::new(native::global::StrSplit())),
-            ("str_contains", Arc::new(native::global::StrContains())),
-            ("str_starts_with", Arc::new(native::global::StrStartsWith())),
-            ("str_ends_with", Arc::new(native::global::StrEndsWith())),
+            ("str.split", Arc::new(stdlib::str::StrSplit())),
+            ("str.contains", Arc::new(stdlib::str::StrContains())),
+            ("str.starts_with", Arc::new(stdlib::str::StrStartsWith())),
+            ("str.ends_with", Arc::new(stdlib::str::StrEndsWith())),
             ("discriminant", Arc::new(native::global::DiscriminantFn())),
             ("tuple", Arc::new(native::global::TupleFn())),
             ("panic", Arc::new(native::global::PanicFn())),
             ("min_or_zero", Arc::new(native::global::MinOrZero())),
+            ("async.channel_new", Arc::new(stdlib::r#async::ChannelNew())),
             (
-                "channel_new",
-                Arc::new(native::r#async::ChannelNew()),
+                "async.channel_send",
+                Arc::new(stdlib::r#async::ChannelSend()),
+            ),
+            ("async.channel_get", Arc::new(stdlib::r#async::ChannelGet())),
+            (
+                "async.channel_close",
+                Arc::new(stdlib::r#async::ChannelClose()),
             ),
             (
-                "channel_send",
-                Arc::new(native::r#async::ChannelSend()),
-            ),
-            ("channel_get", Arc::new(native::r#async::ChannelGet())),
-            (
-                "channel_close",
-                Arc::new(native::r#async::ChannelClose()),
+                "async.channel_closed",
+                Arc::new(stdlib::r#async::ChannelClosed()),
             ),
             (
-                "channel_closed",
-                Arc::new(native::r#async::ChannelClosed()),
+                "async.waitgroup_new",
+                Arc::new(stdlib::r#async::WaitGroupNew()),
             ),
             (
-                "waitgroup_new",
-                Arc::new(native::r#async::WaitGroupNew()),
+                "async.waitgroup_add",
+                Arc::new(stdlib::r#async::WaitGroupAdd()),
             ),
             (
-                "waitgroup_add",
-                Arc::new(native::r#async::WaitGroupAdd()),
+                "async.waitgroup_done",
+                Arc::new(stdlib::r#async::WaitGroupDone()),
             ),
             (
-                "waitgroup_done",
-                Arc::new(native::r#async::WaitGroupDone()),
+                "async.waitgroup_wait",
+                Arc::new(stdlib::r#async::WaitGroupWait()),
             ),
             (
-                "waitgroup_wait",
-                Arc::new(native::r#async::WaitGroupWait()),
+                "async.waitgroup_count",
+                Arc::new(stdlib::r#async::WaitGroupCount()),
             ),
-            (
-                "waitgroup_count",
-                Arc::new(native::r#async::WaitGroupCount()),
-            ),
-            ("mutex_new", Arc::new(native::r#async::MutexNew())),
-            ("mutex_get", Arc::new(native::r#async::MutexGet())),
-            ("mutex_set", Arc::new(native::r#async::MutexSet())),
-            ("mutex_with", Arc::new(native::r#async::MutexWith())),
-            ("mutex_write", Arc::new(native::r#async::MutexWrite())),
-            
+            ("async.mutex_new", Arc::new(stdlib::r#async::MutexNew())),
+            ("async.mutex_get", Arc::new(stdlib::r#async::MutexGet())),
+            ("async.mutex_set", Arc::new(stdlib::r#async::MutexSet())),
+            ("async.mutex_with", Arc::new(stdlib::r#async::MutexWith())),
+            ("async.mutex_write", Arc::new(stdlib::r#async::MutexWrite())),
         ];
 
         let mut map = FxHashMap::default();

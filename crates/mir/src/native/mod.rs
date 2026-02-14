@@ -36,12 +36,12 @@ impl MiddleEnvironment {
         self.stdlib_nodes.clear();
         let mut parser = Parser::default();
         let mut tokenizer = Tokenizer::default();
-        if let Ok(globals) = fs::read_to_string(get_globals_path()) {
-            if let Ok(tokens) = tokenizer.tokenize(&globals) {
-                let program = parser.produce_ast(tokens);
-                let middle = self.evaluate(&scope, program);
-                self.stdlib_nodes.push(middle);
-            }
+        if let Ok(globals) = fs::read_to_string(get_globals_path())
+            && let Ok(tokens) = tokenizer.tokenize(&globals)
+        {
+            let program = parser.produce_ast(tokens);
+            let middle = self.evaluate(&scope, program);
+            self.stdlib_nodes.push(middle);
         }
 
         let std = self.new_scope(Some(scope), get_stdlib_path(), Some("std"));
@@ -60,31 +60,12 @@ impl MiddleEnvironment {
             "err",
             "some",
             "trim",
-            "str_split",
-            "str_contains",
-            "str_starts_with",
-            "str_ends_with",
             "print",
             "len",
             "panic",
             "tuple",
             "discriminant",
             "min_or_zero",
-            "channel_new",
-            "channel_send",
-            "channel_get",
-            "channel_close",
-            "channel_closed",
-            "waitgroup_new",
-            "waitgroup_add",
-            "waitgroup_done",
-            "waitgroup_wait",
-            "waitgroup_count",
-            "mutex_new",
-            "mutex_get",
-            "mutex_set",
-            "mutex_with",
-            "mutex_write",
         ];
 
         let map = ParserDataType::natives();
@@ -135,11 +116,31 @@ impl MiddleEnvironment {
         self.setup_std_module(
             scope,
             "async",
-            &[],
+            &[
+                "channel_new",
+                "channel_send",
+                "channel_get",
+                "channel_close",
+                "channel_closed",
+                "waitgroup_new",
+                "waitgroup_add",
+                "waitgroup_done",
+                "waitgroup_wait",
+                "waitgroup_count",
+                "mutex_new",
+                "mutex_get",
+                "mutex_set",
+                "mutex_with",
+                "mutex_write",
+            ],
         );
         self.setup_std_module(scope, "random", &[]);
         self.setup_std_module(scope, "file", &[]);
-        self.setup_std_module(scope, "str", &[]);
+        self.setup_std_module(
+            scope,
+            "str",
+            &["split", "contains", "starts_with", "ends_with"],
+        );
         self.setup_std_module(scope, "list", &[]);
         self.setup_std_module(scope, "range", &[]);
     }
@@ -149,11 +150,14 @@ impl MiddleEnvironment {
         let scope = self.new_scope(Some(*parent), scope_path.clone(), Some(name));
 
         let map: FxHashMap<String, ParserDataType> = ParserDataType::natives();
-        let funcs: Vec<(String, ParserDataType)> = funcs.into_iter().filter_map(|x| {
-            map.get(&format!("{}.{}", name, x))
-                .cloned()
-                .map(|ty| (String::from(*x), ty))
-        }).collect();
+        let funcs: Vec<(String, ParserDataType)> = funcs
+            .into_iter()
+            .filter_map(|x| {
+                map.get(&format!("{}.{}", name, x))
+                    .cloned()
+                    .map(|ty| (String::from(*x), ty))
+            })
+            .collect();
 
         for var in funcs.iter().cloned() {
             let name = get_disamubiguous_name(&scope, Some(&var.0), None);

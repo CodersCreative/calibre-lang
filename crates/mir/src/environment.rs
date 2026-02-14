@@ -119,6 +119,16 @@ pub struct MiddleEnvironment {
     pub type_cache: FxHashMap<hm::Type, ParserDataType>,
     pub stdlib_nodes: Vec<MiddleNode>,
     pub suppress_curry: bool,
+    pub loop_stack: Vec<LoopContext>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LoopContext {
+    pub label: Option<String>,
+    pub result_target: Option<ParserText>,
+    pub broke_target: Option<ParserText>,
+    pub continue_inject: Option<Node>,
+    pub scope_id: u64,
 }
 
 impl Default for MiddleEnvironment {
@@ -145,6 +155,7 @@ impl Default for MiddleEnvironment {
             stdlib_nodes: Vec::new(),
             type_cache: FxHashMap::default(),
             suppress_curry: false,
+            loop_stack: Vec::new(),
         }
     }
 }
@@ -1597,6 +1608,7 @@ impl MiddleEnvironment {
             }
             _ => data_type,
         }
+        .verify()
     }
 
     pub fn add_scope(&mut self, mut scope: MiddleScope) {
@@ -1977,8 +1989,8 @@ impl MiddleEnvironment {
 
     pub fn resolve_type_from_node(&mut self, scope: &u64, node: &Node) -> Option<ParserDataType> {
         let typ = match &node.node_type {
-            NodeType::Break
-            | NodeType::Continue
+            NodeType::Break { .. }
+            | NodeType::Continue { .. }
             | NodeType::VariableDeclaration { .. }
             | NodeType::ImplDeclaration { .. }
             | NodeType::ImplTraitDeclaration { .. }

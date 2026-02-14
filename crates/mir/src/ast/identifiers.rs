@@ -3,9 +3,9 @@ use crate::{MiddleNode, MiddleNodeType};
 impl MiddleNode {
     pub fn identifiers_used(&self) -> Vec<&String> {
         match &self.node_type {
-            MiddleNodeType::Break
+            MiddleNodeType::Break { value: None, .. }
             | MiddleNodeType::EmptyLine
-            | MiddleNodeType::Continue
+            | MiddleNodeType::Continue { .. }
             | MiddleNodeType::Null
             | MiddleNodeType::EnumExpression {
                 identifier: _,
@@ -17,6 +17,9 @@ impl MiddleNode {
             | MiddleNodeType::IntLiteral(_)
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return { value: None } => Vec::new(),
+            MiddleNodeType::Break {
+                value: Some(value), ..
+            } => value.identifiers_used(),
             MiddleNodeType::Identifier(x) | MiddleNodeType::Drop(x) | MiddleNodeType::Move(x) => {
                 vec![x]
             }
@@ -154,10 +157,10 @@ impl MiddleNode {
 
     pub fn identifiers_declared(&self) -> Vec<&String> {
         match &self.node_type {
-            MiddleNodeType::Break
+            MiddleNodeType::Break { .. }
             | MiddleNodeType::EmptyLine
             | MiddleNodeType::Null
-            | MiddleNodeType::Continue
+            | MiddleNodeType::Continue { .. }
             | MiddleNodeType::EnumExpression {
                 identifier: _,
                 value: _,

@@ -31,8 +31,8 @@ const main = fn() => {
 
     print("start");
 
-    let worker_count = 1000;
-    let total_jobs = 50000;
+    let worker_count = 100;
+    let total_jobs = 5000;
     for i in 0..worker_count => {
         wg.increment();
         spawn worker(i, &jobs, &mut results, &mut total, &mut wg);

@@ -122,11 +122,31 @@ impl Parser {
                 StopValue::Return => self.parse_return_declaration(),
                 StopValue::Break => {
                     let val = self.eat();
-                    Node::new(val.span, NodeType::Break)
+                    let label = if self.first().token_type == TokenType::At {
+                        let _ = self.eat();
+                        Some(self.expect_potential_dollar_ident())
+                    } else {
+                        None
+                    };
+                    let value = match self.first().token_type {
+                        TokenType::EOL
+                        | TokenType::EOF
+                        | TokenType::Comma
+                        | TokenType::Close(_)
+                        | TokenType::Open(Bracket::Curly) => None,
+                        _ => Some(Box::new(self.parse_statement())),
+                    };
+                    Node::new(val.span, NodeType::Break { label, value })
                 }
                 StopValue::Continue => {
                     let val = self.eat();
-                    Node::new(val.span, NodeType::Continue)
+                    let label = if self.first().token_type == TokenType::At {
+                        let _ = self.eat();
+                        Some(self.expect_potential_dollar_ident())
+                    } else {
+                        None
+                    };
+                    Node::new(val.span, NodeType::Continue { label })
                 }
             },
             TokenType::String => {
@@ -267,7 +287,7 @@ impl Parser {
                     },
                 )
             }
-
+            TokenType::For => self.parse_loop_declaration(),
             TokenType::Boolean(BooleanOperator::And) => {
                 let open = self.eat();
                 let close = self.parse_purely_member();

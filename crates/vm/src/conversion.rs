@@ -1497,7 +1497,13 @@ impl<'a> BlockLoweringCtx<'a> {
                 let cond = self.lower_node(condition, span);
                 let cond_reg = if cond == self.ret_reg {
                     let tmp = self.alloc_reg();
-                    self.emit(VMInstruction::Copy { dst: tmp, src: cond }, span);
+                    self.emit(
+                        VMInstruction::Copy {
+                            dst: tmp,
+                            src: cond,
+                        },
+                        span,
+                    );
                     tmp
                 } else {
                     cond

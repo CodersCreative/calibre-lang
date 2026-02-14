@@ -466,7 +466,10 @@ impl MiddleEnvironment {
                     node_type: NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(*condition)),
                         then: Box::new(Node {
-                            node_type: NodeType::Break,
+                            node_type: NodeType::Break {
+                                label: None,
+                                value: None,
+                            },
                             span: node.span,
                         }),
                         otherwise: None,
@@ -474,11 +477,74 @@ impl MiddleEnvironment {
                     span: node.span,
                 },
             ),
-            NodeType::Break => Ok(MiddleNode {
+            NodeType::Break { label, value } => Ok(MiddleNode {
                 node_type: {
                     let mut lst = Vec::new();
 
-                    if let Some(s) = self.scopes.get(scope) {
+                    let label_text = label
+                        .as_ref()
+                        .and_then(|l| self.resolve_dollar_ident_only(scope, l))
+                        .map(|t| t.text);
+
+                    let (result_target, broke_target, target_scope) = {
+                        let target_ctx = if let Some(label_text) = label_text.as_ref() {
+                            self.loop_stack
+                                .iter()
+                                .rev()
+                                .find(|ctx| ctx.label.as_deref() == Some(label_text.as_str()))
+                        } else {
+                            self.loop_stack.last()
+                        };
+                        (
+                            target_ctx.and_then(|ctx| ctx.result_target.clone()),
+                            target_ctx.and_then(|ctx| ctx.broke_target.clone()),
+                            target_ctx.map(|ctx| ctx.scope_id),
+                        )
+                    };
+
+                    let value_node = value.map(|v| self.evaluate(scope, *v));
+
+                    if let Some(result_target) = result_target {
+                        let assign = MiddleNode::new(
+                            MiddleNodeType::AssignmentExpression {
+                                identifier: Box::new(MiddleNode::new(
+                                    MiddleNodeType::Identifier(result_target.clone()),
+                                    self.current_span(),
+                                )),
+                                value: Box::new(value_node.unwrap_or(MiddleNode::new(
+                                    MiddleNodeType::Null,
+                                    self.current_span(),
+                                ))),
+                            },
+                            self.current_span(),
+                        );
+                        lst.push(assign);
+                    } else if let Some(val) = value_node.clone() {
+                        lst.push(val);
+                    }
+                    if let Some(broke_target) = broke_target {
+                        let assign = MiddleNode::new(
+                            MiddleNodeType::AssignmentExpression {
+                                identifier: Box::new(MiddleNode::new(
+                                    MiddleNodeType::Identifier(broke_target.clone()),
+                                    self.current_span(),
+                                )),
+                                value: Box::new(MiddleNode::new(
+                                    MiddleNodeType::IntLiteral(1),
+                                    self.current_span(),
+                                )),
+                            },
+                            self.current_span(),
+                        );
+                        lst.push(assign);
+                    }
+
+                    if let Some(target_scope) = target_scope {
+                        let chain_defers = self.collect_defers_until(scope, target_scope);
+                        for x in chain_defers {
+                            lst.push(self.evaluate(scope, x));
+                        }
+                    } else if let Some(s) = self.scopes.get(scope) {
                         for x in s.defers.clone() {
                             lst.push(self.evaluate(scope, x));
                         }
@@ -491,11 +557,19 @@ impl MiddleEnvironment {
                         ))
                     }
 
+                    let break_node = MiddleNode::new(
+                        MiddleNodeType::Break {
+                            label: label_text.map(Into::into),
+                            value: None,
+                        },
+                        self.current_span(),
+                    );
+
                     if lst.is_empty() {
-                        return Ok(MiddleNode::new(MiddleNodeType::Break, node.span));
+                        return Ok(MiddleNode::new(break_node.node_type, node.span));
                     }
 
-                    lst.push(MiddleNode::new(MiddleNodeType::Break, self.current_span()));
+                    lst.push(break_node);
 
                     MiddleNodeType::ScopeDeclaration {
                         body: lst,
@@ -506,11 +580,34 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::Continue => Ok(MiddleNode {
+            NodeType::Continue { label } => Ok(MiddleNode {
                 node_type: {
                     let mut lst = Vec::new();
 
-                    if let Some(s) = self.scopes.get(scope) {
+                    let label_text = label
+                        .as_ref()
+                        .and_then(|l| self.resolve_dollar_ident_only(scope, l))
+                        .map(|t| t.text);
+
+                    let continue_ctx = if let Some(label_text) = label_text.as_ref() {
+                        self.loop_stack
+                            .iter()
+                            .rev()
+                            .find(|ctx| ctx.label.as_deref() == Some(label_text.as_str()))
+                            .cloned()
+                    } else {
+                        self.loop_stack.last().cloned()
+                    };
+
+                    if let Some(ctx) = continue_ctx {
+                        let chain_defers = self.collect_defers_until(scope, ctx.scope_id);
+                        for x in chain_defers {
+                            lst.push(self.evaluate(scope, x));
+                        }
+                        if let Some(inject) = ctx.continue_inject.clone() {
+                            lst.push(self.evaluate(scope, inject));
+                        }
+                    } else if let Some(s) = self.scopes.get(scope) {
                         for x in s.defers.clone() {
                             lst.push(self.evaluate(scope, x));
                         }
@@ -523,14 +620,18 @@ impl MiddleEnvironment {
                         ))
                     }
 
+                    let cont_node = MiddleNode::new(
+                        MiddleNodeType::Continue {
+                            label: label_text.map(Into::into),
+                        },
+                        self.current_span(),
+                    );
+
                     if lst.is_empty() {
-                        return Ok(MiddleNode::new(MiddleNodeType::Continue, node.span));
+                        return Ok(MiddleNode::new(cont_node.node_type, node.span));
                     }
 
-                    lst.push(MiddleNode::new(
-                        MiddleNodeType::Continue,
-                        self.current_span(),
-                    ));
+                    lst.push(cont_node);
 
                     MiddleNodeType::ScopeDeclaration {
                         body: lst,
@@ -1062,7 +1163,11 @@ impl MiddleEnvironment {
                 loop_type,
                 body,
                 until,
-            } => self.evaluate_loop_statement(scope, node.span, *loop_type, *body, until),
+                label,
+                else_body,
+            } => self.evaluate_loop_statement(
+                scope, node.span, *loop_type, *body, until, label, else_body,
+            ),
             NodeType::IterExpression {
                 data_type,
                 map,

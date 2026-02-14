@@ -1,5 +1,5 @@
 use calibre_parser::{
-    ast::{NamedScope, Node, NodeType, PotentialDollarIdentifier},
+    ast::{LoopType, NamedScope, Node, NodeType, PotentialDollarIdentifier},
     lexer::Span,
 };
 
@@ -111,6 +111,53 @@ impl MiddleEnvironment {
                 .resolve_dollar_ident_only(scope, &named.name)
                 .unwrap()
                 .text;
+            if self.resolve_macro(scope, &name).is_none() {
+                if !named.args.is_empty() {
+                    let scope_macro = ScopeMacro {
+                        name: name.clone(),
+                        args: named.args.clone(),
+                        body: body.clone().unwrap_or_default(),
+                        create_new_scope,
+                    };
+                    self.scopes
+                        .get_mut(scope)
+                        .unwrap()
+                        .macros
+                        .insert(name.clone(), scope_macro);
+                }
+
+                let mut body_nodes = body.unwrap_or_default();
+                let last = body_nodes.pop();
+                let break_value = last.map(Box::new);
+                body_nodes.push(Node::new(
+                    self.current_span(),
+                    NodeType::Break {
+                        label: Some(named.name.clone()),
+                        value: break_value,
+                    },
+                ));
+
+                let loop_body = Node::new(
+                    self.current_span(),
+                    NodeType::ScopeDeclaration {
+                        body: Some(body_nodes),
+                        is_temp: true,
+                        create_new_scope: Some(create_new_scope),
+                        define: false,
+                        named: None,
+                    },
+                );
+
+                return self.evaluate_loop_statement(
+                    scope,
+                    span,
+                    LoopType::Loop,
+                    loop_body,
+                    None,
+                    Some(named.name),
+                    Some(Box::new(Node::new(self.current_span(), NodeType::Null))),
+                );
+            }
             let mut added = Vec::new();
 
             let scope_macro_args: Vec<(PotentialDollarIdentifier, Node)> = {

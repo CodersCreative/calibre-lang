@@ -3,7 +3,6 @@ use std::{cmp::Ordering, fmt::Debug};
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
 
 pub mod global;
-pub mod r#async;
 pub mod stdlib;
 
 pub trait NativeFunction: Send + Sync {
@@ -76,30 +75,11 @@ impl VM {
             "err",
             "some",
             "trim",
-            "str_split",
-            "str_contains",
-            "str_starts_with",
-            "str_ends_with",
             "len",
             "panic",
             "tuple",
             "discriminant",
             "min_or_zero",
-            "channel_new",
-            "channel_send",
-            "channel_get",
-            "channel_close",
-            "channel_closed",
-            "waitgroup_new",
-            "waitgroup_add",
-            "waitgroup_done",
-            "waitgroup_wait",
-            "waitgroup_count",
-            "mutex_new",
-            "mutex_get",
-            "mutex_set",
-            "mutex_with",
-            "mutex_write",
         ];
 
         let map = RuntimeValue::natives();

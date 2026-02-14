@@ -289,6 +289,13 @@ impl ParserDataType {
     pub fn contains_auto(&self) -> bool {
         self.data_type.contains_auto()
     }
+
+    pub fn verify(self) -> Self {
+        Self {
+            data_type: self.data_type.verify(),
+            span: self.span,
+        }
+    }
 }
 
 impl From<ParserFfiDataType> for ParserDataType {
@@ -320,6 +327,22 @@ impl ParserInnerType {
             Self::List(_) => true,
             Self::Ref(x, _) => x.is_list(),
             _ => false,
+        }
+    }
+
+    pub fn verify(self) -> Self {
+        match self {
+            Self::Result { ok, err } => Self::Result {
+                ok: Box::new(ok.verify()),
+                err: Box::new(err.verify()),
+            },
+            Self::Ref(x, y) => Self::Ref(Box::new(x.verify()), y),
+            Self::Ptr(x) => Self::Ptr(Box::new(x.verify())),
+            Self::Option(x) => Self::Option(Box::new(x.verify())),
+            Self::List(x) => Self::List(Box::new(x.verify())),
+            Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.verify()).collect()),
+            Self::Struct(x) => Self::from_str(&x).unwrap(),
+            ty => ty,
         }
     }
 
@@ -993,8 +1016,13 @@ impl Into<Node> for CallArg {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
-    Break,
-    Continue,
+    Break {
+        label: Option<PotentialDollarIdentifier>,
+        value: Option<Box<Node>>,
+    },
+    Continue {
+        label: Option<PotentialDollarIdentifier>,
+    },
     EmptyLine,
     Null,
     Spawn {
@@ -1135,6 +1163,8 @@ pub enum NodeType {
         loop_type: Box<LoopType>,
         body: Box<Node>,
         until: Option<Box<Node>>,
+        label: Option<PotentialDollarIdentifier>,
+        else_body: Option<Box<Node>>,
     },
     Try {
         value: Box<Node>,

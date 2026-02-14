@@ -57,11 +57,13 @@ pub fn comparison(
                     (Some(_), None) | (None, Some(_)) => false,
                     (Some(a), Some(b)) => eq_value(&a, &b).unwrap_or(false),
                 };
-                Ok(RuntimeValue::Bool(if matches!(op, ComparisonOperator::Equal) {
-                    eq
-                } else {
-                    !eq
-                }))
+                Ok(RuntimeValue::Bool(
+                    if matches!(op, ComparisonOperator::Equal) {
+                        eq
+                    } else {
+                        !eq
+                    },
+                ))
             }
             _ => Err(RuntimeError::Comparison(
                 RuntimeValue::Option(a),
@@ -245,7 +247,7 @@ impl RuntimeValue {
         handle_binop_numeric!(Mul, %, rhs, self)
     }
 
-    fn special_and(self, vm : &VM, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
+    fn special_and(self, vm: &VM, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match self {
             Self::Char(x) => {
                 let mut x = x.to_string();

@@ -127,6 +127,11 @@ async fn run_source(
         }
     };
     let program = parser.produce_ast(tokens);
+    if verbose {
+        println!("Parser - elapsed {:.2}s:", start.elapsed().as_secs());
+        println!("{}", program);
+        println!("Starting mir...");
+    }
 
     if !parser.errors.is_empty() {
         calibre_diagnostics::emit_parser_errors(path, &contents, &parser.errors);
