@@ -1,0 +1,65 @@
+// extern "c" const c_fopen = fn(str, str) -> ptr:<> from "libc" as "fopen";
+
+const main = fn() -> null => {
+  let mut dial = 50;
+
+  /*
+    let input = std::console::input("Enter line : ");
+    let line : str = trim(try input => panic());
+  */
+
+  let file = read_file("");
+  let lines = split_into_lines(move file);
+  print(&lines);
+
+  for line in lines {
+    let diff : int = handle_line(move line);
+    dial += diff;
+
+    if dial < 0 => {
+      dial = 100 + dial;
+    } else if dial >= 100 => {
+      dial -= 100;
+    }
+  }
+  
+  print(dial);
+}
+
+const handle_line = fn(line : str) -> int => {
+  let chars = try line as list:<char> => panic();
+  let mut num = "";
+
+  for i in 0..(len(chars) - 1) => num &= chars[i];
+
+  let mut num = try num as int => panic();
+
+  if chars[0] == 'L' => num *= -1;
+
+  num;
+}
+
+const read_file = fn(path : str) -> str => {
+  // TODO File Handling Library
+  // For right now lets just do a placeholder
+  "L56\nR34\nL90\nR46\nR23"
+}
+
+const split_into_lines = fn(text : str) -> list:<str> => {
+  let mut lines = list:<str>[];
+
+  let chars = try line as list:<char> => panic();
+
+  let mut line = "";
+  
+  for c in chars => {
+    if c != '\n' => {
+      line &= c;
+    } else if line != "" {
+      lines <<= line;
+      line = "";
+    }
+  }
+  
+  lines;
+}

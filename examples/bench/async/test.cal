@@ -8,18 +8,18 @@ const worker = fn(
     wg : &mut WaitGroup,
 ) => {
     defer wg.done();
-    print("worker " & id & " start");
+    print("worker " & id & " start\n");
     let mut handled = 0;
     for !jobs.closed() => {
         if let .Some : job <- jobs.get() => {
             let score = job * (id + 1);
-            print("worker " & id & " got " & job & " => " & score);
+            print("worker " & id & " got " & job & " => " & score & "\n");
             results.send(score);
             total.with(fn(x: int) -> int => x + score);
             handled = handled + 1;
         }
     }
-    print("worker " & id & " done (" & handled & " jobs)");
+    print("worker " & id & " done (" & handled & " jobs)\n");
 };
 
 const main = fn() => {
@@ -29,14 +29,14 @@ const main = fn() => {
     let mut wg: WaitGroup = WaitGroup.new();
     defer wg.wait();
 
-    print("start");
+    print("start\n");
 
-    let worker_count = 1000;
-    let total_jobs = 50000;
+    let worker_count = 8;
+    let total_jobs = 100000;
     for i in 0..worker_count => {
         wg.increment();
         spawn worker(i, &jobs, &mut results, &mut total, &mut wg);
-        print("spawned worker " & i);
+        print("spawned worker " & i & "\n");
     }
 
     for i in 1..(total_jobs + 1) => jobs.send(i);
@@ -47,11 +47,11 @@ const main = fn() => {
     for _ in 0..200 => {
         if let .Some : value <- results.get() => {
             received = received + 1;
-            print("received " & received & " => " & value);
+            print("received " & received & " => " & value & "\n");
         };
         if received >= total_jobs => break;
     }
 
     results.close();
-    print("all done, total=" & total.get());
+    print("all done, total=" & total.get() & "\n");
 };

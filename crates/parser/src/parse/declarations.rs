@@ -35,43 +35,12 @@ impl Parser {
         );
 
         let value = if self.first().token_type == TokenType::FatArrow {
-            let block = self.parse_scope_declaration(false);
-            Node::new(
-                Span::new_from_spans(open.span, block.span),
-                NodeType::FunctionDeclaration {
-                    header: FunctionHeader {
-                        generics: GenericTypes::default(),
-                        parameters: Vec::new(),
-                        return_type: ParserDataType::from(ParserInnerType::Auto(None)).into(),
-                        param_destructures: Vec::new(),
-                    },
-                    body: Box::new(block),
-                },
-            )
+            self.parse_scope_declaration(false)
+        } else if self.first().token_type == TokenType::Func {
+            let node = self.parse_function_declaration();
+            self.parse_potential_member(node)
         } else {
-            let expr = self.parse_assignment_expression();
-            let scope = Node::new(
-                Span::new_from_spans(expr.span, expr.span),
-                NodeType::ScopeDeclaration {
-                    body: Some(vec![expr]),
-                    named: None,
-                    is_temp: true,
-                    create_new_scope: Some(true),
-                    define: false,
-                },
-            );
-            Node::new(
-                Span::new_from_spans(open.span, scope.span),
-                NodeType::FunctionDeclaration {
-                    header: FunctionHeader {
-                        generics: GenericTypes::default(),
-                        parameters: Vec::new(),
-                        return_type: ParserDataType::from(ParserInnerType::Auto(None)).into(),
-                        param_destructures: Vec::new(),
-                    },
-                    body: Box::new(scope),
-                },
-            )
+            self.parse_call_member_expression()
         };
 
         Node::new(

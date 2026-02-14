@@ -6,6 +6,6 @@ fn fib(n){
     }
 }
 
-let n = 20;
+let n = 30;
 let result = fib(n);
 print(result);

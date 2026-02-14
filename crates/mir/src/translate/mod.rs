@@ -119,6 +119,31 @@ impl MiddleEnvironment {
             NodeType::Spawn { value } => {
                 let span = node.span;
                 let inner = match value.node_type {
+                    NodeType::ScopeDeclaration { .. } => {
+                        return self.evaluate_inner(
+                            scope,
+                            Node::new(
+                                node.span,
+                                NodeType::Spawn {
+                                    value: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::FunctionDeclaration {
+                                            header: FunctionHeader {
+                                                generics: GenericTypes::default(),
+                                                parameters: Vec::new(),
+                                                return_type: ParserDataType::from(
+                                                    ParserInnerType::Auto(None),
+                                                )
+                                                .into(),
+                                                param_destructures: Vec::new(),
+                                            },
+                                            body: value,
+                                        },
+                                    )),
+                                },
+                            ),
+                        );
+                    }
                     NodeType::CallExpression {
                         string_fn: _,
                         caller,
@@ -198,8 +223,7 @@ impl MiddleEnvironment {
                             self.current_span().from.line,
                             self.current_span().from.col
                         );
-                        let fn_ident: PotentialDollarIdentifier =
-                            ParserText::from(fn_name).into();
+                        let fn_ident: PotentialDollarIdentifier = ParserText::from(fn_name).into();
 
                         body.push(Node::new(
                             self.current_span(),
@@ -233,42 +257,38 @@ impl MiddleEnvironment {
                         self.evaluate(scope, scope_node)
                     }
                     NodeType::FunctionDeclaration { header, body } => {
-                        let fn_name = format!(
+                        let fn_ident: PotentialDollarIdentifier = ParserText::from(format!(
                             "__spawn_fn_{}_{}",
                             self.current_span().from.line,
                             self.current_span().from.col
-                        );
-                        let fn_ident: PotentialDollarIdentifier =
-                            ParserText::from(fn_name).into();
-
-                        let func_decl = Node::new(
-                            self.current_span(),
-                            NodeType::FunctionDeclaration { header, body },
-                        );
-
-                        let mut body_nodes = Vec::new();
-                        body_nodes.push(Node::new(
-                            self.current_span(),
-                            NodeType::VariableDeclaration {
-                                var_type: VarType::Immutable,
-                                identifier: fn_ident.clone(),
-                                data_type: PotentialNewType::DataType(ParserDataType::from(
-                                    ParserInnerType::Auto(None),
-                                )),
-                                value: Box::new(func_decl),
-                            },
-                        ));
-                        body_nodes.push(Node::new(
-                            self.current_span(),
-                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                fn_ident.into(),
-                            )),
-                        ));
+                        ))
+                        .into();
 
                         let scope_node = Node::new(
                             self.current_span(),
                             NodeType::ScopeDeclaration {
-                                body: Some(body_nodes),
+                                body: Some(vec![
+                                    Node::new(
+                                        self.current_span(),
+                                        NodeType::VariableDeclaration {
+                                            var_type: VarType::Immutable,
+                                            identifier: fn_ident.clone(),
+                                            data_type: PotentialNewType::DataType(
+                                                ParserDataType::from(ParserInnerType::Auto(None)),
+                                            ),
+                                            value: Box::new(Node::new(
+                                                self.current_span(),
+                                                NodeType::FunctionDeclaration { header, body },
+                                            )),
+                                        },
+                                    ),
+                                    Node::new(
+                                        self.current_span(),
+                                        NodeType::Identifier(
+                                            PotentialGenericTypeIdentifier::Identifier(fn_ident),
+                                        ),
+                                    ),
+                                ]),
                                 named: None,
                                 is_temp: true,
                                 create_new_scope: Some(true),

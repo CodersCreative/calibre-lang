@@ -1,47 +1,43 @@
-/* Future thread system pseudocode
-// This language feature will be heavily inspired by goroutines from go as I think it's probably the best async programming syntax
-// Firstly I need to remove the async keyword from the lexer and parser as I'm no longer going down the async/aswait route
+/* Label scopes & loops pseudocode
+const main = fn() => {
+	// Example of a simple loop that is able to return a value
+	// value's type should be able to be inferred
+	let mut value = for i in 0..10 => {
+		if i > 8 => break i;
+	} else => {
+		0;
+	};
 
-// Importing wait groups and channels into the scope;
-import (WaitGroup, Channel) from std::async;
+	// Example of a simple labelled block
+	value = => @basic_block {
+		if value > 8 => break @basic_block 100;
 
-// A non-mut reference to a channel means that you can only receive data not send it
-// But a mut reference allows you to do both
-const reader = fn (id : int, ch : &Channel:<int>, wg : &mut WaitGroup) => {
-	// wg.add(1) should also be allowed
-	wg.increment();
-	// defer return wg.done() would also work in this context
-	defer wg.done();
+		60;
+	};
 
-	for !ch.closed() => {
-		if let .Some(val) <- ch.get() => fmt"Reader {id} received {val}" |> print;
+	// This does the same thing as the previous example except it now creates a scope macro as well
+	// The previous example was just a labelled scope that couldn't be re-used as a scope macro, this one can but still manages to still allow for scope breaking 
+	value = => @basic_block[$val = 100, $other = 60] {
+		if value > 8 => break @basic_block $val;
+
+		$other;
+	};
+
+	// reusing the scope macro from before with different values
+	value = => @basic_block[$val = 800, $other = 90];
+	
+	// This showcases how labelled loops can work allowing you to break/continue an outer loop from an inner one 
+	value = for x in 0..100 => @outer{
+		for y in 0..100 => {
+			if y > 40 => continue @outer;
+
+			if x == y => break @outer 50;
+		}else {
+			60;
+		}
+	} else => {
+		70;	
 	}
-
-	fmt"Reader {id} closing" |> print;
-}
-
-const main = fn () => {
-	// Use of in built generics syntax to avoid the syntax feeling disconnected from the language
-	let mut ch : Channel:<int> = Channel:<int>.new();
-	let mut wg : WaitGroup = WaitGroup.new();
-	
-	// The following code would not be run in sync
-	// Also my language will allow scopes to just be used in this syntax, allowing you to not have to create a new function call
-	spawn => print("1");
-	spawn => print("2");
-	spawn => print("3");
-	
-	for i in 0..100 => spawn reader(i, &ch, &mut wg);
-
-	for i in 0..10000 => {
-		// To send data into a channel its just a function call :
-		ch.send(90);
-		// Pipes are also valid
-		// 90 |> ch.send	
-	}
-	
-	ch.close();
-	wg.wait();
 }
 */
 
