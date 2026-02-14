@@ -198,6 +198,20 @@ impl Formatter {
                 self.format(&value)
             ),
             NodeType::Spawn { value } => format!("spawn {}", self.format(value)),
+            NodeType::Use { identifiers, value } => {
+                if identifiers.is_empty() {
+                    format!("use <- {}", self.format(value))
+                } else {
+                    let mut names = String::new();
+                    for (i, ident) in identifiers.iter().enumerate() {
+                        if i > 0 {
+                            names.push_str(", ");
+                        }
+                        names.push_str(&ident.to_string());
+                    }
+                    format!("use {} <- {}", names, self.format(value))
+                }
+            }
             NodeType::SelectStatement { arms } => {
                 let mut txt = String::from("select {\n");
                 for arm in arms {

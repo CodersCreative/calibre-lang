@@ -20,6 +20,7 @@ impl Parser {
             TokenType::Import => self.parse_import_declaration(),
             TokenType::Type => self.parse_type_decaration(),
             TokenType::Spawn => self.parse_spawn_statement(),
+            TokenType::Use => self.parse_use_declaration(),
             TokenType::Select => self.parse_select_declaration(),
             TokenType::Extern => self.parse_extern_function_declaration(),
             _ => self.parse_assignment_expression(),
@@ -46,6 +47,39 @@ impl Parser {
         Node::new(
             Span::new_from_spans(open.span, value.span),
             NodeType::Spawn {
+                value: Box::new(value),
+            },
+        )
+    }
+
+    pub fn parse_use_declaration(&mut self) -> Node {
+        let open = self.expect_eat(
+            &TokenType::Use,
+            SyntaxErr::ExpectedKeyword(String::from("use")),
+        );
+
+        let mut identifiers = Vec::new();
+        if self.first().token_type != TokenType::LeftArrow {
+            loop {
+                identifiers.push(self.expect_potential_dollar_ident());
+                if self.first().token_type == TokenType::Comma {
+                    let _ = self.eat();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        let _ = self.expect_eat(
+            &TokenType::LeftArrow,
+            SyntaxErr::ExpectedKeyword(String::from("<-")),
+        );
+        let value = self.parse_assignment_expression();
+
+        Node::new(
+            Span::new_from_spans(open.span, value.span),
+            NodeType::Use {
+                identifiers,
                 value: Box::new(value),
             },
         )

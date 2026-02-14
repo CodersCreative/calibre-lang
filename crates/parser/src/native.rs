@@ -95,6 +95,56 @@ impl ParserDataType {
                 ParserInnerType::Option(Box::new(ParserDataType::from(ParserInnerType::Str))),
             ),
             ("regex.replace", ParserInnerType::Str),
+            (
+                "collections.hashmap_new",
+                ParserInnerType::StructWithGenerics {
+                    identifier: String::from("HashMap"),
+                    generic_types: vec![
+                        ParserDataType::from(ParserInnerType::Dynamic),
+                        ParserDataType::from(ParserInnerType::Dynamic),
+                    ],
+                },
+            ),
+            ("collections.hashmap_set", ParserInnerType::Null),
+            (
+                "collections.hashmap_get",
+                ParserInnerType::Option(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
+            ),
+            (
+                "collections.hashmap_remove",
+                ParserInnerType::Option(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
+            ),
+            ("collections.hashmap_contains", ParserInnerType::Bool),
+            ("collections.hashmap_len", ParserInnerType::Int),
+            (
+                "collections.hashmap_keys",
+                ParserInnerType::List(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
+            ),
+            (
+                "collections.hashmap_values",
+                ParserInnerType::List(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
+            ),
+            (
+                "collections.hashmap_entries",
+                ParserInnerType::List(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
+            ),
+            ("collections.hashmap_clear", ParserInnerType::Null),
+            (
+                "collections.hashset_new",
+                ParserInnerType::StructWithGenerics {
+                    identifier: String::from("HashSet"),
+                    generic_types: vec![ParserDataType::from(ParserInnerType::Dynamic)],
+                },
+            ),
+            ("collections.hashset_add", ParserInnerType::Bool),
+            ("collections.hashset_remove", ParserInnerType::Bool),
+            ("collections.hashset_contains", ParserInnerType::Bool),
+            ("collections.hashset_len", ParserInnerType::Int),
+            (
+                "collections.hashset_values",
+                ParserInnerType::List(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
+            ),
+            ("collections.hashset_clear", ParserInnerType::Null),
             ("net.http_request_raw", ParserInnerType::Str),
             ("http_request_raw", ParserInnerType::Str),
             (

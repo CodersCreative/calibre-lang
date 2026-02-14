@@ -1,5 +1,8 @@
 use calibre_parser::{
-    ast::{LoopType, NamedScope, Node, NodeType, PotentialDollarIdentifier},
+    ast::{
+        CallArg, FunctionHeader, LoopType, NamedScope, Node, NodeType, ParserDataType,
+        ParserInnerType, PotentialDollarIdentifier, PotentialNewType,
+    },
     lexer::Span,
 };
 
@@ -10,6 +13,106 @@ use crate::{
 };
 
 impl MiddleEnvironment {
+    fn desugar_use_chain(&mut self, mut stmts: Vec<Node>) -> Vec<Node> {
+        let Some(pos) = stmts
+            .iter()
+            .position(|n| matches!(n.node_type, NodeType::Use { .. }))
+        else {
+            return stmts;
+        };
+
+        let mut prefix = stmts.drain(..pos).collect::<Vec<Node>>();
+        let use_node = stmts.remove(0);
+        let rest = stmts;
+
+        let (identifiers, value) = match use_node.node_type {
+            NodeType::Use { identifiers, value } => (identifiers, *value),
+            other => {
+                prefix.push(Node::new(use_node.span, other));
+                return prefix;
+            }
+        };
+
+        let mut rest = if rest.is_empty() {
+            vec![Node::new(use_node.span, NodeType::Null)]
+        } else {
+            self.desugar_use_chain(rest)
+        };
+
+        let body = Node::new(
+            use_node.span,
+            NodeType::ScopeDeclaration {
+                body: Some(rest),
+                named: None,
+                is_temp: true,
+                create_new_scope: Some(true),
+                define: false,
+            },
+        );
+
+        let params = identifiers
+            .iter()
+            .map(|id| {
+                (
+                    id.clone(),
+                    PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(None))),
+                )
+            })
+            .collect();
+
+        let header = FunctionHeader {
+            generics: calibre_parser::ast::GenericTypes(Vec::new()),
+            parameters: params,
+            return_type: PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(
+                None,
+            ))),
+            param_destructures: Vec::new(),
+        };
+
+        let callback = Node::new(
+            use_node.span,
+            NodeType::FunctionDeclaration {
+                header,
+                body: Box::new(body),
+            },
+        );
+
+        let call_node = match value.node_type {
+            NodeType::CallExpression {
+                caller,
+                mut args,
+                reverse_args,
+                string_fn,
+                generic_types,
+            } => {
+                args.push(CallArg::Value(callback));
+                Node::new(
+                    use_node.span,
+                    NodeType::CallExpression {
+                        caller,
+                        args,
+                        reverse_args,
+                        string_fn,
+                        generic_types,
+                    },
+                )
+            }
+            other => Node::new(
+                use_node.span,
+                NodeType::CallExpression {
+                    caller: Box::new(Node::new(use_node.span, other)),
+                    args: vec![CallArg::Value(callback)],
+                    reverse_args: Vec::new(),
+                    string_fn: None,
+                    generic_types: Vec::new(),
+                },
+            ),
+        };
+
+        prefix.push(call_node);
+        prefix
+    }
+
     pub fn evaluate_scope_alias(
         &mut self,
         scope: &u64,
@@ -202,6 +305,7 @@ impl MiddleEnvironment {
         }
 
         if let Some(mut body) = body {
+            body = self.desugar_use_chain(body);
             for stmt in body.iter() {
                 if let NodeType::VariableDeclaration {
                     var_type,

@@ -1,0 +1,43 @@
+import * from std::collections;
+import * from std::console;
+
+const main = fn() => {
+	let mut map = HashMap.new(
+		("a", 1),
+		("b", 2),
+		("c", 3)
+	);
+
+	print("len => " & map.len());
+	print("has b => " & map.contains("b"));
+	print("b => " & map.get_or("b", 0));
+
+	map.set("d", 4);
+	let removed = map.remove("a");
+	match removed {
+		.Some : v => print("removed a => " & v),
+		.None => print("removed a => none"),
+	};
+
+	let keys = map.keys();
+	let values = map.values();
+	print("keys len => " & len(keys));
+	print("values len => " & len(values));
+	for i in 0..len(keys) => print("key => " & keys[i]);
+
+	let entries = map.entries();
+	for i in 0..len(entries) => {
+		let pair = entries[i];
+		print("entry => " & pair.0 & ":" & pair.1);
+	};
+
+	let mut set = HashSet.new("red", "green", "blue", "red");
+	print("set len => " & set.len());
+	print("contains green => " & set.contains("green"));
+	print("add green => " & set.add("green"));
+	print("remove blue => " & set.remove("blue"));
+	print("contains blue => " & set.contains("blue"));
+
+	let vals = set.values();
+	print("set values len => " & len(vals));
+};

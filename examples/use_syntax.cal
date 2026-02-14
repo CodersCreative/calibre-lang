@@ -1,0 +1,12 @@
+import * from std::console;
+
+const with_prefix = fn(prefix: str, op: fn(str) -> null) => {
+    let val = prefix & "-calibre";
+    op(val);
+};
+
+const main = fn() => {
+    use value <- with_prefix("id");
+    print("value => " & value);
+    print("done");
+};

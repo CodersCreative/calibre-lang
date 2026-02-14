@@ -1159,6 +1159,9 @@ impl MiddleEnvironment {
                     },
                 )
             }
+            NodeType::Use { .. } => Err(MiddleErr::Scope(String::from(
+                "use statements are only valid inside a scope",
+            ))),
             NodeType::LoopDeclaration {
                 loop_type,
                 body,

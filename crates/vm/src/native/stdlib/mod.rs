@@ -6,6 +6,7 @@ pub mod str;
 pub mod crypto;
 pub mod regex;
 pub mod net;
+pub mod collections;
 
 impl VM {
     pub fn setup_stdlib(&mut self) {
@@ -37,6 +38,29 @@ impl VM {
             self,
             "str",
             &["split", "contains", "starts_with", "ends_with"],
+        );
+        setup_scope(
+            self,
+            "collections",
+            &[
+                "hashmap_new",
+                "hashmap_set",
+                "hashmap_get",
+                "hashmap_remove",
+                "hashmap_contains",
+                "hashmap_len",
+                "hashmap_keys",
+                "hashmap_values",
+                "hashmap_entries",
+                "hashmap_clear",
+                "hashset_new",
+                "hashset_add",
+                "hashset_remove",
+                "hashset_contains",
+                "hashset_len",
+                "hashset_values",
+                "hashset_clear",
+            ],
         );
         setup_scope(self, "crypto", &["sha256", "sha512", "blake3"]);
         setup_scope(self, "regex", &["is_match", "find", "replace"]);

@@ -1028,6 +1028,10 @@ pub enum NodeType {
     Spawn {
         value: Box<Node>,
     },
+    Use {
+        identifiers: Vec<PotentialDollarIdentifier>,
+        value: Box<Node>,
+    },
     SelectStatement {
         arms: Vec<SelectArm>,
     },

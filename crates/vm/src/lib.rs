@@ -496,6 +496,14 @@ impl VM {
                     self.drop_runtime_value_inner(value, seen, seen_regs);
                 }
             }
+            RuntimeValue::HashMap(map) => {
+                if let Ok(guard) = map.lock() {
+                    for (_, value) in guard.iter() {
+                        self.drop_runtime_value_inner(value.clone(), seen, seen_regs);
+                    }
+                }
+            }
+            RuntimeValue::HashSet(_) => {}
             RuntimeValue::Option(Some(x)) => {
                 self.drop_runtime_value_inner(x.as_ref().clone(), seen, seen_regs);
             }

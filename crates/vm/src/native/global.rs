@@ -190,6 +190,8 @@ impl NativeFunction for Len {
                 RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as i64,
                 RuntimeValue::Range(_, x) => x,
                 RuntimeValue::Str(x) => x.len() as i64,
+                RuntimeValue::HashMap(map) => map.lock().map(|m| m.len() as i64).unwrap_or(0),
+                RuntimeValue::HashSet(set) => set.lock().map(|s| s.len() as i64).unwrap_or(0),
                 RuntimeValue::Int(x) => x,
                 RuntimeValue::Float(x) => x as i64,
                 other => return Err(RuntimeError::UnexpectedType(other)),

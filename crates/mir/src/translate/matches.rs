@@ -132,6 +132,129 @@ impl MiddleEnvironment {
                                 otherwise: None,
                             },
                         )),
+                        MatchArmType::Enum {
+                            value: val,
+                            var_type,
+                            name,
+                            destructure,
+                        } => {
+                            let val = self.resolve_dollar_ident_only(scope, &val).unwrap();
+                            let index: i64 = match val.text.trim() {
+                                "Ok" | "Some" => 0,
+                                "Err" | "None" => 1,
+                                _ => {
+                                    return Err(MiddleErr::At(
+                                        val.span,
+                                        Box::new(MiddleErr::CantMatch(
+                                            ParserDataType::from(ParserInnerType::Auto(None)),
+                                        )),
+                                    ));
+                                }
+                            };
+
+                            ifs.push(Node::new(
+                                self.current_span(),
+                                NodeType::IfStatement {
+                                    comparison: Box::new(IfComparisonType::If(Node::new(
+                                        self.current_span(),
+                                        NodeType::BooleanExpression {
+                                            left: Box::new(Node::new(
+                                                self.current_span(),
+                                                NodeType::ComparisonExpression {
+                                                    left: Box::new(Node::new(
+                                                        self.current_span(),
+                                                        NodeType::CallExpression {
+                                                            string_fn: None,
+                                                            generic_types: Vec::new(),
+                                                            caller: Box::new(Node::new(
+                                                                self.current_span(),
+                                                                NodeType::Identifier(
+                                                                    ParserText::from(
+                                                                        String::from("discriminant"),
+                                                                    )
+                                                                    .into(),
+                                                                ),
+                                                            )),
+                                                            args: vec![CallArg::Value(value.clone())],
+                                                            reverse_args: Vec::new(),
+                                                        },
+                                                    )),
+                                                    right: Box::new(Node::new(
+                                                        self.current_span(),
+                                                        NodeType::IntLiteral(index.to_string()),
+                                                    )),
+                                                    operator: ComparisonOperator::Equal,
+                                                },
+                                            )),
+                                            right: Box::new(conditionals),
+                                            operator: BooleanOperator::And,
+                                        },
+                                    ))),
+                                    then: {
+                                        Box::new(if let Some(name) = name {
+                                            let mut body_nodes = Vec::new();
+                                            body_nodes.push(Node::new(
+                                                self.current_span(),
+                                                NodeType::VariableDeclaration {
+                                                    var_type: var_type.clone(),
+                                                    identifier: name.clone(),
+                                                    value: Box::new(Node::new(
+                                                        self.current_span(),
+                                                        NodeType::MemberExpression {
+                                                            path: vec![
+                                                                (value, false),
+                                                                (
+                                                                    Node::new(
+                                                                        self.current_span(),
+                                                                        NodeType::Identifier(
+                                                                            ParserText::from(
+                                                                                String::from("next"),
+                                                                            )
+                                                                            .into(),
+                                                                        ),
+                                                                    ),
+                                                                    false,
+                                                                ),
+                                                            ],
+                                                        },
+                                                    )),
+                                                    data_type: PotentialNewType::DataType(
+                                                        ParserDataType::from(ParserInnerType::Auto(
+                                                            None,
+                                                        )),
+                                                    ),
+                                                },
+                                            ));
+
+                                            if let Some(pattern) = destructure {
+                                                body_nodes.extend(self.emit_destructure_statements(
+                                                    &name,
+                                                    &pattern,
+                                                    self.current_span(),
+                                                    true,
+                                                ));
+                                            }
+
+                                            body_nodes.push(*pattern.2);
+
+                                            Node::new(
+                                                self.current_span(),
+                                                NodeType::ScopeDeclaration {
+                                                    body: Some(body_nodes),
+                                                    is_temp: true,
+                                                    create_new_scope: Some(true),
+                                                    named: None,
+                                                    define: false,
+                                                },
+                                            )
+                                        } else {
+                                            *pattern.2
+                                        })
+                                    },
+                                    otherwise: None,
+                                },
+                            ));
+                        }
                         _ => unreachable!(),
                     }
                 }

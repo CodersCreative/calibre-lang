@@ -1,5 +1,6 @@
 import * from std::net;
 import * from std::thread;
+import * from std::console;
 
 const main = fn() => {
 	let listener = TcpListener.listen("127.0.0.1", 41001);
@@ -16,7 +17,7 @@ const main = fn() => {
 	let stream = listener.accept();
 	print("server accepted connection");
 	let body = "hello from calibre http server";
-    let resp = "HTTP/1.1 200 OK\nContent-Type: text/plain\nConnection: close\n" & body;
+    let resp = "HTTP/1.1 200 OK\nContent-Type: text/plain\nConnection: close\n\n" & body;
     let _ = stream.write(resp);
 	print("server sent => " & body);
 

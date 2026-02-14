@@ -36,6 +36,41 @@ pub struct GcVec(pub Vec<RuntimeValue>);
 #[derive(Debug, Clone)]
 pub struct GcMap(pub ObjectMap<RuntimeValue>);
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum HashKey {
+    Int(i64),
+    UInt(u64),
+    Bool(bool),
+    Char(char),
+    Str(String),
+}
+
+impl TryFrom<RuntimeValue> for HashKey {
+    type Error = RuntimeError;
+    fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
+        match value {
+            RuntimeValue::Int(x) => Ok(Self::Int(x)),
+            RuntimeValue::UInt(x) => Ok(Self::UInt(x)),
+            RuntimeValue::Bool(x) => Ok(Self::Bool(x)),
+            RuntimeValue::Char(x) => Ok(Self::Char(x)),
+            RuntimeValue::Str(x) => Ok(Self::Str(x)),
+            other => Err(RuntimeError::UnexpectedType(other)),
+        }
+    }
+}
+
+impl From<HashKey> for RuntimeValue {
+    fn from(value: HashKey) -> Self {
+        match value {
+            HashKey::Int(x) => RuntimeValue::Int(x),
+            HashKey::UInt(x) => RuntimeValue::UInt(x),
+            HashKey::Bool(x) => RuntimeValue::Bool(x),
+            HashKey::Char(x) => RuntimeValue::Char(x),
+            HashKey::Str(x) => RuntimeValue::Str(x),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ChannelInner {
     pub queue: Mutex<VecDeque<RuntimeValue>>,
@@ -188,6 +223,8 @@ pub enum RuntimeValue {
     WaitGroup(Arc<WaitGroupInner>),
     Mutex(Arc<MutexInner>),
     MutexGuard(Arc<MutexGuardInner>),
+    HashMap(Arc<Mutex<FxHashMap<HashKey, RuntimeValue>>>),
+    HashSet(Arc<Mutex<rustc_hash::FxHashSet<HashKey>>>),
     TcpStream(Arc<Mutex<TcpStream>>),
     TcpListener(Arc<TcpListener>),
     NativeFunction(Arc<dyn NativeFunction>),
@@ -221,6 +258,15 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
                 guard.get_clone().accept(visitor)
             }
             RuntimeValue::MutexGuard(guard) => guard.get_clone().accept(visitor),
+            RuntimeValue::HashMap(map) => {
+                if let Ok(guard) = map.lock() {
+                    for (_, value) in guard.iter() {
+                        value.accept(visitor)?;
+                    }
+                }
+                Ok(())
+            }
+            RuntimeValue::HashSet(_) => Ok(()),
             RuntimeValue::TcpStream(_) => Ok(()),
             RuntimeValue::TcpListener(_) => Ok(()),
             RuntimeValue::Function { captures, .. } => {
@@ -329,6 +375,38 @@ impl RuntimeValue {
             ("regex.is_match", Arc::new(stdlib::regex::IsMatchFn)),
             ("regex.find", Arc::new(stdlib::regex::FindFn)),
             ("regex.replace", Arc::new(stdlib::regex::ReplaceFn)),
+            ("collections.hashmap_new", Arc::new(stdlib::collections::HashMapNew)),
+            ("collections.hashmap_set", Arc::new(stdlib::collections::HashMapSet)),
+            ("collections.hashmap_get", Arc::new(stdlib::collections::HashMapGet)),
+            (
+                "collections.hashmap_remove",
+                Arc::new(stdlib::collections::HashMapRemove),
+            ),
+            (
+                "collections.hashmap_contains",
+                Arc::new(stdlib::collections::HashMapContains),
+            ),
+            ("collections.hashmap_len", Arc::new(stdlib::collections::HashMapLen)),
+            ("collections.hashmap_keys", Arc::new(stdlib::collections::HashMapKeys)),
+            ("collections.hashmap_values", Arc::new(stdlib::collections::HashMapValues)),
+            (
+                "collections.hashmap_entries",
+                Arc::new(stdlib::collections::HashMapEntries),
+            ),
+            ("collections.hashmap_clear", Arc::new(stdlib::collections::HashMapClear)),
+            ("collections.hashset_new", Arc::new(stdlib::collections::HashSetNew)),
+            ("collections.hashset_add", Arc::new(stdlib::collections::HashSetAdd)),
+            (
+                "collections.hashset_remove",
+                Arc::new(stdlib::collections::HashSetRemove),
+            ),
+            (
+                "collections.hashset_contains",
+                Arc::new(stdlib::collections::HashSetContains),
+            ),
+            ("collections.hashset_len", Arc::new(stdlib::collections::HashSetLen)),
+            ("collections.hashset_values", Arc::new(stdlib::collections::HashSetValues)),
+            ("collections.hashset_clear", Arc::new(stdlib::collections::HashSetClear)),
             ("net.tcp_connect", Arc::new(stdlib::net::TcpConnect)),
             ("net.tcp_listen", Arc::new(stdlib::net::TcpListen)),
             ("net.tcp_accept", Arc::new(stdlib::net::TcpAccept)),
@@ -422,6 +500,28 @@ impl RuntimeValue {
             Self::WaitGroup(_) => String::from("WaitGroup"),
             Self::Mutex(_) => String::from("Mutex"),
             Self::MutexGuard(_) => String::from("MutexGuard"),
+            Self::HashMap(map) => {
+                if let Ok(guard) = map.lock() {
+                    let mut parts = Vec::new();
+                    for (k, v) in guard.iter() {
+                        parts.push(format!("{} : {}", RuntimeValue::from(k.clone()).display(vm), v.display(vm)));
+                    }
+                    format!("HashMap {{ {} }}", parts.join(", "))
+                } else {
+                    String::from("HashMap")
+                }
+            }
+            Self::HashSet(set) => {
+                if let Ok(guard) = set.lock() {
+                    let mut parts = Vec::new();
+                    for k in guard.iter() {
+                        parts.push(RuntimeValue::from(k.clone()).display(vm));
+                    }
+                    format!("HashSet [{}]", parts.join(", "))
+                } else {
+                    String::from("HashSet")
+                }
+            }
             Self::TcpStream(_) => String::from("TcpStream"),
             Self::TcpListener(_) => String::from("TcpListener"),
             Self::List(x) => {
@@ -524,6 +624,8 @@ impl Display for RuntimeValue {
             Self::WaitGroup(_) => write!(f, "WaitGroup"),
             Self::Mutex(_) => write!(f, "Mutex"),
             Self::MutexGuard(_) => write!(f, "MutexGuard"),
+            Self::HashMap(_) => write!(f, "HashMap"),
+            Self::HashSet(_) => write!(f, "HashSet"),
             Self::TcpStream(_) => write!(f, "TcpStream"),
             Self::TcpListener(_) => write!(f, "TcpListener"),
             Self::Str(x) => write!(f, "{}", x),
@@ -611,6 +713,24 @@ impl VM {
                 RuntimeValue::Result(Err(data)) => {
                     let inner_val = transform(env, data.as_ref().clone());
                     RuntimeValue::Result(Err(Gc::new(inner_val)))
+                }
+                RuntimeValue::HashMap(map) => {
+                    let mut new_map = FxHashMap::default();
+                    if let Ok(guard) = map.lock() {
+                        for (k, v) in guard.iter() {
+                            new_map.insert(k.clone(), transform(env, v.clone()));
+                        }
+                    }
+                    RuntimeValue::HashMap(Arc::new(Mutex::new(new_map)))
+                }
+                RuntimeValue::HashSet(set) => {
+                    let mut new_set = rustc_hash::FxHashSet::default();
+                    if let Ok(guard) = set.lock() {
+                        for k in guard.iter() {
+                            new_set.insert(k.clone());
+                        }
+                    }
+                    RuntimeValue::HashSet(Arc::new(Mutex::new(new_set)))
                 }
                 other => other,
             }
