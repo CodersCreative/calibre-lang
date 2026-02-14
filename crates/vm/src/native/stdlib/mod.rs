@@ -3,6 +3,9 @@ use rustc_hash::FxHashMap;
 
 pub mod r#async;
 pub mod str;
+pub mod crypto;
+pub mod regex;
+pub mod net;
 
 impl VM {
     pub fn setup_stdlib(&mut self) {
@@ -13,6 +16,8 @@ impl VM {
                 "channel_new",
                 "channel_send",
                 "channel_get",
+                "channel_try_get",
+                "channel_try_send",
                 "channel_close",
                 "channel_closed",
                 "waitgroup_new",
@@ -32,6 +37,20 @@ impl VM {
             self,
             "str",
             &["split", "contains", "starts_with", "ends_with"],
+        );
+        setup_scope(self, "crypto", &["sha256", "sha512", "blake3"]);
+        setup_scope(self, "regex", &["is_match", "find", "replace"]);
+        setup_scope(
+            self,
+            "net",
+            &[
+                "tcp_connect",
+                "tcp_listen",
+                "tcp_accept",
+                "tcp_read",
+                "tcp_write",
+                "tcp_close",
+            ],
         );
     }
 }

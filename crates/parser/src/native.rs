@@ -63,6 +63,11 @@ impl ParserDataType {
                 "async.channel_get",
                 ParserInnerType::Option(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
             ),
+            (
+                "async.channel_try_get",
+                ParserInnerType::Option(Box::new(ParserDataType::from(ParserInnerType::Dynamic))),
+            ),
+            ("async.channel_try_send", ParserInnerType::Bool),
             ("async.channel_close", ParserInnerType::Null),
             ("async.channel_closed", ParserInnerType::Bool),
             ("async.waitgroup_new", ParserInnerType::Dynamic),
@@ -81,6 +86,46 @@ impl ParserDataType {
                     RefMutability::MutRef,
                 ),
             ),
+            ("crypto.sha256", ParserInnerType::Str),
+            ("crypto.sha512", ParserInnerType::Str),
+            ("crypto.blake3", ParserInnerType::Str),
+            ("regex.is_match", ParserInnerType::Bool),
+            (
+                "regex.find",
+                ParserInnerType::Option(Box::new(ParserDataType::from(ParserInnerType::Str))),
+            ),
+            ("regex.replace", ParserInnerType::Str),
+            ("net.http_request_raw", ParserInnerType::Str),
+            ("http_request_raw", ParserInnerType::Str),
+            (
+                "net.http_request_try",
+                ParserInnerType::Result {
+                    err: Box::new(ParserDataType::from(ParserInnerType::Str)),
+                    ok: Box::new(ParserDataType::from(ParserInnerType::Str)),
+                },
+            ),
+            (
+                "http_request_try",
+                ParserInnerType::Result {
+                    err: Box::new(ParserDataType::from(ParserInnerType::Str)),
+                    ok: Box::new(ParserDataType::from(ParserInnerType::Str)),
+                },
+            ),
+            (
+                "net.tcp_connect",
+                ParserInnerType::Struct(String::from("TcpStream")),
+            ),
+            (
+                "net.tcp_listen",
+                ParserInnerType::Struct(String::from("TcpListener")),
+            ),
+            (
+                "net.tcp_accept",
+                ParserInnerType::Struct(String::from("TcpStream")),
+            ),
+            ("net.tcp_read", ParserInnerType::Str),
+            ("net.tcp_write", ParserInnerType::Int),
+            ("net.tcp_close", ParserInnerType::Null),
         ];
 
         let mut map = FxHashMap::default();

@@ -66,6 +66,8 @@ impl MiddleEnvironment {
             "tuple",
             "discriminant",
             "min_or_zero",
+            "http_request_raw",
+            "http_request_try",
         ];
 
         let map = ParserDataType::natives();
@@ -120,6 +122,8 @@ impl MiddleEnvironment {
                 "channel_new",
                 "channel_send",
                 "channel_get",
+                "channel_try_get",
+                "channel_try_send",
                 "channel_close",
                 "channel_closed",
                 "waitgroup_new",
@@ -143,6 +147,22 @@ impl MiddleEnvironment {
             &["split", "contains", "starts_with", "ends_with"],
         );
         self.setup_std_module(scope, "range", &[]);
+        self.setup_std_module(scope, "crypto", &["sha256", "sha512", "blake3"]);
+        self.setup_std_module(scope, "regex", &["is_match", "find", "replace"]);
+        self.setup_std_module(
+            scope,
+            "net",
+            &[
+                "tcp_connect",
+                "tcp_listen",
+                "tcp_accept",
+                "tcp_read",
+                "tcp_write",
+                "tcp_close",
+                "http_request_raw",
+                "http_request_try",
+            ],
+        );
         self.setup_std_module(scope, "option", &[]);
         self.setup_std_module(scope, "result", &[]);
     }

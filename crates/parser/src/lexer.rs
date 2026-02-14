@@ -145,6 +145,7 @@ pub enum TokenType {
     Defer,
     Extern,
     Spawn,
+    Select,
 }
 
 pub fn keywords() -> HashMap<String, TokenType> {
@@ -183,6 +184,7 @@ pub fn keywords() -> HashMap<String, TokenType> {
         (String::from("from"), TokenType::From),
         (String::from("type"), TokenType::Type),
         (String::from("extern"), TokenType::Extern),
+        (String::from("select"), TokenType::Select),
         (String::from("spawn"), TokenType::Spawn),
     ])
 }

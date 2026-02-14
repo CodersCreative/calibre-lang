@@ -325,6 +325,34 @@ impl MiddleEnvironment {
                             );
                         }
 
+                        if let NodeType::Identifier(second) = &caller.node_type {
+                            let name = second.to_string();
+                            if self.resolve_str(scope, &name).is_some() {
+                                let self_arg: Node = node.into();
+                                args.insert(0, CallArg::Value(self_arg));
+                                return self.evaluate_inner(
+                                    scope,
+                                    Node::new(
+                                        self.current_span(),
+                                        NodeType::CallExpression {
+                                            string_fn: None,
+                                            caller: Box::new(Node::new(
+                                                self.current_span(),
+                                                NodeType::Identifier(
+                                                    PotentialGenericTypeIdentifier::Identifier(
+                                                        ParserText::from(name).into(),
+                                                    ),
+                                                ),
+                                            )),
+                                            generic_types,
+                                            args,
+                                            reverse_args,
+                                        },
+                                    ),
+                                );
+                            }
+                        }
+
                         self.evaluate_inner(
                             scope,
                             Node::new(

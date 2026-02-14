@@ -44,11 +44,16 @@ const main = fn() => {
     jobs.close();
 
     let mut received = 0;
-    for _ in 0..200 => {
-        if let .Some : value <- results.get() => {
-            received = received + 1;
-            print("received " & received & " => " & value);
-        };
+    for => {
+        select {
+            value <- results => {
+                received = received + 1;
+                print("received " & received & " => " & value);
+            },
+            _ => {
+                if results.closed() && received >= total_jobs => break;
+            },
+        }
         if received >= total_jobs => break;
     }
 

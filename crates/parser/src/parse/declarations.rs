@@ -20,6 +20,7 @@ impl Parser {
             TokenType::Import => self.parse_import_declaration(),
             TokenType::Type => self.parse_type_decaration(),
             TokenType::Spawn => self.parse_spawn_statement(),
+            TokenType::Select => self.parse_select_declaration(),
             TokenType::Extern => self.parse_extern_function_declaration(),
             _ => self.parse_assignment_expression(),
         };
@@ -47,6 +48,72 @@ impl Parser {
             NodeType::Spawn {
                 value: Box::new(value),
             },
+        )
+    }
+
+    pub fn parse_select_declaration(&mut self) -> Node {
+        let open = self.expect_eat(
+            &TokenType::Select,
+            SyntaxErr::ExpectedKeyword(String::from("select")),
+        );
+
+        let _ = self.expect_eat(
+            &TokenType::Open(Bracket::Curly),
+            SyntaxErr::ExpectedOpeningBracket(Bracket::Curly),
+        );
+
+        let mut arms = Vec::new();
+
+        while self.first().token_type != TokenType::Close(Bracket::Curly) && !self.is_eof() {
+            let (kind, left, right) = if self.first().token_type == TokenType::Identifier
+                && self.first().value == "_"
+            {
+                let _ = self.eat();
+                (crate::ast::SelectArmKind::Default, None, None)
+            } else {
+                let left = self.parse_statement();
+                if self.first().token_type == TokenType::LeftArrow {
+                    let _ = self.eat();
+                    let right = self.parse_statement();
+                    (crate::ast::SelectArmKind::Recv, Some(left), Some(right))
+                } else if self.first().token_type == TokenType::Arrow {
+                    let _ = self.eat();
+                    let right = self.parse_statement();
+                    (crate::ast::SelectArmKind::Send, Some(left), Some(right))
+                } else {
+                    self.add_err(SyntaxErr::ExpectedToken(TokenType::LeftArrow));
+                    (crate::ast::SelectArmKind::Default, None, None)
+                }
+            };
+
+            let body = if self.first().token_type == TokenType::FatArrow {
+                self.parse_scope_declaration(false)
+            } else {
+                self.add_err(SyntaxErr::ExpectedToken(TokenType::FatArrow));
+                self.parse_statement()
+            };
+            if self.first().token_type == TokenType::Comma {
+                let _ = self.eat();
+            } else {
+                let _ = self.parse_delimited();
+            }
+
+            arms.push(crate::ast::SelectArm {
+                kind,
+                left,
+                right,
+                body,
+            });
+        }
+
+        let close = self.expect_eat(
+            &TokenType::Close(Bracket::Curly),
+            SyntaxErr::ExpectedClosingBracket(Bracket::Curly),
+        );
+
+        Node::new(
+            Span::new_from_spans(open.span, close.span),
+            NodeType::SelectStatement { arms },
         )
     }
 

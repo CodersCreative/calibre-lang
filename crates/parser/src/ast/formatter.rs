@@ -7,7 +7,7 @@ use crate::{
     ast::{
         CallArg, DestructurePattern, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node,
         NodeType, ObjectType, Overload, ParserInnerType, PipeSegment, PotentialDollarIdentifier,
-        PotentialFfiDataType, PotentialNewType, TypeDefType, VarType,
+        PotentialFfiDataType, PotentialNewType, SelectArmKind, TypeDefType, VarType,
     },
     lexer::{Span, Token, TokenType, Tokenizer},
 };
@@ -198,6 +198,39 @@ impl Formatter {
                 self.format(&value)
             ),
             NodeType::Spawn { value } => format!("spawn {}", self.format(value)),
+            NodeType::SelectStatement { arms } => {
+                let mut txt = String::from("select {\n");
+                for arm in arms {
+                    let head = match arm.kind {
+                        SelectArmKind::Default => "_".to_string(),
+                        SelectArmKind::Recv => format!(
+                            "{} <- {}",
+                            arm.left
+                                .as_ref()
+                                .map(|x| self.format(x))
+                                .unwrap_or_else(|| "_".to_string()),
+                            arm.right
+                                .as_ref()
+                                .map(|x| self.format(x))
+                                .unwrap_or_else(|| "_".to_string())
+                        ),
+                        SelectArmKind::Send => format!(
+                            "{} -> {}",
+                            arm.left
+                                .as_ref()
+                                .map(|x| self.format(x))
+                                .unwrap_or_else(|| "_".to_string()),
+                            arm.right
+                                .as_ref()
+                                .map(|x| self.format(x))
+                                .unwrap_or_else(|| "_".to_string())
+                        ),
+                    };
+                    txt.push_str(&format!("  {} => {},\n", head, self.format(&arm.body)));
+                }
+                txt.push('}');
+                txt
+            }
             NodeType::Drop(x) => format!("drop {}", x),
             NodeType::MoveExpression { value } => format!("move {}", self.format(value)),
             NodeType::ImportStatement {

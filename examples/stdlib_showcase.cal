@@ -4,6 +4,8 @@ import * from std::range;
 import * from std::thread;
 import * from std::option;
 import * from std::result;
+import * from std::crypto;
+import * from std::regex;
 
 const main = fn() => {
     let mut nums = list:<int>[1, 2, 3, 4, 5];
@@ -48,4 +50,7 @@ const main = fn() => {
 
     let dur = Duration.from_ms(150);
     print("duration ms => " & dur.as_ms());
+
+    print("sha256 => " & sha256("abc"));
+    print("regex is_match => " & is_match("a.c", "abc"));
 };

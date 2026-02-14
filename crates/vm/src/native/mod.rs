@@ -80,6 +80,8 @@ impl VM {
             "tuple",
             "discriminant",
             "min_or_zero",
+            "http_request_raw",
+            "http_request_try",
         ];
 
         let map = RuntimeValue::natives();

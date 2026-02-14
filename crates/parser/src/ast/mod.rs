@@ -1028,6 +1028,9 @@ pub enum NodeType {
     Spawn {
         value: Box<Node>,
     },
+    SelectStatement {
+        arms: Vec<SelectArm>,
+    },
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
@@ -1229,6 +1232,21 @@ pub enum NodeType {
         identifier: PotentialGenericTypeIdentifier,
         value: ObjectType<Node>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SelectArmKind {
+    Recv,
+    Send,
+    Default,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SelectArm {
+    pub kind: SelectArmKind,
+    pub left: Option<Node>,
+    pub right: Option<Node>,
+    pub body: Node,
 }
 
 #[derive(Clone, Debug, PartialEq)]

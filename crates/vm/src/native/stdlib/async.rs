@@ -84,6 +84,62 @@ impl NativeFunction for ChannelGet {
     }
 }
 
+pub struct ChannelTryGet();
+
+impl NativeFunction for ChannelTryGet {
+    fn name(&self) -> String {
+        String::from("async.channel_try_get")
+    }
+
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let channel = args.remove(0);
+        let resolved = env.resolve_value_for_op(channel)?;
+        let RuntimeValue::Channel(ch) = resolved else {
+            return Err(RuntimeError::UnexpectedType(resolved));
+        };
+
+        let mut guard = ch
+            .queue
+            .lock()
+            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+
+        if let Some(value) = guard.pop_front() {
+            return Ok(RuntimeValue::Option(Some(dumpster::sync::Gc::new(value))));
+        }
+
+        Ok(RuntimeValue::Option(None))
+    }
+}
+
+pub struct ChannelTrySend();
+
+impl NativeFunction for ChannelTrySend {
+    fn name(&self) -> String {
+        String::from("async.channel_try_send")
+    }
+
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let value = args.pop().unwrap_or(RuntimeValue::Null);
+        let value = env.convert_runtime_var_into_saveable(value);
+        let channel = args.remove(0);
+        let resolved = env.resolve_value_for_op(channel)?;
+        let RuntimeValue::Channel(ch) = resolved else {
+            return Err(RuntimeError::UnexpectedType(resolved));
+        };
+
+        if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
+            return Ok(RuntimeValue::Bool(false));
+        }
+
+        if let Ok(mut queue) = ch.queue.lock() {
+            queue.push_back(value);
+            ch.cvar.notify_one();
+        }
+
+        Ok(RuntimeValue::Bool(true))
+    }
+}
+
 pub struct ChannelClose();
 
 impl NativeFunction for ChannelClose {

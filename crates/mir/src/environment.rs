@@ -2007,6 +2007,7 @@ impl MiddleEnvironment {
             | NodeType::ScopeAlias { .. }
             | NodeType::DataType { .. }
             | NodeType::Until { .. }
+            | NodeType::SelectStatement { .. }
             | NodeType::Spawn { .. } => None,
             NodeType::Null | NodeType::Defer { .. } | NodeType::Drop(_) | NodeType::EmptyLine => {
                 Some(ParserDataType::from(ParserInnerType::Null))

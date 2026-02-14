@@ -8,8 +8,8 @@ use crate::{
 };
 use calibre_parser::{
     ast::{
-        CallArg, FunctionHeader, GenericTypes, IfComparisonType, MatchArmType, Node, NodeType,
-        ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
+        CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node,
+        NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, VarType,
         comparison::ComparisonOperator,
     },
@@ -1727,7 +1727,7 @@ impl MiddleEnvironment {
                             }
                             _ => self
                                 .resolve_potential_generic_ident(scope, &identifier)
-                                .unwrap(),
+                                .unwrap_or_else(|| ParserText::from(identifier.to_string())),
                         }
                     }),
                     value: ObjectMap(match value {
@@ -1993,6 +1993,416 @@ impl MiddleEnvironment {
                     node_type: MiddleNodeType::EmptyLine,
                     span: node.span,
                 }))
+            }
+            NodeType::SelectStatement { arms } => {
+                let done_name = format!(
+                    "__select_done_{}_{}",
+                    node.span.from.line, node.span.from.col
+                );
+                let done_ident =
+                    PotentialDollarIdentifier::Identifier(ParserText::from(done_name.clone()));
+
+                let done_decl = Node::new(
+                    node.span,
+                    NodeType::VariableDeclaration {
+                        var_type: VarType::Mutable,
+                        identifier: done_ident.clone(),
+                        data_type: PotentialNewType::DataType(ParserDataType::from(
+                            ParserInnerType::Bool,
+                        )),
+                        value: Box::new(Node::new(
+                            node.span,
+                            NodeType::Identifier(ParserText::from(String::from("false")).into()),
+                        )),
+                    },
+                );
+
+                let mut loop_body = Vec::new();
+                let mut has_default = false;
+                let mut arm_index = 0;
+
+                for arm in arms {
+                    match arm.kind {
+                        calibre_parser::ast::SelectArmKind::Recv => {
+                            let Some(left) = arm.left else { continue };
+                            let Some(right) = arm.right else { continue };
+                            let tmp_name =
+                                format!("__select_tmp_{}_{}", node.span.from.line, arm_index);
+                            let tmp_ident = PotentialDollarIdentifier::Identifier(ParserText::from(
+                                tmp_name.clone(),
+                            ));
+
+                            let try_get_call = Node::new(
+                                node.span,
+                                NodeType::CallExpression {
+                                    string_fn: None,
+                                    caller: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::ScopeMemberExpression {
+                                            path: vec![
+                                                Node::new(
+                                                    node.span,
+                                                    NodeType::Identifier(
+                                                        ParserText::from("std".to_string()).into(),
+                                                    ),
+                                                ),
+                                                Node::new(
+                                                    node.span,
+                                                    NodeType::Identifier(
+                                                        ParserText::from("async".to_string()).into(),
+                                                    ),
+                                                ),
+                                                Node::new(
+                                                    node.span,
+                                                    NodeType::Identifier(
+                                                        ParserText::from(
+                                                            "channel_try_get".to_string(),
+                                                        )
+                                                        .into(),
+                                                    ),
+                                                ),
+                                            ],
+                                        },
+                                    )),
+                                    generic_types: vec![],
+                                    args: vec![CallArg::Value(right)],
+                                    reverse_args: vec![],
+                                },
+                            );
+
+                            loop_body.push(Node::new(
+                                node.span,
+                                NodeType::VariableDeclaration {
+                                    var_type: VarType::Immutable,
+                                    identifier: tmp_ident.clone(),
+                                    data_type: PotentialNewType::DataType(ParserDataType::from(
+                                        ParserInnerType::Auto(None),
+                                    )),
+                                    value: Box::new(try_get_call),
+                                },
+                            ));
+
+                            let cond = Node::new(
+                                node.span,
+                                NodeType::ComparisonExpression {
+                                    left: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::Identifier(tmp_ident.clone().into()),
+                                    )),
+                                    right: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::Identifier(
+                                            ParserText::from(String::from("none")).into(),
+                                        ),
+                                    )),
+                                    operator: ComparisonOperator::NotEqual,
+                                },
+                            );
+
+                            let extracted = Node::new(
+                                node.span,
+                                NodeType::MemberExpression {
+                                    path: vec![
+                                        (
+                                            Node::new(
+                                                node.span,
+                                                NodeType::Identifier(tmp_ident.clone().into()),
+                                            ),
+                                            false,
+                                        ),
+                                        (
+                                            Node::new(
+                                                node.span,
+                                                NodeType::Identifier(
+                                                    ParserText::from("next".to_string()).into(),
+                                                ),
+                                            ),
+                                            false,
+                                        ),
+                                    ],
+                                },
+                            );
+
+                            let bind_node = match left.node_type {
+                                NodeType::Identifier(ident) => Node::new(
+                                    node.span,
+                                    NodeType::VariableDeclaration {
+                                        var_type: VarType::Immutable,
+                                        identifier: ident.into(),
+                                        data_type: PotentialNewType::DataType(ParserDataType::from(
+                                            ParserInnerType::Auto(None),
+                                        )),
+                                        value: Box::new(extracted),
+                                    },
+                                ),
+                                _ => Node::new(
+                                    node.span,
+                                    NodeType::AssignmentExpression {
+                                        identifier: Box::new(left),
+                                        value: Box::new(extracted),
+                                    },
+                                ),
+                            };
+
+                            let set_done = Node::new(
+                                node.span,
+                                NodeType::AssignmentExpression {
+                                    identifier: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::Identifier(done_ident.clone().into()),
+                                    )),
+                                    value: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::Identifier(
+                                            ParserText::from(String::from("true")).into(),
+                                        ),
+                                    )),
+                                },
+                            );
+
+                            let body = Node::new(
+                                node.span,
+                                NodeType::ScopeDeclaration {
+                                    body: Some(vec![bind_node, set_done, arm.body]),
+                                    named: None,
+                                    is_temp: true,
+                                    create_new_scope: Some(true),
+                                    define: false,
+                                },
+                            );
+
+                            loop_body.push(Node::new(
+                                node.span,
+                                NodeType::IfStatement {
+                                    comparison: Box::new(IfComparisonType::If(cond)),
+                                    then: Box::new(body),
+                                    otherwise: None,
+                                },
+                            ));
+                        }
+                        calibre_parser::ast::SelectArmKind::Send => {
+                            let Some(left) = arm.left else { continue };
+                            let Some(right) = arm.right else { continue };
+
+                            let try_send_call = Node::new(
+                                node.span,
+                                NodeType::CallExpression {
+                                    string_fn: None,
+                                    caller: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::ScopeMemberExpression {
+                                            path: vec![
+                                                Node::new(
+                                                    node.span,
+                                                    NodeType::Identifier(
+                                                        ParserText::from("std".to_string()).into(),
+                                                    ),
+                                                ),
+                                                Node::new(
+                                                    node.span,
+                                                    NodeType::Identifier(
+                                                        ParserText::from("async".to_string()).into(),
+                                                    ),
+                                                ),
+                                                Node::new(
+                                                    node.span,
+                                                    NodeType::Identifier(
+                                                        ParserText::from(
+                                                            "channel_try_send".to_string(),
+                                                        )
+                                                        .into(),
+                                                    ),
+                                                ),
+                                            ],
+                                        },
+                                    )),
+                                    generic_types: vec![],
+                                    args: vec![CallArg::Value(left), CallArg::Value(right)],
+                                    reverse_args: vec![],
+                                },
+                            );
+
+                            let set_done = Node::new(
+                                node.span,
+                                NodeType::AssignmentExpression {
+                                    identifier: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::Identifier(done_ident.clone().into()),
+                                    )),
+                                    value: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::Identifier(
+                                            ParserText::from(String::from("true")).into(),
+                                        ),
+                                    )),
+                                },
+                            );
+
+                            let body = Node::new(
+                                node.span,
+                                NodeType::ScopeDeclaration {
+                                    body: Some(vec![set_done, arm.body]),
+                                    named: None,
+                                    is_temp: true,
+                                    create_new_scope: Some(true),
+                                    define: false,
+                                },
+                            );
+
+                            loop_body.push(Node::new(
+                                node.span,
+                                NodeType::IfStatement {
+                                    comparison: Box::new(IfComparisonType::If(try_send_call)),
+                                    then: Box::new(body),
+                                    otherwise: None,
+                                },
+                            ));
+                        }
+                        calibre_parser::ast::SelectArmKind::Default => {
+                            has_default = true;
+                            let set_done = Node::new(
+                                node.span,
+                                NodeType::AssignmentExpression {
+                                    identifier: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::Identifier(done_ident.clone().into()),
+                                    )),
+                                    value: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::Identifier(
+                                            ParserText::from(String::from("true")).into(),
+                                        ),
+                                    )),
+                                },
+                            );
+
+                            loop_body.push(Node::new(
+                                node.span,
+                                NodeType::ScopeDeclaration {
+                                    body: Some(vec![set_done, arm.body]),
+                                    named: None,
+                                    is_temp: true,
+                                    create_new_scope: Some(true),
+                                    define: false,
+                                },
+                            ));
+                        }
+                    }
+                    arm_index += 1;
+                }
+
+                loop_body.push(Node::new(
+                    node.span,
+                    NodeType::IfStatement {
+                        comparison: Box::new(IfComparisonType::If(Node::new(
+                            node.span,
+                            NodeType::Identifier(done_ident.clone().into()),
+                        ))),
+                        then: Box::new(Node::new(
+                            node.span,
+                            NodeType::Break {
+                                label: None,
+                                value: None,
+                            },
+                        )),
+                        otherwise: None,
+                    },
+                ));
+
+                if !has_default {
+                    let sleep_call = Node::new(
+                        node.span,
+                        NodeType::CallExpression {
+                            string_fn: None,
+                            caller: Box::new(Node::new(
+                                node.span,
+                                NodeType::ScopeMemberExpression {
+                                    path: vec![
+                                        Node::new(
+                                            node.span,
+                                            NodeType::Identifier(
+                                                ParserText::from("std".to_string()).into(),
+                                            ),
+                                        ),
+                                        Node::new(
+                                            node.span,
+                                            NodeType::Identifier(
+                                                ParserText::from("thread".to_string()).into(),
+                                            ),
+                                        ),
+                                        Node::new(
+                                            node.span,
+                                            NodeType::Identifier(
+                                                ParserText::from("sleep_ms".to_string()).into(),
+                                            ),
+                                        ),
+                                    ],
+                                },
+                            )),
+                            generic_types: vec![],
+                            args: vec![CallArg::Value(Node::new(
+                                node.span,
+                                NodeType::IntLiteral(String::from("1")),
+                            ))],
+                            reverse_args: vec![],
+                        },
+                    );
+
+                    let not_done = Node::new(
+                        node.span,
+                        NodeType::NotExpression {
+                            value: Box::new(Node::new(
+                                node.span,
+                                NodeType::Identifier(done_ident.clone().into()),
+                            )),
+                        },
+                    );
+
+                    loop_body.push(Node::new(
+                        node.span,
+                        NodeType::IfStatement {
+                            comparison: Box::new(IfComparisonType::If(not_done)),
+                            then: Box::new(sleep_call),
+                            otherwise: None,
+                        },
+                    ));
+                }
+
+                let loop_body = Node::new(
+                    node.span,
+                    NodeType::ScopeDeclaration {
+                        body: Some(loop_body),
+                        named: None,
+                        is_temp: true,
+                        create_new_scope: Some(true),
+                        define: false,
+                    },
+                );
+
+                let select_loop = Node::new(
+                    node.span,
+                    NodeType::LoopDeclaration {
+                        loop_type: Box::new(LoopType::Loop),
+                        body: Box::new(loop_body),
+                        until: None,
+                        label: None,
+                        else_body: None,
+                    },
+                );
+
+                self.evaluate_inner(
+                    scope,
+                    Node::new(
+                        node.span,
+                        NodeType::ScopeDeclaration {
+                            body: Some(vec![done_decl, select_loop]),
+                            named: None,
+                            is_temp: true,
+                            create_new_scope: Some(false),
+                            define: false,
+                        },
+                    ),
+                )
             }
             NodeType::ScopeMemberExpression { path } => {
                 self.evaluate_scope_member_expression(scope, path)

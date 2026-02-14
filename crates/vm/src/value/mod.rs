@@ -2,6 +2,7 @@ use std::{
     cell::UnsafeCell,
     collections::VecDeque,
     fmt::{Debug, Display},
+    net::{TcpListener, TcpStream},
     sync::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, AtomicIsize, Ordering},
@@ -187,6 +188,8 @@ pub enum RuntimeValue {
     WaitGroup(Arc<WaitGroupInner>),
     Mutex(Arc<MutexInner>),
     MutexGuard(Arc<MutexGuardInner>),
+    TcpStream(Arc<Mutex<TcpStream>>),
+    TcpListener(Arc<TcpListener>),
     NativeFunction(Arc<dyn NativeFunction>),
     ExternFunction(Arc<ExternFunction>),
     Function {
@@ -218,6 +221,8 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
                 guard.get_clone().accept(visitor)
             }
             RuntimeValue::MutexGuard(guard) => guard.get_clone().accept(visitor),
+            RuntimeValue::TcpStream(_) => Ok(()),
+            RuntimeValue::TcpListener(_) => Ok(()),
             RuntimeValue::Function { captures, .. } => {
                 for (_, value) in captures {
                     value.accept(visitor)?;
@@ -303,6 +308,14 @@ impl RuntimeValue {
             ),
             ("async.channel_get", Arc::new(stdlib::r#async::ChannelGet())),
             (
+                "async.channel_try_get",
+                Arc::new(stdlib::r#async::ChannelTryGet()),
+            ),
+            (
+                "async.channel_try_send",
+                Arc::new(stdlib::r#async::ChannelTrySend()),
+            ),
+            (
                 "async.channel_close",
                 Arc::new(stdlib::r#async::ChannelClose()),
             ),
@@ -310,6 +323,25 @@ impl RuntimeValue {
                 "async.channel_closed",
                 Arc::new(stdlib::r#async::ChannelClosed()),
             ),
+            ("crypto.sha256", Arc::new(stdlib::crypto::Sha256Fn)),
+            ("crypto.sha512", Arc::new(stdlib::crypto::Sha512Fn)),
+            ("crypto.blake3", Arc::new(stdlib::crypto::Blake3Fn)),
+            ("regex.is_match", Arc::new(stdlib::regex::IsMatchFn)),
+            ("regex.find", Arc::new(stdlib::regex::FindFn)),
+            ("regex.replace", Arc::new(stdlib::regex::ReplaceFn)),
+            ("net.tcp_connect", Arc::new(stdlib::net::TcpConnect)),
+            ("net.tcp_listen", Arc::new(stdlib::net::TcpListen)),
+            ("net.tcp_accept", Arc::new(stdlib::net::TcpAccept)),
+            ("net.tcp_read", Arc::new(stdlib::net::TcpRead)),
+            ("net.tcp_write", Arc::new(stdlib::net::TcpWrite)),
+            ("net.tcp_close", Arc::new(stdlib::net::TcpClose)),
+            ("net.http_request_raw", Arc::new(stdlib::net::HttpRequest)),
+            (
+                "net.http_request_try",
+                Arc::new(stdlib::net::HttpRequestTry),
+            ),
+            ("http_request_raw", Arc::new(stdlib::net::HttpRequest)),
+            ("http_request_try", Arc::new(stdlib::net::HttpRequestTry)),
             (
                 "async.waitgroup_new",
                 Arc::new(stdlib::r#async::WaitGroupNew()),
@@ -390,6 +422,8 @@ impl RuntimeValue {
             Self::WaitGroup(_) => String::from("WaitGroup"),
             Self::Mutex(_) => String::from("Mutex"),
             Self::MutexGuard(_) => String::from("MutexGuard"),
+            Self::TcpStream(_) => String::from("TcpStream"),
+            Self::TcpListener(_) => String::from("TcpListener"),
             Self::List(x) => {
                 let lst: Vec<String> = x.0.iter().map(|x| x.display(vm)).collect();
                 print_list(&lst, '[', ']')
@@ -490,6 +524,8 @@ impl Display for RuntimeValue {
             Self::WaitGroup(_) => write!(f, "WaitGroup"),
             Self::Mutex(_) => write!(f, "Mutex"),
             Self::MutexGuard(_) => write!(f, "MutexGuard"),
+            Self::TcpStream(_) => write!(f, "TcpStream"),
+            Self::TcpListener(_) => write!(f, "TcpListener"),
             Self::Str(x) => write!(f, "{}", x),
             Self::Char(x) => write!(f, "{}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
