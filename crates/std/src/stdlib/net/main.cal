@@ -22,6 +22,11 @@ impl TcpStream {
 }
 
 impl TcpListener {
+	const listen = fn(host: str, port: int) -> TcpListener => TcpListener { inner: tcp_listen(host, port) };
+	const accept = fn(self: &TcpListener) -> TcpStream => TcpStream { inner: tcp_accept(self.inner) };
+}
+
+const listen = fn(host: str, port: int) -> TcpListener => TcpListener { inner: tcp_listen(host, port) };
 const accept = fn(listener: TcpListener) -> TcpStream => TcpStream { inner: tcp_accept(listener.inner) };
 const connect = fn(host: str, port: int) -> TcpStream => TcpStream { inner: tcp_connect(host, port) };
 const read = fn(stream: TcpStream, size: int) -> str => tcp_read(stream.inner, size);
