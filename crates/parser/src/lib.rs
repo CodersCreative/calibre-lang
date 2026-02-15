@@ -95,6 +95,8 @@ pub enum SyntaxErr {
     ExpectedName,
     #[error("Expected token.")]
     UnexpectedToken,
+    #[error("Invalid literal: {0}.")]
+    InvalidLiteral(String),
     #[error("Expected {0} keyword.")]
     ExpectedKeyword(String),
     #[error("Expected key.")]

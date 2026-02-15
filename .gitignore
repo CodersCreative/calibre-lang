@@ -1,5 +1,6 @@
 
 # Rust artifacts
+tmp/
 target/
 **/target
 /src/test*

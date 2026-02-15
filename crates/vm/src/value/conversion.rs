@@ -1,5 +1,7 @@
 use calibre_parser::ast::ParserInnerType;
 
+use std::sync::Arc;
+
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
 use dumpster::sync::Gc;
 
@@ -18,8 +20,13 @@ impl RuntimeValue {
                 return value.convert(env, data_type);
             }
         }
-        if let RuntimeValue::SlotRef(slot) = &self {
-            let value = env.get_slot_value(*slot);
+        if let RuntimeValue::VarRef(id) = &self {
+            if let Some(value) = env.variables.get_by_id(*id) {
+                return value.convert(env, data_type);
+            }
+        }
+        if let RuntimeValue::RegRef { frame, reg } = &self {
+            let value = env.get_reg_value_in_frame(*frame, *reg);
             return value.convert(env, data_type);
         }
 
@@ -30,7 +37,9 @@ impl RuntimeValue {
             (RuntimeValue::UInt(x), ParserInnerType::Char) => {
                 Ok(RuntimeValue::Char((x as u8) as char))
             }
-            (RuntimeValue::UInt(x), ParserInnerType::Str) => Ok(RuntimeValue::Str(x.to_string())),
+            (RuntimeValue::UInt(x), ParserInnerType::Str) => {
+                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
+            }
 
             (RuntimeValue::Int(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x)),
             (RuntimeValue::Int(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
@@ -38,14 +47,18 @@ impl RuntimeValue {
             (RuntimeValue::Int(x), ParserInnerType::Char) => {
                 Ok(RuntimeValue::Char((x as u8) as char))
             }
-            (RuntimeValue::Int(x), ParserInnerType::Str) => Ok(RuntimeValue::Str(x.to_string())),
+            (RuntimeValue::Int(x), ParserInnerType::Str) => {
+                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
+            }
             (RuntimeValue::Float(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x)),
             (RuntimeValue::Float(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
             (RuntimeValue::Float(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
             (RuntimeValue::Float(x), ParserInnerType::Char) => {
                 Ok(RuntimeValue::Char((x as u8) as char))
             }
-            (RuntimeValue::Float(x), ParserInnerType::Str) => Ok(RuntimeValue::Str(x.to_string())),
+            (RuntimeValue::Float(x), ParserInnerType::Str) => {
+                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
+            }
             (RuntimeValue::Range(from, to), ParserInnerType::Range) => {
                 Ok(RuntimeValue::Range(from, to))
             }
@@ -64,26 +77,30 @@ impl RuntimeValue {
             (RuntimeValue::Bool(x), ParserInnerType::Float) => {
                 Ok(RuntimeValue::Float(if x { 1.0 } else { 0.0 }))
             }
-            (RuntimeValue::Bool(x), ParserInnerType::Str) => Ok(RuntimeValue::Str(x.to_string())),
+            (RuntimeValue::Bool(x), ParserInnerType::Str) => {
+                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
+            }
             (RuntimeValue::Char(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(x)),
             (RuntimeValue::Char(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
             (RuntimeValue::Char(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
             (RuntimeValue::Char(x), ParserInnerType::Float) => {
                 Ok(RuntimeValue::Float((x as u8) as f64))
             }
-            (RuntimeValue::Char(x), ParserInnerType::Str) => Ok(RuntimeValue::Str(x.to_string())),
+            (RuntimeValue::Char(x), ParserInnerType::Str) => {
+                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
+            }
             (RuntimeValue::Str(x), ParserInnerType::Str) => Ok(RuntimeValue::Str(x)),
             (RuntimeValue::Str(x), ParserInnerType::Float) => {
-                Ok(RuntimeValue::Float(x.trim().parse()?))
+                Ok(RuntimeValue::Float(x.as_str().trim().parse()?))
             }
             (RuntimeValue::Str(x), ParserInnerType::UInt) => {
-                Ok(RuntimeValue::UInt(x.trim().parse()?))
+                Ok(RuntimeValue::UInt(x.as_str().trim().parse()?))
             }
             (RuntimeValue::Str(x), ParserInnerType::Int) => {
-                Ok(RuntimeValue::Int(x.trim().parse()?))
+                Ok(RuntimeValue::Int(x.as_str().trim().parse()?))
             }
             (RuntimeValue::Str(x), ParserInnerType::Char) => {
-                let ch = x.chars().next().ok_or_else(|| {
+                let ch = x.as_str().chars().next().ok_or_else(|| {
                     RuntimeError::CantConvert(RuntimeValue::Str(x.clone()), ParserInnerType::Char)
                 })?;
                 Ok(RuntimeValue::Char(ch))

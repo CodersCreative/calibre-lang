@@ -3,7 +3,7 @@ use calibre_parser::{
     ast::{ParserDataType, VarType},
     lexer::Tokenizer,
 };
-use calibre_std::{get_globals_path, get_stdlib_path};
+use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
 use rustc_hash::FxHashMap;
 use std::{fs, path::PathBuf};
 
@@ -33,13 +33,15 @@ impl MiddleEnvironment {
         });
 
         self.setup_global(&scope);
+        self.stdlib_nodes.clear();
         let mut parser = Parser::default();
         let mut tokenizer = Tokenizer::default();
-        if let Ok(globals) = fs::read_to_string(get_globals_path()) {
-            if let Ok(tokens) = tokenizer.tokenize(&globals) {
-                let program = parser.produce_ast(tokens);
-                let _ = self.evaluate(&scope, program);
-            }
+        if let Ok(globals) = fs::read_to_string(get_globals_path())
+            && let Ok(tokens) = tokenizer.tokenize(&globals)
+        {
+            let program = parser.produce_ast(tokens);
+            let middle = self.evaluate(&scope, program);
+            self.stdlib_nodes.push(middle);
         }
 
         let std = self.new_scope(Some(scope), get_stdlib_path(), Some("std"));
@@ -53,6 +55,7 @@ impl MiddleEnvironment {
 
     pub fn setup_global(&mut self, scope: &u64) {
         let funcs: Vec<&str> = vec![
+            "console_output",
             "ok",
             "err",
             "some",
@@ -63,6 +66,8 @@ impl MiddleEnvironment {
             "tuple",
             "discriminant",
             "min_or_zero",
+            "http_request_raw",
+            "http_request_try",
         ];
 
         let map = ParserDataType::natives();
@@ -77,7 +82,7 @@ impl MiddleEnvironment {
         vars.append(&mut funcs);
 
         for var in vars {
-            let name = get_disamubiguous_name(scope, Some(&var.0), None);
+            let name = var.0.clone();
 
             let _ = self.variables.insert(
                 name.clone(),
@@ -99,35 +104,108 @@ impl MiddleEnvironment {
         let mut tokenizer = Tokenizer::default();
 
         if let Some(scope_ref) = self.scopes.get(scope) {
-            if let Ok(stdlib) = fs::read_to_string(scope_ref.path.clone()) {
+            if let Ok(stdlib) = fs::read_to_string(&scope_ref.path) {
                 if let Ok(tokens) = tokenizer.tokenize(&stdlib) {
                     let program = parser.produce_ast(tokens);
-                    let _ = self.evaluate(scope, program);
+                    let middle = self.evaluate(scope, program);
+                    self.stdlib_nodes.push(middle);
                 }
             }
         }
 
-        self.setup_std_scope(scope, "thread", &["wait"]);
-        self.setup_std_scope(scope, "console", &["out", "input", "err", "clear"]);
-        self.setup_std_scope(scope, "random", &["generate", "bool", "ratio"]);
+        self.setup_std_module(scope, "thread", &[]);
+        self.setup_std_module(scope, "console", &[]);
+        self.setup_std_module(
+            scope,
+            "async",
+            &[
+                "channel_new",
+                "channel_send",
+                "channel_get",
+                "channel_try_get",
+                "channel_try_send",
+                "channel_close",
+                "channel_closed",
+                "waitgroup_new",
+                "waitgroup_raw_add",
+                "waitgroup_raw_done",
+                "waitgroup_join",
+                "waitgroup_wait",
+                "waitgroup_count",
+                "mutex_new",
+                "mutex_get",
+                "mutex_set",
+                "mutex_with",
+                "mutex_write",
+            ],
+        );
+        self.setup_std_module(scope, "random", &[]);
+        self.setup_std_module(scope, "file", &[]);
+        self.setup_std_module(scope, "list", &[]);
+        self.setup_std_module(
+            scope,
+            "collections",
+            &[
+                "hashmap_new",
+                "hashmap_set",
+                "hashmap_get",
+                "hashmap_remove",
+                "hashmap_contains",
+                "hashmap_len",
+                "hashmap_keys",
+                "hashmap_values",
+                "hashmap_entries",
+                "hashmap_clear",
+                "hashset_new",
+                "hashset_add",
+                "hashset_remove",
+                "hashset_contains",
+                "hashset_len",
+                "hashset_values",
+                "hashset_clear",
+            ],
+        );
+        self.setup_std_module(
+            scope,
+            "str",
+            &["split", "contains", "starts_with", "ends_with"],
+        );
+        self.setup_std_module(scope, "range", &[]);
+        self.setup_std_module(scope, "crypto", &["sha256", "sha512", "blake3"]);
+        self.setup_std_module(scope, "regex", &["is_match", "find", "replace"]);
+        self.setup_std_module(
+            scope,
+            "net",
+            &[
+                "tcp_connect",
+                "tcp_listen",
+                "tcp_accept",
+                "tcp_read",
+                "tcp_write",
+                "tcp_close",
+                "http_request_raw",
+                "http_request_try",
+            ],
+        );
+        self.setup_std_module(scope, "option", &[]);
+        self.setup_std_module(scope, "result", &[]);
     }
 
-    pub fn setup_std_scope(&mut self, parent: &u64, name: &str, funcs: &[&'static str]) {
-        let scope_path = self
-            .scopes
-            .get(parent)
-            .map(|s| s.path.clone())
-            .unwrap_or_default();
-        let scope = self.new_scope(Some(*parent), scope_path, Some(name));
+    pub fn setup_std_module(&mut self, parent: &u64, name: &str, funcs: &[&'static str]) {
+        let scope_path = get_stdlib_module_path(name);
+        let scope = self.new_scope(Some(*parent), scope_path.clone(), Some(name));
+
         let map: FxHashMap<String, ParserDataType> = ParserDataType::natives();
+        let funcs: Vec<(String, ParserDataType)> = funcs
+            .into_iter()
+            .filter_map(|x| {
+                map.get(&format!("{}.{}", name, x))
+                    .cloned()
+                    .map(|ty| (String::from(*x), ty))
+            })
+            .collect();
 
-        let funcs = funcs.into_iter().filter_map(|x| {
-            map.get(&format!("{}.{}", name, x))
-                .cloned()
-                .map(|ty| (String::from(*x), ty))
-        });
-
-        for var in funcs {
+        for var in funcs.iter().cloned() {
             let name = get_disamubiguous_name(&scope, Some(&var.0), None);
             let _ = self.variables.insert(
                 name.clone(),
@@ -139,7 +217,17 @@ impl MiddleEnvironment {
             );
 
             if let Some(scope_ref) = self.scopes.get_mut(&scope) {
-                scope_ref.mappings.insert(var.0, name);
+                scope_ref.mappings.insert(var.0.clone(), name);
+            }
+        }
+
+        let mut parser = Parser::default();
+        let mut tokenizer = Tokenizer::default();
+        if let Ok(stdlib) = fs::read_to_string(scope_path) {
+            if let Ok(tokens) = tokenizer.tokenize(&stdlib) {
+                let program = parser.produce_ast(tokens);
+                let middle = self.evaluate(&scope, program);
+                self.stdlib_nodes.push(middle);
             }
         }
     }

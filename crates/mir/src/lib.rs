@@ -15,6 +15,7 @@ pub mod ast;
 pub mod environment;
 pub mod errors;
 pub mod infer;
+pub mod inline;
 pub mod native;
 pub mod translate;
 
@@ -49,7 +50,7 @@ impl MiddleEnvironment {
                 for (idx, entry) in head.into_iter().enumerate() {
                     if let Some((var_type, name)) = entry {
                         let member = if has_tail {
-                            let index_node = Node::new(span, NodeType::IntLiteral(idx as i64));
+                            let index_node = Node::new(span, NodeType::IntLiteral(idx.to_string()));
                             Node::new(
                                 span,
                                 NodeType::MemberExpression {
@@ -109,7 +110,8 @@ impl MiddleEnvironment {
                                 NodeType::VariableDeclaration {
                                     var_type: var_type.clone(),
                                     identifier: name.clone(),
-                                    data_type: PotentialNewType::DataType(ParserDataType::from(
+                                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                                        span,
                                         ParserInnerType::Auto(None),
                                     )),
                                     value: Box::new(member),
@@ -165,7 +167,10 @@ impl MiddleEnvironment {
                             span,
                             NodeType::BinaryExpression {
                                 left: Box::new(len_call),
-                                right: Box::new(Node::new(span, NodeType::IntLiteral(offset))),
+                                right: Box::new(Node::new(
+                                    span,
+                                    NodeType::IntLiteral(offset.to_string()),
+                                )),
                                 operator: BinaryOperator::Sub,
                             },
                         );
@@ -195,7 +200,8 @@ impl MiddleEnvironment {
                                 NodeType::VariableDeclaration {
                                     var_type: var_type.clone(),
                                     identifier: name.clone().into(),
-                                    data_type: PotentialNewType::DataType(ParserDataType::from(
+                                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                                        span,
                                         ParserInnerType::Auto(None),
                                     )),
                                     value: Box::new(member),
@@ -261,7 +267,8 @@ impl MiddleEnvironment {
                             NodeType::VariableDeclaration {
                                 var_type: var_type.clone(),
                                 identifier: name.clone().into(),
-                                data_type: PotentialNewType::DataType(ParserDataType::from(
+                                data_type: PotentialNewType::DataType(ParserDataType::new(
+                                    span,
                                     ParserInnerType::Auto(None),
                                 )),
                                 value: Box::new(member),
@@ -296,6 +303,23 @@ impl MiddleEnvironment {
         while let Some(id) = current {
             if let Some(s) = self.scopes.get(&id) {
                 out.extend(s.defers.clone());
+                current = s.parent;
+            } else {
+                break;
+            }
+        }
+        out
+    }
+
+    fn collect_defers_until(&self, scope: &u64, stop_scope: u64) -> Vec<Node> {
+        let mut out = Vec::new();
+        let mut current = Some(*scope);
+        while let Some(id) = current {
+            if let Some(s) = self.scopes.get(&id) {
+                out.extend(s.defers.clone());
+                if id == stop_scope {
+                    break;
+                }
                 current = s.parent;
             } else {
                 break;
@@ -352,8 +376,8 @@ impl MiddleEnvironment {
                 } else if let Some(stmt) = stmts.get(idx) {
                     match &stmt.node_type {
                         MiddleNodeType::Return { .. }
-                        | MiddleNodeType::Break
-                        | MiddleNodeType::Continue => continue,
+                        | MiddleNodeType::Break { .. }
+                        | MiddleNodeType::Continue { .. } => continue,
                         MiddleNodeType::Drop(drop_name) if drop_name.text == *name => continue,
                         _ => {}
                     }
@@ -414,18 +438,31 @@ impl MiddleEnvironment {
         right: Node,
         operator: Operator,
     ) -> Result<Option<MiddleNode>, MiddleErr> {
+        if matches!(operator, Operator::As) {
+            return Ok(None);
+        }
         if let (Some(left_ty), Some(right_ty)) = (
             self.resolve_type_from_node(scope, &left),
             self.resolve_type_from_node(scope, &right),
         ) {
+            let matches_overload = |overload: &MiddleOverload| {
+                overload.parameters.len() == 2
+                    && overload.operator == operator
+                    && self.impl_type_matches(
+                        &overload.parameters[0].data_type,
+                        &left_ty.data_type,
+                        &overload.generic_params,
+                    )
+                    && self.impl_type_matches(
+                        &overload.parameters[1].data_type,
+                        &right_ty.data_type,
+                        &overload.generic_params,
+                    )
+            };
             if let Some(overload) = self
                 .overloads
                 .iter()
-                .filter(|x| x.parameters.len() == 2 && x.operator == operator)
-                .find(|x| {
-                    x.parameters[0].data_type == left_ty.data_type
-                        && x.parameters[1].data_type == right_ty.data_type
-                })
+                .find(|x| matches_overload(x))
                 .map(|x| x.clone())
             {
                 return Ok(Some(MiddleNode {
@@ -439,6 +476,102 @@ impl MiddleEnvironment {
                     span,
                 }));
             }
+        }
+
+        Ok(None)
+    }
+
+    pub fn handle_as_overload(
+        &mut self,
+        scope: &u64,
+        span: Span,
+        value: Node,
+        target: ParserDataType,
+    ) -> Result<Option<MiddleNode>, MiddleErr> {
+        let Some(left_ty) = self.resolve_type_from_node(scope, &value) else {
+            return Ok(None);
+        };
+        let overload = self
+            .overloads
+            .iter()
+            .filter(|x| matches!(x.operator, Operator::As))
+            .filter(|x| x.parameters.len() == 1)
+            .find(|x| {
+                self.impl_type_matches(
+                    &x.parameters[0].data_type,
+                    &left_ty.data_type,
+                    &x.generic_params,
+                ) && self.impl_type_matches(
+                    &x.return_type.data_type,
+                    &target.data_type,
+                    &x.generic_params,
+                )
+            })
+            .cloned();
+
+        if let Some(overload) = overload {
+            return Ok(Some(MiddleNode {
+                node_type: MiddleNodeType::CallExpression {
+                    caller: Box::new(self.evaluate_inner(scope, overload.func.clone())?),
+                    args: vec![self.evaluate_inner(scope, value)?],
+                },
+                span,
+            }));
+        }
+
+        Ok(None)
+    }
+
+    pub fn handle_index_assign_overload(
+        &mut self,
+        scope: &u64,
+        span: Span,
+        base: Node,
+        index: Node,
+        value: Node,
+    ) -> Result<Option<MiddleNode>, MiddleErr> {
+        let (Some(base_ty), Some(index_ty), Some(value_ty)) = (
+            self.resolve_type_from_node(scope, &base),
+            self.resolve_type_from_node(scope, &index),
+            self.resolve_type_from_node(scope, &value),
+        ) else {
+            return Ok(None);
+        };
+
+        let overload = self
+            .overloads
+            .iter()
+            .filter(|x| matches!(x.operator, Operator::IndexAssign))
+            .filter(|x| x.parameters.len() == 3)
+            .find(|x| {
+                self.impl_type_matches(
+                    &x.parameters[0].data_type,
+                    &base_ty.data_type,
+                    &x.generic_params,
+                ) && self.impl_type_matches(
+                    &x.parameters[1].data_type,
+                    &index_ty.data_type,
+                    &x.generic_params,
+                ) && self.impl_type_matches(
+                    &x.parameters[2].data_type,
+                    &value_ty.data_type,
+                    &x.generic_params,
+                )
+            })
+            .cloned();
+
+        if let Some(overload) = overload {
+            return Ok(Some(MiddleNode {
+                node_type: MiddleNodeType::CallExpression {
+                    caller: Box::new(self.evaluate_inner(scope, overload.func.clone())?),
+                    args: vec![
+                        self.evaluate_inner(scope, base)?,
+                        self.evaluate_inner(scope, index)?,
+                        self.evaluate_inner(scope, value)?,
+                    ],
+                },
+                span,
+            }));
         }
 
         Ok(None)
@@ -460,8 +593,15 @@ impl MiddleEnvironment {
                 .iter()
                 .filter(|x| x.parameters.len() == 2 && &x.operator == operator)
                 .find(|x| {
-                    x.parameters[0].data_type == left_ty.data_type
-                        && x.parameters[1].data_type == right_ty.data_type
+                    self.impl_type_matches(
+                        &x.parameters[0].data_type,
+                        &left_ty.data_type,
+                        &x.generic_params,
+                    ) && self.impl_type_matches(
+                        &x.parameters[1].data_type,
+                        &right_ty.data_type,
+                        &x.generic_params,
+                    )
                 })
             {
                 return Some(overload);
@@ -477,6 +617,38 @@ impl MiddleEnvironment {
         path: Vec<Node>,
     ) -> Result<MiddleNode, MiddleErr> {
         let (s, node) = self.get_scope_member_scope_path(scope, path)?;
-        Ok(self.evaluate(&s, node))
+        match node.node_type {
+            NodeType::Identifier(ident) => {
+                let resolved = self
+                    .resolve_potential_generic_ident(&s, &ident)
+                    .unwrap_or(ident.to_string().into());
+                Ok(MiddleNode::new(
+                    MiddleNodeType::Identifier(resolved),
+                    node.span,
+                ))
+            }
+            NodeType::MemberExpression { mut path } => {
+                if let Some((
+                    Node {
+                        node_type: NodeType::Identifier(first),
+                        ..
+                    },
+                    _,
+                )) = path.first_mut()
+                {
+                    let resolved = self
+                        .resolve_potential_generic_ident(&s, first)
+                        .unwrap_or(first.to_string().into());
+                    *first = PotentialGenericTypeIdentifier::Identifier(
+                        PotentialDollarIdentifier::Identifier(resolved),
+                    );
+                }
+                Ok(self.evaluate(
+                    scope,
+                    Node::new(node.span, NodeType::MemberExpression { path }),
+                ))
+            }
+            other => Ok(self.evaluate(&s, Node::new(node.span, other))),
+        }
     }
 }

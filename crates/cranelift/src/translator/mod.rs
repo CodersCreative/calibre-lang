@@ -124,6 +124,10 @@ impl<'a> FunctionTranslator<'a> {
     pub fn translate(&mut self, node: LirNodeType) -> RuntimeValue {
         match node {
             LirNodeType::Noop => self.translate_null(),
+            LirNodeType::Spawn { callee } => {
+                let _ = self.translate(*callee);
+                self.translate_null()
+            }
             LirNodeType::Load(x) => self.translate_identifier(&x),
             LirNodeType::Literal(LirLiteral::Int(x)) => RuntimeValue::new(
                 self.builder.ins().iconst(self.types.int(), x as i64),

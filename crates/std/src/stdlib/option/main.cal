@@ -1,0 +1,31 @@
+impl<T> T? {
+	const is_some = fn (self : T?) -> bool => match self {
+		.Some : _ => true,
+		.None => false
+	};
+
+	const is_none = fn (self : T?) -> bool => match self {
+		.Some : _ => false,
+		.None => true
+	};
+
+	const unwrap = fn (self : T?) -> T => match self {
+		.Some : v => v,
+		.None => panic("unwrap on none")
+	};
+
+	const unwrap_or = fn (self : T?, default : T) -> T => match self {
+		.Some : v => v,
+		.None => default
+	};
+
+	const map = fn <U> (self : T?, op : fn(T) -> U) -> U? => match self {
+		.Some : v => some(op(v)),
+		.None => none
+	};
+
+	const and_then = fn <U> (self : T?, op : fn(T) -> U?) -> U? => match self {
+		.Some : v => op(v),
+		.None => none
+	};
+};

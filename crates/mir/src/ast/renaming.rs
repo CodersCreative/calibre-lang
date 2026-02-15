@@ -21,8 +21,11 @@ impl MiddleNode {
 impl MiddleNodeType {
     pub fn rename(self, state: &mut AlphaRenameState) -> Self {
         match self {
-            MiddleNodeType::Break
-            | MiddleNodeType::Continue
+            MiddleNodeType::Break {
+                label: _,
+                value: None,
+            }
+            | MiddleNodeType::Continue { label: _ }
             | MiddleNodeType::EmptyLine
             | MiddleNodeType::Null
             | MiddleNodeType::EnumExpression { data: None, .. }
@@ -31,6 +34,16 @@ impl MiddleNodeType {
             | MiddleNodeType::IntLiteral(_)
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::ExternFunction { .. } => self,
+            MiddleNodeType::Break {
+                label,
+                value: Some(value),
+            } => MiddleNodeType::Break {
+                label,
+                value: Some(Box::new(value.rename(state))),
+            },
+            MiddleNodeType::Spawn { value } => MiddleNodeType::Spawn {
+                value: Box::new(value.rename(state)),
+            },
             MiddleNodeType::RefStatement { mutability, value } => MiddleNodeType::RefStatement {
                 mutability,
                 value: Box::new(value.rename(state)),
@@ -99,7 +112,6 @@ impl MiddleNodeType {
                 parameters,
                 body,
                 return_type,
-                is_async,
                 scope_id,
             } => MiddleNodeType::FunctionDeclaration {
                 parameters: parameters
@@ -119,7 +131,6 @@ impl MiddleNodeType {
                     .collect(),
                 body: Box::new(body.rename(state)),
                 return_type,
-                is_async,
                 scope_id,
             },
             MiddleNodeType::AssignmentExpression { identifier, value } => {
@@ -155,10 +166,12 @@ impl MiddleNodeType {
                 state: s,
                 body,
                 scope_id,
+                label,
             } => MiddleNodeType::LoopDeclaration {
                 state: s.map(|value| Box::new(value.rename(state))),
                 body: Box::new(body.rename(state)),
                 scope_id,
+                label,
             },
             MiddleNodeType::Return { value } => MiddleNodeType::Return {
                 value: value.map(|value| Box::new(value.rename(state))),

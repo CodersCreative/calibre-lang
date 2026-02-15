@@ -1,0 +1,22 @@
+trait Person {
+	const name : fn (&Self) -> str;
+
+	const greeting = fn (self : &Self) -> str => {
+		"Hello " & self.name();
+	};
+};
+
+type User = struct { name : str };
+
+impl Person for User {
+	const name = fn (self : &User) -> str => self.name;
+};
+
+const main = fn () => {
+	let user = User { name : "Ty" };
+	print(user.greeting());
+	
+	let parts = "a,b,c".split(",");
+	print(parts[1]);
+	print("calibre".starts_with("cal"));
+};

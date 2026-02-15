@@ -1,0 +1,27 @@
+impl range {
+	const len = fn (self : range) -> int => len(self);
+
+	const start = fn (self : range) -> int => min_or_zero(self);
+
+	const end = fn (self : range) -> int => len(self);
+
+	const is_empty = fn (self : range) -> bool => len(self) == min_or_zero(self);
+
+	const contains = fn (self : range, value : int) -> bool => {
+		let s = min_or_zero(self);
+		let e = len(self);
+		value >= s && value < e;
+	};
+
+	const to_list = fn (self : range) -> list:<int> => list:<int>[i for i in self];
+
+	const sum = fn (self : range) -> int => {
+		let mut acc = 0;
+		for i in self => acc = acc + i;
+		acc;
+	};
+
+	const iter = fn (self : range) -> RangeIter => iter_range(self);
+
+	const into_iter = fn (self : range) -> RangeIter => iter_range(self);
+};

@@ -11,7 +11,9 @@ pub struct Location {
     pub path: PathBuf,
     pub span: Span,
 }
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 pub struct Span {
     pub from: Position,
     pub to: Position,
@@ -40,7 +42,9 @@ impl Span {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 pub struct Position {
     pub line: u32,
     pub col: u32,
@@ -115,7 +119,6 @@ pub enum TokenType {
     OrColon,
     Object,
     Question,
-    Async,
     Func,
     If,
     In,
@@ -123,6 +126,7 @@ pub enum TokenType {
     Main,
     As,
     Try,
+    Use,
     This,
     At,
     FullStop,
@@ -141,105 +145,115 @@ pub enum TokenType {
     Move,
     Defer,
     Extern,
+    Spawn,
+    Select,
 }
 
-pub fn keywords() -> HashMap<String, TokenType> {
-    HashMap::from([
-        (String::from("until"), TokenType::Stop(StopValue::Until)),
-        (String::from("mut"), TokenType::Mut),
-        (String::from("null"), TokenType::Null),
-        (String::from("const"), TokenType::Const),
-        (String::from("let"), TokenType::Let),
-        (String::from("enum"), TokenType::Enum),
-        (String::from("match"), TokenType::Match),
-        (String::from("obj"), TokenType::Object),
-        (String::from("fn"), TokenType::Func),
-        (String::from("drop"), TokenType::Drop),
-        (String::from("move"), TokenType::Move),
-        (String::from("defer"), TokenType::Defer),
-        (String::from("else"), TokenType::Else),
-        (String::from("list"), TokenType::List),
-        (String::from("debug"), TokenType::Debug),
-        (String::from("return"), TokenType::Stop(StopValue::Return)),
-        (String::from("in"), TokenType::In),
-        (String::from("break"), TokenType::Stop(StopValue::Break)),
-        (
-            String::from("continue"),
-            TokenType::Stop(StopValue::Continue),
-        ),
-        (String::from("try"), TokenType::Try),
-        (String::from("if"), TokenType::If),
-        (String::from("as"), TokenType::As),
-        (String::from("func"), TokenType::Func),
-        (String::from("struct"), TokenType::Struct),
-        (String::from("async"), TokenType::Async),
-        (String::from("impl"), TokenType::Impl),
-        (String::from("trait"), TokenType::Trait),
-        (String::from("Self"), TokenType::This),
-        (String::from("for"), TokenType::For),
-        (String::from("import"), TokenType::Import),
-        (String::from("from"), TokenType::From),
-        (String::from("type"), TokenType::Type),
-        (String::from("extern"), TokenType::Extern),
-    ])
+pub fn keywords() -> &'static HashMap<String, TokenType> {
+    static KEYWORDS: std::sync::OnceLock<HashMap<String, TokenType>> = std::sync::OnceLock::new();
+    KEYWORDS.get_or_init(|| {
+        HashMap::from([
+            (String::from("until"), TokenType::Stop(StopValue::Until)),
+            (String::from("mut"), TokenType::Mut),
+            (String::from("null"), TokenType::Null),
+            (String::from("const"), TokenType::Const),
+            (String::from("let"), TokenType::Let),
+            (String::from("enum"), TokenType::Enum),
+            (String::from("match"), TokenType::Match),
+            (String::from("obj"), TokenType::Object),
+            (String::from("fn"), TokenType::Func),
+            (String::from("drop"), TokenType::Drop),
+            (String::from("move"), TokenType::Move),
+            (String::from("defer"), TokenType::Defer),
+            (String::from("else"), TokenType::Else),
+            (String::from("list"), TokenType::List),
+            (String::from("debug"), TokenType::Debug),
+            (String::from("return"), TokenType::Stop(StopValue::Return)),
+            (String::from("in"), TokenType::In),
+            (String::from("break"), TokenType::Stop(StopValue::Break)),
+            (
+                String::from("continue"),
+                TokenType::Stop(StopValue::Continue),
+            ),
+            (String::from("try"), TokenType::Try),
+            (String::from("use"), TokenType::Use),
+            (String::from("if"), TokenType::If),
+            (String::from("as"), TokenType::As),
+            (String::from("struct"), TokenType::Struct),
+            (String::from("impl"), TokenType::Impl),
+            (String::from("trait"), TokenType::Trait),
+            (String::from("Self"), TokenType::This),
+            (String::from("for"), TokenType::For),
+            (String::from("import"), TokenType::Import),
+            (String::from("from"), TokenType::From),
+            (String::from("type"), TokenType::Type),
+            (String::from("extern"), TokenType::Extern),
+            (String::from("select"), TokenType::Select),
+            (String::from("spawn"), TokenType::Spawn),
+        ])
+    })
 }
 
-pub fn special_keywords() -> HashMap<String, TokenType> {
-    HashMap::from([
-        (String::from("->"), TokenType::Arrow),
-        (String::from("|>"), TokenType::Pipe),
-        (String::from("<("), TokenType::PipeParen),
-        (String::from("|:"), TokenType::OrColon),
-        (String::from("<-"), TokenType::LeftArrow),
-        (String::from("=>"), TokenType::FatArrow),
-        (String::from(".."), TokenType::Range),
-        (String::from("::"), TokenType::DoubleColon),
-        (String::from(":<"), TokenType::ColonAngled),
-        (
-            String::from("**"),
-            TokenType::BinaryOperator(BinaryOperator::Pow),
-        ),
-        (
-            String::from("**="),
-            TokenType::BinaryAssign(BinaryOperator::Pow),
-        ),
-        (
-            String::from("<<="),
-            TokenType::BinaryAssign(BinaryOperator::Shl),
-        ),
-        (
-            String::from(">>="),
-            TokenType::BinaryAssign(BinaryOperator::Shr),
-        ),
-        (
-            String::from("&="),
-            TokenType::BinaryAssign(BinaryOperator::BitAnd),
-        ),
-        (
-            String::from("&&="),
-            TokenType::BooleanAssign(BooleanOperator::And),
-        ),
-        (
-            String::from("||="),
-            TokenType::BooleanAssign(BooleanOperator::Or),
-        ),
-        (String::from("&&"), TokenType::Boolean(BooleanOperator::And)),
-        (String::from("||"), TokenType::Boolean(BooleanOperator::Or)),
-        (
-            String::from("|="),
-            TokenType::BinaryAssign(BinaryOperator::BitOr),
-        ),
-        (String::from("@overload"), TokenType::Overload),
-        (String::from("&mut"), TokenType::RefMut),
-        (
-            String::from("=="),
-            TokenType::Comparison(ComparisonOperator::Equal),
-        ),
-        (
-            String::from("!="),
-            TokenType::Comparison(ComparisonOperator::NotEqual),
-        ),
-    ])
+pub fn special_keywords() -> &'static HashMap<String, TokenType> {
+    static SPECIAL_KEYWORDS: std::sync::OnceLock<HashMap<String, TokenType>> =
+        std::sync::OnceLock::new();
+    SPECIAL_KEYWORDS.get_or_init(|| {
+        HashMap::from([
+            (String::from("->"), TokenType::Arrow),
+            (String::from("|>"), TokenType::Pipe),
+            (String::from("<("), TokenType::PipeParen),
+            (String::from("|:"), TokenType::OrColon),
+            (String::from("<-"), TokenType::LeftArrow),
+            (String::from("=>"), TokenType::FatArrow),
+            (String::from(".."), TokenType::Range),
+            (String::from("::"), TokenType::DoubleColon),
+            (String::from(":<"), TokenType::ColonAngled),
+            (
+                String::from("**"),
+                TokenType::BinaryOperator(BinaryOperator::Pow),
+            ),
+            (
+                String::from("**="),
+                TokenType::BinaryAssign(BinaryOperator::Pow),
+            ),
+            (
+                String::from("<<="),
+                TokenType::BinaryAssign(BinaryOperator::Shl),
+            ),
+            (
+                String::from(">>="),
+                TokenType::BinaryAssign(BinaryOperator::Shr),
+            ),
+            (
+                String::from("&="),
+                TokenType::BinaryAssign(BinaryOperator::BitAnd),
+            ),
+            (
+                String::from("&&="),
+                TokenType::BooleanAssign(BooleanOperator::And),
+            ),
+            (
+                String::from("||="),
+                TokenType::BooleanAssign(BooleanOperator::Or),
+            ),
+            (String::from("&&"), TokenType::Boolean(BooleanOperator::And)),
+            (String::from("||"), TokenType::Boolean(BooleanOperator::Or)),
+            (
+                String::from("|="),
+                TokenType::BinaryAssign(BinaryOperator::BitOr),
+            ),
+            (String::from("@overload"), TokenType::Overload),
+            (String::from("&mut"), TokenType::RefMut),
+            (
+                String::from("=="),
+                TokenType::Comparison(ComparisonOperator::Equal),
+            ),
+            (
+                String::from("!="),
+                TokenType::Comparison(ComparisonOperator::NotEqual),
+            ),
+        ])
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -315,123 +329,113 @@ impl Tokenizer {
     }
 
     pub fn tokenize(&mut self, txt: &str) -> Result<Vec<Token>, LexerError> {
-        let mut tokens: Vec<Token> = Vec::new();
-        let mut buffer: Vec<char> = txt.chars().collect();
+        let mut tokens: Vec<Token> = Vec::with_capacity(txt.len().saturating_add(1) / 2);
+        let buffer: Vec<char> = txt.chars().collect();
+        let keywords = keywords();
+        let special_keywords = special_keywords();
         self.line = 1;
         self.col = 1;
 
-        while !buffer.is_empty() {
-            let Some(first) = buffer.first() else {
-                break;
-            };
+        let mut i = 0usize;
+        let len = buffer.len();
 
-            let get_token = |c: char| -> Option<TokenType> {
-                match c {
-                    '(' => Some(TokenType::Open(Bracket::Paren)),
-                    '|' => Some(TokenType::Or),
-                    ')' => Some(TokenType::Close(Bracket::Paren)),
-                    '{' => Some(TokenType::Open(Bracket::Curly)),
-                    '}' => Some(TokenType::Close(Bracket::Curly)),
-                    '[' => Some(TokenType::Open(Bracket::Square)),
-                    ']' => Some(TokenType::Close(Bracket::Square)),
-                    ',' => Some(TokenType::Comma),
-                    '@' => Some(TokenType::At),
-                    '&' => Some(TokenType::Ref),
-                    '$' => Some(TokenType::Dollar),
-                    '?' => Some(TokenType::Question),
-                    '<' | '>' => {
-                        ComparisonOperator::from_operator(&c.to_string()).map(TokenType::Comparison)
-                    }
-                    '.' => Some(TokenType::FullStop),
-                    ':' => Some(TokenType::Colon),
-                    '=' => Some(TokenType::Equals),
-                    '!' => Some(TokenType::Not),
-                    '+' | '-' | '*' | '/' | '^' | '%' => {
-                        BinaryOperator::from_symbol(&c.to_string()).map(TokenType::BinaryOperator)
-                    }
-                    ';' => Some(TokenType::EOL),
-                    _ if c.is_whitespace() => Some(TokenType::WhiteSpace),
-                    _ => None,
+        let get_token = |c: char| -> Option<TokenType> {
+            match c {
+                '(' => Some(TokenType::Open(Bracket::Paren)),
+                '|' => Some(TokenType::Or),
+                ')' => Some(TokenType::Close(Bracket::Paren)),
+                '{' => Some(TokenType::Open(Bracket::Curly)),
+                '}' => Some(TokenType::Close(Bracket::Curly)),
+                '[' => Some(TokenType::Open(Bracket::Square)),
+                ']' => Some(TokenType::Close(Bracket::Square)),
+                ',' => Some(TokenType::Comma),
+                '@' => Some(TokenType::At),
+                '&' => Some(TokenType::Ref),
+                '$' => Some(TokenType::Dollar),
+                '?' => Some(TokenType::Question),
+                '<' | '>' => {
+                    ComparisonOperator::from_operator(&c.to_string()).map(TokenType::Comparison)
                 }
-            };
+                '.' => Some(TokenType::FullStop),
+                ':' => Some(TokenType::Colon),
+                '=' => Some(TokenType::Equals),
+                '!' => Some(TokenType::Not),
+                '+' | '-' | '*' | '/' | '^' | '%' => {
+                    BinaryOperator::from_symbol(&c.to_string()).map(TokenType::BinaryOperator)
+                }
+                ';' => Some(TokenType::EOL),
+                _ if c.is_whitespace() => Some(TokenType::WhiteSpace),
+                _ => None,
+            }
+        };
 
-            let token = match get_token(*first) {
-                Some(t) => match t {
-                    TokenType::WhiteSpace => {
-                        self.increment_line_col(first);
-                        let _ = buffer.remove(0);
-                        Some(self.new_token(t, ";"))
-                    }
-                    TokenType::FullStop => {
-                        self.increment_line_col(first);
-                        let value = buffer.remove(0).to_string();
-                        let needs_space = tokens
-                            .last()
-                            .map(|t| t.token_type == TokenType::WhiteSpace)
-                            .unwrap_or(false);
-                        Some(self.new_token(
-                            t,
-                            &format!("{}{}", if needs_space { " " } else { "" }, value.trim()),
-                        ))
-                    }
-                    t => {
-                        self.increment_line_col(first);
-                        Some(self.new_token(t, buffer.remove(0).to_string().trim()))
-                    }
-                },
-                _ => {
-                    if first == &'\'' {
-                        let mut txt = String::new();
+        while i < len {
+            let first = buffer[i];
 
-                        let c = buffer.remove(0);
-                        self.increment_line_col(&c);
-
-                        while buffer[0] != '\'' {
-                            let c = buffer.remove(0);
-                            self.increment_line_col(&c);
-                            txt.push(c);
+            let token: Option<Token> = if let Some(token_type) = get_token(first) {
+                i += 1;
+                self.increment_line_col(&first);
+                Some(self.new_token(token_type, &first.to_string()))
+            } else if first.is_numeric() {
+                let mut is_int = true;
+                if first == '0' && i + 1 < len {
+                    let prefix = buffer[i + 1];
+                    let base = match prefix {
+                        'b' | 'B' => Some(2),
+                        'x' | 'X' => Some(16),
+                        _ => None,
+                    };
+                    if let Some(base) = base {
+                        i += 1;
+                        self.increment_line_col(&first);
+                        i += 1;
+                        self.increment_line_col(&prefix);
+                        let mut value: u64 = 0;
+                        let mut saw = false;
+                        while i < len {
+                            let c = buffer[i];
+                            if c == '_' {
+                                i += 1;
+                                self.increment_line_col(&c);
+                                continue;
+                            }
+                            if let Some(digit) = c.to_digit(base) {
+                                value = value
+                                    .checked_mul(base as u64)
+                                    .and_then(|v| v.checked_add(digit as u64))
+                                    .unwrap_or(value);
+                                saw = true;
+                                i += 1;
+                                self.increment_line_col(&c);
+                                continue;
+                            }
+                            break;
                         }
-
-                        let c = buffer.remove(0);
-                        self.increment_line_col(&c);
-
-                        Some(self.new_token(TokenType::Char, &txt))
-                    } else if first == &'"' {
-                        let mut txt = String::new();
-
-                        let c = buffer.remove(0);
-                        self.increment_line_col(&c);
-
-                        while buffer[0] != '"' {
-                            let c = buffer.remove(0);
-                            self.increment_line_col(&c);
-                            txt.push(c);
+                        if !saw {
+                            return Err(self.get_unrecognized(first));
                         }
-
-                        let c = buffer.remove(0);
-                        self.increment_line_col(&c);
-
-                        Some(self.new_token(TokenType::String, &txt))
-                    } else if first.is_numeric() {
+                        let token = self.new_token(TokenType::Integer, &value.to_string());
+                        Some(token)
+                    } else {
                         let mut number = String::new();
-                        let mut is_int = true;
-
-                        while buffer.len() > 0
-                            && (buffer[0].is_numeric() || buffer[0] == '.' || buffer[0] == '_')
+                        while i < len
+                            && (buffer[i].is_numeric() || buffer[i] == '.' || buffer[i] == '_')
                         {
-                            if buffer[0] == '.' {
-                                if buffer[1] == '.' {
+                            if buffer[i] == '.' {
+                                if i + 1 < len && buffer[i + 1] == '.' {
                                     break;
                                 }
                                 is_int = false;
                             }
-                            let c = buffer.remove(0);
+                            let c = buffer[i];
+                            i += 1;
                             self.increment_line_col(&c);
                             number.push(c);
                         }
 
-                        if !buffer.is_empty() && buffer[0] == 'f' {
-                            let c = buffer.remove(0);
+                        if i < len && buffer[i] == 'f' {
+                            let c = buffer[i];
+                            i += 1;
                             self.increment_line_col(&c);
                             is_int = false;
                         }
@@ -444,34 +448,135 @@ impl Tokenizer {
 
                         token.value = number.replace("_", "");
                         Some(token)
-                    } else if first.is_alphabetic()
-                        || first == &'_'
-                        || first.to_uppercase().to_string().trim()
-                            != first.to_lowercase().to_string().trim()
-                    {
-                        let mut txt = String::new();
-                        while buffer.len() > 0
-                            && (buffer[0].is_alphanumeric()
-                                || buffer[0] == '_'
-                                || buffer[0].to_uppercase().to_string().trim()
-                                    != buffer[0].to_lowercase().to_string().trim()
-                                || buffer[0].is_numeric())
-                            && !buffer[0].is_whitespace()
-                        {
-                            let char = buffer.remove(0);
-                            self.increment_line_col(&char);
-                            txt.push(char);
-                        }
-
-                        if let Some(identifier) = keywords().get(txt.trim()) {
-                            Some(self.new_token(identifier.clone(), txt.trim()))
-                        } else {
-                            Some(self.new_token(TokenType::Identifier, txt.trim()))
-                        }
-                    } else {
-                        return Err(self.get_unrecognized(*first));
                     }
+                } else {
+                    let mut number = String::new();
+                    while i < len
+                        && (buffer[i].is_numeric() || buffer[i] == '.' || buffer[i] == '_')
+                    {
+                        if buffer[i] == '.' {
+                            if i + 1 < len && buffer[i + 1] == '.' {
+                                break;
+                            }
+                            is_int = false;
+                        }
+                        let c = buffer[i];
+                        i += 1;
+                        self.increment_line_col(&c);
+                        number.push(c);
+                    }
+
+                    if i < len && buffer[i] == 'f' {
+                        let c = buffer[i];
+                        i += 1;
+                        self.increment_line_col(&c);
+                        is_int = false;
+                    }
+
+                    let mut token = if is_int {
+                        self.new_token(TokenType::Integer, number.trim())
+                    } else {
+                        self.new_token(TokenType::Float, number.trim())
+                    };
+
+                    token.value = number.replace("_", "");
+                    Some(token)
                 }
+            } else if first == '"' {
+                i += 1;
+                self.increment_line_col(&first);
+                let mut txt = String::new();
+                let mut escaped = false;
+                while i < len {
+                    let ch = buffer[i];
+                    i += 1;
+                    self.increment_line_col(&ch);
+                    if escaped {
+                        let resolved = match ch {
+                            'n' => '\n',
+                            'r' => '\r',
+                            't' => '\t',
+                            '\\' => '\\',
+                            '"' => '"',
+                            other => other,
+                        };
+                        txt.push(resolved);
+                        escaped = false;
+                        continue;
+                    }
+                    if ch == '\\' {
+                        escaped = true;
+                        continue;
+                    }
+                    if ch == '"' {
+                        break;
+                    }
+                    txt.push(ch);
+                }
+                if escaped || (i == len && buffer[len - 1] != '"') {
+                    return Err(self.get_unrecognized(first));
+                }
+                Some(self.new_token(TokenType::String, &txt))
+            } else if first == '\'' {
+                i += 1;
+                self.increment_line_col(&first);
+                if i >= len {
+                    return Err(self.get_unrecognized(first));
+                }
+                let mut ch = buffer[i];
+                i += 1;
+                self.increment_line_col(&ch);
+                if ch == '\\' {
+                    if i >= len {
+                        return Err(self.get_unrecognized(first));
+                    }
+                    let next = buffer[i];
+                    i += 1;
+                    self.increment_line_col(&next);
+                    ch = match next {
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        '\\' => '\\',
+                        '\'' => '\'',
+                        other => other,
+                    };
+                }
+                if i >= len || buffer[i] != '\'' {
+                    return Err(self.get_unrecognized(first));
+                }
+                let closing = buffer[i];
+                i += 1;
+                self.increment_line_col(&closing);
+                let ch_str = ch.to_string();
+                Some(self.new_token(TokenType::Char, &ch_str))
+            } else if first.is_alphabetic()
+                || first == '_'
+                || first.to_uppercase().to_string().trim()
+                    != first.to_lowercase().to_string().trim()
+            {
+                let mut txt = String::new();
+                while i < len
+                    && (buffer[i].is_alphanumeric()
+                        || buffer[i] == '_'
+                        || buffer[i].to_uppercase().to_string().trim()
+                            != buffer[i].to_lowercase().to_string().trim()
+                        || buffer[i].is_numeric())
+                    && !buffer[i].is_whitespace()
+                {
+                    let ch = buffer[i];
+                    i += 1;
+                    self.increment_line_col(&ch);
+                    txt.push(ch);
+                }
+
+                if let Some(identifier) = keywords.get(txt.trim()) {
+                    Some(self.new_token(identifier.clone(), txt.trim()))
+                } else {
+                    Some(self.new_token(TokenType::Identifier, txt.trim()))
+                }
+            } else {
+                return Err(self.get_unrecognized(first));
             };
 
             if let Some(token) = token {
@@ -490,9 +595,10 @@ impl Tokenizer {
                             }
                         };
 
-                        while buffer.len() > 0 && can_continue(first, second, token.value == "/") {
+                        while i < len && can_continue(first, second, token.value == "/") {
                             first = second;
-                            second = buffer.remove(0);
+                            second = buffer[i];
+                            i += 1;
                             self.increment_line_col(&second);
                             txt.push(second);
                         }
@@ -505,7 +611,7 @@ impl Tokenizer {
 
                     let combined = format!("{}{}", last.value, token.value);
 
-                    if let Some(t) = special_keywords().get(&combined) {
+                    if let Some(t) = special_keywords.get(&combined) {
                         let token = self.new_token(t.clone(), &combined);
                         tokens.pop();
                         tokens.push(token);
@@ -520,7 +626,7 @@ impl Tokenizer {
                             token.value
                         );
 
-                        if let Some(t) = special_keywords().get(&combined) {
+                        if let Some(t) = special_keywords.get(&combined) {
                             let token = self.new_token(t.clone(), &combined);
                             tokens.pop();
                             tokens.pop();

@@ -95,18 +95,26 @@ impl Parser {
             }
             TokenType::Float => {
                 let val = self.eat();
-                Node::new(
-                    val.span,
-                    NodeType::FloatLiteral(val.value.trim().parse().unwrap()),
-                )
+                let parsed = match val.value.trim().parse() {
+                    Ok(num) => num,
+                    Err(_) => {
+                        self.add_err_at(SyntaxErr::InvalidLiteral(val.value.clone()), val.span);
+                        0.0
+                    }
+                };
+                Node::new(val.span, NodeType::FloatLiteral(parsed))
             }
             TokenType::Null => Node::new(self.eat().span, NodeType::Null),
             TokenType::Integer => {
                 let val = self.eat();
-                Node::new(
-                    val.span,
-                    NodeType::IntLiteral(val.value.trim().parse().unwrap()),
-                )
+                let parsed = match val.value.trim().parse() {
+                    Ok(num) => num,
+                    Err(_) => {
+                        self.add_err_at(SyntaxErr::InvalidLiteral(val.value.clone()), val.span);
+                        0
+                    }
+                };
+                Node::new(val.span, NodeType::IntLiteral(parsed.to_string()))
             }
             TokenType::Stop(x) => match x {
                 StopValue::Until => {
@@ -122,11 +130,31 @@ impl Parser {
                 StopValue::Return => self.parse_return_declaration(),
                 StopValue::Break => {
                     let val = self.eat();
-                    Node::new(val.span, NodeType::Break)
+                    let label = if self.first().token_type == TokenType::At {
+                        let _ = self.eat();
+                        Some(self.expect_potential_dollar_ident())
+                    } else {
+                        None
+                    };
+                    let value = match self.first().token_type {
+                        TokenType::EOL
+                        | TokenType::EOF
+                        | TokenType::Comma
+                        | TokenType::Close(_)
+                        | TokenType::Open(Bracket::Curly) => None,
+                        _ => Some(Box::new(self.parse_statement())),
+                    };
+                    Node::new(val.span, NodeType::Break { label, value })
                 }
                 StopValue::Continue => {
                     let val = self.eat();
-                    Node::new(val.span, NodeType::Continue)
+                    let label = if self.first().token_type == TokenType::At {
+                        let _ = self.eat();
+                        Some(self.expect_potential_dollar_ident())
+                    } else {
+                        None
+                    };
+                    Node::new(val.span, NodeType::Continue { label })
                 }
             },
             TokenType::String => {
@@ -136,11 +164,12 @@ impl Parser {
             }
             TokenType::Char => {
                 let val = self.eat();
-
-                Node::new(
-                    val.span,
-                    NodeType::CharLiteral(val.value.chars().nth(0).unwrap()),
-                )
+                let mut chars = val.value.chars();
+                let ch = chars.next().unwrap_or_else(|| {
+                    self.add_err_at(SyntaxErr::InvalidLiteral(val.value.clone()), val.span);
+                    '\0'
+                });
+                Node::new(val.span, NodeType::CharLiteral(ch))
             }
             TokenType::Drop => {
                 let open = self.eat();
@@ -153,19 +182,13 @@ impl Parser {
             }
             TokenType::Move => {
                 let open = self.eat();
-                let expr = self.parse_pipe_expression();
-                match expr.node_type {
-                    NodeType::Identifier(ident) => Node::new(
-                        Span::new_from_spans(open.span, *ident.span()),
-                        NodeType::Move(ident.into()),
-                    ),
-                    _ => Node::new(
-                        Span::new_from_spans(open.span, expr.span),
-                        NodeType::MoveExpression {
-                            value: Box::new(expr),
-                        },
-                    ),
-                }
+                let value = self.parse_pipe_expression();
+                Node::new(
+                    Span::new_from_spans(open.span, value.span),
+                    NodeType::MoveExpression {
+                        value: Box::new(value),
+                    },
+                )
             }
             TokenType::Defer => {
                 let open = self.eat();
@@ -273,7 +296,7 @@ impl Parser {
                     },
                 )
             }
-
+            TokenType::For => self.parse_loop_declaration(),
             TokenType::Boolean(BooleanOperator::And) => {
                 let open = self.eat();
                 let close = self.parse_purely_member();
@@ -384,21 +407,16 @@ impl Parser {
                     if [TokenType::Comma, TokenType::Close(Bracket::Curly)]
                         .contains(&self.first().token_type)
                     {
-                        if self.first().token_type != TokenType::Close(Bracket::Curly) {
-                            let _ = self.eat();
-                        }
-
                         properties.push((
                             key.to_string(),
                             Node::new(*key.span(), NodeType::Identifier(key.into())),
                         ));
-                        continue;
+                    } else {
+                        let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
+
+                        let value = self.parse_statement();
+                        properties.push((key.to_string(), value));
                     }
-
-                    let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
-
-                    let value = self.parse_statement();
-                    properties.push((key.to_string(), value));
 
                     if self.first().token_type != TokenType::Close(Bracket::Curly) {
                         let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
@@ -473,13 +491,14 @@ impl Parser {
                 }
 
                 let value = if values.len() == 1 {
-                    values.pop().unwrap()
-                } else {
-                    let span = Span::new_from_spans(
-                        values.first().unwrap().span,
-                        values.last().unwrap().span,
-                    );
+                    values
+                        .pop()
+                        .unwrap_or_else(|| Node::new(self.first().span, NodeType::Null))
+                } else if let (Some(first), Some(last)) = (values.first(), values.last()) {
+                    let span = Span::new_from_spans(first.span, last.span);
                     Node::new(span, NodeType::TupleLiteral { values })
+                } else {
+                    Node::new(self.first().span, NodeType::Null)
                 };
 
                 let mut bindings_out = Vec::new();
@@ -523,12 +542,11 @@ impl Parser {
                         }
 
                         let value = if values.len() == 1 {
-                            values.pop().unwrap()
-                        } else {
-                            let span = Span::new_from_spans(
-                                values.first().unwrap().span,
-                                values.last().unwrap().span,
-                            );
+                            values
+                                .pop()
+                                .unwrap_or_else(|| Node::new(self.first().span, NodeType::Null))
+                        } else if let (Some(first), Some(last)) = (values.first(), values.last()) {
+                            let span = Span::new_from_spans(first.span, last.span);
                             Node::new(
                                 span,
                                 NodeType::CallExpression {
@@ -546,6 +564,8 @@ impl Parser {
                                     reverse_args: Vec::new(),
                                 },
                             )
+                        } else {
+                            Node::new(self.first().span, NodeType::Null)
                         };
 
                         let mut bindings_out = Vec::new();

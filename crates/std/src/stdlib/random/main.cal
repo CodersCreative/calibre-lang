@@ -1,0 +1,40 @@
+extern "c" const c_rand = fn() -> @int from "libc" as "rand";
+extern "c" const c_srand = fn(@uint) -> null from "libc" as "srand";
+extern "c" const c_time = fn(@usize) -> @int from "libc" as "time";
+
+const RAND_MAX = 2147483647;
+
+const seed = fn () => {
+	c_srand(c_time(0) as uint);
+	null;
+};
+
+const seed_with = fn (value : int) => {
+	c_srand(value as uint);
+	null;
+};
+
+const generate = fn () -> int => c_rand();
+
+const bool = fn () -> bool => (c_rand() & 1) == 1;
+
+const ratio = fn () -> float => (c_rand() as float) / (RAND_MAX as float);
+
+const range = fn (min : int, max : int) -> int => {
+	if max <= min => min else => {
+		let span = max - min;
+		min + (c_rand() % span);
+	};
+};
+
+const range_inclusive = fn (min : int, max : int) -> int => range(min, max + 1);
+
+const float_range = fn (min : float, max : float) -> float => {
+	if max <= min => min else => min + (ratio() * (max - min));
+};
+
+const choice = fn <T> (values : list:<T>) -> T? => {
+	if len(values) == 0 => none;
+	let idx = range(0, len(values));
+	some(values[idx]);
+};

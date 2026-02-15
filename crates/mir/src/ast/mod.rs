@@ -23,19 +23,17 @@ impl MiddleNode {
     pub fn new(node_type: MiddleNodeType, span: Span) -> Self {
         Self { node_type, span }
     }
-
-    pub fn new_from_type(node_type: MiddleNodeType) -> Self {
-        Self {
-            node_type,
-            span: Span::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
-    Break,
-    Continue,
+    Break {
+        label: Option<ParserText>,
+        value: Option<Box<MiddleNode>>,
+    },
+    Continue {
+        label: Option<ParserText>,
+    },
     EmptyLine,
     Null,
     RefStatement {
@@ -44,6 +42,9 @@ pub enum MiddleNodeType {
     },
     Drop(ParserText),
     Move(ParserText),
+    Spawn {
+        value: Box<MiddleNode>,
+    },
     DerefStatement {
         value: Box<MiddleNode>,
     },
@@ -68,7 +69,6 @@ pub enum MiddleNodeType {
         parameters: Vec<(ParserText, ParserDataType)>,
         body: Box<MiddleNode>,
         return_type: ParserDataType,
-        is_async: bool,
         scope_id: u64,
     },
     ExternFunction {
@@ -102,6 +102,7 @@ pub enum MiddleNodeType {
         state: Option<Box<MiddleNode>>,
         body: Box<MiddleNode>,
         scope_id: u64,
+        label: Option<ParserText>,
     },
     Return {
         value: Option<Box<MiddleNode>>,
@@ -170,10 +171,20 @@ impl Into<Node> for MiddleNode {
 impl Into<NodeType> for MiddleNodeType {
     fn into(self) -> NodeType {
         match self {
+            Self::Spawn { value } => NodeType::Spawn {
+                value: Box::new((*value).into()),
+            },
             Self::Drop(x) => NodeType::Drop(x.into()),
-            Self::Move(x) => NodeType::Move(x.into()),
-            Self::Break => NodeType::Break,
-            Self::Continue => NodeType::Continue,
+            Self::Move(x) => NodeType::MoveExpression {
+                value: Box::new(Node::new(x.span, NodeType::Identifier(x.into()))),
+            },
+            Self::Break { label, value } => NodeType::Break {
+                label: label.map(Into::into),
+                value: value.map(|v| Box::new((*v).into())),
+            },
+            Self::Continue { label } => NodeType::Continue {
+                label: label.map(Into::into),
+            },
             Self::EmptyLine => NodeType::EmptyLine,
             Self::Null => NodeType::Null,
             Self::RefStatement { mutability, value } => NodeType::RefStatement {
@@ -231,7 +242,6 @@ impl Into<NodeType> for MiddleNodeType {
                 parameters,
                 body,
                 return_type,
-                is_async,
                 scope_id: _,
             } => NodeType::FunctionDeclaration {
                 header: FunctionHeader {
@@ -245,7 +255,6 @@ impl Into<NodeType> for MiddleNodeType {
                         lst
                     },
                     return_type: return_type.into(),
-                    is_async,
                     param_destructures: Vec::new(),
                 },
                 body: Box::new((*body).into()),
@@ -307,6 +316,7 @@ impl Into<NodeType> for MiddleNodeType {
                 state,
                 body,
                 scope_id: _,
+                label,
             } => NodeType::ScopeDeclaration {
                 body: {
                     let mut lst = Vec::new();
@@ -315,11 +325,16 @@ impl Into<NodeType> for MiddleNodeType {
                         lst.push((*state).into());
                     }
 
-                    lst.push(Node::new_from_type(NodeType::LoopDeclaration {
-                        loop_type: Box::new(LoopType::Loop),
-                        body: Box::new((*body).into()),
-                        until: None,
-                    }));
+                    lst.push(Node::new(
+                        body.span,
+                        NodeType::LoopDeclaration {
+                            loop_type: Box::new(LoopType::Loop),
+                            body: Box::new((*body).into()),
+                            until: None,
+                            label: label.map(Into::into),
+                            else_body: None,
+                        },
+                    ));
 
                     Some(lst)
                 },
@@ -345,7 +360,7 @@ impl Into<NodeType> for MiddleNodeType {
             }),
             Self::CharLiteral(x) => NodeType::CharLiteral(x),
             Self::FloatLiteral(x) => NodeType::FloatLiteral(x),
-            Self::IntLiteral(x) => NodeType::IntLiteral(x),
+            Self::IntLiteral(x) => NodeType::IntLiteral(x.to_string()),
             Self::MemberExpression { path } => NodeType::MemberExpression {
                 path: {
                     let mut lst = Vec::new();
@@ -405,17 +420,25 @@ impl Into<NodeType> for MiddleNodeType {
                     value.contains_key("0")
                 };
                 if is_tuple {
+                    let caller_span = identifier
+                        .as_ref()
+                        .map(|id| id.span)
+                        .or_else(|| value.0.first().map(|(_, node)| node.span))
+                        .unwrap_or_default();
                     NodeType::CallExpression {
                         string_fn: None,
                         generic_types: Vec::new(),
-                        caller: Box::new(Node::new_from_type(NodeType::Identifier(
-                            if let Some(identifier) = identifier {
-                                identifier
-                            } else {
-                                ParserText::from(String::from("tuple"))
-                            }
-                            .into(),
-                        ))),
+                        caller: Box::new(Node::new(
+                            caller_span,
+                            NodeType::Identifier(
+                                if let Some(identifier) = identifier {
+                                    identifier
+                                } else {
+                                    ParserText::from(String::from("tuple"))
+                                }
+                                .into(),
+                            ),
+                        )),
                         args: {
                             let mut lst = Vec::new();
                             let mut value: Vec<(String, MiddleNode)> =
@@ -430,7 +453,9 @@ impl Into<NodeType> for MiddleNodeType {
                     }
                 } else {
                     NodeType::StructLiteral {
-                        identifier: identifier.unwrap().into(),
+                        identifier: identifier
+                            .unwrap_or_else(|| ParserText::from(String::from("map")).into())
+                            .into(),
                         value: ObjectType::Map(
                             value.0.into_iter().map(|x| (x.0, x.1.into())).collect(),
                         ),

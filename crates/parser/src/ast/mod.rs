@@ -215,7 +215,7 @@ impl FromStr for ParserFfiInnerType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ParserDataType {
     pub data_type: ParserInnerType,
     pub span: Span,
@@ -243,7 +243,7 @@ impl Deref for ParserDataType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ParserInnerType {
     Float,
     UInt,
@@ -267,7 +267,6 @@ pub enum ParserInnerType {
     Function {
         return_type: Box<ParserDataType>,
         parameters: Vec<ParserDataType>,
-        is_async: bool,
     },
     Ref(Box<ParserDataType>, RefMutability),
     Struct(String),
@@ -289,6 +288,13 @@ impl ParserDataType {
 
     pub fn contains_auto(&self) -> bool {
         self.data_type.contains_auto()
+    }
+
+    pub fn verify(self) -> Self {
+        Self {
+            data_type: self.data_type.verify(),
+            span: self.span,
+        }
     }
 }
 
@@ -321,6 +327,22 @@ impl ParserInnerType {
             Self::List(_) => true,
             Self::Ref(x, _) => x.is_list(),
             _ => false,
+        }
+    }
+
+    pub fn verify(self) -> Self {
+        match self {
+            Self::Result { ok, err } => Self::Result {
+                ok: Box::new(ok.verify()),
+                err: Box::new(err.verify()),
+            },
+            Self::Ref(x, y) => Self::Ref(Box::new(x.verify()), y),
+            Self::Ptr(x) => Self::Ptr(Box::new(x.verify())),
+            Self::Option(x) => Self::Option(Box::new(x.verify())),
+            Self::List(x) => Self::List(Box::new(x.verify())),
+            Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.verify()).collect()),
+            Self::Struct(x) => Self::from_str(&x).unwrap_or(Self::Struct(x)),
+            ty => ty,
         }
     }
 
@@ -508,21 +530,15 @@ impl Display for ParserInnerType {
             Self::Function {
                 return_type,
                 parameters,
-                is_async,
             } => {
-                let mut txt = if *is_async {
-                    String::from("fn async")
-                } else {
-                    String::from("fn")
-                };
+                let mut txt = String::from("fn (");
 
-                txt.push_str(&format!(
-                    "({}",
-                    parameters
+                txt.push_str(
+                    &parameters
                         .get(0)
                         .map(|x| x.to_string())
-                        .unwrap_or(String::new())
-                ));
+                        .unwrap_or(String::new()),
+                );
 
                 for typ in parameters.iter().skip(1) {
                     txt.push_str(&format!(", {}", typ));
@@ -547,6 +563,20 @@ pub struct GenericTypes(pub Vec<GenericType>);
 pub struct GenericType {
     pub identifier: PotentialDollarIdentifier,
     pub trait_constraints: Vec<PotentialDollarIdentifier>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TraitMemberKind {
+    Const,
+    Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraitMember {
+    pub kind: TraitMemberKind,
+    pub identifier: PotentialDollarIdentifier,
+    pub data_type: PotentialNewType,
+    pub value: Option<Box<Node>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -891,13 +921,6 @@ impl Node {
     pub fn new(span: Span, node_type: NodeType) -> Self {
         Self { node_type, span }
     }
-
-    pub fn new_from_type(node_type: NodeType) -> Self {
-        Self {
-            node_type,
-            span: Span::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -948,10 +971,13 @@ pub struct Overload {
 
 impl Into<Node> for Overload {
     fn into(self) -> Node {
-        Node::new_from_type(NodeType::FunctionDeclaration {
-            header: self.header,
-            body: self.body,
-        })
+        Node::new(
+            self.operator.span,
+            NodeType::FunctionDeclaration {
+                header: self.header,
+                body: self.body,
+            },
+        )
     }
 }
 
@@ -966,8 +992,7 @@ pub struct FunctionHeader {
     pub generics: GenericTypes,
     pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
     pub return_type: PotentialNewType,
-    pub is_async: bool,
-    pub param_destructures: Vec<(PotentialDollarIdentifier, DestructurePattern)>,
+    pub param_destructures: Vec<(usize, DestructurePattern)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -987,10 +1012,28 @@ impl Into<Node> for CallArg {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
-    Break,
-    Continue,
+    Break {
+        label: Option<PotentialDollarIdentifier>,
+        value: Option<Box<Node>>,
+    },
+    Continue {
+        label: Option<PotentialDollarIdentifier>,
+    },
     EmptyLine,
     Null,
+    Spawn {
+        value: Box<Node>,
+    },
+    SpawnBlock {
+        items: Vec<Node>,
+    },
+    Use {
+        identifiers: Vec<PotentialDollarIdentifier>,
+        value: Box<Node>,
+    },
+    SelectStatement {
+        arms: Vec<SelectArm>,
+    },
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
@@ -1003,7 +1046,6 @@ pub enum NodeType {
         value: Box<Node>,
     },
     Drop(PotentialDollarIdentifier),
-    Move(PotentialDollarIdentifier),
     MoveExpression {
         value: Box<Node>,
     },
@@ -1021,8 +1063,20 @@ pub enum NodeType {
         data_type: PotentialNewType,
     },
     ImplDeclaration {
-        identifier: PotentialGenericTypeIdentifier,
+        generics: GenericTypes,
+        target: PotentialNewType,
         variables: Vec<Node>,
+    },
+    ImplTraitDeclaration {
+        generics: GenericTypes,
+        trait_ident: PotentialGenericTypeIdentifier,
+        target: PotentialNewType,
+        variables: Vec<Node>,
+    },
+    TraitDeclaration {
+        identifier: PotentialGenericTypeIdentifier,
+        implied_traits: Vec<PotentialDollarIdentifier>,
+        members: Vec<TraitMember>,
     },
     TypeDeclaration {
         identifier: PotentialGenericTypeIdentifier,
@@ -1107,6 +1161,7 @@ pub enum NodeType {
     IterExpression {
         data_type: PotentialNewType,
         map: Box<Node>,
+        spawned: bool,
         loop_type: Box<LoopType>,
         conditionals: Vec<Node>,
         until: Option<Box<Node>>,
@@ -1115,6 +1170,8 @@ pub enum NodeType {
         loop_type: Box<LoopType>,
         body: Box<Node>,
         until: Option<Box<Node>>,
+        label: Option<PotentialDollarIdentifier>,
+        else_body: Option<Box<Node>>,
     },
     Try {
         value: Box<Node>,
@@ -1130,7 +1187,7 @@ pub enum NodeType {
     ListLiteral(PotentialNewType, Vec<Node>),
     CharLiteral(char),
     FloatLiteral(f64),
-    IntLiteral(i64),
+    IntLiteral(String),
     MemberExpression {
         path: Vec<(Node, bool)>,
     },
@@ -1179,6 +1236,20 @@ pub enum NodeType {
         identifier: PotentialGenericTypeIdentifier,
         value: ObjectType<Node>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SelectArmKind {
+    Recv,
+    Send,
+    Default,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SelectArm {
+    pub patterns: Vec<(SelectArmKind, Option<Node>, Option<Node>)>,
+    pub conditionals: Vec<Node>,
+    pub body: Node,
 }
 
 #[derive(Clone, Debug, PartialEq)]

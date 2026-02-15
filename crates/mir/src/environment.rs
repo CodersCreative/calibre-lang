@@ -24,6 +24,7 @@ pub enum MiddleTypeDefType {
     Enum(Vec<(ParserText, Option<ParserDataType>)>),
     Struct(ObjectMap<ParserDataType>),
     NewType(ParserDataType),
+    Trait,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,6 +33,29 @@ pub struct MiddleObject {
     pub variables: FxHashMap<String, (String, bool)>,
     pub traits: Vec<String>,
     pub location: Option<Location>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiddleImpl {
+    pub data_type: ParserDataType,
+    pub generic_params: Vec<String>,
+    pub variables: FxHashMap<String, (String, bool)>,
+    pub traits: Vec<String>,
+    pub assoc_types: FxHashMap<String, ParserDataType>,
+    pub location: Option<Location>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiddleTraitMember {
+    pub data_type: ParserDataType,
+    pub default: Option<Node>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiddleTrait {
+    pub implied_traits: Vec<String>,
+    pub members: FxHashMap<String, MiddleTraitMember>,
+    pub assoc_types: FxHashMap<String, ParserDataType>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -47,6 +71,7 @@ pub struct MiddleOverload {
     pub parameters: Vec<ParserDataType>,
     pub return_type: ParserDataType,
     pub func: Node,
+    pub generic_params: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -54,12 +79,24 @@ pub enum Operator {
     Binary(BinaryOperator),
     Comparison(ComparisonOperator),
     Boolean(BooleanOperator),
+    Index,
+    IndexAssign,
+    In,
+    As,
 }
 
 impl FromStr for Operator {
     type Err = MiddleErr;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some(x) = BinaryOperator::from_symbol(s) {
+        if s == "[]" {
+            Ok(Self::Index)
+        } else if s == "[]=" {
+            Ok(Self::IndexAssign)
+        } else if s == "in" {
+            Ok(Self::In)
+        } else if s == "as" {
+            Ok(Self::As)
+        } else if let Some(x) = BinaryOperator::from_symbol(s) {
             Ok(Self::Binary(x))
         } else if let Some(x) = ComparisonOperator::from_operator(s) {
             Ok(Self::Comparison(x))
@@ -80,6 +117,9 @@ pub struct MiddleEnvironment {
     pub overloads: Vec<MiddleOverload>,
     pub func_defers: Vec<Node>,
     pub objects: FxHashMap<String, MiddleObject>,
+    pub impls: FxHashMap<ParserInnerType, MiddleImpl>,
+    pub type_aliases: FxHashMap<String, ParserDataType>,
+    pub trait_defs: FxHashMap<String, MiddleTrait>,
     pub hm_env: FxHashMap<String, hm::TypeScheme>,
     pub generic_fn_templates:
         FxHashMap<String, (Vec<String>, calibre_parser::ast::FunctionHeader, Node)>,
@@ -89,6 +129,48 @@ pub struct MiddleEnvironment {
     pub specialization_decls_by_scope: FxHashMap<u64, Vec<MiddleNode>>,
     pub current_location: Option<Location>,
     pub errors: Vec<MiddleErr>,
+    pub type_cache: FxHashMap<hm::Type, ParserDataType>,
+    pub stdlib_nodes: Vec<MiddleNode>,
+    pub suppress_curry: bool,
+    pub loop_stack: Vec<LoopContext>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LoopContext {
+    pub label: Option<String>,
+    pub result_target: Option<ParserText>,
+    pub broke_target: Option<ParserText>,
+    pub continue_inject: Option<Node>,
+    pub scope_id: u64,
+}
+
+impl Default for MiddleEnvironment {
+    fn default() -> Self {
+        Self {
+            func_defers: Vec::new(),
+            overloads: Vec::new(),
+            scope_counter: 0,
+            scopes: FxHashMap::default(),
+            resolved_variables: Vec::new(),
+            variables: FxHashMap::default(),
+            objects: FxHashMap::default(),
+            impls: FxHashMap::default(),
+            type_aliases: FxHashMap::default(),
+            trait_defs: FxHashMap::default(),
+            hm_env: FxHashMap::default(),
+            generic_fn_templates: FxHashMap::default(),
+            generic_type_templates: FxHashMap::default(),
+            type_specializations: FxHashMap::default(),
+            fn_specializations: FxHashMap::default(),
+            specialization_decls_by_scope: FxHashMap::default(),
+            current_location: None,
+            errors: Vec::new(),
+            stdlib_nodes: Vec::new(),
+            type_cache: FxHashMap::default(),
+            suppress_curry: false,
+            loop_stack: Vec::new(),
+        }
+    }
 }
 
 fn empty_scope() -> &'static MiddleScope {
@@ -148,24 +230,193 @@ pub fn get_disamubiguous_name(
 }
 
 impl MiddleEnvironment {
-    pub fn new() -> MiddleEnvironment {
-        MiddleEnvironment {
-            func_defers: Vec::new(),
-            overloads: Vec::new(),
-            scope_counter: 0,
-            scopes: FxHashMap::default(),
-            resolved_variables: Vec::new(),
-            variables: FxHashMap::default(),
-            objects: FxHashMap::default(),
-            hm_env: FxHashMap::default(),
-            generic_fn_templates: FxHashMap::default(),
-            generic_type_templates: FxHashMap::default(),
-            type_specializations: FxHashMap::default(),
-            fn_specializations: FxHashMap::default(),
-            specialization_decls_by_scope: FxHashMap::default(),
-            current_location: None,
-            errors: Vec::new(),
+    fn lookup_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
+        if let Some(obj) = self.objects.get(struct_name) {
+            return Some(obj);
         }
+        if let Some((base, _)) = struct_name.split_once("->") {
+            return self.objects.get(base);
+        }
+        None
+    }
+
+    pub fn type_key(&self, ty: &ParserDataType) -> String {
+        ty.clone().unwrap_all_refs().data_type.to_string()
+    }
+
+    pub fn impl_key(&self, ty: &ParserDataType) -> ParserInnerType {
+        ty.clone().unwrap_all_refs().data_type
+    }
+
+    pub fn impl_self_name(&self, ty: &ParserDataType) -> String {
+        match ty.clone().unwrap_all_refs().data_type {
+            ParserInnerType::Struct(name) => name,
+            ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
+            ParserInnerType::Int => String::from("int"),
+            ParserInnerType::UInt => String::from("uint"),
+            ParserInnerType::Float => String::from("float"),
+            ParserInnerType::Bool => String::from("bool"),
+            ParserInnerType::Char => String::from("char"),
+            ParserInnerType::Str => String::from("str"),
+            ParserInnerType::Range => String::from("range"),
+            other => other.to_string(),
+        }
+    }
+
+    pub(crate) fn impl_type_matches(
+        &self,
+        impl_ty: &ParserInnerType,
+        target: &ParserInnerType,
+        generic_params: &[String],
+    ) -> bool {
+        fn struct_base(name: &str) -> &str {
+            let short = name.rsplit(':').next().unwrap_or(name);
+            short.split("->").next().unwrap_or(short)
+        }
+        match (impl_ty, target) {
+            (ParserInnerType::Struct(s), ParserInnerType::Int) if struct_base(s) == "int" => {
+                return true;
+            }
+            (ParserInnerType::Struct(s), ParserInnerType::Float) if struct_base(s) == "float" => {
+                return true;
+            }
+            (ParserInnerType::Struct(s), ParserInnerType::Bool) if struct_base(s) == "bool" => {
+                return true;
+            }
+            (ParserInnerType::Struct(s), ParserInnerType::Char) if struct_base(s) == "char" => {
+                return true;
+            }
+            (ParserInnerType::Struct(s), ParserInnerType::Str) if struct_base(s) == "str" => {
+                return true;
+            }
+            (ParserInnerType::Struct(s), ParserInnerType::Range) if struct_base(s) == "range" => {
+                return true;
+            }
+            _ => {}
+        }
+        match (impl_ty, target) {
+            (ParserInnerType::Struct(a), _) if generic_params.contains(a) => true,
+            (ParserInnerType::Struct(a), ParserInnerType::Struct(b))
+                if b == a
+                    || b.starts_with(&format!("{}->", a))
+                    || struct_base(a) == struct_base(b) =>
+            {
+                true
+            }
+            (
+                ParserInnerType::StructWithGenerics { identifier: a, .. },
+                ParserInnerType::Struct(b),
+            ) if b == a || b.starts_with(&format!("{}->", a)) || struct_base(b) == a => true,
+            (
+                ParserInnerType::Struct(a),
+                ParserInnerType::StructWithGenerics { identifier: b, .. },
+            ) => a == b || struct_base(a) == b,
+            (
+                ParserInnerType::StructWithGenerics {
+                    identifier: a,
+                    generic_types: ag,
+                },
+                ParserInnerType::StructWithGenerics {
+                    identifier: b,
+                    generic_types: bg,
+                },
+            ) => {
+                if struct_base(a) != struct_base(b) || ag.len() != bg.len() {
+                    return false;
+                }
+                ag.iter().zip(bg.iter()).all(|(x, y)| {
+                    self.impl_type_matches(&x.data_type, &y.data_type, generic_params)
+                })
+            }
+            (ParserInnerType::List(a), ParserInnerType::List(b)) => {
+                self.impl_type_matches(&a.data_type, &b.data_type, generic_params)
+            }
+            (ParserInnerType::Option(a), ParserInnerType::Option(b)) => {
+                self.impl_type_matches(&a.data_type, &b.data_type, generic_params)
+            }
+            (
+                ParserInnerType::Result { ok: ao, err: ae },
+                ParserInnerType::Result { ok: bo, err: be },
+            ) => {
+                self.impl_type_matches(&ao.data_type, &bo.data_type, generic_params)
+                    && self.impl_type_matches(&ae.data_type, &be.data_type, generic_params)
+            }
+            (ParserInnerType::Ptr(a), ParserInnerType::Ptr(b)) => {
+                self.impl_type_matches(&a.data_type, &b.data_type, generic_params)
+            }
+            (ParserInnerType::Ref(a, _), ParserInnerType::Ref(b, _)) => {
+                self.impl_type_matches(&a.data_type, &b.data_type, generic_params)
+            }
+            (ParserInnerType::Tuple(a), ParserInnerType::Tuple(b)) => {
+                if a.len() != b.len() {
+                    return false;
+                }
+                a.iter().zip(b.iter()).all(|(x, y)| {
+                    self.impl_type_matches(&x.data_type, &y.data_type, generic_params)
+                })
+            }
+            _ => impl_ty == target,
+        }
+    }
+
+    pub fn find_impl_for_type(&self, ty: &ParserDataType) -> Option<&MiddleImpl> {
+        let key = self.impl_key(ty);
+        if let Some(imp) = self.impls.get(&key) {
+            return Some(imp);
+        }
+        let target = ty.clone().unwrap_all_refs().data_type;
+        self.impls.values().find(|imp| {
+            self.impl_type_matches(&imp.data_type.data_type, &target, &imp.generic_params)
+        })
+    }
+
+    pub fn find_impl_for_type_mut(&mut self, ty: &ParserDataType) -> Option<&mut MiddleImpl> {
+        let key = self.impl_key(ty);
+        if self.impls.contains_key(&key) {
+            return self.impls.get_mut(&key);
+        }
+        let target = ty.clone().unwrap_all_refs().data_type;
+        let key = self
+            .impls
+            .iter()
+            .find(|(_, imp)| {
+                self.impl_type_matches(&imp.data_type.data_type, &target, &imp.generic_params)
+            })
+            .map(|(k, _)| k.clone())?;
+        self.impls.get_mut(&key)
+    }
+
+    pub fn resolve_associated_type(
+        &self,
+        base: &ParserDataType,
+        name: &str,
+    ) -> Option<ParserDataType> {
+        self.find_impl_for_type(base)
+            .and_then(|imp| imp.assoc_types.get(name).cloned())
+    }
+
+    pub fn get_or_create_impl(
+        &mut self,
+        ty: ParserDataType,
+        generic_params: Vec<String>,
+    ) -> ParserInnerType {
+        let key = self.impl_key(&ty);
+        if self.impls.contains_key(&key) {
+            return key;
+        }
+
+        self.impls.insert(
+            key.clone(),
+            MiddleImpl {
+                data_type: ty,
+                generic_params,
+                variables: FxHashMap::default(),
+                traits: Vec::new(),
+                assoc_types: FxHashMap::default(),
+                location: self.current_location.clone(),
+            },
+        );
+        key
     }
 
     pub fn push_error(&mut self, err: MiddleErr) {
@@ -212,7 +463,6 @@ impl MiddleEnvironment {
             ParserInnerType::Function {
                 return_type,
                 parameters,
-                is_async: _,
             } => {
                 let params = parameters
                     .iter()
@@ -392,9 +642,10 @@ impl MiddleEnvironment {
             NodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: ParserText::from(specialized_name.clone()).into(),
-                data_type: PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(
-                    None,
-                ))),
+                data_type: PotentialNewType::DataType(ParserDataType::new(
+                    self.current_span(),
+                    ParserInnerType::Auto(None),
+                )),
                 value: Box::new(Node::new(
                     self.current_span(),
                     NodeType::FunctionDeclaration {
@@ -427,9 +678,10 @@ impl MiddleEnvironment {
     ) -> ParserDataType {
         let span = dt.span;
         let data_type = match &dt.data_type {
-            ParserInnerType::Struct(s) if subst.contains_key(s) => {
-                subst.get(s).unwrap().data_type.clone()
-            }
+            ParserInnerType::Struct(s) if subst.contains_key(s) => subst
+                .get(s)
+                .map(|dt| dt.data_type.clone())
+                .unwrap_or_else(|| dt.data_type.clone()),
             ParserInnerType::Tuple(xs) => ParserInnerType::Tuple(
                 xs.iter()
                     .map(|x| self.substitute_data_type(x, subst))
@@ -451,14 +703,12 @@ impl MiddleEnvironment {
             ParserInnerType::Function {
                 return_type,
                 parameters,
-                is_async,
             } => ParserInnerType::Function {
                 return_type: Box::new(self.substitute_data_type(return_type, subst)),
                 parameters: parameters
                     .iter()
                     .map(|p| self.substitute_data_type(p, subst))
                     .collect(),
-                is_async: *is_async,
             },
             ParserInnerType::Ref(x, m) => {
                 ParserInnerType::Ref(Box::new(self.substitute_data_type(x, subst)), m.clone())
@@ -556,7 +806,8 @@ impl MiddleEnvironment {
 
                 for (k, v) in x {
                     lst.push((
-                        self.resolve_dollar_ident_only(scope, &k).unwrap(),
+                        self.resolve_dollar_ident_only(scope, &k)
+                            .unwrap_or_else(|| ParserText::from(k.to_string()).into()),
                         if let Some(v) = v {
                             Some(self.resolve_potential_new_type(scope, v))
                         } else {
@@ -583,34 +834,60 @@ impl MiddleEnvironment {
     }
 
     pub fn new_and_evaluate(node: Node, path: PathBuf) -> (Self, u64, MiddleNode) {
-        let mut env = Self::new();
+        let mut env = Self::default();
         let scope = env.new_scope_with_stdlib(None, path, None);
         let mut same = 0;
-        let mut middle = env.evaluate(&scope, node.clone());
+        let wrap = |env: &MiddleEnvironment, scope: u64, span: Span, inner: MiddleNode| {
+            if env.stdlib_nodes.is_empty() {
+                inner
+            } else {
+                let mut body = env.stdlib_nodes.clone();
+                body.push(inner);
+                MiddleNode {
+                    node_type: MiddleNodeType::ScopeDeclaration {
+                        body,
+                        create_new_scope: false,
+                        is_temp: false,
+                        scope_id: scope,
+                    },
+                    span,
+                }
+            }
+        };
+
+        let mut inner = env.evaluate(&scope, node.clone());
+        let mut middle = wrap(&env, scope, node.span, inner.clone());
 
         for _ in 0..5 {
-            let before_vars: Vec<(String, calibre_parser::ast::ParserDataType)> = env
-                .variables
-                .iter()
-                .map(|(k, v)| (k.clone(), v.data_type.clone()))
-                .collect();
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
 
-            env.apply_inferred_types_to_middlenode(&scope, &mut middle);
+            let mut hasher = DefaultHasher::new();
+            for (k, v) in env.variables.iter() {
+                k.hash(&mut hasher);
+                v.data_type.data_type.to_string().hash(&mut hasher);
+            }
+            let before_hash = hasher.finish();
 
-            let after_vars: Vec<(String, calibre_parser::ast::ParserDataType)> = env
-                .variables
-                .iter()
-                .map(|(k, v)| (k.clone(), v.data_type.clone()))
-                .collect();
+            env.apply_inferred_types_to_middlenode(&scope, &mut inner);
 
-            let new_middle = env.evaluate(&scope, node.clone());
+            let mut hasher2 = DefaultHasher::new();
+            for (k, v) in env.variables.iter() {
+                k.hash(&mut hasher2);
+                v.data_type.data_type.to_string().hash(&mut hasher2);
+            }
+            let after_hash = hasher2.finish();
+
+            let new_inner = env.evaluate(&scope, node.clone());
+            let new_middle = wrap(&env, scope, node.span, new_inner.clone());
 
             let old_str = middle.to_string();
             let new_str = new_middle.to_string();
 
+            inner = new_inner;
             middle = new_middle;
 
-            if before_vars == after_vars && old_str == new_str {
+            if before_hash == after_hash && old_str == new_str {
                 same += 1;
                 if same >= 2 {
                     break;
@@ -620,7 +897,8 @@ impl MiddleEnvironment {
             }
         }
 
-        env.apply_inferred_types_to_middlenode(&scope, &mut middle);
+        env.apply_inferred_types_to_middlenode(&scope, &mut inner);
+        middle = wrap(&env, scope, node.span, inner);
 
         if let Some(mut decls) = env.specialization_decls_by_scope.remove(&scope) {
             if !decls.is_empty() {
@@ -654,6 +932,16 @@ impl MiddleEnvironment {
     }
 
     fn apply_inferred_types_to_middlenode(&mut self, scope: &u64, node: &mut MiddleNode) {
+        let mut cache: FxHashMap<usize, ParserDataType> = FxHashMap::default();
+        self.apply_inferred_types_to_middlenode_inner(scope, node, &mut cache);
+    }
+
+    fn apply_inferred_types_to_middlenode_inner(
+        &mut self,
+        scope: &u64,
+        node: &mut MiddleNode,
+        cache: &mut FxHashMap<usize, ParserDataType>,
+    ) {
         match &mut node.node_type {
             MiddleNodeType::FunctionDeclaration {
                 parameters,
@@ -669,7 +957,7 @@ impl MiddleEnvironment {
                     }
                 }
 
-                self.apply_inferred_types_to_middlenode(scope, body);
+                self.apply_inferred_types_to_middlenode_inner(scope, body, cache);
             }
             MiddleNodeType::VariableDeclaration {
                 identifier,
@@ -715,7 +1003,9 @@ impl MiddleEnvironment {
                 {
                     if let Some(scheme) = self.hm_env.get(&identifier.text) {
                         let applied = scheme.ty.clone();
-                        let parser_ty = hm::to_parser_data_type(&applied);
+                        let mut pd_cache: FxHashMap<hm::Type, calibre_parser::ast::ParserDataType> =
+                            FxHashMap::default();
+                        let parser_ty = hm::to_parser_data_type(&applied, &mut pd_cache);
 
                         if let ParserInnerType::Function {
                             return_type: inf_ret,
@@ -736,18 +1026,18 @@ impl MiddleEnvironment {
                         }
                     }
 
-                    self.apply_inferred_types_to_middlenode(scope, value);
+                    self.apply_inferred_types_to_middlenode_inner(scope, value, cache);
                 } else {
-                    self.apply_inferred_types_to_middlenode(scope, value);
+                    self.apply_inferred_types_to_middlenode_inner(scope, value, cache);
                 }
             }
             MiddleNodeType::RangeDeclaration { from, to, .. } => {
-                self.apply_inferred_types_to_middlenode(scope, from);
-                self.apply_inferred_types_to_middlenode(scope, to);
+                self.apply_inferred_types_to_middlenode_inner(scope, from, cache);
+                self.apply_inferred_types_to_middlenode_inner(scope, to, cache);
             }
             MiddleNodeType::MemberExpression { path } => {
                 for (mn, _flag) in path.iter_mut() {
-                    self.apply_inferred_types_to_middlenode(scope, mn);
+                    self.apply_inferred_types_to_middlenode_inner(scope, mn, cache);
                 }
 
                 if path.len() >= 2 {
@@ -755,11 +1045,15 @@ impl MiddleEnvironment {
                         let mut struct_name_opt: Option<String> = None;
 
                         if let Some(var) = self.variables.get(&first_ident.text) {
-                            if let ParserInnerType::Struct(x) =
-                                var.data_type.clone().unwrap_all_refs().data_type
-                            {
-                                struct_name_opt = Some(x.to_string());
-                            }
+                            match var.data_type.clone().unwrap_all_refs().data_type {
+                                ParserInnerType::Struct(x) => {
+                                    struct_name_opt = Some(x.to_string());
+                                }
+                                ParserInnerType::StructWithGenerics { identifier, .. } => {
+                                    struct_name_opt = Some(identifier);
+                                }
+                                _ => {}
+                            };
                         }
 
                         if struct_name_opt.is_none() {
@@ -769,7 +1063,7 @@ impl MiddleEnvironment {
                         }
 
                         if let Some(struct_name) = struct_name_opt {
-                            if let Some(obj) = self.objects.get(&struct_name) {
+                            if let Some(obj) = self.lookup_object_for_struct_name(&struct_name) {
                                 for (mn, _flag) in path.iter_mut().skip(1) {
                                     if let MiddleNodeType::Identifier(member_ident) = &mn.node_type
                                     {
@@ -792,7 +1086,7 @@ impl MiddleEnvironment {
             }
             MiddleNodeType::ScopeDeclaration { body, .. } => {
                 for stmt in body.iter_mut() {
-                    self.apply_inferred_types_to_middlenode(scope, stmt);
+                    self.apply_inferred_types_to_middlenode_inner(scope, stmt, cache);
                 }
             }
             MiddleNodeType::IfStatement {
@@ -800,10 +1094,10 @@ impl MiddleEnvironment {
                 then,
                 otherwise,
             } => {
-                self.apply_inferred_types_to_middlenode(scope, comparison);
-                self.apply_inferred_types_to_middlenode(scope, then);
+                self.apply_inferred_types_to_middlenode_inner(scope, comparison, cache);
+                self.apply_inferred_types_to_middlenode_inner(scope, then, cache);
                 if let Some(o) = otherwise {
-                    self.apply_inferred_types_to_middlenode(scope, o);
+                    self.apply_inferred_types_to_middlenode_inner(scope, o, cache);
                 }
             }
             MiddleNodeType::CallExpression { caller, args } => {
@@ -834,35 +1128,10 @@ impl MiddleEnvironment {
                     if let Some(scheme) = scheme {
                         let mut tg = TypeGenerator::default();
                         let mut subst = Subst::default();
-                        fn contains_auto(dt: &ParserDataType) -> bool {
-                            match &dt.data_type {
-                                ParserInnerType::Auto(_) => true,
-                                ParserInnerType::Tuple(xs) => xs.iter().any(contains_auto),
-                                ParserInnerType::List(x) => contains_auto(x),
-                                ParserInnerType::Ptr(x) => contains_auto(x),
-                                ParserInnerType::Option(x) => contains_auto(x),
-                                ParserInnerType::Result { ok, err } => {
-                                    contains_auto(ok) || contains_auto(err)
-                                }
-                                ParserInnerType::Function {
-                                    return_type,
-                                    parameters,
-                                    ..
-                                } => {
-                                    contains_auto(return_type)
-                                        || parameters.iter().any(contains_auto)
-                                }
-                                ParserInnerType::Ref(x, _) => contains_auto(x),
-                                ParserInnerType::StructWithGenerics { generic_types, .. } => {
-                                    generic_types.iter().any(contains_auto)
-                                }
-                                ParserInnerType::Scope(xs) => xs.iter().any(contains_auto),
-                                _ => false,
-                            }
-                        }
 
                         let scheme_is_unresolved =
-                            contains_auto(&hm::to_parser_data_type(&scheme.ty));
+                            hm::to_parser_data_type(&scheme.ty, &mut self.type_cache)
+                                .contains_auto();
                         let mut inst = if scheme_is_unresolved {
                             scheme.ty.clone()
                         } else {
@@ -876,9 +1145,9 @@ impl MiddleEnvironment {
 
                                 match inst {
                                     Type::TArrow(param, rest) => {
-                                        subst = hm::unify(subst.clone(), &param, &arg_hm)
+                                        subst = hm::unify(subst.clone(), param.as_ref(), &arg_hm)
                                             .unwrap_or(subst);
-                                        inst = *rest;
+                                        inst = rest.as_ref().clone();
                                     }
                                     _ => {
                                         let fresh_ret = tg.fresh();
@@ -886,8 +1155,8 @@ impl MiddleEnvironment {
                                             subst.clone(),
                                             &inst,
                                             &Type::TArrow(
-                                                Box::new(arg_hm.clone()),
-                                                Box::new(fresh_ret.clone()),
+                                                std::sync::Arc::new(arg_hm.clone()),
+                                                std::sync::Arc::new(fresh_ret.clone()),
                                             ),
                                         )
                                         .unwrap_or(subst);
@@ -901,54 +1170,67 @@ impl MiddleEnvironment {
                             scheme.ty = hm::apply_subst(&subst, &scheme.ty);
                         }
 
-                        hm::recompute_scheme_vars_all(&mut self.hm_env);
+                        if !subst.is_empty() {
+                            hm::recompute_scheme_vars_all(&mut self.hm_env);
 
-                        for (k, v) in self.variables.iter_mut() {
-                            if let Some(scheme) = self.hm_env.get(k) {
-                                v.data_type = hm::to_parser_data_type(&scheme.ty);
+                            for (k, v) in self.variables.iter_mut() {
+                                if (v.data_type.is_auto() || v.data_type.contains_auto())
+                                    && let Some(scheme) = self.hm_env.get(k)
+                                {
+                                    v.data_type =
+                                        hm::to_parser_data_type(&scheme.ty, &mut self.type_cache);
+                                }
                             }
                         }
                     }
                 }
 
-                self.apply_inferred_types_to_middlenode(scope, caller);
+                self.apply_inferred_types_to_middlenode_inner(scope, caller, cache);
+
                 for a in args.iter_mut() {
-                    self.apply_inferred_types_to_middlenode(scope, a);
+                    let key = (a as *const MiddleNode) as usize;
+                    if !cache.contains_key(&key)
+                        && let Some(arg_ty) = self.resolve_type_from_node(scope, &a.clone().into())
+                    {
+                        cache.insert(key, arg_ty);
+                    }
+
+                    self.apply_inferred_types_to_middlenode_inner(scope, a, cache);
                 }
             }
             MiddleNodeType::Return { value: Some(value) } => {
-                self.apply_inferred_types_to_middlenode(scope, value);
+                self.apply_inferred_types_to_middlenode_inner(scope, value, cache);
             }
             MiddleNodeType::AggregateExpression { value, .. } => {
                 for (_, v) in value.0.iter_mut() {
-                    self.apply_inferred_types_to_middlenode(scope, v);
+                    self.apply_inferred_types_to_middlenode_inner(scope, v, cache);
                 }
             }
             MiddleNodeType::ListLiteral(_, items) => {
                 for it in items.iter_mut() {
-                    self.apply_inferred_types_to_middlenode(scope, it);
+                    self.apply_inferred_types_to_middlenode_inner(scope, it, cache);
                 }
             }
             MiddleNodeType::BinaryExpression { left, right, .. }
             | MiddleNodeType::ComparisonExpression { left, right, .. }
             | MiddleNodeType::BooleanExpression { left, right, .. } => {
-                self.apply_inferred_types_to_middlenode(scope, left);
-                self.apply_inferred_types_to_middlenode(scope, right);
+                self.apply_inferred_types_to_middlenode_inner(scope, left, cache);
+                self.apply_inferred_types_to_middlenode_inner(scope, right, cache);
             }
             MiddleNodeType::RefStatement { value, .. }
             | MiddleNodeType::DerefStatement { value }
             | MiddleNodeType::NegExpression { value }
             | MiddleNodeType::DebugExpression { value, .. }
             | MiddleNodeType::AsExpression { value, .. } => {
-                self.apply_inferred_types_to_middlenode(scope, value);
+                self.apply_inferred_types_to_middlenode_inner(scope, value, cache);
             }
             _ => {}
         }
     }
 
     pub fn get_location(&self, scope: &u64, span: Span) -> Option<Location> {
-        Some(Location {
-            path: self.scopes.get(scope).unwrap().path.clone(),
+        self.scopes.get(scope).map(|s| Location {
+            path: s.path.clone(),
             span,
         })
     }
@@ -979,8 +1261,6 @@ impl MiddleEnvironment {
             Some(x.to_string())
         } else if let Some(parent) = scope.parent.as_ref() {
             self.resolve_str(parent, iden)
-        } else if iden.contains("-") {
-            Some(iden.to_string())
         } else {
             None
         }
@@ -1042,7 +1322,9 @@ impl MiddleEnvironment {
     ) -> Option<ParserDataType> {
         match iden {
             PotentialGenericTypeIdentifier::Identifier(x) => {
-                let resolved = self.resolve_potential_dollar_ident(scope, x)?;
+                let resolved = self
+                    .resolve_potential_dollar_ident(scope, x)
+                    .unwrap_or_else(|| ParserText::from(x.to_string()));
                 Some(ParserDataType {
                     data_type: ParserInnerType::Struct(resolved.text.to_string()),
                     span: resolved.span,
@@ -1052,7 +1334,9 @@ impl MiddleEnvironment {
                 identifier,
                 generic_types,
             } => {
-                let base = self.resolve_potential_dollar_ident(scope, identifier)?;
+                let base = self
+                    .resolve_potential_dollar_ident(scope, identifier)
+                    .unwrap_or_else(|| ParserText::from(identifier.to_string()));
 
                 let mut gens: Vec<ParserDataType> = Vec::new();
                 for g in generic_types.iter() {
@@ -1153,6 +1437,7 @@ impl MiddleEnvironment {
         scope: &u64,
         data_type: PotentialNewType,
     ) -> ParserDataType {
+        let data_type_span = *data_type.span();
         match data_type {
             PotentialNewType::DataType(x) => self.resolve_data_type(scope, x),
             PotentialNewType::NewType {
@@ -1160,7 +1445,9 @@ impl MiddleEnvironment {
                 type_def,
                 overloads,
             } => {
-                let identifier = self.resolve_dollar_ident_only(scope, &identifier).unwrap();
+                let identifier = self
+                    .resolve_dollar_ident_only(scope, &identifier)
+                    .unwrap_or_else(|| ParserText::from(identifier.to_string()).into());
                 let new_name = get_disamubiguous_name(scope, Some(identifier.text.trim()), None);
                 let type_def = self.type_def_type_into(scope, type_def);
                 self.objects.insert(
@@ -1173,22 +1460,29 @@ impl MiddleEnvironment {
                     },
                 );
 
-                self.scopes
-                    .get_mut(scope)
-                    .unwrap()
-                    .mappings
-                    .insert(identifier.text, new_name.clone());
+                if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                    scope_ref.mappings.insert(identifier.text, new_name.clone());
+                }
 
                 let previous_self = self
                     .scopes
                     .get_mut(scope)
-                    .unwrap()
-                    .mappings
-                    .insert(String::from("Self"), new_name.clone());
+                    .map(|scope_ref| {
+                        scope_ref
+                            .mappings
+                            .insert(String::from("Self"), new_name.clone())
+                    })
+                    .flatten();
 
                 for overload in overloads {
                     let overload = MiddleOverload {
-                        operator: Operator::from_str(&overload.operator.text).unwrap(),
+                        operator: match Operator::from_str(&overload.operator.text) {
+                            Ok(op) => op,
+                            Err(err) => {
+                                self.errors.push(err);
+                                continue;
+                            }
+                        },
                         return_type: self
                             .resolve_potential_new_type(scope, overload.header.return_type.clone()),
                         parameters: {
@@ -1216,26 +1510,35 @@ impl MiddleEnvironment {
                             params
                         },
                         func: overload.into(),
+                        generic_params: Vec::new(),
                     };
 
                     self.overloads.push(overload);
                 }
 
                 if let Some(prev) = previous_self {
-                    self.scopes
-                        .get_mut(scope)
-                        .unwrap()
-                        .mappings
-                        .insert(String::from("Self"), prev);
+                    if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                        scope_ref.mappings.insert(String::from("Self"), prev);
+                    }
                 }
 
-                ParserDataType::from(ParserInnerType::Struct(new_name))
+                ParserDataType::new(data_type_span, ParserInnerType::Struct(new_name))
             }
         }
     }
 
     pub fn resolve_data_type(&mut self, scope: &u64, data_type: ParserDataType) -> ParserDataType {
         match data_type.data_type {
+            ParserInnerType::Struct(identifier) => {
+                let id = self.resolve_str(scope, &identifier).unwrap_or(identifier);
+                if let Some(alias) = self.type_aliases.get(&id) {
+                    return alias.clone();
+                }
+                ParserDataType {
+                    data_type: ParserInnerType::Struct(id),
+                    span: data_type.span,
+                }
+            }
             ParserInnerType::StructWithGenerics {
                 identifier,
                 generic_types,
@@ -1281,18 +1584,9 @@ impl MiddleEnvironment {
                     span: data_type.span,
                 }
             }
-            ParserInnerType::Struct(x) => ParserDataType {
-                data_type: ParserInnerType::Struct(
-                    self.resolve_str(scope, &x)
-                        .map(|x| x.to_string())
-                        .unwrap_or(x),
-                ),
-                span: data_type.span,
-            },
             ParserInnerType::Function {
                 return_type,
                 parameters,
-                is_async,
             } => ParserDataType {
                 data_type: ParserInnerType::Function {
                     return_type: Box::new(self.resolve_data_type(scope, *return_type)),
@@ -1305,7 +1599,6 @@ impl MiddleEnvironment {
 
                         params
                     },
-                    is_async,
                 },
                 span: data_type.span,
             },
@@ -1342,6 +1635,15 @@ impl MiddleEnvironment {
                     lst.push(self.resolve_data_type(scope, x));
                 }
 
+                if lst.len() == 2 {
+                    if let ParserInnerType::Struct(name) = &lst[1].data_type {
+                        if let Some(resolved) = self.resolve_associated_type(&lst[0], name.as_str())
+                        {
+                            return resolved;
+                        }
+                    }
+                }
+
                 ParserDataType {
                     data_type: ParserInnerType::Scope(lst),
                     span: data_type.span,
@@ -1360,6 +1662,7 @@ impl MiddleEnvironment {
             }
             _ => data_type,
         }
+        .verify()
     }
 
     pub fn add_scope(&mut self, mut scope: MiddleScope) {
@@ -1369,7 +1672,7 @@ impl MiddleEnvironment {
         self.variables.insert(
             name_name.clone(),
             MiddleVariable {
-                data_type: ParserDataType::from(ParserInnerType::Str),
+                data_type: ParserDataType::new(Span::default(), ParserInnerType::Str),
                 var_type: VarType::Constant,
                 location: None,
             },
@@ -1379,7 +1682,7 @@ impl MiddleEnvironment {
         self.variables.insert(
             file_name.clone(),
             MiddleVariable {
-                data_type: ParserDataType::from(ParserInnerType::Str),
+                data_type: ParserDataType::new(Span::default(), ParserInnerType::Str),
                 var_type: VarType::Constant,
                 location: None,
             },
@@ -1398,14 +1701,15 @@ impl MiddleEnvironment {
     ) -> Result<u64, MiddleErr> {
         let mut skip = 0;
         if let None = parent {
-            parent = Some(
-                self.scopes
-                    .iter()
-                    .find(|(_, v)| v.namespace == path[0])
-                    .map(|x| x.0)
-                    .unwrap()
-                    .clone(),
-            );
+            parent = self
+                .scopes
+                .iter()
+                .find(|(_, v)| v.namespace == path[0])
+                .map(|x| x.0)
+                .cloned();
+            if parent.is_none() {
+                return Err(self.err_at_current(MiddleErr::Scope(path[0].clone())));
+            }
             skip = 1;
         }
 
@@ -1415,11 +1719,14 @@ impl MiddleEnvironment {
             }
         }
 
-        Ok(parent.unwrap())
+        parent.ok_or_else(|| self.err_at_current(MiddleErr::Scope(path.join("::"))))
     }
 
     pub fn get_scope_from_parent(&self, parent: u64, namespace: &str) -> Result<u64, MiddleErr> {
-        for (_, child) in self.scopes.get(&parent).unwrap().children.iter() {
+        let parent_scope = self.scopes.get(&parent).ok_or_else(|| {
+            self.err_at_current(MiddleErr::Internal(format!("missing scope {parent}")))
+        })?;
+        for (_, child) in parent_scope.children.iter() {
             if let Some(x) = self.scopes.get(&child) {
                 if x.namespace == namespace {
                     return Ok(x.id);
@@ -1430,22 +1737,23 @@ impl MiddleEnvironment {
     }
 
     pub fn new_scope_from_parent_shallow(&mut self, parent: u64) -> u64 {
-        let path = self.scopes.get(&parent).unwrap().path.clone();
+        let Some(path) = self.scopes.get(&parent).map(|s| s.path.clone()) else {
+            return parent;
+        };
         self.new_scope(Some(parent), path, None)
     }
 
     pub fn new_build_scope_from_parent(&mut self, parent: u64, namespace: &str) -> Option<u64> {
-        let path = self.scopes.get(&parent).unwrap().path.clone();
-        let parent_name = path.file_name().unwrap();
-        let folder = path.parent().unwrap().to_path_buf();
+        let path = self.scopes.get(&parent)?.path.clone();
+        let parent_name = path.file_name()?;
+        let folder = path.parent()?.to_path_buf();
 
         let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
             String::new()
         } else {
-            format!(
-                "{}/",
-                parent_name.to_str().unwrap().split(".").nth(0).unwrap()
-            )
+            let parent_str = parent_name.to_str()?;
+            let base = parent_str.split('.').next()?;
+            format!("{base}/")
         };
 
         let mut path1 = folder.clone();
@@ -1458,41 +1766,71 @@ impl MiddleEnvironment {
         }
     }
 
-    pub fn new_scope_from_parent(&mut self, parent: u64, namespace: &str) -> u64 {
+    pub fn new_scope_from_parent(
+        &mut self,
+        parent: u64,
+        namespace: &str,
+    ) -> Result<u64, MiddleErr> {
         if let Ok(scope) = self.get_scope_from_parent(parent, namespace) {
-            return scope;
+            return Ok(scope);
         }
 
-        let path = self.scopes.get(&parent).unwrap().path.clone();
-        let parent_name = path.file_name().unwrap();
-        let folder = path.parent().unwrap().to_path_buf();
+        let path = self
+            .scopes
+            .get(&parent)
+            .ok_or_else(|| {
+                self.err_at_current(MiddleErr::Internal(format!(
+                    "missing parent scope {parent}"
+                )))
+            })?
+            .path
+            .clone();
+        let parent_name = path.file_name().ok_or_else(|| {
+            self.err_at_current(MiddleErr::Internal(format!(
+                "missing parent filename for scope {parent}"
+            )))
+        })?;
+        let folder = path.parent().ok_or_else(|| {
+            self.err_at_current(MiddleErr::Internal(format!(
+                "missing parent directory for scope {parent}"
+            )))
+        })?;
 
         let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
             String::new()
         } else {
-            format!(
-                "{}/",
-                parent_name.to_str().unwrap().split(".").nth(0).unwrap()
-            )
+            let parent_str = parent_name.to_str().ok_or_else(|| {
+                self.err_at_current(MiddleErr::Internal(format!(
+                    "invalid parent filename for scope {parent}"
+                )))
+            })?;
+            let base = parent_str.split('.').next().ok_or_else(|| {
+                self.err_at_current(MiddleErr::Internal(format!(
+                    "invalid parent filename for scope {parent}"
+                )))
+            })?;
+            format!("{base}/")
         };
 
-        let mut path1 = folder.clone();
+        let mut path1 = folder.to_path_buf();
         path1 = path1.join(format!("{extra}{namespace}.cal"));
 
-        let mut path2 = folder.clone();
+        let mut path2 = folder.to_path_buf();
         path2 = path2.join(format!("{extra}{namespace}/main.cal"));
 
-        let mut path3 = folder.clone();
+        let mut path3 = folder.to_path_buf();
         path3 = path3.join(format!("{extra}{namespace}/mod.cal"));
 
         if path1.exists() {
-            self.new_scope(Some(parent), path1, Some(namespace))
+            Ok(self.new_scope(Some(parent), path1, Some(namespace)))
         } else if path2.exists() {
-            self.new_scope(Some(parent), path2, Some(namespace))
+            Ok(self.new_scope(Some(parent), path2, Some(namespace)))
         } else if path3.exists() {
-            self.new_scope(Some(parent), path3, Some(namespace))
+            Ok(self.new_scope(Some(parent), path3, Some(namespace)))
         } else {
-            panic!("Tried:\n{path1:?}\n{path2:?}\n{path3:?}")
+            Err(self.err_at_current(MiddleErr::Scope(format!(
+                "could not resolve module {namespace}; tried {path1:?}, {path2:?}, {path3:?}"
+            ))))
         }
     }
 
@@ -1520,12 +1858,14 @@ impl MiddleEnvironment {
 
             let _ = self.add_scope(scope);
 
-            self.scopes.get_mut(&parent).unwrap().children.insert(
-                namespace
-                    .map(String::from)
-                    .unwrap_or((self.scope_counter - 1).to_string()),
-                self.scope_counter - 1,
-            );
+            if let Some(scope_ref) = self.scopes.get_mut(&parent) {
+                scope_ref.children.insert(
+                    namespace
+                        .map(String::from)
+                        .unwrap_or((self.scope_counter - 1).to_string()),
+                    self.scope_counter - 1,
+                );
+            }
 
             self.scope_counter - 1
         } else {
@@ -1577,12 +1917,20 @@ impl MiddleEnvironment {
         key: &str,
     ) -> Result<(u64, Option<MiddleNode>), MiddleErr> {
         Ok(match key {
-            "super" => (
-                self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
-                None,
-            ),
+            "super" => {
+                let parent = self
+                    .scopes
+                    .get(&scope)
+                    .and_then(|s| s.parent)
+                    .ok_or_else(|| self.err_at_current(MiddleErr::Scope("super".to_string())))?;
+                (parent, None)
+            }
             _ => {
-                let current = self.scopes.get(&scope).unwrap().clone();
+                let current = self
+                    .scopes
+                    .get(&scope)
+                    .cloned()
+                    .ok_or_else(|| self.err_at_current(MiddleErr::Scope(scope.to_string())))?;
                 if let Some(x) = current.children.get(key) {
                     (x.clone(), None)
                 } else if let Some(s) = self.get_global_scope().children.get(key) {
@@ -1593,8 +1941,21 @@ impl MiddleEnvironment {
 
                     let build_node =
                         if let Some(scope) = self.new_build_scope_from_parent(current.id, key) {
-                            let path = self.scopes.get(&scope).unwrap().path.clone();
-                            let source = fs::read_to_string(path.clone()).unwrap();
+                            let path = self
+                                .scopes
+                                .get(&scope)
+                                .ok_or_else(|| {
+                                    self.err_at_current(MiddleErr::Internal(format!(
+                                        "missing build scope {scope}"
+                                    )))
+                                })?
+                                .path
+                                .clone();
+                            let source = fs::read_to_string(&path).map_err(|err| {
+                                self.err_at_current(MiddleErr::Internal(format!(
+                                    "failed to read {path:?}: {err}"
+                                )))
+                            })?;
                             parser.set_source_path(Some(path.clone()));
                             let tokens = tokenizer.tokenize(&source).map_err(|error| {
                                 MiddleErr::LexerError {
@@ -1632,9 +1993,22 @@ impl MiddleEnvironment {
                             None
                         };
 
-                    let scope = self.new_scope_from_parent(current.id, key);
-                    let path = self.scopes.get(&scope).unwrap().path.clone();
-                    let source = fs::read_to_string(path.clone()).unwrap();
+                    let scope = self.new_scope_from_parent(current.id, key)?;
+                    let path = self
+                        .scopes
+                        .get(&scope)
+                        .ok_or_else(|| {
+                            self.err_at_current(MiddleErr::Internal(format!(
+                                "missing scope {scope} for import"
+                            )))
+                        })?
+                        .path
+                        .clone();
+                    let source = fs::read_to_string(&path).map_err(|err| {
+                        self.err_at_current(MiddleErr::Internal(format!(
+                            "failed to read {path:?}: {err}"
+                        )))
+                    })?;
                     parser.set_source_path(Some(path.clone()));
                     let tokens =
                         tokenizer
@@ -1692,9 +2066,16 @@ impl MiddleEnvironment {
 
     pub fn get_next_scope(&self, scope: u64, key: &str) -> Result<u64, MiddleErr> {
         Ok(match key {
-            "super" => self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
+            "super" => self
+                .scopes
+                .get(&scope)
+                .and_then(|s| s.parent)
+                .ok_or_else(|| self.err_at_current(MiddleErr::Scope("super".to_string())))?,
             _ => {
-                let current = self.scopes.get(&scope).unwrap();
+                let current = self
+                    .scopes
+                    .get(&scope)
+                    .ok_or_else(|| self.err_at_current(MiddleErr::Scope(scope.to_string())))?;
                 if let Some(x) = current.children.get(key) {
                     x.clone()
                 } else if let Some(s) = self.get_global_scope().children.get(key) {
@@ -1740,10 +2121,12 @@ impl MiddleEnvironment {
 
     pub fn resolve_type_from_node(&mut self, scope: &u64, node: &Node) -> Option<ParserDataType> {
         let typ = match &node.node_type {
-            NodeType::Break
-            | NodeType::Continue
+            NodeType::Break { .. }
+            | NodeType::Continue { .. }
             | NodeType::VariableDeclaration { .. }
             | NodeType::ImplDeclaration { .. }
+            | NodeType::ImplTraitDeclaration { .. }
+            | NodeType::TraitDeclaration { .. }
             | NodeType::TypeDeclaration { .. }
             | NodeType::ExternFunctionDeclaration { .. }
             | NodeType::Return { .. }
@@ -1755,25 +2138,34 @@ impl MiddleEnvironment {
             | NodeType::ScopeDeclaration { define: true, .. }
             | NodeType::ScopeAlias { .. }
             | NodeType::DataType { .. }
-            | NodeType::Until { .. } => None,
+            | NodeType::Until { .. }
+            | NodeType::SelectStatement { .. }
+            | NodeType::Use { .. } => None,
+            NodeType::Spawn { .. } | NodeType::SpawnBlock { .. } => Some(ParserDataType::new(
+                node.span,
+                ParserInnerType::Struct(String::from("WaitGroup")),
+            )),
             NodeType::Null | NodeType::Defer { .. } | NodeType::Drop(_) | NodeType::EmptyLine => {
-                Some(ParserDataType::from(ParserInnerType::Null))
+                Some(ParserDataType::new(node.span, ParserInnerType::Null))
             }
-            NodeType::Move(x) => {
-                let ident = self.resolve_potential_dollar_ident(scope, x)?.text;
-
-                Some(self.variables.get(&ident)?.data_type.clone())
+            NodeType::MoveExpression { value } | NodeType::ParenExpression { value } => {
+                self.resolve_type_from_node(scope, value)
             }
-            NodeType::MoveExpression { value } => self.resolve_type_from_node(scope, value),
             NodeType::TupleLiteral { values } => {
                 let mut types = Vec::new();
                 for value in values {
                     types.push(
                         self.resolve_type_from_node(scope, value)
-                            .unwrap_or(ParserDataType::from(ParserInnerType::Auto(None))),
+                            .unwrap_or(ParserDataType::new(
+                                value.span,
+                                ParserInnerType::Auto(None),
+                            )),
                     );
                 }
-                Some(ParserDataType::from(ParserInnerType::Tuple(types)))
+                Some(ParserDataType::new(
+                    node.span,
+                    ParserInnerType::Tuple(types),
+                ))
             }
             NodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
@@ -1782,7 +2174,6 @@ impl MiddleEnvironment {
                 ),
                 span: node.span,
             }),
-            NodeType::ParenExpression { value } => self.resolve_type_from_node(scope, value),
             NodeType::ScopeDeclaration {
                 body: Some(body), ..
             } => self.resolve_type_from_node(scope, body.last()?),
@@ -1893,16 +2284,24 @@ impl MiddleEnvironment {
 
                         params
                     },
-                    is_async: header.is_async,
                 },
                 span: node.span,
             }),
 
-            NodeType::NotExpression { .. } | NodeType::InDeclaration { .. } => {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Bool,
-                    span: node.span,
-                })
+            NodeType::NotExpression { .. } => Some(ParserDataType {
+                data_type: ParserInnerType::Bool,
+                span: node.span,
+            }),
+            NodeType::InDeclaration { identifier, value } => {
+                if let Some(x) = self.get_operator_overload(scope, identifier, value, &Operator::In)
+                {
+                    Some(x.return_type.clone())
+                } else {
+                    Some(ParserDataType {
+                        data_type: ParserInnerType::Bool,
+                        span: node.span,
+                    })
+                }
             }
             NodeType::ComparisonExpression {
                 left,
@@ -1958,14 +2357,33 @@ impl MiddleEnvironment {
                     self.resolve_type_from_node(scope, left)
                 }
             }
-            NodeType::IterExpression { data_type, .. } | NodeType::ListLiteral(data_type, _) => {
-                Some(ParserDataType {
+            NodeType::IterExpression {
+                data_type, spawned, ..
+            } => {
+                let list_type = ParserDataType {
                     data_type: ParserInnerType::List(Box::new(
                         self.resolve_potential_new_type(scope, data_type.clone()),
                     )),
                     span: node.span,
-                })
+                };
+                if *spawned {
+                    Some(ParserDataType {
+                        data_type: ParserInnerType::StructWithGenerics {
+                            identifier: String::from("Mutex"),
+                            generic_types: vec![list_type],
+                        },
+                        span: node.span,
+                    })
+                } else {
+                    Some(list_type)
+                }
             }
+            NodeType::ListLiteral(data_type, _) => Some(ParserDataType {
+                data_type: ParserInnerType::List(Box::new(
+                    self.resolve_potential_new_type(scope, data_type.clone()),
+                )),
+                span: node.span,
+            }),
             NodeType::NegExpression { value }
             | NodeType::DebugExpression { value }
             | NodeType::Ternary { then: value, .. } => self.resolve_type_from_node(scope, value),
@@ -2011,19 +2429,72 @@ impl MiddleEnvironment {
                 ..
             } => {
                 // TODO handle generics
-                let caller = self
-                    .quick_resolve_potential_scope_member(scope, *caller.clone())
-                    .unwrap();
+                if let NodeType::MemberExpression { path } = &caller.node_type {
+                    if path.len() >= 2 {
+                        let member_name = match path.last().map(|p| &p.0.node_type) {
+                            Some(NodeType::Identifier(id)) => id.to_string(),
+                            _ => String::new(),
+                        };
+
+                        if !member_name.is_empty() {
+                            let base_ty = match &path[0].0.node_type {
+                                NodeType::Identifier(id) => {
+                                    if let Some(parsed) =
+                                        self.resolve_potential_generic_ident_to_data_type(scope, id)
+                                    {
+                                        Some(parsed)
+                                    } else if let Some(var) = self.variables.get(&id.to_string()) {
+                                        Some(var.data_type.clone())
+                                    } else {
+                                        self.resolve_type_from_node(scope, &path[0].0)
+                                    }
+                                }
+                                _ => self.resolve_type_from_node(scope, &path[0].0),
+                            };
+
+                            if let Some(base_ty) = base_ty {
+                                if member_name == "new" {
+                                    return Some(base_ty);
+                                }
+                                if let Some(imp) = self.find_impl_for_type(&base_ty) {
+                                    if let Some((fn_name, _)) =
+                                        imp.variables.get(member_name.as_str())
+                                        && let Some(var) = self.variables.get(fn_name)
+                                    {
+                                        match &var.data_type.data_type {
+                                            ParserInnerType::Function { return_type, .. } => {
+                                                return Some(*return_type.clone());
+                                            }
+                                            ParserInnerType::NativeFunction(x) => {
+                                                return Some(*x.clone());
+                                            }
+                                            _ => {
+                                                return Some(var.data_type.clone());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let caller = match self.quick_resolve_potential_scope_member(scope, *caller.clone())
+                {
+                    Ok(caller) => caller,
+                    Err(err) => {
+                        self.errors.push(err);
+                        return None;
+                    }
+                };
                 let mut caller_type = None;
                 if let NodeType::Identifier(caller) = &caller.node_type {
                     if &caller.to_string() == "tuple" {
                         let mut lst = Vec::new();
 
                         for arg in args {
-                            lst.push(
-                                self.resolve_type_from_node(scope, &arg.clone().into())
-                                    .unwrap(),
-                            );
+                            let ty = self.resolve_type_from_node(scope, &arg.clone().into())?;
+                            lst.push(ty);
                         }
                         return Some(ParserDataType {
                             data_type: ParserInnerType::Tuple(lst),
@@ -2071,7 +2542,7 @@ impl MiddleEnvironment {
                         if let Some(scheme) = self.hm_env.get(&base_ident) {
                             let mut tg = TypeGenerator::default();
                             let inst = hm::instantiate(scheme, &mut tg);
-                            let p = hm::to_parser_data_type(&inst);
+                            let p = hm::to_parser_data_type(&inst, &mut self.type_cache);
                             caller_type = Some(self.resolve_data_type(scope, p));
                         } else if let Some(var) = self.variables.get(&base_ident) {
                             caller_type = Some(var.data_type.clone());
@@ -2085,7 +2556,6 @@ impl MiddleEnvironment {
                     ParserInnerType::Function {
                         return_type,
                         parameters,
-                        is_async,
                     } if parameters.len() > args.len() => Some(ParserDataType {
                         data_type: ParserInnerType::Function {
                             return_type,
@@ -2095,14 +2565,12 @@ impl MiddleEnvironment {
                                 .filter(|(i, _)| i >= &args.len())
                                 .map(|x| x.1.clone())
                                 .collect(),
-                            is_async,
                         },
                         span: node.span,
                     }),
                     ParserInnerType::Function {
                         return_type,
                         parameters: _,
-                        is_async: _,
                     } => Some(*return_type.clone()),
                     ParserInnerType::NativeFunction(x) => Some(*x),
                     _ => return None,
@@ -2113,7 +2581,7 @@ impl MiddleEnvironment {
                     if let Some(scheme) = self.hm_env.get(&iden.text) {
                         let mut tg = TypeGenerator::default();
                         let inst = hm::instantiate(scheme, &mut tg);
-                        let p = hm::to_parser_data_type(&inst);
+                        let p = hm::to_parser_data_type(&inst, &mut self.type_cache);
                         return Some(self.resolve_data_type(scope, p));
                     }
 
@@ -2151,7 +2619,8 @@ impl MiddleEnvironment {
                             };
 
                             if let Some(struct_name) = struct_name_opt {
-                                if let Some(obj) = self.objects.get(&struct_name) {
+                                if let Some(obj) = self.lookup_object_for_struct_name(&struct_name)
+                                {
                                     if let MiddleTypeDefType::Struct(map) = &obj.object_type {
                                         if let Some(field_ty) = map.get(&field_name) {
                                             return Some(field_ty.clone());
@@ -2163,11 +2632,54 @@ impl MiddleEnvironment {
                     }
                 }
 
-                Some(ParserDataType::from(ParserInnerType::Dynamic))
+                if path.len() >= 2 {
+                    if let Some(last) = path.last()
+                        && let NodeType::CallExpression { caller, .. } = &last.0.node_type
+                        && let NodeType::Identifier(method_ident) = &caller.node_type
+                    {
+                        let base_ty = match &path[0].0.node_type {
+                            NodeType::Identifier(id) => {
+                                if let Some(parsed) =
+                                    self.resolve_potential_generic_ident_to_data_type(scope, id)
+                                {
+                                    Some(parsed)
+                                } else if let Some(var) = self.variables.get(&id.to_string()) {
+                                    Some(var.data_type.clone())
+                                } else {
+                                    self.resolve_type_from_node(scope, &path[0].0)
+                                }
+                            }
+                            _ => self.resolve_type_from_node(scope, &path[0].0),
+                        };
+
+                        if let Some(base_ty) = base_ty {
+                            if method_ident.to_string() == "new" {
+                                return Some(base_ty);
+                            }
+
+                            if let Some(imp) = self.find_impl_for_type(&base_ty) {
+                                if let Some((fn_name, _)) =
+                                    imp.variables.get(method_ident.to_string().as_str())
+                                    && let Some(var) = self.variables.get(fn_name)
+                                {
+                                    return match &var.data_type.data_type {
+                                        ParserInnerType::Function { return_type, .. } => {
+                                            Some(*return_type.clone())
+                                        }
+                                        ParserInnerType::NativeFunction(x) => Some(*x.clone()),
+                                        _ => Some(var.data_type.clone()),
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Some(ParserDataType::new(node.span, ParserInnerType::Dynamic))
             }
-            NodeType::PipeExpression(path) => {
-                self.resolve_type_from_node(scope, path.last().unwrap().get_node())
-            }
+            NodeType::PipeExpression(path) => path
+                .last()
+                .and_then(|p| self.resolve_type_from_node(scope, p.get_node())),
             NodeType::DerefStatement { value } => {
                 let typ = self.resolve_type_from_node(scope, &value)?;
 
@@ -2178,7 +2690,7 @@ impl MiddleEnvironment {
                 }
             }
             NodeType::ScopeMemberExpression { .. } => {
-                Some(ParserDataType::from(ParserInnerType::Dynamic))
+                Some(ParserDataType::new(node.span, ParserInnerType::Dynamic))
             }
             NodeType::ScopeDeclaration { .. } => unreachable!(),
         };

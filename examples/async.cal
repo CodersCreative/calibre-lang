@@ -1,0 +1,79 @@
+import (Channel, Mutex, WaitGroup) from std::async;
+
+const worker = fn (id : int, jobs : &Channel:<int>, results : &mut Channel:<int>, total : &mut Mutex:<int>) => {
+	print("worker " & id & " start");
+	let mut handled = 0;
+	for !jobs.closed() => {
+		if let .Some : job <- jobs.get() => {
+			let score = job * (id + 1);
+			print("worker " & id & " got " & job & " => " & score);
+			results.send(score);
+			total.with(fn (x : int) -> int => x + score);
+			handled = handled + 1;
+		};
+	};
+	print("worker " & id & " done (" & handled & " jobs)");
+};
+
+const main = fn () => {
+	let mut jobs : Channel:<int> = Channel:<int>.new();
+	let mut results : Channel:<int> = Channel:<int>.new();
+	let mut total : Mutex:<int> = Mutex:<int>.new(0);
+	
+	print("start");
+	
+	let worker_count = 10;
+	let total_jobs = 100;
+	let wg = spawn for i in 0..worker_count => {
+		worker(i, &jobs, &mut results, &mut total);
+		print("spawned worker " & i);
+	};
+	
+	defer wg.wait();
+	
+	for i in 1..(total_jobs + 1) => jobs.send(i);
+	
+	jobs.close();
+	
+	let mut received = 0;
+	for  => {
+		select {
+			value <- results => {
+				received = received + 1;
+				print("received " & received & " => " & value);
+			},
+			_ => {
+				if results.closed() && received >= total_jobs => break;
+			}
+		};
+		if received >= total_jobs => break;
+	};
+	
+	results.close();
+	print("all done, total=" & total.get());
+	
+	use spawn for i in 0..100 => {
+		if i % 2 == 0 => std::thread::Duration.from_ms(101 - i).sleep();
+		print("num => " & i);
+	};
+	
+	use spawn {
+		=> {
+			std::thread::Duration.from_ms(30).sleep();
+			print("spawn block => A");
+		},
+		=> {
+			std::thread::Duration.from_ms(5).sleep();
+			print("spawn block => B");
+		}
+	};
+	
+	let width = 32;
+	
+	let concurrent = [=> {
+		if i % 2 == 0 => std::thread::Duration.from_ms((width + 1) - i).sleep();
+		i;
+	} spawn for i in 0..=width];
+	
+	print("concurrent list => " & concurrent);
+};

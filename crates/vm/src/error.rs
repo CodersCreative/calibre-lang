@@ -16,6 +16,10 @@ pub enum RuntimeError {
     Comparison(RuntimeValue, RuntimeValue, ComparisonOperator),
     Binary(RuntimeValue, RuntimeValue, BinaryOperator),
     UnexpectedType(RuntimeValue),
+    MissingMember {
+        target: RuntimeValue,
+        member: String,
+    },
     ParseFloat(ParseFloatError),
     ParseInt(ParseIntError),
     CantConvert(RuntimeValue, ParserInnerType),
@@ -55,6 +59,9 @@ impl std::fmt::Display for RuntimeError {
                 write!(f, "Invalid binary operation: {left} {op} {right}")
             }
             RuntimeError::UnexpectedType(value) => write!(f, "Unexpected value type: {value:?}"),
+            RuntimeError::MissingMember { target, member } => {
+                write!(f, "Missing member \"{member}\" on {target:?}")
+            }
             RuntimeError::ParseFloat(x) => write!(f, "{x}"),
             RuntimeError::ParseInt(x) => write!(f, "{x}"),
             RuntimeError::CantConvert(value, ty) => write!(f, "Cannot convert {value:?} to {ty:?}"),
@@ -71,12 +78,22 @@ impl std::fmt::Display for RuntimeError {
 }
 
 impl RuntimeError {
+    pub fn at(span: Span, err: RuntimeError) -> RuntimeError {
+        if span == Span::default() {
+            err
+        } else {
+            RuntimeError::At(span, Box::new(err))
+        }
+    }
+
     pub fn innermost(&self) -> (Option<Span>, &RuntimeError) {
         let mut span = None;
         let mut current = self;
 
         while let RuntimeError::At(inner_span, inner) = current {
-            span = Some(*inner_span);
+            if *inner_span != Span::default() {
+                span = Some(*inner_span);
+            }
             current = inner.as_ref();
         }
 
@@ -100,6 +117,9 @@ impl RuntimeError {
                 "Verify the value you're using matches the expected type in this context."
                     .to_string(),
             ),
+            RuntimeError::MissingMember { .. } => {
+                Some("Check the field or method name is correct for this value's type.".to_string())
+            }
             RuntimeError::CantConvert(_, _) => Some(
                 "Use an explicit conversion or adjust the value to a compatible type.".to_string(),
             ),

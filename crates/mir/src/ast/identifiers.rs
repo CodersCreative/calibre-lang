@@ -3,9 +3,9 @@ use crate::{MiddleNode, MiddleNodeType};
 impl MiddleNode {
     pub fn identifiers_used(&self) -> Vec<&String> {
         match &self.node_type {
-            MiddleNodeType::Break
+            MiddleNodeType::Break { value: None, .. }
             | MiddleNodeType::EmptyLine
-            | MiddleNodeType::Continue
+            | MiddleNodeType::Continue { .. }
             | MiddleNodeType::Null
             | MiddleNodeType::EnumExpression {
                 identifier: _,
@@ -17,6 +17,9 @@ impl MiddleNode {
             | MiddleNodeType::IntLiteral(_)
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return { value: None } => Vec::new(),
+            MiddleNodeType::Break {
+                value: Some(value), ..
+            } => value.identifiers_used(),
             MiddleNodeType::Identifier(x) | MiddleNodeType::Drop(x) | MiddleNodeType::Move(x) => {
                 vec![x]
             }
@@ -25,6 +28,7 @@ impl MiddleNode {
                 value,
             }
             | MiddleNodeType::DerefStatement { value }
+            | MiddleNodeType::Spawn { value }
             | MiddleNodeType::VariableDeclaration {
                 var_type: _,
                 identifier: _,
@@ -116,12 +120,10 @@ impl MiddleNode {
                 parameters: _,
                 body,
                 return_type: _,
-                is_async: _,
                 ..
             } => {
-                let amt = body.identifiers_used();
-
-                amt
+                let _ = body;
+                Vec::new()
             }
             MiddleNodeType::LoopDeclaration { body, .. } => body.identifiers_used(),
             MiddleNodeType::IfStatement {
@@ -155,10 +157,10 @@ impl MiddleNode {
 
     pub fn identifiers_declared(&self) -> Vec<&String> {
         match &self.node_type {
-            MiddleNodeType::Break
+            MiddleNodeType::Break { .. }
             | MiddleNodeType::EmptyLine
             | MiddleNodeType::Null
-            | MiddleNodeType::Continue
+            | MiddleNodeType::Continue { .. }
             | MiddleNodeType::EnumExpression {
                 identifier: _,
                 value: _,
@@ -178,6 +180,7 @@ impl MiddleNode {
             }
             | MiddleNodeType::DerefStatement { value }
             | MiddleNodeType::NegExpression { value }
+            | MiddleNodeType::Spawn { value }
             | MiddleNodeType::AsExpression {
                 value,
                 data_type: _,
@@ -272,13 +275,10 @@ impl MiddleNode {
                 parameters,
                 body,
                 return_type: _,
-                is_async: _,
                 ..
             } => {
-                let mut amt: Vec<&String> = parameters.iter().map(|x| &x.0.text).collect();
-                amt.append(&mut body.identifiers_declared());
-
-                amt
+                let _ = (parameters, body);
+                Vec::new()
             }
             MiddleNodeType::ExternFunction { .. } => Vec::new(),
             MiddleNodeType::LoopDeclaration { body, .. } => body.identifiers_declared(),

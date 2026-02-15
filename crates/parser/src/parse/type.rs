@@ -51,26 +51,20 @@ impl Parser {
                 SyntaxErr::ExpectedKeyword(String::from("fn")),
             );
 
-            let is_async = self.first().token_type == TokenType::Async;
-
-            if is_async {
-                let _ = self.eat();
-            }
-
             let parameters = self.parse_key_type_list_ordered_with_ref(
                 TokenType::Open(Bracket::Paren),
                 TokenType::Close(Bracket::Paren),
             );
 
             let return_type = if self.first().token_type == TokenType::FatArrow {
-                ParserDataType::from(ParserInnerType::Auto(None)).into()
+                ParserDataType::new(operator.span, ParserInnerType::Auto(None)).into()
             } else {
                 let _ = self.expect_eat(
                     &TokenType::Arrow,
                     SyntaxErr::ExpectedKeyword(String::from("->")),
                 );
                 self.parse_potential_new_type()
-                    .unwrap_or(ParserDataType::from(ParserInnerType::Null).into())
+                    .unwrap_or(ParserDataType::new(operator.span, ParserInnerType::Null).into())
             };
 
             let block = self.parse_scope_declaration(false);
@@ -82,7 +76,6 @@ impl Parser {
                     generics: GenericTypes::default(),
                     parameters,
                     return_type,
-                    is_async,
                     param_destructures: Vec::new(),
                 },
                 operator: operator.into(),
@@ -143,12 +136,26 @@ impl Parser {
 
         let mut options = Vec::new();
 
-        while let Some(option) = self.parse_potential_dollar_ident() {
+        while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Curly) {
+            let mut variants = Vec::new();
+            while let Some(option) = self.parse_potential_dollar_ident() {
+                variants.push(option);
+            }
+
+            if variants.is_empty() {
+                break;
+            }
+
             if self.first().token_type == TokenType::Colon {
                 let _ = self.eat();
-                options.push((option, Some(self.expect_potential_new_type())));
+                let value_type = self.expect_potential_new_type();
+                for variant in variants {
+                    options.push((variant, Some(value_type.clone())));
+                }
             } else {
-                options.push((option, None));
+                for variant in variants {
+                    options.push((variant, None));
+                }
             }
 
             if self.first().token_type == TokenType::Comma {

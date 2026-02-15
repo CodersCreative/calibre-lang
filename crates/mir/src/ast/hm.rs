@@ -1,6 +1,9 @@
-use calibre_parser::ast::{ParserDataType, ParserInnerType};
+use calibre_parser::{
+    ast::{ParserDataType, ParserInnerType},
+    lexer::Span,
+};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum TypeCon {
@@ -20,9 +23,9 @@ pub enum TypeCon {
 pub enum Type {
     TVar(usize),
     TCon(TypeCon),
-    TApp(TypeApp, Vec<Type>),
-    TArrow(Box<Type>, Box<Type>),
-    TList(Box<Type>),
+    TApp(TypeApp, Vec<Arc<Type>>),
+    TArrow(Arc<Type>, Arc<Type>),
+    TList(Arc<Type>),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -123,13 +126,13 @@ fn ftv(ty: &Type, acc: &mut FxHashSet<usize>) {
         }
         Type::TCon(_) => {}
         Type::TArrow(a, b) => {
-            ftv(a, acc);
-            ftv(b, acc);
+            ftv(a.as_ref(), acc);
+            ftv(b.as_ref(), acc);
         }
-        Type::TList(t) => ftv(t, acc),
+        Type::TList(t) => ftv(t.as_ref(), acc),
         Type::TApp(_name, args) => {
             for a in args.iter() {
-                ftv(a, acc);
+                ftv(a.as_ref(), acc);
             }
         }
     }
@@ -147,34 +150,38 @@ fn ftv_scheme(s: &TypeScheme) -> FxHashSet<usize> {
 pub fn apply_subst(subst: &Subst, ty: &Type) -> Type {
     match ty {
         Type::TVar(n) => {
-            let mut visited = FxHashSet::default();
+            let mut visited: Vec<usize> = Vec::with_capacity(4);
             let mut current = *n;
-            visited.insert(current);
+            visited.push(current);
 
-            while let Some(t) = subst.get(&current) {
-                match t {
-                    Type::TVar(m) => {
-                        if visited.contains(m) {
-                            return Type::TVar(*n);
+            loop {
+                if let Some(t) = subst.get(&current) {
+                    match t {
+                        Type::TVar(m) => {
+                            if visited.iter().any(|v| v == m) {
+                                return Type::TVar(*n);
+                            }
+                            visited.push(*m);
+                            current = *m;
+                            continue;
                         }
-                        visited.insert(*m);
-                        current = *m;
-                    }
-                    _ => {
-                        return apply_subst(subst, t);
+                        _ => return apply_subst(subst, t),
                     }
                 }
+                return Type::TVar(*n);
             }
-            Type::TVar(*n)
         }
         Type::TCon(_) => ty.clone(),
         Type::TArrow(a, b) => Type::TArrow(
-            Box::new(apply_subst(subst, a)),
-            Box::new(apply_subst(subst, b)),
+            Arc::new(apply_subst(subst, a.as_ref())),
+            Arc::new(apply_subst(subst, b.as_ref())),
         ),
-        Type::TList(t) => Type::TList(Box::new(apply_subst(subst, t))),
+        Type::TList(t) => Type::TList(Arc::new(apply_subst(subst, t.as_ref()))),
         Type::TApp(name, args) => {
-            let newargs = args.iter().map(|a| apply_subst(subst, a)).collect();
+            let newargs = args
+                .iter()
+                .map(|a| Arc::new(apply_subst(subst, a.as_ref())))
+                .collect();
             Type::TApp(name.clone(), newargs)
         }
     }
@@ -193,18 +200,22 @@ pub fn unify(mut subst: Subst, t1: &Type, t2: &Type) -> Result<Subst, String> {
 
     match (a, b) {
         (Type::TArrow(a1, b1), Type::TArrow(a2, b2)) => {
-            let s1 = unify(subst.clone(), &a1, &a2)?;
-            let s2 = unify(s1.clone(), &apply_subst(&s1, &b1), &apply_subst(&s1, &b2))?;
+            let s1 = unify(subst.clone(), a1.as_ref(), a2.as_ref())?;
+            let s2 = unify(
+                s1.clone(),
+                &apply_subst(&s1, b1.as_ref()),
+                &apply_subst(&s1, b2.as_ref()),
+            )?;
             Ok(s2)
         }
         (Type::TApp(n1, a1), Type::TApp(n2, a2)) if n1 == n2 && a1.len() == a2.len() => {
             let mut s = subst.clone();
             for (x, y) in a1.iter().zip(a2.iter()) {
-                s = unify(s, x, y)?;
+                s = unify(s, x.as_ref(), y.as_ref())?;
             }
             Ok(s)
         }
-        (Type::TList(x), Type::TList(y)) => unify(subst, &x, &y),
+        (Type::TList(x), Type::TList(y)) => unify(subst, x.as_ref(), y.as_ref()),
         (Type::TVar(n), t) | (t, Type::TVar(n)) => {
             if t == Type::TVar(n) {
                 return Ok(subst);
@@ -264,31 +275,36 @@ pub fn from_parser_data_type(pd: &ParserDataType, tg: &mut TypeGenerator) -> Typ
         ParserInnerType::Str => Type::TCon(TypeCon::Str),
         ParserInnerType::Char => Type::TCon(TypeCon::Char),
         ParserInnerType::Dynamic => Type::TCon(TypeCon::Dyn),
-        ParserInnerType::List(x) => Type::TList(Box::new(from_parser_data_type(x, tg))),
-        ParserInnerType::Ptr(x) => Type::TApp(TypeApp::Ptr, vec![from_parser_data_type(x, tg)]),
+        ParserInnerType::List(x) => Type::TList(Arc::new(from_parser_data_type(x, tg))),
+        ParserInnerType::Ptr(x) => {
+            Type::TApp(TypeApp::Ptr, vec![Arc::new(from_parser_data_type(x, tg))])
+        }
         ParserInnerType::Tuple(types) => Type::TApp(
             TypeApp::Tuple,
-            types.iter().map(|t| from_parser_data_type(t, tg)).collect(),
+            types
+                .iter()
+                .map(|t| Arc::new(from_parser_data_type(t, tg)))
+                .collect(),
         ),
-        ParserInnerType::Option(x) => {
-            Type::TApp(TypeApp::Option, vec![from_parser_data_type(x, tg)])
-        }
+        ParserInnerType::Option(x) => Type::TApp(
+            TypeApp::Option,
+            vec![Arc::new(from_parser_data_type(x, tg))],
+        ),
         ParserInnerType::Result { ok, err } => Type::TApp(
             TypeApp::Result,
             vec![
-                from_parser_data_type(ok, tg),
-                from_parser_data_type(err, tg),
+                Arc::new(from_parser_data_type(ok, tg)),
+                Arc::new(from_parser_data_type(err, tg)),
             ],
         ),
         ParserInnerType::Function {
             return_type,
             parameters,
-            is_async: _,
         } => {
             let mut arrow = from_parser_data_type(return_type, tg);
             for p in parameters.iter().rev() {
                 let pt = from_parser_data_type(p, tg);
-                arrow = Type::TArrow(Box::new(pt), Box::new(arrow));
+                arrow = Type::TArrow(Arc::new(pt), Arc::new(arrow));
             }
             arrow
         }
@@ -302,83 +318,125 @@ pub fn from_parser_data_type(pd: &ParserDataType, tg: &mut TypeGenerator) -> Typ
             TypeApp::StructWithGenerics(identifier.clone()),
             generic_types
                 .iter()
-                .map(|g| from_parser_data_type(g, tg))
+                .map(|g| Arc::new(from_parser_data_type(g, tg)))
                 .collect(),
         ),
         ParserInnerType::NativeFunction(x) => {
             let inner = from_parser_data_type(x, tg);
-            Type::TApp(TypeApp::NativeFn, vec![inner])
+            Type::TApp(TypeApp::NativeFn, vec![Arc::new(inner)])
         }
         ParserInnerType::Scope(vals) => Type::TApp(
             TypeApp::Scope,
-            vals.iter().map(|v| from_parser_data_type(v, tg)).collect(),
+            vals.iter()
+                .map(|v| Arc::new(from_parser_data_type(v, tg)))
+                .collect(),
         ),
         ParserInnerType::DollarIdentifier(_) => tg.fresh(),
         ParserInnerType::Range => Type::TCon(TypeCon::Range),
     }
 }
 
-pub fn to_parser_data_type(ty: &Type) -> ParserDataType {
-    match ty {
-        Type::TVar(_) => ParserDataType::from(ParserInnerType::Auto(None)),
+pub fn to_parser_data_type(
+    ty: &Type,
+    cache: &mut FxHashMap<Type, ParserDataType>,
+) -> ParserDataType {
+    if let Some(pd) = cache.get(ty) {
+        return pd.clone();
+    }
+
+    let res = match ty {
+        Type::TVar(_) => ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
         Type::TCon(tc) => match tc {
-            TypeCon::Int => ParserDataType::from(ParserInnerType::Int),
-            TypeCon::UInt => ParserDataType::from(ParserInnerType::UInt),
-            TypeCon::Float => ParserDataType::from(ParserInnerType::Float),
-            TypeCon::Bool => ParserDataType::from(ParserInnerType::Bool),
-            TypeCon::Str => ParserDataType::from(ParserInnerType::Str),
-            TypeCon::Char => ParserDataType::from(ParserInnerType::Char),
-            TypeCon::Null => ParserDataType::from(ParserInnerType::Null),
-            TypeCon::Dyn => ParserDataType::from(ParserInnerType::Dynamic),
-            TypeCon::Range => ParserDataType::from(ParserInnerType::Range),
-            TypeCon::Struct(s) => ParserDataType::from(ParserInnerType::Struct(s.clone())),
-        },
-        Type::TList(inner) => {
-            ParserDataType::from(ParserInnerType::List(Box::new(to_parser_data_type(inner))))
-        }
-        Type::TApp(name, args) => match name {
-            TypeApp::Tuple => ParserDataType::from(ParserInnerType::Tuple(
-                args.iter().map(|a| to_parser_data_type(a)).collect(),
-            )),
-            TypeApp::Option => ParserDataType::from(ParserInnerType::Option(Box::new(
-                to_parser_data_type(&args[0]),
-            ))),
-            TypeApp::Ptr => ParserDataType::from(ParserInnerType::Ptr(Box::new(
-                to_parser_data_type(&args[0]),
-            ))),
-            TypeApp::Result => ParserDataType::from(ParserInnerType::Result {
-                ok: Box::new(to_parser_data_type(&args[0])),
-                err: Box::new(to_parser_data_type(&args[1])),
-            }),
-            TypeApp::NativeFn => ParserDataType::from(ParserInnerType::NativeFunction(Box::new(
-                to_parser_data_type(&args[0]),
-            ))),
-            TypeApp::Scope => ParserDataType::from(ParserInnerType::Scope(
-                args.iter().map(|a| to_parser_data_type(a)).collect(),
-            )),
-            TypeApp::StructWithGenerics(id) => {
-                ParserDataType::from(ParserInnerType::StructWithGenerics {
-                    identifier: id.clone(),
-                    generic_types: args.iter().map(|a| to_parser_data_type(a)).collect(),
-                })
+            TypeCon::Int => ParserDataType::new(Span::default(), ParserInnerType::Int),
+            TypeCon::UInt => ParserDataType::new(Span::default(), ParserInnerType::UInt),
+            TypeCon::Float => ParserDataType::new(Span::default(), ParserInnerType::Float),
+            TypeCon::Bool => ParserDataType::new(Span::default(), ParserInnerType::Bool),
+            TypeCon::Str => ParserDataType::new(Span::default(), ParserInnerType::Str),
+            TypeCon::Char => ParserDataType::new(Span::default(), ParserInnerType::Char),
+            TypeCon::Null => ParserDataType::new(Span::default(), ParserInnerType::Null),
+            TypeCon::Dyn => ParserDataType::new(Span::default(), ParserInnerType::Dynamic),
+            TypeCon::Range => ParserDataType::new(Span::default(), ParserInnerType::Range),
+            TypeCon::Struct(s) => {
+                ParserDataType::new(Span::default(), ParserInnerType::Struct(s.clone()))
             }
+        },
+        Type::TList(inner) => ParserDataType::new(
+            Span::default(),
+            ParserInnerType::List(Box::new(to_parser_data_type(inner.as_ref(), cache))),
+        ),
+        Type::TApp(name, args) => match name {
+            TypeApp::Tuple => ParserDataType::new(
+                Span::default(),
+                ParserInnerType::Tuple(
+                    args.iter()
+                        .map(|a| to_parser_data_type(a.as_ref(), cache))
+                        .collect(),
+                ),
+            ),
+            TypeApp::Option => ParserDataType::new(
+                Span::default(),
+                ParserInnerType::Option(Box::new(to_parser_data_type(args[0].as_ref(), cache))),
+            ),
+            TypeApp::Ptr => ParserDataType::new(
+                Span::default(),
+                ParserInnerType::Ptr(Box::new(to_parser_data_type(args[0].as_ref(), cache))),
+            ),
+            TypeApp::Result => ParserDataType::new(
+                Span::default(),
+                ParserInnerType::Result {
+                    ok: Box::new(to_parser_data_type(args[0].as_ref(), cache)),
+                    err: Box::new(to_parser_data_type(args[1].as_ref(), cache)),
+                },
+            ),
+            TypeApp::NativeFn => ParserDataType::new(
+                Span::default(),
+                ParserInnerType::NativeFunction(Box::new(to_parser_data_type(
+                    args[0].as_ref(),
+                    cache,
+                ))),
+            ),
+            TypeApp::Scope => ParserDataType::new(
+                Span::default(),
+                ParserInnerType::Scope(
+                    args.iter()
+                        .map(|a| to_parser_data_type(a.as_ref(), cache))
+                        .collect(),
+                ),
+            ),
+            TypeApp::StructWithGenerics(id) => ParserDataType::new(
+                Span::default(),
+                ParserInnerType::StructWithGenerics {
+                    identifier: id.clone(),
+                    generic_types: args
+                        .iter()
+                        .map(|a| to_parser_data_type(a.as_ref(), cache))
+                        .collect(),
+                },
+            ),
         },
         Type::TArrow(_, _) => {
             let mut params = Vec::new();
             let mut cur = ty;
             let mut ret = None;
             while let Type::TArrow(l, r) = cur {
-                params.push(to_parser_data_type(l));
-                ret = Some(to_parser_data_type(r));
-                cur = r;
+                params.push(to_parser_data_type(l.as_ref(), cache));
+                ret = Some(to_parser_data_type(r.as_ref(), cache));
+                cur = r.as_ref();
             }
-            ParserDataType::from(ParserInnerType::Function {
-                return_type: Box::new(ret.unwrap_or(ParserDataType::from(ParserInnerType::Null))),
-                parameters: params,
-                is_async: false,
-            })
+            ParserDataType::new(
+                Span::default(),
+                ParserInnerType::Function {
+                    return_type: Box::new(
+                        ret.unwrap_or(ParserDataType::new(Span::default(), ParserInnerType::Null)),
+                    ),
+                    parameters: params,
+                },
+            )
         }
-    }
+    };
+
+    cache.insert(ty.clone(), res.clone());
+    res
 }
 
 pub fn recompute_scheme_vars_all(env: &mut TypeEnv) {

@@ -1,0 +1,47 @@
+const main = fn () => {
+	let mut value = for i in 0..10 => {
+		if i > 8 => break i;
+	} else => {
+		0;
+	};
+	
+	print("loop result = " & value);
+	
+	value = => @basic_block [] {
+		defer print("basic_block defer");
+		if value > 8 => break @basic_block 100;
+		60;
+	};
+	
+	print("block result = " & value);
+	
+	let mut hit = for x in 0..3 => @outer {
+		defer print("outer defer x=" & x);
+		for y in 0..4 => @inner {
+			defer print(" inner defer x=" & x & " y=" & y);
+			if y == 2 => break @outer (x * 10 + y);
+			if x == 2 => break @inner 99;
+		} else => {
+			-1;
+		};
+	} else => {
+		-999;
+	};
+	
+	print("labelled loop result = " & hit);
+	
+	let mut deep = for a in 0..2 => @A {
+		defer print("A defer a=" & a);
+		for b in 0..2 => @B {
+			defer print(" B defer b=" & b);
+			for c in 0..2 => {
+				defer print("  C defer c=" & c);
+				if a == 1 && b == 1 && c == 1 => break @A 123;
+			};
+		};
+	} else => {
+		0;
+	};
+	
+	print("deep break result = " & deep);
+};

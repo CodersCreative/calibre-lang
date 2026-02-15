@@ -1,7 +1,12 @@
 use std::{
-    f64::consts::PI,
-    fmt::{Debug, Display},
-    sync::Arc,
+    cell::UnsafeCell,
+    collections::VecDeque,
+    fmt::{Debug, Display, Write},
+    net::{TcpListener, TcpStream},
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicBool, AtomicIsize, Ordering},
+    },
 };
 
 use calibre_lir::BlockId;
@@ -17,9 +22,9 @@ use std::os::raw::c_void;
 
 use crate::{
     VM,
-    conversion::VMLiteral,
+    conversion::{Reg, VMLiteral},
     error::RuntimeError,
-    native::{self, NativeFunction},
+    native::{self, NativeFunction, stdlib},
 };
 
 pub mod conversion;
@@ -30,6 +35,180 @@ pub struct GcVec(pub Vec<RuntimeValue>);
 
 #[derive(Debug, Clone)]
 pub struct GcMap(pub ObjectMap<RuntimeValue>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum HashKey {
+    Int(i64),
+    UInt(u64),
+    Bool(bool),
+    Char(char),
+    Str(Arc<String>),
+}
+
+impl TryFrom<RuntimeValue> for HashKey {
+    type Error = RuntimeError;
+    fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
+        match value {
+            RuntimeValue::Int(x) => Ok(Self::Int(x)),
+            RuntimeValue::UInt(x) => Ok(Self::UInt(x)),
+            RuntimeValue::Bool(x) => Ok(Self::Bool(x)),
+            RuntimeValue::Char(x) => Ok(Self::Char(x)),
+            RuntimeValue::Str(x) => Ok(Self::Str(x)),
+            other => Err(RuntimeError::UnexpectedType(other)),
+        }
+    }
+}
+
+impl From<HashKey> for RuntimeValue {
+    fn from(value: HashKey) -> Self {
+        match value {
+            HashKey::Int(x) => RuntimeValue::Int(x),
+            HashKey::UInt(x) => RuntimeValue::UInt(x),
+            HashKey::Bool(x) => RuntimeValue::Bool(x),
+            HashKey::Char(x) => RuntimeValue::Char(x),
+            HashKey::Str(x) => RuntimeValue::Str(x),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ChannelInner {
+    pub queue: Mutex<VecDeque<RuntimeValue>>,
+    pub closed: AtomicBool,
+    pub cvar: Condvar,
+}
+
+impl ChannelInner {
+    pub fn new() -> Self {
+        Self {
+            queue: Mutex::new(VecDeque::new()),
+            closed: AtomicBool::new(false),
+            cvar: Condvar::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct WaitGroupInner {
+    pub count: AtomicIsize,
+    pub mutex: Mutex<()>,
+    pub cvar: Condvar,
+    pub joined: Mutex<Vec<Arc<WaitGroupInner>>>,
+}
+
+impl WaitGroupInner {
+    pub fn new() -> Self {
+        Self {
+            count: AtomicIsize::new(0),
+            mutex: Mutex::new(()),
+            cvar: Condvar::new(),
+            joined: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub fn done(&self) {
+        let remaining = self.count.fetch_sub(1, Ordering::AcqRel) - 1;
+        if remaining <= 0 {
+            self.cvar.notify_all();
+        }
+    }
+
+    pub fn wait(&self) -> Result<(), RuntimeError> {
+        let mut guard = self
+            .mutex
+            .lock()
+            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+        while self.count.load(Ordering::Acquire) > 0 {
+            guard = self
+                .cvar
+                .wait(guard)
+                .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+        }
+        drop(guard);
+        let joined = self
+            .joined
+            .lock()
+            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+        for inner in joined.iter() {
+            inner.wait()?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct MutexInner {
+    locked: AtomicBool,
+    mutex: Mutex<()>,
+    cvar: Condvar,
+    value: UnsafeCell<RuntimeValue>,
+}
+
+unsafe impl Send for MutexInner {}
+unsafe impl Sync for MutexInner {}
+
+impl MutexInner {
+    pub fn new(value: RuntimeValue) -> Self {
+        Self {
+            locked: AtomicBool::new(false),
+            mutex: Mutex::new(()),
+            cvar: Condvar::new(),
+            value: UnsafeCell::new(value),
+        }
+    }
+
+    pub fn lock(self: &Arc<Self>) -> MutexGuardInner {
+        let mut guard = self.mutex.lock().unwrap_or_else(|e| e.into_inner());
+        while self.locked.load(Ordering::Acquire) {
+            guard = self.cvar.wait(guard).unwrap_or_else(|e| e.into_inner());
+        }
+        self.locked.store(true, Ordering::Release);
+        drop(guard);
+        MutexGuardInner {
+            inner: self.clone(),
+            released: AtomicBool::new(false),
+        }
+    }
+
+    fn unlock(&self) {
+        self.locked.store(false, Ordering::Release);
+        self.cvar.notify_one();
+    }
+
+    fn get_clone(&self) -> RuntimeValue {
+        unsafe { (*self.value.get()).clone() }
+    }
+
+    fn set_value(&self, value: RuntimeValue) {
+        unsafe {
+            *self.value.get() = value;
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MutexGuardInner {
+    inner: Arc<MutexInner>,
+    released: AtomicBool,
+}
+
+impl MutexGuardInner {
+    pub fn get_clone(&self) -> RuntimeValue {
+        self.inner.get_clone()
+    }
+
+    pub fn set_value(&self, value: RuntimeValue) {
+        self.inner.set_value(value);
+    }
+}
+
+impl Drop for MutexGuardInner {
+    fn drop(&mut self) {
+        if !self.released.swap(true, Ordering::AcqRel) {
+            self.inner.unlock();
+        }
+    }
+}
 
 unsafe impl<V: Visitor> TraceWith<V> for GcVec {
     fn accept(&self, visitor: &mut V) -> Result<(), ()> {
@@ -59,21 +238,75 @@ pub enum RuntimeValue {
     Ptr(u64),
     Range(i64, i64),
     Bool(bool),
-    Str(String),
+    Str(Arc<String>),
     Char(char),
     Aggregate(Option<String>, Gc<GcMap>),
     Enum(String, usize, Option<Gc<RuntimeValue>>),
     Ref(String),
-    SlotRef(usize),
+    VarRef(usize),
+    RegRef {
+        frame: usize,
+        reg: Reg,
+    },
     List(Gc<GcVec>),
     Option(Option<Gc<RuntimeValue>>),
     Result(Result<Gc<RuntimeValue>, Gc<RuntimeValue>>),
+    Channel(Arc<ChannelInner>),
+    WaitGroup(Arc<WaitGroupInner>),
+    Mutex(Arc<MutexInner>),
+    MutexGuard(Arc<MutexGuardInner>),
+    HashMap(Arc<Mutex<FxHashMap<HashKey, RuntimeValue>>>),
+    HashSet(Arc<Mutex<rustc_hash::FxHashSet<HashKey>>>),
+    TcpStream(Arc<Mutex<TcpStream>>),
+    TcpListener(Arc<TcpListener>),
     NativeFunction(Arc<dyn NativeFunction>),
     ExternFunction(Arc<ExternFunction>),
     Function {
-        name: String,
-        captures: Vec<(String, RuntimeValue)>,
+        name: Arc<String>,
+        captures: std::sync::Arc<Vec<(String, RuntimeValue)>>,
     },
+}
+
+impl RuntimeValue {
+    #[inline]
+    pub fn clone_for_arg(&self) -> RuntimeValue {
+        match self {
+            RuntimeValue::Aggregate(_, _)
+            | RuntimeValue::List(_)
+            | RuntimeValue::Enum(_, _, _)
+            | RuntimeValue::Option(_)
+            | RuntimeValue::Result(_)
+            | RuntimeValue::Ptr(_) => self.clone(),
+            RuntimeValue::Str(x) => RuntimeValue::Str(x.clone()),
+            RuntimeValue::Channel(x) => RuntimeValue::Channel(x.clone()),
+            RuntimeValue::WaitGroup(x) => RuntimeValue::WaitGroup(x.clone()),
+            RuntimeValue::Mutex(x) => RuntimeValue::Mutex(x.clone()),
+            RuntimeValue::MutexGuard(x) => RuntimeValue::MutexGuard(x.clone()),
+            RuntimeValue::HashMap(x) => RuntimeValue::HashMap(x.clone()),
+            RuntimeValue::HashSet(x) => RuntimeValue::HashSet(x.clone()),
+            RuntimeValue::TcpStream(x) => RuntimeValue::TcpStream(x.clone()),
+            RuntimeValue::TcpListener(x) => RuntimeValue::TcpListener(x.clone()),
+            RuntimeValue::NativeFunction(x) => RuntimeValue::NativeFunction(x.clone()),
+            RuntimeValue::ExternFunction(x) => RuntimeValue::ExternFunction(x.clone()),
+            RuntimeValue::Function { name, captures } => RuntimeValue::Function {
+                name: name.clone(),
+                captures: captures.clone(),
+            },
+            RuntimeValue::Ref(x) => RuntimeValue::Ref(x.clone()),
+            RuntimeValue::VarRef(x) => RuntimeValue::VarRef(*x),
+            RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef {
+                frame: *frame,
+                reg: *reg,
+            },
+            RuntimeValue::Range(a, b) => RuntimeValue::Range(*a, *b),
+            RuntimeValue::Float(x) => RuntimeValue::Float(*x),
+            RuntimeValue::Int(x) => RuntimeValue::Int(*x),
+            RuntimeValue::UInt(x) => RuntimeValue::UInt(*x),
+            RuntimeValue::Bool(x) => RuntimeValue::Bool(*x),
+            RuntimeValue::Char(x) => RuntimeValue::Char(*x),
+            RuntimeValue::Null => RuntimeValue::Null,
+        }
+    }
 }
 
 unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
@@ -85,14 +318,40 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
             RuntimeValue::Option(Some(x)) => x.accept(visitor),
             RuntimeValue::Result(Ok(x)) => x.accept(visitor),
             RuntimeValue::Result(Err(x)) => x.accept(visitor),
+            RuntimeValue::Channel(ch) => {
+                if let Ok(queue) = ch.queue.lock() {
+                    for item in queue.iter() {
+                        item.accept(visitor)?;
+                    }
+                }
+                Ok(())
+            }
+            RuntimeValue::WaitGroup(_) => Ok(()),
+            RuntimeValue::Mutex(m) => {
+                let guard = m.lock();
+                guard.get_clone().accept(visitor)
+            }
+            RuntimeValue::MutexGuard(guard) => guard.get_clone().accept(visitor),
+            RuntimeValue::HashMap(map) => {
+                if let Ok(guard) = map.lock() {
+                    for (_, value) in guard.iter() {
+                        value.accept(visitor)?;
+                    }
+                }
+                Ok(())
+            }
+            RuntimeValue::HashSet(_) => Ok(()),
+            RuntimeValue::TcpStream(_) => Ok(()),
+            RuntimeValue::TcpListener(_) => Ok(()),
             RuntimeValue::Function { captures, .. } => {
-                for (_, value) in captures {
+                for (_, value) in captures.as_ref().iter() {
                     value.accept(visitor)?;
                 }
                 Ok(())
             }
             RuntimeValue::ExternFunction(_) => Ok(()),
             RuntimeValue::Ptr(_) => Ok(()),
+            RuntimeValue::VarRef(_) => Ok(()),
             _ => Ok(()),
         }
     }
@@ -131,14 +390,11 @@ enum FfiArg {
 impl RuntimeValue {
     pub fn constants() -> FxHashMap<String, Self> {
         let lst = [
-            ("PI", RuntimeValue::Float(PI)),
-            ("FLOAT_MAX", RuntimeValue::Float(f64::MAX)),
-            ("INT_MAX", RuntimeValue::Int(i64::MAX)),
-            ("FLOAT_MIN", RuntimeValue::Float(f64::MIN)),
-            ("INT_MIN", RuntimeValue::Int(i64::MIN)),
             ("true", RuntimeValue::Bool(true)),
             ("false", RuntimeValue::Bool(false)),
             ("none", RuntimeValue::Option(None)),
+            ("INT_MIN", RuntimeValue::Int(i64::MIN)),
+            ("INT_MAX", RuntimeValue::Int(i64::MAX)),
         ];
 
         let mut map = FxHashMap::default();
@@ -152,27 +408,158 @@ impl RuntimeValue {
 
     pub fn natives() -> FxHashMap<String, Self> {
         let lst: Vec<(&'static str, Arc<dyn NativeFunction>)> = vec![
-            ("print", Arc::new(native::stdlib::console::Out())),
+            ("console_output", Arc::new(native::global::ConsoleOutput())),
             ("ok", Arc::new(native::global::OkFn())),
             ("err", Arc::new(native::global::ErrFn())),
             ("some", Arc::new(native::global::SomeFn())),
             ("len", Arc::new(native::global::Len())),
             ("trim", Arc::new(native::global::Trim())),
+            ("str.split", Arc::new(stdlib::str::StrSplit())),
+            ("str.contains", Arc::new(stdlib::str::StrContains())),
+            ("str.starts_with", Arc::new(stdlib::str::StrStartsWith())),
+            ("str.ends_with", Arc::new(stdlib::str::StrEndsWith())),
             ("discriminant", Arc::new(native::global::DiscriminantFn())),
             ("tuple", Arc::new(native::global::TupleFn())),
             ("panic", Arc::new(native::global::PanicFn())),
             ("min_or_zero", Arc::new(native::global::MinOrZero())),
-            ("console.out", Arc::new(native::stdlib::console::Out())),
-            ("console.input", Arc::new(native::stdlib::console::Input())),
-            ("console.err", Arc::new(native::stdlib::console::ErrFn())),
-            ("console.clear", Arc::new(native::stdlib::console::Clear())),
-            ("thread.wait", Arc::new(native::stdlib::thread::Wait())),
+            ("async.channel_new", Arc::new(stdlib::r#async::ChannelNew())),
             (
-                "random.generate",
-                Arc::new(native::stdlib::random::Generate()),
+                "async.channel_send",
+                Arc::new(stdlib::r#async::ChannelSend()),
             ),
-            ("random.bool", Arc::new(native::stdlib::random::Bool())),
-            ("random.ratio", Arc::new(native::stdlib::random::Ratio())),
+            ("async.channel_get", Arc::new(stdlib::r#async::ChannelGet())),
+            (
+                "async.channel_try_get",
+                Arc::new(stdlib::r#async::ChannelTryGet()),
+            ),
+            (
+                "async.channel_try_send",
+                Arc::new(stdlib::r#async::ChannelTrySend()),
+            ),
+            (
+                "async.channel_close",
+                Arc::new(stdlib::r#async::ChannelClose()),
+            ),
+            (
+                "async.channel_closed",
+                Arc::new(stdlib::r#async::ChannelClosed()),
+            ),
+            ("crypto.sha256", Arc::new(stdlib::crypto::Sha256Fn)),
+            ("crypto.sha512", Arc::new(stdlib::crypto::Sha512Fn)),
+            ("crypto.blake3", Arc::new(stdlib::crypto::Blake3Fn)),
+            ("regex.is_match", Arc::new(stdlib::regex::IsMatchFn)),
+            ("regex.find", Arc::new(stdlib::regex::FindFn)),
+            ("regex.replace", Arc::new(stdlib::regex::ReplaceFn)),
+            (
+                "collections.hashmap_new",
+                Arc::new(stdlib::collections::HashMapNew),
+            ),
+            (
+                "collections.hashmap_set",
+                Arc::new(stdlib::collections::HashMapSet),
+            ),
+            (
+                "collections.hashmap_get",
+                Arc::new(stdlib::collections::HashMapGet),
+            ),
+            (
+                "collections.hashmap_remove",
+                Arc::new(stdlib::collections::HashMapRemove),
+            ),
+            (
+                "collections.hashmap_contains",
+                Arc::new(stdlib::collections::HashMapContains),
+            ),
+            (
+                "collections.hashmap_len",
+                Arc::new(stdlib::collections::HashMapLen),
+            ),
+            (
+                "collections.hashmap_keys",
+                Arc::new(stdlib::collections::HashMapKeys),
+            ),
+            (
+                "collections.hashmap_values",
+                Arc::new(stdlib::collections::HashMapValues),
+            ),
+            (
+                "collections.hashmap_entries",
+                Arc::new(stdlib::collections::HashMapEntries),
+            ),
+            (
+                "collections.hashmap_clear",
+                Arc::new(stdlib::collections::HashMapClear),
+            ),
+            (
+                "collections.hashset_new",
+                Arc::new(stdlib::collections::HashSetNew),
+            ),
+            (
+                "collections.hashset_add",
+                Arc::new(stdlib::collections::HashSetAdd),
+            ),
+            (
+                "collections.hashset_remove",
+                Arc::new(stdlib::collections::HashSetRemove),
+            ),
+            (
+                "collections.hashset_contains",
+                Arc::new(stdlib::collections::HashSetContains),
+            ),
+            (
+                "collections.hashset_len",
+                Arc::new(stdlib::collections::HashSetLen),
+            ),
+            (
+                "collections.hashset_values",
+                Arc::new(stdlib::collections::HashSetValues),
+            ),
+            (
+                "collections.hashset_clear",
+                Arc::new(stdlib::collections::HashSetClear),
+            ),
+            ("net.tcp_connect", Arc::new(stdlib::net::TcpConnect)),
+            ("net.tcp_listen", Arc::new(stdlib::net::TcpListen)),
+            ("net.tcp_accept", Arc::new(stdlib::net::TcpAccept)),
+            ("net.tcp_read", Arc::new(stdlib::net::TcpRead)),
+            ("net.tcp_write", Arc::new(stdlib::net::TcpWrite)),
+            ("net.tcp_close", Arc::new(stdlib::net::TcpClose)),
+            ("net.http_request_raw", Arc::new(stdlib::net::HttpRequest)),
+            (
+                "net.http_request_try",
+                Arc::new(stdlib::net::HttpRequestTry),
+            ),
+            ("http_request_raw", Arc::new(stdlib::net::HttpRequest)),
+            ("http_request_try", Arc::new(stdlib::net::HttpRequestTry)),
+            (
+                "async.waitgroup_new",
+                Arc::new(stdlib::r#async::WaitGroupNew()),
+            ),
+            (
+                "async.waitgroup_raw_add",
+                Arc::new(stdlib::r#async::WaitGroupRawAdd()),
+            ),
+            (
+                "async.waitgroup_raw_done",
+                Arc::new(stdlib::r#async::WaitGroupRawDone()),
+            ),
+            (
+                "async.waitgroup_join",
+                Arc::new(stdlib::r#async::WaitGroupJoin()),
+            ),
+            (
+                "async.waitgroup_wait",
+                Arc::new(stdlib::r#async::WaitGroupWait()),
+            ),
+            (
+                "async.waitgroup_count",
+                Arc::new(stdlib::r#async::WaitGroupCount()),
+            ),
+            ("async.mutex_new", Arc::new(stdlib::r#async::MutexNew())),
+            ("async.mutex_get", Arc::new(stdlib::r#async::MutexGet())),
+            ("async.mutex_set", Arc::new(stdlib::r#async::MutexSet())),
+            ("async.mutex_with", Arc::new(stdlib::r#async::MutexWith())),
+            ("async.mutex_write", Arc::new(stdlib::r#async::MutexWrite())),
         ];
 
         let mut map = FxHashMap::default();
@@ -191,27 +578,31 @@ impl From<VMLiteral> for RuntimeValue {
             VMLiteral::Int(x) => Self::Int(x),
             VMLiteral::Float(x) => Self::Float(x),
             VMLiteral::Char(x) => Self::Char(x),
-            VMLiteral::String(x) => Self::Str(x),
+            VMLiteral::String(x) => Self::Str(x.into()),
             VMLiteral::Null => Self::Null,
             VMLiteral::Closure { label, captures: _ } => Self::Function {
-                name: label,
-                captures: Vec::new(),
+                name: label.into(),
+                captures: std::sync::Arc::new(Vec::new()),
             },
             VMLiteral::ExternFunction { .. } => Self::Null,
         }
     }
 }
 
-fn print_list<T: Display>(data: &[T], open: char, close: char) -> String {
-    let mut txt = String::from(open);
-
-    for val in data.iter() {
-        txt.push_str(&format!("{}, ", val));
+fn print_list_from_iter<I>(mut iter: I, open: char, close: char) -> String
+where
+    I: Iterator<Item = String>,
+{
+    let mut txt = String::new();
+    txt.push(open);
+    if let Some(first) = iter.next() {
+        txt.push_str(&first);
+        for s in iter {
+            txt.push_str(", ");
+            txt.push_str(&s);
+        }
     }
-
-    txt = txt.trim().trim_end_matches(",").trim().to_string();
     txt.push(close);
-
     txt
 }
 
@@ -222,11 +613,59 @@ fn pretty_name(name: &str) -> &str {
 impl RuntimeValue {
     pub fn display(&self, vm: &VM) -> String {
         match self {
-            Self::Ref(x) => vm.variables.get(x).unwrap().display(vm),
-            Self::SlotRef(x) => vm.current_frame().slots.get(*x).unwrap().display(vm),
+            Self::Ref(x) => match vm.variables.get(x) {
+                Some(value) => value.display(vm),
+                None => RuntimeValue::Null.display(vm),
+            },
+            Self::VarRef(id) => vm
+                .variables
+                .get_by_id(*id)
+                .unwrap_or(RuntimeValue::Null)
+                .display(vm),
+            Self::RegRef { frame, reg } => vm.get_reg_value_in_frame(*frame, *reg).display(vm),
+            Self::Channel(_) => String::from("Channel"),
+            Self::WaitGroup(_) => String::from("WaitGroup"),
+            Self::Mutex(_) => String::from("Mutex"),
+            Self::MutexGuard(_) => String::from("MutexGuard"),
+            Self::HashMap(map) => {
+                if let Ok(guard) = map.lock() {
+                    let mut parts = Vec::new();
+                    for (k, v) in guard.iter() {
+                        parts.push(format!(
+                            "{} : {}",
+                            RuntimeValue::from(k.clone()).display(vm),
+                            v.display(vm)
+                        ));
+                    }
+                    format!("HashMap {{ {} }}", parts.join(", "))
+                } else {
+                    String::from("HashMap")
+                }
+            }
+            Self::HashSet(set) => {
+                if let Ok(guard) = set.lock() {
+                    let mut parts = Vec::new();
+                    for k in guard.iter() {
+                        parts.push(RuntimeValue::from(k.clone()).display(vm));
+                    }
+                    format!("HashSet [{}]", parts.join(", "))
+                } else {
+                    String::from("HashSet")
+                }
+            }
+            Self::TcpStream(_) => String::from("TcpStream"),
+            Self::TcpListener(_) => String::from("TcpListener"),
             Self::List(x) => {
-                let lst: Vec<String> = x.0.iter().map(|x| x.display(vm)).collect();
-                print_list(&lst, '[', ']')
+                let mut txt = String::new();
+                txt.push('[');
+                for (i, item) in x.0.iter().enumerate() {
+                    if i > 0 {
+                        txt.push_str(", ");
+                    }
+                    txt.push_str(&item.display(vm));
+                }
+                txt.push(']');
+                txt
             }
             Self::Option(Some(x)) => format!("Some : {}", x.display(vm)),
             Self::Result(Ok(x)) => format!("Ok : {}", x.display(vm)),
@@ -235,20 +674,8 @@ impl RuntimeValue {
             Self::Enum(x, y, _) => format!("{}[{}]", pretty_name(x), y),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
-                    format!(
-                        "{}",
-                        print_list(
-                            &data
-                                .as_ref()
-                                .0
-                                .0
-                                .iter()
-                                .map(|x| x.1.display(vm))
-                                .collect::<Vec<_>>(),
-                            '(',
-                            ')'
-                        )
-                    )
+                    let iter = data.as_ref().0.0.iter().map(|x| x.1.display(vm));
+                    print_list_from_iter(iter, '(', ')')
                 } else if data.as_ref().0.is_empty() {
                     let name = x.as_deref().unwrap_or("tuple");
                     format!("{} {{}}", name)
@@ -257,13 +684,14 @@ impl RuntimeValue {
                     let mut txt = format!("{} {{\n", name);
 
                     for val in data.as_ref().0.iter() {
-                        txt.push_str(&format!("\t{} : {},\n", val.0, val.1.display(vm)));
+                        let _ = write!(txt, "\t{} : {},\n", val.0, val.1.display(vm));
                     }
 
-                    txt = txt.trim().trim_end_matches(",").trim().to_string();
-                    txt.push_str("\n}");
+                    let trimmed = txt.trim_end_matches(',').trim_end();
+                    let mut out = trimmed.to_string();
+                    out.push_str("\n}");
 
-                    format!("{}", txt)
+                    out
                 }
             }
             x => x.to_string(),
@@ -283,19 +711,21 @@ impl Display for RuntimeValue {
             Self::Enum(x, y, _) => write!(f, "{}[{}]", x, y),
             Self::Range(from, to) => write!(f, "{}..{}", from, to),
             Self::Ref(x) => write!(f, "ref -> {}", x),
-            Self::SlotRef(x) => write!(f, "slotref -> {}", x),
+            Self::VarRef(id) => write!(f, "varref -> {}", id),
+            Self::RegRef { frame, reg } => write!(f, "regref -> {}:{}", frame, reg),
             Self::Bool(x) => write!(f, "{}", if *x { "true" } else { "false" }),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
-                    write!(
-                        f,
-                        "{}",
-                        print_list(
-                            &data.as_ref().0.0.iter().map(|x| &x.1).collect::<Vec<_>>(),
-                            '(',
-                            ')'
-                        )
-                    )
+                    let mut txt = String::new();
+                    txt.push('(');
+                    for (i, val) in data.as_ref().0.0.iter().enumerate() {
+                        if i > 0 {
+                            txt.push_str(", ");
+                        }
+                        let _ = write!(txt, "{}", &val.1);
+                    }
+                    txt.push(')');
+                    write!(f, "{}", txt)
                 } else if data.as_ref().0.is_empty() {
                     let name = x.as_deref().unwrap_or("tuple");
                     write!(f, "{}{{}}", name)
@@ -313,13 +743,32 @@ impl Display for RuntimeValue {
                     write!(f, "{}", txt)
                 }
             }
-            Self::List(x) => write!(f, "{}", print_list(&x.as_ref().0, '[', ']')),
+            Self::List(x) => {
+                let mut txt = String::new();
+                txt.push('[');
+                for (i, val) in x.as_ref().0.iter().enumerate() {
+                    if i > 0 {
+                        txt.push_str(", ");
+                    }
+                    let _ = write!(txt, "{}", val);
+                }
+                txt.push(']');
+                write!(f, "{}", txt)
+            }
             Self::NativeFunction(x) => write!(f, "fn {} ...", x.name()),
             Self::ExternFunction(x) => write!(f, "extern fn {} ...", x.symbol),
             Self::Option(Some(x)) => write!(f, "Some : {}", x.as_ref()),
             Self::Option(_) => write!(f, "None"),
             Self::Result(Ok(x)) => write!(f, "Ok : {}", x.as_ref()),
             Self::Result(Err(x)) => write!(f, "Err : {}", x.as_ref()),
+            Self::Channel(_) => write!(f, "Channel"),
+            Self::WaitGroup(_) => write!(f, "WaitGroup"),
+            Self::Mutex(_) => write!(f, "Mutex"),
+            Self::MutexGuard(_) => write!(f, "MutexGuard"),
+            Self::HashMap(_) => write!(f, "HashMap"),
+            Self::HashSet(_) => write!(f, "HashSet"),
+            Self::TcpStream(_) => write!(f, "TcpStream"),
+            Self::TcpListener(_) => write!(f, "TcpListener"),
             Self::Str(x) => write!(f, "{}", x),
             Self::Char(x) => write!(f, "{}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
@@ -331,6 +780,11 @@ pub enum TerminateValue {
     None,
     Jump(BlockId),
     Return(RuntimeValue),
+    Yield {
+        block: BlockId,
+        ip: usize,
+        prev_block: Option<BlockId>,
+    },
 }
 
 impl VM {
@@ -341,7 +795,11 @@ impl VM {
                 .get(&pointer)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ref(pointer)),
-            RuntimeValue::SlotRef(slot) => self.get_slot_value(slot),
+            RuntimeValue::VarRef(id) => self
+                .variables
+                .get_by_id(id)
+                .unwrap_or(RuntimeValue::VarRef(id)),
+            RuntimeValue::RegRef { frame, reg } => self.get_reg_value_in_frame(frame, reg),
             other => other,
         }
     }
@@ -353,7 +811,11 @@ impl VM {
                 .get(&pointer)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ref(pointer)),
-            RuntimeValue::SlotRef(slot) => self.get_slot_value(slot),
+            RuntimeValue::VarRef(id) => self
+                .variables
+                .get_by_id(id)
+                .unwrap_or(RuntimeValue::VarRef(id)),
+            RuntimeValue::RegRef { frame, reg } => self.get_reg_value_in_frame(frame, reg),
             other => other,
         }
     }
@@ -368,7 +830,16 @@ impl VM {
                         RuntimeValue::Null
                     }
                 }
-                RuntimeValue::SlotRef(slot) => transform(env, env.get_slot_value(slot)),
+                RuntimeValue::VarRef(id) => {
+                    if let Some(inner) = env.variables.get_by_id(id) {
+                        transform(env, inner)
+                    } else {
+                        RuntimeValue::Null
+                    }
+                }
+                RuntimeValue::RegRef { frame, reg } => {
+                    transform(env, env.get_reg_value_in_frame(frame, reg))
+                }
                 RuntimeValue::Aggregate(x, map) => {
                     let mut new_map = Vec::new();
                     for (k, v) in map.as_ref().0.0.iter().cloned() {
@@ -399,6 +870,24 @@ impl VM {
                     let inner_val = transform(env, data.as_ref().clone());
                     RuntimeValue::Result(Err(Gc::new(inner_val)))
                 }
+                RuntimeValue::HashMap(map) => {
+                    let mut new_map = FxHashMap::default();
+                    if let Ok(guard) = map.lock() {
+                        for (k, v) in guard.iter() {
+                            new_map.insert(k.clone(), transform(env, v.clone()));
+                        }
+                    }
+                    RuntimeValue::HashMap(Arc::new(Mutex::new(new_map)))
+                }
+                RuntimeValue::HashSet(set) => {
+                    let mut new_set = rustc_hash::FxHashSet::default();
+                    if let Ok(guard) = set.lock() {
+                        for k in guard.iter() {
+                            new_set.insert(k.clone());
+                        }
+                    }
+                    RuntimeValue::HashSet(Arc::new(Mutex::new(new_set)))
+                }
                 other => other,
             }
         }
@@ -415,12 +904,17 @@ impl ExternFunction {
                 .get(&name)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ref(name)),
-            RuntimeValue::SlotRef(slot) => env.get_slot_value(slot),
+            RuntimeValue::VarRef(id) => env
+                .variables
+                .get_by_id(id)
+                .unwrap_or(RuntimeValue::VarRef(id)),
+            RuntimeValue::RegRef { frame, reg } => env.get_reg_value_in_frame(frame, reg),
             RuntimeValue::Ptr(id) => env
                 .ptr_heap
                 .get(&id)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ptr(id)),
+            RuntimeValue::MutexGuard(guard) => guard.get_clone(),
             other => other,
         }
     }
@@ -522,8 +1016,9 @@ impl ExternFunction {
     fn pack_struct_arg(env: &mut VM, value: RuntimeValue) -> Option<(Vec<u8>, Type)> {
         match value {
             RuntimeValue::Aggregate(_, data) => {
-                let mut bytes = Vec::new();
-                let mut fields = Vec::new();
+                let field_count = data.as_ref().0.0.len();
+                let mut bytes = Vec::with_capacity(field_count.saturating_mul(8));
+                let mut fields = Vec::with_capacity(field_count);
                 let mut offset = 0usize;
                 let mut max_align = 1usize;
 
@@ -582,7 +1077,8 @@ impl ExternFunction {
 
         match value {
             RuntimeValue::Aggregate(_, data) => {
-                let mut bytes = Vec::new();
+                let field_count = data.as_ref().0.0.len();
+                let mut bytes = Vec::with_capacity(field_count.saturating_mul(8));
                 for (_, field) in data.as_ref().0.0.iter() {
                     if !push_number(&mut bytes, field) {
                         return None;
@@ -599,9 +1095,9 @@ impl ExternFunction {
         env: &mut VM,
         args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let mut arg_types = Vec::new();
-        let mut ffi_args: Vec<FfiArg> = Vec::new();
-        let mut libffi_args: Vec<Arg> = Vec::new();
+        let mut arg_types = Vec::with_capacity(self.parameters.len());
+        let mut ffi_args: Vec<FfiArg> = Vec::with_capacity(self.parameters.len());
+        let mut libffi_args: Vec<Arg> = Vec::with_capacity(self.parameters.len());
 
         if args.len() != self.parameters.len() {
             return Err(RuntimeError::InvalidFunctionCall);
@@ -613,8 +1109,8 @@ impl ExternFunction {
                     match (Self::resolve_value(env, value), &x.data_type) {
                         (RuntimeValue::Str(x), ParserInnerType::Str) => {
                             arg_types.push(Type::pointer());
-                            let value =
-                                CString::new(x).map_err(|_| RuntimeError::InvalidFunctionCall)?;
+                            let value = CString::new(x.as_str())
+                                .map_err(|_| RuntimeError::InvalidFunctionCall)?;
                             let ptr = value.as_ptr() as *const c_void;
                             Self::push_arg(
                                 &mut ffi_args,
@@ -692,8 +1188,8 @@ impl ExternFunction {
                         }
                         (RuntimeValue::Str(x), ParserInnerType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
-                            let value =
-                                CString::new(x).map_err(|_| RuntimeError::InvalidFunctionCall)?;
+                            let value = CString::new(x.as_str())
+                                .map_err(|_| RuntimeError::InvalidFunctionCall)?;
                             let ptr = value.as_ptr() as *const c_void;
                             Self::push_arg(
                                 &mut ffi_args,
@@ -971,10 +1467,12 @@ impl ExternFunction {
                     ParserInnerType::Str => {
                         let res: *const c_char = cif.call(code, &mut libffi_args);
                         if res.is_null() {
-                            Ok(RuntimeValue::Str(String::new()))
+                            Ok(RuntimeValue::Str(std::sync::Arc::new(String::new())))
                         } else {
                             let c_str = CStr::from_ptr(res);
-                            Ok(RuntimeValue::Str(c_str.to_string_lossy().to_string()))
+                            Ok(RuntimeValue::Str(std::sync::Arc::new(
+                                c_str.to_string_lossy().to_string(),
+                            )))
                         }
                     }
                     ParserInnerType::Ptr(_) => {

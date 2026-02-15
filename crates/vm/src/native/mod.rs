@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use std::{cmp::Ordering, fmt::Debug};
 
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
@@ -69,17 +70,44 @@ impl VM {
             scope.parse::<u64>().ok()
         }
 
+        let mut buckets: FxHashMap<String, Vec<String>> =
+            FxHashMap::with_capacity_and_hasher(self.mappings.len(), Default::default());
+        for full in self.mappings.iter() {
+            if let Some((_, short)) = full.split_once(':') {
+                buckets
+                    .entry(short.to_string())
+                    .or_default()
+                    .push(full.clone());
+            }
+        }
+        let mut mapping_index: FxHashMap<String, Option<String>> =
+            FxHashMap::with_capacity_and_hasher(buckets.len(), Default::default());
+        for (short, mut matches) in buckets {
+            matches.sort();
+            let chosen =
+                if let Some(found) = matches.iter().find(|x| scope_id(x.as_str()) == Some(0)) {
+                    Some(found.clone())
+                } else if matches.len() == 1 {
+                    Some(matches[0].clone())
+                } else {
+                    None
+                };
+            mapping_index.insert(short, chosen);
+        }
+
         let funcs: Vec<&str> = vec![
+            "console_output",
             "ok",
             "err",
             "some",
             "trim",
-            "print",
             "len",
             "panic",
             "tuple",
             "discriminant",
             "min_or_zero",
+            "http_request_raw",
+            "http_request_try",
         ];
 
         let map = RuntimeValue::natives();
@@ -94,25 +122,10 @@ impl VM {
         vars.append(&mut funcs);
 
         for var in vars {
-            let mut matches: Vec<&String> = self
-                .mappings
-                .iter()
-                .filter(|x| x.split_once(":").map(|v| v.1) == Some(var.0.as_str()))
-                .collect();
-
-            matches.sort();
-
-            let name = if let Some(found) = matches
-                .iter()
-                .find(|x| scope_id(x.as_str()) == Some(0))
-                .cloned()
-            {
-                found.to_string()
-            } else if matches.len() == 1 {
-                matches[0].to_string()
-            } else {
-                var.0
-            };
+            let name = mapping_index
+                .get(&var.0)
+                .and_then(|x| x.clone())
+                .unwrap_or(var.0);
 
             let _ = self.variables.insert(name, var.1);
         }

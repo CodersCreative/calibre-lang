@@ -15,7 +15,7 @@ readme.workspace = true
 clap = { version = "4.5.40", features = ["derive"] }
 rand = { workspace = true }
 rustyline = {workspace = true }
-tokio = { version = "1.43.0", features = ["rt-multi-thread", "macros", "fs"] }
+smol = "2.0.2"
 serde = { workspace = true }
 bincode = "1"
 blake3 = "1.6.1"

@@ -1,5 +1,5 @@
 use crate::ast::{CallArg, Node, ParserDataType, ParserInnerType, PotentialNewType};
-use crate::lexer::{Bracket, Span, Tokenizer};
+use crate::lexer::{Bracket, Span};
 use crate::{Parser, SyntaxErr};
 use crate::{ast::NodeType, lexer::TokenType};
 
@@ -17,8 +17,7 @@ fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
                     current_buffer.push('{');
                     chars.next();
                 } else {
-                    normal_parts.push(current_buffer.clone());
-                    current_buffer.clear();
+                    normal_parts.push(std::mem::take(&mut current_buffer));
 
                     let mut extracted = String::new();
                     while let Some(&next_c) = chars.peek() {
@@ -26,7 +25,11 @@ fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
                             chars.next();
                             break;
                         }
-                        extracted.push(chars.next().unwrap());
+                        if let Some(next) = chars.next() {
+                            extracted.push(next);
+                        } else {
+                            break;
+                        }
                     }
                     extracted_parts.push(extracted);
                 }
@@ -67,34 +70,30 @@ impl Parser {
         let args = if self.first().token_type == TokenType::String {
             let val = self.eat();
             string_fn = Some(val.clone().into());
-            let mut tokenizer = Tokenizer::new(false);
             let (texts, args) = parse_splits(&val.value);
 
-            let mut parsed_args = vec![CallArg::Value(Node {
-                node_type: NodeType::ListLiteral(
-                    PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Str)),
+            let mut parsed_args = vec![CallArg::Value(Node::new(
+                val.span,
+                NodeType::ListLiteral(
+                    PotentialNewType::DataType(ParserDataType::new(val.span, ParserInnerType::Str)),
                     {
                         let mut txts = Vec::new();
 
                         for txt in texts {
-                            txts.push(Node::new_from_type(NodeType::StringLiteral(txt.into())));
+                            txts.push(Node::new(val.span, NodeType::StringLiteral(txt.into())));
                         }
 
                         txts
                     },
                 ),
-                span: Span::default(),
-            })];
+            ))];
 
             let args = args
                 .into_iter()
-                .map(|x| tokenizer.tokenize(&x).unwrap())
+                .map(|x| self.tokenize_or_err(&x))
                 .collect::<Vec<_>>();
 
-            let mut original = Vec::new();
-            original.append(&mut self.tokens);
-
-            self.tokens.clear();
+            let original = std::mem::take(&mut self.tokens);
 
             for arg in args {
                 self.tokens = arg;
@@ -183,9 +182,11 @@ impl Parser {
 
         if path.len() <= 1 {
             path.remove(0).0
+        } else if let (Some(first), Some(last)) = (path.first(), path.last()) {
+            let span = Span::new_from_spans(first.0.span, last.0.span);
+            Node::new(span, NodeType::MemberExpression { path })
         } else {
-            let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
-            Node::new(first, NodeType::MemberExpression { path: path })
+            Node::new(self.first().span, NodeType::MemberExpression { path })
         }
     }
 
@@ -201,9 +202,11 @@ impl Parser {
 
         if path.len() <= 1 {
             path.remove(0)
+        } else if let (Some(first), Some(last)) = (path.first(), path.last()) {
+            let span = Span::new_from_spans(first.span, last.span);
+            Node::new(span, NodeType::ScopeMemberExpression { path })
         } else {
-            let first = Span::new_from_spans(path[0].span, path.last().unwrap().span);
-            Node::new(first, NodeType::ScopeMemberExpression { path: path })
+            Node::new(self.first().span, NodeType::ScopeMemberExpression { path })
         }
     }
 
@@ -250,66 +253,67 @@ impl Parser {
             });
         }
 
-        if path.len() == 2 && !path[1].1 {
-            if let NodeType::Identifier(identifier) = &path[0].0.node_type {
-                match &path[1].0.node_type {
-                    NodeType::Identifier(value) => {
-                        if self.first().token_type == TokenType::Colon {
-                            let _ = self.eat();
-                            let mut values = vec![self.parse_statement()];
-                            while self.first().token_type == TokenType::Comma {
-                                let _ = self.eat();
-                                values.push(self.parse_statement());
-                            }
-
-                            let data = if values.len() == 1 {
-                                values.pop().unwrap()
-                            } else {
-                                let span = Span::new_from_spans(
-                                    values.first().unwrap().span,
-                                    values.last().unwrap().span,
-                                );
-                                Node::new(span, NodeType::TupleLiteral { values })
-                            };
-                            return Node::new(
-                                Span::new_from_spans(path[0].0.span, path[1].0.span),
-                                NodeType::EnumExpression {
-                                    identifier: identifier.clone(),
-                                    value: value.clone().into(),
-                                    data: Some(Box::new(data)),
-                                },
-                            );
-                        }
+        if path.len() == 2
+            && !path[1].1
+            && let NodeType::Identifier(identifier) = &path[0].0.node_type
+        {
+            match &path[1].0.node_type {
+                NodeType::Identifier(value) if self.first().token_type == TokenType::Colon => {
+                    let _ = self.eat();
+                    let mut values = vec![self.parse_statement()];
+                    while self.first().token_type == TokenType::Comma {
+                        let _ = self.eat();
+                        values.push(self.parse_statement());
                     }
-                    _ => {}
-                }
-            }
-        }
 
-        if path.len() == 1 {
-            if let NodeType::Identifier(identifier) = &path[0].0.node_type {
-                if self.first().token_type == TokenType::Open(Bracket::Curly)
-                    && self.second().token_type == TokenType::Identifier
-                    && (self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Colon)
-                        || self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Comma))
-                {
-                    let data = self.parse_potential_key_value();
+                    let data = if values.len() == 1 {
+                        values
+                            .pop()
+                            .unwrap_or_else(|| Node::new(self.first().span, NodeType::Null))
+                    } else if let (Some(first), Some(last)) = (values.first(), values.last()) {
+                        let span = Span::new_from_spans(first.span, last.span);
+                        Node::new(span, NodeType::TupleLiteral { values })
+                    } else {
+                        Node::new(self.first().span, NodeType::Null)
+                    };
                     return Node::new(
-                        path[0].0.span,
-                        NodeType::StructLiteral {
+                        Span::new_from_spans(path[0].0.span, path[1].0.span),
+                        NodeType::EnumExpression {
                             identifier: identifier.clone(),
-                            value: data,
+                            value: value.clone().into(),
+                            data: Some(Box::new(data)),
                         },
                     );
                 }
+                _ => {}
             }
+        }
+
+        if path.len() == 1
+            && let NodeType::Identifier(identifier) = &path[0].0.node_type
+            && self.first().token_type == TokenType::Open(Bracket::Curly)
+            && self.second().token_type == TokenType::Identifier
+            && (self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Colon)
+                || self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Comma)
+                || self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Close(Bracket::Curly)))
+        {
+            let data = self.parse_potential_key_value();
+            return Node::new(
+                path[0].0.span,
+                NodeType::StructLiteral {
+                    identifier: identifier.clone(),
+                    value: data,
+                },
+            );
         }
 
         if path.len() <= 1 {
             path.remove(0).0
+        } else if let (Some(first), Some(last)) = (path.first(), path.last()) {
+            let span = Span::new_from_spans(first.0.span, last.0.span);
+            Node::new(span, NodeType::MemberExpression { path })
         } else {
-            let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
-            Node::new(first, NodeType::MemberExpression { path: path })
+            Node::new(self.first().span, NodeType::MemberExpression { path })
         }
     }
 
