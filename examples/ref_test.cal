@@ -1,40 +1,37 @@
-type Pair = struct {
-    a : int,
-    b : int,
-};
+type Pair = struct { a b : int };
 
 impl Pair {
-    const inc = fn(self: &mut Pair) => {
-        self.a = self.a + 1;
-    };
+	const inc = fn (self : &mut Pair) => {
+		self.a = self.a + 1;
+	};
 
-    const add = fn(self: &mut Pair, v: int) => {
-        self.a = self.a + v;
-    };
+	const add = fn (self : &mut Pair, v : int) => {
+		self.a = self.a + v;
+	};
 
-    const get_a = fn(self: &Pair) -> int => self.a;
-}
+	const get_a = fn (self : &Pair) -> int => self.a;
+};
 
-const main = fn() => {
-    print("REF TEST START");
-
-    let mut p = Pair{a: 0, b: 10};
-    print(p.get_a());
-
-    p.inc();
-    print(p.get_a());
-
-    p.add(5);
-    print(p.get_a());
-
-    let mut it : ListIter:<int> = list:<int>[0,1,2,3,4].iter();
-    for => {
-        let next = it.next();
-        match next {
-            .Some : value => print(value),
-            _ => break
-        };
-    };
-
-    print("REF TEST END");
+const main = fn () => {
+	print("REF TEST START");
+	
+	let mut p = Pair { a : 0, b : 10 };
+	print(p.get_a());
+	
+	p.inc();
+	print(p.get_a());
+	
+	p.add(5);
+	print(p.get_a());
+	
+	let mut it : ListIter:<int> = list:<int>[0, 1, 2, 3, 4].iter();
+	for  => {
+		let next = it.next();
+		match next {
+			.Some : value => print(value),
+			_ => break
+		};
+	};
+	
+	print("REF TEST END");
 };

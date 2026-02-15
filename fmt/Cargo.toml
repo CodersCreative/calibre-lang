@@ -14,3 +14,4 @@ readme.workspace = true
 [dependencies]
 clap = { version = "4.5.40", features = ["derive"] }
 calibre-parser = { workspace = true }
+calibre-diagnostics = { workspace = true }

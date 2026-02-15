@@ -230,6 +230,16 @@ pub fn get_disamubiguous_name(
 }
 
 impl MiddleEnvironment {
+    fn lookup_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
+        if let Some(obj) = self.objects.get(struct_name) {
+            return Some(obj);
+        }
+        if let Some((base, _)) = struct_name.split_once("->") {
+            return self.objects.get(base);
+        }
+        None
+    }
+
     pub fn type_key(&self, ty: &ParserDataType) -> String {
         ty.clone().unwrap_all_refs().data_type.to_string()
     }
@@ -1035,11 +1045,15 @@ impl MiddleEnvironment {
                         let mut struct_name_opt: Option<String> = None;
 
                         if let Some(var) = self.variables.get(&first_ident.text) {
-                            if let ParserInnerType::Struct(x) =
-                                var.data_type.clone().unwrap_all_refs().data_type
-                            {
-                                struct_name_opt = Some(x.to_string());
-                            }
+                            match var.data_type.clone().unwrap_all_refs().data_type {
+                                ParserInnerType::Struct(x) => {
+                                    struct_name_opt = Some(x.to_string());
+                                }
+                                ParserInnerType::StructWithGenerics { identifier, .. } => {
+                                    struct_name_opt = Some(identifier);
+                                }
+                                _ => {}
+                            };
                         }
 
                         if struct_name_opt.is_none() {
@@ -1049,7 +1063,7 @@ impl MiddleEnvironment {
                         }
 
                         if let Some(struct_name) = struct_name_opt {
-                            if let Some(obj) = self.objects.get(&struct_name) {
+                            if let Some(obj) = self.lookup_object_for_struct_name(&struct_name) {
                                 for (mn, _flag) in path.iter_mut().skip(1) {
                                     if let MiddleNodeType::Identifier(member_ident) = &mn.node_type
                                     {
@@ -2343,14 +2357,33 @@ impl MiddleEnvironment {
                     self.resolve_type_from_node(scope, left)
                 }
             }
-            NodeType::IterExpression { data_type, .. } | NodeType::ListLiteral(data_type, _) => {
-                Some(ParserDataType {
+            NodeType::IterExpression {
+                data_type, spawned, ..
+            } => {
+                let list_type = ParserDataType {
                     data_type: ParserInnerType::List(Box::new(
                         self.resolve_potential_new_type(scope, data_type.clone()),
                     )),
                     span: node.span,
-                })
+                };
+                if *spawned {
+                    Some(ParserDataType {
+                        data_type: ParserInnerType::StructWithGenerics {
+                            identifier: String::from("Mutex"),
+                            generic_types: vec![list_type],
+                        },
+                        span: node.span,
+                    })
+                } else {
+                    Some(list_type)
+                }
             }
+            NodeType::ListLiteral(data_type, _) => Some(ParserDataType {
+                data_type: ParserInnerType::List(Box::new(
+                    self.resolve_potential_new_type(scope, data_type.clone()),
+                )),
+                span: node.span,
+            }),
             NodeType::NegExpression { value }
             | NodeType::DebugExpression { value }
             | NodeType::Ternary { then: value, .. } => self.resolve_type_from_node(scope, value),
@@ -2586,7 +2619,8 @@ impl MiddleEnvironment {
                             };
 
                             if let Some(struct_name) = struct_name_opt {
-                                if let Some(obj) = self.objects.get(&struct_name) {
+                                if let Some(obj) = self.lookup_object_for_struct_name(&struct_name)
+                                {
                                     if let MiddleTypeDefType::Struct(map) = &obj.object_type {
                                         if let Some(field_ty) = map.get(&field_name) {
                                             return Some(field_ty.clone());

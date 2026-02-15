@@ -2,9 +2,9 @@ import * from std::net;
 import * from std::thread;
 import * from std::console;
 
-const main = fn() => {
+const main = fn () => {
 	let listener = TcpListener.listen("127.0.0.1", 41001);
-
+	
 	spawn => {
 		let sock = TcpStream.connect("127.0.0.1", 41001);
 		let req = "GET / HTTP/1.1\nHost: 127.0.0.1\nConnection: close\n\n";
@@ -13,17 +13,17 @@ const main = fn() => {
 		print("local raw response => " & raw);
 		sock.close();
 	};
-
+	
 	let stream = listener.accept();
 	print("server accepted connection");
 	let body = "hello from calibre http server";
-    let resp = "HTTP/1.1 200 OK\nContent-Type: text/plain\nConnection: close\n\n" & body;
-    let _ = stream.write(resp);
+	let resp = "HTTP/1.1 200 OK\nContent-Type: text/plain\nConnection: close\n\n" & body;
+	let _ = stream.write(resp);
 	print("server sent => " & body);
-
+	
 	let real = http("api.namefake.com", 443);
 	let resp : HttpResponse = real.get("/");
 	print("namefake real => " & resp.body);
-
+	
 	wait(10);
 };

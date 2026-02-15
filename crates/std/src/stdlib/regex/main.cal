@@ -1,4 +1,4 @@
-const find_or = fn(pattern: str, text: str, default: str) -> str => {
+const find_or = fn (pattern : str, text : str, default : str) -> str => {
 	let v = find(pattern, text);
 	if v == none => default else => v.next;
 };

@@ -1,6 +1,6 @@
 import (Channel, WaitGroup) from std::async;
 
-const test_str = fn(splits : list:<str>, inputs : list:<str>, extra : bool, extra2 : int) => {
+const test_str = fn (splits : list:<str>, inputs : list:<str>, extra : bool, extra2 : int) => {
 	print(move splits);
 	print(move inputs);
 	print("extra : " & extra & " and " & extra2);
@@ -9,71 +9,83 @@ const test_str = fn(splits : list:<str>, inputs : list:<str>, extra : bool, extr
 const main = fn () => {
 	let name = "Ty";
 	let age = "10";
-	test_str"Hello, my name is {name} and I'm {age} years old!" <(true, 900003);
-
+	test_str"Hello, my name is {name} and I'm {age} years old!"<(true, 900003);
+	
 	match age {
 		"10" => print("match with value : 10"),
-		"Hi" => print("Hi"),
-	}
+		"Hi" => print("Hi")
+	};
 	
 	match {
 		age == "10" => print("match w/o value : " & age),
-		name == "Hi" => print("Hi"),
-	}
-
+		name == "Hi" => print("Hi")
+	};
+	
 	=> {
 		defer print("end of scope");
+		
 		// Defers are only evaluated when performed so they wont capture values from this scope only the scope they're defered to.
 		defer return print("end of func");
-		// end of scope printed here
 	};
-
-    let mut bmi_ch : Channel:<float> = Channel.new();
-    let mut fac_ch = Channel:<int>.new();
-    let mut lock_ch : Channel:<bool> = Channel.new();
-
-    let wg = spawn {
-        bmi_ch.send(bmi(52.5, 1.65)),
-        fac_ch.send(factorial(5)),
-        lock_ch.send(lock(3, 4, 6)),
-    };
-    wg.wait();
-    let bmi_val = match bmi_ch.get() { .Some : v => v, .None => 0.0 };
-    let fac_val = match fac_ch.get() { .Some : v => v, .None => 0 };
-    let lock_val = match lock_ch.get() { .Some : v => v, .None => false };
-    print(bmi_val);
-    print("fac -> " & fac_val);
-    print(lock_val);
+	
+	// end of scope printed here
+	let mut bmi_ch : Channel:<float> = Channel.new();
+	let mut fac_ch = Channel:<int>.new();
+	let mut lock_ch : Channel:<bool> = Channel.new();
+	
+	let wg = spawn {
+		bmi_ch.send(bmi(52.5, 1.65)),
+		fac_ch.send(factorial(5)),
+		lock_ch.send(lock(3, 4, 6))
+	};
+	
+	wg.wait();
+	let bmi_val = match bmi_ch.get() {
+		.Some : v => v,
+		.None => 0f
+	};
+	let fac_val = match fac_ch.get() {
+		.Some : v => v,
+		.None => 0
+	};
+	let lock_val = match lock_ch.get() {
+		.Some : v => v,
+		.None => false
+	};
+	print(bmi_val);
+	print("fac -> " & fac_val);
+	print(lock_val);
 	print([90, 30, 20, 10, 0][-1]);
 	a_fn();
 	a_two_fn();
-
+	
 	let tri = is_a_triangle(10f, 20f);
 	print(tri);
 	let tri = tri(10f);
 	print(move tri);
+	
 	// end of func printed here
 	null;
 };
 
-const a_fn = fn() => {
+const a_fn = fn () => {
 	let mut a = 1;
 	print(a + => {
 		a += 1;
 		a;
 	});
-}
+};
 
-const a_two_fn = fn() => {
+const a_two_fn = fn () => {
 	let mut a = 1;
-
-	let f = fn() => {
+	
+	let f = fn () => {
 		a += 1;
-		a;	
+		a;
 	};
-
+	
 	print(a + f());
-}
+};
 
 const bmi = fn (mass height : float) -> float => mass / height ** 2;
 
@@ -88,4 +100,4 @@ const area_of_triangle = fn (a b c : float) -> float? => if is_a_triangle(a, b, 
 
 const factorial = fn (x : int) -> int => if x <= 1 => 1 else => x * factorial(x - 1);
 
-const lock = fn(c d e:  int) -> bool => if c*d> e => true else => false ;
+const lock = fn (c d e : int) -> bool => if c * d > e => true else => false;

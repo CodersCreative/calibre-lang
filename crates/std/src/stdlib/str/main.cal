@@ -1,24 +1,36 @@
-
 impl str {
-	const len = fn(self: str) -> int => len(self);
-	const trim = fn(self: str) -> str => trim(self);
-	const split = fn(self: str, delim: str) -> list:<str> => split(self, delim);
-	const contains = fn(self: str, needle: str) -> bool => contains(self, needle);
-	const starts_with = fn(self: str, prefix: str) -> bool => starts_with(self, prefix);
-	const ends_with = fn(self: str, suffix: str) -> bool => ends_with(self, suffix);
-	const iter = fn(self: str) -> StrIter => iter_str(self);
-	const into_iter = fn(self: str) -> StrIter => iter_str(self);
-	const is_empty = fn(self: str) -> bool => len(self) == 0;
-	const to_chars = fn(self: str) -> list:<char> => self.iter().collect();
-	const split_lines = fn(self: str) -> list:<str> => split(self, "\n");
-	const lines = fn(self: str) -> list:<str> => self.split_lines();
-	const repeat = fn(self: str, n: int) -> str => {
+	const len = fn (self : str) -> int => len(self);
+
+	const trim = fn (self : str) -> str => trim(self);
+
+	const split = fn (self : str, delim : str) -> list:<str> => split(self, delim);
+
+	const contains = fn (self : str, needle : str) -> bool => contains(self, needle);
+
+	const starts_with = fn (self : str, prefix : str) -> bool => starts_with(self, prefix);
+
+	const ends_with = fn (self : str, suffix : str) -> bool => ends_with(self, suffix);
+
+	const iter = fn (self : str) -> StrIter => iter_str(self);
+
+	const into_iter = fn (self : str) -> StrIter => iter_str(self);
+
+	const is_empty = fn (self : str) -> bool => len(self) == 0;
+
+	const to_chars = fn (self : str) -> list:<char> => self.iter().collect();
+
+	const split_lines = fn (self : str) -> list:<str> => split(self, "\n");
+
+	const lines = fn (self : str) -> list:<str> => self.split_lines();
+
+	const repeat = fn (self : str, n : int) -> str => {
 		if n <= 0 => "";
 		let mut out = "";
 		for _ in 0..n => out &= self;
 		out;
 	};
-	const replace = fn(self: str, needle: str, to: str) -> str => {
+
+	const replace = fn (self : str, needle : str, to : str) -> str => {
 		let parts = self.split(needle);
 		if len(parts) == 0 => self;
 		let mut out = "";
@@ -30,7 +42,8 @@ impl str {
 		};
 		out;
 	};
-	const strip_prefix = fn(self: str, prefix: str) -> str? => {
+
+	const strip_prefix = fn (self : str, prefix : str) -> str? => {
 		if !self.starts_with(prefix) => none;
 		let rest = self.split(prefix);
 		if len(rest) <= 1 => some("");
@@ -42,7 +55,8 @@ impl str {
 		};
 		some(out);
 	};
-	const strip_suffix = fn(self: str, suffix: str) -> str? => {
+
+	const strip_suffix = fn (self : str, suffix : str) -> str? => {
 		if !self.ends_with(suffix) => none;
 		let parts = self.split(suffix);
 		if len(parts) <= 1 => return some("");
@@ -54,8 +68,4 @@ impl str {
 		};
 		some(out);
 	};
-}
-
-}
-
-}
+};

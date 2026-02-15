@@ -1,10 +1,31 @@
 impl<T, E> T!E {
-    const is_ok = fn(self: T!E) -> bool => match self { .Ok : _ => true, .Err : _ => false };
-    const is_err = fn(self: T!E) -> bool => match self { .Ok : _ => false, .Err : _ => true };
-    const unwrap = fn(self: T!E) -> T => match self { .Ok : v => v, .Err : _ => panic("unwrap on err") };
-    const unwrap_or = fn(self: T!E, default: T) -> T => match self { .Ok : v => v, .Err : _ => default };
-    const map = fn<U>(self: T!E, op: fn(T) -> U) -> U!E =>
-    match self { .Ok : v => ok(op(v)), .Err : e => err(e) };
-    const map_err = fn<F>(self: T!E, op: fn(E) -> F) -> T!F =>
-    match self { .Ok : v => ok(v), .Err : e => err(op(e)) };
-}
+	const is_ok = fn (self : T!E) -> bool => match self {
+		.Ok : _ => true,
+		.Err : _ => false
+	};
+
+	const is_err = fn (self : T!E) -> bool => match self {
+		.Ok : _ => false,
+		.Err : _ => true
+	};
+
+	const unwrap = fn (self : T!E) -> T => match self {
+		.Ok : v => v,
+		.Err : _ => panic("unwrap on err")
+	};
+
+	const unwrap_or = fn (self : T!E, default : T) -> T => match self {
+		.Ok : v => v,
+		.Err : _ => default
+	};
+
+	const map = fn <U> (self : T!E, op : fn(T) -> U) -> U!E => match self {
+		.Ok : v => ok(op(v)),
+		.Err : e => err(e)
+	};
+
+	const map_err = fn <F> (self : T!E, op : fn(E) -> F) -> T!F => match self {
+		.Ok : v => ok(v),
+		.Err : e => err(op(e))
+	};
+};

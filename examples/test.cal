@@ -42,19 +42,17 @@ const main = fn() => {
 	}
 }
 */
+type NumType = struct { num : int } @overload {
 
-type NumType = struct {
-	num : int,
-} @overload {
-	// TODO Add support for Self type
-	const "+" = fn(self: NumType, value : int) -> int => {
+	const "+" = fn (self : NumType, value : int) -> int => {
+		// TODO Add support for Self type
 		return self.num + value;
-	}
+	};
 
-	const "/" = fn(self: NumType, value : int) -> int => {
+	const "/" = fn (self : NumType, value : int) -> int => {
 		return self.num / value;
-	}
-}
+	};
+};
 
 let => @mult_scope [$ident = adder_int, $t = type : int] const $ident = fn (first : dyn, second : $t) -> $t => {
 	print("multiplyer");
@@ -74,19 +72,18 @@ const print_text = fn (values : list:<str>) => {
 const main = fn () => {
 	let name = "Ty";
 	let age = "10";
-	// TODO Add defer keyword
 	
-	// In these string function blocks "{{}}" can be used to mean "{}"
+	// TODO Add defer keyword
 	let txt : str = fmt"Hello, my name is {name} and I'm {age} years old!";
 	print(txt);
 	
 	print(adder_float(90, 10.6));
-
+	
 	print("piping");
-	40 |: forty > adder_float(forty) |> $(80) |> fn(input : float) => print(input);
-
+	40 |: forty > adder_float(forty) |> $(80) |> fn (input : float) => print(input);
+	
 	print("overload");
-	let mut num = NumType{num : 10};
+	let mut num = NumType { num : 10 };
 	let res = num + 10;
 	print(res);
 	let res = (num + 90) / 2;
@@ -96,7 +93,7 @@ const main = fn () => {
 	// The inputs get combined into a list
 	print_text("1", "2", "6");
 	
-	let mut d = comp, 0 => list[list[2, 0, 4], list[1, 9, 3], list[4, 7, 9], list[9, 0, 1]];
+	let mut d = [[2, 0, 4], [1, 9, 3], [4, 7, 9], [9, 0, 1]];
 	let lst = list:<int>[2, 0, 4];
 	
 	let mtchfn = fn match str -> int {
@@ -105,14 +102,15 @@ const main = fn () => {
 	};
 	
 	print(mtchfn("he"));
-
+	
 	let mut match_res : int = match "hello" {
 		"hello" => 0,
-		_ => 10,
+		_ => 10
 	};
+	
 	print(match_res);
 	
-	let => @add_scope [$first = 9.0, $second = 11.0, $t = type : float] {
+	let => @add_scope [$first = 9f, $second = 11f, $t = type : float] {
 		// match_res will be captured at the call_site
 		let sum : $t = $first + $second + match_res;
 		print("add_scope: ");
@@ -123,7 +121,7 @@ const main = fn () => {
 	match_res = 60;
 	=> @add_scope [];
 	
-	=> @add_scope [$first = (5.0 / 99.0)];
+	=> @add_scope [$first = (5f / 99f)];
 	
 	// Now it doesn't create a new scope overriding the default implementation
 	=> @add_scope [$first = 30, $second = 70, $t = type : int] {{}};
@@ -139,13 +137,13 @@ const main = fn () => {
 	print(hello);
 	
 	(false) ? (8 == 9) ? correct : other : other = 0;
-
+	
 	// until allows you to end test the loop with the condition only breaking at the end of each iteration
 	for i in 0..10 => print("hello") until true;
-
+	
 	// until also works with list comprehensions
-	let lst = list[10 for i in 10 until i > 4];
-	print(lst);	
+	let lst = [10 for i in 10 until i > 4];
+	print(lst);
 	
 	print(correct);
 	print(other);
@@ -153,7 +151,7 @@ const main = fn () => {
 	// for i in 0..5 => print(i);
 	let mut sum_ch : Channel:<int> = Channel:<int>.new();
 	let mut fac_ch : Channel:<int> = Channel:<int>.new();
-
+	
 	let wg = spawn {
 		=> {
 			let mut s = 0;
@@ -164,12 +162,19 @@ const main = fn () => {
 			let mut f = 1;
 			for i in 1..6 => f *= i;
 			fac_ch.send(f);
-		},
+		}
 	};
+	
 	wg.wait();
-	let sum = match sum_ch.get() { .Some : v => v, .None => 0 };
-	let fac = match fac_ch.get() { .Some : v => v, .None => 0 };
+	let sum = match sum_ch.get() {
+		.Some : v => v,
+		.None => 0
+	};
+	let fac = match fac_ch.get() {
+		.Some : v => v,
+		.None => 0
+	};
 	print("parallel sum=" & sum);
 	print("parallel fac=" & fac);
 	print("Ho");
-}
+};

@@ -34,7 +34,10 @@ impl MiddleEnvironment {
             }
         };
 
-        if matches!(value.node_type, NodeType::Spawn { .. }) {
+        if matches!(
+            value.node_type,
+            NodeType::Spawn { .. } | NodeType::SpawnBlock { .. }
+        ) {
             let span = use_node.span;
             let wg_ident = if let Some(first) = identifiers.first() {
                 first.clone()
@@ -95,9 +98,9 @@ impl MiddleEnvironment {
                 },
             );
 
-            prefix.extend(self.desugar_use_chain(rest));
             prefix.push(wg_decl);
             prefix.push(wait_call);
+            prefix.extend(self.desugar_use_chain(rest));
             return prefix;
         }
 

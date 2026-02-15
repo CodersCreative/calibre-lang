@@ -1,3 +1,3 @@
-const sha256_hex = fn(input: str) -> str => sha256(input);
-const sha512_hex = fn(input: str) -> str => sha512(input);
-const blake3_hex = fn(input: str) -> str => blake3(input);
+const sha256_hex = fn (input : str) -> str => sha256(input);
+const sha512_hex = fn (input : str) -> str => sha512(input);
+const blake3_hex = fn (input : str) -> str => blake3(input);

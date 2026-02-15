@@ -198,13 +198,23 @@ impl MiddleEnvironment {
                                         },
                                     ))),
                                     then: {
-                                        Box::new(if let Some(name) = name {
+                                        Box::new(if name.is_some() || destructure.is_some() {
+                                            let bind_name = if let Some(name) = name {
+                                                name
+                                            } else {
+                                                ParserText::from(format!(
+                                                    "__match_destructure_{}_{}",
+                                                    self.current_span().from.line,
+                                                    self.current_span().from.col
+                                                ))
+                                                .into()
+                                            };
                                             let mut body_nodes = Vec::new();
                                             body_nodes.push(Node::new(
                                                 self.current_span(),
                                                 NodeType::VariableDeclaration {
                                                     var_type: var_type.clone(),
-                                                    identifier: name.clone(),
+                                                    identifier: bind_name.clone(),
                                                     value: Box::new(Node::new(
                                                         self.current_span(),
                                                         NodeType::MemberExpression {
@@ -239,7 +249,7 @@ impl MiddleEnvironment {
                                             if let Some(pattern) = destructure {
                                                 body_nodes.extend(
                                                     self.emit_destructure_statements(
-                                                        &name,
+                                                        &bind_name,
                                                         &pattern,
                                                         self.current_span(),
                                                         true,
@@ -410,13 +420,23 @@ impl MiddleEnvironment {
                                 },
                             ))),
                             then: {
-                                Box::new(if let Some(name) = name {
+                                Box::new(if name.is_some() || destructure.is_some() {
+                                    let bind_name = if let Some(name) = name {
+                                        name
+                                    } else {
+                                        ParserText::from(format!(
+                                            "__match_destructure_{}_{}",
+                                            self.current_span().from.line,
+                                            self.current_span().from.col
+                                        ))
+                                        .into()
+                                    };
                                     let mut body_nodes = Vec::new();
                                     body_nodes.push(Node::new(
                                         self.current_span(),
                                         NodeType::VariableDeclaration {
                                             var_type: var_type.clone(),
-                                            identifier: name.clone(),
+                                            identifier: bind_name.clone(),
                                             value: if reference.is_some()
                                                 && reference != Some(RefMutability::Value)
                                             {
@@ -491,7 +511,7 @@ impl MiddleEnvironment {
 
                                     if let Some(pattern) = destructure {
                                         body_nodes.extend(self.emit_destructure_statements(
-                                            &name,
+                                            &bind_name,
                                             &pattern,
                                             self.current_span(),
                                             true,

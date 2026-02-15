@@ -25,6 +25,32 @@ fn eof_token() -> &'static Token {
 }
 
 impl Parser {
+    fn should_preserve_token_on_expect_miss(expected: &TokenType, found: &TokenType) -> bool {
+        match expected {
+            TokenType::EOL => matches!(found, TokenType::EOF | TokenType::Close(Bracket::Curly)),
+            TokenType::Close(Bracket::Paren) => matches!(
+                found,
+                TokenType::Arrow
+                    | TokenType::FatArrow
+                    | TokenType::Comma
+                    | TokenType::EOL
+                    | TokenType::EOF
+                    | TokenType::Close(Bracket::Curly)
+                    | TokenType::Close(Bracket::Square)
+            ),
+            TokenType::Close(Bracket::Square) => matches!(
+                found,
+                TokenType::Comma
+                    | TokenType::EOL
+                    | TokenType::EOF
+                    | TokenType::Close(Bracket::Paren)
+                    | TokenType::Close(Bracket::Curly)
+            ),
+            TokenType::Close(Bracket::Curly) => matches!(found, TokenType::EOL | TokenType::EOF),
+            _ => false,
+        }
+    }
+
     fn tokenize_or_err(&mut self, input: &str) -> Vec<Token> {
         let mut tokenizer = Tokenizer::new(false);
         match tokenizer.tokenize(input) {
@@ -79,16 +105,21 @@ impl Parser {
     }
 
     fn expect_eat(&mut self, t: &TokenType, err: SyntaxErr) -> Token {
-        let token = self.eat();
-        if &token.token_type != t {
-            self.add_err_at(err, token.span);
-            if &self.first().token_type == t {
-                self.eat()
-            } else {
-                token
-            }
+        let token = self.first().clone();
+        if &token.token_type == t {
+            self.eat()
         } else {
-            token
+            self.add_err_at(err, token.span);
+            if Self::should_preserve_token_on_expect_miss(t, &token.token_type) {
+                Token {
+                    token_type: t.clone(),
+                    value: String::new(),
+                    span: token.span,
+                }
+            } else {
+                // Consume one token on mismatch to guarantee parser forward progress.
+                self.eat()
+            }
         }
     }
 
@@ -214,13 +245,19 @@ impl Parser {
         let _ = self.expect_eat(&open_token, SyntaxErr::ExpectedToken(open_token.clone()));
 
         while !self.is_eof() && self.first().token_type != close_token {
-            let key = self
-                .expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)
-                .value;
+            let mut keys = Vec::new();
+            while self.first().token_type == TokenType::Identifier {
+                keys.push(
+                    self.expect_eat(&TokenType::Identifier, SyntaxErr::ExpectedKey)
+                        .value,
+                );
+            }
 
             let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
-
-            properties.push((key, self.expect_potential_new_type()));
+            let value = self.expect_potential_new_type();
+            for key in keys {
+                properties.push((key, value.clone()));
+            }
 
             if self.first().token_type != close_token {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
@@ -274,7 +311,12 @@ impl Parser {
                     }
                 }
 
-                self.expect_eat(&TokenType::EOL, SyntaxErr::ExpectedChar(';'))
+                self.add_err(SyntaxErr::ExpectedChar(';'));
+                Token {
+                    token_type: TokenType::EOL,
+                    value: String::new(),
+                    span: self.first().span,
+                }
             }
         }
     }
@@ -629,6 +671,13 @@ impl Parser {
 
         while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Square) {
             values.push(self.parse_statement());
+            let spawned = if self.first().token_type == TokenType::Spawn {
+                let _ = self.eat();
+                true
+            } else {
+                false
+            };
+
             if self.first().token_type == TokenType::For {
                 let _ = self.eat();
                 let loop_type = self.get_loop_type();
@@ -657,11 +706,14 @@ impl Parser {
                     NodeType::IterExpression {
                         data_type: t,
                         map: Box::new(values[0].clone()),
+                        spawned,
                         loop_type: Box::new(loop_type),
                         conditionals,
                         until,
                     },
                 );
+            } else if spawned {
+                self.add_err(SyntaxErr::ExpectedToken(TokenType::For));
             } else if self.first().token_type != TokenType::Close(Bracket::Square) {
                 let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));
             }

@@ -465,6 +465,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if let Some(path) = args.path {
             if args.fmt {
                 Command::new("cal-fmt").arg("-a").arg(&path).output()?;
+                return Ok(());
             }
             let path = PathBuf::from_str(&path)?;
             let contents = fs::read_to_string(&path).await?;

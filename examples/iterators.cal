@@ -1,61 +1,59 @@
-type Counter = struct {
-	current : int,
-	end : int,
-};
+type Counter = struct { current end : int };
 
 impl Iter for Counter {
 	type Item = int;
-	const next = fn(self: &mut Counter) -> int? => {
+
+	const next = fn (self : &mut Counter) -> int? => {
 		if self.current >= self.end => return none;
 		let value = self.current;
 		self.current = self.current + 1;
 		some(value);
 	};
-}
+};
 
-const main = fn() => {
+const main = fn () => {
 	let mut list_it : ListIter:<int> = list:<int>[1, 2, 3].iter();
-	for => {
+	for  => {
 		let next = list_it.next();
 		match next {
 			.Some : value => print(value),
 			_ => break
 		};
 	};
-
+	
 	let mut range_it : RangeIter = (0..3).iter();
-	for => {
+	for  => {
 		let next = range_it.next();
 		match next {
 			.Some : value => print(value),
 			_ => break
 		};
 	};
-
-	let mut counter = Counter{current: 5, end: 8};
+	
+	let mut counter = Counter { current : 5, end : 8 };
 	for let .Some : value <- counter.next() => print(value);
-
-	let mapped = list:<int>[1, 2, 3].iter().map(fn(x: int) -> int => x * 2).collect();
+	
+	let mapped = list:<int>[1, 2, 3].iter().map(fn (x : int) -> int => x * 2).collect();
 	print(mapped);
-
-	let filtered = list:<int>[1, 2, 3, 4].iter().filter(fn(x: int) -> bool => x % 2 == 0).collect();
+	
+	let filtered = list:<int>[1, 2, 3, 4].iter().filter(fn (x : int) -> bool => x % 2 == 0).collect();
 	print(filtered);
-
-	let sum = list:<int>[1, 2, 3, 4].iter().fold(0, fn(acc: int, x: int) -> int => acc + x);
+	
+	let sum = list:<int>[1, 2, 3, 4].iter().fold(0, fn (acc : int, x : int) -> int => acc + x);
 	print(sum);
-
-	let any_big = list:<int>[1, 2, 3].iter().any(fn(x: int) -> bool => x > 2);
+	
+	let any_big = list:<int>[1, 2, 3].iter().any(fn (x : int) -> bool => x > 2);
 	print(any_big);
-
-	let all_pos = list:<int>[1, 2, 3].iter().all(fn(x: int) -> bool => x > 0);
+	
+	let all_pos = list:<int>[1, 2, 3].iter().all(fn (x : int) -> bool => x > 0);
 	print(all_pos);
-
-	let found = list:<int>[3, 4, 5].iter().find(fn(x: int) -> bool => x == 4);
+	
+	let found = list:<int>[3, 4, 5].iter().find(fn (x : int) -> bool => x == 4);
 	print(found);
-
+	
 	let taken = list:<int>[1, 2, 3, 4, 5].iter().take(3).collect();
 	print(taken);
-
+	
 	let skipped = list:<int>[1, 2, 3, 4, 5].iter().skip(2).collect();
 	print(skipped);
 };

@@ -136,12 +136,26 @@ impl Parser {
 
         let mut options = Vec::new();
 
-        while let Some(option) = self.parse_potential_dollar_ident() {
+        while !self.is_eof() && self.first().token_type != TokenType::Close(Bracket::Curly) {
+            let mut variants = Vec::new();
+            while let Some(option) = self.parse_potential_dollar_ident() {
+                variants.push(option);
+            }
+
+            if variants.is_empty() {
+                break;
+            }
+
             if self.first().token_type == TokenType::Colon {
                 let _ = self.eat();
-                options.push((option, Some(self.expect_potential_new_type())));
+                let value_type = self.expect_potential_new_type();
+                for variant in variants {
+                    options.push((variant, Some(value_type.clone())));
+                }
             } else {
-                options.push((option, None));
+                for variant in variants {
+                    options.push((variant, None));
+                }
             }
 
             if self.first().token_type == TokenType::Comma {

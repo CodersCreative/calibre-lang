@@ -102,10 +102,12 @@ impl MiddleEnvironment {
         body: Node,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut params = Vec::with_capacity(header.parameters.len());
+        let mut param_idents = Vec::with_capacity(header.parameters.len());
         let mut old_func_defers = Vec::new();
         old_func_defers.append(&mut self.func_defers);
         let new_scope = self.new_scope_from_parent_shallow(*scope);
         for param in header.parameters {
+            param_idents.push(param.0.clone());
             let og_name = self
                 .resolve_dollar_ident_only(scope, &param.0)
                 .ok_or_else(|| self.err_at_current(MiddleErr::Scope(param.0.to_string())))?;
@@ -136,9 +138,11 @@ impl MiddleEnvironment {
 
         if !header.param_destructures.is_empty() {
             let mut destructures = Vec::new();
-            for (tmp_name, pattern) in header.param_destructures {
-                destructures
-                    .extend(self.emit_destructure_statements(&tmp_name, &pattern, span, true));
+            for (param_index, pattern) in header.param_destructures {
+                if let Some(tmp_name) = param_idents.get(param_index) {
+                    destructures
+                        .extend(self.emit_destructure_statements(tmp_name, &pattern, span, true));
+                }
             }
             body_node = match body_node.node_type {
                 NodeType::ScopeDeclaration {

@@ -992,7 +992,7 @@ pub struct FunctionHeader {
     pub generics: GenericTypes,
     pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
     pub return_type: PotentialNewType,
-    pub param_destructures: Vec<(PotentialDollarIdentifier, DestructurePattern)>,
+    pub param_destructures: Vec<(usize, DestructurePattern)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1161,6 +1161,7 @@ pub enum NodeType {
     IterExpression {
         data_type: PotentialNewType,
         map: Box<Node>,
+        spawned: bool,
         loop_type: Box<LoopType>,
         conditionals: Vec<Node>,
         until: Option<Box<Node>>,
@@ -1246,9 +1247,8 @@ pub enum SelectArmKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectArm {
-    pub kind: SelectArmKind,
-    pub left: Option<Node>,
-    pub right: Option<Node>,
+    pub patterns: Vec<(SelectArmKind, Option<Node>, Option<Node>)>,
+    pub conditionals: Vec<Node>,
     pub body: Node,
 }
 

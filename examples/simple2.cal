@@ -1,6 +1,6 @@
-const main = fn() -> null => {
-  // for i in 10..=100 => print(i);
-  print(whatever(10, 0b101));
-}
+const main = fn () -> null => {
+	// for i in 10..=100 => print(i);
+	print(whatever(10, 5));
+};
 
-const whatever = fn(a b) -> int => return a + b;
+const whatever = fn (a b) -> int => return a + b;

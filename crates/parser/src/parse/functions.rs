@@ -253,62 +253,58 @@ impl Parser {
             });
         }
 
-        if path.len() == 2 && !path[1].1 {
-            if let NodeType::Identifier(identifier) = &path[0].0.node_type {
-                match &path[1].0.node_type {
-                    NodeType::Identifier(value) => {
-                        if self.first().token_type == TokenType::Colon {
-                            let _ = self.eat();
-                            let mut values = vec![self.parse_statement()];
-                            while self.first().token_type == TokenType::Comma {
-                                let _ = self.eat();
-                                values.push(self.parse_statement());
-                            }
-
-                            let data = if values.len() == 1 {
-                                values
-                                    .pop()
-                                    .unwrap_or_else(|| Node::new(self.first().span, NodeType::Null))
-                            } else if let (Some(first), Some(last)) =
-                                (values.first(), values.last())
-                            {
-                                let span = Span::new_from_spans(first.span, last.span);
-                                Node::new(span, NodeType::TupleLiteral { values })
-                            } else {
-                                Node::new(self.first().span, NodeType::Null)
-                            };
-                            return Node::new(
-                                Span::new_from_spans(path[0].0.span, path[1].0.span),
-                                NodeType::EnumExpression {
-                                    identifier: identifier.clone(),
-                                    value: value.clone().into(),
-                                    data: Some(Box::new(data)),
-                                },
-                            );
-                        }
+        if path.len() == 2
+            && !path[1].1
+            && let NodeType::Identifier(identifier) = &path[0].0.node_type
+        {
+            match &path[1].0.node_type {
+                NodeType::Identifier(value) if self.first().token_type == TokenType::Colon => {
+                    let _ = self.eat();
+                    let mut values = vec![self.parse_statement()];
+                    while self.first().token_type == TokenType::Comma {
+                        let _ = self.eat();
+                        values.push(self.parse_statement());
                     }
-                    _ => {}
-                }
-            }
-        }
 
-        if path.len() == 1 {
-            if let NodeType::Identifier(identifier) = &path[0].0.node_type {
-                if self.first().token_type == TokenType::Open(Bracket::Curly)
-                    && self.second().token_type == TokenType::Identifier
-                    && (self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Colon)
-                        || self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Comma))
-                {
-                    let data = self.parse_potential_key_value();
+                    let data = if values.len() == 1 {
+                        values
+                            .pop()
+                            .unwrap_or_else(|| Node::new(self.first().span, NodeType::Null))
+                    } else if let (Some(first), Some(last)) = (values.first(), values.last()) {
+                        let span = Span::new_from_spans(first.span, last.span);
+                        Node::new(span, NodeType::TupleLiteral { values })
+                    } else {
+                        Node::new(self.first().span, NodeType::Null)
+                    };
                     return Node::new(
-                        path[0].0.span,
-                        NodeType::StructLiteral {
+                        Span::new_from_spans(path[0].0.span, path[1].0.span),
+                        NodeType::EnumExpression {
                             identifier: identifier.clone(),
-                            value: data,
+                            value: value.clone().into(),
+                            data: Some(Box::new(data)),
                         },
                     );
                 }
+                _ => {}
             }
+        }
+
+        if path.len() == 1
+            && let NodeType::Identifier(identifier) = &path[0].0.node_type
+            && self.first().token_type == TokenType::Open(Bracket::Curly)
+            && self.second().token_type == TokenType::Identifier
+            && (self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Colon)
+                || self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Comma)
+                || self.nth(2).map(|x| &x.token_type) == Some(&TokenType::Close(Bracket::Curly)))
+        {
+            let data = self.parse_potential_key_value();
+            return Node::new(
+                path[0].0.span,
+                NodeType::StructLiteral {
+                    identifier: identifier.clone(),
+                    value: data,
+                },
+            );
         }
 
         if path.len() <= 1 {

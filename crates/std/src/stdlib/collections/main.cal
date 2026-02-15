@@ -1,49 +1,73 @@
-type HashMap:<K, V> = struct {} @overload {
-	const "[]" = fn(self: HashMap:<K, V>, key: K) -> V? => self.get(key);
-	const "[]=" = fn(self: HashMap:<K, V>, key: K, value: V) -> HashMap:<K, V> => {
+type HashMap:<K, V> = struct { } @overload {
+
+	const "[]" = fn (self : HashMap:<K, V>, key : K) -> V? => self.get(key);
+
+	const "[]=" = fn (self : HashMap:<K, V>, key : K, value : V) -> HashMap:<K, V> => {
 		let mut out = self;
 		out.set(key, value);
 		out;
 	};
-	const "in" = fn(key: K, map: HashMap:<K, V>) -> bool => map.contains(key);
-}
-type HashSet:<T> = struct {} @overload {
-	const "in" = fn(value: T, set: HashSet:<T>) -> bool => set.contains(value);
-}
+
+	const "in" = fn (key : K, map : HashMap:<K, V>) -> bool => map.contains(key);
+};
+
+type HashSet:<T> = struct { } @overload {
+
+	const "in" = fn (value : T, set : HashSet:<T>) -> bool => set.contains(value);
+};
 
 impl<K, V> HashMap:<K, V> {
-	const new = fn(entries: list:<<K, V>>) -> HashMap:<K, V> => hashmap_new(entries);
-	const set = fn(self: &mut HashMap:<K, V>, key: K, value: V) => hashmap_set(self, key, value);
-	const get = fn(self: &HashMap:<K, V>, key: K) -> V? => hashmap_get(self, key);
-	const remove = fn(self: &mut HashMap:<K, V>, key: K) -> V? => hashmap_remove(self, key);
-	const contains = fn(self: &HashMap:<K, V>, key: K) -> bool => hashmap_contains(self, key);
-	const len = fn(self: &HashMap:<K, V>) -> int => hashmap_len(self);
-	const is_empty = fn(self: &HashMap:<K, V>) -> bool => self.len() == 0;
-	const keys = fn(self: &HashMap:<K, V>) -> list:<K> => hashmap_keys(self);
-	const values = fn(self: &HashMap:<K, V>) -> list:<V> => hashmap_values(self);
-	const entries = fn(self: &HashMap:<K, V>) -> list:<dyn> => hashmap_entries(self);
-	const clear = fn(self: &mut HashMap:<K, V>) => hashmap_clear(self);
-	const set_all = fn(self: &mut HashMap:<K, V>, entries: list:<dyn>) => {
+	const new = fn (entries : list:<<K, V>>) -> HashMap:<K, V> => hashmap_new(entries);
+
+	const set = fn (self : &mut HashMap:<K, V>, key : K, value : V) => hashmap_set(self, key, value);
+
+	const get = fn (self : &HashMap:<K, V>, key : K) -> V? => hashmap_get(self, key);
+
+	const remove = fn (self : &mut HashMap:<K, V>, key : K) -> V? => hashmap_remove(self, key);
+
+	const contains = fn (self : &HashMap:<K, V>, key : K) -> bool => hashmap_contains(self, key);
+
+	const len = fn (self : &HashMap:<K, V>) -> int => hashmap_len(self);
+
+	const is_empty = fn (self : &HashMap:<K, V>) -> bool => self.len() == 0;
+
+	const keys = fn (self : &HashMap:<K, V>) -> list:<K> => hashmap_keys(self);
+
+	const values = fn (self : &HashMap:<K, V>) -> list:<V> => hashmap_values(self);
+
+	const entries = fn (self : &HashMap:<K, V>) -> list:<dyn> => hashmap_entries(self);
+
+	const clear = fn (self : &mut HashMap:<K, V>) => hashmap_clear(self);
+
+	const set_all = fn (self : &mut HashMap:<K, V>, entries : list:<dyn>) => {
 		for i in 0..len(entries) => {
 			let pair = entries[i];
 			self.set(pair.0, pair.1);
 		};
 	};
-	const get_or = fn(self: &HashMap:<K, V>, key: K, default: V) -> V => {
+
+	const get_or = fn (self : &HashMap:<K, V>, key : K, default : V) -> V => {
 		match self.get(key) {
 			.Some : v => v,
-			.None => default,
-		}
+			.None => default
+		};
 	};
-}
+};
 
 impl<T> HashSet:<T> {
-	const new = fn(entries: list:<T>) -> HashSet:<T> => hashset_new(entries);
-	const add = fn(self: &mut HashSet:<T>, value: T) -> bool => hashset_add(self, value);
-	const remove = fn(self: &mut HashSet:<T>, value: T) -> bool => hashset_remove(self, value);
-	const contains = fn(self: &HashSet:<T>, value: T) -> bool => hashset_contains(self, value);
-	const len = fn(self: &HashSet:<T>) -> int => hashset_len(self);
-	const is_empty = fn(self: &HashSet:<T>) -> bool => self.len() == 0;
-	const values = fn(self: &HashSet:<T>) -> list:<T> => hashset_values(self);
-	const clear = fn(self: &mut HashSet:<T>) => hashset_clear(self);
-}
+	const new = fn (entries : list:<T>) -> HashSet:<T> => hashset_new(entries);
+
+	const add = fn (self : &mut HashSet:<T>, value : T) -> bool => hashset_add(self, value);
+
+	const remove = fn (self : &mut HashSet:<T>, value : T) -> bool => hashset_remove(self, value);
+
+	const contains = fn (self : &HashSet:<T>, value : T) -> bool => hashset_contains(self, value);
+
+	const len = fn (self : &HashSet:<T>) -> int => hashset_len(self);
+
+	const is_empty = fn (self : &HashSet:<T>) -> bool => self.len() == 0;
+
+	const values = fn (self : &HashSet:<T>) -> list:<T> => hashset_values(self);
+
+	const clear = fn (self : &mut HashSet:<T>) => hashset_clear(self);
+};

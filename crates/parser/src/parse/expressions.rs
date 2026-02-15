@@ -407,21 +407,16 @@ impl Parser {
                     if [TokenType::Comma, TokenType::Close(Bracket::Curly)]
                         .contains(&self.first().token_type)
                     {
-                        if self.first().token_type != TokenType::Close(Bracket::Curly) {
-                            let _ = self.eat();
-                        }
-
                         properties.push((
                             key.to_string(),
                             Node::new(*key.span(), NodeType::Identifier(key.into())),
                         ));
-                        continue;
+                    } else {
+                        let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
+
+                        let value = self.parse_statement();
+                        properties.push((key.to_string(), value));
                     }
-
-                    let _ = self.expect_eat(&TokenType::Colon, SyntaxErr::ExpectedChar(':'));
-
-                    let value = self.parse_statement();
-                    properties.push((key.to_string(), value));
 
                     if self.first().token_type != TokenType::Close(Bracket::Curly) {
                         let _ = self.expect_eat(&TokenType::Comma, SyntaxErr::ExpectedChar(','));

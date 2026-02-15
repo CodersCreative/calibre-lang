@@ -1,51 +1,73 @@
-type Channel:<T> = struct {};
-type WaitGroup = struct {};
-type Mutex:<T> = struct {};
+type Channel:<T> = struct { };
+type WaitGroup = struct { };
+type Mutex:<T> = struct { };
 
 impl<T> Channel:<T> {
-	const new = fn() -> Channel:<T> => channel_new();
-	const send = fn(self: &mut Channel:<T>, value: T) => channel_send(self, value);
-	const get = fn(self: &Channel:<T>) -> T? => channel_get(self);
-	const try_get = fn(self: &Channel:<T>) -> T? => channel_try_get(self);
-	const try_send = fn(self: &mut Channel:<T>, value: T) -> bool => channel_try_send(self, value);
-	const close = fn(self: &mut Channel:<T>) => channel_close(self);
-	const closed = fn(self: &Channel:<T>) -> bool => channel_closed(self);
-	const recv = fn(self: &Channel:<T>) -> T? => self.get();
-	const try_recv = fn(self: &Channel:<T>) -> T? => self.try_get();
-	const recv_or = fn(self: &Channel:<T>, default: T) -> T => {
+	const new = fn () -> Channel:<T> => channel_new();
+
+	const send = fn (self : &mut Channel:<T>, value : T) => channel_send(self, value);
+
+	const get = fn (self : &Channel:<T>) -> T? => channel_get(self);
+
+	const try_get = fn (self : &Channel:<T>) -> T? => channel_try_get(self);
+
+	const try_send = fn (self : &mut Channel:<T>, value : T) -> bool => channel_try_send(self, value);
+
+	const close = fn (self : &mut Channel:<T>) => channel_close(self);
+
+	const closed = fn (self : &Channel:<T>) -> bool => channel_closed(self);
+
+	const recv = fn (self : &Channel:<T>) -> T? => self.get();
+
+	const try_recv = fn (self : &Channel:<T>) -> T? => self.try_get();
+
+	const recv_or = fn (self : &Channel:<T>, default : T) -> T => {
 		match self.get() {
 			.Some : v => v,
-			.None => default,
-		}
+			.None => default
+		};
 	};
-	const send_all = fn(self: &mut Channel:<T>, values: list:<T>) => {
+
+	const send_all = fn (self : &mut Channel:<T>, values : list:<T>) => {
 		for i in 0..len(values) => self.send(values[i]);
 	};
-}
+};
 
 impl WaitGroup {
-	const new = fn() -> WaitGroup => waitgroup_new();
-	const raw_add = fn(self: &mut WaitGroup, value: int) => waitgroup_raw_add(self, value);
-	const raw_done = fn(self: &mut WaitGroup) => waitgroup_raw_done(self);
-	const join = fn(self: &mut WaitGroup, other: WaitGroup) => waitgroup_join(self, other);
-	const wait = fn(self: &WaitGroup) => waitgroup_wait(self);
-	const count = fn(self: &WaitGroup) -> int => waitgroup_count(self);
-	const wait_until_zero = fn(self: &WaitGroup) => self.wait();
-}
+	const new = fn () -> WaitGroup => waitgroup_new();
+
+	const raw_add = fn (self : &mut WaitGroup, value : int) => waitgroup_raw_add(self, value);
+
+	const raw_done = fn (self : &mut WaitGroup) => waitgroup_raw_done(self);
+
+	const join = fn (self : &mut WaitGroup, other : WaitGroup) => waitgroup_join(self, other);
+
+	const wait = fn (self : &WaitGroup) => waitgroup_wait(self);
+
+	const count = fn (self : &WaitGroup) -> int => waitgroup_count(self);
+
+	const wait_until_zero = fn (self : &WaitGroup) => self.wait();
+};
 
 impl<T> Mutex:<T> {
-	const new = fn(value: T) -> Mutex:<T> => mutex_new(value);
-	const get = fn(self: &Mutex:<T>) -> T => mutex_get(self);
-	const set = fn(self: &mut Mutex:<T>, value: T) => mutex_set(self, value);
-	const with = fn<U>(self: &mut Mutex:<T>, op: fn(T) -> U) -> U => mutex_with(self, op);
-	const write = fn(self: &mut Mutex:<T>) -> &mut T => mutex_write(self);
-	const swap = fn(self: &mut Mutex:<T>, value: T) -> T => {
+	const new = fn (value : T) -> Mutex:<T> => mutex_new(value);
+
+	const get = fn (self : &Mutex:<T>) -> T => mutex_get(self);
+
+	const set = fn (self : &mut Mutex:<T>, value : T) => mutex_set(self, value);
+
+	const with = fn <U> (self : &mut Mutex:<T>, op : fn(T) -> U) -> U => mutex_with(self, op);
+
+	const write = fn (self : &mut Mutex:<T>) -> &mut T => mutex_write(self);
+
+	const swap = fn (self : &mut Mutex:<T>, value : T) -> T => {
 		let current = self.get();
 		self.set(value);
 		current;
 	};
-	const update = fn(self: &mut Mutex:<T>, op: fn(T) -> T) => {
+
+	const update = fn (self : &mut Mutex:<T>, op : fn(T) -> T) => {
 		let current = self.get();
 		self.set(op(current));
 	};
-}
+};

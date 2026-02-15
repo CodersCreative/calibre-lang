@@ -2,8 +2,8 @@ import data;
 import * from data;
 
 // The const keyword creates an immutable variable that cannot be shadowed.
-const language_forced : Language = Language.ENGLISH:6;
+const language_forced : Language = Language.ENGLISH : 6;
 
-const main = fn() => {
+const main = fn () => {
 	print("hello");
-}
+};
