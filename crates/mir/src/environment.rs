@@ -71,6 +71,7 @@ pub struct MiddleOverload {
     pub parameters: Vec<ParserDataType>,
     pub return_type: ParserDataType,
     pub func: Node,
+    pub generic_params: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -78,12 +79,24 @@ pub enum Operator {
     Binary(BinaryOperator),
     Comparison(ComparisonOperator),
     Boolean(BooleanOperator),
+    Index,
+    IndexAssign,
+    In,
+    As,
 }
 
 impl FromStr for Operator {
     type Err = MiddleErr;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some(x) = BinaryOperator::from_symbol(s) {
+        if s == "[]" {
+            Ok(Self::Index)
+        } else if s == "[]=" {
+            Ok(Self::IndexAssign)
+        } else if s == "in" {
+            Ok(Self::In)
+        } else if s == "as" {
+            Ok(Self::As)
+        } else if let Some(x) = BinaryOperator::from_symbol(s) {
             Ok(Self::Binary(x))
         } else if let Some(x) = ComparisonOperator::from_operator(s) {
             Ok(Self::Comparison(x))
@@ -223,6 +236,21 @@ impl MiddleEnvironment {
 
     pub fn impl_key(&self, ty: &ParserDataType) -> ParserInnerType {
         ty.clone().unwrap_all_refs().data_type
+    }
+
+    pub fn impl_self_name(&self, ty: &ParserDataType) -> String {
+        match ty.clone().unwrap_all_refs().data_type {
+            ParserInnerType::Struct(name) => name,
+            ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
+            ParserInnerType::Int => String::from("int"),
+            ParserInnerType::UInt => String::from("uint"),
+            ParserInnerType::Float => String::from("float"),
+            ParserInnerType::Bool => String::from("bool"),
+            ParserInnerType::Char => String::from("char"),
+            ParserInnerType::Str => String::from("str"),
+            ParserInnerType::Range => String::from("range"),
+            other => other.to_string(),
+        }
     }
 
     pub(crate) fn impl_type_matches(
@@ -604,9 +632,10 @@ impl MiddleEnvironment {
             NodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: ParserText::from(specialized_name.clone()).into(),
-                data_type: PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(
-                    None,
-                ))),
+                data_type: PotentialNewType::DataType(ParserDataType::new(
+                    self.current_span(),
+                    ParserInnerType::Auto(None),
+                )),
                 value: Box::new(Node::new(
                     self.current_span(),
                     NodeType::FunctionDeclaration {
@@ -639,9 +668,10 @@ impl MiddleEnvironment {
     ) -> ParserDataType {
         let span = dt.span;
         let data_type = match &dt.data_type {
-            ParserInnerType::Struct(s) if subst.contains_key(s) => {
-                subst.get(s).unwrap().data_type.clone()
-            }
+            ParserInnerType::Struct(s) if subst.contains_key(s) => subst
+                .get(s)
+                .map(|dt| dt.data_type.clone())
+                .unwrap_or_else(|| dt.data_type.clone()),
             ParserInnerType::Tuple(xs) => ParserInnerType::Tuple(
                 xs.iter()
                     .map(|x| self.substitute_data_type(x, subst))
@@ -766,7 +796,8 @@ impl MiddleEnvironment {
 
                 for (k, v) in x {
                     lst.push((
-                        self.resolve_dollar_ident_only(scope, &k).unwrap(),
+                        self.resolve_dollar_ident_only(scope, &k)
+                            .unwrap_or_else(|| ParserText::from(k.to_string()).into()),
                         if let Some(v) = v {
                             Some(self.resolve_potential_new_type(scope, v))
                         } else {
@@ -1100,9 +1131,9 @@ impl MiddleEnvironment {
 
                                 match inst {
                                     Type::TArrow(param, rest) => {
-                                        subst = hm::unify(subst.clone(), &param, &arg_hm)
+                                        subst = hm::unify(subst.clone(), param.as_ref(), &arg_hm)
                                             .unwrap_or(subst);
-                                        inst = *rest;
+                                        inst = rest.as_ref().clone();
                                     }
                                     _ => {
                                         let fresh_ret = tg.fresh();
@@ -1110,8 +1141,8 @@ impl MiddleEnvironment {
                                             subst.clone(),
                                             &inst,
                                             &Type::TArrow(
-                                                Box::new(arg_hm.clone()),
-                                                Box::new(fresh_ret.clone()),
+                                                std::sync::Arc::new(arg_hm.clone()),
+                                                std::sync::Arc::new(fresh_ret.clone()),
                                             ),
                                         )
                                         .unwrap_or(subst);
@@ -1184,8 +1215,8 @@ impl MiddleEnvironment {
     }
 
     pub fn get_location(&self, scope: &u64, span: Span) -> Option<Location> {
-        Some(Location {
-            path: self.scopes.get(scope).unwrap().path.clone(),
+        self.scopes.get(scope).map(|s| Location {
+            path: s.path.clone(),
             span,
         })
     }
@@ -1392,6 +1423,7 @@ impl MiddleEnvironment {
         scope: &u64,
         data_type: PotentialNewType,
     ) -> ParserDataType {
+        let data_type_span = *data_type.span();
         match data_type {
             PotentialNewType::DataType(x) => self.resolve_data_type(scope, x),
             PotentialNewType::NewType {
@@ -1399,7 +1431,9 @@ impl MiddleEnvironment {
                 type_def,
                 overloads,
             } => {
-                let identifier = self.resolve_dollar_ident_only(scope, &identifier).unwrap();
+                let identifier = self
+                    .resolve_dollar_ident_only(scope, &identifier)
+                    .unwrap_or_else(|| ParserText::from(identifier.to_string()).into());
                 let new_name = get_disamubiguous_name(scope, Some(identifier.text.trim()), None);
                 let type_def = self.type_def_type_into(scope, type_def);
                 self.objects.insert(
@@ -1412,22 +1446,29 @@ impl MiddleEnvironment {
                     },
                 );
 
-                self.scopes
-                    .get_mut(scope)
-                    .unwrap()
-                    .mappings
-                    .insert(identifier.text, new_name.clone());
+                if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                    scope_ref.mappings.insert(identifier.text, new_name.clone());
+                }
 
                 let previous_self = self
                     .scopes
                     .get_mut(scope)
-                    .unwrap()
-                    .mappings
-                    .insert(String::from("Self"), new_name.clone());
+                    .map(|scope_ref| {
+                        scope_ref
+                            .mappings
+                            .insert(String::from("Self"), new_name.clone())
+                    })
+                    .flatten();
 
                 for overload in overloads {
                     let overload = MiddleOverload {
-                        operator: Operator::from_str(&overload.operator.text).unwrap(),
+                        operator: match Operator::from_str(&overload.operator.text) {
+                            Ok(op) => op,
+                            Err(err) => {
+                                self.errors.push(err);
+                                continue;
+                            }
+                        },
                         return_type: self
                             .resolve_potential_new_type(scope, overload.header.return_type.clone()),
                         parameters: {
@@ -1455,20 +1496,19 @@ impl MiddleEnvironment {
                             params
                         },
                         func: overload.into(),
+                        generic_params: Vec::new(),
                     };
 
                     self.overloads.push(overload);
                 }
 
                 if let Some(prev) = previous_self {
-                    self.scopes
-                        .get_mut(scope)
-                        .unwrap()
-                        .mappings
-                        .insert(String::from("Self"), prev);
+                    if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                        scope_ref.mappings.insert(String::from("Self"), prev);
+                    }
                 }
 
-                ParserDataType::from(ParserInnerType::Struct(new_name))
+                ParserDataType::new(data_type_span, ParserInnerType::Struct(new_name))
             }
         }
     }
@@ -1618,7 +1658,7 @@ impl MiddleEnvironment {
         self.variables.insert(
             name_name.clone(),
             MiddleVariable {
-                data_type: ParserDataType::from(ParserInnerType::Str),
+                data_type: ParserDataType::new(Span::default(), ParserInnerType::Str),
                 var_type: VarType::Constant,
                 location: None,
             },
@@ -1628,7 +1668,7 @@ impl MiddleEnvironment {
         self.variables.insert(
             file_name.clone(),
             MiddleVariable {
-                data_type: ParserDataType::from(ParserInnerType::Str),
+                data_type: ParserDataType::new(Span::default(), ParserInnerType::Str),
                 var_type: VarType::Constant,
                 location: None,
             },
@@ -1647,14 +1687,15 @@ impl MiddleEnvironment {
     ) -> Result<u64, MiddleErr> {
         let mut skip = 0;
         if let None = parent {
-            parent = Some(
-                self.scopes
-                    .iter()
-                    .find(|(_, v)| v.namespace == path[0])
-                    .map(|x| x.0)
-                    .unwrap()
-                    .clone(),
-            );
+            parent = self
+                .scopes
+                .iter()
+                .find(|(_, v)| v.namespace == path[0])
+                .map(|x| x.0)
+                .cloned();
+            if parent.is_none() {
+                return Err(self.err_at_current(MiddleErr::Scope(path[0].clone())));
+            }
             skip = 1;
         }
 
@@ -1664,11 +1705,14 @@ impl MiddleEnvironment {
             }
         }
 
-        Ok(parent.unwrap())
+        parent.ok_or_else(|| self.err_at_current(MiddleErr::Scope(path.join("::"))))
     }
 
     pub fn get_scope_from_parent(&self, parent: u64, namespace: &str) -> Result<u64, MiddleErr> {
-        for (_, child) in self.scopes.get(&parent).unwrap().children.iter() {
+        let parent_scope = self.scopes.get(&parent).ok_or_else(|| {
+            self.err_at_current(MiddleErr::Internal(format!("missing scope {parent}")))
+        })?;
+        for (_, child) in parent_scope.children.iter() {
             if let Some(x) = self.scopes.get(&child) {
                 if x.namespace == namespace {
                     return Ok(x.id);
@@ -1679,22 +1723,23 @@ impl MiddleEnvironment {
     }
 
     pub fn new_scope_from_parent_shallow(&mut self, parent: u64) -> u64 {
-        let path = self.scopes.get(&parent).unwrap().path.clone();
+        let Some(path) = self.scopes.get(&parent).map(|s| s.path.clone()) else {
+            return parent;
+        };
         self.new_scope(Some(parent), path, None)
     }
 
     pub fn new_build_scope_from_parent(&mut self, parent: u64, namespace: &str) -> Option<u64> {
-        let path = self.scopes.get(&parent).unwrap().path.clone();
-        let parent_name = path.file_name().unwrap();
-        let folder = path.parent().unwrap().to_path_buf();
+        let path = self.scopes.get(&parent)?.path.clone();
+        let parent_name = path.file_name()?;
+        let folder = path.parent()?.to_path_buf();
 
         let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
             String::new()
         } else {
-            format!(
-                "{}/",
-                parent_name.to_str().unwrap().split(".").nth(0).unwrap()
-            )
+            let parent_str = parent_name.to_str()?;
+            let base = parent_str.split('.').next()?;
+            format!("{base}/")
         };
 
         let mut path1 = folder.clone();
@@ -1707,41 +1752,71 @@ impl MiddleEnvironment {
         }
     }
 
-    pub fn new_scope_from_parent(&mut self, parent: u64, namespace: &str) -> u64 {
+    pub fn new_scope_from_parent(
+        &mut self,
+        parent: u64,
+        namespace: &str,
+    ) -> Result<u64, MiddleErr> {
         if let Ok(scope) = self.get_scope_from_parent(parent, namespace) {
-            return scope;
+            return Ok(scope);
         }
 
-        let path = self.scopes.get(&parent).unwrap().path.clone();
-        let parent_name = path.file_name().unwrap();
-        let folder = path.parent().unwrap().to_path_buf();
+        let path = self
+            .scopes
+            .get(&parent)
+            .ok_or_else(|| {
+                self.err_at_current(MiddleErr::Internal(format!(
+                    "missing parent scope {parent}"
+                )))
+            })?
+            .path
+            .clone();
+        let parent_name = path.file_name().ok_or_else(|| {
+            self.err_at_current(MiddleErr::Internal(format!(
+                "missing parent filename for scope {parent}"
+            )))
+        })?;
+        let folder = path.parent().ok_or_else(|| {
+            self.err_at_current(MiddleErr::Internal(format!(
+                "missing parent directory for scope {parent}"
+            )))
+        })?;
 
         let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
             String::new()
         } else {
-            format!(
-                "{}/",
-                parent_name.to_str().unwrap().split(".").nth(0).unwrap()
-            )
+            let parent_str = parent_name.to_str().ok_or_else(|| {
+                self.err_at_current(MiddleErr::Internal(format!(
+                    "invalid parent filename for scope {parent}"
+                )))
+            })?;
+            let base = parent_str.split('.').next().ok_or_else(|| {
+                self.err_at_current(MiddleErr::Internal(format!(
+                    "invalid parent filename for scope {parent}"
+                )))
+            })?;
+            format!("{base}/")
         };
 
-        let mut path1 = folder.clone();
+        let mut path1 = folder.to_path_buf();
         path1 = path1.join(format!("{extra}{namespace}.cal"));
 
-        let mut path2 = folder.clone();
+        let mut path2 = folder.to_path_buf();
         path2 = path2.join(format!("{extra}{namespace}/main.cal"));
 
-        let mut path3 = folder.clone();
+        let mut path3 = folder.to_path_buf();
         path3 = path3.join(format!("{extra}{namespace}/mod.cal"));
 
         if path1.exists() {
-            self.new_scope(Some(parent), path1, Some(namespace))
+            Ok(self.new_scope(Some(parent), path1, Some(namespace)))
         } else if path2.exists() {
-            self.new_scope(Some(parent), path2, Some(namespace))
+            Ok(self.new_scope(Some(parent), path2, Some(namespace)))
         } else if path3.exists() {
-            self.new_scope(Some(parent), path3, Some(namespace))
+            Ok(self.new_scope(Some(parent), path3, Some(namespace)))
         } else {
-            panic!("Tried:\n{path1:?}\n{path2:?}\n{path3:?}")
+            Err(self.err_at_current(MiddleErr::Scope(format!(
+                "could not resolve module {namespace}; tried {path1:?}, {path2:?}, {path3:?}"
+            ))))
         }
     }
 
@@ -1769,12 +1844,14 @@ impl MiddleEnvironment {
 
             let _ = self.add_scope(scope);
 
-            self.scopes.get_mut(&parent).unwrap().children.insert(
-                namespace
-                    .map(String::from)
-                    .unwrap_or((self.scope_counter - 1).to_string()),
-                self.scope_counter - 1,
-            );
+            if let Some(scope_ref) = self.scopes.get_mut(&parent) {
+                scope_ref.children.insert(
+                    namespace
+                        .map(String::from)
+                        .unwrap_or((self.scope_counter - 1).to_string()),
+                    self.scope_counter - 1,
+                );
+            }
 
             self.scope_counter - 1
         } else {
@@ -1826,12 +1903,20 @@ impl MiddleEnvironment {
         key: &str,
     ) -> Result<(u64, Option<MiddleNode>), MiddleErr> {
         Ok(match key {
-            "super" => (
-                self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
-                None,
-            ),
+            "super" => {
+                let parent = self
+                    .scopes
+                    .get(&scope)
+                    .and_then(|s| s.parent)
+                    .ok_or_else(|| self.err_at_current(MiddleErr::Scope("super".to_string())))?;
+                (parent, None)
+            }
             _ => {
-                let current = self.scopes.get(&scope).unwrap().clone();
+                let current = self
+                    .scopes
+                    .get(&scope)
+                    .cloned()
+                    .ok_or_else(|| self.err_at_current(MiddleErr::Scope(scope.to_string())))?;
                 if let Some(x) = current.children.get(key) {
                     (x.clone(), None)
                 } else if let Some(s) = self.get_global_scope().children.get(key) {
@@ -1842,8 +1927,21 @@ impl MiddleEnvironment {
 
                     let build_node =
                         if let Some(scope) = self.new_build_scope_from_parent(current.id, key) {
-                            let path = self.scopes.get(&scope).unwrap().path.clone();
-                            let source = fs::read_to_string(path.clone()).unwrap();
+                            let path = self
+                                .scopes
+                                .get(&scope)
+                                .ok_or_else(|| {
+                                    self.err_at_current(MiddleErr::Internal(format!(
+                                        "missing build scope {scope}"
+                                    )))
+                                })?
+                                .path
+                                .clone();
+                            let source = fs::read_to_string(&path).map_err(|err| {
+                                self.err_at_current(MiddleErr::Internal(format!(
+                                    "failed to read {path:?}: {err}"
+                                )))
+                            })?;
                             parser.set_source_path(Some(path.clone()));
                             let tokens = tokenizer.tokenize(&source).map_err(|error| {
                                 MiddleErr::LexerError {
@@ -1881,9 +1979,22 @@ impl MiddleEnvironment {
                             None
                         };
 
-                    let scope = self.new_scope_from_parent(current.id, key);
-                    let path = self.scopes.get(&scope).unwrap().path.clone();
-                    let source = fs::read_to_string(path.clone()).unwrap();
+                    let scope = self.new_scope_from_parent(current.id, key)?;
+                    let path = self
+                        .scopes
+                        .get(&scope)
+                        .ok_or_else(|| {
+                            self.err_at_current(MiddleErr::Internal(format!(
+                                "missing scope {scope} for import"
+                            )))
+                        })?
+                        .path
+                        .clone();
+                    let source = fs::read_to_string(&path).map_err(|err| {
+                        self.err_at_current(MiddleErr::Internal(format!(
+                            "failed to read {path:?}: {err}"
+                        )))
+                    })?;
                     parser.set_source_path(Some(path.clone()));
                     let tokens =
                         tokenizer
@@ -1941,9 +2052,16 @@ impl MiddleEnvironment {
 
     pub fn get_next_scope(&self, scope: u64, key: &str) -> Result<u64, MiddleErr> {
         Ok(match key {
-            "super" => self.scopes.get(&scope).unwrap().parent.clone().unwrap(),
+            "super" => self
+                .scopes
+                .get(&scope)
+                .and_then(|s| s.parent)
+                .ok_or_else(|| self.err_at_current(MiddleErr::Scope("super".to_string())))?,
             _ => {
-                let current = self.scopes.get(&scope).unwrap();
+                let current = self
+                    .scopes
+                    .get(&scope)
+                    .ok_or_else(|| self.err_at_current(MiddleErr::Scope(scope.to_string())))?;
                 if let Some(x) = current.children.get(key) {
                     x.clone()
                 } else if let Some(s) = self.get_global_scope().children.get(key) {
@@ -2009,13 +2127,12 @@ impl MiddleEnvironment {
             | NodeType::Until { .. }
             | NodeType::SelectStatement { .. }
             | NodeType::Use { .. } => None,
-            NodeType::Spawn { .. } | NodeType::SpawnBlock { .. } => {
-                Some(ParserDataType::from(ParserInnerType::Struct(String::from(
-                    "WaitGroup",
-                ))))
-            }
+            NodeType::Spawn { .. } | NodeType::SpawnBlock { .. } => Some(ParserDataType::new(
+                node.span,
+                ParserInnerType::Struct(String::from("WaitGroup")),
+            )),
             NodeType::Null | NodeType::Defer { .. } | NodeType::Drop(_) | NodeType::EmptyLine => {
-                Some(ParserDataType::from(ParserInnerType::Null))
+                Some(ParserDataType::new(node.span, ParserInnerType::Null))
             }
             NodeType::MoveExpression { value } | NodeType::ParenExpression { value } => {
                 self.resolve_type_from_node(scope, value)
@@ -2025,10 +2142,16 @@ impl MiddleEnvironment {
                 for value in values {
                     types.push(
                         self.resolve_type_from_node(scope, value)
-                            .unwrap_or(ParserDataType::from(ParserInnerType::Auto(None))),
+                            .unwrap_or(ParserDataType::new(
+                                value.span,
+                                ParserInnerType::Auto(None),
+                            )),
                     );
                 }
-                Some(ParserDataType::from(ParserInnerType::Tuple(types)))
+                Some(ParserDataType::new(
+                    node.span,
+                    ParserInnerType::Tuple(types),
+                ))
             }
             NodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
@@ -2151,11 +2274,20 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
 
-            NodeType::NotExpression { .. } | NodeType::InDeclaration { .. } => {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Bool,
-                    span: node.span,
-                })
+            NodeType::NotExpression { .. } => Some(ParserDataType {
+                data_type: ParserInnerType::Bool,
+                span: node.span,
+            }),
+            NodeType::InDeclaration { identifier, value } => {
+                if let Some(x) = self.get_operator_overload(scope, identifier, value, &Operator::In)
+                {
+                    Some(x.return_type.clone())
+                } else {
+                    Some(ParserDataType {
+                        data_type: ParserInnerType::Bool,
+                        span: node.span,
+                    })
+                }
             }
             NodeType::ComparisonExpression {
                 left,
@@ -2266,8 +2398,8 @@ impl MiddleEnvironment {
                 // TODO handle generics
                 if let NodeType::MemberExpression { path } = &caller.node_type {
                     if path.len() >= 2 {
-                        let member_name = match &path.last().unwrap().0.node_type {
-                            NodeType::Identifier(id) => id.to_string(),
+                        let member_name = match path.last().map(|p| &p.0.node_type) {
+                            Some(NodeType::Identifier(id)) => id.to_string(),
                             _ => String::new(),
                         };
 
@@ -2278,9 +2410,7 @@ impl MiddleEnvironment {
                                         self.resolve_potential_generic_ident_to_data_type(scope, id)
                                     {
                                         Some(parsed)
-                                    } else if let Some(var) =
-                                        self.variables.get(&id.to_string())
-                                    {
+                                    } else if let Some(var) = self.variables.get(&id.to_string()) {
                                         Some(var.data_type.clone())
                                     } else {
                                         self.resolve_type_from_node(scope, &path[0].0)
@@ -2316,19 +2446,22 @@ impl MiddleEnvironment {
                     }
                 }
 
-                let caller = self
-                    .quick_resolve_potential_scope_member(scope, *caller.clone())
-                    .unwrap();
+                let caller = match self.quick_resolve_potential_scope_member(scope, *caller.clone())
+                {
+                    Ok(caller) => caller,
+                    Err(err) => {
+                        self.errors.push(err);
+                        return None;
+                    }
+                };
                 let mut caller_type = None;
                 if let NodeType::Identifier(caller) = &caller.node_type {
                     if &caller.to_string() == "tuple" {
                         let mut lst = Vec::new();
 
                         for arg in args {
-                            lst.push(
-                                self.resolve_type_from_node(scope, &arg.clone().into())
-                                    .unwrap(),
-                            );
+                            let ty = self.resolve_type_from_node(scope, &arg.clone().into())?;
+                            lst.push(ty);
                         }
                         return Some(ParserDataType {
                             data_type: ParserInnerType::Tuple(lst),
@@ -2466,7 +2599,8 @@ impl MiddleEnvironment {
                 }
 
                 if path.len() >= 2 {
-                    if let NodeType::CallExpression { caller, .. } = &path.last().unwrap().0.node_type
+                    if let Some(last) = path.last()
+                        && let NodeType::CallExpression { caller, .. } = &last.0.node_type
                         && let NodeType::Identifier(method_ident) = &caller.node_type
                     {
                         let base_ty = match &path[0].0.node_type {
@@ -2507,11 +2641,11 @@ impl MiddleEnvironment {
                     }
                 }
 
-                Some(ParserDataType::from(ParserInnerType::Dynamic))
+                Some(ParserDataType::new(node.span, ParserInnerType::Dynamic))
             }
-            NodeType::PipeExpression(path) => {
-                self.resolve_type_from_node(scope, path.last().unwrap().get_node())
-            }
+            NodeType::PipeExpression(path) => path
+                .last()
+                .and_then(|p| self.resolve_type_from_node(scope, p.get_node())),
             NodeType::DerefStatement { value } => {
                 let typ = self.resolve_type_from_node(scope, &value)?;
 
@@ -2522,7 +2656,7 @@ impl MiddleEnvironment {
                 }
             }
             NodeType::ScopeMemberExpression { .. } => {
-                Some(ParserDataType::from(ParserInnerType::Dynamic))
+                Some(ParserDataType::new(node.span, ParserInnerType::Dynamic))
             }
             NodeType::ScopeDeclaration { .. } => unreachable!(),
         };

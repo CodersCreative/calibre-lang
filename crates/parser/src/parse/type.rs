@@ -57,14 +57,14 @@ impl Parser {
             );
 
             let return_type = if self.first().token_type == TokenType::FatArrow {
-                ParserDataType::from(ParserInnerType::Auto(None)).into()
+                ParserDataType::new(operator.span, ParserInnerType::Auto(None)).into()
             } else {
                 let _ = self.expect_eat(
                     &TokenType::Arrow,
                     SyntaxErr::ExpectedKeyword(String::from("->")),
                 );
                 self.parse_potential_new_type()
-                    .unwrap_or(ParserDataType::from(ParserInnerType::Null).into())
+                    .unwrap_or(ParserDataType::new(operator.span, ParserInnerType::Null).into())
             };
 
             let block = self.parse_scope_declaration(false);

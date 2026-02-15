@@ -1,7 +1,7 @@
 use std::{
     cell::UnsafeCell,
     collections::VecDeque,
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, Write},
     net::{TcpListener, TcpStream},
     sync::{
         Arc, Condvar, Mutex,
@@ -42,7 +42,7 @@ pub enum HashKey {
     UInt(u64),
     Bool(bool),
     Char(char),
-    Str(String),
+    Str(Arc<String>),
 }
 
 impl TryFrom<RuntimeValue> for HashKey {
@@ -125,9 +125,10 @@ impl WaitGroupInner {
                 .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
         }
         drop(guard);
-        let joined = self.joined.lock().map_err(|_| {
-            RuntimeError::UnexpectedType(RuntimeValue::Null)
-        })?;
+        let joined = self
+            .joined
+            .lock()
+            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
         for inner in joined.iter() {
             inner.wait()?;
         }
@@ -237,11 +238,12 @@ pub enum RuntimeValue {
     Ptr(u64),
     Range(i64, i64),
     Bool(bool),
-    Str(String),
+    Str(Arc<String>),
     Char(char),
     Aggregate(Option<String>, Gc<GcMap>),
     Enum(String, usize, Option<Gc<RuntimeValue>>),
     Ref(String),
+    VarRef(usize),
     RegRef {
         frame: usize,
         reg: Reg,
@@ -260,9 +262,51 @@ pub enum RuntimeValue {
     NativeFunction(Arc<dyn NativeFunction>),
     ExternFunction(Arc<ExternFunction>),
     Function {
-        name: String,
-        captures: Vec<(String, RuntimeValue)>,
+        name: Arc<String>,
+        captures: std::sync::Arc<Vec<(String, RuntimeValue)>>,
     },
+}
+
+impl RuntimeValue {
+    #[inline]
+    pub fn clone_for_arg(&self) -> RuntimeValue {
+        match self {
+            RuntimeValue::Aggregate(_, _)
+            | RuntimeValue::List(_)
+            | RuntimeValue::Enum(_, _, _)
+            | RuntimeValue::Option(_)
+            | RuntimeValue::Result(_)
+            | RuntimeValue::Ptr(_) => self.clone(),
+            RuntimeValue::Str(x) => RuntimeValue::Str(x.clone()),
+            RuntimeValue::Channel(x) => RuntimeValue::Channel(x.clone()),
+            RuntimeValue::WaitGroup(x) => RuntimeValue::WaitGroup(x.clone()),
+            RuntimeValue::Mutex(x) => RuntimeValue::Mutex(x.clone()),
+            RuntimeValue::MutexGuard(x) => RuntimeValue::MutexGuard(x.clone()),
+            RuntimeValue::HashMap(x) => RuntimeValue::HashMap(x.clone()),
+            RuntimeValue::HashSet(x) => RuntimeValue::HashSet(x.clone()),
+            RuntimeValue::TcpStream(x) => RuntimeValue::TcpStream(x.clone()),
+            RuntimeValue::TcpListener(x) => RuntimeValue::TcpListener(x.clone()),
+            RuntimeValue::NativeFunction(x) => RuntimeValue::NativeFunction(x.clone()),
+            RuntimeValue::ExternFunction(x) => RuntimeValue::ExternFunction(x.clone()),
+            RuntimeValue::Function { name, captures } => RuntimeValue::Function {
+                name: name.clone(),
+                captures: captures.clone(),
+            },
+            RuntimeValue::Ref(x) => RuntimeValue::Ref(x.clone()),
+            RuntimeValue::VarRef(x) => RuntimeValue::VarRef(*x),
+            RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef {
+                frame: *frame,
+                reg: *reg,
+            },
+            RuntimeValue::Range(a, b) => RuntimeValue::Range(*a, *b),
+            RuntimeValue::Float(x) => RuntimeValue::Float(*x),
+            RuntimeValue::Int(x) => RuntimeValue::Int(*x),
+            RuntimeValue::UInt(x) => RuntimeValue::UInt(*x),
+            RuntimeValue::Bool(x) => RuntimeValue::Bool(*x),
+            RuntimeValue::Char(x) => RuntimeValue::Char(*x),
+            RuntimeValue::Null => RuntimeValue::Null,
+        }
+    }
 }
 
 unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
@@ -300,13 +344,14 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
             RuntimeValue::TcpStream(_) => Ok(()),
             RuntimeValue::TcpListener(_) => Ok(()),
             RuntimeValue::Function { captures, .. } => {
-                for (_, value) in captures {
+                for (_, value) in captures.as_ref().iter() {
                     value.accept(visitor)?;
                 }
                 Ok(())
             }
             RuntimeValue::ExternFunction(_) => Ok(()),
             RuntimeValue::Ptr(_) => Ok(()),
+            RuntimeValue::VarRef(_) => Ok(()),
             _ => Ok(()),
         }
     }
@@ -405,9 +450,18 @@ impl RuntimeValue {
             ("regex.is_match", Arc::new(stdlib::regex::IsMatchFn)),
             ("regex.find", Arc::new(stdlib::regex::FindFn)),
             ("regex.replace", Arc::new(stdlib::regex::ReplaceFn)),
-            ("collections.hashmap_new", Arc::new(stdlib::collections::HashMapNew)),
-            ("collections.hashmap_set", Arc::new(stdlib::collections::HashMapSet)),
-            ("collections.hashmap_get", Arc::new(stdlib::collections::HashMapGet)),
+            (
+                "collections.hashmap_new",
+                Arc::new(stdlib::collections::HashMapNew),
+            ),
+            (
+                "collections.hashmap_set",
+                Arc::new(stdlib::collections::HashMapSet),
+            ),
+            (
+                "collections.hashmap_get",
+                Arc::new(stdlib::collections::HashMapGet),
+            ),
             (
                 "collections.hashmap_remove",
                 Arc::new(stdlib::collections::HashMapRemove),
@@ -416,16 +470,34 @@ impl RuntimeValue {
                 "collections.hashmap_contains",
                 Arc::new(stdlib::collections::HashMapContains),
             ),
-            ("collections.hashmap_len", Arc::new(stdlib::collections::HashMapLen)),
-            ("collections.hashmap_keys", Arc::new(stdlib::collections::HashMapKeys)),
-            ("collections.hashmap_values", Arc::new(stdlib::collections::HashMapValues)),
+            (
+                "collections.hashmap_len",
+                Arc::new(stdlib::collections::HashMapLen),
+            ),
+            (
+                "collections.hashmap_keys",
+                Arc::new(stdlib::collections::HashMapKeys),
+            ),
+            (
+                "collections.hashmap_values",
+                Arc::new(stdlib::collections::HashMapValues),
+            ),
             (
                 "collections.hashmap_entries",
                 Arc::new(stdlib::collections::HashMapEntries),
             ),
-            ("collections.hashmap_clear", Arc::new(stdlib::collections::HashMapClear)),
-            ("collections.hashset_new", Arc::new(stdlib::collections::HashSetNew)),
-            ("collections.hashset_add", Arc::new(stdlib::collections::HashSetAdd)),
+            (
+                "collections.hashmap_clear",
+                Arc::new(stdlib::collections::HashMapClear),
+            ),
+            (
+                "collections.hashset_new",
+                Arc::new(stdlib::collections::HashSetNew),
+            ),
+            (
+                "collections.hashset_add",
+                Arc::new(stdlib::collections::HashSetAdd),
+            ),
             (
                 "collections.hashset_remove",
                 Arc::new(stdlib::collections::HashSetRemove),
@@ -434,9 +506,18 @@ impl RuntimeValue {
                 "collections.hashset_contains",
                 Arc::new(stdlib::collections::HashSetContains),
             ),
-            ("collections.hashset_len", Arc::new(stdlib::collections::HashSetLen)),
-            ("collections.hashset_values", Arc::new(stdlib::collections::HashSetValues)),
-            ("collections.hashset_clear", Arc::new(stdlib::collections::HashSetClear)),
+            (
+                "collections.hashset_len",
+                Arc::new(stdlib::collections::HashSetLen),
+            ),
+            (
+                "collections.hashset_values",
+                Arc::new(stdlib::collections::HashSetValues),
+            ),
+            (
+                "collections.hashset_clear",
+                Arc::new(stdlib::collections::HashSetClear),
+            ),
             ("net.tcp_connect", Arc::new(stdlib::net::TcpConnect)),
             ("net.tcp_listen", Arc::new(stdlib::net::TcpListen)),
             ("net.tcp_accept", Arc::new(stdlib::net::TcpAccept)),
@@ -497,27 +578,31 @@ impl From<VMLiteral> for RuntimeValue {
             VMLiteral::Int(x) => Self::Int(x),
             VMLiteral::Float(x) => Self::Float(x),
             VMLiteral::Char(x) => Self::Char(x),
-            VMLiteral::String(x) => Self::Str(x),
+            VMLiteral::String(x) => Self::Str(x.into()),
             VMLiteral::Null => Self::Null,
             VMLiteral::Closure { label, captures: _ } => Self::Function {
-                name: label,
-                captures: Vec::new(),
+                name: label.into(),
+                captures: std::sync::Arc::new(Vec::new()),
             },
             VMLiteral::ExternFunction { .. } => Self::Null,
         }
     }
 }
 
-fn print_list<T: Display>(data: &[T], open: char, close: char) -> String {
-    let mut txt = String::from(open);
-
-    for val in data.iter() {
-        txt.push_str(&format!("{}, ", val));
+fn print_list_from_iter<I>(mut iter: I, open: char, close: char) -> String
+where
+    I: Iterator<Item = String>,
+{
+    let mut txt = String::new();
+    txt.push(open);
+    if let Some(first) = iter.next() {
+        txt.push_str(&first);
+        for s in iter {
+            txt.push_str(", ");
+            txt.push_str(&s);
+        }
     }
-
-    txt = txt.trim().trim_end_matches(",").trim().to_string();
     txt.push(close);
-
     txt
 }
 
@@ -528,7 +613,15 @@ fn pretty_name(name: &str) -> &str {
 impl RuntimeValue {
     pub fn display(&self, vm: &VM) -> String {
         match self {
-            Self::Ref(x) => vm.variables.get(x).unwrap().display(vm),
+            Self::Ref(x) => match vm.variables.get(x) {
+                Some(value) => value.display(vm),
+                None => RuntimeValue::Null.display(vm),
+            },
+            Self::VarRef(id) => vm
+                .variables
+                .get_by_id(*id)
+                .unwrap_or(RuntimeValue::Null)
+                .display(vm),
             Self::RegRef { frame, reg } => vm.get_reg_value_in_frame(*frame, *reg).display(vm),
             Self::Channel(_) => String::from("Channel"),
             Self::WaitGroup(_) => String::from("WaitGroup"),
@@ -538,7 +631,11 @@ impl RuntimeValue {
                 if let Ok(guard) = map.lock() {
                     let mut parts = Vec::new();
                     for (k, v) in guard.iter() {
-                        parts.push(format!("{} : {}", RuntimeValue::from(k.clone()).display(vm), v.display(vm)));
+                        parts.push(format!(
+                            "{} : {}",
+                            RuntimeValue::from(k.clone()).display(vm),
+                            v.display(vm)
+                        ));
                     }
                     format!("HashMap {{ {} }}", parts.join(", "))
                 } else {
@@ -559,8 +656,16 @@ impl RuntimeValue {
             Self::TcpStream(_) => String::from("TcpStream"),
             Self::TcpListener(_) => String::from("TcpListener"),
             Self::List(x) => {
-                let lst: Vec<String> = x.0.iter().map(|x| x.display(vm)).collect();
-                print_list(&lst, '[', ']')
+                let mut txt = String::new();
+                txt.push('[');
+                for (i, item) in x.0.iter().enumerate() {
+                    if i > 0 {
+                        txt.push_str(", ");
+                    }
+                    txt.push_str(&item.display(vm));
+                }
+                txt.push(']');
+                txt
             }
             Self::Option(Some(x)) => format!("Some : {}", x.display(vm)),
             Self::Result(Ok(x)) => format!("Ok : {}", x.display(vm)),
@@ -569,20 +674,8 @@ impl RuntimeValue {
             Self::Enum(x, y, _) => format!("{}[{}]", pretty_name(x), y),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
-                    format!(
-                        "{}",
-                        print_list(
-                            &data
-                                .as_ref()
-                                .0
-                                .0
-                                .iter()
-                                .map(|x| x.1.display(vm))
-                                .collect::<Vec<_>>(),
-                            '(',
-                            ')'
-                        )
-                    )
+                    let iter = data.as_ref().0.0.iter().map(|x| x.1.display(vm));
+                    print_list_from_iter(iter, '(', ')')
                 } else if data.as_ref().0.is_empty() {
                     let name = x.as_deref().unwrap_or("tuple");
                     format!("{} {{}}", name)
@@ -591,13 +684,14 @@ impl RuntimeValue {
                     let mut txt = format!("{} {{\n", name);
 
                     for val in data.as_ref().0.iter() {
-                        txt.push_str(&format!("\t{} : {},\n", val.0, val.1.display(vm)));
+                        let _ = write!(txt, "\t{} : {},\n", val.0, val.1.display(vm));
                     }
 
-                    txt = txt.trim().trim_end_matches(",").trim().to_string();
-                    txt.push_str("\n}");
+                    let trimmed = txt.trim_end_matches(',').trim_end();
+                    let mut out = trimmed.to_string();
+                    out.push_str("\n}");
 
-                    format!("{}", txt)
+                    out
                 }
             }
             x => x.to_string(),
@@ -617,19 +711,21 @@ impl Display for RuntimeValue {
             Self::Enum(x, y, _) => write!(f, "{}[{}]", x, y),
             Self::Range(from, to) => write!(f, "{}..{}", from, to),
             Self::Ref(x) => write!(f, "ref -> {}", x),
+            Self::VarRef(id) => write!(f, "varref -> {}", id),
             Self::RegRef { frame, reg } => write!(f, "regref -> {}:{}", frame, reg),
             Self::Bool(x) => write!(f, "{}", if *x { "true" } else { "false" }),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
-                    write!(
-                        f,
-                        "{}",
-                        print_list(
-                            &data.as_ref().0.0.iter().map(|x| &x.1).collect::<Vec<_>>(),
-                            '(',
-                            ')'
-                        )
-                    )
+                    let mut txt = String::new();
+                    txt.push('(');
+                    for (i, val) in data.as_ref().0.0.iter().enumerate() {
+                        if i > 0 {
+                            txt.push_str(", ");
+                        }
+                        let _ = write!(txt, "{}", &val.1);
+                    }
+                    txt.push(')');
+                    write!(f, "{}", txt)
                 } else if data.as_ref().0.is_empty() {
                     let name = x.as_deref().unwrap_or("tuple");
                     write!(f, "{}{{}}", name)
@@ -647,7 +743,18 @@ impl Display for RuntimeValue {
                     write!(f, "{}", txt)
                 }
             }
-            Self::List(x) => write!(f, "{}", print_list(&x.as_ref().0, '[', ']')),
+            Self::List(x) => {
+                let mut txt = String::new();
+                txt.push('[');
+                for (i, val) in x.as_ref().0.iter().enumerate() {
+                    if i > 0 {
+                        txt.push_str(", ");
+                    }
+                    let _ = write!(txt, "{}", val);
+                }
+                txt.push(']');
+                write!(f, "{}", txt)
+            }
             Self::NativeFunction(x) => write!(f, "fn {} ...", x.name()),
             Self::ExternFunction(x) => write!(f, "extern fn {} ...", x.symbol),
             Self::Option(Some(x)) => write!(f, "Some : {}", x.as_ref()),
@@ -688,6 +795,10 @@ impl VM {
                 .get(&pointer)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ref(pointer)),
+            RuntimeValue::VarRef(id) => self
+                .variables
+                .get_by_id(id)
+                .unwrap_or(RuntimeValue::VarRef(id)),
             RuntimeValue::RegRef { frame, reg } => self.get_reg_value_in_frame(frame, reg),
             other => other,
         }
@@ -700,6 +811,10 @@ impl VM {
                 .get(&pointer)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ref(pointer)),
+            RuntimeValue::VarRef(id) => self
+                .variables
+                .get_by_id(id)
+                .unwrap_or(RuntimeValue::VarRef(id)),
             RuntimeValue::RegRef { frame, reg } => self.get_reg_value_in_frame(frame, reg),
             other => other,
         }
@@ -710,6 +825,13 @@ impl VM {
             match val {
                 RuntimeValue::Ref(name) => {
                     if let Some(inner) = env.variables.get(&name).cloned() {
+                        transform(env, inner)
+                    } else {
+                        RuntimeValue::Null
+                    }
+                }
+                RuntimeValue::VarRef(id) => {
+                    if let Some(inner) = env.variables.get_by_id(id) {
                         transform(env, inner)
                     } else {
                         RuntimeValue::Null
@@ -782,6 +904,10 @@ impl ExternFunction {
                 .get(&name)
                 .cloned()
                 .unwrap_or(RuntimeValue::Ref(name)),
+            RuntimeValue::VarRef(id) => env
+                .variables
+                .get_by_id(id)
+                .unwrap_or(RuntimeValue::VarRef(id)),
             RuntimeValue::RegRef { frame, reg } => env.get_reg_value_in_frame(frame, reg),
             RuntimeValue::Ptr(id) => env
                 .ptr_heap
@@ -890,8 +1016,9 @@ impl ExternFunction {
     fn pack_struct_arg(env: &mut VM, value: RuntimeValue) -> Option<(Vec<u8>, Type)> {
         match value {
             RuntimeValue::Aggregate(_, data) => {
-                let mut bytes = Vec::new();
-                let mut fields = Vec::new();
+                let field_count = data.as_ref().0.0.len();
+                let mut bytes = Vec::with_capacity(field_count.saturating_mul(8));
+                let mut fields = Vec::with_capacity(field_count);
                 let mut offset = 0usize;
                 let mut max_align = 1usize;
 
@@ -950,7 +1077,8 @@ impl ExternFunction {
 
         match value {
             RuntimeValue::Aggregate(_, data) => {
-                let mut bytes = Vec::new();
+                let field_count = data.as_ref().0.0.len();
+                let mut bytes = Vec::with_capacity(field_count.saturating_mul(8));
                 for (_, field) in data.as_ref().0.0.iter() {
                     if !push_number(&mut bytes, field) {
                         return None;
@@ -967,9 +1095,9 @@ impl ExternFunction {
         env: &mut VM,
         args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let mut arg_types = Vec::new();
-        let mut ffi_args: Vec<FfiArg> = Vec::new();
-        let mut libffi_args: Vec<Arg> = Vec::new();
+        let mut arg_types = Vec::with_capacity(self.parameters.len());
+        let mut ffi_args: Vec<FfiArg> = Vec::with_capacity(self.parameters.len());
+        let mut libffi_args: Vec<Arg> = Vec::with_capacity(self.parameters.len());
 
         if args.len() != self.parameters.len() {
             return Err(RuntimeError::InvalidFunctionCall);
@@ -981,8 +1109,8 @@ impl ExternFunction {
                     match (Self::resolve_value(env, value), &x.data_type) {
                         (RuntimeValue::Str(x), ParserInnerType::Str) => {
                             arg_types.push(Type::pointer());
-                            let value =
-                                CString::new(x).map_err(|_| RuntimeError::InvalidFunctionCall)?;
+                            let value = CString::new(x.as_str())
+                                .map_err(|_| RuntimeError::InvalidFunctionCall)?;
                             let ptr = value.as_ptr() as *const c_void;
                             Self::push_arg(
                                 &mut ffi_args,
@@ -1060,8 +1188,8 @@ impl ExternFunction {
                         }
                         (RuntimeValue::Str(x), ParserInnerType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
-                            let value =
-                                CString::new(x).map_err(|_| RuntimeError::InvalidFunctionCall)?;
+                            let value = CString::new(x.as_str())
+                                .map_err(|_| RuntimeError::InvalidFunctionCall)?;
                             let ptr = value.as_ptr() as *const c_void;
                             Self::push_arg(
                                 &mut ffi_args,
@@ -1339,10 +1467,12 @@ impl ExternFunction {
                     ParserInnerType::Str => {
                         let res: *const c_char = cif.call(code, &mut libffi_args);
                         if res.is_null() {
-                            Ok(RuntimeValue::Str(String::new()))
+                            Ok(RuntimeValue::Str(std::sync::Arc::new(String::new())))
                         } else {
                             let c_str = CStr::from_ptr(res);
-                            Ok(RuntimeValue::Str(c_str.to_string_lossy().to_string()))
+                            Ok(RuntimeValue::Str(std::sync::Arc::new(
+                                c_str.to_string_lossy().to_string(),
+                            )))
                         }
                     }
                     ParserInnerType::Ptr(_) => {

@@ -24,6 +24,20 @@ impl MiddleEnvironment {
             return Some(found.0.clone());
         }
 
+        let target_key = self.type_key(&target);
+
+        for imp in self.impls.values() {
+            if self.impl_type_matches(
+                &imp.data_type.data_type,
+                &target.data_type,
+                &imp.generic_params,
+            ) && self.type_key(&imp.data_type) == target_key
+                && let Some(found) = imp.variables.get(member)
+            {
+                return Some(found.0.clone());
+            }
+        }
+
         let target_inner = target.data_type;
         for imp in self.impls.values() {
             if self.impl_type_matches(&imp.data_type.data_type, &target_inner, &imp.generic_params)
@@ -42,9 +56,12 @@ impl MiddleEnvironment {
         ident: &PotentialGenericTypeIdentifier,
     ) -> Option<ParserDataType> {
         if let PotentialGenericTypeIdentifier::Identifier(x) = ident {
-            let builtin = ParserInnerType::from_str(&x.to_string()).unwrap();
+            let builtin = match ParserInnerType::from_str(&x.to_string()) {
+                Ok(builtin) => builtin,
+                Err(_) => ParserInnerType::Struct(x.to_string()),
+            };
             if !matches!(builtin, ParserInnerType::Struct(_)) {
-                return Some(ParserDataType::from(builtin));
+                return Some(ParserDataType::new(*x.span(), builtin));
             }
         }
         self.resolve_potential_generic_ident_to_data_type(scope, ident)
@@ -170,11 +187,9 @@ impl MiddleEnvironment {
                             }
                             let ident_node = Node::new(
                                 path[1].0.span,
-                                NodeType::Identifier(
-                                    PotentialGenericTypeIdentifier::Identifier(
-                                        ParserText::from(var).into(),
-                                    ),
-                                ),
+                                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                                    ParserText::from(var).into(),
+                                )),
                             );
                             path[0].0 = ident_node;
                             path.remove(1);
@@ -190,11 +205,34 @@ impl MiddleEnvironment {
 
         let path_len = path.len();
         for (i, item) in path.into_iter().enumerate() {
+            if item.1 {
+                let base_node = MiddleNode::new(
+                    MiddleNodeType::MemberExpression { path: list.clone() },
+                    self.current_span(),
+                );
+                if let Some(overloaded) = self.handle_operator_overloads(
+                    scope,
+                    item.0.span,
+                    base_node.clone().into(),
+                    item.0.clone(),
+                    crate::environment::Operator::Index,
+                )? {
+                    list = vec![(overloaded, false)];
+                    continue;
+                }
+            }
             list.push((
                 match item.0.node_type {
                     NodeType::Identifier(_) if item.1 => self.evaluate(scope, item.0),
                     NodeType::Identifier(x) if i == 0 => {
-                        let first = list.first().unwrap().clone();
+                        let first = list.first().cloned().ok_or_else(|| {
+                            MiddleErr::At(
+                                item.0.span,
+                                Box::new(MiddleErr::Internal(
+                                    "missing base for member expression".to_string(),
+                                )),
+                            )
+                        })?;
                         let x = self
                             .resolve_dollar_ident_potential_generic_only(scope, &x)
                             .unwrap_or_else(|| match &x {
@@ -325,7 +363,13 @@ impl MiddleEnvironment {
                                         }
                                     }
                                 }
-                                args.insert(0, CallArg::Value(self_arg));
+                                let already_has_self = args.iter().any(|arg| match arg {
+                                    CallArg::Value(value) => *value == self_arg,
+                                    CallArg::Named(_, value) => *value == self_arg,
+                                });
+                                if !already_has_self {
+                                    args.insert(0, CallArg::Value(self_arg));
+                                }
                             }
 
                             self.evaluate_inner(

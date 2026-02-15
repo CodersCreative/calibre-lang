@@ -9,7 +9,11 @@ impl NativeFunction for Sha256Fn {
         String::from("crypto.sha256")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let input = args.pop().unwrap_or(RuntimeValue::Null);
         let RuntimeValue::Str(s) = input else {
             return Err(RuntimeError::UnexpectedType(input));
@@ -17,7 +21,7 @@ impl NativeFunction for Sha256Fn {
         let mut hasher = Sha256::new();
         hasher.update(s.as_bytes());
         let out = hasher.finalize();
-        Ok(RuntimeValue::Str(hex::encode(out)))
+        Ok(RuntimeValue::Str(std::sync::Arc::new(hex::encode(out))))
     }
 }
 
@@ -28,7 +32,11 @@ impl NativeFunction for Sha512Fn {
         String::from("crypto.sha512")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let input = args.pop().unwrap_or(RuntimeValue::Null);
         let RuntimeValue::Str(s) = input else {
             return Err(RuntimeError::UnexpectedType(input));
@@ -36,7 +44,7 @@ impl NativeFunction for Sha512Fn {
         let mut hasher = Sha512::new();
         hasher.update(s.as_bytes());
         let out = hasher.finalize();
-        Ok(RuntimeValue::Str(hex::encode(out)))
+        Ok(RuntimeValue::Str(std::sync::Arc::new(hex::encode(out))))
     }
 }
 
@@ -47,7 +55,11 @@ impl NativeFunction for Blake3Fn {
         String::from("crypto.blake3")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let input = args.pop().unwrap_or(RuntimeValue::Null);
         let RuntimeValue::Str(s) = input else {
             return Err(RuntimeError::UnexpectedType(input));
@@ -55,6 +67,8 @@ impl NativeFunction for Blake3Fn {
         let mut hasher = Blake3::new();
         hasher.update(s.as_bytes());
         let out = hasher.finalize();
-        Ok(RuntimeValue::Str(out.to_hex().to_string()))
+        Ok(RuntimeValue::Str(std::sync::Arc::new(
+            out.to_hex().to_string(),
+        )))
     }
 }

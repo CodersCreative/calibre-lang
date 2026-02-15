@@ -95,18 +95,26 @@ impl Parser {
             }
             TokenType::Float => {
                 let val = self.eat();
-                Node::new(
-                    val.span,
-                    NodeType::FloatLiteral(val.value.trim().parse().unwrap()),
-                )
+                let parsed = match val.value.trim().parse() {
+                    Ok(num) => num,
+                    Err(_) => {
+                        self.add_err_at(SyntaxErr::InvalidLiteral(val.value.clone()), val.span);
+                        0.0
+                    }
+                };
+                Node::new(val.span, NodeType::FloatLiteral(parsed))
             }
             TokenType::Null => Node::new(self.eat().span, NodeType::Null),
             TokenType::Integer => {
                 let val = self.eat();
-                Node::new(
-                    val.span,
-                    NodeType::IntLiteral(val.value.trim().parse().unwrap()),
-                )
+                let parsed = match val.value.trim().parse() {
+                    Ok(num) => num,
+                    Err(_) => {
+                        self.add_err_at(SyntaxErr::InvalidLiteral(val.value.clone()), val.span);
+                        0
+                    }
+                };
+                Node::new(val.span, NodeType::IntLiteral(parsed.to_string()))
             }
             TokenType::Stop(x) => match x {
                 StopValue::Until => {
@@ -156,11 +164,12 @@ impl Parser {
             }
             TokenType::Char => {
                 let val = self.eat();
-
-                Node::new(
-                    val.span,
-                    NodeType::CharLiteral(val.value.chars().nth(0).unwrap()),
-                )
+                let mut chars = val.value.chars();
+                let ch = chars.next().unwrap_or_else(|| {
+                    self.add_err_at(SyntaxErr::InvalidLiteral(val.value.clone()), val.span);
+                    '\0'
+                });
+                Node::new(val.span, NodeType::CharLiteral(ch))
             }
             TokenType::Drop => {
                 let open = self.eat();
@@ -487,13 +496,14 @@ impl Parser {
                 }
 
                 let value = if values.len() == 1 {
-                    values.pop().unwrap()
-                } else {
-                    let span = Span::new_from_spans(
-                        values.first().unwrap().span,
-                        values.last().unwrap().span,
-                    );
+                    values
+                        .pop()
+                        .unwrap_or_else(|| Node::new(self.first().span, NodeType::Null))
+                } else if let (Some(first), Some(last)) = (values.first(), values.last()) {
+                    let span = Span::new_from_spans(first.span, last.span);
                     Node::new(span, NodeType::TupleLiteral { values })
+                } else {
+                    Node::new(self.first().span, NodeType::Null)
                 };
 
                 let mut bindings_out = Vec::new();
@@ -537,12 +547,11 @@ impl Parser {
                         }
 
                         let value = if values.len() == 1 {
-                            values.pop().unwrap()
-                        } else {
-                            let span = Span::new_from_spans(
-                                values.first().unwrap().span,
-                                values.last().unwrap().span,
-                            );
+                            values
+                                .pop()
+                                .unwrap_or_else(|| Node::new(self.first().span, NodeType::Null))
+                        } else if let (Some(first), Some(last)) = (values.first(), values.last()) {
+                            let span = Span::new_from_spans(first.span, last.span);
                             Node::new(
                                 span,
                                 NodeType::CallExpression {
@@ -560,6 +569,8 @@ impl Parser {
                                     reverse_args: Vec::new(),
                                 },
                             )
+                        } else {
+                            Node::new(self.first().span, NodeType::Null)
                         };
 
                         let mut bindings_out = Vec::new();

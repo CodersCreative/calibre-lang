@@ -69,8 +69,12 @@ impl MiddleEnvironment {
         let Some(else_body) = else_body else {
             return Ok(loop_node);
         };
-        let result_raw = result_raw.expect("loop result missing");
-        let broke_raw = broke_raw.expect("loop broke missing");
+        let result_raw = result_raw.ok_or_else(|| {
+            self.err_at_current(MiddleErr::Internal("loop result missing".to_string()))
+        })?;
+        let broke_raw = broke_raw.ok_or_else(|| {
+            self.err_at_current(MiddleErr::Internal("loop broke missing".to_string()))
+        })?;
         let result_ident = ParserText::from(result_raw.clone());
         let broke_ident = ParserText::from(broke_raw.clone());
         let result_decl = Node::new(
@@ -79,9 +83,10 @@ impl MiddleEnvironment {
                 var_type: VarType::Mutable,
                 identifier: result_ident.clone().into(),
                 value: Box::new(Node::new(self.current_span(), NodeType::Null)),
-                data_type: PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(
-                    None,
-                ))),
+                data_type: PotentialNewType::DataType(ParserDataType::new(
+                    self.current_span(),
+                    ParserInnerType::Auto(None),
+                )),
             },
         );
 
@@ -94,7 +99,10 @@ impl MiddleEnvironment {
                     self.current_span(),
                     NodeType::IntLiteral(String::from("0")),
                 )),
-                data_type: PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Int)),
+                data_type: PotentialNewType::DataType(ParserDataType::new(
+                    self.current_span(),
+                    ParserInnerType::Int,
+                )),
             },
         );
 
@@ -190,9 +198,10 @@ impl MiddleEnvironment {
                                 self.current_span(),
                                 NodeType::ListLiteral(data_type.clone(), Vec::new()),
                             )),
-                            data_type: ParserDataType::from(ParserInnerType::List(Box::new(
-                                resolved_data_type,
-                            )))
+                            data_type: ParserDataType::new(
+                                self.current_span(),
+                                ParserInnerType::List(Box::new(resolved_data_type)),
+                            )
                             .into(),
                         },
                     ),
@@ -437,32 +446,38 @@ impl MiddleEnvironment {
                     self.current_span().from.col
                 );
                 let idx_id: PotentialDollarIdentifier = ParserText::from(idx_id_name).into();
-                let state = Some(Box::new(self.evaluate(
-                    &scope,
-                    Node::new(
-                        self.current_span(),
-                        NodeType::VariableDeclaration {
-                            var_type: VarType::Mutable,
-                            identifier: idx_id.clone(),
-                            value: Box::new(Node::new(
-                                self.current_span(),
-                                NodeType::CallExpression {
-                                    string_fn: None,
-                                    caller: Box::new(Node::new(
-                                        self.current_span(),
-                                        NodeType::Identifier(
-                                            ParserText::from("min_or_zero".to_string()).into(),
-                                        ),
-                                    )),
-                                    generic_types: vec![],
-                                    args: vec![CallArg::Value(range.clone())],
-                                    reverse_args: vec![],
-                                },
-                            )),
-                            data_type: ParserDataType::from(ParserInnerType::Int).into(),
-                        },
+                let state = Some(Box::new(
+                    self.evaluate(
+                        &scope,
+                        Node::new(
+                            self.current_span(),
+                            NodeType::VariableDeclaration {
+                                var_type: VarType::Mutable,
+                                identifier: idx_id.clone(),
+                                value: Box::new(Node::new(
+                                    self.current_span(),
+                                    NodeType::CallExpression {
+                                        string_fn: None,
+                                        caller: Box::new(Node::new(
+                                            self.current_span(),
+                                            NodeType::Identifier(
+                                                ParserText::from("min_or_zero".to_string()).into(),
+                                            ),
+                                        )),
+                                        generic_types: vec![],
+                                        args: vec![CallArg::Value(range.clone())],
+                                        reverse_args: vec![],
+                                    },
+                                )),
+                                data_type: ParserDataType::new(
+                                    self.current_span(),
+                                    ParserInnerType::Int,
+                                )
+                                .into(),
+                            },
+                        ),
                     ),
-                )));
+                ));
 
                 let break_node = Node::new(self.current_span(), NodeType::IfStatement {
                             comparison: Box::new(IfComparisonType::If(Node::new(self.current_span(),
@@ -487,7 +502,8 @@ impl MiddleEnvironment {
                     NodeType::VariableDeclaration {
                         identifier: name,
                         var_type: VarType::Mutable,
-                        data_type: PotentialNewType::DataType(ParserDataType::from(
+                        data_type: PotentialNewType::DataType(ParserDataType::new(
+                            self.current_span(),
                             ParserInnerType::Auto(None),
                         )),
                         value: match range_dt.map(|x| x.data_type) {

@@ -958,32 +958,33 @@ impl ServerState {
 
 struct TickEvent;
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() {
-    let (server, _) = async_lsp::MainLoop::new_server(|client| {
-        tokio::spawn({
-            let client = client.clone();
-            async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(1));
-                loop {
-                    interval.tick().await;
-                    if client.emit(TickEvent).is_err() {
-                        break;
+fn main() {
+    smol::block_on(async {
+        let (server, _) =
+            async_lsp::MainLoop::new_server(|client| {
+                smol::spawn({
+                    let client = client.clone();
+                    async move {
+                        loop {
+                            smol::Timer::after(Duration::from_secs(1)).await;
+                            if client.emit(TickEvent).is_err() {
+                                break;
+                            }
+                        }
                     }
-                }
-            }
-        });
+                })
+                .detach();
 
-        let mut router = Router::new(ServerState {
-            client: client.clone(),
-            env: None,
-            scope: None,
-            middle_ast: None,
-            current_path: None,
-            mir_errors: Vec::new(),
-            files: HashMap::new(),
-        });
-        router
+                let mut router = Router::new(ServerState {
+                    client: client.clone(),
+                    env: None,
+                    scope: None,
+                    middle_ast: None,
+                    current_path: None,
+                    mir_errors: Vec::new(),
+                    files: HashMap::new(),
+                });
+                router
             .request::<request::Initialize, _>(|_st, params| async move {
                 eprintln!("Initialize with {params:?}");
                 /*if let Some(x) = params.root_path {
@@ -1266,33 +1267,34 @@ async fn main() {
             .notification::<notification::DidCloseTextDocument>(|_, _| ControlFlow::Continue(()))
             .event::<TickEvent>(|_, _| ControlFlow::Continue(()));
 
-        ServiceBuilder::new()
-            .layer(TracingLayer::default())
-            .layer(LifecycleLayer::default())
-            .layer(CatchUnwindLayer::default())
-            .layer(ConcurrencyLayer::default())
-            .layer(ClientProcessMonitorLayer::new(client))
-            .service(router)
+                ServiceBuilder::new()
+                    .layer(TracingLayer::default())
+                    .layer(LifecycleLayer::default())
+                    .layer(CatchUnwindLayer::default())
+                    .layer(ConcurrencyLayer::default())
+                    .layer(ClientProcessMonitorLayer::new(client))
+                    .service(router)
+            });
+
+        tracing_subscriber::fmt()
+            .with_max_level(Level::INFO)
+            .with_ansi(false)
+            .with_writer(std::io::stderr)
+            .init();
+
+        // Prefer truly asynchronous piped stdin/stdout without blocking tasks.
+        #[cfg(unix)]
+        let (stdin, stdout) = (
+            smol::Async::new(async_lsp::stdio::PipeStdin::lock().unwrap()).unwrap(),
+            smol::Async::new(async_lsp::stdio::PipeStdout::lock().unwrap()).unwrap(),
+        );
+        // Fallback to spawn blocking read/write otherwise.
+        #[cfg(not(unix))]
+        let (stdin, stdout) = (
+            smol::Unblock::new(std::io::stdin()),
+            smol::Unblock::new(std::io::stdout()),
+        );
+
+        server.run_buffered(stdin, stdout).await.unwrap();
     });
-
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .with_ansi(false)
-        .with_writer(std::io::stderr)
-        .init();
-
-    // Prefer truly asynchronous piped stdin/stdout without blocking tasks.
-    #[cfg(unix)]
-    let (stdin, stdout) = (
-        async_lsp::stdio::PipeStdin::lock_tokio().unwrap(),
-        async_lsp::stdio::PipeStdout::lock_tokio().unwrap(),
-    );
-    // Fallback to spawn blocking read/write otherwise.
-    #[cfg(not(unix))]
-    let (stdin, stdout) = (
-        tokio_util::compat::TokioAsyncReadCompatExt::compat(tokio::io::stdin()),
-        tokio_util::compat::TokioAsyncWriteCompatExt::compat_write(tokio::io::stdout()),
-    );
-
-    server.run_buffered(stdin, stdout).await.unwrap();
 }

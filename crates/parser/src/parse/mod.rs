@@ -11,7 +11,7 @@ use crate::{
         PotentialDollarIdentifier, PotentialFfiDataType, PotentialNewType, RefMutability,
         comparison::ComparisonOperator,
     },
-    lexer::{Bracket, Span, StopValue, Token, TokenType},
+    lexer::{Bracket, Span, StopValue, Token, TokenType, Tokenizer},
 };
 use std::{str::FromStr, sync::OnceLock};
 
@@ -25,6 +25,17 @@ fn eof_token() -> &'static Token {
 }
 
 impl Parser {
+    fn tokenize_or_err(&mut self, input: &str) -> Vec<Token> {
+        let mut tokenizer = Tokenizer::new(false);
+        match tokenizer.tokenize(input) {
+            Ok(tokens) => tokens,
+            Err(err) => {
+                self.errors.push(ParserError::Lexer(err));
+                vec![eof_token().clone()]
+            }
+        }
+    }
+
     fn first(&self) -> &Token {
         self.tokens.first().unwrap_or_else(|| eof_token())
     }
@@ -345,7 +356,7 @@ impl Parser {
                 .into_iter()
                 .map(|x| self.coerce_data_type(x))
                 .collect();
-            let mut ret = ParserDataType::from(ParserInnerType::Null);
+            let mut ret = ParserDataType::new(open.span, ParserInnerType::Null);
 
             if self.first().token_type == TokenType::Arrow {
                 let _ = self.eat();
@@ -421,12 +432,12 @@ impl Parser {
                                     open
                                 };
                                 let elem = inner.into_iter().next().unwrap_or(
-                                    ParserDataType::from(ParserInnerType::Auto(None)).into(),
+                                    ParserDataType::new(open, ParserInnerType::Auto(None)).into(),
                                 );
                                 let elem = match elem {
                                     PotentialNewType::DataType(x) => x,
                                     PotentialNewType::NewType { .. } => {
-                                        ParserDataType::from(ParserInnerType::Auto(None))
+                                        ParserDataType::new(open, ParserInnerType::Auto(None))
                                     }
                                 };
                                 return Some(ParserDataType::new(
@@ -437,7 +448,8 @@ impl Parser {
 
                             return Some(ParserDataType::new(
                                 open,
-                                ParserInnerType::Ptr(Box::new(ParserDataType::from(
+                                ParserInnerType::Ptr(Box::new(ParserDataType::new(
+                                    open,
                                     ParserInnerType::Null,
                                 ))),
                             ));
@@ -474,9 +486,10 @@ impl Parser {
                                     .into_iter()
                                     .map(|x| match x {
                                         PotentialNewType::DataType(dt) => dt,
-                                        PotentialNewType::NewType { .. } => {
-                                            ParserDataType::from(ParserInnerType::Auto(None))
-                                        }
+                                        PotentialNewType::NewType { .. } => ParserDataType::new(
+                                            typ.span,
+                                            ParserInnerType::Auto(None),
+                                        ),
                                     })
                                     .collect();
                                 typ = ParserDataType::new(
@@ -604,7 +617,8 @@ impl Parser {
         } else {
             None
         }
-        .unwrap_or(PotentialNewType::DataType(ParserDataType::from(
+        .unwrap_or(PotentialNewType::DataType(ParserDataType::new(
+            self.first().span,
             ParserInnerType::Auto(None),
         )));
 

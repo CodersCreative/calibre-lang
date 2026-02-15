@@ -23,11 +23,11 @@ impl NativeFunction for StrSplit {
 
         let parts = if delim.is_empty() {
             text.chars()
-                .map(|c| RuntimeValue::Str(c.to_string()))
+                .map(|c| RuntimeValue::Str(std::sync::Arc::new(c.to_string())))
                 .collect::<Vec<_>>()
         } else {
-            text.split(delim)
-                .map(|s| RuntimeValue::Str(s.to_string()))
+            text.split(delim.as_str())
+                .map(|s| RuntimeValue::Str(std::sync::Arc::new(s.to_string())))
                 .collect::<Vec<_>>()
         };
 
@@ -54,7 +54,7 @@ impl NativeFunction for StrContains {
             ));
         };
 
-        Ok(RuntimeValue::Bool(text.contains(needle)))
+        Ok(RuntimeValue::Bool(text.as_str().contains(needle.as_str())))
     }
 }
 
@@ -77,7 +77,9 @@ impl NativeFunction for StrStartsWith {
             ));
         };
 
-        Ok(RuntimeValue::Bool(text.starts_with(prefix)))
+        Ok(RuntimeValue::Bool(
+            text.as_str().starts_with(prefix.as_str()),
+        ))
     }
 }
 
@@ -100,6 +102,6 @@ impl NativeFunction for StrEndsWith {
             ));
         };
 
-        Ok(RuntimeValue::Bool(text.ends_with(suffix)))
+        Ok(RuntimeValue::Bool(text.as_str().ends_with(suffix.as_str())))
     }
 }

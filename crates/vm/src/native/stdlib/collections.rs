@@ -11,7 +11,7 @@ use crate::{
 use dumpster::sync::Gc;
 
 fn expect_hash_key(env: &VM, value: RuntimeValue) -> Result<HashKey, RuntimeError> {
-    let resolved = env.resolve_value_for_op(value)?;
+    let resolved = env.resolve_value_for_op_ref(&value)?;
     HashKey::try_from(resolved)
 }
 
@@ -53,10 +53,12 @@ impl NativeFunction for HashMapNew {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let entries = args.pop().unwrap_or(RuntimeValue::List(Gc::new(crate::value::GcVec(Vec::new()))));
+        let entries = args
+            .pop()
+            .unwrap_or(RuntimeValue::List(Gc::new(crate::value::GcVec(Vec::new()))));
         let mut map: FxHashMap<HashKey, RuntimeValue> = FxHashMap::default();
 
-        let RuntimeValue::List(list) = env.resolve_value_for_op(entries)? else {
+        let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {
             return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
         };
 
@@ -80,7 +82,7 @@ impl NativeFunction for HashMapSet {
         let value = args.pop().unwrap_or(RuntimeValue::Null);
         let key = args.pop().unwrap_or(RuntimeValue::Null);
         let map_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let map_val = env.resolve_value_for_op(map_val)?;
+        let map_val = env.resolve_value_for_op_ref(&map_val)?;
         let RuntimeValue::HashMap(map) = map_val else {
             return Err(RuntimeError::UnexpectedType(map_val));
         };
@@ -103,7 +105,7 @@ impl NativeFunction for HashMapGet {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let key = args.pop().unwrap_or(RuntimeValue::Null);
         let map_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let map_val = env.resolve_value_for_op(map_val)?;
+        let map_val = env.resolve_value_for_op_ref(&map_val)?;
         let RuntimeValue::HashMap(map) = map_val else {
             return Err(RuntimeError::UnexpectedType(map_val));
         };
@@ -126,7 +128,7 @@ impl NativeFunction for HashMapRemove {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let key = args.pop().unwrap_or(RuntimeValue::Null);
         let map_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let map_val = env.resolve_value_for_op(map_val)?;
+        let map_val = env.resolve_value_for_op_ref(&map_val)?;
         let RuntimeValue::HashMap(map) = map_val else {
             return Err(RuntimeError::UnexpectedType(map_val));
         };
@@ -149,7 +151,7 @@ impl NativeFunction for HashMapContains {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let key = args.pop().unwrap_or(RuntimeValue::Null);
         let map_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let map_val = env.resolve_value_for_op(map_val)?;
+        let map_val = env.resolve_value_for_op_ref(&map_val)?;
         let RuntimeValue::HashMap(map) = map_val else {
             return Err(RuntimeError::UnexpectedType(map_val));
         };
@@ -169,7 +171,7 @@ impl NativeFunction for HashMapLen {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let map_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let map_val = env.resolve_value_for_op(map_val)?;
+        let map_val = env.resolve_value_for_op_ref(&map_val)?;
         let RuntimeValue::HashMap(map) = map_val else {
             return Err(RuntimeError::UnexpectedType(map_val));
         };
@@ -193,6 +195,7 @@ impl NativeFunction for HashMapKeys {
 
         let mut out = Vec::new();
         if let Ok(guard) = map.lock() {
+            out = Vec::with_capacity(guard.len());
             for key in guard.keys() {
                 out.push(RuntimeValue::from(key.clone()));
             }
@@ -216,6 +219,7 @@ impl NativeFunction for HashMapValues {
 
         let mut out = Vec::new();
         if let Ok(guard) = map.lock() {
+            out = Vec::with_capacity(guard.len());
             for value in guard.values() {
                 out.push(value.clone());
             }
@@ -239,6 +243,7 @@ impl NativeFunction for HashMapEntries {
 
         let mut out = Vec::new();
         if let Ok(guard) = map.lock() {
+            out = Vec::with_capacity(guard.len());
             for (key, value) in guard.iter() {
                 let pair = RuntimeValue::Aggregate(
                     None,
@@ -292,10 +297,12 @@ impl NativeFunction for HashSetNew {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let entries = args.pop().unwrap_or(RuntimeValue::List(Gc::new(crate::value::GcVec(Vec::new()))));
+        let entries = args
+            .pop()
+            .unwrap_or(RuntimeValue::List(Gc::new(crate::value::GcVec(Vec::new()))));
         let mut set: FxHashSet<HashKey> = FxHashSet::default();
 
-        let RuntimeValue::List(list) = env.resolve_value_for_op(entries)? else {
+        let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {
             return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
         };
 
@@ -316,7 +323,7 @@ impl NativeFunction for HashSetAdd {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let key = args.pop().unwrap_or(RuntimeValue::Null);
         let set_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let set_val = env.resolve_value_for_op(set_val)?;
+        let set_val = env.resolve_value_for_op_ref(&set_val)?;
         let RuntimeValue::HashSet(set) = set_val else {
             return Err(RuntimeError::UnexpectedType(set_val));
         };
@@ -340,7 +347,7 @@ impl NativeFunction for HashSetRemove {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let key = args.pop().unwrap_or(RuntimeValue::Null);
         let set_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let set_val = env.resolve_value_for_op(set_val)?;
+        let set_val = env.resolve_value_for_op_ref(&set_val)?;
         let RuntimeValue::HashSet(set) = set_val else {
             return Err(RuntimeError::UnexpectedType(set_val));
         };
@@ -364,7 +371,7 @@ impl NativeFunction for HashSetContains {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let key = args.pop().unwrap_or(RuntimeValue::Null);
         let set_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let set_val = env.resolve_value_for_op(set_val)?;
+        let set_val = env.resolve_value_for_op_ref(&set_val)?;
         let RuntimeValue::HashSet(set) = set_val else {
             return Err(RuntimeError::UnexpectedType(set_val));
         };
@@ -387,7 +394,7 @@ impl NativeFunction for HashSetLen {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let set_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let set_val = env.resolve_value_for_op(set_val)?;
+        let set_val = env.resolve_value_for_op_ref(&set_val)?;
         let RuntimeValue::HashSet(set) = set_val else {
             return Err(RuntimeError::UnexpectedType(set_val));
         };
@@ -404,7 +411,7 @@ impl NativeFunction for HashSetValues {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let set_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let set_val = env.resolve_value_for_op(set_val)?;
+        let set_val = env.resolve_value_for_op_ref(&set_val)?;
         let RuntimeValue::HashSet(set) = set_val else {
             return Err(RuntimeError::UnexpectedType(set_val));
         };
@@ -427,7 +434,7 @@ impl NativeFunction for HashSetClear {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let set_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let set_val = env.resolve_value_for_op(set_val)?;
+        let set_val = env.resolve_value_for_op_ref(&set_val)?;
         let RuntimeValue::HashSet(set) = set_val else {
             return Err(RuntimeError::UnexpectedType(set_val));
         };

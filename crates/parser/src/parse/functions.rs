@@ -1,5 +1,5 @@
 use crate::ast::{CallArg, Node, ParserDataType, ParserInnerType, PotentialNewType};
-use crate::lexer::{Bracket, Span, Tokenizer};
+use crate::lexer::{Bracket, Span};
 use crate::{Parser, SyntaxErr};
 use crate::{ast::NodeType, lexer::TokenType};
 
@@ -25,7 +25,11 @@ fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
                             chars.next();
                             break;
                         }
-                        extracted.push(chars.next().unwrap());
+                        if let Some(next) = chars.next() {
+                            extracted.push(next);
+                        } else {
+                            break;
+                        }
                     }
                     extracted_parts.push(extracted);
                 }
@@ -66,28 +70,27 @@ impl Parser {
         let args = if self.first().token_type == TokenType::String {
             let val = self.eat();
             string_fn = Some(val.clone().into());
-            let mut tokenizer = Tokenizer::new(false);
             let (texts, args) = parse_splits(&val.value);
 
-            let mut parsed_args = vec![CallArg::Value(Node {
-                node_type: NodeType::ListLiteral(
-                    PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Str)),
+            let mut parsed_args = vec![CallArg::Value(Node::new(
+                val.span,
+                NodeType::ListLiteral(
+                    PotentialNewType::DataType(ParserDataType::new(val.span, ParserInnerType::Str)),
                     {
                         let mut txts = Vec::new();
 
                         for txt in texts {
-                            txts.push(Node::new_from_type(NodeType::StringLiteral(txt.into())));
+                            txts.push(Node::new(val.span, NodeType::StringLiteral(txt.into())));
                         }
 
                         txts
                     },
                 ),
-                span: Span::default(),
-            })];
+            ))];
 
             let args = args
                 .into_iter()
-                .map(|x| tokenizer.tokenize(&x).unwrap())
+                .map(|x| self.tokenize_or_err(&x))
                 .collect::<Vec<_>>();
 
             let original = std::mem::take(&mut self.tokens);
@@ -179,9 +182,11 @@ impl Parser {
 
         if path.len() <= 1 {
             path.remove(0).0
+        } else if let (Some(first), Some(last)) = (path.first(), path.last()) {
+            let span = Span::new_from_spans(first.0.span, last.0.span);
+            Node::new(span, NodeType::MemberExpression { path })
         } else {
-            let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
-            Node::new(first, NodeType::MemberExpression { path: path })
+            Node::new(self.first().span, NodeType::MemberExpression { path })
         }
     }
 
@@ -197,9 +202,11 @@ impl Parser {
 
         if path.len() <= 1 {
             path.remove(0)
+        } else if let (Some(first), Some(last)) = (path.first(), path.last()) {
+            let span = Span::new_from_spans(first.span, last.span);
+            Node::new(span, NodeType::ScopeMemberExpression { path })
         } else {
-            let first = Span::new_from_spans(path[0].span, path.last().unwrap().span);
-            Node::new(first, NodeType::ScopeMemberExpression { path: path })
+            Node::new(self.first().span, NodeType::ScopeMemberExpression { path })
         }
     }
 
@@ -259,13 +266,16 @@ impl Parser {
                             }
 
                             let data = if values.len() == 1 {
-                                values.pop().unwrap()
-                            } else {
-                                let span = Span::new_from_spans(
-                                    values.first().unwrap().span,
-                                    values.last().unwrap().span,
-                                );
+                                values
+                                    .pop()
+                                    .unwrap_or_else(|| Node::new(self.first().span, NodeType::Null))
+                            } else if let (Some(first), Some(last)) =
+                                (values.first(), values.last())
+                            {
+                                let span = Span::new_from_spans(first.span, last.span);
                                 Node::new(span, NodeType::TupleLiteral { values })
+                            } else {
+                                Node::new(self.first().span, NodeType::Null)
                             };
                             return Node::new(
                                 Span::new_from_spans(path[0].0.span, path[1].0.span),
@@ -303,9 +313,11 @@ impl Parser {
 
         if path.len() <= 1 {
             path.remove(0).0
+        } else if let (Some(first), Some(last)) = (path.first(), path.last()) {
+            let span = Span::new_from_spans(first.0.span, last.0.span);
+            Node::new(span, NodeType::MemberExpression { path })
         } else {
-            let first = Span::new_from_spans(path[0].0.span, path.last().unwrap().0.span);
-            Node::new(first, NodeType::MemberExpression { path: path })
+            Node::new(self.first().span, NodeType::MemberExpression { path })
         }
     }
 

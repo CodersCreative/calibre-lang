@@ -114,6 +114,16 @@ impl<T> list:<T> {
 	};
 }
 
+	const "[]" = fn(self: list:<T>, idx: int) -> T => {
+		return self[idx];
+	};
+	const "[]=" = fn(self: list:<T>, idx: int, value: T) -> list:<T> => {
+		let mut out = self;
+		out[idx] = value;
+		out;
+	};
+}
+
 impl list:<int> {
 	const sum = fn(self: list:<int>) -> int => {
 		let mut acc = 0;
@@ -151,5 +161,15 @@ impl list:<float> {
 		let mut m = self[0];
 		for i in 1..len(self) => if self[i] > m => m = self[i];
 		some(m);
+	};
+}
+
+	const "[]" = fn(self: list:<T>, idx: int) -> T => {
+		return self[idx];
+	};
+	const "[]=" = fn(self: list:<T>, idx: int, value: T) -> list:<T> => {
+		let mut out = self;
+		out[idx] = value;
+		out;
 	};
 }

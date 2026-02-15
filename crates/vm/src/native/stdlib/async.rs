@@ -30,7 +30,7 @@ impl NativeFunction for ChannelSend {
         let value = args.pop().unwrap_or(RuntimeValue::Null);
         let value = env.convert_runtime_var_into_saveable(value);
         let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op(channel)?;
+        let resolved = env.resolve_value_for_op_ref(&channel)?;
         let RuntimeValue::Channel(ch) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -57,7 +57,7 @@ impl NativeFunction for ChannelGet {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op(channel)?;
+        let resolved = env.resolve_value_for_op_ref(&channel)?;
         let RuntimeValue::Channel(ch) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -93,7 +93,7 @@ impl NativeFunction for ChannelTryGet {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op(channel)?;
+        let resolved = env.resolve_value_for_op_ref(&channel)?;
         let RuntimeValue::Channel(ch) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -122,7 +122,7 @@ impl NativeFunction for ChannelTrySend {
         let value = args.pop().unwrap_or(RuntimeValue::Null);
         let value = env.convert_runtime_var_into_saveable(value);
         let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op(channel)?;
+        let resolved = env.resolve_value_for_op_ref(&channel)?;
         let RuntimeValue::Channel(ch) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -149,7 +149,7 @@ impl NativeFunction for ChannelClose {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op(channel)?;
+        let resolved = env.resolve_value_for_op_ref(&channel)?;
         let RuntimeValue::Channel(ch) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -169,7 +169,7 @@ impl NativeFunction for ChannelClosed {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op(channel)?;
+        let resolved = env.resolve_value_for_op_ref(&channel)?;
         let RuntimeValue::Channel(ch) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -211,7 +211,7 @@ impl NativeFunction for WaitGroupRawAdd {
         };
 
         let wg_val = args.remove(0);
-        let resolved = env.resolve_value_for_op(wg_val)?;
+        let resolved = env.resolve_value_for_op_ref(&wg_val)?;
         let RuntimeValue::WaitGroup(wg) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -231,7 +231,7 @@ impl NativeFunction for WaitGroupRawDone {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let wg_val = args.remove(0);
-        let resolved = env.resolve_value_for_op(wg_val)?;
+        let resolved = env.resolve_value_for_op_ref(&wg_val)?;
         let RuntimeValue::WaitGroup(wg) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -253,8 +253,8 @@ impl NativeFunction for WaitGroupJoin {
         let inner = args.pop().unwrap_or(RuntimeValue::Null);
         let outer = args.pop().unwrap_or(RuntimeValue::Null);
 
-        let outer = env.resolve_value_for_op(outer)?;
-        let inner = env.resolve_value_for_op(inner)?;
+        let outer = env.resolve_value_for_op_ref(&outer)?;
+        let inner = env.resolve_value_for_op_ref(&inner)?;
 
         let RuntimeValue::WaitGroup(outer) = outer else {
             return Err(RuntimeError::UnexpectedType(outer));
@@ -281,7 +281,7 @@ impl NativeFunction for WaitGroupWait {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let wg_val = args.remove(0);
-        let resolved = env.resolve_value_for_op(wg_val)?;
+        let resolved = env.resolve_value_for_op_ref(&wg_val)?;
         let RuntimeValue::WaitGroup(wg) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -300,7 +300,7 @@ impl NativeFunction for WaitGroupCount {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let wg_val = args.remove(0);
-        let resolved = env.resolve_value_for_op(wg_val)?;
+        let resolved = env.resolve_value_for_op_ref(&wg_val)?;
         let RuntimeValue::WaitGroup(wg) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -336,7 +336,7 @@ impl NativeFunction for MutexGet {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let mutex = args.remove(0);
-        let resolved = env.resolve_value_for_op(mutex)?;
+        let resolved = env.resolve_value_for_op_ref(&mutex)?;
         let RuntimeValue::Mutex(m) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -355,7 +355,7 @@ impl NativeFunction for MutexSet {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let value = args.pop().unwrap_or(RuntimeValue::Null);
         let mutex = args.remove(0);
-        let resolved = env.resolve_value_for_op(mutex)?;
+        let resolved = env.resolve_value_for_op_ref(&mutex)?;
         let RuntimeValue::Mutex(m) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -378,7 +378,7 @@ impl NativeFunction for MutexWith {
         }
         let func = args.pop().unwrap_or(RuntimeValue::Null);
         let mutex = args.remove(0);
-        let resolved = env.resolve_value_for_op(mutex)?;
+        let resolved = env.resolve_value_for_op_ref(&mutex)?;
         let RuntimeValue::Mutex(m) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };
@@ -387,12 +387,13 @@ impl NativeFunction for MutexWith {
 
         let result = match func {
             RuntimeValue::Function { name, captures } => {
-                let func_opt = if let Some(x) = env.registry.functions.get(&name) {
-                    Some(x.clone())
+                let func_opt = if let Some(x) = env.get_function(name.as_str()) {
+                    Some(x)
                 } else if let Some((prefix, _)) = name.split_once("->") {
                     env.registry
                         .functions
                         .iter()
+                        .filter(|(k, _)| !env.moved_functions.contains(*k))
                         .find(|(k, _)| k.starts_with(prefix))
                         .map(|(_, v)| v.clone())
                 } else if let Some((_, short)) = name.rsplit_once(':') {
@@ -400,13 +401,14 @@ impl NativeFunction for MutexWith {
                     env.registry
                         .functions
                         .iter()
+                        .filter(|(k, _)| !env.moved_functions.contains(*k))
                         .find(|(k, _)| k.ends_with(&suffix))
                         .map(|(_, v)| v.clone())
                 } else {
                     None
                 };
                 let Some(func_def) = func_opt else {
-                    return Err(RuntimeError::FunctionNotFound(name));
+                    return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
                 };
                 env.run_function(func_def.as_ref(), vec![current], captures)?
             }
@@ -429,7 +431,7 @@ impl NativeFunction for MutexWrite {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let mutex = args.remove(0);
-        let resolved = env.resolve_value_for_op(mutex)?;
+        let resolved = env.resolve_value_for_op_ref(&mutex)?;
         let RuntimeValue::Mutex(m) = resolved else {
             return Err(RuntimeError::UnexpectedType(resolved));
         };

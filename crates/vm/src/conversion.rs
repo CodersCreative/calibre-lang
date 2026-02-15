@@ -769,9 +769,17 @@ impl FunctionLowering {
                 let instructions = self.func.blocks[idx].instructions.clone();
                 for (instr_idx, instr) in instructions.iter().enumerate() {
                     if let Some(name) = assigned_local_name(&instr.node_type) {
-                        if let Some(reg) = self.assign_regs[idx].get(instr_idx).and_then(|r| *r) {
-                            out.insert(name.to_string(), reg);
-                        }
+                        let reg = match self.assign_regs[idx].get(instr_idx).and_then(|r| *r) {
+                            Some(reg) => reg,
+                            None => {
+                                let reg = self.alloc_reg();
+                                if let Some(slot) = self.assign_regs[idx].get_mut(instr_idx) {
+                                    *slot = Some(reg);
+                                }
+                                reg
+                            }
+                        };
+                        out.insert(name.to_string(), reg);
                     }
                 }
 

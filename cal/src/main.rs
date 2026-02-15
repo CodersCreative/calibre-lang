@@ -7,13 +7,13 @@ use clap::Parser;
 use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;
 use serde::{Deserialize, Serialize};
+use smol::fs;
 use std::{
     error::Error,
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
 };
-use tokio::fs;
 
 #[derive(Serialize, Deserialize)]
 struct BytecodeCache {
@@ -74,43 +74,51 @@ async fn run_source(
             .join("calibre")
             .join(env!("CARGO_PKG_VERSION"));
         let path = cache_dir.join(format!("{}.bin", cache_key.to_hex()));
-        if let Ok(bytes) = fs::read(&path).await {
+        let cache_res: Result<BytecodeCache, String> = smol::unblock({
+            let path = path.clone();
+            move || {
+                let file =
+                    std::fs::File::open(&path).map_err(|e| format!("cache open failed: {e}"))?;
+                let mut reader = std::io::BufReader::new(file);
+                bincode::deserialize_from(&mut reader)
+                    .map_err(|e| format!("cache deserialize failed: {e}"))
+            }
+        })
+        .await;
+
+        if let Ok(cache) = cache_res {
             if verbose {
-                println!("Loading Cache - elapsed {:.2}s", start.elapsed().as_secs());
+                println!("Loading Cache - elapsed {}ms", start.elapsed().as_millis());
             }
-            let cache_res = bincode::deserialize::<BytecodeCache>(&bytes);
+            let mut vm: VM = VM::new(cache.registry, cache.mappings, VMConfig::default());
 
-            if let Ok(cache) = cache_res {
-                let mut vm: VM = VM::new(cache.registry, cache.mappings, VMConfig::default());
-
-                if verbose {
-                    println!("Starting vm... - elapsed {:.2}s", start.elapsed().as_secs());
-                    println!("Bytecode:");
-                    println!("{}", vm.registry);
-                }
-
-                let Some(main) = vm.registry.functions.get(&cache.main).cloned() else {
-                    calibre_diagnostics::emit_error(
-                        &path,
-                        &contents,
-                        format!("Missing entry point: {}", cache.main),
-                        None,
-                    );
-                    return Err(format!("runtime error").into());
-                };
-                if let Err(err) = vm.run(main.as_ref(), Vec::new()) {
-                    let (span, inner) = err.innermost();
-                    calibre_diagnostics::emit_runtime_error(
-                        &path,
-                        &contents,
-                        inner.to_string(),
-                        span,
-                        inner.help(),
-                    );
-                    return Err(format!("runtime error").into());
-                }
-                return Ok(());
+            if verbose {
+                println!("Starting vm... - elapsed {}ms", start.elapsed().as_millis());
+                println!("Bytecode:");
+                println!("{}", vm.registry.as_ref());
             }
+
+            let Some(main) = vm.registry.functions.get(&cache.main).cloned() else {
+                calibre_diagnostics::emit_error(
+                    &path,
+                    &contents,
+                    format!("Missing entry point: {}", cache.main),
+                    None,
+                );
+                return Err(format!("runtime error").into());
+            };
+            if let Err(err) = vm.run(main.as_ref(), Vec::new()) {
+                let (span, inner) = err.innermost();
+                calibre_diagnostics::emit_runtime_error(
+                    &path,
+                    &contents,
+                    inner.to_string(),
+                    span,
+                    inner.help(),
+                );
+                return Err(format!("runtime error").into());
+            }
+            return Ok(());
         }
 
         cache_path = Some((cache_dir, path));
@@ -128,7 +136,7 @@ async fn run_source(
     };
     let program = parser.produce_ast(tokens);
     if verbose {
-        println!("Parser - elapsed {:.2}s:", start.elapsed().as_secs());
+        println!("Parser - elapsed {}ms:", start.elapsed().as_millis());
         println!("{}", program);
         println!("Starting mir...");
     }
@@ -147,7 +155,8 @@ async fn run_source(
         return Err(format!("compile failed").into());
     }
 
-    let middle_result = (env, scope, middle_node);
+    let mut middle_result = (env, scope, middle_node);
+    calibre_mir::inline::inline_small_calls(&mut middle_result.2, 20);
 
     let entry_name = entry_name;
     let main_name = if let Some(ref entry_name) = entry_name {
@@ -161,7 +170,7 @@ async fn run_source(
     };
 
     if verbose {
-        println!("Mir - elapsed {:.2}s:", start.elapsed().as_secs());
+        println!("Mir - elapsed {}ms:", start.elapsed().as_millis());
         println!("{}", middle_result.2);
         println!("Starting vm...");
     }
@@ -177,7 +186,7 @@ async fn run_source(
     };
 
     if verbose {
-        println!("Lir - elapsed {:.2}s:", start.elapsed().as_secs());
+        println!("Lir - elapsed {}ms:", start.elapsed().as_millis());
         println!("{}", lir_result);
     }
 
@@ -207,8 +216,8 @@ async fn run_source(
     let mut vm: VM = VM::new(registry, mappings, VMConfig::default());
 
     if verbose {
-        println!("Bytecode - elapsed {:.2}s:", start.elapsed().as_secs());
-        println!("{}", vm.registry);
+        println!("Bytecode - elapsed {}ms:", start.elapsed().as_millis());
+        println!("{}", vm.registry.as_ref());
     }
 
     if let Some(main) = vm.registry.functions.get(&main_name).cloned() {
@@ -246,7 +255,7 @@ async fn run_source(
     }
 
     if verbose {
-        println!("Finished - elapsed {:.2}s", start.elapsed().as_secs());
+        println!("Finished - elapsed {}ms", start.elapsed().as_millis());
     }
 
     Ok(())
@@ -356,7 +365,7 @@ fn is_repl_file(contents: &str) -> bool {
 fn is_persistent_decl(line: &str) -> bool {
     let trimmed = line.trim_start();
     let keywords = [
-        "const ", "let ", "type ", "import ", "trait ", "impl ", "extern ",
+        "const ", "let ", "type ", "import ", "trait ", "impl ", "extern ", "use",
     ];
     keywords.iter().any(|k| trimmed.starts_with(k))
 }
@@ -441,31 +450,32 @@ async fn repl(initial_session: Vec<String>) -> Result<(), Box<dyn Error>> {
 struct Args {
     #[arg(index(1))]
     path: Option<String>,
-    #[arg(long)]
-    cache: bool,
+    #[arg(long, default_value_t = false)]
+    no_cache: bool,
     #[arg(short, long)]
     fmt: bool,
     #[arg(short, long)]
     verbose: bool,
 }
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
-    if let Some(path) = args.path {
-        if args.fmt {
-            Command::new("cal-fmt").arg("-a").arg(&path).output()?;
-        }
-        let path = PathBuf::from_str(&path)?;
-        let contents = fs::read_to_string(&path).await?;
-        if is_repl_file(&contents) {
-            let session = contents.lines().skip(1).map(|x| x.to_string()).collect();
-            repl(session).await
+    smol::block_on(async move {
+        if let Some(path) = args.path {
+            if args.fmt {
+                Command::new("cal-fmt").arg("-a").arg(&path).output()?;
+            }
+            let path = PathBuf::from_str(&path)?;
+            let contents = fs::read_to_string(&path).await?;
+            if is_repl_file(&contents) {
+                let session = contents.lines().skip(1).map(|x| x.to_string()).collect();
+                repl(session).await
+            } else {
+                run_source(contents, &path, !args.no_cache, args.verbose, None).await
+            }
         } else {
-            run_source(contents, &path, args.cache, args.verbose, None).await
+            repl(Vec::new()).await
         }
-    } else {
-        repl(Vec::new()).await
-    }
+    })
 }

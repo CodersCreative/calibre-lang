@@ -55,7 +55,7 @@ impl SchedulerHandle {
             .unwrap_or(1);
 
         {
-            let mut workers = inner.workers.lock().unwrap();
+            let mut workers = inner.workers.lock().unwrap_or_else(|e| e.into_inner());
             for _ in 0..worker_count {
                 let worker = Arc::new(Worker {
                     queue: Mutex::new(VecDeque::new()),
@@ -73,7 +73,7 @@ impl SchedulerHandle {
 
     pub fn spawn(&self, base_vm: &VM, func: RuntimeValue, wait_group: Option<Arc<WaitGroupInner>>) {
         let worker = {
-            let mut workers = self.inner.workers.lock().unwrap();
+            let mut workers = self.inner.workers.lock().unwrap_or_else(|e| e.into_inner());
             let mut selected = None;
             let mut best_load = usize::MAX;
             for candidate in workers.iter() {
@@ -94,18 +94,23 @@ impl SchedulerHandle {
                 workers.push(worker.clone());
                 selected = Some(worker);
             }
-            selected.expect("worker selection failed")
+            if let Some(selected) = selected {
+                selected
+            } else {
+                return;
+            }
         };
 
-        let mut vm = VM::new(
+        let mut vm = VM::new_shared(
             base_vm.registry.clone(),
             base_vm.mappings.clone(),
             base_vm.config.clone(),
         );
         vm.variables = base_vm.variables.clone();
         vm.ptr_heap = base_vm.ptr_heap.clone();
+        vm.moved_functions = base_vm.moved_functions.clone();
 
-        let mut queue = worker.queue.lock().unwrap();
+        let mut queue = worker.queue.lock().unwrap_or_else(|e| e.into_inner());
         worker.tasks.fetch_add(1, Ordering::AcqRel);
         queue.push_back(Task {
             vm,
@@ -119,19 +124,19 @@ impl SchedulerHandle {
         thread::spawn(move || {
             loop {
                 let mut task = {
-                    let mut queue = worker.queue.lock().unwrap();
+                    let mut queue = worker.queue.lock().unwrap_or_else(|e| e.into_inner());
                     loop {
                         if let Some(task) = queue.pop_front() {
                             break task;
                         }
-                        queue = worker.cvar.wait(queue).unwrap();
+                        queue = worker.cvar.wait(queue).unwrap_or_else(|e| e.into_inner());
                     }
                 };
 
                 if let Some(status) = run_task_slice(&mut task, worker.quantum) {
                     match status {
                         TaskStatus::Yielded => {
-                            let mut queue = worker.queue.lock().unwrap();
+                            let mut queue = worker.queue.lock().unwrap_or_else(|e| e.into_inner());
                             queue.push_back(task);
                         }
                         TaskStatus::Finished => {
@@ -160,14 +165,15 @@ enum TaskStatus {
 }
 
 fn resolve_function(vm: &VM, name: &str) -> Option<Arc<VMFunction>> {
-    if let Some(found) = vm.registry.functions.get(name) {
-        return Some(found.clone());
+    if let Some(found) = vm.get_function(name) {
+        return Some(found);
     }
     if let Some((prefix, _)) = name.split_once("->") {
         if let Some(found) = vm
             .registry
             .functions
             .iter()
+            .filter(|(k, _)| !vm.moved_functions.contains(*k))
             .find(|(k, _)| k.starts_with(prefix))
             .map(|(_, v)| v.clone())
         {
@@ -178,6 +184,9 @@ fn resolve_function(vm: &VM, name: &str) -> Option<Arc<VMFunction>> {
         let suffix = format!(":{}", short);
         let mut found = None;
         for (k, v) in vm.registry.functions.iter() {
+            if vm.moved_functions.contains(k) {
+                continue;
+            }
             if k.ends_with(&suffix) {
                 if found.is_some() {
                     return None;

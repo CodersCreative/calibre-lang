@@ -4,7 +4,7 @@ use crate::{
         DestructurePattern, FunctionHeader, GenericType, GenericTypes, IfComparisonType, LoopType,
         MatchArmType, NamedScope, Node, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialFfiDataType, PotentialGenericTypeIdentifier,
-        PotentialNewType, TryCatch, VarType, binary::BinaryOperator,
+        PotentialNewType, TryCatch, TypeDefType, VarType, binary::BinaryOperator,
         comparison::ComparisonOperator,
     },
     lexer::{Bracket, Span, StopValue},
@@ -96,16 +96,19 @@ impl Parser {
         if self.first().token_type == TokenType::Spawn {
             let value = self.parse_spawn_statement();
             let value_span = value.span;
-            let wg_name = format!("__use_spawn_wg_{}_{}", open.span.from.line, open.span.from.col);
-            let wg_ident: PotentialDollarIdentifier =
-                ParserText::from(wg_name.clone()).into();
+            let wg_name = format!(
+                "__use_spawn_wg_{}_{}",
+                open.span.from.line, open.span.from.col
+            );
+            let wg_ident: PotentialDollarIdentifier = ParserText::from(wg_name.clone()).into();
 
             let wg_decl = Node::new(
                 Span::new_from_spans(open.span, value.span),
                 NodeType::VariableDeclaration {
                     var_type: VarType::Immutable,
                     identifier: wg_ident.clone(),
-                    data_type: PotentialNewType::DataType(ParserDataType::from(
+                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                        open.span,
                         ParserInnerType::Auto(None),
                     )),
                     value: Box::new(value),
@@ -201,26 +204,25 @@ impl Parser {
         let mut arms = Vec::new();
 
         while self.first().token_type != TokenType::Close(Bracket::Curly) && !self.is_eof() {
-            let (kind, left, right) = if self.first().token_type == TokenType::Identifier
-                && self.first().value == "_"
-            {
-                let _ = self.eat();
-                (crate::ast::SelectArmKind::Default, None, None)
-            } else {
-                let left = self.parse_statement();
-                if self.first().token_type == TokenType::LeftArrow {
+            let (kind, left, right) =
+                if self.first().token_type == TokenType::Identifier && self.first().value == "_" {
                     let _ = self.eat();
-                    let right = self.parse_statement();
-                    (crate::ast::SelectArmKind::Recv, Some(left), Some(right))
-                } else if self.first().token_type == TokenType::Arrow {
-                    let _ = self.eat();
-                    let right = self.parse_statement();
-                    (crate::ast::SelectArmKind::Send, Some(left), Some(right))
-                } else {
-                    self.add_err(SyntaxErr::ExpectedToken(TokenType::LeftArrow));
                     (crate::ast::SelectArmKind::Default, None, None)
-                }
-            };
+                } else {
+                    let left = self.parse_statement();
+                    if self.first().token_type == TokenType::LeftArrow {
+                        let _ = self.eat();
+                        let right = self.parse_statement();
+                        (crate::ast::SelectArmKind::Recv, Some(left), Some(right))
+                    } else if self.first().token_type == TokenType::Arrow {
+                        let _ = self.eat();
+                        let right = self.parse_statement();
+                        (crate::ast::SelectArmKind::Send, Some(left), Some(right))
+                    } else {
+                        self.add_err(SyntaxErr::ExpectedToken(TokenType::LeftArrow));
+                        (crate::ast::SelectArmKind::Default, None, None)
+                    }
+                };
 
             let body = if self.first().token_type == TokenType::FatArrow {
                 self.parse_scope_declaration(false)
@@ -302,13 +304,15 @@ impl Parser {
         );
 
         let return_type = if self.first().token_type == TokenType::Arrow {
-            let _ = self.eat();
+            let arrow = self.eat();
             self.parse_potential_ffi_type()
                 .unwrap_or(PotentialFfiDataType::Normal(
-                    ParserDataType::from(ParserInnerType::Null).into(),
+                    ParserDataType::new(arrow.span, ParserInnerType::Null).into(),
                 ))
         } else {
-            PotentialFfiDataType::Normal(ParserDataType::from(ParserInnerType::Null).into())
+            PotentialFfiDataType::Normal(
+                ParserDataType::new(open.span, ParserInnerType::Null).into(),
+            )
         };
 
         let mut library = String::new();
@@ -529,7 +533,7 @@ impl Parser {
             )
         } else {
             let body = vec![self.parse_statement()];
-            let close = body.last().unwrap().span;
+            let close = body.last().map(|node| node.span).unwrap_or(open.span);
 
             Node::new(
                 Span::new_from_spans(open.span, close),
@@ -648,7 +652,10 @@ impl Parser {
                 let _ = self.eat();
                 self.expect_potential_new_type()
             }
-            _ => PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(None))),
+            _ => PotentialNewType::DataType(ParserDataType::new(
+                *identifier.span(),
+                ParserInnerType::Auto(None),
+            )),
         };
 
         let _ = self.expect_eat(&TokenType::Equals, SyntaxErr::ExpectedChar('='));
@@ -660,11 +667,14 @@ impl Parser {
         }
 
         let value = if values.len() == 1 {
-            values.pop().unwrap()
-        } else {
-            let span =
-                Span::new_from_spans(values.first().unwrap().span, values.last().unwrap().span);
+            values
+                .pop()
+                .unwrap_or_else(|| Node::new(self.first().span, NodeType::Null))
+        } else if let (Some(first), Some(last)) = (values.first(), values.last()) {
+            let span = Span::new_from_spans(first.span, last.span);
             Node::new(span, NodeType::TupleLiteral { values })
+        } else {
+            Node::new(self.first().span, NodeType::Null)
         };
 
         Node::new(
@@ -719,11 +729,16 @@ impl Parser {
             values.push(self.parse_statement());
         }
         if values.len() == 1 {
-            values.pop().unwrap()
+            values
+                .pop()
+                .unwrap_or_else(|| Node::new(self.first().span, NodeType::Null))
         } else {
-            let span =
-                Span::new_from_spans(values.first().unwrap().span, values.last().unwrap().span);
-            Node::new(span, NodeType::TupleLiteral { values })
+            if let (Some(first), Some(last)) = (values.first(), values.last()) {
+                let span = Span::new_from_spans(first.span, last.span);
+                Node::new(span, NodeType::TupleLiteral { values })
+            } else {
+                Node::new(self.first().span, NodeType::Null)
+            }
         }
     }
 
@@ -774,7 +789,7 @@ impl Parser {
         let mut types = Vec::new();
 
         while self.first().token_type != TokenType::Comparison(ComparisonOperator::Greater) {
-            let identifier = self.parse_potential_dollar_ident().unwrap();
+            let identifier = self.expect_potential_dollar_ident();
             let mut constraints = Vec::new();
 
             if self.first().token_type == TokenType::Colon {
@@ -814,6 +829,54 @@ impl Parser {
         let generics = self.parse_generic_types_with_constraints();
 
         let target_type = self.expect_potential_new_type();
+        if self.first().token_type == TokenType::Overload {
+            let overloads = self.parse_overloads();
+            let identifier = match &target_type {
+                PotentialNewType::DataType(ParserDataType { data_type, span }) => match data_type {
+                    ParserInnerType::Struct(name) => PotentialGenericTypeIdentifier::Identifier(
+                        PotentialDollarIdentifier::Identifier(ParserText {
+                            text: name.clone(),
+                            span: *span,
+                        }),
+                    ),
+                    ParserInnerType::StructWithGenerics {
+                        identifier,
+                        generic_types,
+                    } => PotentialGenericTypeIdentifier::Generic {
+                        identifier: PotentialDollarIdentifier::Identifier(ParserText {
+                            text: identifier.clone(),
+                            span: *span,
+                        }),
+                        generic_types: generic_types
+                            .iter()
+                            .map(|t| PotentialNewType::DataType(t.clone()))
+                            .collect(),
+                    },
+                    _ => PotentialGenericTypeIdentifier::Identifier(
+                        PotentialDollarIdentifier::Identifier(ParserText {
+                            text: data_type.to_string(),
+                            span: *span,
+                        }),
+                    ),
+                },
+                PotentialNewType::NewType { identifier, .. } => {
+                    PotentialGenericTypeIdentifier::Identifier(identifier.clone())
+                }
+            };
+
+            let auto_inner = PotentialNewType::DataType(ParserDataType::new(
+                *target_type.span(),
+                ParserInnerType::Auto(None),
+            ));
+            return Node::new(
+                *target_type.span(),
+                NodeType::TypeDeclaration {
+                    identifier,
+                    object: TypeDefType::NewType(Box::new(auto_inner)),
+                    overloads,
+                },
+            );
+        }
         let target = if self.first().token_type == TokenType::For {
             let _ = self.eat();
             Some(self.expect_potential_new_type())
@@ -862,6 +925,16 @@ impl Parser {
                 }) => PotentialGenericTypeIdentifier::Identifier(
                     PotentialDollarIdentifier::Identifier(ParserText { text: name, span }),
                 ),
+                PotentialNewType::DataType(ParserDataType {
+                    data_type: ParserInnerType::List(inner),
+                    span,
+                }) => PotentialGenericTypeIdentifier::Generic {
+                    identifier: PotentialDollarIdentifier::Identifier(ParserText {
+                        text: "list".to_string(),
+                        span,
+                    }),
+                    generic_types: vec![PotentialNewType::DataType(*inner)],
+                },
                 PotentialNewType::DataType(ParserDataType {
                     data_type: ParserInnerType::StructWithGenerics { identifier, .. },
                     span,
@@ -942,8 +1015,10 @@ impl Parser {
 
             let member_ident = self.expect_potential_dollar_ident();
 
-            let mut data_type =
-                PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(None)));
+            let mut data_type = PotentialNewType::DataType(ParserDataType::new(
+                *member_ident.span(),
+                ParserInnerType::Auto(None),
+            ));
 
             if self.first().token_type == TokenType::Colon {
                 let _ = self.eat();
@@ -1413,14 +1488,14 @@ impl Parser {
         };
 
         let return_type = if self.first().token_type == TokenType::Open(Bracket::Curly) {
-            ParserDataType::from(ParserInnerType::Null).into()
+            ParserDataType::new(open.span, ParserInnerType::Null).into()
         } else {
-            let _ = self.expect_eat(
+            let arrow = self.expect_eat(
                 &TokenType::Arrow,
                 SyntaxErr::ExpectedKeyword(String::from("->")),
             );
             self.parse_potential_new_type()
-                .unwrap_or(ParserDataType::from(ParserInnerType::Null).into())
+                .unwrap_or(ParserDataType::new(arrow.span, ParserInnerType::Null).into())
         };
 
         let _ = self.expect_eat(
@@ -1551,14 +1626,14 @@ impl Parser {
         let (parameters, destructures) = self.parse_function_params_with_destructure();
 
         let return_type = if self.first().token_type == TokenType::FatArrow {
-            ParserDataType::from(ParserInnerType::Auto(None)).into()
+            ParserDataType::new(open.span, ParserInnerType::Auto(None)).into()
         } else {
-            let _ = self.expect_eat(
+            let arrow = self.expect_eat(
                 &TokenType::Arrow,
                 SyntaxErr::ExpectedKeyword(String::from("->")),
             );
             self.parse_potential_new_type()
-                .unwrap_or(ParserDataType::from(ParserInnerType::Null).into())
+                .unwrap_or(ParserDataType::new(arrow.span, ParserInnerType::Null).into())
         };
 
         let block = self.parse_scope_declaration(false);

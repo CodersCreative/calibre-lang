@@ -104,7 +104,7 @@ impl MiddleEnvironment {
         let mut tokenizer = Tokenizer::default();
 
         if let Some(scope_ref) = self.scopes.get(scope) {
-            if let Ok(stdlib) = fs::read_to_string(scope_ref.path.clone()) {
+            if let Ok(stdlib) = fs::read_to_string(&scope_ref.path) {
                 if let Ok(tokens) = tokenizer.tokenize(&stdlib) {
                     let program = parser.produce_ast(tokens);
                     let middle = self.evaluate(scope, program);

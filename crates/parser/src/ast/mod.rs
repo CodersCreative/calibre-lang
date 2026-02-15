@@ -341,7 +341,7 @@ impl ParserInnerType {
             Self::Option(x) => Self::Option(Box::new(x.verify())),
             Self::List(x) => Self::List(Box::new(x.verify())),
             Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.verify()).collect()),
-            Self::Struct(x) => Self::from_str(&x).unwrap(),
+            Self::Struct(x) => Self::from_str(&x).unwrap_or(Self::Struct(x)),
             ty => ty,
         }
     }
@@ -921,13 +921,6 @@ impl Node {
     pub fn new(span: Span, node_type: NodeType) -> Self {
         Self { node_type, span }
     }
-
-    pub fn new_from_type(node_type: NodeType) -> Self {
-        Self {
-            node_type,
-            span: Span::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -978,10 +971,13 @@ pub struct Overload {
 
 impl Into<Node> for Overload {
     fn into(self) -> Node {
-        Node::new_from_type(NodeType::FunctionDeclaration {
-            header: self.header,
-            body: self.body,
-        })
+        Node::new(
+            self.operator.span,
+            NodeType::FunctionDeclaration {
+                header: self.header,
+                body: self.body,
+            },
+        )
     }
 }
 

@@ -35,6 +35,8 @@ pub enum MiddleErr {
     Object(String),
     #[error("Enum Variant does not exist : {0:?}")]
     EnumVariant(String),
+    #[error("Internal error: {0}")]
+    Internal(String),
     #[error("Cannot perform enum style pattern matching on type : {0}")]
     CantMatch(ParserDataType),
     #[error("Parser error in {path:?}")]

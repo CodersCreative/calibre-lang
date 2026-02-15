@@ -23,13 +23,6 @@ impl MiddleNode {
     pub fn new(node_type: MiddleNodeType, span: Span) -> Self {
         Self { node_type, span }
     }
-
-    pub fn new_from_type(node_type: MiddleNodeType) -> Self {
-        Self {
-            node_type,
-            span: Span::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -183,7 +176,7 @@ impl Into<NodeType> for MiddleNodeType {
             },
             Self::Drop(x) => NodeType::Drop(x.into()),
             Self::Move(x) => NodeType::MoveExpression {
-                value: Box::new(Node::new_from_type(NodeType::Identifier(x.into()))),
+                value: Box::new(Node::new(x.span, NodeType::Identifier(x.into()))),
             },
             Self::Break { label, value } => NodeType::Break {
                 label: label.map(Into::into),
@@ -332,13 +325,16 @@ impl Into<NodeType> for MiddleNodeType {
                         lst.push((*state).into());
                     }
 
-                    lst.push(Node::new_from_type(NodeType::LoopDeclaration {
-                        loop_type: Box::new(LoopType::Loop),
-                        body: Box::new((*body).into()),
-                        until: None,
-                        label: label.map(Into::into),
-                        else_body: None,
-                    }));
+                    lst.push(Node::new(
+                        body.span,
+                        NodeType::LoopDeclaration {
+                            loop_type: Box::new(LoopType::Loop),
+                            body: Box::new((*body).into()),
+                            until: None,
+                            label: label.map(Into::into),
+                            else_body: None,
+                        },
+                    ));
 
                     Some(lst)
                 },
@@ -424,17 +420,25 @@ impl Into<NodeType> for MiddleNodeType {
                     value.contains_key("0")
                 };
                 if is_tuple {
+                    let caller_span = identifier
+                        .as_ref()
+                        .map(|id| id.span)
+                        .or_else(|| value.0.first().map(|(_, node)| node.span))
+                        .unwrap_or_default();
                     NodeType::CallExpression {
                         string_fn: None,
                         generic_types: Vec::new(),
-                        caller: Box::new(Node::new_from_type(NodeType::Identifier(
-                            if let Some(identifier) = identifier {
-                                identifier
-                            } else {
-                                ParserText::from(String::from("tuple"))
-                            }
-                            .into(),
-                        ))),
+                        caller: Box::new(Node::new(
+                            caller_span,
+                            NodeType::Identifier(
+                                if let Some(identifier) = identifier {
+                                    identifier
+                                } else {
+                                    ParserText::from(String::from("tuple"))
+                                }
+                                .into(),
+                            ),
+                        )),
                         args: {
                             let mut lst = Vec::new();
                             let mut value: Vec<(String, MiddleNode)> =
@@ -449,7 +453,9 @@ impl Into<NodeType> for MiddleNodeType {
                     }
                 } else {
                     NodeType::StructLiteral {
-                        identifier: identifier.unwrap().into(),
+                        identifier: identifier
+                            .unwrap_or_else(|| ParserText::from(String::from("map")).into())
+                            .into(),
                         value: ObjectType::Map(
                             value.0.into_iter().map(|x| (x.0, x.1.into())).collect(),
                         ),

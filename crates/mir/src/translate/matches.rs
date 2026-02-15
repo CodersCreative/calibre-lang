@@ -30,7 +30,8 @@ impl MiddleEnvironment {
                     NodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
                         identifier: ParserText::from(tmp_name.clone()).into(),
-                        data_type: PotentialNewType::DataType(ParserDataType::from(
+                        data_type: PotentialNewType::DataType(ParserDataType::new(
+                            self.current_span(),
                             ParserInnerType::Auto(None),
                         )),
                         value,
@@ -138,16 +139,20 @@ impl MiddleEnvironment {
                             name,
                             destructure,
                         } => {
-                            let val = self.resolve_dollar_ident_only(scope, &val).unwrap();
+                            let val =
+                                self.resolve_dollar_ident_only(scope, &val).ok_or_else(|| {
+                                    self.err_at_current(MiddleErr::Scope(val.to_string()))
+                                })?;
                             let index: i64 = match val.text.trim() {
                                 "Ok" | "Some" => 0,
                                 "Err" | "None" => 1,
                                 _ => {
                                     return Err(MiddleErr::At(
                                         val.span,
-                                        Box::new(MiddleErr::CantMatch(
-                                            ParserDataType::from(ParserInnerType::Auto(None)),
-                                        )),
+                                        Box::new(MiddleErr::CantMatch(ParserDataType::new(
+                                            val.span,
+                                            ParserInnerType::Auto(None),
+                                        ))),
                                     ));
                                 }
                             };
@@ -169,13 +174,15 @@ impl MiddleEnvironment {
                                                             caller: Box::new(Node::new(
                                                                 self.current_span(),
                                                                 NodeType::Identifier(
-                                                                    ParserText::from(
-                                                                        String::from("discriminant"),
-                                                                    )
+                                                                    ParserText::from(String::from(
+                                                                        "discriminant",
+                                                                    ))
                                                                     .into(),
                                                                 ),
                                                             )),
-                                                            args: vec![CallArg::Value(value.clone())],
+                                                            args: vec![CallArg::Value(
+                                                                value.clone(),
+                                                            )],
                                                             reverse_args: Vec::new(),
                                                         },
                                                     )),
@@ -208,7 +215,9 @@ impl MiddleEnvironment {
                                                                         self.current_span(),
                                                                         NodeType::Identifier(
                                                                             ParserText::from(
-                                                                                String::from("next"),
+                                                                                String::from(
+                                                                                    "next",
+                                                                                ),
                                                                             )
                                                                             .into(),
                                                                         ),
@@ -219,20 +228,23 @@ impl MiddleEnvironment {
                                                         },
                                                     )),
                                                     data_type: PotentialNewType::DataType(
-                                                        ParserDataType::from(ParserInnerType::Auto(
-                                                            None,
-                                                        )),
+                                                        ParserDataType::new(
+                                                            self.current_span(),
+                                                            ParserInnerType::Auto(None),
+                                                        ),
                                                     ),
                                                 },
                                             ));
 
                                             if let Some(pattern) = destructure {
-                                                body_nodes.extend(self.emit_destructure_statements(
-                                                    &name,
-                                                    &pattern,
-                                                    self.current_span(),
-                                                    true,
-                                                ));
+                                                body_nodes.extend(
+                                                    self.emit_destructure_statements(
+                                                        &name,
+                                                        &pattern,
+                                                        self.current_span(),
+                                                        true,
+                                                    ),
+                                                );
                                             }
 
                                             body_nodes.push(*pattern.2);
@@ -327,7 +339,9 @@ impl MiddleEnvironment {
                     name,
                     destructure,
                 } => {
-                    let val = self.resolve_dollar_ident_only(scope, &val).unwrap();
+                    let val = self.resolve_dollar_ident_only(scope, &val).ok_or_else(|| {
+                        MiddleErr::At(*val.span(), Box::new(MiddleErr::Scope(val.to_string())))
+                    })?;
                     let index: i64 = match val.text.trim() {
                         _ if enum_object.is_some() => {
                             let Some(object) = enum_object else {
@@ -406,10 +420,20 @@ impl MiddleEnvironment {
                                             value: if reference.is_some()
                                                 && reference != Some(RefMutability::Value)
                                             {
+                                                let mutability =
+                                                    reference.clone().ok_or_else(|| {
+                                                        MiddleErr::At(
+                                                            value.span,
+                                                            Box::new(MiddleErr::Internal(
+                                                                "missing reference mutability"
+                                                                    .to_string(),
+                                                            )),
+                                                        )
+                                                    })?;
                                                 Box::new(Node::new(
                                                     self.current_span(),
                                                     NodeType::RefStatement {
-                                                        mutability: reference.clone().unwrap(),
+                                                        mutability,
                                                         value: Box::new(Node::new(
                                                             self.current_span(),
                                                             NodeType::MemberExpression {
@@ -457,7 +481,10 @@ impl MiddleEnvironment {
                                                 ))
                                             },
                                             data_type: PotentialNewType::DataType(
-                                                ParserDataType::from(ParserInnerType::Auto(None)),
+                                                ParserDataType::new(
+                                                    self.current_span(),
+                                                    ParserInnerType::Auto(None),
+                                                ),
                                             ),
                                         },
                                     ));
@@ -496,19 +523,13 @@ impl MiddleEnvironment {
         let ifs = if ifs.is_empty() {
             Node::new(self.current_span(), NodeType::EmptyLine)
         } else {
-            let mut cur_if = ifs.remove(0);
-            let mut cur_if_ref = &mut cur_if;
-
-            for new_if in ifs {
-                match &mut cur_if_ref.node_type {
-                    NodeType::IfStatement { otherwise, .. } => {
-                        *otherwise = Some(Box::new(new_if));
-                        cur_if_ref = otherwise.as_mut().unwrap()
-                    }
-                    _ => unreachable!(),
+            let mut cur_if = ifs.pop().unwrap();
+            while let Some(mut prev) = ifs.pop() {
+                if let NodeType::IfStatement { otherwise, .. } = &mut prev.node_type {
+                    *otherwise = Some(Box::new(cur_if));
                 }
+                cur_if = prev;
             }
-
             cur_if
         };
 

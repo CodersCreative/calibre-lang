@@ -1,5 +1,15 @@
-type HashMap:<K, V> = struct {};
-type HashSet:<T> = struct {};
+type HashMap:<K, V> = struct {} @overload {
+	const "[]" = fn(self: HashMap:<K, V>, key: K) -> V? => self.get(key);
+	const "[]=" = fn(self: HashMap:<K, V>, key: K, value: V) -> HashMap:<K, V> => {
+		let mut out = self;
+		out.set(key, value);
+		out;
+	};
+	const "in" = fn(key: K, map: HashMap:<K, V>) -> bool => map.contains(key);
+}
+type HashSet:<T> = struct {} @overload {
+	const "in" = fn(value: T, set: HashSet:<T>) -> bool => set.contains(value);
+}
 
 impl<K, V> HashMap:<K, V> {
 	const new = fn(entries: list:<<K, V>>) -> HashMap:<K, V> => hashmap_new(entries);

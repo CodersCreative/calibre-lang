@@ -55,3 +55,7 @@ impl str {
 		some(out);
 	};
 }
+
+}
+
+}

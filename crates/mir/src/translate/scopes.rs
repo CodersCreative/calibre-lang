@@ -39,8 +39,11 @@ impl MiddleEnvironment {
             let wg_ident = if let Some(first) = identifiers.first() {
                 first.clone()
             } else {
-                ParserText::from(format!("__use_spawn_wg_{}_{}", span.from.line, span.from.col))
-                    .into()
+                ParserText::from(format!(
+                    "__use_spawn_wg_{}_{}",
+                    span.from.line, span.from.col
+                ))
+                .into()
             };
 
             let wg_decl = Node::new(
@@ -48,7 +51,8 @@ impl MiddleEnvironment {
                 NodeType::VariableDeclaration {
                     var_type: calibre_parser::ast::VarType::Immutable,
                     identifier: wg_ident.clone(),
-                    data_type: PotentialNewType::DataType(ParserDataType::from(
+                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                        span,
                         ParserInnerType::Auto(None),
                     )),
                     value: Box::new(value),
@@ -119,7 +123,10 @@ impl MiddleEnvironment {
             .map(|id| {
                 (
                     id.clone(),
-                    PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(None))),
+                    PotentialNewType::DataType(ParserDataType::new(
+                        use_node.span,
+                        ParserInnerType::Auto(None),
+                    )),
                 )
             })
             .collect();
@@ -127,9 +134,10 @@ impl MiddleEnvironment {
         let header = FunctionHeader {
             generics: calibre_parser::ast::GenericTypes(Vec::new()),
             parameters: params,
-            return_type: PotentialNewType::DataType(ParserDataType::from(ParserInnerType::Auto(
-                None,
-            ))),
+            return_type: PotentialNewType::DataType(ParserDataType::new(
+                use_node.span,
+                ParserInnerType::Auto(None),
+            )),
             param_destructures: Vec::new(),
         };
 
@@ -187,27 +195,38 @@ impl MiddleEnvironment {
     ) -> Result<MiddleNode, MiddleErr> {
         let identifer = self
             .resolve_dollar_ident_only(scope, &identifier)
-            .unwrap()
+            .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(identifier.to_string()))))?
             .text;
 
         let name = self
             .resolve_dollar_ident_only(scope, &value.name)
-            .unwrap()
+            .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(value.name.to_string()))))?
             .text;
 
-        let scope_macro = self.resolve_macro(scope, &name).unwrap().clone();
+        let scope_macro = self
+            .resolve_macro(scope, &name)
+            .cloned()
+            .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(name.clone()))))?;
         let mut args = Vec::new();
 
         let mut added = Vec::new();
 
         for arg in value.args {
-            let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();
+            let arg_text = self
+                .resolve_dollar_ident_only(scope, &arg.0)
+                .ok_or_else(|| {
+                    MiddleErr::At(span, Box::new(MiddleErr::Scope(arg.0.to_string())))
+                })?;
             added.push(arg_text.text.clone());
             args.push(arg);
         }
 
         for arg in scope_macro.args {
-            let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();
+            let arg_text = self
+                .resolve_dollar_ident_only(scope, &arg.0)
+                .ok_or_else(|| {
+                    MiddleErr::At(span, Box::new(MiddleErr::Scope(arg.0.to_string())))
+                })?;
             if !added.contains(&arg_text) {
                 added.push(arg_text.text.clone());
                 args.push(arg);
@@ -223,7 +242,12 @@ impl MiddleEnvironment {
 
         self.scopes
             .get_mut(scope)
-            .unwrap()
+            .ok_or_else(|| {
+                MiddleErr::At(
+                    span,
+                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                )
+            })?
             .macros
             .insert(identifer, scope_macro);
 
@@ -252,7 +276,9 @@ impl MiddleEnvironment {
             if define {
                 let name = self
                     .resolve_dollar_ident_only(scope, &named.name)
-                    .unwrap()
+                    .ok_or_else(|| {
+                        MiddleErr::At(span, Box::new(MiddleErr::Scope(named.name.to_string())))
+                    })?
                     .text;
 
                 let scope_macro = ScopeMacro {
@@ -264,7 +290,12 @@ impl MiddleEnvironment {
 
                 self.scopes
                     .get_mut(scope)
-                    .unwrap()
+                    .ok_or_else(|| {
+                        MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                        )
+                    })?
                     .macros
                     .insert(name, scope_macro);
 
@@ -276,7 +307,9 @@ impl MiddleEnvironment {
 
             let name = self
                 .resolve_dollar_ident_only(scope, &named.name)
-                .unwrap()
+                .ok_or_else(|| {
+                    MiddleErr::At(span, Box::new(MiddleErr::Scope(named.name.to_string())))
+                })?
                 .text;
             if self.resolve_macro(scope, &name).is_none() {
                 if !named.args.is_empty() {
@@ -288,7 +321,12 @@ impl MiddleEnvironment {
                     };
                     self.scopes
                         .get_mut(scope)
-                        .unwrap()
+                        .ok_or_else(|| {
+                            MiddleErr::At(
+                                span,
+                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                            )
+                        })?
                         .macros
                         .insert(name.clone(), scope_macro);
                 }
@@ -328,7 +366,9 @@ impl MiddleEnvironment {
             let mut added = Vec::new();
 
             let scope_macro_args: Vec<(PotentialDollarIdentifier, Node)> = {
-                let scope_macro = self.resolve_macro(scope, &name).unwrap();
+                let scope_macro = self
+                    .resolve_macro(scope, &name)
+                    .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(name.clone()))))?;
                 if og_create_new_scope.is_none() {
                     og_create_new_scope = Some(scope_macro.create_new_scope);
                 }
@@ -337,13 +377,21 @@ impl MiddleEnvironment {
             };
 
             for arg in named.args {
-                let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();
+                let arg_text = self
+                    .resolve_dollar_ident_only(scope, &arg.0)
+                    .ok_or_else(|| {
+                        MiddleErr::At(span, Box::new(MiddleErr::Scope(arg.0.to_string())))
+                    })?;
                 added.push(arg_text.text.clone());
                 macro_args_to_insert.push((arg_text.text, arg.1));
             }
 
             for arg in scope_macro_args {
-                let arg_text = self.resolve_dollar_ident_only(scope, &arg.0).unwrap();
+                let arg_text = self
+                    .resolve_dollar_ident_only(scope, &arg.0)
+                    .ok_or_else(|| {
+                        MiddleErr::At(span, Box::new(MiddleErr::Scope(arg.0.to_string())))
+                    })?;
                 if !added.contains(&arg_text) {
                     added.push(arg_text.text.clone());
                     macro_args_to_insert.push((arg_text.text, arg.1));
@@ -362,7 +410,12 @@ impl MiddleEnvironment {
         };
 
         if !macro_args_to_insert.is_empty() {
-            let scope_data = self.scopes.get_mut(&new_scope).unwrap();
+            let scope_data = self.scopes.get_mut(&new_scope).ok_or_else(|| {
+                MiddleErr::At(
+                    span,
+                    Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
+                )
+            })?;
             for (key, value) in macro_args_to_insert {
                 scope_data.macro_args.insert(key, value);
             }
@@ -381,7 +434,9 @@ impl MiddleEnvironment {
                 {
                     let ident = self
                         .resolve_dollar_ident_only(&new_scope, identifier)
-                        .unwrap();
+                        .ok_or_else(|| {
+                            MiddleErr::At(span, Box::new(MiddleErr::Scope(identifier.to_string())))
+                        })?;
                     let new_name = if ident.text.contains("->") {
                         ident.text.clone()
                     } else {
@@ -389,7 +444,12 @@ impl MiddleEnvironment {
                     };
                     self.scopes
                         .get_mut(&new_scope)
-                        .unwrap()
+                        .ok_or_else(|| {
+                            MiddleErr::At(
+                                span,
+                                Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
+                            )
+                        })?
                         .mappings
                         .entry(ident.text.clone())
                         .or_insert(new_name);
@@ -416,14 +476,30 @@ impl MiddleEnvironment {
                     None
                 };
 
-                for x in self.scopes.get(&new_scope).unwrap().defers.clone() {
+                for x in self
+                    .scopes
+                    .get(&new_scope)
+                    .ok_or_else(|| {
+                        MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
+                        )
+                    })?
+                    .defers
+                    .clone()
+                {
                     stmts.push(self.evaluate(&new_scope, x));
                 }
 
                 for value in self
                     .scopes
                     .get(&new_scope)
-                    .unwrap()
+                    .ok_or_else(|| {
+                        MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
+                        )
+                    })?
                     .defined
                     .clone()
                     .into_iter()
@@ -467,16 +543,26 @@ impl MiddleEnvironment {
             }
         }
 
-        if &new_scope != scope && !og_create_new_scope.unwrap() {
+        if &new_scope != scope && !og_create_new_scope.unwrap_or(create_new_scope) {
             let (mappings, macros) = {
-                let scope = self.scopes.get(&new_scope).unwrap();
+                let scope = self.scopes.get(&new_scope).ok_or_else(|| {
+                    MiddleErr::At(
+                        span,
+                        Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
+                    )
+                })?;
                 (scope.mappings.clone(), scope.macros.clone())
             };
 
             for mapping in mappings {
                 self.scopes
                     .get_mut(scope)
-                    .unwrap()
+                    .ok_or_else(|| {
+                        MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                        )
+                    })?
                     .mappings
                     .insert(mapping.0, mapping.1);
             }
@@ -484,7 +570,12 @@ impl MiddleEnvironment {
             for scope_macro in macros {
                 self.scopes
                     .get_mut(scope)
-                    .unwrap()
+                    .ok_or_else(|| {
+                        MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                        )
+                    })?
                     .macros
                     .insert(scope_macro.0, scope_macro.1);
             }
@@ -536,7 +627,11 @@ impl MiddleEnvironment {
                             if last_used.contains(&name.text) {
                                 break;
                             }
-                            trailing.push(body.pop().unwrap());
+                            if let Some(node) = body.pop() {
+                                trailing.push(node);
+                            } else {
+                                break;
+                            }
                         }
                         if !trailing.is_empty() {
                             let insert_at = body.len().saturating_sub(1);
@@ -548,7 +643,7 @@ impl MiddleEnvironment {
                     body
                 },
                 is_temp,
-                create_new_scope: og_create_new_scope.unwrap(),
+                create_new_scope: og_create_new_scope.unwrap_or(create_new_scope),
                 scope_id: new_scope,
             },
             span,

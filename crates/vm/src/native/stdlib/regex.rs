@@ -8,7 +8,11 @@ impl NativeFunction for IsMatchFn {
         String::from("regex.is_match")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let text = args.pop().unwrap_or(RuntimeValue::Null);
         let pattern = args.pop().unwrap_or(RuntimeValue::Null);
         let RuntimeValue::Str(text) = text else {
@@ -29,7 +33,11 @@ impl NativeFunction for FindFn {
         String::from("regex.find")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let text = args.pop().unwrap_or(RuntimeValue::Null);
         let pattern = args.pop().unwrap_or(RuntimeValue::Null);
         let RuntimeValue::Str(text) = text else {
@@ -39,7 +47,9 @@ impl NativeFunction for FindFn {
             return Err(RuntimeError::UnexpectedType(pattern));
         };
         let re = Regex::new(&pattern).map_err(|e| RuntimeError::Io(e.to_string()))?;
-        let found = re.find(&text).map(|m| RuntimeValue::Str(m.as_str().to_string()));
+        let found = re
+            .find(&text)
+            .map(|m| RuntimeValue::Str(std::sync::Arc::new(m.as_str().to_string())));
         Ok(RuntimeValue::Option(found.map(dumpster::sync::Gc::new)))
     }
 }
@@ -51,7 +61,11 @@ impl NativeFunction for ReplaceFn {
         String::from("regex.replace")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let replacement = args.pop().unwrap_or(RuntimeValue::Null);
         let text = args.pop().unwrap_or(RuntimeValue::Null);
         let pattern = args.pop().unwrap_or(RuntimeValue::Null);
@@ -66,6 +80,6 @@ impl NativeFunction for ReplaceFn {
         };
         let re = Regex::new(&pattern).map_err(|e| RuntimeError::Io(e.to_string()))?;
         let out = re.replace_all(&text, replacement.as_str());
-        Ok(RuntimeValue::Str(out.to_string()))
+        Ok(RuntimeValue::Str(std::sync::Arc::new(out.to_string())))
     }
 }

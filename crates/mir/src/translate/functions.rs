@@ -26,7 +26,9 @@ impl MiddleEnvironment {
         library: String,
         symbol: Option<String>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let ident = self.resolve_dollar_ident_only(scope, &identifier).unwrap();
+        let ident = self
+            .resolve_dollar_ident_only(scope, &identifier)
+            .ok_or_else(|| self.err_at_current(MiddleErr::Scope(identifier.to_string())))?;
         let new_name = get_disamubiguous_name(scope, Some(ident.trim()), Some(&VarType::Constant));
 
         let mut params = Vec::new();
@@ -37,20 +39,25 @@ impl MiddleEnvironment {
 
         let return_type = self.resolve_potential_ffi_type(scope, return_type);
 
-        let fn_type = ParserDataType::from(ParserInnerType::Function {
-            return_type: Box::new(match return_type.clone() {
-                PotentialFfiDataType::Normal(x) => x,
-                PotentialFfiDataType::Ffi(x) => ParserDataType::from(x),
-            }),
-            parameters: params
-                .clone()
-                .into_iter()
-                .map(|x| match x {
+        let fn_type = ParserDataType::new(
+            self.current_span(),
+            ParserInnerType::Function {
+                return_type: Box::new(match return_type.clone() {
                     PotentialFfiDataType::Normal(x) => x,
-                    PotentialFfiDataType::Ffi(x) => ParserDataType::from(x),
-                })
-                .collect(),
-        });
+                    PotentialFfiDataType::Ffi(x) => ParserDataType::new(x.span, x.data_type.into()),
+                }),
+                parameters: params
+                    .clone()
+                    .into_iter()
+                    .map(|x| match x {
+                        PotentialFfiDataType::Normal(x) => x,
+                        PotentialFfiDataType::Ffi(x) => {
+                            ParserDataType::new(x.span, x.data_type.into())
+                        }
+                    })
+                    .collect(),
+            },
+        );
 
         self.variables.insert(
             new_name.clone(),
@@ -61,9 +68,9 @@ impl MiddleEnvironment {
             },
         );
 
-        self.scopes
-            .get_mut(scope)
-            .unwrap()
+        let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
+        let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
+        scope_ref
             .mappings
             .insert(ident.text.clone(), new_name.clone());
 
@@ -99,7 +106,9 @@ impl MiddleEnvironment {
         old_func_defers.append(&mut self.func_defers);
         let new_scope = self.new_scope_from_parent_shallow(*scope);
         for param in header.parameters {
-            let og_name = self.resolve_dollar_ident_only(scope, &param.0).unwrap();
+            let og_name = self
+                .resolve_dollar_ident_only(scope, &param.0)
+                .ok_or_else(|| self.err_at_current(MiddleErr::Scope(param.0.to_string())))?;
             let new_name =
                 get_disamubiguous_name(scope, Some(og_name.trim()), Some(&VarType::Mutable));
             let data_type = self.resolve_potential_new_type(scope, param.1);
@@ -112,17 +121,12 @@ impl MiddleEnvironment {
                 },
             );
 
-            self.scopes
-                .get_mut(&new_scope)
-                .unwrap()
+            let err = self.err_at_current(MiddleErr::Scope(new_scope.to_string()));
+            let scope_ref = self.scopes.get_mut(&new_scope).ok_or(err)?;
+            scope_ref
                 .mappings
                 .insert(og_name.text.clone(), new_name.clone());
-
-            self.scopes
-                .get_mut(&new_scope)
-                .unwrap()
-                .defined
-                .push(new_name.clone());
+            scope_ref.defined.push(new_name.clone());
             params.push((ParserText::from(new_name), data_type));
         }
 
@@ -287,11 +291,11 @@ impl MiddleEnvironment {
             let full = p_name.text.clone();
             if let Some(idx) = full.rfind(':') {
                 let short = full[idx + 1..].to_string();
-                self.scopes
-                    .get_mut(&new_scope)
-                    .unwrap()
-                    .mappings
-                    .insert(short, full.clone());
+                if let Some(scope_ref) = self.scopes.get_mut(&new_scope) {
+                    scope_ref.mappings.insert(short, full.clone());
+                } else {
+                    return Err(self.err_at_current(MiddleErr::Scope(new_scope.to_string())));
+                }
             }
         }
 
@@ -480,12 +484,16 @@ impl MiddleEnvironment {
                     Some(ParserInnerType::Function {
                         return_type,
                         parameters,
-                    }) if (parameters.len() < args.len() + reverse_args.len()
-                        || parameters.len() == args.len() + reverse_args.len() + 1)
-                        && parameters
-                            .get(parameters.len() - reverse_args.len() - 1)
-                            .unwrap()
-                            .is_list() =>
+                    }) if {
+                        let total_args = args.len() + reverse_args.len();
+                        let list_idx = parameters.len().saturating_sub(reverse_args.len() + 1);
+                        let has_list_param = parameters
+                            .get(list_idx)
+                            .map(|p| p.is_list())
+                            .unwrap_or(false);
+                        (parameters.len() < total_args || parameters.len() == total_args + 1)
+                            && has_list_param
+                    } =>
                     {
                         let mut lst = Vec::new();
                         for _ in 0..(parameters.len() - 1 - reverse_args.len()) {
@@ -501,13 +509,12 @@ impl MiddleEnvironment {
                                     NodeType::ListLiteral(
                                         match parameters
                                             .last()
-                                            .unwrap()
-                                            .clone()
-                                            .unwrap_all_refs()
-                                            .data_type
+                                            .cloned()
+                                            .map(|p| p.unwrap_all_refs().data_type)
                                         {
-                                            ParserInnerType::List(x) => (*x).into(),
-                                            _ => PotentialNewType::DataType(ParserDataType::from(
+                                            Some(ParserInnerType::List(x)) => (*x).into(),
+                                            _ => PotentialNewType::DataType(ParserDataType::new(
+                                                self.current_span(),
                                                 ParserInnerType::Auto(None),
                                             )),
                                         },
@@ -546,7 +553,10 @@ impl MiddleEnvironment {
                                             var_type: VarType::Immutable,
                                             identifier: ident.clone(),
                                             data_type: PotentialNewType::DataType(
-                                                ParserDataType::from(ParserInnerType::Auto(None)),
+                                                ParserDataType::new(
+                                                    self.current_span(),
+                                                    ParserInnerType::Auto(None),
+                                                ),
                                             ),
                                             value: Box::new(node),
                                         },
@@ -637,7 +647,8 @@ impl MiddleEnvironment {
                             NodeType::VariableDeclaration {
                                 var_type: VarType::Immutable,
                                 identifier: tmp_ident,
-                                data_type: PotentialNewType::DataType(ParserDataType::from(
+                                data_type: PotentialNewType::DataType(ParserDataType::new(
+                                    self.current_span(),
                                     ParserInnerType::Auto(None),
                                 )),
                                 value: Box::new(func_decl),

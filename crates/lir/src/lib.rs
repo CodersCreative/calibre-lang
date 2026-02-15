@@ -46,17 +46,15 @@ impl LirRegistry {
 
 impl Display for LirRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut txt = String::new();
-
         for val in &self.globals {
-            txt.push_str(&format!("{}\n", val.1));
+            writeln!(f, "{}", val.1)?;
         }
 
         for func in &self.functions {
-            txt.push_str(&format!("{}\n\n", func.1));
+            writeln!(f, "{}\n", func.1)?;
         }
 
-        write!(f, "{}", txt)
+        Ok(())
     }
 }
 
@@ -431,7 +429,7 @@ impl<'a> LirEnvironment<'a> {
                 root_name.clone(),
                 LirGlobal {
                     name: root_name,
-                    data_type: ParserDataType::from(ParserInnerType::Dynamic),
+                    data_type: ParserDataType::new(Span::default(), ParserInnerType::Dynamic),
                     blocks: this.blocks.clone(),
                 },
             );
@@ -554,8 +552,9 @@ impl<'a> LirEnvironment<'a> {
                     lowered_fields.push((field_name.to_string(), self.lower_node(field_node)));
                 }
 
+                let name = identifier.map(|i| i.to_string());
                 LirNodeType::Aggregate {
-                    name: identifier.map(|i| i.to_string()),
+                    name,
                     fields: ObjectMap(lowered_fields),
                 }
             }
@@ -621,7 +620,9 @@ impl<'a> LirEnvironment<'a> {
                         .variables
                         .get(cap)
                         .map(|v| v.data_type.clone())
-                        .unwrap_or_else(|| ParserDataType::from(ParserInnerType::Dynamic).into());
+                        .unwrap_or_else(|| {
+                            ParserDataType::new(Span::default(), ParserInnerType::Dynamic).into()
+                        });
 
                     captures.push((cap.clone(), cap_type));
                 }
@@ -678,6 +679,9 @@ impl<'a> LirEnvironment<'a> {
                                 | MiddleNodeType::CharLiteral(_)
                                 | MiddleNodeType::Null
                                 | MiddleNodeType::MemberExpression { .. }
+                                | MiddleNodeType::AggregateExpression { .. }
+                                | MiddleNodeType::ListLiteral(_, _)
+                                | MiddleNodeType::RangeDeclaration { .. }
                         );
                         if simple_fallback {
                             body_val = sub_lowerer.lower_node(expr);
@@ -703,12 +707,17 @@ impl<'a> LirEnvironment<'a> {
 
                 self.registry.append(sub_lowerer.registry);
 
-                let capture_names = captures.iter().map(|x| x.0.clone()).collect();
+                let mut capture_names = Vec::with_capacity(captures.len());
+                let mut captures_for_func = Vec::with_capacity(captures.len());
+                for (n, t) in captures.into_iter() {
+                    capture_names.push(n.clone());
+                    captures_for_func.push((n, t));
+                }
 
                 let lir_func = LirFunction {
                     name: internal_name.clone(),
                     params: parameters.into_iter().map(|x| (x.0.text, x.1)).collect(),
-                    captures,
+                    captures: captures_for_func,
                     return_type,
                     blocks: sub_lowerer.blocks,
                 };

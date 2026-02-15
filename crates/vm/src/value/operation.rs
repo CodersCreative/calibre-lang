@@ -1,5 +1,4 @@
 use calibre_parser::ast::{
-    ObjectMap,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
@@ -250,23 +249,25 @@ impl RuntimeValue {
     fn special_and(self, vm: &VM, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match self {
             Self::Char(x) => {
-                let mut x = x.to_string();
-                x.push_str(&rhs.display(vm));
-                Ok(Self::Str(x))
+                let mut s = x.to_string();
+                s.push_str(&rhs.display(vm));
+                Ok(Self::Str(std::sync::Arc::new(s)))
             }
-            Self::Str(mut x) => {
-                x.push_str(&rhs.display(vm));
-                Ok(Self::Str(x))
+            Self::Str(x) => {
+                let mut s = x.as_str().to_string();
+                s.push_str(&rhs.display(vm));
+                Ok(Self::Str(std::sync::Arc::new(s)))
             }
             lhs => match rhs {
                 Self::Char(x) => {
-                    let mut x = x.to_string();
-                    x.push_str(&lhs.display(vm));
-                    Ok(Self::Str(x))
+                    let mut s = x.to_string();
+                    s.push_str(&lhs.display(vm));
+                    Ok(Self::Str(std::sync::Arc::new(s)))
                 }
-                Self::Str(mut x) => {
-                    x.push_str(&lhs.display(vm));
-                    Ok(Self::Str(x))
+                Self::Str(x) => {
+                    let mut s = x.as_str().to_string();
+                    s.push_str(&lhs.display(vm));
+                    Ok(Self::Str(std::sync::Arc::new(s)))
                 }
                 _ => Err((lhs, rhs)),
             },
@@ -276,18 +277,16 @@ impl RuntimeValue {
     fn special_shr(self, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match rhs {
             Self::Aggregate(None, data) => {
-                let mut data = data.as_ref().0.0.clone();
-                let key = (data.len() - 1).to_string();
-                data.push((key, self));
-                Ok(Self::Aggregate(
-                    None,
-                    Gc::new(crate::value::GcMap(ObjectMap(data))),
-                ))
+                let mut data = data.clone();
+                let entries = &mut Gc::make_mut(&mut data).0.0;
+                let key = entries.len().to_string();
+                entries.push((key, self));
+                Ok(Self::Aggregate(None, data))
             }
             Self::List(data) => {
-                let mut data = data.as_ref().0.clone();
-                data.push(self);
-                Ok(Self::List(Gc::new(crate::value::GcVec(data))))
+                let mut data = data.clone();
+                Gc::make_mut(&mut data).0.push(self);
+                Ok(Self::List(data))
             }
             _ => Err((self, rhs)),
         }
@@ -296,18 +295,16 @@ impl RuntimeValue {
     fn special_shl(self, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match self {
             Self::Aggregate(None, data) => {
-                let mut data = data.as_ref().0.0.clone();
-                let key = (data.len() - 1).to_string();
-                data.push((key, rhs));
-                Ok(Self::Aggregate(
-                    None,
-                    Gc::new(crate::value::GcMap(ObjectMap(data))),
-                ))
+                let mut data = data.clone();
+                let entries = &mut Gc::make_mut(&mut data).0.0;
+                let key = entries.len().to_string();
+                entries.push((key, rhs));
+                Ok(Self::Aggregate(None, data))
             }
             Self::List(data) => {
-                let mut data = data.as_ref().0.clone();
-                data.push(rhs);
-                Ok(Self::List(Gc::new(crate::value::GcVec(data))))
+                let mut data = data.clone();
+                Gc::make_mut(&mut data).0.push(rhs);
+                Ok(Self::List(data))
             }
             _ => Err((self, rhs)),
         }

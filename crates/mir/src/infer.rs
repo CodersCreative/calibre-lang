@@ -90,13 +90,16 @@ fn visit(
                 let t_applied = hm::apply_subst(subst, &t);
                 if let Some(e) = elem_ty {
                     let e_applied = hm::apply_subst(subst, &e);
-                    *subst = hm::unify(subst.clone(), &e_applied, &t_applied).map_err(|e| e)?;
+                    *subst =
+                        hm::unify(std::mem::take(subst), &e_applied, &t_applied).map_err(|e| e)?;
                     elem_ty = Some(hm::apply_subst(subst, &e_applied));
                 } else {
                     elem_ty = Some(t_applied);
                 }
             }
-            Ok(Type::TList(Box::new(elem_ty.unwrap_or(tg.fresh()))))
+            Ok(Type::TList(std::sync::Arc::new(
+                elem_ty.unwrap_or(tg.fresh()),
+            )))
         }
         NodeType::CallExpression {
             caller,
@@ -113,15 +116,18 @@ fn visit(
                 let caller_t_applied = hm::apply_subst(subst, &caller_t);
                 match caller_t_applied {
                     Type::TArrow(param, rest) => {
-                        *subst = hm::unify(subst.clone(), &param, &arg_t_applied).map_err(|e| e)?;
+                        *subst = hm::unify(std::mem::take(subst), &param, &arg_t_applied)
+                            .map_err(|e| e)?;
                         caller_t = hm::apply_subst(subst, &*rest);
                     }
                     _ => {
                         let fresh_ret = tg.fresh();
-                        let fn_t =
-                            Type::TArrow(Box::new(arg_t_applied), Box::new(fresh_ret.clone()));
-                        *subst =
-                            hm::unify(subst.clone(), &caller_t_applied, &fn_t).map_err(|e| e)?;
+                        let fn_t = Type::TArrow(
+                            std::sync::Arc::new(arg_t_applied),
+                            std::sync::Arc::new(fresh_ret.clone()),
+                        );
+                        *subst = hm::unify(std::mem::take(subst), &caller_t_applied, &fn_t)
+                            .map_err(|e| e)?;
                         caller_t = fresh_ret;
                     }
                 }
@@ -234,8 +240,10 @@ fn visit(
                         Err(format!("cannot infer numeric operator {:?}", op))
                     }
                     BinaryOperator::Mod => {
-                        *subst = hm::unify(subst.clone(), &lt_applied, &int_t).map_err(|e| e)?;
-                        *subst = hm::unify(subst.clone(), &rt_applied, &int_t).map_err(|e| e)?;
+                        *subst =
+                            hm::unify(std::mem::take(subst), &lt_applied, &int_t).map_err(|e| e)?;
+                        *subst =
+                            hm::unify(std::mem::take(subst), &rt_applied, &int_t).map_err(|e| e)?;
                         Ok(int_t)
                     }
                     BinaryOperator::BitXor
@@ -287,8 +295,8 @@ fn visit(
                             return Ok(int_t);
                         }
 
-                        *subst =
-                            hm::unify(subst.clone(), &lt_applied, &rt_applied).map_err(|e| e)?;
+                        *subst = hm::unify(std::mem::take(subst), &lt_applied, &rt_applied)
+                            .map_err(|e| e)?;
                         Ok(hm::apply_subst(subst, &lt_applied))
                     }
                 }
@@ -312,14 +320,18 @@ fn visit(
             let rt = visit(right, env, scope, tg, tenv, subst)?;
             let lt_applied = hm::apply_subst(subst, &lt);
             let rt_applied = hm::apply_subst(subst, &rt);
-            *subst = hm::unify(subst.clone(), &lt_applied, &rt_applied).map_err(|e| e)?;
+            *subst = hm::unify(std::mem::take(subst), &lt_applied, &rt_applied).map_err(|e| e)?;
             Ok(Type::TCon(TypeCon::Bool))
         }
         NodeType::NotExpression { value } => {
             let vt = visit(value, env, scope, tg, tenv, subst)?;
             let vt_applied = hm::apply_subst(subst, &vt);
-            *subst =
-                hm::unify(subst.clone(), &vt_applied, &Type::TCon(TypeCon::Bool)).map_err(|e| e)?;
+            *subst = hm::unify(
+                std::mem::take(subst),
+                &vt_applied,
+                &Type::TCon(TypeCon::Bool),
+            )
+            .map_err(|e| e)?;
             Ok(Type::TCon(TypeCon::Bool))
         }
         NodeType::Return { value } => {
@@ -348,7 +360,8 @@ fn visit(
             if let Some(o) = otherwise {
                 let ot = visit(o, env, scope, tg, tenv, subst)?;
                 let ot_applied = hm::apply_subst(subst, &ot);
-                *subst = hm::unify(subst.clone(), &tt_applied, &ot_applied).map_err(|e| e)?;
+                *subst =
+                    hm::unify(std::mem::take(subst), &tt_applied, &ot_applied).map_err(|e| e)?;
                 Ok(hm::apply_subst(subst, &tt_applied))
             } else {
                 Ok(tt_applied)
@@ -391,8 +404,8 @@ fn visit(
                         };
                         let vt_applied = hm::apply_subst(subst, &vt);
                         let ret_applied = hm::apply_subst(subst, ret_t);
-                        *subst =
-                            hm::unify(subst.clone(), &ret_applied, &vt_applied).map_err(|e| e)?;
+                        *subst = hm::unify(std::mem::take(subst), &ret_applied, &vt_applied)
+                            .map_err(|e| e)?;
                         Ok(())
                     }
                     NodeType::ScopeDeclaration { body, .. } => {
@@ -418,7 +431,7 @@ fn visit(
 
             let declared_ret_pd = match &header.return_type {
                 PotentialNewType::DataType(pd) => pd.clone(),
-                _ => ParserDataType::from(ParserInnerType::Auto(None)),
+                _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
             };
             let declared_ret_t = if matches!(declared_ret_pd.data_type, ParserInnerType::Auto(_)) {
                 tg.fresh()
@@ -442,7 +455,7 @@ fn visit(
                 } else {
                     let p_pd = match &param.1 {
                         PotentialNewType::DataType(pd) => pd.clone(),
-                        _ => ParserDataType::from(ParserInnerType::Auto(None)),
+                        _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
                     };
 
                     let p_t = if matches!(p_pd.data_type, ParserInnerType::Auto(_)) {
@@ -478,17 +491,18 @@ fn visit(
             if !saw_return {
                 let null_t = Type::TCon(TypeCon::Null);
                 let ret_applied = hm::apply_subst(subst, &declared_ret_t);
-                *subst = hm::unify(subst.clone(), &ret_applied, &null_t).map_err(|e| e)?;
+                *subst = hm::unify(std::mem::take(subst), &ret_applied, &null_t).map_err(|e| e)?;
             } else {
                 let body_t_applied = hm::apply_subst(subst, &body_t);
                 let ret_applied = hm::apply_subst(subst, &declared_ret_t);
-                *subst = hm::unify(subst.clone(), &body_t_applied, &ret_applied).map_err(|e| e)?;
+                *subst = hm::unify(std::mem::take(subst), &body_t_applied, &ret_applied)
+                    .map_err(|e| e)?;
             }
 
             let mut fn_t = hm::apply_subst(subst, &declared_ret_t);
             for p_t in param_types.iter().rev() {
                 let p_t_applied = hm::apply_subst(subst, p_t);
-                fn_t = Type::TArrow(Box::new(p_t_applied), Box::new(fn_t));
+                fn_t = Type::TArrow(std::sync::Arc::new(p_t_applied), std::sync::Arc::new(fn_t));
             }
 
             Ok(hm::apply_subst(subst, &fn_t))
@@ -554,7 +568,8 @@ pub fn infer_node_hm(
     match visit(node, env, scope, &mut tg, &mut tenv2, &mut subst) {
         Ok(t) => {
             for (_, scheme) in env.hm_env.iter_mut() {
-                *scheme = TypeScheme::new(scheme.vars.clone(), hm::apply_subst(&subst, &scheme.ty));
+                let applied = hm::apply_subst(&subst, &scheme.ty);
+                *scheme = TypeScheme::new(scheme.vars.clone(), applied);
             }
 
             for (k, v) in env.variables.iter_mut() {
@@ -566,19 +581,15 @@ pub fn infer_node_hm(
             }
 
             for (k, orig_t) in var_types.iter() {
+                let applied = hm::apply_subst(&subst, orig_t);
                 if let Some(var) = env.variables.get_mut(k)
                     && var.data_type.contains_auto()
                 {
-                    var.data_type = hm::to_parser_data_type(
-                        &hm::apply_subst(&subst, orig_t),
-                        &mut env.type_cache,
-                    );
+                    var.data_type = hm::to_parser_data_type(&applied, &mut env.type_cache);
                 }
 
-                env.hm_env.insert(
-                    k.clone(),
-                    TypeScheme::new(Vec::new(), hm::apply_subst(&subst, orig_t)),
-                );
+                env.hm_env
+                    .insert(k.clone(), TypeScheme::new(Vec::new(), applied));
             }
 
             Some((hm::apply_subst(&subst, &t), subst))

@@ -12,12 +12,12 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
-async-lsp = { version = "0.2.2", features = ["tokio"] }
+async-lsp = { version = "0.2.2", features = ["async-io"] }
 calibre-parser = { workspace = true }
 calibre-mir = { workspace = true }
 cal-fmt = { workspace = true }
-tokio = { version = "1.49", features = ["full"] }
-tower = { version = "0.5", features = ["full", "tokio"] }
+smol = "2.0.2"
+tower = { version = "0.5", default-features = false, features = ["util"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 serde_json = "1.0"

@@ -7,24 +7,56 @@ use dumpster::sync::Gc;
 
 pub struct HttpRequest;
 
+fn parse_http_args(args: Vec<RuntimeValue>) -> Result<(String, String, String), RuntimeError> {
+    if args.len() != 3 {
+        return Err(RuntimeError::InvalidFunctionCall);
+    }
+    let mut parts = Vec::with_capacity(3);
+    for value in args {
+        let RuntimeValue::Str(s) = value else {
+            return Err(RuntimeError::UnexpectedType(value));
+        };
+        parts.push(s.to_string());
+    }
+
+    let looks_like_method = |s: &str| {
+        matches!(
+            s,
+            "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "TRACE"
+        )
+    };
+    let looks_like_url = |s: &str| s.contains("://") || s.starts_with("http");
+
+    let mut method_idx = None;
+    let mut url_idx = None;
+    for (idx, part) in parts.iter().enumerate() {
+        if method_idx.is_none() && looks_like_method(part) {
+            method_idx = Some(idx);
+        }
+        if url_idx.is_none() && looks_like_url(part) {
+            url_idx = Some(idx);
+        }
+    }
+
+    let method_idx = method_idx.unwrap_or(0);
+    let url_idx = url_idx.unwrap_or_else(|| if method_idx == 0 { 1 } else { 0 });
+    let body_idx = (0..3)
+        .find(|idx| *idx != method_idx && *idx != url_idx)
+        .unwrap_or(2);
+
+    let method = parts[method_idx].clone();
+    let url = parts[url_idx].clone();
+    let body = parts[body_idx].clone();
+    Ok((method, url, body))
+}
+
 impl NativeFunction for HttpRequest {
     fn name(&self) -> String {
         String::from("net.http_request_raw")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let body = args.pop().unwrap_or(RuntimeValue::Null);
-        let url = args.pop().unwrap_or(RuntimeValue::Null);
-        let method = args.pop().unwrap_or(RuntimeValue::Null);
-        let RuntimeValue::Str(body) = body else {
-            return Err(RuntimeError::UnexpectedType(body));
-        };
-        let RuntimeValue::Str(url) = url else {
-            return Err(RuntimeError::UnexpectedType(url));
-        };
-        let RuntimeValue::Str(method) = method else {
-            return Err(RuntimeError::UnexpectedType(method));
-        };
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let (method, url, body) = parse_http_args(args)?;
 
         let req = ureq::request(&method, &url).timeout(std::time::Duration::from_secs(5));
         let resp = if body.is_empty() {
@@ -36,7 +68,7 @@ impl NativeFunction for HttpRequest {
         let text = resp
             .into_string()
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
-        Ok(RuntimeValue::Str(text))
+        Ok(RuntimeValue::Str(std::sync::Arc::new(text)))
     }
 }
 
@@ -47,19 +79,8 @@ impl NativeFunction for HttpRequestTry {
         String::from("net.http_request_try")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let body = args.pop().unwrap_or(RuntimeValue::Null);
-        let url = args.pop().unwrap_or(RuntimeValue::Null);
-        let method = args.pop().unwrap_or(RuntimeValue::Null);
-        let RuntimeValue::Str(body) = body else {
-            return Err(RuntimeError::UnexpectedType(body));
-        };
-        let RuntimeValue::Str(url) = url else {
-            return Err(RuntimeError::UnexpectedType(url));
-        };
-        let RuntimeValue::Str(method) = method else {
-            return Err(RuntimeError::UnexpectedType(method));
-        };
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let (method, url, body) = parse_http_args(args)?;
 
         let req = ureq::request(&method, &url).timeout(std::time::Duration::from_secs(5));
         let resp = if body.is_empty() {
@@ -73,10 +94,12 @@ impl NativeFunction for HttpRequestTry {
                 let text = resp
                     .into_string()
                     .map_err(|e| RuntimeError::Io(e.to_string()))?;
-                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Str(text)))))
+                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Str(
+                    std::sync::Arc::new(text),
+                )))))
             }
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
-                e.to_string(),
+                std::sync::Arc::new(e.to_string()),
             ))))),
         }
     }
@@ -89,7 +112,11 @@ impl NativeFunction for TcpConnect {
         String::from("net.tcp_connect")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let port = args.pop().unwrap_or(RuntimeValue::Null);
         let host = args.pop().unwrap_or(RuntimeValue::Null);
         let RuntimeValue::Int(port) = port else {
@@ -116,7 +143,11 @@ impl NativeFunction for TcpListen {
         String::from("net.tcp_listen")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let port = args.pop().unwrap_or(RuntimeValue::Null);
         let host = args.pop().unwrap_or(RuntimeValue::Null);
         let RuntimeValue::Int(port) = port else {
@@ -138,12 +169,18 @@ impl NativeFunction for TcpAccept {
         String::from("net.tcp_accept")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let listener = args.pop().unwrap_or(RuntimeValue::Null);
         let RuntimeValue::TcpListener(listener) = listener else {
             return Err(RuntimeError::UnexpectedType(listener));
         };
-        let (stream, _) = listener.accept().map_err(|e| RuntimeError::Io(e.to_string()))?;
+        let (stream, _) = listener
+            .accept()
+            .map_err(|e| RuntimeError::Io(e.to_string()))?;
         let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(3)));
         let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(3)));
         Ok(RuntimeValue::TcpStream(Arc::new(Mutex::new(stream))))
@@ -157,7 +194,11 @@ impl NativeFunction for TcpRead {
         String::from("net.tcp_read")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let len = args.pop().unwrap_or(RuntimeValue::Null);
         let stream = args.pop().unwrap_or(RuntimeValue::Null);
         let RuntimeValue::Int(len) = len else {
@@ -167,18 +208,21 @@ impl NativeFunction for TcpRead {
             return Err(RuntimeError::UnexpectedType(stream));
         };
         let mut buf = vec![0u8; len.max(0) as usize];
-        let mut guard = stream.lock().map_err(|_| RuntimeError::Io("lock".to_string()))?;
+        let mut guard = stream
+            .lock()
+            .map_err(|_| RuntimeError::Io("lock".to_string()))?;
         match guard.read(&mut buf) {
             Ok(n) => {
                 buf.truncate(n);
                 let out = String::from_utf8_lossy(&buf).to_string();
-                Ok(RuntimeValue::Str(out))
+                Ok(RuntimeValue::Str(std::sync::Arc::new(out)))
             }
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock
-                || e.kind() == std::io::ErrorKind::TimedOut
-                || e.kind() == std::io::ErrorKind::ConnectionReset =>
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut
+                    || e.kind() == std::io::ErrorKind::ConnectionReset =>
             {
-                Ok(RuntimeValue::Str(String::new()))
+                Ok(RuntimeValue::Str(std::sync::Arc::new(String::new())))
             }
             Err(e) => Err(RuntimeError::Io(e.to_string())),
         }
@@ -192,7 +236,11 @@ impl NativeFunction for TcpWrite {
         String::from("net.tcp_write")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let data = args.pop().unwrap_or(RuntimeValue::Null);
         let stream = args.pop().unwrap_or(RuntimeValue::Null);
         let RuntimeValue::Str(data) = data else {
@@ -201,8 +249,12 @@ impl NativeFunction for TcpWrite {
         let RuntimeValue::TcpStream(stream) = stream else {
             return Err(RuntimeError::UnexpectedType(stream));
         };
-        let mut guard = stream.lock().map_err(|_| RuntimeError::Io("lock".to_string()))?;
-        let n = guard.write(data.as_bytes()).map_err(|e| RuntimeError::Io(e.to_string()))?;
+        let mut guard = stream
+            .lock()
+            .map_err(|_| RuntimeError::Io("lock".to_string()))?;
+        let n = guard
+            .write(data.as_bytes())
+            .map_err(|e| RuntimeError::Io(e.to_string()))?;
         Ok(RuntimeValue::Int(n as i64))
     }
 }
@@ -214,7 +266,11 @@ impl NativeFunction for TcpClose {
         String::from("net.tcp_close")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let _stream = args.pop().unwrap_or(RuntimeValue::Null);
         Ok(RuntimeValue::Null)
     }

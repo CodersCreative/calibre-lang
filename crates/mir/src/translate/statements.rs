@@ -26,7 +26,9 @@ impl MiddleEnvironment {
         value: Node,
         data_type: PotentialNewType,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = self.resolve_dollar_ident_only(scope, &identifier).unwrap();
+        let identifier = self
+            .resolve_dollar_ident_only(scope, &identifier)
+            .ok_or_else(|| self.err_at_current(MiddleErr::Scope(identifier.to_string())))?;
 
         let new_name = if let Some(existing) = self
             .scopes
@@ -76,16 +78,19 @@ impl MiddleEnvironment {
         };
 
         if let NodeType::FunctionDeclaration { ref header, .. } = original_value_node.node_type {
-            data_type = ParserDataType::from(ParserInnerType::Function {
-                return_type: Box::new(
-                    self.resolve_potential_new_type(scope, header.return_type.clone()),
-                ),
-                parameters: header
-                    .parameters
-                    .iter()
-                    .map(|(_, t)| self.resolve_potential_new_type(scope, t.clone()))
-                    .collect(),
-            });
+            data_type = ParserDataType::new(
+                span,
+                ParserInnerType::Function {
+                    return_type: Box::new(
+                        self.resolve_potential_new_type(scope, header.return_type.clone()),
+                    ),
+                    parameters: header
+                        .parameters
+                        .iter()
+                        .map(|(_, t)| self.resolve_potential_new_type(scope, t.clone()))
+                        .collect(),
+                },
+            );
         }
 
         if let NodeType::FunctionDeclaration { ref header, .. } = original_value_node.node_type {
@@ -106,7 +111,7 @@ impl MiddleEnvironment {
                     hm::from_parser_data_type(&p_pd, &mut tg)
                 };
 
-                ret_hm = Type::TArrow(Box::new(p_hm), Box::new(ret_hm));
+                ret_hm = Type::TArrow(std::sync::Arc::new(p_hm), std::sync::Arc::new(ret_hm));
             }
 
             if !self.hm_env.contains_key(&new_name) {
@@ -127,16 +132,18 @@ impl MiddleEnvironment {
                 },
             );
 
-            self.scopes
-                .get_mut(scope)
-                .unwrap()
+            let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
+            let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
+            scope_ref
                 .mappings
                 .insert(identifier.text.clone(), new_name.clone());
 
             let new_scope = self.new_scope_from_parent_shallow(*scope);
 
             for param in header.parameters.iter() {
-                let og_name = self.resolve_dollar_ident_only(scope, &param.0).unwrap();
+                let og_name = self
+                    .resolve_dollar_ident_only(scope, &param.0)
+                    .ok_or_else(|| self.err_at_current(MiddleErr::Scope(param.0.to_string())))?;
 
                 let new_name =
                     get_disamubiguous_name(scope, Some(og_name.trim()), Some(&VarType::Mutable));
@@ -152,17 +159,12 @@ impl MiddleEnvironment {
                     },
                 );
 
-                self.scopes
-                    .get_mut(&new_scope)
-                    .unwrap()
+                let err = self.err_at_current(MiddleErr::Scope(new_scope.to_string()));
+                let scope_ref = self.scopes.get_mut(&new_scope).ok_or(err)?;
+                scope_ref
                     .mappings
                     .insert(og_name.text.clone(), new_name.clone());
-
-                self.scopes
-                    .get_mut(&new_scope)
-                    .unwrap()
-                    .defined
-                    .push(new_name.clone());
+                scope_ref.defined.push(new_name.clone());
             }
 
             self.evaluate(&new_scope, value)
@@ -183,11 +185,9 @@ impl MiddleEnvironment {
                 },
             );
 
-            self.scopes
-                .get_mut(scope)
-                .unwrap()
-                .mappings
-                .insert(identifier.text, new_name.clone());
+            let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
+            let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
+            scope_ref.mappings.insert(identifier.text, new_name.clone());
         }
 
         if data_type.contains_auto()

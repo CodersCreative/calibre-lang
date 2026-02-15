@@ -44,6 +44,7 @@ const main = fn () => {
     print(bmi_val);
     print("fac -> " & fac_val);
     print(lock_val);
+	print([90, 30, 20, 10, 0][-1]);
 	a_fn();
 	a_two_fn();
 
