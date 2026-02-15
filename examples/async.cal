@@ -75,5 +75,5 @@ const main = fn () => {
 		i;
 	} spawn for i in 0..=width];
 	
-	print("concurrent list => " & concurrent.get());
+	print("concurrent list => " & concurrent);
 };
