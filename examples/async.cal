@@ -59,7 +59,7 @@ const main = fn () => {
 	
 	use spawn {
 		=> {
-			std::thread::Duration.from_ms(30).sleep();
+			std::thread::Duration.from_ms(100).sleep();
 			print("spawn block => A");
 		},
 		=> {

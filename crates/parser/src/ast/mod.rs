@@ -1022,9 +1022,6 @@ pub enum NodeType {
     EmptyLine,
     Null,
     Spawn {
-        value: Box<Node>,
-    },
-    SpawnBlock {
         items: Vec<Node>,
     },
     Use {

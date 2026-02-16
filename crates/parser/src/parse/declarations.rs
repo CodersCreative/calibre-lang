@@ -64,7 +64,7 @@ impl Parser {
             );
             return Node::new(
                 Span::new_from_spans(open.span, close.span),
-                NodeType::SpawnBlock { items },
+                NodeType::Spawn { items },
             );
         }
 
@@ -81,9 +81,7 @@ impl Parser {
 
         Node::new(
             Span::new_from_spans(open.span, value.span),
-            NodeType::Spawn {
-                value: Box::new(value),
-            },
+            NodeType::Spawn { items: vec![value] },
         )
     }
 

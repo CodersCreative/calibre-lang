@@ -2141,7 +2141,7 @@ impl MiddleEnvironment {
             | NodeType::Until { .. }
             | NodeType::SelectStatement { .. }
             | NodeType::Use { .. } => None,
-            NodeType::Spawn { .. } | NodeType::SpawnBlock { .. } => Some(ParserDataType::new(
+            NodeType::Spawn { .. } => Some(ParserDataType::new(
                 node.span,
                 ParserInnerType::Struct(String::from("WaitGroup")),
             )),

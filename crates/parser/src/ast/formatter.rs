@@ -206,8 +206,12 @@ impl Formatter {
                 if *function { "return " } else { "" },
                 self.format(&value)
             ),
-            NodeType::Spawn { value } => format!("spawn {}", self.format(value)),
-            NodeType::SpawnBlock { items } => {
+
+            NodeType::Spawn { items } => {
+                if items.len() == 1 {
+                    return format!("spawn {}", self.format(&items[0]));
+                }
+
                 let mut txt = String::from("spawn {");
                 if items.is_empty() {
                     txt.push_str("}");
@@ -226,12 +230,7 @@ impl Formatter {
                 txt
             }
             NodeType::Use { identifiers, value } => {
-                if identifiers.is_empty()
-                    && matches!(
-                        value.node_type,
-                        NodeType::Spawn { .. } | NodeType::SpawnBlock { .. }
-                    )
-                {
+                if identifiers.is_empty() && matches!(value.node_type, NodeType::Spawn { .. }) {
                     format!("use {}", self.format(value))
                 } else if identifiers.is_empty() {
                     let rhs = self.format(value);

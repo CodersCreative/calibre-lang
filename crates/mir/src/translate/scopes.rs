@@ -34,10 +34,7 @@ impl MiddleEnvironment {
             }
         };
 
-        if matches!(
-            value.node_type,
-            NodeType::Spawn { .. } | NodeType::SpawnBlock { .. }
-        ) {
+        if matches!(value.node_type, NodeType::Spawn { .. }) {
             let span = use_node.span;
             let wg_ident = if let Some(first) = identifiers.first() {
                 first.clone()

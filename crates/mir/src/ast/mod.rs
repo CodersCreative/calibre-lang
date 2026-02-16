@@ -172,7 +172,7 @@ impl Into<NodeType> for MiddleNodeType {
     fn into(self) -> NodeType {
         match self {
             Self::Spawn { value } => NodeType::Spawn {
-                value: Box::new((*value).into()),
+                items: vec![(*value).into()],
             },
             Self::Drop(x) => NodeType::Drop(x.into()),
             Self::Move(x) => NodeType::MoveExpression {

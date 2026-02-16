@@ -1,3 +1,5 @@
+import (File) from std::file;
+
 trait Person {
 	const name : fn (&Self) -> str;
 
@@ -19,4 +21,6 @@ const main = fn () => {
 	let parts = "a,b,c".split(",");
 	print(parts[1]);
 	print("calibre".starts_with("cal"));
+	let file = File.open_read("./destructure.cal");
+	print(file.read_all(10000));
 };

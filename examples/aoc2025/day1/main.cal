@@ -1,15 +1,30 @@
-const main = fn () => {
-	let mut dial = 50;
-};
+import (File) from std::file;
 
 const handle_line = fn (line : str) -> int => {
-	let chars = try line as list:<char> => panic();
-	let mut num = "";
+	let chars = try trim(line) as list:<char> => panic();
+	print(chars);
+	let mut num_text : str = "";
 	
-	for i in 0..(len(chars) - 1) => num &= chars[i + 1];
-	let mut num = try num as int => panic();
+	for i in 0..(len(chars) - 1) => num_text &= chars[i + 1];
+	let mut num = try num_text as int => panic();
 	
 	if chars[0] == 'L' => num *= -1;
 	
 	num;
 };
+
+const main = fn () => {
+	let mut dial = 50;
+	let file : File = File.open_read("./input.txt");
+	let lines : list:<str> = file.read_lines(100000);
+	print(lines);
+	for i in 0..len(lines) => {
+		let line : int= handle_line(lines[i]);
+		print(line);
+		dial += line;
+		for dial < 0 => dial += 100;
+		for dial > 99 => dial -= 100;
+		print(dial);
+	}
+};
+

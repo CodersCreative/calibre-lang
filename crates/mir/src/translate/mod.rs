@@ -137,8 +137,10 @@ impl MiddleEnvironment {
             NodeType::MemberExpression { path } => {
                 self.evaluate_member_expression(scope, node.span, path)
             }
-            NodeType::Spawn { value } => {
+            NodeType::Spawn { mut items } if items.len() == 1 => {
                 let span = node.span;
+
+                let value = items.remove(0);
                 let inner = match value.node_type {
                     NodeType::ScopeDeclaration { .. } => {
                         return self.evaluate_inner(
@@ -146,7 +148,7 @@ impl MiddleEnvironment {
                             Node::new(
                                 node.span,
                                 NodeType::Spawn {
-                                    value: Box::new(Node::new(
+                                    items: vec![Node::new(
                                         node.span,
                                         NodeType::FunctionDeclaration {
                                             header: FunctionHeader {
@@ -159,9 +161,9 @@ impl MiddleEnvironment {
                                                 .into(),
                                                 param_destructures: Vec::new(),
                                             },
-                                            body: value,
+                                            body: Box::new(value),
                                         },
-                                    )),
+                                    )],
                                 },
                             ),
                         );
@@ -569,11 +571,11 @@ impl MiddleEnvironment {
                                 Node::new(
                                     span,
                                     NodeType::Spawn {
-                                        value: Box::new(scope_body),
+                                        items: vec![scope_body],
                                     },
                                 )
                             }
-                            _ => Node::new(span, NodeType::Spawn { value: body }),
+                            _ => Node::new(span, NodeType::Spawn { items: vec![*body] }),
                         };
                         let join_call = Node::new(
                             span,
@@ -703,7 +705,7 @@ impl MiddleEnvironment {
                     span,
                 ))
             }
-            NodeType::SpawnBlock { items } => {
+            NodeType::Spawn { items } => {
                 let span = node.span;
                 let wg_name = format!("__spawn_block_wg_{}_{}", span.from.line, span.from.col);
                 let wg_ident: PotentialDollarIdentifier = ParserText::from(wg_name.clone()).into();
@@ -772,11 +774,11 @@ impl MiddleEnvironment {
 
                 for item in items {
                     let item = match item.node_type {
-                        NodeType::Spawn { .. } | NodeType::SpawnBlock { .. } => item,
+                        NodeType::Spawn { .. } => item,
                         other => Node::new(
                             item.span,
                             NodeType::Spawn {
-                                value: Box::new(Node::new(item.span, other)),
+                                items: vec![Node::new(item.span, other)],
                             },
                         ),
                     };

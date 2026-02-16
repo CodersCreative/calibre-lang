@@ -24,3 +24,4 @@ calibre-diagnostics = {workspace = true}
 calibre-mir = { workspace = true }
 calibre-lir = { workspace = true }
 calibre-vm = { workspace = true }
+toml = "1.0.1"
