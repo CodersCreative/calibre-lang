@@ -62,21 +62,21 @@ pub enum LexerError {
     Unrecognized { span: Span, ch: char },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Bracket {
     Curly,
     Paren,
     Square,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum StopValue {
     Return,
     Break,
     Continue,
     Until,
 }
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TokenType {
     Float,
     Integer,
@@ -256,7 +256,7 @@ pub fn special_keywords() -> &'static HashMap<String, TokenType> {
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Token {
     pub value: String,
     pub token_type: TokenType,
@@ -733,7 +733,7 @@ mod tests {
             TokenType::BinaryAssign(BinaryOperator::Add),
             TokenType::Integer,
             TokenType::Identifier,
-            TokenType::UnaryAssign(BinaryOperator::Sub),
+            TokenType::BinaryAssign(BinaryOperator::Sub),
             TokenType::Identifier,
             TokenType::BinaryAssign(BinaryOperator::Mul),
             TokenType::Integer,

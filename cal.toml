@@ -5,7 +5,7 @@ version = "0.0.1"
 authors = ["Creative Coders <officialccoders@gmail.com>"]
 cal = ">= 0.0.1"
 readme = "README.md"
-hompage = ""
+homepage = ""
 # source path to the projet defaults to src/
 src = "./examples/showcase"
 repository = "https://github.com/CodersCreative/calibre-lang"

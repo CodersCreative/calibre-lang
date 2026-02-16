@@ -1,6 +1,7 @@
 use crate::{
     ast::{Node, NodeType},
-    lexer::{Bracket, LexerError, Span, Token, TokenType},
+    lexer::{Bracket, LexerError, Span},
+    parse::parse_program_with_source,
 };
 use thiserror::Error;
 
@@ -11,9 +12,7 @@ pub mod parse;
 
 #[derive(Debug, Default)]
 pub struct Parser {
-    tokens: Vec<Token>,
     pub errors: Vec<ParserError>,
-    prev_token: Option<Token>,
     source_path: Option<std::path::PathBuf>,
 }
 
@@ -21,48 +20,27 @@ impl Parser {
     pub fn set_source_path(&mut self, path: Option<std::path::PathBuf>) {
         self.source_path = path;
     }
-    fn is_eof(&self) -> bool {
-        if let Some(token) = self.tokens.first() {
-            token.token_type == TokenType::EOF
-        } else {
-            true
+
+    pub fn produce_ast(&mut self, source: &str) -> Node {
+        match parse_program_with_source(source, self.source_path.as_deref()) {
+            Ok(ast) => {
+                self.errors.clear();
+                ast
+            }
+            Err(errs) => {
+                self.errors = errs;
+                Node::new(
+                    Span::default(),
+                    NodeType::ScopeDeclaration {
+                        body: Some(Vec::new()),
+                        is_temp: false,
+                        define: false,
+                        named: None,
+                        create_new_scope: Some(false),
+                    },
+                )
+            }
         }
-    }
-    pub fn produce_ast(&mut self, tokens: Vec<Token>) -> Node {
-        self.errors.clear();
-        self.tokens = tokens;
-        self.prev_token = None;
-        let mut body = Vec::new();
-
-        while !self.is_eof() {
-            body.push(self.parse_statement());
-            self.parse_delimited();
-        }
-
-        let body: Vec<Node> = body
-            .into_iter()
-            .filter(|x| x.node_type != NodeType::EmptyLine)
-            .collect();
-
-        let span = if let (Some(first), Some(last)) = (body.first(), body.last()) {
-            Span::new_from_spans(first.span, last.span)
-        } else {
-            Span::new(
-                lexer::Position { line: 1, col: 1 },
-                lexer::Position { line: 1, col: 1 },
-            )
-        };
-
-        Node::new(
-            span,
-            NodeType::ScopeDeclaration {
-                body: Some(body),
-                is_temp: false,
-                define: false,
-                named: None,
-                create_new_scope: Some(false),
-            },
-        )
     }
 }
 
@@ -87,8 +65,8 @@ pub enum SyntaxErr {
     ExpectedOpeningBracket(Bracket),
     #[error("Expected closing bracket, {0:?}.")]
     ExpectedClosingBracket(Bracket),
-    #[error("Expected token, {0:?}.")]
-    ExpectedToken(TokenType),
+    #[error("Expected token, {0}.")]
+    ExpectedToken(String),
     #[error("Expected identifier.")]
     ExpectedIdentifier,
     #[error("Expected name.")]

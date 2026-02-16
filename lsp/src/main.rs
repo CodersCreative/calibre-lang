@@ -148,9 +148,10 @@ impl ServerState {
     fn parse_text(path: &PathBuf, text: &str) -> Result<(Node, Parser), LexerError> {
         let mut parser = Parser::default();
         parser.set_source_path(Some(path.clone()));
-        let mut tokenizer = Tokenizer::default();
-        let tokens = tokenizer.tokenize(text)?;
-        let ast = parser.produce_ast(tokens);
+        let ast = parser.produce_ast(text);
+        if let Some(ParserError::Lexer(err)) = parser.errors.first().cloned() {
+            return Err(err);
+        }
         Ok((ast, parser))
     }
 
@@ -1211,7 +1212,7 @@ impl ServerState {
             .filter(|x| x.token_type != TokenType::Comment)
             .collect();
         let mut parser = Parser::default();
-        let _ = parser.produce_ast(tokens);
+        let _ = parser.produce_ast(text);
         parser.errors.is_empty()
     }
 

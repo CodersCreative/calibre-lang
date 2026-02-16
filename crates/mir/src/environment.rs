@@ -4,13 +4,13 @@ use calibre_parser::ast::PotentialFfiDataType;
 use calibre_parser::{
     Parser,
     ast::{
-        FunctionHeader, Node, NodeType, ObjectMap, Overload, ParserDataType, ParserInnerType,
+        FunctionHeader, Node, NodeType, ObjectMap, ObjectType, Overload, ParserDataType, ParserInnerType,
         ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
         TypeDefType, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
-    lexer::{Location, Span, Tokenizer},
+    lexer::{Location, Span},
 };
 use rand::random_range;
 use rustc_hash::FxHashMap;
@@ -133,6 +133,7 @@ pub struct MiddleEnvironment {
     pub stdlib_nodes: Vec<MiddleNode>,
     pub suppress_curry: bool,
     pub loop_stack: Vec<LoopContext>,
+    pub package_metadata: Option<PackageMetadata>,
 }
 
 #[derive(Debug, Clone)]
@@ -169,8 +170,21 @@ impl Default for MiddleEnvironment {
             type_cache: FxHashMap::default(),
             suppress_curry: false,
             loop_stack: Vec::new(),
+            package_metadata: None,
         }
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PackageMetadata {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub license: String,
+    pub repository: String,
+    pub homepage: String,
+    pub src: String,
+    pub root: String,
 }
 
 fn empty_scope() -> &'static MiddleScope {
@@ -270,7 +284,7 @@ impl MiddleEnvironment {
         generic_params: &[String],
     ) -> bool {
         fn struct_base(name: &str) -> &str {
-            let short = name.rsplit(':').next().unwrap_or(name);
+            let short = name.rsplit_once("::").map(|(lhs, _)| lhs).unwrap_or(name);
             short.split("->").next().unwrap_or(short)
         }
         match (impl_ty, target) {
@@ -833,8 +847,13 @@ impl MiddleEnvironment {
         }
     }
 
-    pub fn new_and_evaluate(node: Node, path: PathBuf) -> (Self, u64, MiddleNode) {
+    pub fn new_and_evaluate_with_package(
+        node: Node,
+        path: PathBuf,
+        package_metadata: Option<PackageMetadata>,
+    ) -> (Self, u64, MiddleNode) {
         let mut env = Self::default();
+        env.package_metadata = package_metadata;
         let scope = env.new_scope_with_stdlib(None, path, None);
         let mut same = 0;
         let wrap = |env: &MiddleEnvironment, scope: u64, span: Span, inner: MiddleNode| {
@@ -855,6 +874,7 @@ impl MiddleEnvironment {
             }
         };
 
+        let node = env.inject_scope_magic_bindings(scope, node);
         let mut inner = env.evaluate(&scope, node.clone());
         let mut middle = wrap(&env, scope, node.span, inner.clone());
 
@@ -929,6 +949,10 @@ impl MiddleEnvironment {
         }
 
         (env, scope, middle)
+    }
+
+    pub fn new_and_evaluate(node: Node, path: PathBuf) -> (Self, u64, MiddleNode) {
+        Self::new_and_evaluate_with_package(node, path, None)
     }
 
     fn apply_inferred_types_to_middlenode(&mut self, scope: &u64, node: &mut MiddleNode) {
@@ -1694,6 +1718,213 @@ impl MiddleEnvironment {
         self.scope_counter += 1;
     }
 
+    pub(crate) fn inject_scope_magic_bindings(&mut self, scope: u64, program: Node) -> Node {
+        let Some(scope_ref) = self.scopes.get(&scope).cloned() else {
+            return program;
+        };
+
+        let mut prefix = Vec::new();
+        let sp = Span::default();
+        let mapped_name = scope_ref
+            .mappings
+            .get("__name__")
+            .cloned()
+            .unwrap_or_else(|| "__name__".to_string());
+        let mapped_file = scope_ref
+            .mappings
+            .get("__file__")
+            .cloned()
+            .unwrap_or_else(|| "__file__".to_string());
+        let name_value = Node::new(
+            sp,
+            NodeType::StringLiteral(ParserText::new(sp, scope_ref.namespace.clone())),
+        );
+        let file_value = Node::new(
+            sp,
+            NodeType::StringLiteral(ParserText::new(
+                sp,
+                scope_ref.path.to_string_lossy().to_string(),
+            )),
+        );
+
+        prefix.push(Node::new(
+            sp,
+            NodeType::VariableDeclaration {
+                var_type: VarType::Constant,
+                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, mapped_name)),
+                data_type: PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
+                value: Box::new(name_value),
+            },
+        ));
+        prefix.push(Node::new(
+            sp,
+            NodeType::VariableDeclaration {
+                var_type: VarType::Constant,
+                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, mapped_file)),
+                data_type: PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
+                value: Box::new(file_value),
+            },
+        ));
+
+        let package_meta = if scope_ref.namespace == "std" {
+            Some(PackageMetadata {
+                name: "std".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                description: "Calibre standard library".to_string(),
+                license: "MIT".to_string(),
+                repository: String::new(),
+                homepage: String::new(),
+                src: scope_ref.path.to_string_lossy().to_string(),
+                root: scope_ref.path.to_string_lossy().to_string(),
+            })
+        } else if scope_ref.namespace == "root" {
+            self.package_metadata.clone()
+        } else {
+            None
+        };
+
+        if let Some(meta) = package_meta {
+
+                let package_type = Node::new(
+                    sp,
+                    NodeType::TypeDeclaration {
+                        identifier: PotentialGenericTypeIdentifier::Identifier(
+                            PotentialDollarIdentifier::Identifier(ParserText::new(
+                                sp,
+                                "__Package".to_string(),
+                            )),
+                        ),
+                        object: TypeDefType::Struct(ObjectType::Map(vec![
+                            (
+                                "name".to_string(),
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                            ),
+                            (
+                                "version".to_string(),
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                            ),
+                            (
+                                "description".to_string(),
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                            ),
+                            (
+                                "license".to_string(),
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                            ),
+                            (
+                                "repository".to_string(),
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                            ),
+                            (
+                                "homepage".to_string(),
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                            ),
+                            (
+                                "src".to_string(),
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                            ),
+                            (
+                                "root".to_string(),
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                            ),
+                        ])),
+                        overloads: Vec::new(),
+                    },
+                );
+                prefix.push(package_type);
+
+                let value = |v: String| {
+                    Node::new(
+                        sp,
+                        NodeType::StringLiteral(ParserText::new(sp, v)),
+                    )
+                };
+                let package_value = Node::new(
+                    sp,
+                    NodeType::StructLiteral {
+                        identifier: PotentialGenericTypeIdentifier::Identifier(
+                            PotentialDollarIdentifier::Identifier(ParserText::new(
+                                sp,
+                                "__Package".to_string(),
+                            )),
+                        ),
+                        value: ObjectType::Map(vec![
+                            ("name".to_string(), value(meta.name)),
+                            ("version".to_string(), value(meta.version)),
+                            ("description".to_string(), value(meta.description)),
+                            ("license".to_string(), value(meta.license)),
+                            ("repository".to_string(), value(meta.repository)),
+                            ("homepage".to_string(), value(meta.homepage)),
+                            ("src".to_string(), value(meta.src)),
+                            ("root".to_string(), value(meta.root)),
+                        ]),
+                    },
+                );
+                let package_ident = get_disamubiguous_name(&scope, Some("__package__"), None);
+                if let Some(scope_ref) = self.scopes.get_mut(&scope) {
+                    scope_ref
+                        .mappings
+                        .entry("__package__".to_string())
+                        .or_insert_with(|| package_ident.clone());
+                }
+                prefix.push(Node::new(
+                    sp,
+                    NodeType::VariableDeclaration {
+                        var_type: VarType::Constant,
+                        identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
+                            sp,
+                            package_ident,
+                        )),
+                        data_type: PotentialNewType::DataType(ParserDataType::new(
+                            sp,
+                            ParserInnerType::Struct("__Package".to_string()),
+                        )),
+                        value: Box::new(package_value),
+                    },
+                ));
+        }
+
+        let mut body = match program.node_type {
+            NodeType::ScopeDeclaration { body, .. } => body.unwrap_or_default(),
+            _ => vec![program],
+        };
+        prefix.append(&mut body);
+        Node::new(
+            sp,
+            NodeType::ScopeDeclaration {
+                body: Some(prefix),
+                named: None,
+                is_temp: false,
+                create_new_scope: Some(false),
+                define: false,
+            },
+        )
+    }
+
     pub fn get_scope_from_path(
         &self,
         path: &[String],
@@ -1937,7 +2168,6 @@ impl MiddleEnvironment {
                     (s.clone(), None)
                 } else {
                     let mut parser = Parser::default();
-                    let mut tokenizer = Tokenizer::default();
 
                     let build_node =
                         if let Some(scope) = self.new_build_scope_from_parent(current.id, key) {
@@ -1957,14 +2187,7 @@ impl MiddleEnvironment {
                                 )))
                             })?;
                             parser.set_source_path(Some(path.clone()));
-                            let tokens = tokenizer.tokenize(&source).map_err(|error| {
-                                MiddleErr::LexerError {
-                                    path: path.clone(),
-                                    contents: source.clone(),
-                                    error,
-                                }
-                            })?;
-                            let program = parser.produce_ast(tokens);
+                            let program = parser.produce_ast(&source);
 
                             if !parser.errors.is_empty() {
                                 let errors = std::mem::take(&mut parser.errors);
@@ -1988,6 +2211,7 @@ impl MiddleEnvironment {
                                 },
                                 _ => program,
                             };
+                            let program = self.inject_scope_magic_bindings(scope, program);
                             Some(self.evaluate(&scope, program))
                         } else {
                             None
@@ -2010,15 +2234,7 @@ impl MiddleEnvironment {
                         )))
                     })?;
                     parser.set_source_path(Some(path.clone()));
-                    let tokens =
-                        tokenizer
-                            .tokenize(&source)
-                            .map_err(|error| MiddleErr::LexerError {
-                                path: path.clone(),
-                                contents: source.clone(),
-                                error,
-                            })?;
-                    let program = parser.produce_ast(tokens);
+                    let program = parser.produce_ast(&source);
 
                     if !parser.errors.is_empty() {
                         let errors = std::mem::take(&mut parser.errors);
@@ -2029,6 +2245,7 @@ impl MiddleEnvironment {
                         });
                     }
 
+                    let program = self.inject_scope_magic_bindings(scope, program);
                     let node = self.evaluate(&scope, program);
 
                     let node = match (node.node_type.clone(), build_node) {

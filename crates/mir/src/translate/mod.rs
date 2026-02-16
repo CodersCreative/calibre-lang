@@ -859,18 +859,11 @@ impl MiddleEnvironment {
                     span: node.span,
                 }),
                 NodeType::MemberExpression { mut path } => {
-                    let Some((
-                        Node {
-                            node_type: NodeType::Identifier(base),
-                            ..
-                        },
-                        _,
-                    )) = path.first().cloned()
-                    else {
+                    let Some((base_node, _)) = path.first().cloned() else {
                         return Err(MiddleErr::At(
                             node.span,
                             Box::new(MiddleErr::Internal(
-                                "expected identifier base for move member expression".to_string(),
+                                "expected base for move member expression".to_string(),
                             )),
                         ));
                     };
@@ -892,10 +885,7 @@ impl MiddleEnvironment {
                             value: Box::new(Node::new(
                                 node.span,
                                 NodeType::MoveExpression {
-                                    value: Box::new(Node::new(
-                                        node.span,
-                                        NodeType::Identifier(base.into()),
-                                    )),
+                                    value: Box::new(base_node),
                                 },
                             )),
                         },

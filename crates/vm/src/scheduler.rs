@@ -52,7 +52,7 @@ impl SchedulerHandle {
         });
         let worker_count = std::thread::available_parallelism()
             .map(|n| n.get())
-            .unwrap_or(1);
+            .unwrap_or(2);
 
         {
             let mut workers = inner.workers.lock().unwrap_or_else(|e| e.into_inner());

@@ -3,7 +3,6 @@ use std::{error::Error, fmt, fs, io::Write, path::PathBuf};
 use calibre_parser::{
     Parser, ParserError,
     ast::{NodeType, formatter::Formatter},
-    lexer::Tokenizer,
 };
 
 #[derive(Debug)]
@@ -67,16 +66,8 @@ impl Error for FormatError {
 }
 
 fn parse_errors(text: &str) -> Result<(), Vec<ParserError>> {
-    let mut tokenizer = Tokenizer::new(true);
-    let tokens = match tokenizer.tokenize(text) {
-        Ok(t) => t,
-        Err(err) => return Err(vec![ParserError::Lexer(err)]),
-    }
-    .into_iter()
-    .filter(|x| x.token_type != calibre_parser::lexer::TokenType::Comment)
-    .collect();
     let mut parser = Parser::default();
-    let _ = parser.produce_ast(tokens);
+    let _ = parser.produce_ast(text);
     if parser.errors.is_empty() {
         Ok(())
     } else {

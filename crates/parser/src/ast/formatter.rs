@@ -85,13 +85,13 @@ impl Formatter {
             .cloned()
             .collect();
         self.tokens = tokens.clone();
-        let tokens = tokens
+        let _tokens: Vec<Token> = tokens
             .into_iter()
             .filter(|x| x.token_type != TokenType::Comment)
             .collect();
 
         let mut parser = Parser::default();
-        let ast = parser.produce_ast(tokens);
+        let ast = parser.produce_ast(&text);
 
         if !parser.errors.is_empty() {
             return Err(format!("{:?}", parser.errors).into());
@@ -101,10 +101,10 @@ impl Formatter {
     }
 
     pub fn get_imports(&self, contents: String) -> Result<Vec<Node>, Box<dyn Error>> {
-        let mut tokenizer = Tokenizer::default();
-        let tokens = tokenizer.tokenize(&contents)?;
         let mut parser = Parser::default();
-        let NodeType::ScopeDeclaration { body, .. } = parser.produce_ast(tokens).node_type else {
+        let NodeType::ScopeDeclaration { body, .. } =
+            parser.produce_ast(&contents).node_type
+        else {
             return Err("Expected scope declaration".into());
         };
         let Some(body) = body else {
@@ -2164,15 +2164,11 @@ impl Formatter {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Parser, ast::formatter::Formatter, lexer::Tokenizer};
+    use crate::{Parser, ast::formatter::Formatter};
 
     fn parse_has_no_errors(src: &str) -> bool {
-        let mut tokenizer = Tokenizer::new(true);
-        let Ok(tokens) = tokenizer.tokenize(src) else {
-            return false;
-        };
         let mut parser = Parser::default();
-        let _ = parser.produce_ast(tokens);
+        let _ = parser.produce_ast(src);
         parser.errors.is_empty()
     }
 

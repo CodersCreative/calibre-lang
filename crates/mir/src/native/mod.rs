@@ -1,7 +1,6 @@
 use calibre_parser::{
     Parser,
     ast::{ParserDataType, VarType},
-    lexer::Tokenizer,
 };
 use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
 use rustc_hash::FxHashMap;
@@ -35,11 +34,8 @@ impl MiddleEnvironment {
         self.setup_global(&scope);
         self.stdlib_nodes.clear();
         let mut parser = Parser::default();
-        let mut tokenizer = Tokenizer::default();
-        if let Ok(globals) = fs::read_to_string(get_globals_path())
-            && let Ok(tokens) = tokenizer.tokenize(&globals)
-        {
-            let program = parser.produce_ast(tokens);
+        if let Ok(globals) = fs::read_to_string(get_globals_path()) {
+            let program = parser.produce_ast(&globals);
             let middle = self.evaluate(&scope, program);
             self.stdlib_nodes.push(middle);
         }
@@ -101,15 +97,12 @@ impl MiddleEnvironment {
 
     pub fn setup_std(&mut self, scope: &u64) {
         let mut parser = Parser::default();
-        let mut tokenizer = Tokenizer::default();
 
         if let Some(scope_ref) = self.scopes.get(scope) {
             if let Ok(stdlib) = fs::read_to_string(&scope_ref.path) {
-                if let Ok(tokens) = tokenizer.tokenize(&stdlib) {
-                    let program = parser.produce_ast(tokens);
-                    let middle = self.evaluate(scope, program);
-                    self.stdlib_nodes.push(middle);
-                }
+                let program = parser.produce_ast(&stdlib);
+                let middle = self.evaluate(scope, program);
+                self.stdlib_nodes.push(middle);
             }
         }
 
@@ -222,13 +215,10 @@ impl MiddleEnvironment {
         }
 
         let mut parser = Parser::default();
-        let mut tokenizer = Tokenizer::default();
         if let Ok(stdlib) = fs::read_to_string(scope_path) {
-            if let Ok(tokens) = tokenizer.tokenize(&stdlib) {
-                let program = parser.produce_ast(tokens);
-                let middle = self.evaluate(&scope, program);
-                self.stdlib_nodes.push(middle);
-            }
+            let program = parser.produce_ast(&stdlib);
+            let middle = self.evaluate(&scope, program);
+            self.stdlib_nodes.push(middle);
         }
     }
 }
