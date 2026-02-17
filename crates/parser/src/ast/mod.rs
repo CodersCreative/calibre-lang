@@ -2,8 +2,8 @@ pub mod binary;
 pub mod comparison;
 pub mod formatter;
 use crate::{
-    ast::{comparison::BooleanOperator, formatter::Formatter},
     Span,
+    ast::{comparison::BooleanOperator, formatter::Formatter},
 };
 use binary::BinaryOperator;
 use comparison::ComparisonOperator;
@@ -908,6 +908,7 @@ impl Node {
     }
 }
 
+#[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MatchArmType {
     Enum {
@@ -995,6 +996,7 @@ impl Into<Node> for CallArg {
     }
 }
 
+#[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     Break {

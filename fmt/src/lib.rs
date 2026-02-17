@@ -93,7 +93,7 @@ pub fn format_file(
         }));
     }
 
-    let out = formatter.start_format(contents, None).map_err(|err| {
+    let out = formatter.start_format(&contents, None).map_err(|err| {
         Box::new(FormatError::FormatterFailed {
             path: path.clone(),
             message: err.to_string(),
@@ -118,7 +118,8 @@ pub fn format_file(
 }
 
 pub fn format_all(formatter: &mut Formatter, path: &PathBuf) -> Result<(), Box<dyn Error>> {
-    let imports = formatter.get_imports(fs::read_to_string(path)?)?;
+    let contents = fs::read_to_string(path)?;
+    let imports = formatter.get_imports(&contents)?;
 
     let Some(base) = path.parent() else {
         return Ok(());

@@ -1,3 +1,4 @@
+use chumsky::error::Rich;
 use chumsky::prelude::*;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -24,6 +25,36 @@ use util::{
     parse_embedded_expr, parse_splits, scope_node, scope_node_parser, span,
     strip_block_comments_keep_layout, unescape_char, unescape_string,
 };
+
+trait LegacySpanMapExt<'a, O>: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Sized {
+    fn map_with_span<U, F>(self, f: F) -> impl Parser<'a, &'a str, U, extra::Err<Rich<'a, char>>>
+    where
+        F: Fn(O, std::ops::Range<usize>) -> U + Clone + 'a,
+    {
+        self.map_with(move |out, e| f(out, e.span().into_range()))
+    }
+}
+
+impl<'a, O, P> LegacySpanMapExt<'a, O> for P where
+    P: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Sized
+{
+}
+
+fn filter<'a, F>(f: F) -> impl Parser<'a, &'a str, char, extra::Err<Rich<'a, char>>> + Clone
+where
+    F: Fn(&char) -> bool + Clone + 'a,
+{
+    any().filter(f)
+}
+
+fn take_until<'a, P, O>(
+    end: P,
+) -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> + Clone
+where
+    P: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Clone + 'a,
+{
+    any().and_is(end.not()).repeated().collect::<String>()
+}
 
 pub fn parse_program(source: &str) -> Result<Node, Vec<ParserError>> {
     parse_program_with_source(source, None)
@@ -71,17 +102,17 @@ pub fn parse_program_with_source(
         .ignored()
         .boxed();
 
-    let raw_ident = lex(pad.clone(), text::ident())
+    let raw_ident = lex(pad.clone(), text::ident().map(|s: &str| s.to_string()))
         .map_with_span({
             let ls = line_starts.clone();
             move |s: String, r| (s, span(ls.as_ref(), r))
         })
         .boxed();
 
-    let ident = lex(pad.clone(), text::ident())
+    let ident = lex(pad.clone(), text::ident().map(|s: &str| s.to_string()))
         .try_map(|s: String, span| {
             if is_keyword(&s) {
-                Err(Simple::custom(span, "keyword cannot be identifier"))
+                Err(Rich::custom(span, "keyword cannot be identifier"))
             } else {
                 Ok(s)
             }
@@ -111,7 +142,8 @@ pub fn parse_program_with_source(
                     just('\\').ignore_then(any()).map(|c| format!("\\{c}")),
                     filter(|c: &char| *c != '"' && *c != '\n').map(|c| c.to_string()),
                 ))
-                .repeated(),
+                .repeated()
+                .collect::<Vec<_>>(),
             )
             .then_ignore(just('"')),
     )
@@ -134,7 +166,8 @@ pub fn parse_program_with_source(
                     just('\\').ignore_then(any()).map(|c| format!("\\{c}")),
                     filter(|c: &char| *c != '"' && *c != '\n').map(|c| c.to_string()),
                 ))
-                .repeated(),
+                .repeated()
+                .collect::<Vec<_>>(),
             )
             .then_ignore(just('"')),
     )
@@ -162,8 +195,9 @@ pub fn parse_program_with_source(
     let float_suffix_lit = lex(
         pad.clone(),
         text::int(10)
+            .map(|s: &str| s.to_string())
             .then_ignore(choice((just('f'), just('F'))))
-            .map(|n: String| n),
+            .map(|n| n),
     )
     .map_with_span({
         let ls = line_starts.clone();
@@ -174,7 +208,7 @@ pub fn parse_program_with_source(
     })
     .boxed();
 
-    let int_lit = lex(pad.clone(), text::int(10))
+    let int_lit = lex(pad.clone(), text::int(10).map(|s: &str| s.to_string()))
         .map_with_span({
             let ls = line_starts.clone();
             move |n: String, r| Node::new(span(ls.as_ref(), r), NodeType::IntLiteral(n))
@@ -184,9 +218,16 @@ pub fn parse_program_with_source(
     let float_lit = lex(
         pad.clone(),
         text::int(10)
+            .map(|s: &str| s.to_string())
             .then_ignore(just('.'))
-            .then(text::digits(10))
-            .map(|(a, b): (String, String)| format!("{a}.{b}")),
+            .then(
+                any()
+                    .filter(|c: &char| c.is_ascii_digit())
+                    .repeated()
+                    .at_least(1)
+                    .collect::<String>(),
+            )
+            .map(|(a, b)| format!("{a}.{b}")),
     )
     .map_with_span({
         let ls = line_starts.clone();
@@ -210,7 +251,8 @@ pub fn parse_program_with_source(
             .then(
                 lex(pad.clone(), just("::"))
                     .ignore_then(raw_ident.clone())
-                    .repeated(),
+                    .repeated()
+                    .collect::<Vec<_>>(),
             )
             .map(|((first, sp), rest)| {
                 if rest.is_empty() {
@@ -234,6 +276,7 @@ pub fn parse_program_with_source(
                         ty.clone()
                             .separated_by(lex(pad.clone(), just(',')))
                             .allow_trailing()
+                            .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
@@ -282,6 +325,7 @@ pub fn parse_program_with_source(
                     ty.clone()
                         .separated_by(lex(pad.clone(), just(',')))
                         .allow_trailing()
+                        .collect::<Vec<_>>()
                         .or_not()
                         .map(|x| x.unwrap_or_default()),
                 )
@@ -330,6 +374,7 @@ pub fn parse_program_with_source(
                     ty.clone()
                         .separated_by(lex(pad.clone(), just(',')))
                         .allow_trailing()
+                        .collect::<Vec<_>>()
                         .or_not()
                         .map(|x| x.unwrap_or_default()),
                 )
@@ -447,12 +492,13 @@ pub fn parse_program_with_source(
     let parser = recursive(|statement| {
         let expr = recursive(|expr| {
             let scope = lex(pad.clone(), just('{'))
-                .then_ignore(delim.clone().repeated())
+                .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                 .ignore_then(
                     statement
                         .clone()
                         .separated_by(delim.clone())
                         .allow_trailing()
+                        .collect::<Vec<_>>()
                         .or_not()
                         .map(|x| x.unwrap_or_default()),
                 )
@@ -473,6 +519,7 @@ pub fn parse_program_with_source(
                         .clone()
                         .separated_by(lex(pad.clone(), just(',')))
                         .allow_trailing()
+                        .collect::<Vec<_>>()
                         .or_not()
                         .map(|x| x.unwrap_or_default()),
                 )
@@ -493,6 +540,7 @@ pub fn parse_program_with_source(
                 .clone()
                 .repeated()
                 .at_least(1)
+                .collect::<Vec<_>>()
                 .then(
                     lex(pad.clone(), just(':'))
                         .ignore_then(type_name.clone())
@@ -514,6 +562,7 @@ pub fn parse_program_with_source(
             let fn_param_groups = choice((tuple_param, plain_param))
                 .separated_by(lex(pad.clone(), just(',')))
                 .allow_trailing()
+                .collect::<Vec<_>>()
                 .or_not()
                 .map(|x| x.unwrap_or_default())
                 .map(|groups| groups.into_iter().flatten().collect::<Vec<_>>())
@@ -547,6 +596,7 @@ pub fn parse_program_with_source(
                                 .clone()
                                 .separated_by(lex(pad.clone(), just(',')))
                                 .allow_trailing()
+                                .collect::<Vec<_>>()
                                 .or_not()
                                 .map(|x| x.unwrap_or_default()),
                         )
@@ -626,6 +676,7 @@ pub fn parse_program_with_source(
                                 .clone()
                                 .separated_by(lex(pad.clone(), just(',')))
                                 .allow_trailing()
+                                .collect::<Vec<_>>()
                                 .or_not()
                                 .map(|x| x.unwrap_or_default()),
                         )
@@ -666,6 +717,7 @@ pub fn parse_program_with_source(
                                 })
                                 .separated_by(lex(pad.clone(), just(',')))
                                 .allow_trailing()
+                                .collect::<Vec<_>>()
                                 .or_not()
                                 .map(|x| x.unwrap_or_default()),
                         )
@@ -751,6 +803,7 @@ pub fn parse_program_with_source(
                         })
                         .separated_by(lex(pad.clone(), just(',')))
                         .allow_trailing()
+                        .collect::<Vec<_>>()
                         .or_not()
                         .map(|x| x.unwrap_or_default()),
                 )
@@ -780,6 +833,7 @@ pub fn parse_program_with_source(
                     ))
                     .separated_by(lex(pad.clone(), just(',')))
                     .allow_trailing()
+                    .collect::<Vec<_>>()
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
                 )
@@ -801,7 +855,8 @@ pub fn parse_program_with_source(
                 .then(
                     lex(pad.clone(), just('|'))
                         .ignore_then(match_arm_start.clone())
-                        .repeated(),
+                        .repeated()
+                        .collect::<Vec<_>>(),
                 )
                 .then(
                     lex(pad.clone(), just(':'))
@@ -819,7 +874,8 @@ pub fn parse_program_with_source(
                                                 .or_not()
                                                 .then(ident.clone()),
                                         )
-                                        .repeated(),
+                                        .repeated()
+                                        .collect::<Vec<_>>(),
                                 )
                                 .map(|((first_mut, (first_name, first_sp)), rest)| {
                                     let first = (
@@ -862,7 +918,8 @@ pub fn parse_program_with_source(
                 .then(
                     lex(pad.clone(), just("if"))
                         .ignore_then(expr.clone())
-                        .repeated(),
+                        .repeated()
+                        .collect::<Vec<_>>(),
                 )
                 .then(match_arm_body.clone())
                 .map(|((((first, rest), binds), conditions), body)| {
@@ -911,14 +968,16 @@ pub fn parse_program_with_source(
                         .map(Some)
                         .or(lex(pad.clone(), just('{')).to(None)),
                 )
-                .then_ignore(delim.clone().repeated())
+                .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                 .then(
                     match_arm
                         .clone()
                         .separated_by(
-                            lex(pad.clone(), just(',')).then_ignore(delim.clone().repeated()),
+                            lex(pad.clone(), just(','))
+                                .then_ignore(delim.clone().repeated().collect::<Vec<_>>()),
                         )
                         .allow_trailing()
+                        .collect::<Vec<_>>()
                         .or_not()
                         .map(|x| x.unwrap_or_default()),
                 )
@@ -971,6 +1030,7 @@ pub fn parse_program_with_source(
                         expr.clone()
                             .separated_by(lex(pad.clone(), just(',')))
                             .allow_trailing()
+                            .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
@@ -985,6 +1045,7 @@ pub fn parse_program_with_source(
                                             expr.clone()
                                                 .separated_by(lex(pad.clone(), just(',')))
                                                 .allow_trailing()
+                                                .collect::<Vec<_>>()
                                                 .or_not()
                                                 .map(|x| x.unwrap_or_default()),
                                         )
@@ -1019,7 +1080,8 @@ pub fn parse_program_with_source(
                                 .then_ignore(lex(pad.clone(), just(']')))
                                 .map(|idx| (idx, true)),
                         ))
-                        .repeated(),
+                        .repeated()
+                        .collect::<Vec<_>>(),
                     )
                     .map(|(((_open_ty, _open_br), values), tails)| {
                         let list =
@@ -1056,6 +1118,7 @@ pub fn parse_program_with_source(
                         expr.clone()
                             .separated_by(lex(pad.clone(), just(',')))
                             .allow_trailing()
+                            .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
@@ -1092,7 +1155,8 @@ pub fn parse_program_with_source(
                         lex(pad.clone(), just("::"))
                             .ignore_then(ident.clone().map(|(n, sp)| ident_node(sp, &n)))
                             .repeated()
-                            .at_least(1),
+                            .at_least(1)
+                            .collect::<Vec<_>>(),
                     )
                     .map(|(first, rest)| {
                         let mut path = vec![first];
@@ -1112,15 +1176,26 @@ pub fn parse_program_with_source(
                         expr.clone()
                             .separated_by(lex(pad.clone(), just(',')))
                             .allow_trailing()
+                            .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
                     .then_ignore(lex(pad.clone(), just(')')))
-                    .map(|values| {
-                        if values.len() == 1 {
-                            values.into_iter().next().unwrap()
-                        } else {
-                            Node::new(Span::default(), NodeType::TupleLiteral { values })
+                    .map_with_span({
+                        let ls = line_starts.clone();
+                        move |values, r| {
+                            let sp = span(ls.as_ref(), r);
+                            let inner = if values.len() == 1 {
+                                values.into_iter().next().unwrap()
+                            } else {
+                                Node::new(sp, NodeType::TupleLiteral { values })
+                            };
+                            Node::new(
+                                sp,
+                                NodeType::ParenExpression {
+                                    value: Box::new(inner),
+                                },
+                            )
                         }
                     }),
             ))
@@ -1134,7 +1209,8 @@ pub fn parse_program_with_source(
                             just('\\').ignore_then(any()).map(|c| format!("\\{c}")),
                             filter(|c: &char| *c != '"' && *c != '\n').map(|c| c.to_string()),
                         ))
-                        .repeated(),
+                        .repeated()
+                        .collect::<Vec<_>>(),
                     )
                     .then_ignore(just('"')),
             )
@@ -1177,7 +1253,8 @@ pub fn parse_program_with_source(
                             lex(pad.clone(), just('['))
                                 .ignore_then(expr.clone())
                                 .then_ignore(lex(pad.clone(), just(']')))
-                                .repeated(),
+                                .repeated()
+                                .collect::<Vec<_>>(),
                         )
                         .map(|(head, indexes)| {
                             if indexes.is_empty() {
@@ -1196,6 +1273,7 @@ pub fn parse_program_with_source(
                         })
                         .separated_by(lex(pad.clone(), just(',')))
                         .allow_trailing()
+                        .collect::<Vec<_>>()
                         .or_not()
                         .map(|x| x.unwrap_or_default()),
                 )
@@ -1210,7 +1288,8 @@ pub fn parse_program_with_source(
                             lex(pad.clone(), just('['))
                                 .ignore_then(expr.clone())
                                 .then_ignore(lex(pad.clone(), just(']')))
-                                .repeated(),
+                                .repeated()
+                                .collect::<Vec<_>>(),
                         )
                         .map(|(head, indexes)| {
                             if indexes.is_empty() {
@@ -1229,6 +1308,7 @@ pub fn parse_program_with_source(
                         })
                         .separated_by(lex(pad.clone(), just(',')))
                         .allow_trailing()
+                        .collect::<Vec<_>>()
                         .or_not()
                         .map(|x| x.unwrap_or_default()),
                 )
@@ -1241,7 +1321,7 @@ pub fn parse_program_with_source(
                         ident.clone().map(|(n, sp)| ident_node(sp, &n)),
                         int_lit.clone(),
                     )))
-                    .then(call_args.clone().repeated())
+                    .then(call_args.clone().repeated().collect::<Vec<_>>())
                     .map(|(m, calls)| {
                         let node = calls.into_iter().fold(m, |c, args| {
                             Node::new(
@@ -1278,7 +1358,8 @@ pub fn parse_program_with_source(
                                 (Some(string_fn), args, rev.unwrap_or_default())
                             }),
                     ))
-                    .repeated(),
+                    .repeated()
+                    .collect::<Vec<_>>(),
                 )
                 .map(|(head, calls)| {
                     calls
@@ -1296,7 +1377,7 @@ pub fn parse_program_with_source(
                             )
                         })
                 })
-                .then(member.clone().repeated())
+                .then(member.clone().repeated().collect::<Vec<_>>())
                 .map(|(head, rest)| {
                     if rest.is_empty() {
                         head
@@ -1319,42 +1400,25 @@ pub fn parse_program_with_source(
             let enum_expr_value = expr.clone();
             let enum_variant = postfix
                 .clone()
-                .then_with({
-                    let pad = pad.clone();
-                    let enum_expr_value = enum_expr_value.clone();
-                    move |lhs| {
-                        let is_enum_candidate = matches!(
-                            &lhs.node_type,
-                            NodeType::MemberExpression { path }
-                                if path.len() == 2 && !path[0].1 && !path[1].1
-                        );
-                        if is_enum_candidate {
-                            lex(pad.clone(), just(':'))
-                                .ignore_then(choice((
-                                    lex(pad.clone(), just('('))
-                                        .ignore_then(
-                                            enum_expr_value
-                                                .clone()
-                                                .separated_by(lex(pad.clone(), just(',')))
-                                                .at_least(1),
-                                        )
-                                        .then_ignore(lex(pad.clone(), just(')')))
-                                        .map(|values| {
-                                            Node::new(
-                                                Span::default(),
-                                                NodeType::TupleLiteral { values },
-                                            )
-                                        }),
-                                    enum_expr_value.clone(),
-                                )))
-                                .or_not()
-                                .map(move |data| (lhs.clone(), data))
-                                .boxed()
-                        } else {
-                            empty().to((lhs, None)).boxed()
-                        }
-                    }
-                })
+                .then(
+                    lex(pad.clone(), just(':'))
+                        .ignore_then(choice((
+                            lex(pad.clone(), just('('))
+                                .ignore_then(
+                                    enum_expr_value
+                                        .clone()
+                                        .separated_by(lex(pad.clone(), just(',')))
+                                        .at_least(1)
+                                        .collect::<Vec<_>>(),
+                                )
+                                .then_ignore(lex(pad.clone(), just(')')))
+                                .map(|values| {
+                                    Node::new(Span::default(), NodeType::TupleLiteral { values })
+                                }),
+                            enum_expr_value.clone(),
+                        )))
+                        .or_not(),
+                )
                 .map(|(lhs, data)| {
                     if let Some(data) = data {
                         if let NodeType::MemberExpression { path } = &lhs.node_type {
@@ -1402,11 +1466,12 @@ pub fn parse_program_with_source(
                     expr.clone()
                         .separated_by(lex(pad.clone(), just(',')))
                         .allow_trailing()
+                        .collect::<Vec<_>>()
                         .or_not()
                         .map(|x| x.unwrap_or_default()),
                 )
                 .then_ignore(lex(pad.clone(), just(']')))
-                .then(member.clone().repeated())
+                .then(member.clone().repeated().collect::<Vec<_>>())
                 .map(|(((_open_ty, _open_br), values), tails)| {
                     let data_type = _open_ty;
                     let list = Node::new(Span::default(), NodeType::ListLiteral(data_type, values));
@@ -1451,7 +1516,7 @@ pub fn parse_program_with_source(
                             if has_brace
                                 && !matches!(body.node_type, NodeType::ScopeDeclaration { .. })
                             {
-                                Err(Simple::custom(sp, "expected scope body"))
+                                Err(Rich::custom(sp, "expected scope body"))
                             } else {
                                 Ok(body)
                             }
@@ -1476,7 +1541,8 @@ pub fn parse_program_with_source(
                 .then(
                     lex(pad.clone(), just("if"))
                         .ignore_then(expr.clone())
-                        .repeated(),
+                        .repeated()
+                        .collect::<Vec<_>>(),
                 )
                 .then(
                     lex(pad.clone(), just("until"))
@@ -1516,6 +1582,7 @@ pub fn parse_program_with_source(
                 lex(pad.clone(), just('*')).to(PrefixOp::Deref),
             ))
             .repeated()
+            .collect::<Vec<_>>()
             .then(enum_variant)
             .map(|(prefixes, node)| {
                 prefixes.into_iter().rev().fold(node, |value, op| match op {
@@ -1541,6 +1608,7 @@ pub fn parse_program_with_source(
                 lex(pad.clone(), just('!')).to(BinaryOperator::BitXor),
             ))
             .repeated()
+            .collect::<Vec<_>>()
             .then(prefixed)
             .map(|(ops, node)| {
                 ops.into_iter().fold(node, |n, op| {
@@ -1567,7 +1635,7 @@ pub fn parse_program_with_source(
 
             let product = unary
                 .clone()
-                .then(mul_op.then(unary).repeated())
+                .then(mul_op.then(unary).repeated().collect::<Vec<_>>())
                 .map(|(h, t)| {
                     t.into_iter().fold(h, |l, (op, r)| {
                         Node::new(
@@ -1584,7 +1652,7 @@ pub fn parse_program_with_source(
 
             let sum = product
                 .clone()
-                .then(add_op.then(product).repeated())
+                .then(add_op.then(product).repeated().collect::<Vec<_>>())
                 .map(|(h, t)| {
                     t.into_iter().fold(h, |l, (op, r)| {
                         Node::new(
@@ -1610,7 +1678,7 @@ pub fn parse_program_with_source(
 
             let bitwise = sum
                 .clone()
-                .then(bit_op.then(sum.clone()).repeated())
+                .then(bit_op.then(sum.clone()).repeated().collect::<Vec<_>>())
                 .map(|(h, t)| {
                     t.into_iter().fold(h, |l, (op, r)| {
                         Node::new(
@@ -1637,7 +1705,7 @@ pub fn parse_program_with_source(
 
             let compared = bitwise
                 .clone()
-                .then(cmp_op.then(bitwise.clone()).repeated())
+                .then(cmp_op.then(bitwise.clone()).repeated().collect::<Vec<_>>())
                 .map(|(h, t)| {
                     t.into_iter().fold(h, |l, (op, r)| {
                         Node::new(
@@ -1660,7 +1728,12 @@ pub fn parse_program_with_source(
 
             let boolean = compared
                 .clone()
-                .then(bool_op.then(compared.clone()).repeated())
+                .then(
+                    bool_op
+                        .then(compared.clone())
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
                 .map(|(h, t)| {
                     t.into_iter().fold(h, |l, (op, r)| {
                         Node::new(
@@ -1704,7 +1777,8 @@ pub fn parse_program_with_source(
                 .then(
                     lex(pad.clone(), just("as"))
                         .ignore_then(type_name.clone())
-                        .repeated(),
+                        .repeated()
+                        .collect::<Vec<_>>(),
                 )
                 .map(|(head, casts)| {
                     casts.into_iter().fold(head, |value, data_type| {
@@ -1724,7 +1798,8 @@ pub fn parse_program_with_source(
                 .then(
                     lex(pad.clone(), just("in"))
                         .ignore_then(as_expr.clone())
-                        .repeated(),
+                        .repeated()
+                        .collect::<Vec<_>>(),
                 )
                 .map(|(h, t)| {
                     t.into_iter().fold(h, |l, r| {
@@ -1793,7 +1868,7 @@ pub fn parse_program_with_source(
 
             let pipe_expr = ternary_expr
                 .clone()
-                .then(pipe_seg.repeated())
+                .then(pipe_seg.repeated().collect::<Vec<_>>())
                 .map(|(head, rest)| {
                     if rest.is_empty() {
                         return head;
@@ -1940,7 +2015,7 @@ pub fn parse_program_with_source(
             let spawn_expr = lex(pad.clone(), just("spawn"))
                 .ignore_then(choice((
                     lex(pad.clone(), just('{'))
-                        .ignore_then(delim.clone().repeated())
+                        .ignore_then(delim.clone().repeated().collect::<Vec<_>>())
                         .ignore_then(
                             fat_arrow
                                 .clone()
@@ -1951,10 +2026,11 @@ pub fn parse_program_with_source(
                                 .or(expr.clone())
                                 .separated_by(
                                     lex(pad.clone(), just(','))
-                                        .then_ignore(delim.clone().repeated())
+                                        .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                                         .ignored(),
                                 )
                                 .allow_trailing()
+                                .collect::<Vec<_>>()
                                 .or_not()
                                 .map(|x| x.unwrap_or_default()),
                         )
@@ -1978,37 +2054,11 @@ pub fn parse_program_with_source(
                                 .or(expr.clone().map(LoopType::While)),
                         )
                         .then_ignore(fat_arrow.clone())
-                        .then_with({
-                            let scope_body =
-                                scope_node_parser(statement.clone(), delim.clone(), pad.clone())
-                                    .boxed();
-                            let short_body =
-                                choice((labelled_scope.clone(), statement.clone(), expr.clone()))
-                                    .boxed();
-                            let brace_peek = lex(pad.clone(), just('{'))
-                                .rewind()
-                                .to(true)
-                                .or_not()
-                                .map(|x| x.unwrap_or(false))
-                                .boxed();
-                            move |lt| {
-                                brace_peek
-                                    .clone()
-                                    .then_with({
-                                        let scope_body = scope_body.clone();
-                                        let short_body = short_body.clone();
-                                        move |has_brace| {
-                                            if has_brace {
-                                                scope_body.clone()
-                                            } else {
-                                                short_body.clone()
-                                            }
-                                        }
-                                    })
-                                    .map(move |body| (lt.clone(), body))
-                                    .boxed()
-                            }
-                        })
+                        .then(
+                            scope_node_parser(statement.clone(), delim.clone(), pad.clone()).or(
+                                choice((labelled_scope.clone(), statement.clone(), expr.clone())),
+                            ),
+                        )
                         .map(|(lt, body)| {
                             let body = match body.node_type {
                                 NodeType::ScopeDeclaration { .. } => body,
@@ -2095,7 +2145,8 @@ pub fn parse_program_with_source(
                                                     }
                                                 }),
                                         )
-                                        .repeated(),
+                                        .repeated()
+                                        .collect::<Vec<_>>(),
                                 )
                                 .map(|(first, rest)| {
                                     let mut all = vec![first];
@@ -2133,29 +2184,11 @@ pub fn parse_program_with_source(
                     .then(
                         lex(pad.clone(), just("else"))
                             .ignore_then(fat_arrow.clone())
-                            .ignore_then(
-                                lex(pad.clone(), just('{'))
-                                    .rewind()
-                                    .to(true)
-                                    .or_not()
-                                    .map(|x| x.unwrap_or(false))
-                                    .then_with({
-                                        let scope_body = scope.clone().boxed();
-                                        let short_body = choice((
-                                            labelled_scope.clone(),
-                                            statement.clone(),
-                                            expr.clone(),
-                                        ))
-                                        .boxed();
-                                        move |has_brace| {
-                                            if has_brace {
-                                                scope_body.clone()
-                                            } else {
-                                                short_body.clone()
-                                            }
-                                        }
-                                    }),
-                            )
+                            .ignore_then(scope.clone().or(choice((
+                                labelled_scope.clone(),
+                                statement.clone(),
+                                expr.clone(),
+                            ))))
                             .or_not(),
                     )
                     .then(
@@ -2219,7 +2252,8 @@ pub fn parse_program_with_source(
                             .then(
                                 lex(pad.clone(), just('|'))
                                     .ignore_then(if_let_pattern)
-                                    .repeated(),
+                                    .repeated()
+                                    .collect::<Vec<_>>(),
                             )
                             .map(|(first, rest)| {
                                 let mut all = vec![first];
@@ -2307,7 +2341,8 @@ pub fn parse_program_with_source(
                                     PotentialDollarIdentifier::Identifier(ParserText::new(sp, n))
                                 })
                                 .separated_by(lex(pad.clone(), just(',')))
-                                .allow_trailing(),
+                                .allow_trailing()
+                                .collect::<Vec<_>>(),
                         )
                         .then_ignore(lex(pad.clone(), just(')'))),
                     lex(pad.clone(), just('*')).map(|_| {
@@ -2324,21 +2359,32 @@ pub fn parse_program_with_source(
                             PotentialDollarIdentifier::Identifier(ParserText::new(sp, n))
                         })
                         .separated_by(lex(pad.clone(), just("::")))
-                        .at_least(1),
-                ),
+                        .at_least(1)
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(values, module)| (values, module, None)),
                 ident
                     .clone()
                     .map(|(n, sp)| PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)))
                     .separated_by(lex(pad.clone(), just("::")))
                     .at_least(1)
-                    .map(|module| (Vec::new(), module)),
+                    .collect::<Vec<_>>()
+                    .then(
+                        lex(pad.clone(), just("as"))
+                            .ignore_then(ident.clone())
+                            .map(|(n, sp)| {
+                                PotentialDollarIdentifier::Identifier(ParserText::new(sp, n))
+                            })
+                            .or_not(),
+                    )
+                    .map(|(module, alias)| (Vec::new(), module, alias)),
             )))
-            .map(|(values, module)| {
+            .map(|(values, module, alias)| {
                 Node::new(
                     Span::default(),
                     NodeType::ImportStatement {
                         module,
-                        alias: None,
+                        alias,
                         values,
                     },
                 )
@@ -2353,6 +2399,7 @@ pub fn parse_program_with_source(
                             .clone()
                             .separated_by(lex(pad.clone(), just(',')))
                             .allow_trailing()
+                            .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
@@ -2363,12 +2410,13 @@ pub fn parse_program_with_source(
             .then(choice((
                 lex(pad.clone(), just("struct")).ignore_then(
                     lex(pad.clone(), just('{'))
-                        .then_ignore(delim.clone().repeated())
+                        .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                         .ignore_then(
                             ident
                                 .clone()
                                 .repeated()
                                 .at_least(1)
+                                .collect::<Vec<_>>()
                                 .then_ignore(lex(pad.clone(), just(':')))
                                 .then(type_name.clone())
                                 .separated_by(
@@ -2377,7 +2425,8 @@ pub fn parse_program_with_source(
                                         .at_least(1)
                                         .ignored(),
                                 )
-                                .allow_trailing(),
+                                .allow_trailing()
+                                .collect::<Vec<_>>(),
                         )
                         .then_ignore(delim.clone().or_not())
                         .then_ignore(lex(pad.clone(), just('}')))
@@ -2404,6 +2453,7 @@ pub fn parse_program_with_source(
                                         .ignored(),
                                     )
                                     .allow_trailing()
+                                    .collect::<Vec<_>>()
                                     .or_not()
                                     .map(|x| x.unwrap_or_default()),
                             )
@@ -2412,12 +2462,13 @@ pub fn parse_program_with_source(
                 ),
                 lex(pad.clone(), just("enum"))
                     .ignore_then(lex(pad.clone(), just('{')))
-                    .then_ignore(delim.clone().repeated())
+                    .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                     .ignore_then(
                         ident
                             .clone()
                             .repeated()
                             .at_least(1)
+                            .collect::<Vec<_>>()
                             .then(
                                 lex(pad.clone(), just(':'))
                                     .ignore_then(type_name.clone())
@@ -2442,7 +2493,8 @@ pub fn parse_program_with_source(
                                     .at_least(1)
                                     .ignored(),
                             )
-                            .allow_trailing(),
+                            .allow_trailing()
+                            .collect::<Vec<_>>(),
                     )
                     .then_ignore(delim.clone().or_not())
                     .then_ignore(lex(pad.clone(), just('}')))
@@ -2454,7 +2506,7 @@ pub fn parse_program_with_source(
             .then(
                 lex(pad.clone(), just("@overload"))
                     .ignore_then(lex(pad.clone(), just('{')))
-                    .then_ignore(delim.clone().repeated())
+                    .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                     .ignore_then(
                         lex(pad.clone(), just("const"))
                             .ignore_then(string_text.clone())
@@ -2470,10 +2522,11 @@ pub fn parse_program_with_source(
                                     body,
                                     header,
                                 }),
-                                _ => Err(Simple::custom(sp, "expected function declaration")),
+                                _ => Err(Rich::custom(sp, "expected function declaration")),
                             })
                             .separated_by(delim.clone())
                             .allow_trailing()
+                            .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
@@ -2545,11 +2598,12 @@ pub fn parse_program_with_source(
         let trait_stmt = lex(pad.clone(), just("trait"))
             .ignore_then(ident.clone())
             .then_ignore(lex(pad.clone(), just('{')))
-            .then_ignore(delim.clone().repeated())
+            .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
             .then(
                 trait_member
                     .separated_by(delim.clone())
                     .allow_trailing()
+                    .collect::<Vec<_>>()
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
@@ -2575,6 +2629,7 @@ pub fn parse_program_with_source(
                             .clone()
                             .separated_by(lex(pad.clone(), just(',')))
                             .allow_trailing()
+                            .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
@@ -2602,12 +2657,13 @@ pub fn parse_program_with_source(
                     .or_not(),
             )
             .then_ignore(lex(pad.clone(), just('{')))
-            .then_ignore(delim.clone().repeated())
+            .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
             .then(
                 statement
                     .clone()
                     .separated_by(delim.clone())
                     .allow_trailing()
+                    .collect::<Vec<_>>()
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
@@ -2705,6 +2761,7 @@ pub fn parse_program_with_source(
                             })
                             .separated_by(lex(pad.clone(), just(',')))
                             .allow_trailing()
+                            .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
@@ -2743,7 +2800,8 @@ pub fn parse_program_with_source(
                         }),
                 ))
                 .separated_by(lex(pad.clone(), just(',')))
-                .at_least(2),
+                .at_least(2)
+                .collect::<Vec<_>>(),
             )
             .then_ignore(lex(pad.clone(), just('=')))
             .then(expr.clone())
@@ -2775,7 +2833,8 @@ pub fn parse_program_with_source(
             expr.clone().then(
                 lex(pad.clone(), just(','))
                     .ignore_then(expr.clone())
-                    .repeated(),
+                    .repeated()
+                    .collect::<Vec<_>>(),
             ),
         )
         .map(|((((vt, m), name), ty), (first_value, rest_values))| {
@@ -2824,6 +2883,7 @@ pub fn parse_program_with_source(
                     )
                     .separated_by(lex(pad.clone(), just(',')))
                     .allow_trailing()
+                    .collect::<Vec<_>>()
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
@@ -2838,12 +2898,13 @@ pub fn parse_program_with_source(
 
         let scope_body_with_mode = choice((
             lex(pad.clone(), just("{{"))
-                .ignore_then(delim.clone().repeated())
+                .ignore_then(delim.clone().repeated().collect::<Vec<_>>())
                 .ignore_then(
                     statement
                         .clone()
                         .separated_by(delim.clone())
                         .allow_trailing()
+                        .collect::<Vec<_>>()
                         .or_not()
                         .map(|x| x.unwrap_or_default()),
                 )
@@ -3011,7 +3072,8 @@ pub fn parse_program_with_source(
                                                     }
                                                 }),
                                         )
-                                        .repeated(),
+                                        .repeated()
+                                        .collect::<Vec<_>>(),
                                 )
                                 .map(|(first, rest)| {
                                     let mut all = vec![first];
@@ -3063,7 +3125,7 @@ pub fn parse_program_with_source(
                                 if has_brace
                                     && !matches!(body.node_type, NodeType::ScopeDeclaration { .. })
                                 {
-                                    Err(Simple::custom(sp, "expected scope body"))
+                                    Err(Rich::custom(sp, "expected scope body"))
                                 } else {
                                     Ok(body)
                                 }
@@ -3151,6 +3213,7 @@ pub fn parse_program_with_source(
                     .clone()
                     .separated_by(lex(pad.clone(), just(',')))
                     .allow_trailing()
+                    .collect::<Vec<_>>()
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
@@ -3226,7 +3289,7 @@ pub fn parse_program_with_source(
                             if has_brace
                                 && !matches!(body.node_type, NodeType::ScopeDeclaration { .. })
                             {
-                                Err(Simple::custom(sp, "expected scope body"))
+                                Err(Rich::custom(sp, "expected scope body"))
                             } else {
                                 Ok(body)
                             }
@@ -3257,7 +3320,7 @@ pub fn parse_program_with_source(
                             if has_brace
                                 && !matches!(body.node_type, NodeType::ScopeDeclaration { .. })
                             {
-                                Err(Simple::custom(sp, "expected scope body"))
+                                Err(Rich::custom(sp, "expected scope body"))
                             } else {
                                 Ok(body)
                             }
@@ -3288,6 +3351,7 @@ pub fn parse_program_with_source(
                     .map(|(n, sp)| PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)))
                     .separated_by(lex(pad.clone(), just(',')))
                     .at_least(1)
+                    .collect::<Vec<_>>()
                     .then_ignore(left_arrow.clone())
                     .then(expr.clone())
                     .or(expr.clone().map(|value| (Vec::new(), value))),
@@ -3336,16 +3400,17 @@ pub fn parse_program_with_source(
             .boxed();
 
         let spawn_block = lex(pad.clone(), just('{'))
-            .ignore_then(delim.clone().repeated())
+            .ignore_then(delim.clone().repeated().collect::<Vec<_>>())
             .ignore_then(
                 spawn_item
                     .clone()
                     .separated_by(
                         lex(pad.clone(), just(','))
-                            .then_ignore(delim.clone().repeated())
+                            .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                             .ignored(),
                     )
                     .allow_trailing()
+                    .collect::<Vec<_>>()
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
@@ -3382,7 +3447,8 @@ pub fn parse_program_with_source(
                         .then_ignore(lex(pad.clone(), just(']')))
                         .map(|e| (e, true)),
                 ))
-                .repeated(),
+                .repeated()
+                .collect::<Vec<_>>(),
             )
             .map(|(head, rest)| {
                 if rest.is_empty() {
@@ -3442,7 +3508,8 @@ pub fn parse_program_with_source(
                 lex(pad.clone(), just(','))
                     .ignore_then(ident.clone())
                     .repeated()
-                    .at_least(1),
+                    .at_least(1)
+                    .collect::<Vec<_>>(),
             )
             .then_ignore(lex(pad.clone(), just('=')))
             .then(expr.clone())
@@ -3497,37 +3564,36 @@ pub fn parse_program_with_source(
 
     let parsed = pad
         .clone()
-        .then_ignore(delim.clone().repeated())
+        .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
         .ignore_then(
             parser
                 .separated_by(delim.clone())
                 .allow_trailing()
+                .collect::<Vec<_>>()
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
         )
         .then_ignore(pad.clone())
-        .then_ignore(delim.clone().repeated())
+        .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
         .then_ignore(end())
         .parse(source);
 
-    match parsed {
-        Ok(items) => {
-            let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
-                Span::new_from_spans(a.span, b.span)
-            } else {
-                Span::default()
-            };
-            Ok(Node::new(
-                sp,
-                NodeType::ScopeDeclaration {
-                    body: Some(items),
-                    named: None,
-                    is_temp: false,
-                    create_new_scope: Some(false),
-                    define: false,
-                },
-            ))
-        }
-        Err(errs) => Err(to_parser_errors(line_starts.as_ref(), errs)),
+    if let Some(items) = parsed.output().cloned() {
+        let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
+            Span::new_from_spans(a.span, b.span)
+        } else {
+            Span::default()
+        };
+        return Ok(Node::new(
+            sp,
+            NodeType::ScopeDeclaration {
+                body: Some(items),
+                named: None,
+                is_temp: false,
+                create_new_scope: Some(false),
+                define: false,
+            },
+        ));
     }
+    Err(to_parser_errors(line_starts.as_ref(), parsed.into_errors()))
 }

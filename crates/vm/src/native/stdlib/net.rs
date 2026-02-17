@@ -50,6 +50,24 @@ fn parse_http_args(args: Vec<RuntimeValue>) -> Result<(String, String, String), 
     Ok((method, url, body))
 }
 
+fn send_http_request(method: &str, url: &str, body: &str) -> Result<String, RuntimeError> {
+    let config = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(5)))
+        .build();
+    let agent = ureq::Agent::new_with_config(config);
+    let request = ureq::http::Request::builder()
+        .method(method)
+        .uri(url)
+        .body(body.to_string())
+        .map_err(|e| RuntimeError::Io(e.to_string()))?;
+    let mut resp = agent
+        .run(request)
+        .map_err(|e| RuntimeError::Io(e.to_string()))?;
+    resp.body_mut()
+        .read_to_string()
+        .map_err(|e| RuntimeError::Io(e.to_string()))
+}
+
 impl NativeFunction for HttpRequest {
     fn name(&self) -> String {
         String::from("net.http_request_raw")
@@ -57,17 +75,7 @@ impl NativeFunction for HttpRequest {
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let (method, url, body) = parse_http_args(args)?;
-
-        let req = ureq::request(&method, &url).timeout(std::time::Duration::from_secs(5));
-        let resp = if body.is_empty() {
-            req.call()
-        } else {
-            req.send_string(&body)
-        }
-        .map_err(|e| RuntimeError::Io(e.to_string()))?;
-        let text = resp
-            .into_string()
-            .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        let text = send_http_request(&method, &url, &body)?;
         Ok(RuntimeValue::Str(std::sync::Arc::new(text)))
     }
 }
@@ -81,23 +89,10 @@ impl NativeFunction for HttpRequestTry {
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let (method, url, body) = parse_http_args(args)?;
-
-        let req = ureq::request(&method, &url).timeout(std::time::Duration::from_secs(5));
-        let resp = if body.is_empty() {
-            req.call()
-        } else {
-            req.send_string(&body)
-        };
-
-        match resp {
-            Ok(resp) => {
-                let text = resp
-                    .into_string()
-                    .map_err(|e| RuntimeError::Io(e.to_string()))?;
-                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Str(
-                    std::sync::Arc::new(text),
-                )))))
-            }
+        match send_http_request(&method, &url, &body) {
+            Ok(text) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Str(
+                std::sync::Arc::new(text),
+            ))))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 std::sync::Arc::new(e.to_string()),
             ))))),

@@ -15,4 +15,4 @@ readme.workspace = true
 thiserror = { workspace = true }
 serde = { workspace = true}
 rustc-hash = { workspace = true }
-chumsky = "0.9.3"
+chumsky = "0.12"

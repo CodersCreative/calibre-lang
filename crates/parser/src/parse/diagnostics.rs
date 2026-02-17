@@ -1,10 +1,10 @@
-use chumsky::error::Simple;
-use crate::{ParserError, SyntaxErr};
 use super::util::span;
+use crate::{ParserError, SyntaxErr};
+use chumsky::error::{Rich, RichPattern};
 
 pub(super) fn to_parser_errors(
     line_starts: &[usize],
-    errs: Vec<Simple<char>>,
+    errs: Vec<Rich<'_, char>>,
 ) -> Vec<ParserError> {
     errs.into_iter()
         .map(|e| {
@@ -13,7 +13,12 @@ pub(super) fn to_parser_errors(
             } else {
                 let mut expected: Vec<String> = e
                     .expected()
-                    .filter_map(|c| c.map(|ch| format!("`{ch}`")))
+                    .filter_map(|p| match p {
+                        RichPattern::Token(tok) => Some(format!("`{:?}`", tok)),
+                        RichPattern::Identifier(id) => Some(format!("identifier `{id}`")),
+                        RichPattern::Label(lbl) => Some(lbl.to_string()),
+                        _ => None,
+                    })
                     .collect();
                 expected.sort();
                 expected.dedup();
@@ -37,7 +42,7 @@ pub(super) fn to_parser_errors(
             };
             ParserError::Syntax {
                 err,
-                span: span(line_starts, e.span()),
+                span: span(line_starts, e.span().clone().into_range()),
             }
         })
         .collect()

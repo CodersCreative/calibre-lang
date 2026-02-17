@@ -201,7 +201,7 @@ impl<'a> FunctionTranslator<'a> {
                 name,
                 variant,
                 payload,
-            } => self.translate_enum_expression(name, variant, payload.map(|x| *x)),
+            } => self.translate_enum_expression(name.to_string(), variant, payload.map(|x| *x)),
             LirNodeType::Literal(LirLiteral::String(txt)) => {
                 println!("{txt}");
                 let name = format!("string_literal_{}", rand::random_range(0..100000));
@@ -220,7 +220,7 @@ impl<'a> FunctionTranslator<'a> {
                     .declare_var(self.types.get_type_from_runtime_type(&value.data_type));
 
                 self.variables
-                    .insert(dest, (value.data_type.clone(), var.clone()));
+                    .insert(dest.to_string(), (value.data_type.clone(), var.clone()));
 
                 self.builder.def_var(var, value.value);
 
@@ -231,7 +231,7 @@ impl<'a> FunctionTranslator<'a> {
                     todo!()
                 };
 
-                let (data_type, var) = self.variables.get(&identifier).unwrap().clone();
+                let (data_type, var) = self.variables.get(identifier.as_ref()).unwrap().clone();
 
                 let value = self.translate(*value);
 
@@ -264,7 +264,7 @@ impl<'a> FunctionTranslator<'a> {
             }
             LirNodeType::Member(value, key) => {
                 let value = self.translate(*value);
-                self.get_aggregate_member(value, key)
+                self.get_aggregate_member(value, key.to_string())
             }
             LirNodeType::Closure {
                 label: _,

@@ -1,18 +1,18 @@
-use chumsky::prelude::*;
 use crate::{
+    Position, Span,
     ast::{
         Node, NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
         PotentialGenericTypeIdentifier, PotentialNewType,
     },
-    Position, Span,
 };
+use chumsky::prelude::*;
 
 pub(super) fn lex<'a, P, O: 'a>(
-    pad: impl Parser<char, (), Error = Simple<char>> + Clone + 'a,
+    pad: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
     p: P,
-) -> impl Parser<char, O, Error = Simple<char>> + Clone + 'a
+) -> impl Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Clone + 'a
 where
-    P: Parser<char, O, Error = Simple<char>> + Clone + 'a,
+    P: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Clone + 'a,
 {
     p.padded_by(pad)
 }
@@ -106,7 +106,9 @@ pub(super) fn parse_embedded_expr(txt: &str) -> Node {
 pub(super) fn parse_block_scope(txt: &str) -> Node {
     match super::parse_program(txt) {
         Ok(node) => match node.node_type {
-            NodeType::ScopeDeclaration { body, .. } => scope_node(body.unwrap_or_default(), true, false),
+            NodeType::ScopeDeclaration { body, .. } => {
+                scope_node(body.unwrap_or_default(), true, false)
+            }
             _ => scope_node(Vec::new(), true, false),
         },
         Err(_) => scope_node(Vec::new(), true, false),
@@ -157,8 +159,14 @@ pub(super) fn normalize_scope_member_chain(
         (NodeType::ScopeMemberExpression { path }, NodeType::Identifier(_)) => {
             let mut new_path = path.clone();
             new_path.push(first);
-            let sp = Span::new_from_spans(new_path.first().unwrap().span, new_path.last().unwrap().span);
-            (Node::new(sp, NodeType::ScopeMemberExpression { path: new_path }), remaining)
+            let sp = Span::new_from_spans(
+                new_path.first().unwrap().span,
+                new_path.last().unwrap().span,
+            );
+            (
+                Node::new(sp, NodeType::ScopeMemberExpression { path: new_path }),
+                remaining,
+            )
         }
         (
             NodeType::ScopeMemberExpression { path },
@@ -173,10 +181,14 @@ pub(super) fn normalize_scope_member_chain(
             if let NodeType::Identifier(_) = caller.node_type {
                 let mut new_path = path.clone();
                 new_path.push(*caller.clone());
-                let caller_span =
-                    Span::new_from_spans(new_path.first().unwrap().span, new_path.last().unwrap().span);
-                let scoped_caller =
-                    Node::new(caller_span, NodeType::ScopeMemberExpression { path: new_path });
+                let caller_span = Span::new_from_spans(
+                    new_path.first().unwrap().span,
+                    new_path.last().unwrap().span,
+                );
+                let scoped_caller = Node::new(
+                    caller_span,
+                    NodeType::ScopeMemberExpression { path: new_path },
+                );
                 (
                     Node::new(
                         first.span,
@@ -325,11 +337,11 @@ pub(super) fn unescape_char(input: char) -> char {
 
 pub(super) fn scope_node_parser<'a, P>(
     statement: P,
-    delim: impl Parser<char, (), Error = Simple<char>> + Clone + 'a,
-    pad: impl Parser<char, (), Error = Simple<char>> + Clone + 'a,
-) -> impl Parser<char, Node, Error = Simple<char>> + Clone + 'a
+    delim: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
+    pad: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
+) -> impl Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a
 where
-    P: Parser<char, Node, Error = Simple<char>> + Clone + 'a,
+    P: Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a,
 {
     just('{')
         .padded_by(pad.clone())
@@ -338,6 +350,7 @@ where
             statement
                 .separated_by(delim.clone())
                 .allow_trailing()
+                .collect::<Vec<_>>()
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
         )

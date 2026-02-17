@@ -60,9 +60,9 @@ impl Display for LirRegistry {
 
 #[derive(Debug, Clone)]
 pub struct LirGlobal {
-    pub name: String,
+    pub name: Box<str>,
     pub data_type: ParserDataType,
-    pub blocks: Vec<LirBlock>,
+    pub blocks: Box<[LirBlock]>,
 }
 
 impl Display for LirGlobal {
@@ -79,11 +79,11 @@ impl Display for LirGlobal {
 
 #[derive(Debug, Clone)]
 pub struct LirFunction {
-    pub name: String,
-    pub params: Vec<(String, ParserDataType)>,
-    pub captures: Vec<(String, ParserDataType)>,
+    pub name: Box<str>,
+    pub params: Box<[(Box<str>, ParserDataType)]>,
+    pub captures: Box<[(Box<str>, ParserDataType)]>,
     pub return_type: ParserDataType,
-    pub blocks: Vec<LirBlock>,
+    pub blocks: Box<[LirBlock]>,
 }
 
 impl Display for LirFunction {
@@ -107,6 +107,7 @@ impl Display for LirFunction {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BlockId(pub u32);
 
+#[repr(u8)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum LirLiteral {
     Int(i64),
@@ -128,6 +129,7 @@ impl Display for LirLiteral {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum LirNodeType {
     Noop,
@@ -135,8 +137,8 @@ pub enum LirNodeType {
         callee: Box<LirNodeType>,
     },
     Closure {
-        label: String,
-        captures: Vec<String>,
+        label: Box<str>,
+        captures: Vec<Box<str>>,
     },
     List {
         elements: Vec<LirNodeType>,
@@ -152,14 +154,14 @@ pub enum LirNodeType {
         inclusive: bool,
     },
     Literal(LirLiteral),
-    Load(String),
+    Load(Box<str>),
     Boolean {
         left: Box<LirNodeType>,
         right: Box<LirNodeType>,
         operator: BooleanOperator,
     },
-    Move(String),
-    Drop(String),
+    Move(Box<str>),
+    Drop(Box<str>),
     Binary {
         left: Box<LirNodeType>,
         right: Box<LirNodeType>,
@@ -177,9 +179,9 @@ pub enum LirNodeType {
     Deref(Box<LirNodeType>),
     Ref(Box<LirNodeType>),
     Index(Box<LirNodeType>, Box<LirNodeType>),
-    Member(Box<LirNodeType>, String),
+    Member(Box<LirNodeType>, Box<str>),
     Enum {
-        name: String,
+        name: Box<str>,
         variant: u32,
         payload: Option<Box<LirNodeType>>,
     },
@@ -189,13 +191,13 @@ pub enum LirNodeType {
         value: Box<LirNodeType>,
     },
     Declare {
-        dest: String,
+        dest: Box<str>,
         value: Box<LirNodeType>,
     },
     ExternFunction {
-        abi: String,
-        library: String,
-        symbol: String,
+        abi: Box<str>,
+        library: Box<str>,
+        symbol: Box<str>,
         parameters: Vec<PotentialFfiDataType>,
         return_type: PotentialFfiDataType,
     },
@@ -316,9 +318,10 @@ impl Display for LirNodeType {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum LirLValue {
-    Var(String),
+    Var(Box<str>),
     Ptr(Box<LirNodeType>),
 }
 
@@ -331,6 +334,7 @@ impl Display for LirLValue {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum LirTerminator {
     Jump {
@@ -428,9 +432,9 @@ impl<'a> LirEnvironment<'a> {
             this.registry.globals.insert(
                 root_name.clone(),
                 LirGlobal {
-                    name: root_name,
+                    name: root_name.into_boxed_str(),
                     data_type: ParserDataType::new(Span::default(), ParserInnerType::Dynamic),
-                    blocks: this.blocks.clone(),
+                    blocks: this.blocks.clone().into_boxed_slice(),
                 },
             );
         }
@@ -468,9 +472,9 @@ impl<'a> LirEnvironment<'a> {
     fn lower_member_lvalue(&mut self, path: Vec<(MiddleNode, bool)>) -> LirNodeType {
         let (base_node, _) = &path[0];
         let mut current = match &base_node.node_type {
-            MiddleNodeType::Identifier(name) => {
-                LirNodeType::Ref(Box::new(LirNodeType::Load(name.to_string())))
-            }
+            MiddleNodeType::Identifier(name) => LirNodeType::Ref(Box::new(LirNodeType::Load(
+                name.to_string().into_boxed_str(),
+            ))),
             _ => self.lower_node(base_node.clone()),
         };
 
@@ -485,7 +489,7 @@ impl<'a> LirEnvironment<'a> {
                     MiddleNodeType::FloatLiteral(x) => x.to_string(),
                     _ => "<invalid>".to_string(),
                 };
-                current = LirNodeType::Member(Box::new(current), field);
+                current = LirNodeType::Member(Box::new(current), field.into_boxed_str());
             }
         }
 
@@ -562,9 +566,11 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::Spawn { value } => LirNodeType::Spawn {
                 callee: Box::new(self.lower_node(*value)),
             },
-            MiddleNodeType::Drop(name) => LirNodeType::Drop(name.to_string()),
-            MiddleNodeType::Move(name) => LirNodeType::Move(name.to_string()),
-            MiddleNodeType::Identifier(name) => LirNodeType::Load(name.to_string()),
+            MiddleNodeType::Drop(name) => LirNodeType::Drop(name.to_string().into_boxed_str()),
+            MiddleNodeType::Move(name) => LirNodeType::Move(name.to_string().into_boxed_str()),
+            MiddleNodeType::Identifier(name) => {
+                LirNodeType::Load(name.to_string().into_boxed_str())
+            }
             MiddleNodeType::VariableDeclaration {
                 identifier, value, ..
             } => {
@@ -579,7 +585,7 @@ impl<'a> LirEnvironment<'a> {
                 self.add_instr(LirInstr::new(
                     identifier.span,
                     LirNodeType::Declare {
-                        dest: identifier.to_string(),
+                        dest: identifier.to_string().into_boxed_str(),
                         value: Box::new(val),
                     },
                 ));
@@ -710,16 +716,20 @@ impl<'a> LirEnvironment<'a> {
                 let mut capture_names = Vec::with_capacity(captures.len());
                 let mut captures_for_func = Vec::with_capacity(captures.len());
                 for (n, t) in captures.into_iter() {
-                    capture_names.push(n.clone());
-                    captures_for_func.push((n, t));
+                    capture_names.push(n.clone().into_boxed_str());
+                    captures_for_func.push((n.into_boxed_str(), t));
                 }
 
                 let lir_func = LirFunction {
-                    name: internal_name.clone(),
-                    params: parameters.into_iter().map(|x| (x.0.text, x.1)).collect(),
-                    captures: captures_for_func,
+                    name: internal_name.clone().into_boxed_str(),
+                    params: parameters
+                        .into_iter()
+                        .map(|x| (x.0.text.into_boxed_str(), x.1))
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice(),
+                    captures: captures_for_func.into_boxed_slice(),
                     return_type,
-                    blocks: sub_lowerer.blocks,
+                    blocks: sub_lowerer.blocks.into_boxed_slice(),
                 };
 
                 self.registry
@@ -727,7 +737,7 @@ impl<'a> LirEnvironment<'a> {
                     .insert(internal_name.clone(), lir_func);
 
                 LirNodeType::Closure {
-                    label: internal_name,
+                    label: internal_name.into_boxed_str(),
                     captures: capture_names,
                 }
             }
@@ -738,9 +748,9 @@ impl<'a> LirEnvironment<'a> {
                 parameters,
                 return_type,
             } => LirNodeType::ExternFunction {
-                abi,
-                library,
-                symbol,
+                abi: abi.into_boxed_str(),
+                library: library.into_boxed_str(),
+                symbol: symbol.into_boxed_str(),
                 parameters,
                 return_type,
             },
@@ -753,7 +763,7 @@ impl<'a> LirEnvironment<'a> {
                     self.resolve_enum_variant(&identifier.to_string(), &value.to_string());
                 let payload = data.map(|d| Box::new(self.lower_node(*d)));
                 LirNodeType::Enum {
-                    name: identifier.text,
+                    name: identifier.text.into_boxed_str(),
                     variant,
                     payload,
                 }
@@ -786,9 +796,9 @@ impl<'a> LirEnvironment<'a> {
                         self.registry.globals.insert(
                             identifier.to_string(),
                             LirGlobal {
-                                name: identifier.to_string(),
+                                name: identifier.to_string().into_boxed_str(),
                                 data_type,
-                                blocks: sub_lowerer.blocks,
+                                blocks: sub_lowerer.blocks.into_boxed_slice(),
                             },
                         );
                         continue;
@@ -814,11 +824,11 @@ impl<'a> LirEnvironment<'a> {
                     self.add_instr(LirInstr::new(
                         span,
                         LirNodeType::Declare {
-                            dest: temp.clone(),
+                            dest: temp.clone().into_boxed_str(),
                             value: Box::new(lowered),
                         },
                     ));
-                    LirNodeType::Load(temp)
+                    LirNodeType::Load(temp.into_boxed_str())
                 } else {
                     self.lower_and_add_node(last);
                     LirNodeType::Literal(LirLiteral::Null)
@@ -837,7 +847,7 @@ impl<'a> LirEnvironment<'a> {
                 self.add_instr(LirInstr::new(
                     span,
                     LirNodeType::Declare {
-                        dest: temp.clone(),
+                        dest: temp.clone().into_boxed_str(),
                         value: Box::new(LirNodeType::Literal(LirLiteral::Null)),
                     },
                 ));
@@ -859,7 +869,7 @@ impl<'a> LirEnvironment<'a> {
                     self.add_instr(LirInstr::new(
                         span,
                         LirNodeType::Assign {
-                            dest: LirLValue::Var(temp.clone()),
+                            dest: LirLValue::Var(temp.clone().into_boxed_str()),
                             value: Box::new(then_val),
                         },
                     ));
@@ -882,7 +892,7 @@ impl<'a> LirEnvironment<'a> {
                     self.add_instr(LirInstr::new(
                         span,
                         LirNodeType::Assign {
-                            dest: LirLValue::Var(temp.clone()),
+                            dest: LirLValue::Var(temp.clone().into_boxed_str()),
                             value: Box::new(else_val),
                         },
                     ));
@@ -893,7 +903,7 @@ impl<'a> LirEnvironment<'a> {
                 }
 
                 self.switch_to(merge_id);
-                LirNodeType::Load(temp)
+                LirNodeType::Load(temp.into_boxed_str())
             }
             MiddleNodeType::LoopDeclaration {
                 state, body, label, ..
@@ -1028,7 +1038,7 @@ impl<'a> LirEnvironment<'a> {
                             MiddleNodeType::FloatLiteral(x) => x.to_string(),
                             _ => "<invalid>".to_string(),
                         };
-                        current = LirNodeType::Member(Box::new(current), field);
+                        current = LirNodeType::Member(Box::new(current), field.into_boxed_str());
                     }
                 }
                 current
@@ -1122,14 +1132,14 @@ impl<'a> LirEnvironment<'a> {
 
     pub fn lower_lvalue(&mut self, node: MiddleNode) -> LirLValue {
         match node.node_type {
-            MiddleNodeType::Identifier(name) => LirLValue::Var(name.to_string()),
+            MiddleNodeType::Identifier(name) => LirLValue::Var(name.to_string().into_boxed_str()),
             MiddleNodeType::DerefStatement { value } => {
                 LirLValue::Ptr(Box::new(self.lower_node(*value)))
             }
             MiddleNodeType::MemberExpression { path } => {
                 LirLValue::Ptr(Box::new(self.lower_member_lvalue(path)))
             }
-            _ => LirLValue::Var("<invalid>".to_string()),
+            _ => LirLValue::Var("<invalid>".to_string().into_boxed_str()),
         }
     }
 

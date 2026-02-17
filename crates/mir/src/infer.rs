@@ -22,10 +22,7 @@ pub fn infer_node_type(
         if !tenv.contains_key(k) {
             tenv.insert(
                 k.clone(),
-                hm::generalize(
-                    &tenv,
-                    &hm::from_parser_data_type(&v.data_type, &mut tg),
-                ),
+                hm::generalize(&tenv, &hm::from_parser_data_type(&v.data_type, &mut tg)),
             );
         }
     }
@@ -70,7 +67,11 @@ fn visit(
             if let Some((_, scheme)) = tenv
                 .iter()
                 .find(|(k, _)| k.ends_with(&format!("::{member}")))
-                .or_else(|| env.hm_env.iter().find(|(k, _)| k.ends_with(&format!("::{member}"))))
+                .or_else(|| {
+                    env.hm_env
+                        .iter()
+                        .find(|(k, _)| k.ends_with(&format!("::{member}")))
+                })
             {
                 return Some(hm::instantiate(scheme, tg));
             }
@@ -94,8 +95,8 @@ fn visit(
             let caller_t_applied = hm::apply_subst(subst, &caller_t);
             match caller_t_applied {
                 Type::TArrow(param, rest) => {
-                    *subst = hm::unify(std::mem::take(subst), &param, &arg_t_applied)
-                        .map_err(|e| e)?;
+                    *subst =
+                        hm::unify(std::mem::take(subst), &param, &arg_t_applied).map_err(|e| e)?;
                     caller_t = hm::apply_subst(subst, &*rest);
                 }
                 _ => {
@@ -135,8 +136,8 @@ fn visit(
                         std::sync::Arc::new(arg_t_applied),
                         std::sync::Arc::new(fresh_ret.clone()),
                     );
-                    *subst =
-                        hm::unify(std::mem::take(subst), &caller_t_applied, &fn_t).map_err(|e| e)?;
+                    *subst = hm::unify(std::mem::take(subst), &caller_t_applied, &fn_t)
+                        .map_err(|e| e)?;
                     caller_t = fresh_ret;
                 }
             }
@@ -203,10 +204,18 @@ fn visit(
             let from_t = visit(from, env, scope, tg, tenv, subst)?;
             let to_t = visit(to, env, scope, tg, tenv, subst)?;
             let int_t = Type::TCon(TypeCon::Int);
-            *subst = hm::unify(std::mem::take(subst), &hm::apply_subst(subst, &from_t), &int_t)
-                .map_err(|e| e)?;
-            *subst = hm::unify(std::mem::take(subst), &hm::apply_subst(subst, &to_t), &int_t)
-                .map_err(|e| e)?;
+            *subst = hm::unify(
+                std::mem::take(subst),
+                &hm::apply_subst(subst, &from_t),
+                &int_t,
+            )
+            .map_err(|e| e)?;
+            *subst = hm::unify(
+                std::mem::take(subst),
+                &hm::apply_subst(subst, &to_t),
+                &int_t,
+            )
+            .map_err(|e| e)?;
             Ok(Type::TCon(TypeCon::Range))
         }
         NodeType::CallExpression {
@@ -548,9 +557,13 @@ fn visit(
                 match &seg.node_type {
                     NodeType::Identifier(id) => {
                         let name = id.to_string();
-                        if let Some(member_fn) =
-                            resolve_member_fn_type(env, tenv, &hm::apply_subst(subst, &acc_t), &name, tg)
-                        {
+                        if let Some(member_fn) = resolve_member_fn_type(
+                            env,
+                            tenv,
+                            &hm::apply_subst(subst, &acc_t),
+                            &name,
+                            tg,
+                        ) {
                             acc_t = member_fn;
                         } else {
                             acc_t = Type::TCon(TypeCon::Dyn);

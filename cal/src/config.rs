@@ -117,8 +117,8 @@ pub fn load_project_from(start: &Path) -> Result<Option<ProjectContext>, String>
     };
     let txt = fs::read_to_string(&manifest_path)
         .map_err(|e| format!("failed to read {:?}: {e}", manifest_path))?;
-    let config: Config = toml::from_str(&txt)
-        .map_err(|e| format!("failed to parse {:?}: {e}", manifest_path))?;
+    let config: Config =
+        toml::from_str(&txt).map_err(|e| format!("failed to parse {:?}: {e}", manifest_path))?;
     let root = manifest_path
         .parent()
         .map(Path::to_path_buf)
@@ -154,7 +154,10 @@ fn default_examples(root: &Path) -> Vec<PathBuf> {
 }
 
 fn auto_example_name(path: &Path) -> String {
-    let file_name = path.file_name().and_then(|x| x.to_str()).unwrap_or_default();
+    let file_name = path
+        .file_name()
+        .and_then(|x| x.to_str())
+        .unwrap_or_default();
     if file_name == "main.cal" {
         path.parent()
             .and_then(|x| x.file_name())

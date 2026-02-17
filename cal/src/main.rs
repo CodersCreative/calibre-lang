@@ -1,6 +1,8 @@
+use cal::{CalEngine, CalError};
 use calibre_diagnostics;
 use calibre_lir::LirEnvironment;
 use calibre_mir::{
+    ast::{MiddleNode, MiddleNodeType},
     environment::{MiddleEnvironment, PackageMetadata},
     errors::MiddleErr,
 };
@@ -9,7 +11,6 @@ use clap::{Parser, Subcommand, ValueEnum};
 use config::{ProjectContext, load_project_from, resolve_example_by_name};
 use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;
-use serde::{Deserialize, Serialize};
 use smol::fs;
 use std::{
     error::Error,
@@ -19,15 +20,6 @@ use std::{
 };
 
 pub mod config;
-
-#[derive(Serialize, Deserialize)]
-struct BytecodeCache {
-    main: String,
-    mappings: Vec<String>,
-    registry: VMRegistry,
-}
-
-const CACHE_FORMAT_VERSION: &str = "cache-v2";
 
 fn emit_middle_error(path: &Path, contents: &str, err: &MiddleErr) {
     match err {
@@ -62,166 +54,111 @@ async fn run_source(
     vm_config: VMConfig,
     package_metadata: Option<PackageMetadata>,
     cache_base_dir: Option<PathBuf>,
+    module_only: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let mut parser = calibre_parser::Parser::default();
-    parser.set_source_path(Some(path.to_path_buf()));
-    let mut cache_path = None;
     let start = std::time::Instant::now();
-
-    if cache {
-        let cache_material = format!(
-            "{}:{}:{}",
-            CACHE_FORMAT_VERSION,
-            env!("CARGO_PKG_VERSION"),
-            contents
-        );
-        let cache_key = blake3::hash(cache_material.as_bytes());
-        let cache_root = cache_base_dir.unwrap_or_else(|| PathBuf::from("."));
-        let cache_dir = cache_root
-            .join("target")
-            .join("calibre")
-            .join(env!("CARGO_PKG_VERSION"));
-        let path = cache_dir.join(format!("{}.bin", cache_key.to_hex()));
-        let cache_res: Result<BytecodeCache, String> = smol::unblock({
-            let path = path.clone();
-            move || {
-                let file =
-                    std::fs::File::open(&path).map_err(|e| format!("cache open failed: {e}"))?;
-                let mut reader = std::io::BufReader::new(file);
-                bincode::deserialize_from(&mut reader)
-                    .map_err(|e| format!("cache deserialize failed: {e}"))
-            }
-        })
-        .await;
-
-        if let Ok(cache) = cache_res {
-            if verbose && verbosity.is_level(&Verbosity::LIR) {
-                println!("Loading Cache - elapsed {}ms", start.elapsed().as_millis());
-            }
-            let mut vm: VM = VM::new(cache.registry, cache.mappings, vm_config.clone());
-
-            if verbose && verbosity.is_level(&Verbosity::Byte) {
-                println!("Starting vm... - elapsed {}ms", start.elapsed().as_millis());
-                println!("Bytecode:");
-                println!("{}", vm.registry.as_ref());
-            }
-
-            let Some(main) = vm.registry.functions.get(&cache.main).cloned() else {
-                calibre_diagnostics::emit_error(
-                    &path,
-                    &contents,
-                    format!("Missing entry point: {}", cache.main),
-                    None,
-                );
-                return Err(format!("runtime error").into());
-            };
-            if let Err(err) = vm.run(main.as_ref(), Vec::new()) {
-                let (span, inner) = err.innermost();
-                calibre_diagnostics::emit_runtime_error(
-                    &path,
-                    &contents,
-                    inner.to_string(),
-                    span,
-                    inner.help(),
-                );
-                return Err(format!("runtime error").into());
-            }
-            return Ok(());
-        }
-
-        cache_path = Some((cache_dir, path));
+    let mut engine = CalEngine::new()
+        .with_vm_config(vm_config.clone())
+        .with_source_path(path.to_path_buf())
+        .with_cache_enabled(cache);
+    if let Some(dir) = cache_base_dir {
+        engine = engine.with_cache_dir(dir.join("target").join("calibre"));
+    }
+    if let Some(metadata) = package_metadata {
+        engine = engine.with_package_metadata(metadata);
+    }
+    if let Some(name) = entry_name.clone() {
+        engine = engine.with_entry_name(name);
     }
 
-    let program = parser.produce_ast(&contents);
+    let wants_full_ir =
+        verbose && (verbosity.is_level(&Verbosity::AST) || verbosity.is_level(&Verbosity::MIR));
+
+    let artifacts = match if wants_full_ir {
+        engine.compile_source(contents.clone())
+    } else {
+        engine.compile_cached_program_source(contents.clone())
+    } {
+        Ok(artifacts) => artifacts,
+        Err(CalError::Parse { errors, .. }) => {
+            calibre_diagnostics::emit_parser_errors(path, &contents, &errors);
+            return Err("parse failed".into());
+        }
+        Err(CalError::Middle { error, .. }) => {
+            emit_middle_error(path, &contents, &error);
+            return Err("compile failed".into());
+        }
+        Err(CalError::MissingEntryPoint(name)) => {
+            calibre_diagnostics::emit_error(
+                path,
+                &contents,
+                format!("Missing entry point: {name}"),
+                None,
+            );
+            return Err("runtime error".into());
+        }
+        Err(other) => return Err(other.to_string().into()),
+    };
+
     if verbose && verbosity.is_level(&Verbosity::AST) {
         println!("Parser - elapsed {}ms:", start.elapsed().as_millis());
-        println!("{}", program);
-        println!("Starting mir...");
+        if let Some(ast) = &artifacts.ast {
+            println!("{}", ast);
+            println!("Starting mir...");
+        } else {
+            println!("<AST unavailable: loaded from cache>");
+        }
     }
-
-    if !parser.errors.is_empty() {
-        calibre_diagnostics::emit_parser_errors(path, &contents, &parser.errors);
-        return Err(format!("parse failed").into());
-    }
-
-    let (mut env, scope, middle_node) = MiddleEnvironment::new_and_evaluate_with_package(
-        program,
-        path.to_path_buf(),
-        package_metadata,
-    );
-
-    let mir_errors = env.take_errors();
-    if !mir_errors.is_empty() {
-        emit_middle_error(path, &contents, &MiddleErr::Multiple(mir_errors));
-        return Err(format!("compile failed").into());
-    }
-
-    let mut middle_result = (env, scope, middle_node);
-    calibre_mir::inline::inline_small_calls(&mut middle_result.2, 20);
-
-    let entry_name = entry_name;
-    let main_name = if let Some(ref entry_name) = entry_name {
-        entry_name.clone()
-    } else {
-        middle_result
-            .0
-            .resolve_str(&middle_result.1, "main")
-            .map(|x| x.to_string())
-            .unwrap_or(String::from("main"))
-    };
 
     if verbose && verbosity.is_level(&Verbosity::MIR) {
         println!("Mir - elapsed {}ms:", start.elapsed().as_millis());
-        println!("{}", middle_result.2);
-        println!("Starting vm...");
+        if let Some(mir) = &artifacts.mir {
+            if module_only {
+                let token = scope_filter_token(&artifacts.entry_name);
+                if let Some(scope_id) = scope_id_from_token(token.as_deref()) {
+                    let filtered = filter_mir_node_for_scope(mir, scope_id, token.as_deref());
+                    println!("{filtered}");
+                } else {
+                    println!("{mir}");
+                }
+            } else {
+                println!("{}", mir);
+            }
+            println!("Starting vm...");
+        } else {
+            println!("<MIR unavailable: loaded from cache>");
+        }
     }
-
-    let lir_result = if entry_name.is_some() {
-        LirEnvironment::lower_with_root(
-            &middle_result.0,
-            middle_result.2.clone(),
-            "__repl".to_string(),
-        )
-    } else {
-        LirEnvironment::lower(&middle_result.0, middle_result.2.clone())
-    };
 
     if verbose && verbosity.is_level(&Verbosity::LIR) {
-        println!("Lir - elapsed {}ms:", start.elapsed().as_millis());
-        println!("{}", lir_result);
+        println!("Lir/Bytecode - elapsed {}ms:", start.elapsed().as_millis());
+        if module_only {
+            let token = scope_filter_token(&artifacts.entry_name);
+            let filtered = filter_registry_by_scope_text(&artifacts.registry, token.as_deref());
+            println!("{filtered}");
+        } else {
+            println!("{}", artifacts.registry);
+        }
     }
 
-    let mappings: Vec<String> = middle_result
-        .0
-        .variables
-        .iter()
-        .map(|x| x.0.to_string())
-        .collect();
-
-    let registry = VMRegistry::from(lir_result);
-    let cache_main = main_name.clone();
-
-    if let Some((cache_dir, cache_path)) = cache_path {
-        let cache = BytecodeCache {
-            main: cache_main,
-            mappings: mappings.clone(),
-            registry: registry.clone(),
-        };
-
-        fs::create_dir_all(&cache_dir).await?;
-        let bytes_res = bincode::serialize(&cache);
-        let bytes = bytes_res.map_err(|e| format!("bytecode cache serialize failed: {e}"))?;
-        let _ = fs::write(&cache_path, bytes).await;
-    }
-
-    let mut vm: VM = VM::new(registry, mappings, vm_config);
+    let mut vm: VM = VM::new(
+        artifacts.registry.clone(),
+        artifacts.mappings.clone(),
+        vm_config,
+    );
 
     if verbose && verbosity.is_level(&Verbosity::Byte) {
         println!("Bytecode - elapsed {}ms:", start.elapsed().as_millis());
-        println!("{}", vm.registry.as_ref());
+        if module_only {
+            let token = scope_filter_token(&artifacts.entry_name);
+            let filtered = filter_registry_by_scope_text(vm.registry.as_ref(), token.as_deref());
+            println!("{filtered}");
+        } else {
+            println!("{}", vm.registry.as_ref());
+        }
     }
 
-    if let Some(main) = vm.registry.functions.get(&main_name).cloned() {
+    if let Some(main) = vm.registry.functions.get(&artifacts.entry_name).cloned() {
         if let Err(err) = vm.run(main.as_ref(), Vec::new()) {
             let (span, inner) = err.innermost();
             calibre_diagnostics::emit_runtime_error(
@@ -231,28 +168,16 @@ async fn run_source(
                 span,
                 inner.help(),
             );
-            return Err(format!("runtime error").into());
-        }
-    } else if entry_name.is_some() {
-        if let Err(err) = vm.run_globals() {
-            let (span, inner) = err.innermost();
-            calibre_diagnostics::emit_runtime_error(
-                path,
-                &contents,
-                inner.to_string(),
-                span,
-                inner.help(),
-            );
-            return Err(format!("runtime error").into());
+            return Err("runtime error".into());
         }
     } else {
         calibre_diagnostics::emit_error(
             path,
             &contents,
-            format!("Missing entry point: {}", main_name),
+            format!("Missing entry point: {}", artifacts.entry_name),
             None,
         );
-        return Err(format!("runtime error").into());
+        return Err("runtime error".into());
     }
 
     if verbose {
@@ -260,6 +185,84 @@ async fn run_source(
     }
 
     Ok(())
+}
+
+fn scope_filter_token(entry_name: &str) -> Option<String> {
+    let head = entry_name.split(':').next()?;
+    let mut parts = head.split('-');
+    let _prefix = parts.next()?;
+    let scope = parts.next()?;
+    Some(format!("-{scope}-"))
+}
+
+fn scope_id_from_token(token: Option<&str>) -> Option<u64> {
+    let token = token?;
+    let trimmed = token.trim_matches('-');
+    trimmed.parse::<u64>().ok()
+}
+
+fn node_matches_scope(node: &MiddleNode, scope_id: u64, token: Option<&str>) -> bool {
+    match &node.node_type {
+        MiddleNodeType::FunctionDeclaration {
+            scope_id: fn_scope, ..
+        } => *fn_scope == scope_id,
+        MiddleNodeType::VariableDeclaration { identifier, .. } => {
+            token.map(|t| identifier.text.contains(t)).unwrap_or(false)
+        }
+        MiddleNodeType::ScopeDeclaration { body, .. } => body
+            .iter()
+            .any(|child| node_matches_scope(child, scope_id, token)),
+        _ => false,
+    }
+}
+
+fn filter_mir_node_for_scope(node: &MiddleNode, scope_id: u64, token: Option<&str>) -> MiddleNode {
+    match &node.node_type {
+        MiddleNodeType::ScopeDeclaration {
+            body,
+            create_new_scope,
+            is_temp,
+            scope_id: sid,
+        } => {
+            let filtered_body = body
+                .iter()
+                .filter(|child| node_matches_scope(child, scope_id, token))
+                .map(|child| filter_mir_node_for_scope(child, scope_id, token))
+                .collect::<Vec<_>>();
+            MiddleNode::new(
+                MiddleNodeType::ScopeDeclaration {
+                    body: filtered_body,
+                    create_new_scope: *create_new_scope,
+                    is_temp: *is_temp,
+                    scope_id: *sid,
+                },
+                node.span,
+            )
+        }
+        _ => node.clone(),
+    }
+}
+
+fn filter_registry_by_scope_text(
+    registry: &calibre_vm::conversion::VMRegistry,
+    token: Option<&str>,
+) -> String {
+    let Some(token) = token else {
+        return registry.to_string();
+    };
+
+    let mut out = String::new();
+    for (name, global) in &registry.globals {
+        if name.contains(token) {
+            out.push_str(&format!("{}\n", global));
+        }
+    }
+    for (name, func) in &registry.functions {
+        if name.contains(token) {
+            out.push_str(&format!("{}\n\n", func.as_ref()));
+        }
+    }
+    out
 }
 
 async fn run_repl_source(
@@ -539,6 +542,8 @@ enum Commands {
         example: Option<String>,
         #[arg(long)]
         verbosity: Option<Verbosity>,
+        #[arg(long)]
+        module_only: bool,
     },
     Clear,
     #[command(external_subcommand)]
@@ -583,40 +588,39 @@ fn main() -> Result<(), Box<dyn Error>> {
             Ok(None)
         };
 
-        let run_file = |path: PathBuf, verbosity: Verbosity| async move {
-            let path = PathBuf::from_str(path.to_string_lossy().as_ref())?;
-            let contents = fs::read_to_string(&path).await?;
-            if is_repl_file(&contents) {
-                let session = contents.lines().skip(1).map(|x| x.to_string()).collect();
-                return repl(session).await;
-            }
-
-            let project = load_project_from(&path).map_err(|e| format!("config error: {e}"))?;
-            let vm_config = vm_config_from_project(project.as_ref());
-            let package_metadata = package_metadata_from_project(project.as_ref());
-            let cache_base_dir = project.as_ref().map(|p| p.root.clone());
-            run_source(
-                contents,
-                &path,
-                !args.no_cache,
-                args.verbose,
-                verbosity,
-                None,
-                vm_config,
-                package_metadata,
-                cache_base_dir,
-            )
-            .await
-        };
-
         match args.command {
             Some(Commands::Run {
                 path,
                 example,
                 verbosity,
+                module_only,
             }) => {
                 if let Some(path) = resolve_run_target(path, example)? {
-                    run_file(path, verbosity.unwrap_or_default()).await
+                    let path = PathBuf::from_str(path.to_string_lossy().as_ref())?;
+                    let contents = fs::read_to_string(&path).await?;
+                    if is_repl_file(&contents) {
+                        let session = contents.lines().skip(1).map(|x| x.to_string()).collect();
+                        return repl(session).await;
+                    }
+
+                    let project =
+                        load_project_from(&path).map_err(|e| format!("config error: {e}"))?;
+                    let vm_config = vm_config_from_project(project.as_ref());
+                    let package_metadata = package_metadata_from_project(project.as_ref());
+                    let cache_base_dir = project.as_ref().map(|p| p.root.clone());
+                    run_source(
+                        contents,
+                        &path,
+                        !args.no_cache,
+                        args.verbose,
+                        verbosity.unwrap_or_default(),
+                        None,
+                        vm_config,
+                        package_metadata,
+                        cache_base_dir,
+                        module_only,
+                    )
+                    .await
                 } else {
                     repl(Vec::new()).await
                 }

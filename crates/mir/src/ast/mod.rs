@@ -26,6 +26,7 @@ impl MiddleNode {
     }
 }
 
+#[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
     Break {

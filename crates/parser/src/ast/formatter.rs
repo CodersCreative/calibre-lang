@@ -67,23 +67,28 @@ impl Default for Formatter {
 impl Formatter {
     pub fn start_format(
         &mut self,
-        text: String,
-        _range: Option<Span>,
+        text: &str,
+        range: Option<Span>,
     ) -> Result<String, Box<dyn Error>> {
+        self.comments = Self::extract_comments(text);
         let mut parser = Parser::default();
-        let ast = parser.produce_ast(&text);
+        let ast = parser.produce_ast(text);
 
         if !parser.errors.is_empty() {
             return Err(format!("{:?}", parser.errors).into());
         }
 
-        Ok(self.format(&ast))
+        let formatted = self.format(&ast);
+        if let Some(range) = range {
+            Ok(Self::slice_by_span(&formatted, range))
+        } else {
+            Ok(formatted)
+        }
     }
 
-    pub fn get_imports(&self, contents: String) -> Result<Vec<Node>, Box<dyn Error>> {
+    pub fn get_imports(&self, contents: &str) -> Result<Vec<Node>, Box<dyn Error>> {
         let mut parser = Parser::default();
-        let NodeType::ScopeDeclaration { body, .. } = parser.produce_ast(&contents).node_type
-        else {
+        let NodeType::ScopeDeclaration { body, .. } = parser.produce_ast(contents).node_type else {
             return Err("Expected scope declaration".into());
         };
         let Some(body) = body else {
@@ -92,10 +97,7 @@ impl Formatter {
 
         Ok(body
             .into_iter()
-            .filter(|x| match x.node_type {
-                NodeType::ImportStatement { .. } => true,
-                _ => false,
-            })
+            .filter(|x| matches!(x.node_type, NodeType::ImportStatement { .. }))
             .collect())
     }
 }
@@ -111,6 +113,165 @@ macro_rules! handle_comment {
 }
 
 impl Formatter {
+    fn slice_by_span(text: &str, span: Span) -> String {
+        fn offset_for(text: &str, line: u32, col: u32) -> usize {
+            let mut cur_line = 1u32;
+            let mut cur_col = 1u32;
+            let mut last = 0usize;
+            for (idx, ch) in text.char_indices() {
+                if cur_line == line && cur_col == col {
+                    return idx;
+                }
+                if ch == '\n' {
+                    cur_line += 1;
+                    cur_col = 1;
+                } else {
+                    cur_col += 1;
+                }
+                last = idx + ch.len_utf8();
+            }
+            if cur_line == line && cur_col == col {
+                return text.len();
+            }
+            last.min(text.len())
+        }
+
+        let start = offset_for(text, span.from.line.max(1), span.from.col.max(1));
+        let end = offset_for(text, span.to.line.max(1), span.to.col.max(1)).max(start);
+        text.get(start..end).unwrap_or("").to_string()
+    }
+
+    fn extract_comments(text: &str) -> Vec<Comment> {
+        #[derive(Copy, Clone, PartialEq, Eq)]
+        enum State {
+            Normal,
+            String,
+            Char,
+        }
+
+        let chars: Vec<char> = text.chars().collect();
+        let mut comments = Vec::new();
+        let mut i = 0usize;
+        let mut line = 1u32;
+        let mut col = 1u32;
+        let mut state = State::Normal;
+        let mut escaped = false;
+
+        while i < chars.len() {
+            let c = chars[i];
+            let next = chars.get(i + 1).copied();
+
+            match state {
+                State::String => {
+                    if escaped {
+                        escaped = false;
+                    } else if c == '\\' {
+                        escaped = true;
+                    } else if c == '"' {
+                        state = State::Normal;
+                    }
+                }
+                State::Char => {
+                    if escaped {
+                        escaped = false;
+                    } else if c == '\\' {
+                        escaped = true;
+                    } else if c == '\'' {
+                        state = State::Normal;
+                    }
+                }
+                State::Normal => {
+                    if c == '"' {
+                        state = State::String;
+                    } else if c == '\'' {
+                        state = State::Char;
+                    } else if c == '/' && next == Some('/') {
+                        let start_line = line;
+                        let start_col = col;
+                        i += 2;
+                        col += 2;
+                        let mut val = String::new();
+                        while i < chars.len() {
+                            let ch = chars[i];
+                            if ch == '\n' {
+                                break;
+                            }
+                            val.push(ch);
+                            i += 1;
+                            col += 1;
+                        }
+                        let end_col = if col > 1 { col - 1 } else { col };
+                        comments.push(Comment {
+                            value: val,
+                            span: Span::new(
+                                crate::Position {
+                                    line: start_line,
+                                    col: start_col,
+                                },
+                                crate::Position {
+                                    line: start_line,
+                                    col: end_col,
+                                },
+                            ),
+                        });
+                        continue;
+                    } else if c == '/' && next == Some('*') {
+                        let start_line = line;
+                        let start_col = col;
+                        i += 2;
+                        col += 2;
+                        let mut val = String::new();
+                        let mut end_line = line;
+                        let mut end_col = col;
+                        while i < chars.len() {
+                            let ch = chars[i];
+                            let ch_next = chars.get(i + 1).copied();
+                            if ch == '*' && ch_next == Some('/') {
+                                end_line = line;
+                                end_col = col + 1;
+                                i += 2;
+                                col += 2;
+                                break;
+                            }
+                            val.push(ch);
+                            if ch == '\n' {
+                                line += 1;
+                                col = 1;
+                            } else {
+                                col += 1;
+                            }
+                            i += 1;
+                        }
+                        comments.push(Comment {
+                            value: val,
+                            span: Span::new(
+                                crate::Position {
+                                    line: start_line,
+                                    col: start_col,
+                                },
+                                crate::Position {
+                                    line: end_line,
+                                    col: end_col,
+                                },
+                            ),
+                        });
+                        continue;
+                    }
+                }
+            }
+
+            if c == '\n' {
+                line += 1;
+                col = 1;
+            } else {
+                col += 1;
+            }
+            i += 1;
+        }
+
+        comments
+    }
+
     fn should_wrap(&self, text: &str) -> bool {
         text.contains('\n') || text.len() > self.max_width
     }
@@ -2037,9 +2198,9 @@ impl Formatter {
             return single_values.join(", ");
         }
 
-        let single = format!("({})", single_values.join(", "));
+        let single = format!("{}", single_values.join(", "));
         let multi = format!(
-            "(\n{}\n)",
+            "\n{}",
             self.fmt_txt_with_tab(&single_values.join(",\n"), 1, true)
         );
         self.wrap_if_wide(single, &multi)
@@ -2089,13 +2250,7 @@ impl Formatter {
 
     fn fmt_ffi_normal_type(&mut self, data_type: &ParserDataType) -> String {
         match &data_type.data_type {
-            // In FFI signatures, pointer element scalars must stay explicit.
-            // We prefer byte-size aliases for pointer element defaults.
-            ParserInnerType::Ptr(inner) => match inner.data_type {
-                ParserInnerType::UInt => "ptr:<@u8>".to_string(),
-                ParserInnerType::Int => "ptr:<@i8>".to_string(),
-                _ => format!("ptr:<{}>", self.fmt_ffi_normal_type(inner)),
-            },
+            ParserInnerType::Ptr(inner) => format!("ptr:<{}>", self.fmt_ffi_normal_type(inner)),
             _ => self.fmt_parser_data_type(data_type),
         }
     }
@@ -2128,9 +2283,7 @@ mod tests {
     fn tuple_literal_uses_parens_inside_other_expressions() {
         let src = "let v = consume((1, 2));";
         let mut formatter = Formatter::default();
-        let out = formatter
-            .start_format(src.to_string(), None)
-            .expect("format");
+        let out = formatter.start_format(src, None).expect("format");
         assert!(out.contains("consume((1, 2))"), "{out}");
         assert!(parse_has_no_errors(&out), "{out}");
     }
@@ -2139,9 +2292,7 @@ mod tests {
     fn tuple_literal_is_bare_for_assignment_rhs() {
         let src = "let tpl = (1, 2); tpl = (3, 4);";
         let mut formatter = Formatter::default();
-        let out = formatter
-            .start_format(src.to_string(), None)
-            .expect("format");
+        let out = formatter.start_format(src, None).expect("format");
         assert!(out.contains("let tpl = 1, 2;"), "{out}");
         assert!(out.contains("tpl = 3, 4;"), "{out}");
         assert!(parse_has_no_errors(&out), "{out}");
