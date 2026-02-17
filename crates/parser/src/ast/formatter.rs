@@ -1,17 +1,14 @@
-use std::error::Error;
-
-use rustc_hash::FxHashMap;
-
 use crate::{
-    Parser,
+    Parser, Span,
     ast::{
         CallArg, DestructurePattern, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node,
         NodeType, ObjectType, Overload, ParserDataType, ParserInnerType, PipeSegment,
         PotentialDollarIdentifier, PotentialFfiDataType, PotentialNewType, SelectArmKind,
         TypeDefType, VarType,
     },
-    lexer::{Span, Token, TokenType, Tokenizer},
 };
+use rustc_hash::FxHashMap;
+use std::error::Error;
 
 pub struct Tab {
     character: char,
@@ -46,9 +43,13 @@ impl Tab {
     }
 }
 
+pub struct Comment {
+    pub value: String,
+    pub span: Span,
+}
+
 pub struct Formatter {
-    pub comments: Vec<Token>,
-    pub tokens: Vec<Token>,
+    pub comments: Vec<Comment>,
     pub max_width: usize,
     pub tab: Tab,
 }
@@ -57,7 +58,6 @@ impl Default for Formatter {
     fn default() -> Self {
         Self {
             comments: Vec::new(),
-            tokens: Vec::new(),
             max_width: 200,
             tab: Tab::default(),
         }
@@ -68,28 +68,8 @@ impl Formatter {
     pub fn start_format(
         &mut self,
         text: String,
-        range: Option<Span>,
+        _range: Option<Span>,
     ) -> Result<String, Box<dyn Error>> {
-        let mut tokenizer = Tokenizer::new(true);
-        let mut tokens = tokenizer.tokenize(&text)?;
-        if let Some(range) = range {
-            tokens = tokens
-                .into_iter()
-                .filter(|x| x.span.from >= range.from && x.span.to <= range.to)
-                .collect()
-        }
-
-        self.comments = tokens
-            .iter()
-            .filter(|x| x.token_type == TokenType::Comment)
-            .cloned()
-            .collect();
-        self.tokens = tokens.clone();
-        let _tokens: Vec<Token> = tokens
-            .into_iter()
-            .filter(|x| x.token_type != TokenType::Comment)
-            .collect();
-
         let mut parser = Parser::default();
         let ast = parser.produce_ast(&text);
 
@@ -102,8 +82,7 @@ impl Formatter {
 
     pub fn get_imports(&self, contents: String) -> Result<Vec<Node>, Box<dyn Error>> {
         let mut parser = Parser::default();
-        let NodeType::ScopeDeclaration { body, .. } =
-            parser.produce_ast(&contents).node_type
+        let NodeType::ScopeDeclaration { body, .. } = parser.produce_ast(&contents).node_type
         else {
             return Err("Expected scope declaration".into());
         };
@@ -1518,7 +1497,7 @@ impl Formatter {
         }
     }
 
-    fn fmt_comments(mut comments: Vec<Token>) -> String {
+    fn fmt_comments(mut comments: Vec<Comment>) -> String {
         let comment = comments.remove(0);
 
         if comments.len() > 1 {
@@ -1796,32 +1775,7 @@ impl Formatter {
     }
 
     fn fmt_parser_data_type(&mut self, data_type: &ParserDataType) -> String {
-        if let Some(raw) = self.fmt_raw_type_with_ffi_markers(&data_type.span) {
-            return raw;
-        }
         self.fmt_parser_inner_type(&data_type.data_type)
-    }
-
-    fn fmt_raw_type_with_ffi_markers(&self, span: &Span) -> Option<String> {
-        let mut parts = Vec::new();
-        let mut has_at = false;
-        for tok in &self.tokens {
-            if tok.token_type == TokenType::Comment {
-                continue;
-            }
-            if tok.span.from >= span.from && tok.span.to <= span.to {
-                if tok.token_type == TokenType::At {
-                    has_at = true;
-                }
-                parts.push(tok.value.clone());
-            }
-        }
-
-        if !has_at || parts.is_empty() {
-            return None;
-        }
-
-        Some(parts.join(""))
     }
 
     fn fmt_parser_inner_type(&mut self, inner: &ParserInnerType) -> String {
@@ -2099,11 +2053,9 @@ impl Formatter {
     }
 
     fn has_comment_between_spans(&self, outer: &Span, end: &Span) -> bool {
-        self.comments.iter().any(|comment| {
-            comment.span.from >= outer.from
-                && comment.span.to <= end.from
-                && comment.token_type == TokenType::Comment
-        })
+        self.comments
+            .iter()
+            .any(|comment| comment.span.from >= outer.from && comment.span.to <= end.from)
     }
 
     fn escape_char_literal(&self, value: &char) -> String {

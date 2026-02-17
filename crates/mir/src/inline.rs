@@ -1,6 +1,5 @@
-use rustc_hash::FxHashMap;
-
 use crate::ast::{MiddleNode, MiddleNodeType};
+use rustc_hash::FxHashMap;
 
 struct InlineFn {
     params: Vec<String>,

@@ -1,23 +1,21 @@
 use crate::ast::hm::{self, Subst, Type, TypeGenerator};
 use crate::ast::{MiddleNode, MiddleNodeType};
+use crate::errors::MiddleErr;
+use crate::infer::infer_node_type;
 use calibre_parser::ast::PotentialFfiDataType;
 use calibre_parser::{
-    Parser,
+    Location, Parser, Span,
     ast::{
-        FunctionHeader, Node, NodeType, ObjectMap, ObjectType, Overload, ParserDataType, ParserInnerType,
-        ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
-        TypeDefType, VarType,
+        FunctionHeader, Node, NodeType, ObjectMap, ObjectType, Overload, ParserDataType,
+        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+        PotentialNewType, TypeDefType, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
-    lexer::{Location, Span},
 };
 use rand::random_range;
 use rustc_hash::FxHashMap;
 use std::{fs, path::PathBuf, str::FromStr};
-
-use crate::errors::MiddleErr;
-use crate::infer::infer_node_type;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MiddleTypeDefType {
@@ -1113,7 +1111,7 @@ impl MiddleEnvironment {
                     self.apply_inferred_types_to_middlenode_inner(scope, stmt, cache);
                 }
             }
-            MiddleNodeType::IfStatement {
+            MiddleNodeType::Conditional {
                 comparison,
                 then,
                 otherwise,
@@ -1752,7 +1750,10 @@ impl MiddleEnvironment {
             NodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, mapped_name)),
-                data_type: PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
+                data_type: PotentialNewType::DataType(ParserDataType::new(
+                    sp,
+                    ParserInnerType::Str,
+                )),
                 value: Box::new(name_value),
             },
         ));
@@ -1761,7 +1762,10 @@ impl MiddleEnvironment {
             NodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, mapped_file)),
-                data_type: PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
+                data_type: PotentialNewType::DataType(ParserDataType::new(
+                    sp,
+                    ParserInnerType::Str,
+                )),
                 value: Box::new(file_value),
             },
         ));
@@ -1784,128 +1788,122 @@ impl MiddleEnvironment {
         };
 
         if let Some(meta) = package_meta {
-
-                let package_type = Node::new(
-                    sp,
-                    NodeType::TypeDeclaration {
-                        identifier: PotentialGenericTypeIdentifier::Identifier(
-                            PotentialDollarIdentifier::Identifier(ParserText::new(
+            let package_type = Node::new(
+                sp,
+                NodeType::TypeDeclaration {
+                    identifier: PotentialGenericTypeIdentifier::Identifier(
+                        PotentialDollarIdentifier::Identifier(ParserText::new(
+                            sp,
+                            "__Package".to_string(),
+                        )),
+                    ),
+                    object: TypeDefType::Struct(ObjectType::Map(vec![
+                        (
+                            "name".to_string(),
+                            PotentialNewType::DataType(ParserDataType::new(
                                 sp,
-                                "__Package".to_string(),
+                                ParserInnerType::Str,
                             )),
                         ),
-                        object: TypeDefType::Struct(ObjectType::Map(vec![
-                            (
-                                "name".to_string(),
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                            ),
-                            (
-                                "version".to_string(),
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                            ),
-                            (
-                                "description".to_string(),
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                            ),
-                            (
-                                "license".to_string(),
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                            ),
-                            (
-                                "repository".to_string(),
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                            ),
-                            (
-                                "homepage".to_string(),
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                            ),
-                            (
-                                "src".to_string(),
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                            ),
-                            (
-                                "root".to_string(),
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                            ),
-                        ])),
-                        overloads: Vec::new(),
-                    },
-                );
-                prefix.push(package_type);
+                        (
+                            "version".to_string(),
+                            PotentialNewType::DataType(ParserDataType::new(
+                                sp,
+                                ParserInnerType::Str,
+                            )),
+                        ),
+                        (
+                            "description".to_string(),
+                            PotentialNewType::DataType(ParserDataType::new(
+                                sp,
+                                ParserInnerType::Str,
+                            )),
+                        ),
+                        (
+                            "license".to_string(),
+                            PotentialNewType::DataType(ParserDataType::new(
+                                sp,
+                                ParserInnerType::Str,
+                            )),
+                        ),
+                        (
+                            "repository".to_string(),
+                            PotentialNewType::DataType(ParserDataType::new(
+                                sp,
+                                ParserInnerType::Str,
+                            )),
+                        ),
+                        (
+                            "homepage".to_string(),
+                            PotentialNewType::DataType(ParserDataType::new(
+                                sp,
+                                ParserInnerType::Str,
+                            )),
+                        ),
+                        (
+                            "src".to_string(),
+                            PotentialNewType::DataType(ParserDataType::new(
+                                sp,
+                                ParserInnerType::Str,
+                            )),
+                        ),
+                        (
+                            "root".to_string(),
+                            PotentialNewType::DataType(ParserDataType::new(
+                                sp,
+                                ParserInnerType::Str,
+                            )),
+                        ),
+                    ])),
+                    overloads: Vec::new(),
+                },
+            );
+            prefix.push(package_type);
 
-                let value = |v: String| {
-                    Node::new(
+            let value = |v: String| Node::new(sp, NodeType::StringLiteral(ParserText::new(sp, v)));
+            let package_value = Node::new(
+                sp,
+                NodeType::StructLiteral {
+                    identifier: PotentialGenericTypeIdentifier::Identifier(
+                        PotentialDollarIdentifier::Identifier(ParserText::new(
+                            sp,
+                            "__Package".to_string(),
+                        )),
+                    ),
+                    value: ObjectType::Map(vec![
+                        ("name".to_string(), value(meta.name)),
+                        ("version".to_string(), value(meta.version)),
+                        ("description".to_string(), value(meta.description)),
+                        ("license".to_string(), value(meta.license)),
+                        ("repository".to_string(), value(meta.repository)),
+                        ("homepage".to_string(), value(meta.homepage)),
+                        ("src".to_string(), value(meta.src)),
+                        ("root".to_string(), value(meta.root)),
+                    ]),
+                },
+            );
+            let package_ident = get_disamubiguous_name(&scope, Some("__package__"), None);
+            if let Some(scope_ref) = self.scopes.get_mut(&scope) {
+                scope_ref
+                    .mappings
+                    .entry("__package__".to_string())
+                    .or_insert_with(|| package_ident.clone());
+            }
+            prefix.push(Node::new(
+                sp,
+                NodeType::VariableDeclaration {
+                    var_type: VarType::Constant,
+                    identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                         sp,
-                        NodeType::StringLiteral(ParserText::new(sp, v)),
-                    )
-                };
-                let package_value = Node::new(
-                    sp,
-                    NodeType::StructLiteral {
-                        identifier: PotentialGenericTypeIdentifier::Identifier(
-                            PotentialDollarIdentifier::Identifier(ParserText::new(
-                                sp,
-                                "__Package".to_string(),
-                            )),
-                        ),
-                        value: ObjectType::Map(vec![
-                            ("name".to_string(), value(meta.name)),
-                            ("version".to_string(), value(meta.version)),
-                            ("description".to_string(), value(meta.description)),
-                            ("license".to_string(), value(meta.license)),
-                            ("repository".to_string(), value(meta.repository)),
-                            ("homepage".to_string(), value(meta.homepage)),
-                            ("src".to_string(), value(meta.src)),
-                            ("root".to_string(), value(meta.root)),
-                        ]),
-                    },
-                );
-                let package_ident = get_disamubiguous_name(&scope, Some("__package__"), None);
-                if let Some(scope_ref) = self.scopes.get_mut(&scope) {
-                    scope_ref
-                        .mappings
-                        .entry("__package__".to_string())
-                        .or_insert_with(|| package_ident.clone());
-                }
-                prefix.push(Node::new(
-                    sp,
-                    NodeType::VariableDeclaration {
-                        var_type: VarType::Constant,
-                        identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
-                            sp,
-                            package_ident,
-                        )),
-                        data_type: PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::Struct("__Package".to_string()),
-                        )),
-                        value: Box::new(package_value),
-                    },
-                ));
+                        package_ident,
+                    )),
+                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                        sp,
+                        ParserInnerType::Struct("__Package".to_string()),
+                    )),
+                    value: Box::new(package_value),
+                },
+            ));
         }
 
         let mut body = match program.node_type {

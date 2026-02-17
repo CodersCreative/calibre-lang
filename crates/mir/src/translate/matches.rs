@@ -1,10 +1,10 @@
 use calibre_parser::{
+    Span,
     ast::{
         CallArg, IfComparisonType, MatchArmType, Node, NodeType, ParserDataType, ParserInnerType,
         ParserText, PotentialGenericTypeIdentifier, PotentialNewType, RefMutability, VarType,
         comparison::{BooleanOperator, ComparisonOperator},
     },
-    lexer::Span,
 };
 
 use crate::{

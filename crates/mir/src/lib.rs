@@ -1,11 +1,11 @@
 use ast::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
+    Span,
     ast::{
         CallArg, DestructurePattern, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
         binary::BinaryOperator,
     },
-    lexer::Span,
 };
 
 use crate::errors::MiddleErr;

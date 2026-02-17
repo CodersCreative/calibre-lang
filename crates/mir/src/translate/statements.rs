@@ -8,11 +8,11 @@ use crate::{
     infer::infer_node_hm,
 };
 use calibre_parser::{
+    Span,
     ast::{
         Node, NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
         PotentialNewType, VarType,
     },
-    lexer::Span,
 };
 use rustc_hash::FxHashMap;
 

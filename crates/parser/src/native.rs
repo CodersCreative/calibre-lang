@@ -1,6 +1,6 @@
 use crate::{
+    Span,
     ast::{ParserDataType, ParserInnerType, RefMutability},
-    lexer::Span,
 };
 use rustc_hash::FxHashMap;
 

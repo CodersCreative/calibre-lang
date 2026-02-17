@@ -1,10 +1,10 @@
 use calibre_parser::{
+    Span,
     ast::{
         CallArg, FunctionHeader, GenericTypes, Node, NodeType, ParserDataType, ParserInnerType,
         ParserText, PotentialDollarIdentifier, PotentialFfiDataType,
         PotentialGenericTypeIdentifier, PotentialNewType, VarType,
     },
-    lexer::Span,
 };
 
 use crate::{
@@ -222,7 +222,7 @@ impl MiddleEnvironment {
                             ));
                         } else {
                             let last_node = match last_node.node_type {
-                                MiddleNodeType::IfStatement {
+                                MiddleNodeType::Conditional {
                                     comparison,
                                     then,
                                     otherwise,
@@ -247,7 +247,7 @@ impl MiddleEnvironment {
                                     };
                                     MiddleNode {
                                         span: last_node.span,
-                                        node_type: MiddleNodeType::IfStatement {
+                                        node_type: MiddleNodeType::Conditional {
                                             comparison,
                                             then,
                                             otherwise,

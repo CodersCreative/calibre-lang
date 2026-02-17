@@ -2,12 +2,12 @@ use calibre_lir::{
     BlockId, LirBlock, LirFunction, LirGlobal, LirInstr, LirLValue, LirLiteral, LirNodeType,
     LirRegistry, LirTerminator,
 };
+use calibre_parser::Span;
 use calibre_parser::ast::{
     ParserDataType, ParserInnerType, PotentialFfiDataType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
-use calibre_parser::lexer::Span;
 use rand::random_range;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};

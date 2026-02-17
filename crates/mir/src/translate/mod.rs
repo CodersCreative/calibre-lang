@@ -7,19 +7,17 @@ use crate::{
     errors::MiddleErr,
 };
 use calibre_parser::{
+    Span,
     ast::{
         CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node,
         NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, VarType,
         comparison::{BooleanOperator, ComparisonOperator},
     },
-    lexer::Span,
 };
 use rustc_hash::FxHashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-static SPAWN_FN_COUNTER: AtomicUsize = AtomicUsize::new(0);
 use std::str::FromStr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub mod functions;
 pub mod loops;
@@ -27,6 +25,8 @@ pub mod matches;
 pub mod member;
 pub mod scopes;
 pub mod statements;
+
+static SPAWN_FN_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 impl MiddleEnvironment {
     pub fn evaluate(&mut self, scope: &u64, node: Node) -> MiddleNode {
@@ -948,7 +948,7 @@ impl MiddleEnvironment {
                 otherwise,
             } => match *comparison {
                 IfComparisonType::If(x) => Ok(MiddleNode {
-                    node_type: MiddleNodeType::IfStatement {
+                    node_type: MiddleNodeType::Conditional {
                         comparison: Box::new(self.evaluate(scope, x)),
                         then: Box::new(self.evaluate(scope, *then)),
                         otherwise: otherwise.map(|x| Box::new(self.evaluate(scope, *x))),

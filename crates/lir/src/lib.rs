@@ -2,12 +2,12 @@ use calibre_mir::{
     ast::{MiddleNode, MiddleNodeType},
     environment::{MiddleEnvironment, MiddleTypeDefType},
 };
+use calibre_parser::Span;
 use calibre_parser::ast::{
     ObjectMap, ParserDataType, ParserInnerType, PotentialFfiDataType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
-use calibre_parser::lexer::Span;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -649,7 +649,7 @@ impl<'a> LirEnvironment<'a> {
                 };
                 let mut body_val;
                 let mut has_body_value;
-                if let MiddleNodeType::IfStatement { .. } = &body.node_type {
+                if let MiddleNodeType::Conditional { .. } = &body.node_type {
                     let ret = MiddleNode::new(
                         MiddleNodeType::Return {
                             value: Some(body.clone()),
@@ -824,7 +824,7 @@ impl<'a> LirEnvironment<'a> {
                     LirNodeType::Literal(LirLiteral::Null)
                 }
             }
-            MiddleNodeType::IfStatement {
+            MiddleNodeType::Conditional {
                 comparison,
                 then,
                 otherwise,
@@ -931,7 +931,7 @@ impl<'a> LirEnvironment<'a> {
             }
             MiddleNodeType::Return { value } => {
                 if let Some(v) = value {
-                    if let MiddleNodeType::IfStatement {
+                    if let MiddleNodeType::Conditional {
                         comparison,
                         then,
                         otherwise,

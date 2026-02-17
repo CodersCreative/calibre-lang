@@ -1,12 +1,11 @@
-use std::str::FromStr;
-
 use calibre_parser::{
+    Span,
     ast::{
         CallArg, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
     },
-    lexer::Span,
 };
+use std::str::FromStr;
 
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
@@ -15,11 +14,7 @@ use crate::{
 };
 
 impl MiddleEnvironment {
-    fn resolve_member_from_chain_family(
-        &self,
-        base: &MiddleNode,
-        member: &str,
-    ) -> Option<String> {
+    fn resolve_member_from_chain_family(&self, base: &MiddleNode, member: &str) -> Option<String> {
         let MiddleNodeType::CallExpression { caller, .. } = &base.node_type else {
             return None;
         };
@@ -102,7 +97,9 @@ impl MiddleEnvironment {
             let generic_ident = PotentialGenericTypeIdentifier::Identifier(
                 PotentialDollarIdentifier::Identifier(ident.clone()),
             );
-            return self.resolve_type_from_ident(scope, &generic_ident).is_none();
+            return self
+                .resolve_type_from_ident(scope, &generic_ident)
+                .is_none();
         }
         true
     }
@@ -443,7 +440,8 @@ impl MiddleEnvironment {
                                         }
                                     }
                                 }
-                                if !first_param_by_ref && list.len() == 1
+                                if !first_param_by_ref
+                                    && list.len() == 1
                                     && let MiddleNodeType::Identifier(ident) = &list[0].0.node_type
                                 {
                                     self_arg = Node::new(
@@ -493,9 +491,9 @@ impl MiddleEnvironment {
                             && list.len() > 1
                         {
                             let name = second.to_string();
-                            let chain_member = list
-                                .last()
-                                .and_then(|(base, _)| self.resolve_member_from_chain_family(base, &name));
+                            let chain_member = list.last().and_then(|(base, _)| {
+                                self.resolve_member_from_chain_family(base, &name)
+                            });
                             let chain_member_name = list
                                 .last()
                                 .and_then(|(base, _)| self.resolve_chain_member_name(base, &name));

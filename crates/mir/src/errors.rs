@@ -1,9 +1,8 @@
 use std::path::PathBuf;
 
 use calibre_parser::{
-    ParserError,
+    ParserError, Span,
     ast::{NodeType, ParserDataType},
-    lexer::{LexerError, Span},
 };
 use thiserror::Error;
 
@@ -44,12 +43,6 @@ pub enum MiddleErr {
         path: PathBuf,
         contents: String,
         errors: Vec<ParserError>,
-    },
-    #[error("Lexer error in {path:?}")]
-    LexerError {
-        path: PathBuf,
-        contents: String,
-        error: LexerError,
     },
     #[error("Multiple middle errors")]
     Multiple(Vec<MiddleErr>),

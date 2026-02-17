@@ -4,7 +4,7 @@ use crate::{
         Node, NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
         PotentialGenericTypeIdentifier, PotentialNewType,
     },
-    lexer::{Position, Span},
+    Position, Span,
 };
 
 pub(super) fn lex<'a, P, O: 'a>(

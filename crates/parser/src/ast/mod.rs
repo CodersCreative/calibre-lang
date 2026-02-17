@@ -1,10 +1,9 @@
 pub mod binary;
 pub mod comparison;
 pub mod formatter;
-
 use crate::{
     ast::{comparison::BooleanOperator, formatter::Formatter},
-    lexer::Span,
+    Span,
 };
 use binary::BinaryOperator;
 use comparison::ComparisonOperator;

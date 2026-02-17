@@ -1,4 +1,5 @@
 use calibre_parser::{
+    Span,
     ast::{
         CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
         ObjectMap, ObjectType, ParserDataType, ParserText, PotentialFfiDataType, RefMutability,
@@ -6,9 +7,9 @@ use calibre_parser::{
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
-    lexer::Span,
 };
 use std::fmt::Display;
+
 pub mod hm;
 pub mod identifiers;
 pub mod renaming;
@@ -139,7 +140,7 @@ pub enum MiddleNodeType {
         identifier: Option<ParserText>,
         value: ObjectMap<MiddleNode>,
     },
-    IfStatement {
+    Conditional {
         comparison: Box<MiddleNode>,
         then: Box<MiddleNode>,
         otherwise: Option<Box<MiddleNode>>,
@@ -290,7 +291,7 @@ impl Into<NodeType> for MiddleNodeType {
                 value: Box::new((*value).into()),
                 data_type: data_type.into(),
             },
-            Self::IfStatement {
+            Self::Conditional {
                 comparison,
                 then,
                 otherwise,

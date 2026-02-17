@@ -1,14 +1,66 @@
+use std::{fmt::Display, path::PathBuf};
+
 use crate::{
     ast::{Node, NodeType},
-    lexer::{Bracket, LexerError, Span},
     parse::parse_program_with_source,
 };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod ast;
-pub mod lexer;
 pub mod native;
 pub mod parse;
+
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
+pub struct Position {
+    pub line: u32,
+    pub col: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct Location {
+    pub path: PathBuf,
+    pub span: Span,
+}
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
+pub struct Span {
+    pub from: Position,
+    pub to: Position,
+}
+
+impl Display for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({}:{}) -> ({}:{})",
+            self.from.line, self.from.col, self.to.line, self.to.col
+        )
+    }
+}
+
+impl Span {
+    pub fn new(from: Position, to: Position) -> Self {
+        Self { from, to }
+    }
+
+    pub fn new_from_spans(from: Self, to: Self) -> Self {
+        Self {
+            from: from.from,
+            to: to.to,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Bracket {
+    Curly,
+    Paren,
+    Square,
+}
 
 #[derive(Debug, Default)]
 pub struct Parser {
@@ -44,17 +96,9 @@ impl Parser {
     }
 }
 
-impl From<LexerError> for ParserError {
-    fn from(value: LexerError) -> Self {
-        Self::Lexer(value)
-    }
-}
-
 #[allow(unused_assignments)]
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParserError {
-    #[error(transparent)]
-    Lexer(LexerError),
     #[error("{err} at {span}")]
     Syntax { err: SyntaxErr, span: Span },
 }

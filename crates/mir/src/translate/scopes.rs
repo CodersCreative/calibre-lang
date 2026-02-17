@@ -1,16 +1,15 @@
+use crate::{
+    ast::{MiddleNode, MiddleNodeType},
+    environment::{MiddleEnvironment, ScopeMacro, get_disamubiguous_name},
+    errors::MiddleErr,
+};
 use calibre_parser::{
+    Span,
     ast::{
         CallArg, FunctionHeader, LoopType, NamedScope, Node, NodeType, ParserDataType,
         ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
         PotentialNewType,
     },
-    lexer::Span,
-};
-
-use crate::{
-    ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, ScopeMacro, get_disamubiguous_name},
-    errors::MiddleErr,
 };
 
 impl MiddleEnvironment {

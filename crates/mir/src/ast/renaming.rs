@@ -1,8 +1,7 @@
+use crate::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{ObjectMap, ParserText};
 use rand::random_range;
 use rustc_hash::FxHashMap;
-
-use crate::{MiddleNode, MiddleNodeType};
 
 #[derive(Default)]
 pub struct AlphaRenameState {
@@ -245,11 +244,11 @@ impl MiddleNodeType {
                     ),
                 }
             }
-            MiddleNodeType::IfStatement {
+            MiddleNodeType::Conditional {
                 comparison,
                 then,
                 otherwise,
-            } => MiddleNodeType::IfStatement {
+            } => MiddleNodeType::Conditional {
                 comparison: Box::new(comparison.rename(state)),
                 then: Box::new(then.rename(state)),
                 otherwise: otherwise.map(|value| Box::new(value.rename(state))),

@@ -5,7 +5,8 @@ use calibre_mir::{
     errors::MiddleErr,
 };
 use calibre_vm::{VM, config::VMConfig, conversion::VMRegistry, value::RuntimeValue};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+use config::{ProjectContext, load_project_from, resolve_example_by_name};
 use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;
 use serde::{Deserialize, Serialize};
@@ -14,11 +15,10 @@ use std::{
     error::Error,
     path::{Path, PathBuf},
     process::Command,
-    str::FromStr
+    str::FromStr,
 };
 
 pub mod config;
-use config::{ProjectContext, load_project_from, resolve_example_by_name};
 
 #[derive(Serialize, Deserialize)]
 struct BytecodeCache {
@@ -46,16 +46,6 @@ fn emit_middle_error(path: &Path, contents: &str, err: &MiddleErr) {
         } => {
             calibre_diagnostics::emit_parser_errors(err_path, contents, errors);
         }
-        MiddleErr::LexerError {
-            path: err_path,
-            contents,
-            error,
-        } => {
-            let span = match error {
-                calibre_parser::lexer::LexerError::Unrecognized { span, .. } => Some(*span),
-            };
-            calibre_diagnostics::emit_error(err_path, contents, error.to_string(), span);
-        }
         other => {
             calibre_diagnostics::emit_error(path, contents, other.to_string(), None);
         }
@@ -67,6 +57,7 @@ async fn run_source(
     path: &Path,
     cache: bool,
     verbose: bool,
+    verbosity: Verbosity,
     entry_name: Option<String>,
     vm_config: VMConfig,
     package_metadata: Option<PackageMetadata>,
@@ -104,12 +95,12 @@ async fn run_source(
         .await;
 
         if let Ok(cache) = cache_res {
-            if verbose {
+            if verbose && verbosity.is_level(&Verbosity::LIR) {
                 println!("Loading Cache - elapsed {}ms", start.elapsed().as_millis());
             }
             let mut vm: VM = VM::new(cache.registry, cache.mappings, vm_config.clone());
 
-            if verbose {
+            if verbose && verbosity.is_level(&Verbosity::Byte) {
                 println!("Starting vm... - elapsed {}ms", start.elapsed().as_millis());
                 println!("Bytecode:");
                 println!("{}", vm.registry.as_ref());
@@ -142,7 +133,7 @@ async fn run_source(
     }
 
     let program = parser.produce_ast(&contents);
-    if verbose {
+    if verbose && verbosity.is_level(&Verbosity::AST) {
         println!("Parser - elapsed {}ms:", start.elapsed().as_millis());
         println!("{}", program);
         println!("Starting mir...");
@@ -179,7 +170,7 @@ async fn run_source(
             .unwrap_or(String::from("main"))
     };
 
-    if verbose {
+    if verbose && verbosity.is_level(&Verbosity::MIR) {
         println!("Mir - elapsed {}ms:", start.elapsed().as_millis());
         println!("{}", middle_result.2);
         println!("Starting vm...");
@@ -195,7 +186,7 @@ async fn run_source(
         LirEnvironment::lower(&middle_result.0, middle_result.2.clone())
     };
 
-    if verbose {
+    if verbose && verbosity.is_level(&Verbosity::LIR) {
         println!("Lir - elapsed {}ms:", start.elapsed().as_millis());
         println!("{}", lir_result);
     }
@@ -225,7 +216,7 @@ async fn run_source(
 
     let mut vm: VM = VM::new(registry, mappings, vm_config);
 
-    if verbose {
+    if verbose && verbosity.is_level(&Verbosity::Byte) {
         println!("Bytecode - elapsed {}ms:", start.elapsed().as_millis());
         println!("{}", vm.registry.as_ref());
     }
@@ -417,16 +408,15 @@ fn run_external_subcommand(cmd: &[String]) -> Result<(), Box<dyn Error>> {
                 if status.success() {
                     return Ok(());
                 }
-                return Err(
-                    format!("subcommand `{}` exited with status {status}", candidate.display())
-                        .into(),
-                );
+                return Err(format!(
+                    "subcommand `{}` exited with status {status}",
+                    candidate.display()
+                )
+                .into());
             }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
             Err(err) => {
-                return Err(
-                    format!("unable to run `{}`: {err}", candidate.display()).into(),
-                )
+                return Err(format!("unable to run `{}`: {err}", candidate.display()).into());
             }
         }
     }
@@ -498,7 +488,8 @@ async fn repl(initial_session: Vec<String>) -> Result<(), Box<dyn Error>> {
         }
         program.push_str(line);
 
-        if let Ok((Some(_), txt)) = run_repl_source(program, &repl_path, VMConfig::default()).await {
+        if let Ok((Some(_), txt)) = run_repl_source(program, &repl_path, VMConfig::default()).await
+        {
             session.push(line.to_string());
             if !is_persistent_decl(line) {
                 println!("{}", txt);
@@ -520,12 +511,34 @@ struct Args {
     command: Option<Commands>,
 }
 
+#[derive(Debug, Default, Clone, Parser, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum Verbosity {
+    #[default]
+    All,
+    AST,
+    MIR,
+    LIR,
+    Byte,
+}
+
+impl Verbosity {
+    pub fn is_level(&self, other: &Verbosity) -> bool {
+        if self == &Verbosity::All || other == &Verbosity::All {
+            return true;
+        }
+
+        self == other
+    }
+}
+
 #[derive(Subcommand, Debug)]
 enum Commands {
     Run {
         path: Option<String>,
-        #[arg(long)]
+        #[arg(short, long)]
         example: Option<String>,
+        #[arg(long)]
+        verbosity: Option<Verbosity>,
     },
     Clear,
     #[command(external_subcommand)]
@@ -570,7 +583,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Ok(None)
         };
 
-        let run_file = |path: PathBuf| async move {
+        let run_file = |path: PathBuf, verbosity: Verbosity| async move {
             let path = PathBuf::from_str(path.to_string_lossy().as_ref())?;
             let contents = fs::read_to_string(&path).await?;
             if is_repl_file(&contents) {
@@ -587,6 +600,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 &path,
                 !args.no_cache,
                 args.verbose,
+                verbosity,
                 None,
                 vm_config,
                 package_metadata,
@@ -596,9 +610,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
 
         match args.command {
-            Some(Commands::Run { path, example }) => {
+            Some(Commands::Run {
+                path,
+                example,
+                verbosity,
+            }) => {
                 if let Some(path) = resolve_run_target(path, example)? {
-                    run_file(path).await
+                    run_file(path, verbosity.unwrap_or_default()).await
                 } else {
                     repl(Vec::new()).await
                 }
@@ -616,9 +634,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
                 Ok(())
             }
-            Some(Commands::External(cmd)) => {
-                run_external_subcommand(&cmd)
-            }
+            Some(Commands::External(cmd)) => run_external_subcommand(&cmd),
             None => repl(Vec::new()).await,
         }
     })
