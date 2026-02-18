@@ -18,3 +18,5 @@ const main = fn () => {
 	let result = calculate_pi(n);
 	print(result);
 };
+
+bench pi => main();

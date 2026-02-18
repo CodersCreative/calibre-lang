@@ -2289,12 +2289,12 @@ mod tests {
     }
 
     #[test]
-    fn tuple_literal_is_bare_for_assignment_rhs() {
+    fn tuple_literal_roundtrips_for_assignment_rhs() {
         let src = "let tpl = (1, 2); tpl = (3, 4);";
         let mut formatter = Formatter::default();
         let out = formatter.start_format(src, None).expect("format");
-        assert!(out.contains("let tpl = 1, 2;"), "{out}");
-        assert!(out.contains("tpl = 3, 4;"), "{out}");
+        assert!(out.contains("let tpl = (1, 2);"), "{out}");
+        assert!(out.contains("tpl = (3, 4);"), "{out}");
         assert!(parse_has_no_errors(&out), "{out}");
     }
 }

@@ -1,7 +1,8 @@
 use crate::ast::hm::{self, Subst, Type, TypeCon, TypeEnv, TypeGenerator, TypeScheme};
 use crate::environment::{MiddleEnvironment, Operator};
 use calibre_parser::ast::{
-    Node, NodeType, ParserDataType, ParserInnerType, PotentialNewType, binary::BinaryOperator,
+    CallArg, IfComparisonType, Node, NodeType, ParserDataType, ParserInnerType, PotentialNewType,
+    binary::BinaryOperator,
 };
 use rustc_hash::FxHashMap;
 
@@ -13,10 +14,7 @@ pub fn infer_node_type(
     let mut tg = TypeGenerator::default();
     let mut subst = Subst::default();
 
-    let mut tenv: TypeEnv = FxHashMap::default();
-    for (k, s) in env.hm_env.iter() {
-        tenv.insert(k.clone(), s.clone());
-    }
+    let mut tenv: TypeEnv = env.hm_env.clone();
 
     for (k, v) in env.variables.iter() {
         if !tenv.contains_key(k) {
@@ -51,45 +49,45 @@ fn visit(
         member: &str,
         tg: &mut TypeGenerator,
     ) -> Option<Type> {
-        let base_pd = hm::to_parser_data_type(base_ty, &mut FxHashMap::default());
-        let base_key = base_pd.clone().unwrap_all_refs().data_type.to_string();
-        let short = base_key.rsplit(':').next().unwrap_or(&base_key).to_string();
-        let candidates = [
-            format!("{base_key}::{member}"),
-            format!("{short}::{member}"),
-            member.to_string(),
-        ];
-
-        for key in candidates {
+        let base_pd = hm::to_parser_data_type(base_ty, &mut FxHashMap::default()).unwrap_all_refs();
+        for key in env.member_fn_candidates(&base_pd, member) {
             if let Some(scheme) = tenv.get(&key).or_else(|| env.hm_env.get(&key)) {
                 return Some(hm::instantiate(scheme, tg));
             }
-            if let Some((_, scheme)) = tenv
-                .iter()
-                .find(|(k, _)| k.ends_with(&format!("::{member}")))
-                .or_else(|| {
-                    env.hm_env
-                        .iter()
-                        .find(|(k, _)| k.ends_with(&format!("::{member}")))
-                })
-            {
-                return Some(hm::instantiate(scheme, tg));
-            }
         }
-
         None
     }
 
-    fn apply_call(
+    fn resolve_member_field_type(
+        env: &mut MiddleEnvironment,
+        scope: &u64,
+        base_t: &Type,
+        member: &str,
+        span: calibre_parser::Span,
+    ) -> Option<Type> {
+        let base_pd = env
+            .resolve_data_type(
+                scope,
+                hm::to_parser_data_type(base_t, &mut FxHashMap::default()),
+            )
+            .unwrap_all_refs();
+        env.resolve_member_field_type(scope, &base_pd, member, span)
+            .map(|v| hm::from_parser_data_type(&v, &mut TypeGenerator::default()))
+    }
+
+    fn apply_call_iter<'a, I>(
         mut caller_t: Type,
-        call_args: &[Node],
+        call_args: I,
         env: &mut MiddleEnvironment,
         scope: &u64,
         tg: &mut TypeGenerator,
         tenv: &mut TypeEnv,
         subst: &mut hm::Subst,
-    ) -> Result<Type, String> {
-        for arg in call_args.iter() {
+    ) -> Result<Type, String>
+    where
+        I: IntoIterator<Item = &'a Node>,
+    {
+        for arg in call_args {
             let arg_t = visit(arg, env, scope, tg, tenv, subst)?;
             let arg_t_applied = hm::apply_subst(subst, &arg_t);
             let caller_t_applied = hm::apply_subst(subst, &caller_t);
@@ -113,6 +111,31 @@ fn visit(
         }
 
         Ok(hm::apply_subst(subst, &caller_t))
+    }
+
+    fn apply_call_args(
+        caller_t: Type,
+        args: &[CallArg],
+        reverse_args: &[Node],
+        env: &mut MiddleEnvironment,
+        scope: &u64,
+        tg: &mut TypeGenerator,
+        tenv: &mut TypeEnv,
+        subst: &mut hm::Subst,
+    ) -> Result<Type, String> {
+        let positional = args.iter().map(|arg| match arg {
+            CallArg::Value(n) => n,
+            CallArg::Named(_, n) => n,
+        });
+        apply_call_iter(
+            caller_t,
+            positional.chain(reverse_args.iter()),
+            env,
+            scope,
+            tg,
+            tenv,
+            subst,
+        )
     }
 
     fn apply_call_types(
@@ -180,15 +203,15 @@ fn visit(
                 }
             }
 
-            Ok(Type::TCon(TypeCon::Dyn))
+            Ok(tg.fresh())
         }
         NodeType::ListLiteral(_, items) => {
             let mut elem_ty: Option<Type> = None;
             for it in items.iter() {
                 let t = visit(it, env, scope, tg, tenv, subst)?;
                 let t_applied = hm::apply_subst(subst, &t);
-                if let Some(e) = elem_ty {
-                    let e_applied = hm::apply_subst(subst, &e);
+                if let Some(e) = elem_ty.as_ref() {
+                    let e_applied = hm::apply_subst(subst, e);
                     *subst =
                         hm::unify(std::mem::take(subst), &e_applied, &t_applied).map_err(|e| e)?;
                     elem_ty = Some(hm::apply_subst(subst, &e_applied));
@@ -224,10 +247,8 @@ fn visit(
             reverse_args,
             ..
         } => {
-            let mut all_args: Vec<Node> = args.iter().map(|a| a.clone().into()).collect();
-            all_args.append(&mut reverse_args.clone());
             let caller_t = visit(caller, env, scope, tg, tenv, subst)?;
-            apply_call(caller_t, &all_args, env, scope, tg, tenv, subst)
+            apply_call_args(caller_t, args, reverse_args, env, scope, tg, tenv, subst)
         }
         NodeType::BinaryExpression {
             left,
@@ -450,8 +471,28 @@ fn visit(
             }
         }
         NodeType::IfStatement {
-            then, otherwise, ..
+            comparison,
+            then,
+            otherwise,
+            ..
         } => {
+            match comparison.as_ref() {
+                IfComparisonType::If(cond) => {
+                    let ct = visit(cond, env, scope, tg, tenv, subst)?;
+                    let ct_applied = hm::apply_subst(subst, &ct);
+                    *subst = hm::unify(
+                        std::mem::take(subst),
+                        &ct_applied,
+                        &Type::TCon(TypeCon::Bool),
+                    )
+                    .map_err(|e| e)?;
+                }
+                IfComparisonType::IfLet { value, .. } => {
+                    // Ensure scrutinee participates in constraints even if pattern typing is coarse.
+                    let _ = visit(value, env, scope, tg, tenv, subst)?;
+                }
+            }
+
             let tt = visit(then, env, scope, tg, tenv, subst)?;
             let tt_applied = hm::apply_subst(subst, &tt);
             if let Some(o) = otherwise {
@@ -461,7 +502,7 @@ fn visit(
                     hm::unify(std::mem::take(subst), &tt_applied, &ot_applied).map_err(|e| e)?;
                 Ok(hm::apply_subst(subst, &tt_applied))
             } else {
-                Ok(tt_applied)
+                Ok(Type::TCon(TypeCon::Null))
             }
         }
         NodeType::ParenExpression { value } => visit(value, env, scope, tg, tenv, subst),
@@ -487,7 +528,7 @@ fn visit(
         NodeType::AsExpression { data_type, .. } => Ok(hm::from_parser_data_type(
             &match data_type {
                 PotentialNewType::DataType(dt) => dt.clone(),
-                _ => ParserDataType::new(node.span, ParserInnerType::Dynamic),
+                _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
             },
             tg,
         )),
@@ -533,7 +574,7 @@ fn visit(
         }
         NodeType::MemberExpression { path } => {
             if path.is_empty() {
-                return Ok(Type::TCon(TypeCon::Dyn));
+                return Ok(tg.fresh());
             }
 
             let mut acc_t = visit(&path[0].0, env, scope, tg, tenv, subst)?;
@@ -549,7 +590,7 @@ fn visit(
                     let acc_applied = hm::apply_subst(subst, &acc_t);
                     acc_t = match acc_applied {
                         Type::TList(inner) => (*inner).clone(),
-                        _ => Type::TCon(TypeCon::Dyn),
+                        _ => tg.fresh(),
                     };
                     continue;
                 }
@@ -557,7 +598,18 @@ fn visit(
                 match &seg.node_type {
                     NodeType::Identifier(id) => {
                         let name = id.to_string();
-                        if let Some(member_fn) = resolve_member_fn_type(
+                        if name == "new" {
+                            continue;
+                        }
+                        if let Some(field_t) = resolve_member_field_type(
+                            env,
+                            scope,
+                            &hm::apply_subst(subst, &acc_t),
+                            &name,
+                            seg.span,
+                        ) {
+                            acc_t = field_t;
+                        } else if let Some(member_fn) = resolve_member_fn_type(
                             env,
                             tenv,
                             &hm::apply_subst(subst, &acc_t),
@@ -566,7 +618,7 @@ fn visit(
                         ) {
                             acc_t = member_fn;
                         } else {
-                            acc_t = Type::TCon(TypeCon::Dyn);
+                            acc_t = tg.fresh();
                         }
                     }
                     NodeType::CallExpression {
@@ -576,11 +628,10 @@ fn visit(
                         ..
                     } => {
                         if let NodeType::Identifier(id) = &caller.node_type {
-                            let mut call_args = Vec::new();
-                            call_args.push(Node::new(node.span, NodeType::Null));
-                            call_args.extend(args.iter().map(|x| x.clone().into()));
-                            call_args.extend(reverse_args.clone());
                             let name = id.to_string();
+                            if name == "new" {
+                                continue;
+                            }
                             if let Some(member_fn) = resolve_member_fn_type(
                                 env,
                                 tenv,
@@ -588,33 +639,45 @@ fn visit(
                                 &name,
                                 tg,
                             ) {
-                                let mut arg_types = Vec::new();
+                                let mut arg_types =
+                                    Vec::with_capacity(1 + args.len() + reverse_args.len());
                                 arg_types.push(hm::apply_subst(subst, &acc_t));
-                                for arg in call_args.into_iter().skip(1) {
-                                    let t = visit(&arg, env, scope, tg, tenv, subst)?;
+                                for arg in args {
+                                    let arg_node = match arg {
+                                        CallArg::Value(n) => n,
+                                        CallArg::Named(_, n) => n,
+                                    };
+                                    let t = visit(arg_node, env, scope, tg, tenv, subst)?;
+                                    arg_types.push(t);
+                                }
+                                for arg in reverse_args {
+                                    let t = visit(arg, env, scope, tg, tenv, subst)?;
                                     arg_types.push(t);
                                 }
                                 acc_t = apply_call_types(member_fn, arg_types, tg, subst)?;
                             } else {
-                                acc_t = Type::TCon(TypeCon::Dyn);
+                                acc_t = tg.fresh();
                             }
                         } else {
-                            acc_t = Type::TCon(TypeCon::Dyn);
+                            acc_t = tg.fresh();
                         }
                     }
                     _ => {
                         let _ = visit(seg, env, scope, tg, tenv, subst)?;
-                        acc_t = Type::TCon(TypeCon::Dyn);
+                        acc_t = tg.fresh();
                     }
                 }
             }
             Ok(hm::apply_subst(subst, &acc_t))
         }
         NodeType::TupleLiteral { values } => {
+            let mut elems = Vec::with_capacity(values.len());
             for value in values {
-                let _ = visit(value, env, scope, tg, tenv, subst)?;
+                elems.push(std::sync::Arc::new(visit(
+                    value, env, scope, tg, tenv, subst,
+                )?));
             }
-            Ok(Type::TCon(TypeCon::Dyn))
+            Ok(Type::TApp(hm::TypeApp::Tuple, elems))
         }
         NodeType::FunctionDeclaration { header, body, .. } => {
             fn unify_returns(
@@ -672,6 +735,7 @@ fn visit(
                 hm::from_parser_data_type(&declared_ret_pd, tg)
             };
 
+            let mut fn_tenv = tenv.clone();
             let mut param_types = Vec::new();
             for param in header.parameters.iter() {
                 let resolved_name = env
@@ -679,35 +743,23 @@ fn visit(
                     .map(|p| p.text)
                     .unwrap_or_else(|| param.0.to_string());
 
-                let p_t = if let Some(scheme) = tenv.get(&resolved_name) {
-                    if scheme.vars.is_empty() {
-                        scheme.ty.clone()
-                    } else {
-                        hm::instantiate(scheme, tg)
-                    }
-                } else {
-                    let p_pd = match &param.1 {
-                        PotentialNewType::DataType(pd) => pd.clone(),
-                        _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
-                    };
-
-                    let p_t = if matches!(p_pd.data_type, ParserInnerType::Auto(_)) {
-                        tg.fresh()
-                    } else {
-                        hm::from_parser_data_type(&p_pd, tg)
-                    };
-
-                    tenv.insert(
-                        resolved_name.clone(),
-                        hm::TypeScheme::new(Vec::new(), p_t.clone()),
-                    );
-
-                    p_t
+                let p_pd = match &param.1 {
+                    PotentialNewType::DataType(pd) => pd.clone(),
+                    _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
                 };
+                let p_t = if matches!(p_pd.data_type, ParserInnerType::Auto(_)) {
+                    tg.fresh()
+                } else {
+                    hm::from_parser_data_type(&p_pd, tg)
+                };
+                fn_tenv.insert(
+                    resolved_name.clone(),
+                    hm::TypeScheme::new(Vec::new(), p_t.clone()),
+                );
                 param_types.push(p_t);
             }
 
-            let body_t = visit(body, env, scope, tg, tenv, subst)?;
+            let body_t = visit(body, env, scope, tg, &mut fn_tenv, subst)?;
 
             let mut saw_return = false;
             unify_returns(
@@ -715,22 +767,16 @@ fn visit(
                 env,
                 scope,
                 tg,
-                tenv,
+                &mut fn_tenv,
                 subst,
                 &declared_ret_t,
                 &mut saw_return,
             )?;
 
-            if !saw_return {
-                let null_t = Type::TCon(TypeCon::Null);
-                let ret_applied = hm::apply_subst(subst, &declared_ret_t);
-                *subst = hm::unify(std::mem::take(subst), &ret_applied, &null_t).map_err(|e| e)?;
-            } else {
-                let body_t_applied = hm::apply_subst(subst, &body_t);
-                let ret_applied = hm::apply_subst(subst, &declared_ret_t);
-                *subst = hm::unify(std::mem::take(subst), &body_t_applied, &ret_applied)
-                    .map_err(|e| e)?;
-            }
+            let body_t_applied = hm::apply_subst(subst, &body_t);
+            let ret_applied = hm::apply_subst(subst, &declared_ret_t);
+            *subst =
+                hm::unify(std::mem::take(subst), &body_t_applied, &ret_applied).map_err(|e| e)?;
 
             let mut fn_t = hm::apply_subst(subst, &declared_ret_t);
             for p_t in param_types.iter().rev() {
@@ -740,7 +786,7 @@ fn visit(
 
             Ok(hm::apply_subst(subst, &fn_t))
         }
-        _ => Ok(Type::TCon(TypeCon::Dyn)),
+        _ => Ok(tg.fresh()),
     }
 }
 
@@ -752,11 +798,7 @@ pub fn infer_node_hm(
     let mut tg = TypeGenerator::default();
     let mut subst = hm::Subst::default();
 
-    let mut tenv: TypeEnv = FxHashMap::default();
-
-    for (k, s) in env.hm_env.iter() {
-        tenv.insert(k.clone(), s.clone());
-    }
+    let mut tenv: TypeEnv = env.hm_env.clone();
 
     let mut var_types: FxHashMap<String, Type> = FxHashMap::default();
     for (k, v) in env.variables.iter() {

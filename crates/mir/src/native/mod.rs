@@ -59,6 +59,7 @@ impl MiddleEnvironment {
             "print",
             "len",
             "panic",
+            "assert",
             "tuple",
             "discriminant",
             "min_or_zero",

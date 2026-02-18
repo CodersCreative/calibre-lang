@@ -15,16 +15,15 @@ const handle_line = fn (line : str) -> int => {
 
 const main = fn () => {
 	let mut dial = 50;
-	let file : File = File.open_read("./input.txt");
+	let file : File = File.open_read(__file__ & "/input.txt");
 	let lines : list:<str> = file.read_lines(100000);
 	print(lines);
 	for i in 0..len(lines) => {
-		let line : int= handle_line(lines[i]);
+		let line : int = handle_line(lines[i]);
 		print(line);
 		dial += line;
 		for dial < 0 => dial += 100;
 		for dial > 99 => dial -= 100;
 		print(dial);
-	}
+	};
 };
-

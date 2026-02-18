@@ -568,26 +568,6 @@ pub fn parse_program_with_source(
                 .map(|groups| groups.into_iter().flatten().collect::<Vec<_>>())
                 .boxed();
 
-            let fn_match_expr = lex(pad.clone(), just("fn"))
-                .ignore_then(lex(pad.clone(), just("match")))
-                .then(take_until(lex(pad.clone(), just("};"))))
-                .map(|_| {
-                    let body = scope_node(Vec::new(), true, false);
-                    Node::new(
-                        body.span,
-                        NodeType::FunctionDeclaration {
-                            header: FunctionHeader {
-                                generics: GenericTypes::default(),
-                                parameters: Vec::new(),
-                                return_type: auto_type(body.span),
-                                param_destructures: Vec::new(),
-                            },
-                            body: Box::new(body),
-                        },
-                    )
-                })
-                .boxed();
-
             let fn_expr = lex(pad.clone(), just("fn"))
                 .ignore_then(
                     lex(pad.clone(), just('<'))
@@ -958,6 +938,82 @@ pub fn parse_program_with_source(
                         out.push((value, conditions.clone(), Box::new(body.clone())));
                     }
                     out
+                })
+                .boxed();
+
+            let fn_match_expr = lex(pad.clone(), just("fn"))
+                .ignore_then(
+                    lex(pad.clone(), just('<'))
+                        .ignore_then(
+                            ident
+                                .clone()
+                                .separated_by(lex(pad.clone(), just(',')))
+                                .allow_trailing()
+                                .collect::<Vec<_>>()
+                                .or_not()
+                                .map(|x| x.unwrap_or_default()),
+                        )
+                        .then_ignore(lex(pad.clone(), just('>')))
+                        .or_not()
+                        .map(|items| {
+                            GenericTypes(
+                                items
+                                    .unwrap_or_default()
+                                    .into_iter()
+                                    .map(|(n, sp)| GenericType {
+                                        identifier: PotentialDollarIdentifier::Identifier(
+                                            ParserText::new(sp, n),
+                                        ),
+                                        trait_constraints: Vec::new(),
+                                    })
+                                    .collect(),
+                            )
+                        }),
+                )
+                .then_ignore(lex(pad.clone(), just("match")))
+                .then(type_name.clone().or_not())
+                .then(arrow.clone().ignore_then(type_name.clone()).or_not())
+                .then_ignore(lex(pad.clone(), just('{')))
+                .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
+                .then(
+                    match_arm
+                        .clone()
+                        .separated_by(
+                            lex(pad.clone(), just(','))
+                                .then_ignore(delim.clone().repeated().collect::<Vec<_>>()),
+                        )
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                        .or_not()
+                        .map(|x| x.unwrap_or_default()),
+                )
+                .then_ignore(delim.clone().or_not())
+                .then_ignore(lex(pad.clone(), just('}')))
+                .map_with_span({
+                    let ls = line_starts.clone();
+                    move |(((generics, param_ty), return_ty), body), r| {
+                        let sp = span(ls.as_ref(), r);
+                        let header = FunctionHeader {
+                            generics,
+                            parameters: vec![(
+                                PotentialDollarIdentifier::Identifier(ParserText::new(
+                                    sp,
+                                    "__match_value".to_string(),
+                                )),
+                                param_ty.unwrap_or_else(|| auto_type(sp)),
+                            )],
+                            return_type: return_ty.unwrap_or_else(|| auto_type(sp)),
+                            param_destructures: Vec::new(),
+                        };
+
+                        Node::new(
+                            sp,
+                            NodeType::FnMatchDeclaration {
+                                header,
+                                body: body.into_iter().flatten().collect(),
+                            },
+                        )
+                    }
                 })
                 .boxed();
 
@@ -1398,51 +1454,40 @@ pub fn parse_program_with_source(
                 .boxed();
 
             let enum_expr_value = expr.clone();
-            let enum_variant = postfix
+            let enum_with_payload = named_ident
                 .clone()
-                .then(
-                    lex(pad.clone(), just(':'))
-                        .ignore_then(choice((
-                            lex(pad.clone(), just('('))
-                                .ignore_then(
-                                    enum_expr_value
-                                        .clone()
-                                        .separated_by(lex(pad.clone(), just(',')))
-                                        .at_least(1)
-                                        .collect::<Vec<_>>(),
-                                )
-                                .then_ignore(lex(pad.clone(), just(')')))
-                                .map(|values| {
-                                    Node::new(Span::default(), NodeType::TupleLiteral { values })
-                                }),
-                            enum_expr_value.clone(),
-                        )))
-                        .or_not(),
-                )
-                .map(|(lhs, data)| {
-                    if let Some(data) = data {
-                        if let NodeType::MemberExpression { path } = &lhs.node_type {
-                            if path.len() == 2 && !path[0].1 && !path[1].1 {
-                                if let (
-                                    NodeType::Identifier(identifier),
-                                    NodeType::Identifier(value),
-                                ) = (&path[0].0.node_type, &path[1].0.node_type)
-                                {
-                                    return Node::new(
-                                        lhs.span,
-                                        NodeType::EnumExpression {
-                                            identifier: identifier.clone(),
-                                            value: value.clone().into(),
-                                            data: Some(Box::new(data)),
-                                        },
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    lhs
+                .then_ignore(lex(pad.clone(), just('.')))
+                .then(named_ident.clone())
+                .then_ignore(lex(pad.clone(), just(':')))
+                .then(choice((
+                    lex(pad.clone(), just('('))
+                        .ignore_then(
+                            enum_expr_value
+                                .clone()
+                                .separated_by(lex(pad.clone(), just(',')))
+                                .at_least(1)
+                                .collect::<Vec<_>>(),
+                        )
+                        .then_ignore(lex(pad.clone(), just(')')))
+                        .map(|values| {
+                            Node::new(Span::default(), NodeType::TupleLiteral { values })
+                        }),
+                    enum_expr_value.clone(),
+                )))
+                .map(|((identifier, value), data)| {
+                    let ident = identifier;
+                    Node::new(
+                        Span::new_from_spans(*ident.span(), data.span),
+                        NodeType::EnumExpression {
+                            identifier: ident.into(),
+                            value,
+                            data: Some(Box::new(data)),
+                        },
+                    )
                 })
                 .boxed();
+
+            let enum_variant = choice((enum_with_payload, postfix.clone())).boxed();
 
             let list_prefix_type = lex(pad.clone(), just("list"))
                 .ignore_then(lex(pad.clone(), just(":<")))
@@ -1670,8 +1715,8 @@ pub fn parse_program_with_source(
             let bit_op = choice((
                 lex(pad.clone(), just("<<")).to(BinaryOperator::Shl),
                 lex(pad.clone(), just(">>")).to(BinaryOperator::Shr),
-                lex(pad.clone(), just('&')).to(BinaryOperator::BitAnd),
-                lex(pad.clone(), just('|')).to(BinaryOperator::BitOr),
+                lex(pad.clone(), just('&').then(just('&').not())).to(BinaryOperator::BitAnd),
+                lex(pad.clone(), just('|').then(just('|').not())).to(BinaryOperator::BitOr),
                 lex(pad.clone(), just('^')).to(BinaryOperator::BitXor),
             ))
             .boxed();
@@ -1829,30 +1874,41 @@ pub fn parse_program_with_source(
                 })
                 .boxed();
 
-            let ternary_expr = in_expr
-                .clone()
-                .then(
-                    lex(pad.clone(), just('?'))
-                        .ignore_then(choice((assign_expr.clone(), expr.clone())))
-                        .then_ignore(lex(pad.clone(), just(':')))
-                        .then(choice((assign_expr.clone(), expr.clone())))
-                        .or_not(),
-                )
-                .map(|(comparison, then_otherwise)| {
-                    if let Some((then, otherwise)) = then_otherwise {
-                        Node::new(
-                            Span::new_from_spans(comparison.span, otherwise.span),
-                            NodeType::Ternary {
-                                comparison: Box::new(comparison),
-                                then: Box::new(then),
-                                otherwise: Box::new(otherwise),
-                            },
-                        )
-                    } else {
-                        comparison
-                    }
-                })
-                .boxed();
+            let ternary_expr = recursive(|ternary_expr| {
+                in_expr
+                    .clone()
+                    .then(
+                        lex(pad.clone(), just('?'))
+                            .ignore_then(choice((
+                                assign_expr.clone(),
+                                ternary_expr.clone(),
+                                in_expr.clone(),
+                            )))
+                            .then_ignore(lex(pad.clone(), just(':')))
+                            .then(choice((
+                                assign_expr.clone(),
+                                ternary_expr.clone(),
+                                in_expr.clone(),
+                            )))
+                            .or_not(),
+                    )
+                    .map(|(comparison, then_otherwise)| {
+                        if let Some((then, otherwise)) = then_otherwise {
+                            Node::new(
+                                Span::new_from_spans(comparison.span, otherwise.span),
+                                NodeType::Ternary {
+                                    comparison: Box::new(comparison),
+                                    then: Box::new(then),
+                                    otherwise: Box::new(otherwise),
+                                },
+                            )
+                        } else {
+                            comparison
+                        }
+                    })
+                    .boxed()
+            })
+            .boxed();
 
             let pipe_seg = choice((
                 lex(pad.clone(), just("|>"))
@@ -3163,6 +3219,88 @@ pub fn parse_program_with_source(
             .then_ignore(lex(pad.clone(), just(';')).or_not())
             .boxed();
 
+        let test_stmt =
+            lex(pad.clone(), just("test"))
+                .ignore_then(ident.clone())
+                .then(
+                    fat_arrow.clone().ignore_then(
+                        scope_node_parser(statement.clone(), delim.clone(), pad.clone())
+                            .or(choice((statement.clone(), expr.clone()))
+                                .map(|n| scope_node(vec![n], true, false))),
+                    ),
+                )
+                .map(|((name, sp), body)| {
+                    let hidden = PotentialDollarIdentifier::Identifier(ParserText::new(
+                        sp,
+                        format!("__test__{name}"),
+                    ));
+                    let header = FunctionHeader {
+                        generics: GenericTypes::default(),
+                        parameters: Vec::new(),
+                        return_type: auto_type(body.span),
+                        param_destructures: Vec::new(),
+                    };
+                    let fn_decl = Node::new(
+                        body.span,
+                        NodeType::FunctionDeclaration {
+                            header,
+                            body: Box::new(body),
+                        },
+                    );
+                    let fn_span = fn_decl.span;
+                    Node::new(
+                        Span::new_from_spans(sp, fn_decl.span),
+                        NodeType::VariableDeclaration {
+                            var_type: VarType::Constant,
+                            identifier: hidden,
+                            value: Box::new(fn_decl),
+                            data_type: auto_type(fn_span),
+                        },
+                    )
+                })
+                .boxed();
+
+        let bench_stmt =
+            lex(pad.clone(), just("bench"))
+                .ignore_then(ident.clone())
+                .then(
+                    fat_arrow.clone().ignore_then(
+                        scope_node_parser(statement.clone(), delim.clone(), pad.clone())
+                            .or(choice((statement.clone(), expr.clone()))
+                                .map(|n| scope_node(vec![n], true, false))),
+                    ),
+                )
+                .map(|((name, sp), body)| {
+                    let hidden = PotentialDollarIdentifier::Identifier(ParserText::new(
+                        sp,
+                        format!("__bench__{name}"),
+                    ));
+                    let header = FunctionHeader {
+                        generics: GenericTypes::default(),
+                        parameters: Vec::new(),
+                        return_type: auto_type(body.span),
+                        param_destructures: Vec::new(),
+                    };
+                    let fn_decl = Node::new(
+                        body.span,
+                        NodeType::FunctionDeclaration {
+                            header,
+                            body: Box::new(body),
+                        },
+                    );
+                    let fn_span = fn_decl.span;
+                    Node::new(
+                        Span::new_from_spans(sp, fn_decl.span),
+                        NodeType::VariableDeclaration {
+                            var_type: VarType::Constant,
+                            identifier: hidden,
+                            value: Box::new(fn_decl),
+                            data_type: auto_type(fn_span),
+                        },
+                    )
+                })
+                .boxed();
+
         let ffi_type = recursive(|ffi_type| {
             let ffi_base = lex(pad.clone(), just('@'))
                 .ignore_then(raw_ident.clone())
@@ -3335,13 +3473,24 @@ pub fn parse_program_with_source(
         .boxed();
 
         let select_stmt = lex(pad.clone(), just("select"))
-            .then(take_until(lex(pad.clone(), just("};"))))
-            .map(|_| {
-                Node::new(
-                    Span::default(),
-                    NodeType::SelectStatement { arms: Vec::new() },
-                )
-            })
+            .ignore_then(lex(pad.clone(), just('{')))
+            .ignore_then(delim.clone().repeated().collect::<Vec<_>>())
+            .ignore_then(
+                _select_arm
+                    .clone()
+                    .separated_by(
+                        choice((delim.clone(), lex(pad.clone(), just(',')).ignored()))
+                            .repeated()
+                            .at_least(1),
+                    )
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .or_not()
+                    .map(|x| x.unwrap_or_default()),
+            )
+            .then_ignore(delim.clone().or_not())
+            .then_ignore(lex(pad.clone(), just('}')))
+            .map(|arms| Node::new(Span::default(), NodeType::SelectStatement { arms }))
             .boxed();
 
         let use_stmt = lex(pad.clone(), just("use"))
@@ -3547,6 +3696,8 @@ pub fn parse_program_with_source(
             select_stmt,
             spawn_stmt,
             for_stmt,
+            test_stmt,
+            bench_stmt,
             let_struct_destruct_stmt,
             let_tuple_destruct_stmt,
             scope_define_stmt,

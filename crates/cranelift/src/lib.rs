@@ -53,7 +53,7 @@ impl Compiler {
                 if key.to_string().contains(":main") {
                     "_start".to_string()
                 } else {
-                    identifier.clone()
+                    identifier.to_string()
                 },
                 var,
                 &registry,
@@ -99,7 +99,7 @@ impl Compiler {
                 .map(|x| (x.0.to_string(), x.1.clone()))
                 .collect(),
             value.return_type,
-            value.blocks,
+            value.blocks.to_vec(),
             registry,
             &mut module,
             &mut ctx,

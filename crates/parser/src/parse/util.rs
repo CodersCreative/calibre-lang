@@ -246,6 +246,8 @@ pub(super) fn is_keyword(ident: &str) -> bool {
             | "continue"
             | "extern"
             | "move"
+            | "test"
+            | "bench"
     )
 }
 

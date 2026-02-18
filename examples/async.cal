@@ -33,9 +33,7 @@ const main = fn () => {
 	
 	defer wg.wait();
 	
-	for i in 1..total_jobs + 1 => {
-		jobs.send(i);
-	};
+	for i in 1..total_jobs + 1 => jobs.send(i);
 	
 	jobs.close();
 	
@@ -43,6 +41,13 @@ const main = fn () => {
 	
 	for  => {
 		select {
+			value <- results => {
+				received = received + 1;
+				print("received " & received & " => " & value);
+			},
+			_ => {
+				if results.closed() && received >= total_jobs => break;
+			}
 		};
 		
 		if received >= total_jobs => {

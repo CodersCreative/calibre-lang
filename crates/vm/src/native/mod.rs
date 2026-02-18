@@ -103,6 +103,7 @@ impl VM {
             "trim",
             "len",
             "panic",
+            "assert",
             "tuple",
             "discriminant",
             "min_or_zero",

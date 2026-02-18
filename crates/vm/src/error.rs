@@ -28,7 +28,7 @@ pub enum RuntimeError {
     DanglingRef(String),
     InvalidBytecode(String),
     Io(String),
-    Panic,
+    Panic(Option<String>),
 }
 
 impl From<ParseFloatError> for RuntimeError {
@@ -70,7 +70,8 @@ impl std::fmt::Display for RuntimeError {
             RuntimeError::DanglingRef(name) => write!(f, "Dangling reference: {name}"),
             RuntimeError::InvalidBytecode(msg) => write!(f, "Invalid bytecode: {msg}"),
             RuntimeError::Io(msg) => write!(f, "I/O error: {msg}"),
-            RuntimeError::Panic => write!(f, "panic"),
+            RuntimeError::Panic(Some(msg)) => write!(f, "panic: {msg}"),
+            RuntimeError::Panic(None) => write!(f, "panic"),
         }
     }
 }
@@ -148,7 +149,7 @@ impl RuntimeError {
             RuntimeError::Io(_) => Some(
                 "Check file permissions, terminal availability, or input/output state.".to_string(),
             ),
-            RuntimeError::Panic => Some(
+            RuntimeError::Panic(_) => Some(
                 "A panic was triggered. If this is unexpected, inspect the call stack.".to_string(),
             ),
         }

@@ -16,3 +16,5 @@ const main = fn () => {
 	let n : int = 2000;
 	print(sum_pairs(n));
 };
+
+bench member_index => main();

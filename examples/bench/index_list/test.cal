@@ -11,3 +11,5 @@ const main = fn () => {
 	let n : int = 2000;
 	print(sum_index(n));
 };
+
+bench index_list => main();

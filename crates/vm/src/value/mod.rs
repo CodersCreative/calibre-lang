@@ -421,6 +421,7 @@ impl RuntimeValue {
             ("discriminant", Arc::new(native::global::DiscriminantFn())),
             ("tuple", Arc::new(native::global::TupleFn())),
             ("panic", Arc::new(native::global::PanicFn())),
+            ("assert", Arc::new(native::global::AssertFn())),
             ("min_or_zero", Arc::new(native::global::MinOrZero())),
             ("async.channel_new", Arc::new(stdlib::r#async::ChannelNew())),
             (

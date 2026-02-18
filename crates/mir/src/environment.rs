@@ -398,6 +398,146 @@ impl MiddleEnvironment {
         self.impls.get_mut(&key)
     }
 
+    fn member_base_name_candidates(&self, ty: &ParserDataType) -> Vec<String> {
+        let mut names = Vec::new();
+        let base = ty.clone().unwrap_all_refs();
+        let base_key = base.data_type.to_string();
+        names.push(base_key.clone());
+
+        match &base.data_type {
+            ParserInnerType::Struct(name) => {
+                if let Some((_, de_prefixed)) = name.rsplit_once(':')
+                    && de_prefixed != name
+                {
+                    names.push(de_prefixed.to_string());
+                }
+                let short = name.rsplit_once("::").map(|(_, rhs)| rhs).unwrap_or(name);
+                if short != name {
+                    names.push(short.to_string());
+                }
+            }
+            ParserInnerType::StructWithGenerics { identifier, .. } => {
+                names.push(identifier.clone());
+                if let Some((_, de_prefixed)) = identifier.rsplit_once(':')
+                    && de_prefixed != identifier
+                {
+                    names.push(de_prefixed.to_string());
+                }
+                let short = identifier
+                    .rsplit_once("::")
+                    .map(|(_, rhs)| rhs)
+                    .unwrap_or(identifier);
+                if short != identifier {
+                    names.push(short.to_string());
+                }
+            }
+            _ => {
+                let short = base_key
+                    .rsplit_once("::")
+                    .map(|(_, rhs)| rhs)
+                    .unwrap_or(base_key.as_str());
+                if short != base_key {
+                    names.push(short.to_string());
+                }
+            }
+        }
+
+        names
+    }
+
+    pub fn member_fn_candidates(&self, ty: &ParserDataType, member: &str) -> Vec<String> {
+        let mut candidates = Vec::new();
+
+        if let Some(imp) = self.find_impl_for_type(&ty.clone().unwrap_all_refs())
+            && let Some((mapped_name, _)) = imp.variables.get(member)
+        {
+            candidates.push(mapped_name.clone());
+        }
+
+        for base in self.member_base_name_candidates(ty) {
+            candidates.push(format!("{base}::{member}"));
+        }
+        candidates.dedup();
+        candidates
+    }
+
+    pub fn resolve_member_fn_name(&self, ty: &ParserDataType, member: &str) -> Option<String> {
+        self.member_fn_candidates(ty, member)
+            .into_iter()
+            .find(|name| {
+                self.variables.get(name).is_some_and(|var| {
+                    matches!(
+                        var.data_type.data_type,
+                        ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
+                    )
+                }) || self
+                    .hm_env
+                    .get(name)
+                    .is_some_and(|scheme| matches!(scheme.ty, Type::TArrow(_, _)))
+            })
+    }
+
+    pub fn resolve_member_fn_type(
+        &self,
+        ty: &ParserDataType,
+        member: &str,
+    ) -> Option<ParserDataType> {
+        self.resolve_member_fn_name(ty, member)
+            .and_then(|name| self.variables.get(&name))
+            .map(|var| var.data_type.clone())
+    }
+
+    pub fn resolve_member_field_type(
+        &mut self,
+        scope: &u64,
+        base: &ParserDataType,
+        member: &str,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        let resolved = self
+            .resolve_data_type(scope, base.clone())
+            .unwrap_all_refs();
+        match &resolved.data_type {
+            ParserInnerType::Struct(struct_name) => self
+                .lookup_object_for_struct_name(struct_name)
+                .and_then(|obj| match &obj.object_type {
+                    MiddleTypeDefType::Struct(fields) => fields.get(member).cloned(),
+                    _ => None,
+                }),
+            ParserInnerType::StructWithGenerics { identifier, .. } => self
+                .lookup_object_for_struct_name(identifier)
+                .and_then(|obj| match &obj.object_type {
+                    MiddleTypeDefType::Struct(fields) => fields.get(member).cloned(),
+                    _ => None,
+                }),
+            ParserInnerType::Tuple(values) => member
+                .parse::<usize>()
+                .ok()
+                .and_then(|idx| values.get(idx).cloned()),
+            ParserInnerType::Option(inner) | ParserInnerType::Ptr(inner)
+                if member == "next" || member == "0" =>
+            {
+                Some((**inner).clone())
+            }
+            ParserInnerType::Result { ok, err } => {
+                if member == "ok" || member == "0" {
+                    Some((**ok).clone())
+                } else if member == "err" || member == "1" {
+                    Some((**err).clone())
+                } else if member == "next" {
+                    if ok.data_type == err.data_type {
+                        Some((**ok).clone())
+                    } else {
+                        Some(ParserDataType::new(span, ParserInnerType::Dynamic))
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
     pub fn resolve_associated_type(
         &self,
         base: &ParserDataType,
@@ -2293,7 +2433,21 @@ impl MiddleEnvironment {
                     .ok_or_else(|| self.err_at_current(MiddleErr::Scope(scope.to_string())))?;
                 if let Some(x) = current.children.get(key) {
                     x.clone()
+                } else if let Some(mapped) = current.mappings.get(key)
+                    && let Some(x) = current.children.get(mapped)
+                {
+                    x.clone()
                 } else if let Some(s) = self.get_global_scope().children.get(key) {
+                    s.clone()
+                } else if let Some(mapped) = self.get_global_scope().mappings.get(key)
+                    && let Some(s) = self.get_global_scope().children.get(mapped)
+                {
+                    s.clone()
+                } else if let Some(s) = self.get_root_scope().children.get(key) {
+                    s.clone()
+                } else if let Some(mapped) = self.get_root_scope().mappings.get(key)
+                    && let Some(s) = self.get_root_scope().children.get(mapped)
+                {
                     s.clone()
                 } else {
                     return Err(self.err_at_current(MiddleErr::Scope(key.to_string())));
@@ -2412,11 +2566,13 @@ impl MiddleEnvironment {
                             otherwise.clone()
                         };
 
-                    let ty = self.resolve_type_from_node(scope, then);
-                    if ty == self.resolve_type_from_node(scope, &otherwise) {
-                        ty
-                    } else {
-                        None
+                    let then_ty = self.resolve_type_from_node(scope, then);
+                    let else_ty = self.resolve_type_from_node(scope, &otherwise);
+                    match (then_ty, else_ty) {
+                        (Some(a), Some(b)) if a.data_type == b.data_type => Some(a),
+                        (Some(a), Some(b)) if a.data_type == ParserInnerType::Null => Some(b),
+                        (Some(a), Some(b)) if b.data_type == ParserInnerType::Null => Some(a),
+                        _ => None,
                     }
                 } else {
                     self.resolve_type_from_node(scope, then)
@@ -2652,41 +2808,42 @@ impl MiddleEnvironment {
                         };
 
                         if !member_name.is_empty() {
-                            let base_ty = match &path[0].0.node_type {
-                                NodeType::Identifier(id) => {
-                                    if let Some(parsed) =
-                                        self.resolve_potential_generic_ident_to_data_type(scope, id)
+                            let receiver_path = path[..path.len() - 1].to_vec();
+                            let receiver_node = Node::new(
+                                node.span,
+                                NodeType::MemberExpression {
+                                    path: receiver_path,
+                                },
+                            );
+                            let base_ty = self
+                                .resolve_type_from_node(scope, &receiver_node)
+                                .or_else(|| {
+                                    if let NodeType::MemberExpression { path } =
+                                        &receiver_node.node_type
+                                        && path.len() == 1
+                                        && let NodeType::Identifier(id) = &path[0].0.node_type
                                     {
-                                        Some(parsed)
-                                    } else if let Some(var) = self.variables.get(&id.to_string()) {
-                                        Some(var.data_type.clone())
+                                        self.resolve_potential_generic_ident_to_data_type(scope, id)
                                     } else {
-                                        self.resolve_type_from_node(scope, &path[0].0)
+                                        None
                                     }
-                                }
-                                _ => self.resolve_type_from_node(scope, &path[0].0),
-                            };
+                                });
 
                             if let Some(base_ty) = base_ty {
                                 if member_name == "new" {
                                     return Some(base_ty);
                                 }
-                                if let Some(imp) = self.find_impl_for_type(&base_ty) {
-                                    if let Some((fn_name, _)) =
-                                        imp.variables.get(member_name.as_str())
-                                        && let Some(var) = self.variables.get(fn_name)
-                                    {
-                                        match &var.data_type.data_type {
-                                            ParserInnerType::Function { return_type, .. } => {
-                                                return Some(*return_type.clone());
-                                            }
-                                            ParserInnerType::NativeFunction(x) => {
-                                                return Some(*x.clone());
-                                            }
-                                            _ => {
-                                                return Some(var.data_type.clone());
-                                            }
+                                if let Some(method_ty) =
+                                    self.resolve_member_fn_type(&base_ty, member_name.as_str())
+                                {
+                                    match method_ty.data_type {
+                                        ParserInnerType::Function { return_type, .. } => {
+                                            return Some(*return_type);
                                         }
+                                        ParserInnerType::NativeFunction(ret) => {
+                                            return Some(*ret);
+                                        }
+                                        _ => return Some(method_ty),
                                     }
                                 }
                             }
@@ -2808,89 +2965,114 @@ impl MiddleEnvironment {
                 None
             }
             NodeType::MemberExpression { path } => {
-                if path.len() == 1 {
-                    return self.resolve_type_from_node(scope, &path[0].0);
+                if path.is_empty() {
+                    return Some(ParserDataType::new(node.span, ParserInnerType::Auto(None)));
                 }
 
-                if path.len() == 2 {
-                    if let (NodeType::Identifier(_base_ident), NodeType::Identifier(field_ident)) =
-                        (&path[0].0.node_type, &path[1].0.node_type)
-                    {
-                        let field_name = match field_ident {
-                            PotentialGenericTypeIdentifier::Identifier(x) => x.to_string(),
-                            PotentialGenericTypeIdentifier::Generic { identifier, .. } => {
-                                identifier.to_string()
-                            }
-                        };
-
-                        if let Some(base_ty) = self.resolve_type_from_node(scope, &path[0].0) {
-                            let base_ty = self.resolve_data_type(scope, base_ty).unwrap_all_refs();
-                            let struct_name_opt = match base_ty.data_type {
-                                ParserInnerType::Struct(s) => Some(s),
-                                ParserInnerType::StructWithGenerics { identifier, .. } => {
-                                    Some(identifier)
-                                }
-                                _ => None,
-                            };
-
-                            if let Some(struct_name) = struct_name_opt {
-                                if let Some(obj) = self.lookup_object_for_struct_name(&struct_name)
-                                {
-                                    if let MiddleTypeDefType::Struct(map) = &obj.object_type {
-                                        if let Some(field_ty) = map.get(&field_name) {
-                                            return Some(field_ty.clone());
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                let mut current = self.resolve_type_from_node(scope, &path[0].0).or_else(|| {
+                    if let NodeType::Identifier(id) = &path[0].0.node_type {
+                        self.resolve_potential_generic_ident_to_data_type(scope, id)
+                    } else {
+                        None
                     }
-                }
+                })?;
+                for (segment, is_index) in path.iter().skip(1) {
+                    current = self.resolve_data_type(scope, current).unwrap_all_refs();
 
-                if path.len() >= 2 {
-                    if let Some(last) = path.last()
-                        && let NodeType::CallExpression { caller, .. } = &last.0.node_type
-                        && let NodeType::Identifier(method_ident) = &caller.node_type
-                    {
-                        let base_ty = match &path[0].0.node_type {
-                            NodeType::Identifier(id) => {
-                                if let Some(parsed) =
-                                    self.resolve_potential_generic_ident_to_data_type(scope, id)
-                                {
-                                    Some(parsed)
-                                } else if let Some(var) = self.variables.get(&id.to_string()) {
-                                    Some(var.data_type.clone())
+                    if *is_index {
+                        current = match current.data_type {
+                            ParserInnerType::List(inner)
+                            | ParserInnerType::Option(inner)
+                            | ParserInnerType::Ptr(inner) => *inner,
+                            ParserInnerType::Tuple(values) => match &segment.node_type {
+                                NodeType::IntLiteral(i) => i
+                                    .parse::<usize>()
+                                    .ok()
+                                    .and_then(|idx| values.get(idx).cloned())
+                                    .unwrap_or_else(|| {
+                                        ParserDataType::new(node.span, ParserInnerType::Auto(None))
+                                    }),
+                                _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
+                            },
+                            ParserInnerType::Result { ok, err } => {
+                                if ok.data_type == err.data_type {
+                                    *ok
                                 } else {
-                                    self.resolve_type_from_node(scope, &path[0].0)
+                                    ParserDataType::new(node.span, ParserInnerType::Dynamic)
                                 }
                             }
-                            _ => self.resolve_type_from_node(scope, &path[0].0),
+                            _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
                         };
+                        continue;
+                    }
 
-                        if let Some(base_ty) = base_ty {
-                            if method_ident.to_string() == "new" {
-                                return Some(base_ty);
+                    match &segment.node_type {
+                        NodeType::Identifier(member_ident) => {
+                            let member_name = member_ident.to_string();
+                            if let Some(field_ty) = self.resolve_member_field_type(
+                                scope,
+                                &current,
+                                &member_name,
+                                node.span,
+                            ) {
+                                current = field_ty;
+                                continue;
                             }
 
-                            if let Some(imp) = self.find_impl_for_type(&base_ty) {
-                                if let Some((fn_name, _)) =
-                                    imp.variables.get(method_ident.to_string().as_str())
-                                    && let Some(var) = self.variables.get(fn_name)
-                                {
-                                    return match &var.data_type.data_type {
-                                        ParserInnerType::Function { return_type, .. } => {
-                                            Some(*return_type.clone())
-                                        }
-                                        ParserInnerType::NativeFunction(x) => Some(*x.clone()),
-                                        _ => Some(var.data_type.clone()),
-                                    };
-                                }
+                            if member_name == "new" {
+                                continue;
                             }
+
+                            if let Some(method_ty) =
+                                self.resolve_member_fn_type(&current, member_name.as_str())
+                            {
+                                current = method_ty;
+                            } else {
+                                current =
+                                    ParserDataType::new(node.span, ParserInnerType::Auto(None));
+                            }
+                        }
+                        NodeType::CallExpression { caller, args, .. } => {
+                            let NodeType::Identifier(method_ident) = &caller.node_type else {
+                                current =
+                                    ParserDataType::new(node.span, ParserInnerType::Auto(None));
+                                continue;
+                            };
+                            let method_name = method_ident.to_string();
+
+                            if method_name == "new" {
+                                continue;
+                            }
+
+                            let method_ty =
+                                self.resolve_member_fn_type(&current, method_name.as_str());
+
+                            current = match method_ty.map(|t| t.unwrap_all_refs().data_type) {
+                                Some(ParserInnerType::Function {
+                                    return_type,
+                                    parameters,
+                                }) if parameters.len() > args.len() + 1 => ParserDataType {
+                                    data_type: ParserInnerType::Function {
+                                        return_type,
+                                        parameters: parameters
+                                            .into_iter()
+                                            .skip(args.len() + 1)
+                                            .collect(),
+                                    },
+                                    span: node.span,
+                                },
+                                Some(ParserInnerType::Function { return_type, .. }) => *return_type,
+                                Some(ParserInnerType::NativeFunction(ret)) => *ret,
+                                _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
+                            };
+                        }
+                        _ => {
+                            current = ParserDataType::new(node.span, ParserInnerType::Auto(None));
                         }
                     }
                 }
 
-                Some(ParserDataType::new(node.span, ParserInnerType::Dynamic))
+                Some(current)
             }
             NodeType::PipeExpression(path) => path
                 .last()
@@ -2905,7 +3087,7 @@ impl MiddleEnvironment {
                 }
             }
             NodeType::ScopeMemberExpression { .. } => {
-                Some(ParserDataType::new(node.span, ParserInnerType::Dynamic))
+                Some(ParserDataType::new(node.span, ParserInnerType::Auto(None)))
             }
             NodeType::ScopeDeclaration { .. } => unreachable!(),
         };

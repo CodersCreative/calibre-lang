@@ -77,13 +77,15 @@ pub struct VM {
     scheduler: scheduler::SchedulerHandle,
     task_state: TaskState,
     pub(crate) moved_functions: FxHashSet<String>,
+    pub suppress_output: bool,
+    pub captured_output: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct VMCaches {
     call: FxHashMap<String, Arc<VMFunction>>,
     globals: FxHashMap<String, RuntimeValue>,
-    callsite: FxHashMap<(usize, u32), Arc<VMFunction>>,
+    callsite: FxHashMap<(usize, usize, u32), Arc<VMFunction>>,
     globals_direct: FxHashMap<String, RuntimeValue>,
     locals: FxHashMap<usize, Arc<FxHashMap<Arc<str>, Reg>>>,
     globals_id: FxHashMap<String, usize>,
@@ -147,6 +149,8 @@ impl From<VMRegistry> for VM {
             scheduler,
             task_state: TaskState::default(),
             moved_functions: FxHashSet::default(),
+            suppress_output: false,
+            captured_output: String::new(),
         }
     }
 }
@@ -373,6 +377,8 @@ impl VM {
             scheduler,
             task_state: TaskState::default(),
             moved_functions: FxHashSet::default(),
+            suppress_output: false,
+            captured_output: String::new(),
         };
 
         if let Some(interval) = config.gc_interval {
@@ -412,6 +418,8 @@ impl VM {
             scheduler,
             task_state: TaskState::default(),
             moved_functions: FxHashSet::default(),
+            suppress_output: false,
+            captured_output: String::new(),
         };
 
         if let Some(interval) = config.gc_interval {
@@ -433,6 +441,10 @@ impl VM {
 
     pub fn store_task_state(&mut self, state: TaskState) {
         self.task_state = state;
+    }
+
+    pub fn take_captured_output(&mut self) -> String {
+        std::mem::take(&mut self.captured_output)
     }
 
     pub fn get_ref_id(&mut self) -> u64 {
@@ -754,7 +766,7 @@ impl VM {
                     return;
                 }
                 if let Some(inner) = self.variables.remove(name) {
-                    self.drop_runtime_value(inner);
+                    self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
                 }
             }
             RuntimeValue::VarRef(id) => {
@@ -763,7 +775,7 @@ impl VM {
                     return;
                 }
                 if let Some(inner) = self.variables.remove_by_id(*id) {
-                    self.drop_runtime_value(inner);
+                    self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
                 }
             }
             RuntimeValue::RegRef { frame, reg } => {
@@ -773,7 +785,7 @@ impl VM {
                 }
                 let inner = self.get_reg_value_in_frame(*frame, *reg);
                 self.set_reg_value_in_frame(*frame, *reg, RuntimeValue::Null);
-                self.drop_runtime_value(inner);
+                self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
             }
             RuntimeValue::List(list) => {
                 for item in list.as_ref().0.iter() {
@@ -810,7 +822,7 @@ impl VM {
             RuntimeValue::Channel(ch) => {
                 if let Ok(mut queue) = ch.queue.lock() {
                     while let Some(item) = queue.pop_front() {
-                        self.drop_runtime_value(item);
+                        self.drop_runtime_value_inner_ref(&item, seen, seen_regs);
                     }
                 }
             }

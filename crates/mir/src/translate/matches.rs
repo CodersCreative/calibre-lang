@@ -50,23 +50,24 @@ impl MiddleEnvironment {
 
         let mut ifs: Vec<Node> = Vec::new();
         let mut reference = None;
+        let resolved_unwrapped = resolved_data_type
+            .as_ref()
+            .map(|t| t.clone().unwrap_all_refs());
         let enum_object = if let Some(resolved_data_type) = &resolved_data_type {
-            if let Some(x) = self.objects.get(
-                resolved_data_type
-                    .to_string()
-                    .replace("mut ", "")
-                    .replace("&", "")
-                    .trim(),
-            ) {
-                match (
-                    resolved_data_type.to_string().contains("mut "),
-                    resolved_data_type.to_string().contains("&"),
-                ) {
-                    (true, true) => reference = Some(RefMutability::MutRef),
-                    (true, false) => reference = Some(RefMutability::MutValue),
-                    (false, true) => reference = Some(RefMutability::Ref),
-                    (false, false) => reference = Some(RefMutability::Value),
-                }
+            reference = Some(match &resolved_data_type.data_type {
+                ParserInnerType::Ref(_, mutability) => mutability.clone(),
+                _ => RefMutability::Value,
+            });
+            let enum_key = match &resolved_unwrapped
+                .as_ref()
+                .unwrap_or(resolved_data_type)
+                .data_type
+            {
+                ParserInnerType::Struct(name) => name.clone(),
+                ParserInnerType::StructWithGenerics { identifier, .. } => identifier.clone(),
+                other => other.to_string(),
+            };
+            if let Some(x) = self.objects.get(&enum_key) {
                 match &x.object_type {
                     MiddleTypeDefType::Enum(x) => Some(x),
                     _ => None,

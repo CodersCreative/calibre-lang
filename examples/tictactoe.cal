@@ -150,12 +150,12 @@ const minimax = fn (board : &mut Board, player : Player, depth : int) -> int => 
 		board.0[i] = player;
 		let value = minimax(board, player.get_opposite(), depth + 1);
 		board.0[i] = Player.None;
-
+		
 		match maximising {
 			true if best_value < value => best_value = value,
 			false if best_value > value => best_value = value,
 			_ => {}
-		}
+		};
 	};
 	best_value;
 };

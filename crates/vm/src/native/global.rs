@@ -46,39 +46,31 @@ impl NativeFunction for ConsoleOutput {
         };
         args.remove(0);
 
-        if handle_type != 2 {
+        let rendered = args
+            .into_iter()
+            .map(|arg| match arg {
+                RuntimeValue::Str(value) => unescape_string(value.as_str()),
+                other => other.display(env),
+            })
+            .collect::<String>();
+
+        if env.suppress_output {
+            env.captured_output.push_str(&rendered);
+        } else if handle_type != 2 {
             let stdout = io::stdout();
             let mut handle = stdout.lock();
-
-            for arg in args {
-                let s = match arg {
-                    RuntimeValue::Str(value) => unescape_string(value.as_str()),
-                    other => other.display(env),
-                };
-
-                handle
-                    .write_all(s.as_bytes())
-                    .map_err(|e| RuntimeError::Io(e.to_string()))?;
-            }
-
+            handle
+                .write_all(rendered.as_bytes())
+                .map_err(|e| RuntimeError::Io(e.to_string()))?;
             handle
                 .flush()
                 .map_err(|e| RuntimeError::Io(e.to_string()))?;
         } else {
-            let stdout = io::stderr();
-            let mut handle = stdout.lock();
-
-            for arg in args {
-                let s = match arg {
-                    RuntimeValue::Str(value) => unescape_string(value.as_str()),
-                    other => other.display(env),
-                };
-
-                handle
-                    .write_all(s.as_bytes())
-                    .map_err(|e| RuntimeError::Io(e.to_string()))?;
-            }
-
+            let stderr = io::stderr();
+            let mut handle = stderr.lock();
+            handle
+                .write_all(rendered.as_bytes())
+                .map_err(|e| RuntimeError::Io(e.to_string()))?;
             handle
                 .flush()
                 .map_err(|e| RuntimeError::Io(e.to_string()))?;
@@ -162,8 +154,35 @@ impl NativeFunction for PanicFn {
     fn name(&self) -> String {
         String::from("panic")
     }
-    fn run(&self, _env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Err(RuntimeError::Panic)
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let msg = args.first().map(|value| match value {
+            RuntimeValue::Str(s) => s.to_string(),
+            other => format!("{other:?}"),
+        });
+        Err(RuntimeError::Panic(msg))
+    }
+}
+
+pub struct AssertFn();
+
+impl NativeFunction for AssertFn {
+    fn name(&self) -> String {
+        String::from("assert")
+    }
+
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let condition = args.first().ok_or(RuntimeError::InvalidFunctionCall)?;
+        match condition {
+            RuntimeValue::Bool(true) => Ok(RuntimeValue::Null),
+            RuntimeValue::Bool(false) => {
+                let msg = args.get(1).map(|value| match value {
+                    RuntimeValue::Str(s) => s.to_string(),
+                    other => format!("{other:?}"),
+                });
+                Err(RuntimeError::Panic(msg))
+            }
+            other => Err(RuntimeError::UnexpectedType(other.clone())),
+        }
     }
 }
 

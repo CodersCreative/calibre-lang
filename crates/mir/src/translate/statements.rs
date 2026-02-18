@@ -42,6 +42,48 @@ impl MiddleEnvironment {
             get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))
         };
 
+        let mut value = value;
+
+        if let NodeType::CallExpression {
+            caller,
+            generic_types,
+            args,
+            reverse_args,
+            ..
+        } = value.clone().node_type
+            && let NodeType::Identifier(callee_ident) = &caller.node_type
+            && callee_ident.to_string() == identifier.text
+            && let Some(first_arg) = args.first().cloned().map(|a| -> Node { a.into() })
+        {
+            let first_ty = self.resolve_type_from_node(scope, &first_arg).or_else(|| {
+                match &first_arg.node_type {
+                    NodeType::RefStatement { value, .. } => {
+                        self.resolve_type_from_node(scope, value.as_ref())
+                    }
+                    _ => None,
+                }
+            });
+            if let Some(first_ty) = first_ty
+                && let Some(mapped_name) = self
+                    .resolve_member_fn_name(&first_ty.unwrap_all_refs(), &callee_ident.to_string())
+                && mapped_name != callee_ident.to_string()
+            {
+                value = Node::new(
+                    value.span,
+                    NodeType::CallExpression {
+                        string_fn: None,
+                        caller: Box::new(Node::new(
+                            value.span,
+                            NodeType::Identifier(ParserText::from(mapped_name).into()),
+                        )),
+                        generic_types,
+                        args,
+                        reverse_args,
+                    },
+                );
+            }
+        }
+
         let original_value_node = value.clone();
 
         if let NodeType::FunctionDeclaration {
@@ -71,8 +113,28 @@ impl MiddleEnvironment {
         );
 
         let mut data_type = if data_type.is_auto() {
-            self.resolve_type_from_node(scope, &value)
-                .unwrap_or(self.resolve_potential_new_type(scope, data_type))
+            let inferred = self.resolve_type_from_node(scope, &value).or_else(|| {
+                if let NodeType::CallExpression { caller, .. } = &value.node_type
+                    && let NodeType::MemberExpression { path } = &caller.node_type
+                    && path.len() >= 2
+                    && let Some((last, _)) = path.last()
+                    && let NodeType::Identifier(ident) = &last.node_type
+                    && ident.to_string() == "new"
+                {
+                    let receiver_path = path[..path.len() - 1].to_vec();
+                    let receiver = Node::new(
+                        span,
+                        NodeType::MemberExpression {
+                            path: receiver_path,
+                        },
+                    );
+                    self.resolve_type_from_node(scope, &receiver)
+                } else {
+                    None
+                }
+            });
+
+            inferred.unwrap_or(self.resolve_potential_new_type(scope, data_type))
         } else {
             self.resolve_potential_new_type(scope, data_type)
         };

@@ -15,6 +15,26 @@ use crate::{
 };
 
 impl MiddleEnvironment {
+    #[inline]
+    fn is_callable_type(data_type: &ParserDataType) -> bool {
+        matches!(
+            data_type.data_type,
+            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
+        )
+    }
+
+    #[inline]
+    fn resolved_callable_name(
+        &self,
+        scope: &u64,
+        ident: &PotentialGenericTypeIdentifier,
+    ) -> Option<String> {
+        let resolved = self.resolve_potential_generic_ident(scope, ident)?;
+        self.variables
+            .get(&resolved.text)
+            .and_then(|var| Self::is_callable_type(&var.data_type).then_some(resolved.text))
+    }
+
     pub fn evaluate_extern_function(
         &mut self,
         scope: &u64,
@@ -345,6 +365,7 @@ impl MiddleEnvironment {
         mut reverse_args: Vec<Node>,
         allow_curry: bool,
     ) -> Result<MiddleNode, MiddleErr> {
+        let mut caller = caller;
         if let NodeType::MemberExpression { mut path } = caller.node_type.clone() {
             if let Some((last_node, is_dynamic)) = path.last_mut()
                 && !*is_dynamic
@@ -365,9 +386,104 @@ impl MiddleEnvironment {
             }
         }
 
-        if let NodeType::Identifier(caller_ident) = &caller.node_type {
-            if let Some(resolved_caller) = self.resolve_potential_generic_ident(scope, caller_ident)
+        if let NodeType::Identifier(caller_ident) = caller.node_type.clone() {
+            let caller_name = caller_ident.to_string();
+            let caller_resolved = self.resolve_potential_generic_ident(scope, &caller_ident);
+            if !caller_name.contains("::")
+                && let Some(resolved) = caller_resolved.clone()
+                && resolved.text.contains("::")
+                && let Some(global_name) = self.get_global_scope().mappings.get(&caller_name)
+                && global_name != &resolved.text
+                && self
+                    .variables
+                    .get(global_name)
+                    .is_some_and(|var| Self::is_callable_type(&var.data_type))
             {
+                caller = Node::new(
+                    span,
+                    NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                        ParserText::from(global_name.clone()).into(),
+                    )),
+                );
+            }
+            let caller_exact_callable = self.resolved_callable_name(scope, &caller_ident).is_some();
+            if caller_name.contains("::")
+                && let Some(full_name) = self.variables.iter().find_map(|(name, var)| {
+                    if !name.ends_with(&caller_name) {
+                        return None;
+                    }
+                    if Self::is_callable_type(&var.data_type) {
+                        Some(name.clone())
+                    } else {
+                        None
+                    }
+                })
+            {
+                caller = Node::new(
+                    span,
+                    NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                        ParserText::from(full_name).into(),
+                    )),
+                );
+            }
+
+            if !caller_exact_callable
+                && let Some(first_arg) = args.first().cloned().map(|a| -> Node { a.into() })
+            {
+                let first_ty = self.resolve_type_from_node(scope, &first_arg).or_else(|| {
+                    match &first_arg.node_type {
+                        NodeType::RefStatement { value, .. } => {
+                            self.resolve_type_from_node(scope, value.as_ref())
+                        }
+                        _ => None,
+                    }
+                });
+                if let Some(first_ty) = first_ty {
+                    let target_ty = first_ty.unwrap_all_refs();
+                    let caller_member_name = caller_ident
+                        .to_string()
+                        .rsplit_once("::")
+                        .map(|(_, member)| member.to_string())
+                        .unwrap_or_else(|| caller_ident.to_string());
+                    let mapped_from_param = self.variables.iter().find_map(|(name, var)| {
+                        if !name.ends_with(&format!("::{}", caller_member_name)) {
+                            return None;
+                        }
+                        let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
+                        else {
+                            return None;
+                        };
+                        let Some(first) = parameters.first() else {
+                            return None;
+                        };
+                        let param_inner = match &first.data_type {
+                            ParserInnerType::Ref(inner, _) => &inner.data_type,
+                            other => other,
+                        };
+                        if self.impl_type_matches(param_inner, &target_ty.data_type, &Vec::new()) {
+                            Some(name.clone())
+                        } else {
+                            None
+                        }
+                    });
+                    if let Some(mapped_name) = self
+                        .resolve_member_fn_name(&target_ty, &caller_member_name)
+                        .or(mapped_from_param)
+                        && mapped_name != caller_ident.to_string()
+                        && let Some(var) = self.variables.get(&mapped_name)
+                        && Self::is_callable_type(&var.data_type)
+                    {
+                        caller = Node::new(
+                            span,
+                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                                ParserText::from(mapped_name).into(),
+                            )),
+                        );
+                    }
+                }
+            }
+
+            if let Some(resolved_caller) = caller_resolved {
                 let base_name = resolved_caller.text.clone();
 
                 if let Some((tpl_params, header, _body)) =
@@ -478,9 +594,45 @@ impl MiddleEnvironment {
             }
         }
 
+        if let NodeType::Identifier(caller_ident) = &caller.node_type
+            && self.resolved_callable_name(scope, caller_ident).is_none()
+            && let Some(first_arg) = args.first().cloned().map(|a| -> Node { a.into() })
+            && let Some(first_ty) = self.resolve_type_from_node(scope, &first_arg)
+            && let Some(mapped_name) =
+                self.resolve_member_fn_name(&first_ty.unwrap_all_refs(), &caller_ident.to_string())
+            && let Some(var) = self.variables.get(&mapped_name)
+            && Self::is_callable_type(&var.data_type)
+        {
+            caller = Node::new(
+                span,
+                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                    ParserText::from(mapped_name).into(),
+                )),
+            );
+        }
+
         let data_type = self
             .resolve_type_from_node(scope, &caller)
             .map(|x| x.unwrap_all_refs().data_type);
+
+        if args.len() >= 2 {
+            let first: Node = args[0].clone().into();
+            let second: Node = args[1].clone().into();
+            let duplicate_receiver = first.to_string() == second.to_string();
+            let looks_like_member_rewrite = matches!(
+                &caller.node_type,
+                NodeType::Identifier(id) if id.to_string().contains("::")
+            );
+            if duplicate_receiver
+                && (looks_like_member_rewrite
+                    || matches!(
+                        &data_type,
+                        Some(ParserInnerType::Function { parameters, .. }) if args.len() > parameters.len()
+                    ))
+            {
+                args.remove(1);
+            }
+        }
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::CallExpression {
@@ -621,7 +773,7 @@ impl MiddleEnvironment {
                                     self.current_span(),
                                     NodeType::CallExpression {
                                         string_fn: None,
-                                        caller: Box::new(caller),
+                                        caller: Box::new(caller.clone()),
                                         generic_types,
                                         args: captured_args,
                                         reverse_args: Vec::new(),
@@ -688,7 +840,7 @@ impl MiddleEnvironment {
                         lst
                     }
                 },
-                caller: Box::new(self.evaluate(scope, caller)),
+                caller: Box::new(self.evaluate_inner(scope, caller)?),
             },
             span,
         })

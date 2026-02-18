@@ -171,7 +171,10 @@ fn prepare_scope(
                 .get(*func)
                 .and_then(|x| x.clone())
                 .unwrap_or_else(|| (*func).to_string());
-            out.push((key, value));
+            out.push((key.clone(), value.clone()));
+            if key != *func {
+                out.push(((*func).to_string(), value));
+            }
         }
     }
     out

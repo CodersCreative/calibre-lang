@@ -10,6 +10,20 @@ const main = fn () => {
 	let name = "Ty";
 	let age = "10";
 	test_str"Hello, my name is {name} and I'm {age} years old!"<(true, 900003);
+
+	let txt = fn (splits : list:<str>, inputs : list:<str>) -> str => {
+		let mut txt : str = "";
+		
+		for i in len(splits) => {
+			txt &= splits[i];
+			if i < len(inputs) => txt &= inputs[i];
+		};
+		
+		txt;
+	}"Hello, my name is {name} and I'm {age} years old!";
+	
+	print(txt);
+
 	
 	match age {
 		"10" => print("match with value : 10"),
@@ -44,14 +58,17 @@ const main = fn () => {
 		.Some : v => v,
 		.None => 0f
 	};
+	
 	let fac_val = match fac_ch.get() {
 		.Some : v => v,
 		.None => 0
 	};
+	
 	let lock_val = match lock_ch.get() {
 		.Some : v => v,
 		.None => false
 	};
+	
 	print(bmi_val);
 	print("fac -> " & fac_val);
 	print(lock_val);

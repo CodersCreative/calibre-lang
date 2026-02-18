@@ -11,6 +11,9 @@ use calibre_parser::ast::{
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static GLOBAL_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Default)]
 pub struct LirRegistry {
@@ -409,7 +412,6 @@ pub struct LirEnvironment<'a> {
     pub registry: LirRegistry,
     pub blocks: Vec<LirBlock>,
     pub current_block: BlockId,
-    pub temp_count: usize,
     pub loop_stack: Vec<(BlockId, BlockId, Option<String>)>,
     allow_global_hoist: bool,
 }
@@ -429,12 +431,13 @@ impl<'a> LirEnvironment<'a> {
         let mut this = Self::new(env);
         this.lower_and_add_node(node);
         if !this.blocks.is_empty() {
+            let blocks = std::mem::take(&mut this.blocks).into_boxed_slice();
             this.registry.globals.insert(
                 root_name.clone(),
                 LirGlobal {
                     name: root_name.into_boxed_str(),
                     data_type: ParserDataType::new(Span::default(), ParserInnerType::Dynamic),
-                    blocks: this.blocks.clone().into_boxed_slice(),
+                    blocks,
                 },
             );
         }
@@ -457,39 +460,43 @@ impl<'a> LirEnvironment<'a> {
                 terminator: None,
             }],
             current_block: entry_id,
-            temp_count: 0,
             loop_stack: vec![],
             allow_global_hoist,
         }
     }
 
     fn get_temp(&mut self) -> String {
-        let name = format!("tmp_{}", self.temp_count);
-        self.temp_count += 1;
-        name
+        let id = GLOBAL_TEMP_ID.fetch_add(1, Ordering::Relaxed);
+        format!("tmp_{}", id)
+    }
+
+    fn member_field(step: MiddleNode) -> Box<str> {
+        match step.node_type {
+            MiddleNodeType::Identifier(name) => name.text.into_boxed_str(),
+            MiddleNodeType::IntLiteral(x) => x.to_string().into_boxed_str(),
+            MiddleNodeType::FloatLiteral(x) => x.to_string().into_boxed_str(),
+            _ => "<invalid>".to_string().into_boxed_str(),
+        }
     }
 
     fn lower_member_lvalue(&mut self, path: Vec<(MiddleNode, bool)>) -> LirNodeType {
-        let (base_node, _) = &path[0];
-        let mut current = match &base_node.node_type {
-            MiddleNodeType::Identifier(name) => LirNodeType::Ref(Box::new(LirNodeType::Load(
-                name.to_string().into_boxed_str(),
-            ))),
-            _ => self.lower_node(base_node.clone()),
+        let mut iter = path.into_iter();
+        let (base_node, _) = iter
+            .next()
+            .expect("member lvalue path must contain at least one segment");
+        let mut current = match base_node.node_type {
+            MiddleNodeType::Identifier(name) => {
+                LirNodeType::Ref(Box::new(LirNodeType::Load(name.text.into_boxed_str())))
+            }
+            _ => self.lower_node(base_node),
         };
 
-        for (step, is_dynamic) in path.iter().skip(1) {
-            if *is_dynamic {
-                let idx = self.lower_node(step.clone());
+        for (step, is_dynamic) in iter {
+            if is_dynamic {
+                let idx = self.lower_node(step);
                 current = LirNodeType::Index(Box::new(current), Box::new(idx));
             } else {
-                let field = match &step.node_type {
-                    MiddleNodeType::Identifier(name) => name.to_string(),
-                    MiddleNodeType::IntLiteral(x) => x.to_string(),
-                    MiddleNodeType::FloatLiteral(x) => x.to_string(),
-                    _ => "<invalid>".to_string(),
-                };
-                current = LirNodeType::Member(Box::new(current), field.into_boxed_str());
+                current = LirNodeType::Member(Box::new(current), Self::member_field(step));
             }
         }
 
@@ -529,6 +536,12 @@ impl<'a> LirEnvironment<'a> {
         }
         let span = node.span;
         let value = self.lower_node(node);
+        if matches!(
+            value,
+            LirNodeType::Noop | LirNodeType::Literal(LirLiteral::Null)
+        ) {
+            return;
+        }
         self.add_instr(LirInstr::new(span, value));
     }
 
@@ -543,7 +556,10 @@ impl<'a> LirEnvironment<'a> {
                 LirNodeType::Literal(LirLiteral::String(s.to_string()))
             }
             MiddleNodeType::ListLiteral(data_type, elements) => {
-                let lowered_elements = elements.into_iter().map(|e| self.lower_node(e)).collect();
+                let mut lowered_elements = Vec::with_capacity(elements.len());
+                for element in elements {
+                    lowered_elements.push(self.lower_node(element));
+                }
 
                 LirNodeType::List {
                     elements: lowered_elements,
@@ -551,7 +567,7 @@ impl<'a> LirEnvironment<'a> {
                 }
             }
             MiddleNodeType::AggregateExpression { identifier, value } => {
-                let mut lowered_fields = Vec::new();
+                let mut lowered_fields = Vec::with_capacity(value.0.len());
                 for (field_name, field_node) in value.0 {
                     lowered_fields.push((field_name.to_string(), self.lower_node(field_node)));
                 }
@@ -781,12 +797,13 @@ impl<'a> LirEnvironment<'a> {
                 }
                 for stmt in body {
                     if let MiddleNodeType::VariableDeclaration {
-                        var_type: _,
                         identifier,
-                        value: _,
                         data_type,
-                    } = stmt.node_type.clone()
+                        ..
+                    } = &stmt.node_type
                     {
+                        let global_name = identifier.to_string();
+                        let global_type = data_type.clone();
                         let mut sub_lowerer = LirEnvironment::new_with_hoist(self.env, false);
 
                         let _body_val = sub_lowerer.lower_node(stmt);
@@ -794,10 +811,10 @@ impl<'a> LirEnvironment<'a> {
                         self.registry.append(sub_lowerer.registry);
 
                         self.registry.globals.insert(
-                            identifier.to_string(),
+                            global_name.clone(),
                             LirGlobal {
-                                name: identifier.to_string().into_boxed_str(),
-                                data_type,
+                                name: global_name.into_boxed_str(),
+                                data_type: global_type,
                                 blocks: sub_lowerer.blocks.into_boxed_slice(),
                             },
                         );
@@ -821,6 +838,9 @@ impl<'a> LirEnvironment<'a> {
                 if is_temp {
                     let temp = self.get_temp();
                     let lowered = self.lower_node(last);
+                    if matches!(lowered, LirNodeType::Literal(LirLiteral::Null)) {
+                        return LirNodeType::Literal(LirLiteral::Null);
+                    }
                     self.add_instr(LirInstr::new(
                         span,
                         LirNodeType::Declare {
@@ -866,13 +886,15 @@ impl<'a> LirEnvironment<'a> {
                     .terminator
                     .is_none()
                 {
-                    self.add_instr(LirInstr::new(
-                        span,
-                        LirNodeType::Assign {
-                            dest: LirLValue::Var(temp.clone().into_boxed_str()),
-                            value: Box::new(then_val),
-                        },
-                    ));
+                    if !matches!(then_val, LirNodeType::Literal(LirLiteral::Null)) {
+                        self.add_instr(LirInstr::new(
+                            span,
+                            LirNodeType::Assign {
+                                dest: LirLValue::Var(temp.clone().into_boxed_str()),
+                                value: Box::new(then_val),
+                            },
+                        ));
+                    }
                     self.set_terminator(LirTerminator::Jump {
                         span,
                         target: merge_id,
@@ -889,13 +911,15 @@ impl<'a> LirEnvironment<'a> {
                     .terminator
                     .is_none()
                 {
-                    self.add_instr(LirInstr::new(
-                        span,
-                        LirNodeType::Assign {
-                            dest: LirLValue::Var(temp.clone().into_boxed_str()),
-                            value: Box::new(else_val),
-                        },
-                    ));
+                    if !matches!(else_val, LirNodeType::Literal(LirLiteral::Null)) {
+                        self.add_instr(LirInstr::new(
+                            span,
+                            LirNodeType::Assign {
+                                dest: LirLValue::Var(temp.clone().into_boxed_str()),
+                                value: Box::new(else_val),
+                            },
+                        ));
+                    }
                     self.set_terminator(LirTerminator::Jump {
                         span,
                         target: merge_id,
@@ -1024,21 +1048,18 @@ impl<'a> LirEnvironment<'a> {
                 LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::MemberExpression { path } => {
-                let (base_node, _) = &path[0];
-                let mut current = self.lower_node(base_node.clone());
+                let mut iter = path.into_iter();
+                let (base_node, _) = iter
+                    .next()
+                    .expect("member expression path must contain at least one segment");
+                let mut current = self.lower_node(base_node);
 
-                for (step, is_dynamic) in path.iter().skip(1) {
-                    if *is_dynamic {
-                        let idx = self.lower_node(step.clone());
+                for (step, is_dynamic) in iter {
+                    if is_dynamic {
+                        let idx = self.lower_node(step);
                         current = LirNodeType::Index(Box::new(current), Box::new(idx));
                     } else {
-                        let field = match &step.node_type {
-                            MiddleNodeType::Identifier(name) => name.to_string(),
-                            MiddleNodeType::IntLiteral(x) => x.to_string(),
-                            MiddleNodeType::FloatLiteral(x) => x.to_string(),
-                            _ => "<invalid>".to_string(),
-                        };
-                        current = LirNodeType::Member(Box::new(current), field.into_boxed_str());
+                        current = LirNodeType::Member(Box::new(current), Self::member_field(step));
                     }
                 }
                 current
@@ -1078,15 +1099,23 @@ impl<'a> LirEnvironment<'a> {
             },
             MiddleNodeType::CallExpression { caller, args } => {
                 let caller_node = *caller;
-                let l_caller = self.lower_node(caller_node.clone());
-                let mut l_args: Vec<LirNodeType> =
-                    args.into_iter().map(|a| self.lower_node(a)).collect();
-
-                if let MiddleNodeType::Identifier(name) = &caller_node.node_type
+                let needs_ref_first_arg = if let MiddleNodeType::Identifier(name) =
+                    &caller_node.node_type
                     && let Some(var) = self.env.variables.get(&name.text)
                     && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
                     && let Some(first) = parameters.first()
-                    && matches!(first.data_type, ParserInnerType::Ref(_, _))
+                {
+                    matches!(first.data_type, ParserInnerType::Ref(_, _))
+                } else {
+                    false
+                };
+                let l_caller = self.lower_node(caller_node);
+                let mut l_args: Vec<LirNodeType> = Vec::with_capacity(args.len());
+                for a in args {
+                    l_args.push(self.lower_node(a));
+                }
+
+                if needs_ref_first_arg
                     && let Some(first_arg) = l_args.get_mut(0)
                     && matches!(first_arg, LirNodeType::Load(_))
                 {
@@ -1139,7 +1168,7 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::MemberExpression { path } => {
                 LirLValue::Ptr(Box::new(self.lower_member_lvalue(path)))
             }
-            _ => LirLValue::Var("<invalid>".to_string().into_boxed_str()),
+            _ => LirLValue::Var(Box::<str>::from("<invalid>")),
         }
     }
 
@@ -1148,7 +1177,7 @@ impl<'a> LirEnvironment<'a> {
             if let MiddleTypeDefType::Enum(variants) = &obj.object_type {
                 return variants
                     .iter()
-                    .position(|(name, _)| name.to_string() == variant_name)
+                    .position(|(name, _)| name.text == variant_name)
                     .unwrap_or(0) as u32;
             }
         }

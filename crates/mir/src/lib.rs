@@ -3,7 +3,7 @@ use calibre_parser::{
     Span,
     ast::{
         CallArg, DestructurePattern, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
+        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, VarType,
         binary::BinaryOperator,
     },
 };
@@ -27,7 +27,50 @@ impl MiddleEnvironment {
         span: Span,
         is_declaration: bool,
     ) -> Vec<Node> {
-        let mut out = Vec::new();
+        let estimated = match pattern {
+            DestructurePattern::Tuple(bindings) => bindings.iter().flatten().count(),
+            DestructurePattern::Struct(fields) => fields.len(),
+        };
+        let mut out = Vec::with_capacity(estimated);
+        let auto_type =
+            PotentialNewType::DataType(ParserDataType::new(span, ParserInnerType::Auto(None)));
+        let tmp_member_base = || {
+            Node::new(
+                span,
+                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                    tmp_ident.clone(),
+                )),
+            )
+        };
+        let push_binding = |out: &mut Vec<Node>,
+                            var_type: &VarType,
+                            name: &PotentialDollarIdentifier,
+                            member: Node| {
+            if is_declaration {
+                out.push(Node::new(
+                    span,
+                    NodeType::VariableDeclaration {
+                        var_type: var_type.clone(),
+                        identifier: name.clone(),
+                        data_type: auto_type.clone(),
+                        value: Box::new(member),
+                    },
+                ));
+            } else {
+                out.push(Node::new(
+                    span,
+                    NodeType::AssignmentExpression {
+                        identifier: Box::new(Node::new(
+                            span,
+                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                                name.clone().into(),
+                            )),
+                        )),
+                        value: Box::new(member),
+                    },
+                ));
+            }
+        };
         match pattern {
             DestructurePattern::Tuple(bindings) => {
                 let has_tail = bindings.iter().any(|b| b.is_none());
@@ -54,20 +97,7 @@ impl MiddleEnvironment {
                             Node::new(
                                 span,
                                 NodeType::MemberExpression {
-                                    path: vec![
-                                        (
-                                            Node::new(
-                                                span,
-                                                NodeType::Identifier(
-                                                    PotentialGenericTypeIdentifier::Identifier(
-                                                        tmp_ident.clone(),
-                                                    ),
-                                                ),
-                                            ),
-                                            false,
-                                        ),
-                                        (index_node, true),
-                                    ],
+                                    path: vec![(tmp_member_base(), false), (index_node, true)],
                                 },
                             )
                         } else {
@@ -78,17 +108,7 @@ impl MiddleEnvironment {
                                 span,
                                 NodeType::MemberExpression {
                                     path: vec![
-                                        (
-                                            Node::new(
-                                                span,
-                                                NodeType::Identifier(
-                                                    PotentialGenericTypeIdentifier::Identifier(
-                                                        tmp_ident.clone(),
-                                                    ),
-                                                ),
-                                            ),
-                                            false,
-                                        ),
+                                        (tmp_member_base(), false),
                                         (
                                             Node::new(
                                                 span,
@@ -104,35 +124,7 @@ impl MiddleEnvironment {
                                 },
                             )
                         };
-                        if is_declaration {
-                            out.push(Node::new(
-                                span,
-                                NodeType::VariableDeclaration {
-                                    var_type: var_type.clone(),
-                                    identifier: name.clone(),
-                                    data_type: PotentialNewType::DataType(ParserDataType::new(
-                                        span,
-                                        ParserInnerType::Auto(None),
-                                    )),
-                                    value: Box::new(member),
-                                },
-                            ));
-                        } else {
-                            out.push(Node::new(
-                                span,
-                                NodeType::AssignmentExpression {
-                                    identifier: Box::new(Node::new(
-                                        span,
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(
-                                                name.clone(),
-                                            ),
-                                        ),
-                                    )),
-                                    value: Box::new(member),
-                                },
-                            ));
-                        }
+                        push_binding(&mut out, var_type, name, member);
                     }
                 }
 
@@ -147,7 +139,7 @@ impl MiddleEnvironment {
                                     span,
                                     NodeType::Identifier(
                                         PotentialGenericTypeIdentifier::Identifier(
-                                            ParserText::from(String::from("len")).into(),
+                                            ParserText::from("len".to_string()).into(),
                                         ),
                                     ),
                                 )),
@@ -155,7 +147,7 @@ impl MiddleEnvironment {
                                     span,
                                     NodeType::Identifier(
                                         PotentialGenericTypeIdentifier::Identifier(
-                                            tmp_ident.clone().into(),
+                                            tmp_ident.clone(),
                                         ),
                                     ),
                                 ))],
@@ -177,52 +169,10 @@ impl MiddleEnvironment {
                         let member = Node::new(
                             span,
                             NodeType::MemberExpression {
-                                path: vec![
-                                    (
-                                        Node::new(
-                                            span,
-                                            NodeType::Identifier(
-                                                PotentialGenericTypeIdentifier::Identifier(
-                                                    tmp_ident.clone().into(),
-                                                ),
-                                            ),
-                                        ),
-                                        false,
-                                    ),
-                                    (index_expr, true),
-                                ],
+                                path: vec![(tmp_member_base(), false), (index_expr, true)],
                             },
                         );
-
-                        if is_declaration {
-                            out.push(Node::new(
-                                span,
-                                NodeType::VariableDeclaration {
-                                    var_type: var_type.clone(),
-                                    identifier: name.clone().into(),
-                                    data_type: PotentialNewType::DataType(ParserDataType::new(
-                                        span,
-                                        ParserInnerType::Auto(None),
-                                    )),
-                                    value: Box::new(member),
-                                },
-                            ));
-                        } else {
-                            out.push(Node::new(
-                                span,
-                                NodeType::AssignmentExpression {
-                                    identifier: Box::new(Node::new(
-                                        span,
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(
-                                                name.clone().into(),
-                                            ),
-                                        ),
-                                    )),
-                                    value: Box::new(member),
-                                },
-                            ));
-                        }
+                        push_binding(&mut out, var_type, name, member);
                     }
                 }
             }
@@ -232,17 +182,7 @@ impl MiddleEnvironment {
                         span,
                         NodeType::MemberExpression {
                             path: vec![
-                                (
-                                    Node::new(
-                                        span,
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(
-                                                tmp_ident.clone().into(),
-                                            ),
-                                        ),
-                                    ),
-                                    false,
-                                ),
+                                (tmp_member_base(), false),
                                 (
                                     Node::new(
                                         span,
@@ -260,36 +200,7 @@ impl MiddleEnvironment {
                             ],
                         },
                     );
-
-                    if is_declaration {
-                        out.push(Node::new(
-                            span,
-                            NodeType::VariableDeclaration {
-                                var_type: var_type.clone(),
-                                identifier: name.clone().into(),
-                                data_type: PotentialNewType::DataType(ParserDataType::new(
-                                    span,
-                                    ParserInnerType::Auto(None),
-                                )),
-                                value: Box::new(member),
-                            },
-                        ));
-                    } else {
-                        out.push(Node::new(
-                            span,
-                            NodeType::AssignmentExpression {
-                                identifier: Box::new(Node::new(
-                                    span,
-                                    NodeType::Identifier(
-                                        PotentialGenericTypeIdentifier::Identifier(
-                                            name.clone().into(),
-                                        ),
-                                    ),
-                                )),
-                                value: Box::new(member),
-                            },
-                        ));
-                    }
+                    push_binding(&mut out, var_type, name, member);
                 }
             }
         }
@@ -407,11 +318,55 @@ impl MiddleEnvironment {
         scope: &u64,
         mut path: Vec<Node>,
     ) -> Result<(u64, Node), MiddleErr> {
+        fn normalize_scope_key(input: &str) -> String {
+            if let Some(idx) = input.find("text: \"") {
+                let rest = &input[idx + 7..];
+                if let Some(end) = rest.find('"') {
+                    return rest[..end].to_string();
+                }
+            }
+
+            let mut s = input.trim().to_string();
+            loop {
+                if s.starts_with("Identifier(") && s.ends_with(')') {
+                    s = s
+                        .trim_start_matches("Identifier(")
+                        .trim_end_matches(')')
+                        .trim()
+                        .to_string();
+                    continue;
+                }
+                break;
+            }
+            s
+        }
+
         if let NodeType::Identifier(x) = &path[0].node_type {
-            let x = self
+            let raw = match x {
+                PotentialGenericTypeIdentifier::Identifier(id) => match id {
+                    PotentialDollarIdentifier::Identifier(txt) => txt.text.clone(),
+                    PotentialDollarIdentifier::DollarIdentifier(txt) => txt.text.clone(),
+                },
+                PotentialGenericTypeIdentifier::Generic { identifier, .. } => {
+                    identifier.to_string()
+                }
+            };
+            let resolved = self
                 .resolve_potential_generic_ident(scope, x)
-                .unwrap_or(x.to_string().into());
-            if let Ok(s) = self.get_next_scope(*scope, &x.text) {
+                .map(|v| v.text)
+                .unwrap_or_else(|| raw.clone());
+            let raw = normalize_scope_key(&raw);
+            let resolved = normalize_scope_key(&resolved);
+            let mut next = self
+                .get_next_scope(*scope, &raw)
+                .or_else(|_| self.get_next_scope(*scope, &resolved));
+            if next.is_err()
+                && raw == "std"
+                && let Ok((s, _)) = self.import_scope_list(*scope, vec!["std".to_string()])
+            {
+                next = Ok(s);
+            }
+            if let Ok(s) = next {
                 if path.len() <= 2 {
                     return Ok((s, path.remove(1)));
                 }
@@ -421,6 +376,38 @@ impl MiddleEnvironment {
                     _ => {}
                 }
             }
+        }
+
+        let joined = path
+            .iter()
+            .map(|node| match &node.node_type {
+                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                    PotentialDollarIdentifier::Identifier(txt),
+                )) => Some(txt.text.clone()),
+                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                    PotentialDollarIdentifier::DollarIdentifier(txt),
+                )) => Some(txt.text.clone()),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>();
+        if let Some(parts) = joined
+            && !parts.is_empty()
+        {
+            let joined_ident = parts.join("::");
+            let sp = if let (Some(a), Some(b)) = (path.first(), path.last()) {
+                Span::new_from_spans(a.span, b.span)
+            } else {
+                Span::default()
+            };
+            return Ok((
+                *scope,
+                Node::new(
+                    sp,
+                    NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                        ParserText::from(joined_ident).into(),
+                    )),
+                ),
+            ));
         }
 
         Err(MiddleErr::At(
@@ -616,6 +603,33 @@ impl MiddleEnvironment {
         scope: &u64,
         path: Vec<Node>,
     ) -> Result<MiddleNode, MiddleErr> {
+        let joined = path
+            .iter()
+            .map(|node| match &node.node_type {
+                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                    PotentialDollarIdentifier::Identifier(txt),
+                )) => Some(txt.text.clone()),
+                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                    PotentialDollarIdentifier::DollarIdentifier(txt),
+                )) => Some(txt.text.clone()),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>();
+        if let Some(parts) = joined
+            && !parts.is_empty()
+        {
+            let joined_ident = parts.join("::");
+            let ident = PotentialGenericTypeIdentifier::Identifier(
+                PotentialDollarIdentifier::Identifier(ParserText::from(joined_ident.clone())),
+            );
+            if let Some(resolved) = self.resolve_potential_generic_ident(scope, &ident) {
+                return Ok(MiddleNode::new(
+                    MiddleNodeType::Identifier(resolved),
+                    path.first().map(|n| n.span).unwrap_or_default(),
+                ));
+            }
+        }
+
         let (s, node) = self.get_scope_member_scope_path(scope, path)?;
         match node.node_type {
             NodeType::Identifier(ident) => {

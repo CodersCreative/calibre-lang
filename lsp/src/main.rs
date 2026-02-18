@@ -26,8 +26,7 @@ use calibre_mir::environment::{MiddleEnvironment, MiddleObject, MiddleTypeDefTyp
 use calibre_mir::errors::MiddleErr;
 use calibre_parser::ast::formatter::{Formatter, Tab};
 use calibre_parser::ast::{ParserDataType, ParserInnerType};
-use calibre_parser::lexer::{self, LexerError, Token, TokenType, Tokenizer};
-use calibre_parser::{Parser, ParserError, ast::Node};
+use calibre_parser::{Parser, ParserError, Position as CalPosition, Span as CalSpan, ast::Node};
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
 use std::ops::ControlFlow;
@@ -36,6 +35,223 @@ use std::time::Duration;
 use std::{error::Error, fs, path::PathBuf, str::FromStr};
 use tower::ServiceBuilder;
 use tracing::Level;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Bracket {
+    Paren,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TokenType {
+    Identifier,
+    String,
+    Integer,
+    Float,
+    Comment,
+    Func,
+    Let,
+    Mut,
+    Const,
+    Match,
+    If,
+    For,
+    Enum,
+    Object,
+    Extern,
+    As,
+    Try,
+    In,
+    Range,
+    Impl,
+    Trait,
+    FullStop,
+    Open(Bracket),
+}
+
+#[derive(Debug, Clone)]
+struct Token {
+    token_type: TokenType,
+    value: String,
+    span: CalSpan,
+}
+
+#[derive(Debug, Clone)]
+enum LexerError {
+    Unrecognized,
+}
+
+#[derive(Default)]
+struct Tokenizer;
+
+impl Tokenizer {
+    fn tokenize(&mut self, text: &str) -> Result<Vec<Token>, LexerError> {
+        fn pos_from_idx(line_starts: &[usize], idx: usize) -> CalPosition {
+            let line_idx = line_starts.partition_point(|&s| s <= idx).saturating_sub(1);
+            let line_start = line_starts.get(line_idx).copied().unwrap_or(0);
+            CalPosition {
+                line: line_idx as u32 + 1,
+                col: (idx - line_start) as u32 + 1,
+            }
+        }
+        fn span_from(line_starts: &[usize], start: usize, end: usize) -> CalSpan {
+            CalSpan {
+                from: pos_from_idx(line_starts, start),
+                to: pos_from_idx(line_starts, end),
+            }
+        }
+
+        let mut tokens = Vec::new();
+        let line_starts: Vec<usize> = std::iter::once(0)
+            .chain(text.match_indices('\n').map(|(i, _)| i + 1))
+            .collect();
+        let bytes = text.as_bytes();
+        let mut i = 0usize;
+        while i < bytes.len() {
+            let c = bytes[i] as char;
+            if c.is_whitespace() {
+                i += 1;
+                continue;
+            }
+            if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'/' {
+                let start = i;
+                i += 2;
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+                tokens.push(Token {
+                    token_type: TokenType::Comment,
+                    value: text[start..i].to_string(),
+                    span: span_from(&line_starts, start, i.saturating_sub(1)),
+                });
+                continue;
+            }
+            if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+                let start = i;
+                i += 2;
+                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                    i += 1;
+                }
+                i = (i + 2).min(bytes.len());
+                tokens.push(Token {
+                    token_type: TokenType::Comment,
+                    value: text[start..i].to_string(),
+                    span: span_from(&line_starts, start, i.saturating_sub(1)),
+                });
+                continue;
+            }
+            if c == '"' {
+                let start = i;
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == b'\\' {
+                        i += 2;
+                        continue;
+                    }
+                    if bytes[i] == b'"' {
+                        i += 1;
+                        break;
+                    }
+                    i += 1;
+                }
+                tokens.push(Token {
+                    token_type: TokenType::String,
+                    value: text[start..i.min(bytes.len())].to_string(),
+                    span: span_from(&line_starts, start, i.saturating_sub(1)),
+                });
+                continue;
+            }
+            if c == '.' {
+                tokens.push(Token {
+                    token_type: TokenType::FullStop,
+                    value: ".".into(),
+                    span: span_from(&line_starts, i, i),
+                });
+                i += 1;
+                continue;
+            }
+            if c == '(' {
+                tokens.push(Token {
+                    token_type: TokenType::Open(Bracket::Paren),
+                    value: "(".into(),
+                    span: span_from(&line_starts, i, i),
+                });
+                i += 1;
+                continue;
+            }
+            if c.is_ascii_digit() {
+                let start = i;
+                i += 1;
+                let mut has_dot = false;
+                while i < bytes.len() {
+                    let cc = bytes[i] as char;
+                    if cc.is_ascii_digit() {
+                        i += 1;
+                    } else if cc == '.' && !has_dot {
+                        has_dot = true;
+                        i += 1;
+                    } else {
+                        break;
+                    }
+                }
+                tokens.push(Token {
+                    token_type: if has_dot {
+                        TokenType::Float
+                    } else {
+                        TokenType::Integer
+                    },
+                    value: text[start..i].to_string(),
+                    span: span_from(&line_starts, start, i.saturating_sub(1)),
+                });
+                continue;
+            }
+            if c.is_ascii_alphabetic() || c == '_' {
+                let start = i;
+                i += 1;
+                while i < bytes.len() {
+                    let cc = bytes[i] as char;
+                    if cc.is_ascii_alphanumeric() || cc == '_' {
+                        i += 1;
+                    } else {
+                        break;
+                    }
+                }
+                let v = &text[start..i];
+                let token_type = match v {
+                    "fn" => TokenType::Func,
+                    "let" => TokenType::Let,
+                    "mut" => TokenType::Mut,
+                    "const" => TokenType::Const,
+                    "match" => TokenType::Match,
+                    "if" => TokenType::If,
+                    "for" => TokenType::For,
+                    "enum" => TokenType::Enum,
+                    "struct" => TokenType::Object,
+                    "extern" => TokenType::Extern,
+                    "as" => TokenType::As,
+                    "try" => TokenType::Try,
+                    "in" => TokenType::In,
+                    "range" => TokenType::Range,
+                    "impl" => TokenType::Impl,
+                    "trait" => TokenType::Trait,
+                    _ => TokenType::Identifier,
+                };
+                tokens.push(Token {
+                    token_type,
+                    value: v.to_string(),
+                    span: span_from(&line_starts, start, i.saturating_sub(1)),
+                });
+                continue;
+            }
+            if c.is_ascii_punctuation() {
+                i += 1;
+                continue;
+            }
+            let _ = c;
+            return Err(LexerError::Unrecognized);
+        }
+        Ok(tokens)
+    }
+}
 
 fn is_position_within_range(pos: Position, range: Range) -> bool {
     if pos.line < range.start.line {
@@ -103,29 +319,29 @@ struct CompletionPrefix {
     typed: String,
 }
 
-fn span_into_range(span: lexer::Span) -> Range {
+fn span_into_range(span: CalSpan) -> Range {
     Range {
         start: lexer_pos_to_lsp_pos(span.from),
         end: lexer_pos_to_lsp_pos(span.to),
     }
 }
 
-fn lexer_pos_to_lsp_pos(pos: lexer::Position) -> Position {
+fn lexer_pos_to_lsp_pos(pos: CalPosition) -> Position {
     Position {
         line: pos.line.saturating_sub(1),
         character: pos.col.saturating_sub(1),
     }
 }
 
-fn lsp_range_to_lexer_span(range: Range) -> lexer::Span {
-    lexer::Span {
+fn lsp_range_to_lexer_span(range: Range) -> CalSpan {
+    CalSpan {
         from: pos_into_lexer_pos(range.start),
         to: pos_into_lexer_pos(range.end),
     }
 }
 
-fn pos_into_lexer_pos(pos: Position) -> lexer::Position {
-    lexer::Position {
+fn pos_into_lexer_pos(pos: Position) -> CalPosition {
+    CalPosition {
         line: pos.line + 1,
         col: pos.character + 1,
     }
@@ -145,40 +361,16 @@ impl ServerState {
         None
     }
 
-    fn parse_text(path: &PathBuf, text: &str) -> Result<(Node, Parser), LexerError> {
+    fn parse_text(path: &PathBuf, text: &str) -> (Node, Parser) {
         let mut parser = Parser::default();
         parser.set_source_path(Some(path.clone()));
         let ast = parser.produce_ast(text);
-        if let Some(ParserError::Lexer(err)) = parser.errors.first().cloned() {
-            return Err(err);
-        }
-        Ok((ast, parser))
+        (ast, parser)
     }
 
     fn run_index_job(job: IndexJob) -> IndexResult {
         let path = job.path;
-        let parse_result = Self::parse_text(&path, &job.text);
-        let (ast, parser) = match parse_result {
-            Ok(parts) => parts,
-            Err(err) => {
-                let diagnostics = match err {
-                    LexerError::Unrecognized { span, ch } => vec![Diagnostic {
-                        range: span_into_range(span),
-                        severity: Some(DiagnosticSeverity::ERROR),
-                        message: format!("Unrecognized character: '{ch}'"),
-                        ..Diagnostic::default()
-                    }],
-                };
-                return IndexResult {
-                    generation: job.generation,
-                    path,
-                    env: None,
-                    scope: None,
-                    middle_ast: None,
-                    diagnostics,
-                };
-            }
-        };
+        let (ast, parser) = Self::parse_text(&path, &job.text);
         let mut diagnostics = Self::parser_diagnostics(&parser.errors);
         let (mut env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path.clone());
 
@@ -520,12 +712,6 @@ impl ServerState {
         errors
             .iter()
             .map(|err| match err {
-                ParserError::Lexer(LexerError::Unrecognized { span, ch }) => Diagnostic {
-                    range: span_into_range(*span),
-                    severity: Some(DiagnosticSeverity::ERROR),
-                    message: format!("Unrecognized character: '{ch}'"),
-                    ..Diagnostic::default()
-                },
                 ParserError::Syntax { err, span } => Diagnostic {
                     range: span_into_range(*span),
                     severity: Some(DiagnosticSeverity::ERROR),
@@ -553,14 +739,6 @@ impl ServerState {
                 diag
             }
             MiddleErr::ParserErrors { errors, .. } => Self::parser_diagnostics(errors),
-            MiddleErr::LexerError { error, .. } => match error {
-                LexerError::Unrecognized { span, ch } => vec![Diagnostic {
-                    range: span_into_range(*span),
-                    severity: Some(DiagnosticSeverity::ERROR),
-                    message: format!("Unrecognized character: '{ch}'"),
-                    ..Diagnostic::default()
-                }],
-            },
             MiddleErr::Multiple(errors) => errors
                 .iter()
                 .flat_map(|err| Self::mir_diagnostics(err))
@@ -760,7 +938,7 @@ impl ServerState {
                 base_ty = Some(var.data_type.clone());
             } else if Self::lookup_object_for_struct_name(env, &resolved).is_some() {
                 base_ty = Some(ParserDataType::new(
-                    lexer::Span::default(),
+                    CalSpan::default(),
                     ParserInnerType::Struct(resolved),
                 ));
             }
@@ -774,12 +952,12 @@ impl ServerState {
                     .unwrap_or_else(|| base_name.to_string());
                 if env.objects.contains_key(&resolved) {
                     base_ty = Some(ParserDataType::new(
-                        lexer::Span::default(),
+                        CalSpan::default(),
                         ParserInnerType::Struct(resolved),
                     ));
                 } else if env.objects.contains_key(base_name) {
                     base_ty = Some(ParserDataType::new(
-                        lexer::Span::default(),
+                        CalSpan::default(),
                         ParserInnerType::Struct(base_name.to_string()),
                     ));
                 }
@@ -943,7 +1121,7 @@ impl ServerState {
                             traverse(val_node, pos, current_scope, smallest_span);
                         }
                     }
-                    MiddleNodeType::IfStatement {
+                    MiddleNodeType::Conditional {
                         comparison,
                         then,
                         otherwise,
@@ -1203,14 +1381,6 @@ impl ServerState {
     }
 
     fn parses_cleanly(text: &str) -> bool {
-        let mut tokenizer = Tokenizer::new(true);
-        let Ok(tokens) = tokenizer.tokenize(text) else {
-            return false;
-        };
-        let tokens: Vec<Token> = tokens
-            .into_iter()
-            .filter(|x| x.token_type != TokenType::Comment)
-            .collect();
         let mut parser = Parser::default();
         let _ = parser.produce_ast(text);
         parser.errors.is_empty()
@@ -1230,7 +1400,7 @@ impl ServerState {
     fn code_action_format(&self, path: &PathBuf) -> Option<CodeAction> {
         let text = self.text_for_path(path)?;
         let mut formatter = Formatter::default();
-        let output = formatter.start_format(text.clone(), None).ok()?;
+        let output = formatter.start_format(&text, None).ok()?;
         if !Self::parses_cleanly(&output) {
             return None;
         }
@@ -1464,7 +1634,7 @@ impl ServerState {
                     visit(left, range, out);
                     visit(right, range, out);
                 }
-                MiddleNodeType::IfStatement {
+                MiddleNodeType::Conditional {
                     comparison,
                     then,
                     otherwise,
@@ -1597,7 +1767,7 @@ impl ServerState {
         }
         let mut i = idx?;
         while i > 0 {
-            if let TokenType::Open(lexer::Bracket::Paren) = tokens[i].token_type {
+            if let TokenType::Open(Bracket::Paren) = tokens[i].token_type {
                 if i == 0 {
                     break;
                 }
@@ -1792,13 +1962,7 @@ fn main() {
                 next_generation: AtomicU64::new(0),
             });
             router
-                .request::<request::Initialize, _>(|_st, params| async move {
-                    eprintln!("Initialize with {params:?}");
-                    /*if let Some(x) = params.root_path {
-                        let _ = st.type_checker.new_scope_with_stdlib(None, PathBuf::from_str(path).unwrap(), None);
-                    } else {
-                        println!("Nooo");
-                    }*/
+                .request::<request::Initialize, _>(|_st, _params| async move {
                     Ok(InitializeResult {
                         capabilities: ServerCapabilities {
                             text_document_sync: Some(TextDocumentSyncCapability::Options(
@@ -1868,7 +2032,7 @@ fn main() {
                     };
                     let content = fs::read_to_string(params.text_document.uri.path()).unwrap();
 
-                    let output = match formatter.start_format(content.clone(), None) {
+                    let output = match formatter.start_format(&content, None) {
                         Ok(x) => x,
                         _ => return Ok(None),
                     };
@@ -1905,7 +2069,7 @@ fn main() {
                     let content = fs::read_to_string(params.text_document.uri.path()).unwrap();
 
                     let output = match formatter.start_format(
-                        content.clone(),
+                        &content,
                         Some(lsp_range_to_lexer_span(params.range.clone())),
                     ) {
                         Ok(x) => x,

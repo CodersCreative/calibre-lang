@@ -38,3 +38,5 @@ const main = fn () => {
 	print("static from object : " & ThingEnum.age);
 	print("static from object inferred : " & thing.age);
 };
+
+bench simple => main();

@@ -10,7 +10,10 @@ use calibre_mir::{
     environment::{MiddleEnvironment, PackageMetadata},
     errors::MiddleErr,
 };
-use calibre_parser::{Parser, ParserError, ast::Node};
+use calibre_parser::{
+    Parser, ParserError,
+    ast::{Node, NodeType, PotentialDollarIdentifier},
+};
 use calibre_vm::{
     VM, config::VMConfig, conversion::VMRegistry, error::RuntimeError, native::NativeFunction,
     value::RuntimeValue,
@@ -110,6 +113,13 @@ impl RunResult {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompileMode {
+    Run,
+    Test,
+    Bench,
+}
+
 #[derive(Clone)]
 pub struct CalEngine {
     vm_config: VMConfig,
@@ -118,6 +128,7 @@ pub struct CalEngine {
     package_metadata: Option<PackageMetadata>,
     prelude: Vec<String>,
     bindings: Vec<NativeBinding>,
+    compile_mode: CompileMode,
     cache_enabled: bool,
     cache_dir: Option<PathBuf>,
 }
@@ -137,6 +148,7 @@ impl CalEngine {
             package_metadata: None,
             prelude: Vec::new(),
             bindings: Vec::new(),
+            compile_mode: CompileMode::Run,
             cache_enabled: true,
             cache_dir: None,
         }
@@ -205,6 +217,11 @@ impl CalEngine {
         self
     }
 
+    pub fn with_compile_mode(mut self, mode: CompileMode) -> Self {
+        self.compile_mode = mode;
+        self
+    }
+
     pub fn with_cache_enabled(mut self, enabled: bool) -> Self {
         self.cache_enabled = enabled;
         self
@@ -233,6 +250,7 @@ impl CalEngine {
                 errors: parser.errors,
             });
         }
+        let ast = filter_ast_for_mode(ast, self.compile_mode);
 
         let (mut env, scope, middle_node) = if let Some(metadata) = &self.package_metadata {
             MiddleEnvironment::new_and_evaluate_with_package(
@@ -395,9 +413,10 @@ impl CalEngine {
             })
             .unwrap_or_default();
         let material = format!(
-            "{}:{}:{}:{}:{}:{}",
+            "{}:{}:{}:{}:{}:{}:{}",
             CACHE_FORMAT_VERSION,
             env!("CARGO_PKG_VERSION"),
+            self.compile_mode.cache_tag(),
             self.entry_name,
             path,
             package,
@@ -466,6 +485,90 @@ impl CalEngine {
             .map_err(CalError::Io)?;
         Ok(())
     }
+}
+
+impl CompileMode {
+    fn cache_tag(self) -> &'static str {
+        match self {
+            Self::Run => "run",
+            Self::Test => "test",
+            Self::Bench => "bench",
+        }
+    }
+}
+
+fn should_keep_hidden_decl(name: &str, mode: CompileMode) -> bool {
+    let is_test = name.starts_with("__test__");
+    let is_bench = name.starts_with("__bench__");
+    match mode {
+        CompileMode::Run => !is_test && !is_bench,
+        CompileMode::Test => !is_bench,
+        CompileMode::Bench => !is_test,
+    }
+}
+
+fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
+    fn map_opt(node: Node, mode: CompileMode) -> Option<Node> {
+        let Node { span, node_type } = node;
+        let node_type = match node_type {
+            NodeType::VariableDeclaration {
+                var_type,
+                identifier,
+                value,
+                data_type,
+            } => {
+                let ident = match &identifier {
+                    PotentialDollarIdentifier::Identifier(v)
+                    | PotentialDollarIdentifier::DollarIdentifier(v) => v.text.as_str(),
+                };
+                if !should_keep_hidden_decl(ident, mode) {
+                    return None;
+                }
+                NodeType::VariableDeclaration {
+                    var_type,
+                    identifier,
+                    value: Box::new(map_opt(*value, mode)?),
+                    data_type,
+                }
+            }
+            NodeType::ScopeDeclaration {
+                body,
+                named,
+                is_temp,
+                create_new_scope,
+                define,
+            } => NodeType::ScopeDeclaration {
+                body: body.map(|nodes| {
+                    nodes
+                        .into_iter()
+                        .filter_map(|n| map_opt(n, mode))
+                        .collect::<Vec<_>>()
+                }),
+                named,
+                is_temp,
+                create_new_scope,
+                define,
+            },
+            NodeType::FunctionDeclaration { header, body } => NodeType::FunctionDeclaration {
+                header,
+                body: Box::new(map_opt(*body, mode)?),
+            },
+            NodeType::Defer { value, function } => NodeType::Defer {
+                value: Box::new(map_opt(*value, mode)?),
+                function,
+            },
+            NodeType::Spawn { items } => NodeType::Spawn {
+                items: items
+                    .into_iter()
+                    .filter_map(|n| map_opt(n, mode))
+                    .collect::<Vec<_>>(),
+            },
+            other => other,
+        };
+        Some(Node::new(span, node_type))
+    }
+
+    map_opt(node, mode).unwrap_or_else(|| Node::new(Default::default(), NodeType::EmptyLine))
 }
 
 const CACHE_FORMAT_VERSION: &str = "cal-engine-cache-v1";

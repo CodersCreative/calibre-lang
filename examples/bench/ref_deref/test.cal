@@ -14,3 +14,5 @@ const main = fn () => {
 	let n : int = 2000;
 	print(sum_refs(n));
 };
+
+bench ref_deref => main();
