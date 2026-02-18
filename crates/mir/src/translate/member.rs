@@ -14,6 +14,156 @@ use crate::{
 };
 
 impl MiddleEnvironment {
+    fn receiver_arg_for_member_call(
+        &self,
+        function_name: &str,
+        receiver: Node,
+        list_len: usize,
+    ) -> Node {
+        let mut self_arg = receiver;
+        if let Some(var) = self.variables.get(function_name)
+            && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
+            && let Some(first) = parameters.first()
+            && let ParserInnerType::Ref(_, mutability) = &first.data_type
+        {
+            if list_len == 1 {
+                if let NodeType::Identifier(ident) = &self_arg.node_type {
+                    self_arg = Node::new(
+                        self.current_span(),
+                        NodeType::RefStatement {
+                            mutability: mutability.clone(),
+                            value: Box::new(Node::new(
+                                self.current_span(),
+                                NodeType::Identifier(ident.clone()),
+                            )),
+                        },
+                    );
+                } else {
+                    self_arg = Node::new(
+                        self.current_span(),
+                        NodeType::RefStatement {
+                            mutability: mutability.clone(),
+                            value: Box::new(self_arg),
+                        },
+                    );
+                }
+            } else {
+                self_arg = Node::new(
+                    self.current_span(),
+                    NodeType::RefStatement {
+                        mutability: mutability.clone(),
+                        value: Box::new(self_arg),
+                    },
+                );
+            }
+        }
+        self_arg
+    }
+
+    fn add_receiver_if_missing(
+        &mut self,
+        scope: &u64,
+        args: &mut Vec<CallArg>,
+        receiver: Node,
+    ) {
+        let _ = scope;
+        let receiver_text = receiver.to_string();
+        let already_has_receiver = args.iter().any(|arg| match arg {
+            CallArg::Value(value) => value.to_string() == receiver_text,
+            CallArg::Named(_, value) => value.to_string() == receiver_text,
+        });
+
+        if !already_has_receiver {
+            args.insert(0, CallArg::Value(receiver));
+        }
+    }
+
+    fn evaluate_explicit_member_call(
+        &mut self,
+        scope: &u64,
+        list: &[(MiddleNode, bool)],
+        caller: Box<Node>,
+        generic_types: Vec<calibre_parser::ast::PotentialNewType>,
+        mut args: Vec<CallArg>,
+        reverse_args: Vec<Node>,
+        receiver_is_value: bool,
+        target_type: Option<ParserDataType>,
+    ) -> Result<MiddleNode, MiddleErr> {
+        let receiver_node: Node = list
+            .last()
+            .map(|(node, _)| node.clone().into())
+            .unwrap_or_else(|| {
+                MiddleNode::new(MiddleNodeType::EmptyLine, self.current_span()).into()
+            });
+
+        let resolved_caller = if let NodeType::Identifier(member_ident) = &caller.node_type {
+            let name = member_ident.to_string();
+            target_type
+                .as_ref()
+                .and_then(|ty| self.resolve_impl_member(scope, ty, &name))
+                .or_else(|| {
+                    target_type
+                        .as_ref()
+                        .and_then(|ty| self.resolve_member_fn_name(ty, &name))
+                })
+                .or_else(|| {
+                    list.last()
+                        .and_then(|(base, _)| self.resolve_member_from_chain_family(base, &name))
+                })
+                .or_else(|| {
+                    list.last()
+                        .and_then(|(base, _)| self.resolve_chain_member_name(base, &name))
+                        .and_then(|candidate| {
+                            if self.variables.contains_key(&candidate) {
+                                Some(candidate)
+                            } else {
+                                self.resolve_str(scope, &candidate)
+                            }
+                        })
+                })
+                .or_else(|| self.resolve_str(scope, &name))
+        } else {
+            None
+        };
+
+        let caller_node = if let Some(function_name) = resolved_caller {
+            if receiver_is_value {
+                let self_arg =
+                    self.receiver_arg_for_member_call(&function_name, receiver_node, list.len());
+                self.add_receiver_if_missing(scope, &mut args, self_arg);
+                if args.len() >= 2 {
+                    let a0: Node = args[0].clone().into();
+                    let a1: Node = args[1].clone().into();
+                    if a0.to_string() == a1.to_string() {
+                        args.remove(1);
+                    }
+                }
+            }
+            Node::new(
+                self.current_span(),
+                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                    ParserText::from(function_name).into(),
+                )),
+            )
+        } else {
+            *caller
+        };
+
+        self.evaluate_inner(
+            scope,
+            Node::new(
+                self.current_span(),
+                NodeType::CallExpression {
+                    string_fn: None,
+                    caller: Box::new(caller_node),
+                    generic_types,
+                    args,
+                    reverse_args,
+                },
+            ),
+        )
+    }
+
     fn resolve_member_from_chain_family(&self, base: &MiddleNode, member: &str) -> Option<String> {
         let MiddleNodeType::CallExpression { caller, .. } = &base.node_type else {
             return None;
@@ -126,6 +276,29 @@ impl MiddleEnvironment {
         let target_inner = resolved.clone().unwrap_all_refs().data_type;
         if let Some(found) = self.variables.iter().find_map(|(name, var)| {
             if !name.ends_with(&format!("::{member}")) {
+                return None;
+            }
+            let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type else {
+                return None;
+            };
+            let Some(first) = parameters.first() else {
+                return None;
+            };
+            let param_inner = match &first.data_type {
+                ParserInnerType::Ref(inner, _) => &inner.data_type,
+                other => other,
+            };
+            if self.impl_type_matches(param_inner, &target_inner, &Vec::new()) {
+                Some(name.clone())
+            } else {
+                None
+            }
+        }) {
+            return Some(found);
+        }
+        if let Some(found) = self.variables.iter().find_map(|(name, var)| {
+            let tail = name.rsplit(':').next().unwrap_or(name.as_str());
+            if tail != member {
                 return None;
             }
             let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type else {
@@ -401,14 +574,6 @@ impl MiddleEnvironment {
 
         let first = path.remove(0);
         let mut list = vec![(self.evaluate(scope, first.0), first.1)];
-        let is_callable_name = |env: &MiddleEnvironment, name: &str| {
-            env.variables.get(name).is_some_and(|var| {
-                matches!(
-                    var.data_type.data_type,
-                    ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
-                )
-            })
-        };
 
         let path_len = path.len();
         for (i, item) in path.into_iter().enumerate() {
@@ -492,19 +657,21 @@ impl MiddleEnvironment {
                         string_fn: _,
                         caller,
                         generic_types,
-                        mut args,
+                        args,
                         reverse_args,
                     } if !item.1 => {
-                        let node = MiddleNode::new(
-                            MiddleNodeType::MemberExpression { path: list.clone() },
-                            self.current_span(),
-                        );
-
                         let target_type = list
                             .last()
                             .and_then(|(last_node, _)| self.member_base_type(scope, last_node))
                             .or_else(|| {
-                                self.resolve_type_from_node(scope, &node.clone().into())
+                                self.resolve_type_from_node(
+                                    scope,
+                                    &MiddleNode::new(
+                                        MiddleNodeType::MemberExpression { path: list.clone() },
+                                        self.current_span(),
+                                    )
+                                    .into(),
+                                )
                                     .map(|x| x.unwrap_all_refs())
                             });
 
@@ -513,465 +680,16 @@ impl MiddleEnvironment {
                             .map(|(n, _)| self.member_base_is_value(scope, n))
                             .unwrap_or(true);
 
-                        let call_node = if let (Some(target_type), NodeType::Identifier(second)) =
-                            (target_type.clone(), &caller.node_type)
-                            && let Some(static_fn) =
-                                self.resolve_impl_member(scope, &target_type, &second.to_string())
-                        {
-                            let static_fn_name = static_fn.clone();
-                            if receiver_is_value {
-                                let mut self_arg: Node = node.into();
-                                let mut first_param_by_value = false;
-                                if let Some(var) = self.variables.get(&static_fn)
-                                    && let ParserInnerType::Function { parameters, .. } =
-                                        &var.data_type.data_type
-                                {
-                                    if let Some(first) = parameters.first()
-                                        && let ParserInnerType::Ref(_, mutability) =
-                                            &first.data_type
-                                    {
-                                        if list.len() == 1 {
-                                            if let MiddleNodeType::Identifier(ident) =
-                                                &list[0].0.node_type
-                                            {
-                                                self_arg = Node::new(
-                                                    self.current_span(),
-                                                    NodeType::RefStatement {
-                                                        mutability: mutability.clone(),
-                                                        value: Box::new(Node::new(
-                                                            self.current_span(),
-                                                            NodeType::Identifier(
-                                                                ident.clone().into(),
-                                                            ),
-                                                        )),
-                                                    },
-                                                );
-                                            } else {
-                                                self_arg = Node::new(
-                                                    self.current_span(),
-                                                    NodeType::RefStatement {
-                                                        mutability: mutability.clone(),
-                                                        value: Box::new(self_arg),
-                                                    },
-                                                );
-                                            }
-                                        } else {
-                                            self_arg = Node::new(
-                                                self.current_span(),
-                                                NodeType::RefStatement {
-                                                    mutability: mutability.clone(),
-                                                    value: Box::new(self_arg),
-                                                },
-                                            );
-                                        }
-                                    } else if parameters.first().is_some() {
-                                        first_param_by_value = true;
-                                    }
-                                }
-                                let _ = first_param_by_value;
-                                let self_arg_text = self_arg.to_string();
-                                let receiver_ty = self
-                                    .resolve_type_from_node(scope, &self_arg)
-                                    .map(|t| t.unwrap_all_refs());
-                                let already_has_self = args.iter().any(|arg| match arg {
-                                    CallArg::Value(value) => {
-                                        *value == self_arg || value.to_string() == self_arg_text
-                                    }
-                                    CallArg::Named(_, value) => {
-                                        *value == self_arg || value.to_string() == self_arg_text
-                                    }
-                                }) || args
-                                    .first()
-                                    .and_then(|arg| {
-                                        let node: Node = arg.clone().into();
-                                        self.resolve_type_from_node(scope, &node)
-                                            .map(|t| t.unwrap_all_refs())
-                                    })
-                                    .zip(receiver_ty.clone())
-                                    .is_some_and(|(a, b)| {
-                                        self.impl_type_matches(
-                                            &a.data_type,
-                                            &b.data_type,
-                                            &Vec::new(),
-                                        ) || self.impl_type_matches(
-                                            &b.data_type,
-                                            &a.data_type,
-                                            &Vec::new(),
-                                        )
-                                    });
-                                if !already_has_self {
-                                    args.insert(0, CallArg::Value(self_arg));
-                                }
-                            }
-
-                            self.evaluate_inner(
-                                scope,
-                                Node::new(
-                                    self.current_span(),
-                                    NodeType::CallExpression {
-                                        string_fn: None,
-                                        caller: Box::new(Node::new(
-                                            self.current_span(),
-                                            NodeType::Identifier(
-                                                PotentialGenericTypeIdentifier::Identifier(
-                                                    ParserText::from(static_fn_name).into(),
-                                                ),
-                                            ),
-                                        )),
-                                        generic_types,
-                                        args,
-                                        reverse_args,
-                                    },
-                                ),
-                            )?
-                        } else if let NodeType::Identifier(second) = &caller.node_type {
-                            let name = second.to_string();
-                            if let Some(target_type) = target_type.clone()
-                                && let Some(mapped_name) =
-                                    self.resolve_member_fn_name(&target_type, &name)
-                            {
-                                let mut self_arg: Node = node.into();
-                                let mut first_param_by_ref = false;
-                                let mut first_param_by_value = false;
-                                if let Some(var) = self.variables.get(&mapped_name)
-                                    && let ParserInnerType::Function { parameters, .. } =
-                                        &var.data_type.data_type
-                                    && let Some(first) = parameters.first()
-                                {
-                                    if let ParserInnerType::Ref(_, mutability) = &first.data_type {
-                                        first_param_by_ref = true;
-                                        self_arg = Node::new(
-                                            self.current_span(),
-                                            NodeType::RefStatement {
-                                                mutability: mutability.clone(),
-                                                value: Box::new(self_arg),
-                                            },
-                                        );
-                                    } else {
-                                        first_param_by_value = true;
-                                    }
-                                }
-                                let _ = (first_param_by_value, first_param_by_ref);
-                                let self_arg_text = self_arg.to_string();
-                                let receiver_ty = self
-                                    .resolve_type_from_node(scope, &self_arg)
-                                    .map(|t| t.unwrap_all_refs());
-                                let already_has_self = args.iter().any(|arg| match arg {
-                                    CallArg::Value(value) => value.to_string() == self_arg_text,
-                                    CallArg::Named(_, value) => value.to_string() == self_arg_text,
-                                }) || args
-                                    .first()
-                                    .and_then(|arg| {
-                                        let node: Node = arg.clone().into();
-                                        self.resolve_type_from_node(scope, &node)
-                                            .map(|t| t.unwrap_all_refs())
-                                    })
-                                    .zip(receiver_ty.clone())
-                                    .is_some_and(|(a, b)| {
-                                        self.impl_type_matches(
-                                            &a.data_type,
-                                            &b.data_type,
-                                            &Vec::new(),
-                                        ) || self.impl_type_matches(
-                                            &b.data_type,
-                                            &a.data_type,
-                                            &Vec::new(),
-                                        )
-                                    });
-                                if !already_has_self {
-                                    args.insert(0, CallArg::Value(self_arg));
-                                }
-                                self.evaluate_inner(
-                                    scope,
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::CallExpression {
-                                            string_fn: None,
-                                            caller: Box::new(Node::new(
-                                                self.current_span(),
-                                                NodeType::Identifier(
-                                                    PotentialGenericTypeIdentifier::Identifier(
-                                                        ParserText::from(mapped_name).into(),
-                                                    ),
-                                                ),
-                                            )),
-                                            generic_types,
-                                            args,
-                                            reverse_args,
-                                        },
-                                    ),
-                                )?
-                            } else {
-                                let chain_member = list.last().and_then(|(base, _)| {
-                                    self.resolve_member_from_chain_family(base, &name)
-                                });
-                                let chain_member_name = list.last().and_then(|(base, _)| {
-                                    self.resolve_chain_member_name(base, &name)
-                                });
-                                if let Some(mapped_name) = chain_member {
-                                    let mut self_arg: Node = node.into();
-                                    let mut first_param_by_ref = false;
-                                    let mut first_param_by_value = false;
-                                    if let Some(var) = self.variables.get(&mapped_name)
-                                        && let ParserInnerType::Function { parameters, .. } =
-                                            &var.data_type.data_type
-                                        && let Some(first) = parameters.first()
-                                    {
-                                        if let ParserInnerType::Ref(_, mutability) =
-                                            &first.data_type
-                                        {
-                                            first_param_by_ref = true;
-                                            self_arg = Node::new(
-                                                self.current_span(),
-                                                NodeType::RefStatement {
-                                                    mutability: mutability.clone(),
-                                                    value: Box::new(self_arg),
-                                                },
-                                            );
-                                        } else {
-                                            first_param_by_value = true;
-                                        }
-                                    }
-                                    let _ = (first_param_by_value, first_param_by_ref);
-                                    let self_arg_text = self_arg.to_string();
-                                    let receiver_ty = self
-                                        .resolve_type_from_node(scope, &self_arg)
-                                        .map(|t| t.unwrap_all_refs());
-                                    let already_has_self = args.iter().any(|arg| match arg {
-                                        CallArg::Value(value) => value.to_string() == self_arg_text,
-                                        CallArg::Named(_, value) => {
-                                            value.to_string() == self_arg_text
-                                        }
-                                    }) || args
-                                        .first()
-                                        .and_then(|arg| {
-                                            let node: Node = arg.clone().into();
-                                            self.resolve_type_from_node(scope, &node)
-                                                .map(|t| t.unwrap_all_refs())
-                                        })
-                                        .zip(receiver_ty.clone())
-                                        .is_some_and(|(a, b)| {
-                                            self.impl_type_matches(
-                                                &a.data_type,
-                                                &b.data_type,
-                                                &Vec::new(),
-                                            ) || self.impl_type_matches(
-                                                &b.data_type,
-                                                &a.data_type,
-                                                &Vec::new(),
-                                            )
-                                        });
-                                    if !already_has_self {
-                                        args.insert(0, CallArg::Value(self_arg));
-                                    }
-                                    self.evaluate_inner(
-                                        scope,
-                                        Node::new(
-                                            self.current_span(),
-                                            NodeType::CallExpression {
-                                                string_fn: None,
-                                                caller: Box::new(Node::new(
-                                                    self.current_span(),
-                                                    NodeType::Identifier(
-                                                        PotentialGenericTypeIdentifier::Identifier(
-                                                            ParserText::from(mapped_name).into(),
-                                                        ),
-                                                    ),
-                                                )),
-                                                generic_types,
-                                                args,
-                                                reverse_args,
-                                            },
-                                        ),
-                                    )?
-                                } else if let Some(mapped_name) = chain_member_name
-                                    && (is_callable_name(self, &mapped_name)
-                                        || self
-                                            .resolve_str(scope, &mapped_name)
-                                            .is_some_and(|_| is_callable_name(self, &mapped_name)))
-                                {
-                                    let mut self_arg: Node = node.into();
-                                    let mut first_param_by_ref = false;
-                                    let mut first_param_by_value = false;
-                                    if let Some(var) = self.variables.get(&mapped_name)
-                                        && let ParserInnerType::Function { parameters, .. } =
-                                            &var.data_type.data_type
-                                        && let Some(first) = parameters.first()
-                                    {
-                                        if let ParserInnerType::Ref(_, mutability) =
-                                            &first.data_type
-                                        {
-                                            first_param_by_ref = true;
-                                            self_arg = Node::new(
-                                                self.current_span(),
-                                                NodeType::RefStatement {
-                                                    mutability: mutability.clone(),
-                                                    value: Box::new(self_arg),
-                                                },
-                                            );
-                                        } else {
-                                            first_param_by_value = true;
-                                        }
-                                    }
-                                    let _ = (first_param_by_value, first_param_by_ref);
-                                    let self_arg_text = self_arg.to_string();
-                                    let receiver_ty = self
-                                        .resolve_type_from_node(scope, &self_arg)
-                                        .map(|t| t.unwrap_all_refs());
-                                    let already_has_self = args.iter().any(|arg| match arg {
-                                        CallArg::Value(value) => value.to_string() == self_arg_text,
-                                        CallArg::Named(_, value) => {
-                                            value.to_string() == self_arg_text
-                                        }
-                                    }) || args
-                                        .first()
-                                        .and_then(|arg| {
-                                            let node: Node = arg.clone().into();
-                                            self.resolve_type_from_node(scope, &node)
-                                                .map(|t| t.unwrap_all_refs())
-                                        })
-                                        .zip(receiver_ty.clone())
-                                        .is_some_and(|(a, b)| {
-                                            self.impl_type_matches(
-                                                &a.data_type,
-                                                &b.data_type,
-                                                &Vec::new(),
-                                            ) || self.impl_type_matches(
-                                                &b.data_type,
-                                                &a.data_type,
-                                                &Vec::new(),
-                                            )
-                                        });
-                                    if !already_has_self {
-                                        args.insert(0, CallArg::Value(self_arg));
-                                    }
-                                    self.evaluate_inner(
-                                        scope,
-                                        Node::new(
-                                            self.current_span(),
-                                            NodeType::CallExpression {
-                                                string_fn: None,
-                                                caller: Box::new(Node::new(
-                                                    self.current_span(),
-                                                    NodeType::Identifier(
-                                                        PotentialGenericTypeIdentifier::Identifier(
-                                                            ParserText::from(mapped_name).into(),
-                                                        ),
-                                                    ),
-                                                )),
-                                                generic_types,
-                                                args,
-                                                reverse_args,
-                                            },
-                                        ),
-                                    )?
-                                } else if let Some(resolved_name) = self.resolve_str(scope, &name) {
-                                    let mut self_arg: Node = node.into();
-                                    let mut first_param_by_ref = false;
-                                    let mut first_param_by_value = false;
-                                    if let Some(var) = self.variables.get(&resolved_name)
-                                        && let ParserInnerType::Function { parameters, .. } =
-                                            &var.data_type.data_type
-                                        && let Some(first) = parameters.first()
-                                    {
-                                        if let ParserInnerType::Ref(_, mutability) =
-                                            &first.data_type
-                                        {
-                                            first_param_by_ref = true;
-                                            self_arg = Node::new(
-                                                self.current_span(),
-                                                NodeType::RefStatement {
-                                                    mutability: mutability.clone(),
-                                                    value: Box::new(self_arg),
-                                                },
-                                            );
-                                        } else {
-                                            first_param_by_value = true;
-                                        }
-                                    }
-                                    let _ = (first_param_by_value, first_param_by_ref);
-                                    let self_arg_text = self_arg.to_string();
-                                    let receiver_ty = self
-                                        .resolve_type_from_node(scope, &self_arg)
-                                        .map(|t| t.unwrap_all_refs());
-                                    let already_has_self = args.iter().any(|arg| match arg {
-                                        CallArg::Value(value) => value.to_string() == self_arg_text,
-                                        CallArg::Named(_, value) => {
-                                            value.to_string() == self_arg_text
-                                        }
-                                    }) || args
-                                        .first()
-                                        .and_then(|arg| {
-                                            let node: Node = arg.clone().into();
-                                            self.resolve_type_from_node(scope, &node)
-                                                .map(|t| t.unwrap_all_refs())
-                                        })
-                                        .zip(receiver_ty.clone())
-                                        .is_some_and(|(a, b)| {
-                                            self.impl_type_matches(
-                                                &a.data_type,
-                                                &b.data_type,
-                                                &Vec::new(),
-                                            ) || self.impl_type_matches(
-                                                &b.data_type,
-                                                &a.data_type,
-                                                &Vec::new(),
-                                            )
-                                        });
-                                    if !already_has_self {
-                                        args.insert(0, CallArg::Value(self_arg));
-                                    }
-                                    self.evaluate_inner(
-                                        scope,
-                                        Node::new(
-                                            self.current_span(),
-                                            NodeType::CallExpression {
-                                                string_fn: None,
-                                                caller: Box::new(Node::new(
-                                                    self.current_span(),
-                                                    NodeType::Identifier(
-                                                        PotentialGenericTypeIdentifier::Identifier(
-                                                            ParserText::from(resolved_name).into(),
-                                                        ),
-                                                    ),
-                                                )),
-                                                generic_types,
-                                                args,
-                                                reverse_args,
-                                            },
-                                        ),
-                                    )?
-                                } else {
-                                    self.evaluate_inner(
-                                        scope,
-                                        Node::new(
-                                            self.current_span(),
-                                            NodeType::CallExpression {
-                                                string_fn: None,
-                                                caller,
-                                                generic_types,
-                                                args,
-                                                reverse_args,
-                                            },
-                                        ),
-                                    )?
-                                }
-                            }
-                        } else {
-                            self.evaluate_inner(
-                                scope,
-                                Node::new(
-                                    self.current_span(),
-                                    NodeType::CallExpression {
-                                        string_fn: None,
-                                        caller,
-                                        generic_types,
-                                        args,
-                                        reverse_args,
-                                    },
-                                ),
-                            )?
-                        };
+                        let call_node = self.evaluate_explicit_member_call(
+                            scope,
+                            &list,
+                            caller,
+                            generic_types,
+                            args,
+                            reverse_args,
+                            receiver_is_value,
+                            target_type,
+                        )?;
 
                         if i + 1 == path_len {
                             return Ok(call_node);

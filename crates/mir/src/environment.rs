@@ -1711,6 +1711,13 @@ impl MiddleEnvironment {
                     resolved_gens.push(self.resolve_data_type(scope, g));
                 }
 
+                if id == "ptr" && resolved_gens.len() == 1 {
+                    return ParserDataType {
+                        data_type: ParserInnerType::Ptr(Box::new(resolved_gens.remove(0))),
+                        span: data_type.span,
+                    };
+                }
+
                 if let Some((tpl_params, _, _)) = self.generic_type_templates.get(&id).cloned() {
                     if tpl_params.len() == resolved_gens.len()
                         && !resolved_gens.iter().any(|g| g.is_auto())

@@ -30,12 +30,22 @@ impl MiddleEnvironment {
             .resolve_dollar_ident_only(scope, &identifier)
             .ok_or_else(|| self.err_at_current(MiddleErr::Scope(identifier.to_string())))?;
 
+        let is_reserved_constructor =
+            matches!(identifier.text.as_str(), "ok" | "err" | "some" | "none");
+
         let new_name = if let Some(existing) = self
             .scopes
             .get(scope)
             .and_then(|s| s.mappings.get(&identifier.text))
         {
-            existing.clone()
+            let existing_is_native = self.variables.get(existing).is_some_and(|var| {
+                matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+            });
+            if is_reserved_constructor && existing_is_native {
+                get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))
+            } else {
+                existing.clone()
+            }
         } else if identifier.text.contains("->") {
             identifier.text.clone()
         } else {
@@ -196,9 +206,16 @@ impl MiddleEnvironment {
 
             let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
             let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
-            scope_ref
+            let existing_is_native = scope_ref
                 .mappings
-                .insert(identifier.text.clone(), new_name.clone());
+                .get(&identifier.text)
+                .and_then(|name| self.variables.get(name))
+                .is_some_and(|var| matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_)));
+            if !(is_reserved_constructor && existing_is_native) {
+                scope_ref
+                    .mappings
+                    .insert(identifier.text.clone(), new_name.clone());
+            }
 
             let new_scope = self.new_scope_from_parent_shallow(*scope);
 
@@ -249,7 +266,14 @@ impl MiddleEnvironment {
 
             let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
             let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
-            scope_ref.mappings.insert(identifier.text, new_name.clone());
+            let existing_is_native = scope_ref
+                .mappings
+                .get(&identifier.text)
+                .and_then(|name| self.variables.get(name))
+                .is_some_and(|var| matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_)));
+            if !(is_reserved_constructor && existing_is_native) {
+                scope_ref.mappings.insert(identifier.text, new_name.clone());
+            }
         }
 
         if data_type.contains_auto()

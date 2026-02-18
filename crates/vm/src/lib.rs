@@ -2,7 +2,7 @@ use crate::{
     config::VMConfig,
     conversion::{Reg, VMBlock, VMFunction, VMRegistry},
     error::RuntimeError,
-    value::{RuntimeValue, WaitGroupInner},
+    value::{GcMap, RuntimeValue, WaitGroupInner},
     variables::VariableStore,
 };
 use calibre_lir::BlockId;
@@ -90,6 +90,7 @@ pub struct VMCaches {
     locals: FxHashMap<usize, Arc<FxHashMap<Arc<str>, Reg>>>,
     globals_id: FxHashMap<String, usize>,
     local_str: FxHashMap<(u32, u16), Arc<str>>,
+    aggregate_member_slots: FxHashMap<String, FxHashMap<String, usize>>,
 }
 
 impl Default for VMCaches {
@@ -102,6 +103,7 @@ impl Default for VMCaches {
             locals: FxHashMap::default(),
             globals_id: FxHashMap::default(),
             local_str: FxHashMap::default(),
+            aggregate_member_slots: FxHashMap::default(),
         }
     }
 }
@@ -654,11 +656,8 @@ impl VM {
         {
             return;
         }
-        let in_flight = self.gc.in_flight.clone();
-        std::thread::spawn(move || {
-            dumpster::sync::collect();
-            in_flight.store(false, Ordering::Release);
-        });
+        dumpster::sync::collect();
+        self.gc.in_flight.store(false, Ordering::Release);
     }
 
     #[inline(always)]
@@ -876,6 +875,59 @@ enum VarName {
 }
 
 impl VM {
+    pub(crate) fn resolve_aggregate_member_slot(
+        &mut self,
+        type_name: &str,
+        map: &GcMap,
+        name: &str,
+        short_name: Option<&str>,
+    ) -> Option<usize> {
+        if map.0.0.len() <= 3 {
+            return map.0.0.iter().enumerate().find_map(|(idx, (field, _))| {
+                if field == name || short_name.is_some_and(|short| field == short) {
+                    Some(idx)
+                } else {
+                    None
+                }
+            });
+        }
+
+        if let Some(slots) = self.caches.aggregate_member_slots.get(type_name) {
+            if let Some(idx) = slots.get(name).copied() {
+                return Some(idx);
+            }
+            if let Some(short) = short_name
+                && let Some(idx) = slots.get(short).copied()
+            {
+                return Some(idx);
+            }
+        }
+
+        let idx = map
+            .0
+            .0
+            .iter()
+            .enumerate()
+            .find_map(|(idx, (field, _))| {
+                if field == name || short_name.is_some_and(|short| field == short) {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })?;
+
+        let slots = self
+            .caches
+            .aggregate_member_slots
+            .entry(type_name.to_string())
+            .or_default();
+        slots.insert(name.to_string(), idx);
+        if let Some(short) = short_name {
+            let _ = slots.entry(short.to_string()).or_insert(idx);
+        }
+        Some(idx)
+    }
+
     fn resolve_var_name(&self, name: &str) -> VarName {
         if self.get_function(name).is_some() {
             return VarName::Func(name.to_string());

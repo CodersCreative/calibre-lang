@@ -1079,10 +1079,11 @@ impl MiddleEnvironment {
         else_body: Option<Box<Node>>,
     ) -> Result<MiddleNode, MiddleErr> {
         let scope = self.new_scope_from_parent_shallow(*scope);
-        let label_text = label
-            .as_ref()
-            .and_then(|l| self.resolve_dollar_ident_only(&scope, l))
-            .map(|t| t.text);
+        let label_text = label.as_ref().map(|l| {
+            self.resolve_dollar_ident_only(&scope, l)
+                .map(|t| t.text)
+                .unwrap_or_else(|| l.to_string())
+        });
 
         if let Some(until) = until {
             let until_node = Node::new(self.current_span(), NodeType::Until { condition: until });

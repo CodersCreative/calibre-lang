@@ -13,7 +13,7 @@ const write_fd = fn (fd : int, msg : dyn) => {
 
 const out = fn (msg : dyn) => console_output(1, msg);
 
-const err = fn (msg : dyn) => console_output(2, msg);
+const stderr = fn (msg : dyn) => console_output(2, msg);
 
 const clear = fn () => {
 	out("x1b[2Jx1b[1;1H");

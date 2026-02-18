@@ -35,6 +35,33 @@ impl MiddleEnvironment {
             .and_then(|var| Self::is_callable_type(&var.data_type).then_some(resolved.text))
     }
 
+    #[inline]
+    fn should_prefer_native_constructor(
+        &self,
+        scope: &u64,
+        ident: &PotentialGenericTypeIdentifier,
+    ) -> Option<String> {
+        let name = ident.to_string();
+        if name.contains("::") || !matches!(name.as_str(), "ok" | "err" | "some") {
+            return None;
+        }
+
+        let native = self.variables.get(&name).and_then(|var| {
+            matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+                .then_some(name.clone())
+        })?;
+
+        let resolved = self.resolved_callable_name(scope, ident);
+        if let Some(resolved_name) = resolved
+            && let Some(var) = self.variables.get(&resolved_name)
+            && matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+        {
+            return None;
+        }
+
+        Some(native)
+    }
+
     pub fn evaluate_extern_function(
         &mut self,
         scope: &u64,
@@ -387,6 +414,8 @@ impl MiddleEnvironment {
         }
 
         if let NodeType::Identifier(caller_ident) = caller.node_type.clone() {
+            let forced_native_constructor =
+                self.should_prefer_native_constructor(scope, &caller_ident);
             let caller_name = caller_ident.to_string();
             let caller_resolved = self.resolve_potential_generic_ident(scope, &caller_ident);
             if !caller_name.contains("::")
@@ -547,6 +576,26 @@ impl MiddleEnvironment {
                         }
                     }
                 }
+            }
+
+            if let Some(native_name) = forced_native_constructor {
+                let mut lowered_args = Vec::with_capacity(args.len() + reverse_args.len());
+                for arg in args {
+                    lowered_args.push(self.evaluate(scope, arg.into()));
+                }
+                for arg in reverse_args {
+                    lowered_args.push(self.evaluate(scope, arg));
+                }
+                return Ok(MiddleNode {
+                    node_type: MiddleNodeType::CallExpression {
+                        args: lowered_args,
+                        caller: Box::new(MiddleNode::new(
+                            MiddleNodeType::Identifier(ParserText::from(native_name)),
+                            span,
+                        )),
+                    },
+                    span,
+                });
             }
         }
 

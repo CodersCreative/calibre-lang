@@ -15,7 +15,7 @@ const matmul = fn (n : int, a b : list:<list:<float>>) -> list:<list:<float>> =>
 };
 
 const main = fn () => {
-	let n : int = 40;
+	let n : int = 100;
 	let tmp : float = 1f / n / n;
 	let a = list:<list:<float>>[list:<float>[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n];
 	let b = list:<list:<float>>[list:<float>[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n];

@@ -481,9 +481,9 @@ impl<'a> LirEnvironment<'a> {
 
     fn lower_member_lvalue(&mut self, path: Vec<(MiddleNode, bool)>) -> LirNodeType {
         let mut iter = path.into_iter();
-        let (base_node, _) = iter
-            .next()
-            .expect("member lvalue path must contain at least one segment");
+        let Some((base_node, _)) = iter.next() else {
+            return LirNodeType::Literal(LirLiteral::Null);
+        };
         let mut current = match base_node.node_type {
             MiddleNodeType::Identifier(name) => {
                 LirNodeType::Ref(Box::new(LirNodeType::Load(name.text.into_boxed_str())))
@@ -1020,14 +1020,15 @@ impl<'a> LirEnvironment<'a> {
                         .rev()
                         .find(|(_, _, l)| l.as_deref() == Some(label.text.as_str()))
                         .map(|(_, exit, _)| *exit)
-                        .expect("Break label not found")
+                        .or_else(|| self.loop_stack.last().map(|(_, exit, _)| *exit))
                 } else {
                     self.loop_stack
                         .last()
                         .map(|(_, exit, _)| *exit)
-                        .expect("Break outside loop")
                 };
-                self.set_terminator(LirTerminator::Jump { span, target });
+                if let Some(target) = target {
+                    self.set_terminator(LirTerminator::Jump { span, target });
+                }
                 LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::Continue { label } => {
@@ -1037,21 +1038,22 @@ impl<'a> LirEnvironment<'a> {
                         .rev()
                         .find(|(_, _, l)| l.as_deref() == Some(label.text.as_str()))
                         .map(|(header, _, _)| *header)
-                        .expect("Continue label not found")
+                        .or_else(|| self.loop_stack.last().map(|(header, _, _)| *header))
                 } else {
                     self.loop_stack
                         .last()
                         .map(|(header, _, _)| *header)
-                        .expect("Continue outside loop")
                 };
-                self.set_terminator(LirTerminator::Jump { span, target });
+                if let Some(target) = target {
+                    self.set_terminator(LirTerminator::Jump { span, target });
+                }
                 LirNodeType::Literal(LirLiteral::Null)
             }
             MiddleNodeType::MemberExpression { path } => {
                 let mut iter = path.into_iter();
-                let (base_node, _) = iter
-                    .next()
-                    .expect("member expression path must contain at least one segment");
+                let Some((base_node, _)) = iter.next() else {
+                    return LirNodeType::Literal(LirLiteral::Null);
+                };
                 let mut current = self.lower_node(base_node);
 
                 for (step, is_dynamic) in iter {

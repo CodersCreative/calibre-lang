@@ -27,12 +27,11 @@ use calibre_mir::errors::MiddleErr;
 use calibre_parser::ast::formatter::{Formatter, Tab};
 use calibre_parser::ast::{ParserDataType, ParserInnerType};
 use calibre_parser::{Parser, ParserError, Position as CalPosition, Span as CalSpan, ast::Node};
-use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use std::{error::Error, fs, path::PathBuf, str::FromStr};
+use std::{error::Error, fs, path::PathBuf};
 use tower::ServiceBuilder;
 use tracing::Level;
 
@@ -348,6 +347,13 @@ fn pos_into_lexer_pos(pos: Position) -> CalPosition {
 }
 
 impl ServerState {
+    fn path_from_url(url: &Url) -> Option<PathBuf> {
+        url.to_file_path().ok().or_else(|| {
+            let p = PathBuf::from(url.path());
+            (!p.as_os_str().is_empty()).then_some(p)
+        })
+    }
+
     fn lookup_object_for_struct_name<'a>(
         env: &'a MiddleEnvironment,
         struct_name: &str,
@@ -1330,6 +1336,7 @@ impl ServerState {
         Some(DocumentSymbolResponse::Nested(symbols))
     }
 
+    #[allow(deprecated)]
     fn make_document_symbol(
         name: String,
         detail: Option<String>,
@@ -1337,27 +1344,32 @@ impl ServerState {
         range: Range,
         selection_range: Range,
     ) -> DocumentSymbol {
-        let mut object = Map::new();
-        object.insert("name".to_string(), json!(name));
-        if let Some(detail) = detail {
-            object.insert("detail".to_string(), json!(detail));
+        DocumentSymbol {
+            name,
+            detail,
+            kind,
+            tags: None,
+            deprecated: None,
+            range,
+            selection_range,
+            children: None,
         }
-        object.insert("kind".to_string(), json!(kind));
-        object.insert("range".to_string(), json!(range));
-        object.insert("selectionRange".to_string(), json!(selection_range));
-        serde_json::from_value(Value::Object(object)).unwrap()
     }
 
+    #[allow(deprecated)]
     fn make_symbol_information(
         name: String,
         kind: SymbolKind,
         location: Location,
     ) -> SymbolInformation {
-        let mut object = Map::new();
-        object.insert("name".to_string(), json!(name));
-        object.insert("kind".to_string(), json!(kind));
-        object.insert("location".to_string(), json!(location));
-        serde_json::from_value(Value::Object(object)).unwrap()
+        SymbolInformation {
+            name,
+            kind,
+            tags: None,
+            deprecated: None,
+            location,
+            container_name: None,
+        }
     }
 
     fn text_for_path(&self, path: &PathBuf) -> Option<String> {
@@ -1676,7 +1688,9 @@ impl ServerState {
             return out;
         };
 
-        let env = self.env.as_ref().unwrap();
+        let Some(env) = self.env.as_ref() else {
+            return out;
+        };
         let original_scope = self.find_scope_at(original_pos);
         let original_resolved_name = env.resolve_str(&original_scope, word);
 
@@ -2030,7 +2044,12 @@ fn main() {
                     } else {
                         Formatter::default()
                     };
-                    let content = fs::read_to_string(params.text_document.uri.path()).unwrap();
+                    let Some(path) = ServerState::path_from_url(&params.text_document.uri) else {
+                        return Ok(None);
+                    };
+                    let Ok(content) = fs::read_to_string(path) else {
+                        return Ok(None);
+                    };
 
                     let output = match formatter.start_format(&content, None) {
                         Ok(x) => x,
@@ -2066,7 +2085,12 @@ fn main() {
                     } else {
                         Formatter::default()
                     };
-                    let content = fs::read_to_string(params.text_document.uri.path()).unwrap();
+                    let Some(path) = ServerState::path_from_url(&params.text_document.uri) else {
+                        return Ok(None);
+                    };
+                    let Ok(content) = fs::read_to_string(path) else {
+                        return Ok(None);
+                    };
 
                     let output = match formatter.start_format(
                         &content,
@@ -2100,23 +2124,26 @@ fn main() {
                 })
                 .request::<request::DocumentHighlightRequest, _>(|st, params| {
                     st.poll_index_results();
-                    let path = PathBuf::from_str(
-                        params
-                            .text_document_position_params
-                            .text_document
-                            .uri
-                            .path(),
-                    )
-                    .unwrap();
-                    st.activate_path(&path);
-                    let response = st.document_highlights(&path, &params);
+                    let response = if let Some(path) =
+                        ServerState::path_from_url(&params.text_document_position_params.text_document.uri)
+                    {
+                        st.activate_path(&path);
+                        st.document_highlights(&path, &params)
+                    } else {
+                        None
+                    };
                     async move { Ok(response) }
                 })
                 .request::<request::DocumentColor, _>(|st, params: DocumentColorParams| {
                     st.poll_index_results();
-                    let path = PathBuf::from_str(params.text_document.uri.path()).unwrap();
-                    st.activate_path(&path);
-                    let response = st.document_colors(&path).unwrap_or_default();
+                    let response = if let Some(path) =
+                        ServerState::path_from_url(&params.text_document.uri)
+                    {
+                        st.activate_path(&path);
+                        st.document_colors(&path).unwrap_or_default()
+                    } else {
+                        Vec::new()
+                    };
                     async move { Ok(response) }
                 })
                 .request::<request::ColorPresentationRequest, _>(|_st, params| {
@@ -2138,160 +2165,181 @@ fn main() {
                 })
                 .request::<request::Completion, _>(|st, params: CompletionParams| {
                     st.poll_index_results();
-                    let path =
-                        PathBuf::from_str(params.text_document_position.text_document.uri.path())
-                            .unwrap();
-                    st.activate_path(&path);
-                    let prefix =
-                        st.completion_prefix(&path, params.text_document_position.position);
-                    let items = st.completion_items(prefix, params.text_document_position.position);
-                    async move { Ok(Some(async_lsp::lsp_types::CompletionResponse::Array(items))) }
+                    let response = if let Some(path) =
+                        ServerState::path_from_url(&params.text_document_position.text_document.uri)
+                    {
+                        st.activate_path(&path);
+                        let prefix =
+                            st.completion_prefix(&path, params.text_document_position.position);
+                        let items =
+                            st.completion_items(prefix, params.text_document_position.position);
+                        Some(async_lsp::lsp_types::CompletionResponse::Array(items))
+                    } else {
+                        None
+                    };
+                    async move { Ok(response) }
                 })
                 .request::<request::References, _>(|st, params: ReferenceParams| {
                     st.poll_index_results();
-                    let path =
-                        PathBuf::from_str(params.text_document_position.text_document.uri.path())
-                            .unwrap();
-                    st.activate_path(&path);
-                    let position = params.text_document_position.position;
-                    let word = st.get_word_at(position);
-                    let locations = word
-                        .map(|w| st.find_references_across_indexed_files(&path, &w, position))
-                        .unwrap_or_default();
-                    async move { Ok(Some(locations)) }
+                    let response = if let Some(path) =
+                        ServerState::path_from_url(&params.text_document_position.text_document.uri)
+                    {
+                        st.activate_path(&path);
+                        let position = params.text_document_position.position;
+                        let word = st.get_word_at(position);
+                        Some(
+                            word.map(|w| st.find_references_across_indexed_files(&path, &w, position))
+                                .unwrap_or_default(),
+                        )
+                    } else {
+                        None
+                    };
+                    async move { Ok(response) }
                 })
                 .request::<request::Rename, _>(|st, params: RenameParams| {
                     st.poll_index_results();
-                    let path =
-                        PathBuf::from_str(params.text_document_position.text_document.uri.path())
-                            .unwrap();
-                    st.activate_path(&path);
-                    let position = params.text_document_position.position;
-                    let word = st.get_word_at(position);
-                    let edits = word
-                        .map(|w| {
-                            st.find_references_across_indexed_files(&path, &w, position)
-                                .into_iter()
-                                .collect::<Vec<_>>()
+                    let response = if let Some(path) =
+                        ServerState::path_from_url(&params.text_document_position.text_document.uri)
+                    {
+                        st.activate_path(&path);
+                        let position = params.text_document_position.position;
+                        let word = st.get_word_at(position);
+                        let edits = word
+                            .map(|w| {
+                                st.find_references_across_indexed_files(&path, &w, position)
+                                    .into_iter()
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
+                        let mut changes: HashMap<Url, Vec<LspTextEdit>> = HashMap::new();
+                        for loc in edits {
+                            changes.entry(loc.uri).or_default().push(LspTextEdit {
+                                range: loc.range,
+                                new_text: params.new_name.clone(),
+                            });
+                        }
+                        Some(WorkspaceEdit {
+                            changes: Some(changes),
+                            document_changes: None,
+                            change_annotations: None,
                         })
-                        .unwrap_or_default();
-                    let mut changes: HashMap<Url, Vec<LspTextEdit>> = HashMap::new();
-                    for loc in edits {
-                        changes.entry(loc.uri).or_default().push(LspTextEdit {
-                            range: loc.range,
-                            new_text: params.new_name.clone(),
-                        });
-                    }
-                    let edit = WorkspaceEdit {
-                        changes: Some(changes),
-                        document_changes: None,
-                        change_annotations: None,
+                    } else {
+                        None
                     };
-                    async move { Ok(Some(edit)) }
+                    async move { Ok(response) }
                 })
                 .request::<request::InlayHintRequest, _>(|st, params: InlayHintParams| {
                     st.poll_index_results();
-                    let path = PathBuf::from_str(params.text_document.uri.path()).unwrap();
-                    st.activate_path(&path);
-                    let hints = st.inlay_hints_for_path(&path, params.range);
-                    async move { Ok(Some(hints)) }
+                    let response = if let Some(path) =
+                        ServerState::path_from_url(&params.text_document.uri)
+                    {
+                        st.activate_path(&path);
+                        Some(st.inlay_hints_for_path(&path, params.range))
+                    } else {
+                        None
+                    };
+                    async move { Ok(response) }
                 })
                 .request::<request::SignatureHelpRequest, _>(|st, params| {
                     st.poll_index_results();
-                    let path = PathBuf::from_str(
-                        params
-                            .text_document_position_params
-                            .text_document
-                            .uri
-                            .path(),
-                    )
-                    .unwrap();
-                    st.activate_path(&path);
-                    let help = st.signature_help_at(params.text_document_position_params.position);
-                    async move { Ok(help) }
+                    let response = if let Some(path) = ServerState::path_from_url(
+                        &params.text_document_position_params.text_document.uri,
+                    ) {
+                        st.activate_path(&path);
+                        st.signature_help_at(params.text_document_position_params.position)
+                    } else {
+                        None
+                    };
+                    async move { Ok(response) }
                 })
                 .request::<request::DocumentSymbolRequest, _>(|st, params: DocumentSymbolParams| {
                     st.poll_index_results();
-                    let path = PathBuf::from_str(params.text_document.uri.path()).unwrap();
-                    st.activate_path(&path);
-                    let response = st.document_symbols(&path);
+                    let response = if let Some(path) =
+                        ServerState::path_from_url(&params.text_document.uri)
+                    {
+                        st.activate_path(&path);
+                        st.document_symbols(&path)
+                    } else {
+                        None
+                    };
                     async move { Ok(response) }
                 })
                 .request::<request::SemanticTokensFullRequest, _>(
                     |st, params: SemanticTokensParams| {
                         st.poll_index_results();
-                        let path = PathBuf::from_str(params.text_document.uri.path()).unwrap();
-                        st.activate_path(&path);
-                        let text = st
-                            .files
-                            .get(&path)
-                            .cloned()
-                            .unwrap_or_else(|| fs::read_to_string(&path).unwrap_or_default());
-                        let tokens = st.semantic_tokens_for(&path, &text);
-                        async move { Ok(tokens.map(SemanticTokensResult::Tokens)) }
+                        let response = if let Some(path) =
+                            ServerState::path_from_url(&params.text_document.uri)
+                        {
+                            st.activate_path(&path);
+                            let text = st
+                                .files
+                                .get(&path)
+                                .cloned()
+                                .unwrap_or_else(|| fs::read_to_string(&path).unwrap_or_default());
+                            st.semantic_tokens_for(&path, &text)
+                                .map(SemanticTokensResult::Tokens)
+                        } else {
+                            None
+                        };
+                        async move { Ok(response) }
                     },
                 )
                 .request::<request::HoverRequest, _>(|st, params| {
                     st.poll_index_results();
-                    let path = PathBuf::from_str(
-                        params
-                            .text_document_position_params
-                            .text_document
-                            .uri
-                            .path(),
-                    )
-                    .unwrap();
-                    st.activate_path(&path);
-                    let result = (|| {
-                        let position = params.text_document_position_params.position;
-                        let word = st.get_word_at(position)?;
-                        let env = st.env.as_ref()?;
-                        let current_scope = st.find_scope_at(position);
-                        let resolved = env.resolve_str(&current_scope, &word)?;
+                    let result = if let Some(path) = ServerState::path_from_url(
+                        &params.text_document_position_params.text_document.uri,
+                    ) {
+                        st.activate_path(&path);
+                        (|| {
+                            let position = params.text_document_position_params.position;
+                            let word = st.get_word_at(position)?;
+                            let env = st.env.as_ref()?;
+                            let current_scope = st.find_scope_at(position);
+                            let resolved = env.resolve_str(&current_scope, &word)?;
 
-                        if let Some(var) = env.variables.get(&resolved) {
-                            return Some(Hover {
-                                contents: HoverContents::Scalar(MarkedString::String(format!(
-                                    "{}: {}",
-                                    word,
-                                    ServerState::pretty_type(&var.data_type)
-                                ))),
-                                range: None,
-                            });
-                        }
+                            if let Some(var) = env.variables.get(&resolved) {
+                                return Some(Hover {
+                                    contents: HoverContents::Scalar(MarkedString::String(format!(
+                                        "{}: {}",
+                                        word,
+                                        ServerState::pretty_type(&var.data_type)
+                                    ))),
+                                    range: None,
+                                });
+                            }
 
-                        if let Some(obj) = env.objects.get(&resolved) {
-                            return Some(Hover {
-                                contents: HoverContents::Scalar(MarkedString::String(format!(
-                                    "{}: {}",
-                                    word,
-                                    ServerState::describe_object(obj)
-                                ))),
-                                range: None,
-                            });
-                        }
+                            if let Some(obj) = env.objects.get(&resolved) {
+                                return Some(Hover {
+                                    contents: HoverContents::Scalar(MarkedString::String(format!(
+                                        "{}: {}",
+                                        word,
+                                        ServerState::describe_object(obj)
+                                    ))),
+                                    range: None,
+                                });
+                            }
 
+                            None
+                        })()
+                    } else {
                         None
-                    })();
+                    };
 
                     async move { Ok(result) }
                 })
                 .request::<request::GotoDefinition, _>(|st, params| {
                     st.poll_index_results();
-                    let path = PathBuf::from_str(
-                        params
-                            .text_document_position_params
-                            .text_document
-                            .uri
-                            .path(),
-                    )
-                    .unwrap();
-                    st.activate_path(&path);
-                    let position = params.text_document_position_params.position;
-                    let response = st
-                        .get_word_at(position)
-                        .and_then(|word| st.resolve_definition(&word, position))
-                        .map(GotoDefinitionResponse::Scalar);
+                    let response = if let Some(path) = ServerState::path_from_url(
+                        &params.text_document_position_params.text_document.uri,
+                    ) {
+                        st.activate_path(&path);
+                        let position = params.text_document_position_params.position;
+                        st.get_word_at(position)
+                            .and_then(|word| st.resolve_definition(&word, position))
+                            .map(GotoDefinitionResponse::Scalar)
+                    } else {
+                        None
+                    };
 
                     async move {
                         if response.is_some() {
@@ -2303,39 +2351,33 @@ fn main() {
                 })
                 .request::<request::GotoDeclaration, _>(|st, params| {
                     st.poll_index_results();
-                    let path = PathBuf::from_str(
-                        params
-                            .text_document_position_params
-                            .text_document
-                            .uri
-                            .path(),
-                    )
-                    .unwrap();
-                    st.activate_path(&path);
-                    let position = params.text_document_position_params.position;
-                    let response = st
-                        .get_word_at(position)
-                        .and_then(|word| st.resolve_definition(&word, position))
-                        .map(GotoDefinitionResponse::Scalar);
+                    let response = if let Some(path) = ServerState::path_from_url(
+                        &params.text_document_position_params.text_document.uri,
+                    ) {
+                        st.activate_path(&path);
+                        let position = params.text_document_position_params.position;
+                        st.get_word_at(position)
+                            .and_then(|word| st.resolve_definition(&word, position))
+                            .map(GotoDefinitionResponse::Scalar)
+                    } else {
+                        None
+                    };
 
                     async move { Ok(response) }
                 })
                 .request::<request::GotoTypeDefinition, _>(|st, params| {
                     st.poll_index_results();
-                    let path = PathBuf::from_str(
-                        params
-                            .text_document_position_params
-                            .text_document
-                            .uri
-                            .path(),
-                    )
-                    .unwrap();
-                    st.activate_path(&path);
-                    let position = params.text_document_position_params.position;
-                    let response = st
-                        .get_word_at(position)
-                        .and_then(|word| st.resolve_type_definition(&word, position))
-                        .map(GotoDefinitionResponse::Scalar);
+                    let response = if let Some(path) = ServerState::path_from_url(
+                        &params.text_document_position_params.text_document.uri,
+                    ) {
+                        st.activate_path(&path);
+                        let position = params.text_document_position_params.position;
+                        st.get_word_at(position)
+                            .and_then(|word| st.resolve_type_definition(&word, position))
+                            .map(GotoDefinitionResponse::Scalar)
+                    } else {
+                        None
+                    };
                     async move { Ok(response) }
                 })
                 .notification::<notification::Initialized>(|_, _| ControlFlow::Continue(()))
@@ -2343,7 +2385,9 @@ fn main() {
                     ControlFlow::Continue(())
                 })
                 .notification::<notification::DidOpenTextDocument>(|st, params| {
-                    let path = PathBuf::from_str(params.text_document.uri.path()).unwrap();
+                    let Some(path) = ServerState::path_from_url(&params.text_document.uri) else {
+                        return ControlFlow::Continue(());
+                    };
                     st.current_path = Some(path.clone());
                     st.files
                         .insert(path.clone(), params.text_document.text.clone());
@@ -2352,14 +2396,18 @@ fn main() {
                     ControlFlow::Continue(())
                 })
                 .notification::<notification::DidChangeTextDocument>(|st, params| {
-                    let path = PathBuf::from_str(params.text_document.uri.path()).unwrap();
+                    let Some(path) = ServerState::path_from_url(&params.text_document.uri) else {
+                        return ControlFlow::Continue(());
+                    };
                     st.apply_content_changes(&path, &params.content_changes);
                     let _ = st.enqueue_index(path);
                     st.poll_index_results();
                     ControlFlow::Continue(())
                 })
                 .notification::<notification::DidSaveTextDocument>(|st, params| {
-                    let path = PathBuf::from_str(params.text_document.uri.path()).unwrap();
+                    let Some(path) = ServerState::path_from_url(&params.text_document.uri) else {
+                        return ControlFlow::Continue(());
+                    };
                     if let Some(text) = &params.text {
                         st.files.insert(path.clone(), text.clone());
                     }
@@ -2368,7 +2416,9 @@ fn main() {
                     ControlFlow::Continue(())
                 })
                 .notification::<notification::DidCloseTextDocument>(|st, params| {
-                    let path = PathBuf::from_str(params.text_document.uri.path()).unwrap();
+                    let Some(path) = ServerState::path_from_url(&params.text_document.uri) else {
+                        return ControlFlow::Continue(());
+                    };
                     st.files.remove(&path);
                     st.file_indices.remove(&path);
                     st.current_path = None;
@@ -2403,10 +2453,25 @@ fn main() {
 
         // Prefer truly asynchronous piped stdin/stdout without blocking tasks.
         #[cfg(unix)]
-        let (stdin, stdout) = (
-            smol::Async::new(async_lsp::stdio::PipeStdin::lock().unwrap()).unwrap(),
-            smol::Async::new(async_lsp::stdio::PipeStdout::lock().unwrap()).unwrap(),
-        );
+        let (stdin, stdout) = {
+            let Ok(stdin_lock) = async_lsp::stdio::PipeStdin::lock() else {
+                eprintln!("failed to lock stdin");
+                return;
+            };
+            let Ok(stdout_lock) = async_lsp::stdio::PipeStdout::lock() else {
+                eprintln!("failed to lock stdout");
+                return;
+            };
+            let Ok(stdin) = smol::Async::new(stdin_lock) else {
+                eprintln!("failed to create async stdin");
+                return;
+            };
+            let Ok(stdout) = smol::Async::new(stdout_lock) else {
+                eprintln!("failed to create async stdout");
+                return;
+            };
+            (stdin, stdout)
+        };
         // Fallback to spawn blocking read/write otherwise.
         #[cfg(not(unix))]
         let (stdin, stdout) = (
@@ -2414,6 +2479,8 @@ fn main() {
             smol::Unblock::new(std::io::stdout()),
         );
 
-        server.run_buffered(stdin, stdout).await.unwrap();
+        if let Err(err) = server.run_buffered(stdin, stdout).await {
+            eprintln!("lsp server error: {err}");
+        }
     });
 }

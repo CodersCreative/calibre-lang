@@ -821,95 +821,103 @@ impl VM {
             }
             VMInstruction::LoadMember { dst, value, member } => {
                 let name = self.local_string(block, *member)?;
-                let member_name = name.to_string();
-                let short_name = name.rsplit_once(':').map(|(_, short)| short);
-                let tuple_index = name.parse::<usize>().ok();
-                let value_ref = self.get_reg_value_ref(*value);
-
-                let load_from = |val: RuntimeValue| -> Result<RuntimeValue, RuntimeError> {
-                    match val {
-                        RuntimeValue::Aggregate(None, map) => {
-                            let idx = tuple_index
-                                .ok_or(RuntimeError::UnexpectedType(RuntimeValue::Null))?;
-                            Ok(map
-                                .as_ref()
-                                .0
-                                .0
-                                .get(idx)
-                                .ok_or_else(|| RuntimeError::MissingMember {
-                                    target: RuntimeValue::Aggregate(None, map.clone()),
-                                    member: member_name.clone(),
-                                })?
-                                .1
-                                .clone())
-                        }
-                        RuntimeValue::Aggregate(Some(type_name), map) => {
-                            if let Some(found) = map.as_ref().0.0.iter().find(|x| {
-                                &x.0 == name || short_name.map_or(false, |short| x.0 == short)
-                            }) {
-                                return Ok(found.1.clone());
-                            }
-
-                            let direct_full = format!("{type_name}::{name}");
-                            if let Some(func) = self.get_function(&direct_full) {
-                                return Ok(self.make_runtime_function(func.as_ref()));
-                            }
-                            if let Some(short) = short_name {
-                                let direct_short = format!("{type_name}::{short}");
-                                if let Some(func) = self.get_function(&direct_short) {
-                                    return Ok(self.make_runtime_function(func.as_ref()));
-                                }
-                            }
-
-                            let short_type = type_name.rsplit_once(':').map(|(_, short)| short);
-                            if let Some(short_type) = short_type {
-                                let short_full = format!("{short_type}::{name}");
-                                if let Some(func) = self.get_function(&short_full) {
-                                    return Ok(self.make_runtime_function(func.as_ref()));
-                                }
-                                if let Some(short) = short_name {
-                                    let short_short = format!("{short_type}::{short}");
-                                    if let Some(func) = self.get_function(&short_short) {
-                                        return Ok(self.make_runtime_function(func.as_ref()));
-                                    }
-                                }
-                            }
-
-                            Err(RuntimeError::MissingMember {
-                                target: RuntimeValue::Aggregate(Some(type_name), map),
-                                member: member_name.clone(),
-                            })
-                        }
-                        RuntimeValue::Enum(_, _, Some(x)) if name == "next" || name == "0" => {
-                            Ok(x.as_ref().clone())
-                        }
-                        RuntimeValue::Enum(_, _, Some(x)) => Ok(x.as_ref().clone()),
-                        RuntimeValue::Enum(_, _, None) if name == "next" || name == "0" => {
-                            Ok(RuntimeValue::Null)
-                        }
-                        RuntimeValue::Option(Some(x)) if name == "next" || name == "0" => {
-                            Ok(x.as_ref().clone())
-                        }
-                        RuntimeValue::Option(None) if name == "next" || name == "0" => {
-                            Ok(RuntimeValue::Null)
-                        }
-                        RuntimeValue::Result(Ok(x)) if name == "next" || name == "0" => {
-                            Ok(x.as_ref().clone())
-                        }
-                        RuntimeValue::Result(Err(x)) if name == "next" || name == "0" => {
-                            Ok(x.as_ref().clone())
-                        }
-                        RuntimeValue::Ptr(id) if name == "next" || name == "0" => Ok(self
-                            .ptr_heap
-                            .get(&id)
-                            .cloned()
-                            .unwrap_or(RuntimeValue::Null)),
-                        other => Err(RuntimeError::UnexpectedType(other)),
-                    }
+                let short_name = if let Some(pos) = name.rfind("::") {
+                    Some(&name[pos + 2..])
+                } else {
+                    None
                 };
-
-                let resolved = self.resolve_value_for_op_ref(value_ref)?;
-                let val = load_from(resolved)?;
+                let tuple_index = name.parse::<usize>().ok();
+                let resolved = self.resolve_value_for_op_ref(self.get_reg_value_ref(*value))?;
+                let val = match resolved {
+                    RuntimeValue::Aggregate(None, map) => {
+                        let idx = tuple_index
+                            .ok_or(RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                        map.as_ref()
+                            .0
+                            .0
+                            .get(idx)
+                            .map(|(_, v)| v.clone())
+                            .ok_or_else(|| RuntimeError::MissingMember {
+                                target: RuntimeValue::Aggregate(None, map.clone()),
+                                member: name.to_string(),
+                            })?
+                    }
+                    RuntimeValue::Aggregate(Some(type_name), map) => {
+                        if let Some(idx) = self.resolve_aggregate_member_slot(
+                            &type_name,
+                            &map,
+                            name,
+                            short_name,
+                        ) {
+                            map.0.0[idx].1.clone()
+                        } else {
+                            let mut path = String::with_capacity(type_name.len() + name.len() + 2);
+                            path.push_str(&type_name);
+                            path.push_str("::");
+                            path.push_str(name);
+                            if let Some(func) = self.get_function(&path) {
+                                self.make_runtime_function(func.as_ref())
+                            } else {
+                                let found = if let Some(short) = short_name {
+                                    path.clear();
+                                    path.push_str(&type_name);
+                                    path.push_str("::");
+                                    path.push_str(short);
+                                    self.get_function(&path)
+                                } else {
+                                    None
+                                }
+                                .or_else(|| {
+                                    let short_type =
+                                        type_name.rsplit_once(':').map(|(_, short)| short)?;
+                                    path.clear();
+                                    path.push_str(short_type);
+                                    path.push_str("::");
+                                    path.push_str(name);
+                                    self.get_function(&path).or_else(|| {
+                                        let short = short_name?;
+                                        path.clear();
+                                        path.push_str(short_type);
+                                        path.push_str("::");
+                                        path.push_str(short);
+                                        self.get_function(&path)
+                                    })
+                                });
+                                if let Some(func) = found {
+                                    self.make_runtime_function(func.as_ref())
+                                } else {
+                                    return Err(RuntimeError::MissingMember {
+                                        target: RuntimeValue::Aggregate(Some(type_name), map),
+                                        member: name.to_string(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    RuntimeValue::Enum(_, _, Some(x)) if name == "next" || name == "0" => {
+                        x.as_ref().clone()
+                    }
+                    RuntimeValue::Enum(_, _, Some(x)) => x.as_ref().clone(),
+                    RuntimeValue::Enum(_, _, None) if name == "next" || name == "0" => {
+                        RuntimeValue::Null
+                    }
+                    RuntimeValue::Option(Some(x)) if name == "next" || name == "0" => {
+                        x.as_ref().clone()
+                    }
+                    RuntimeValue::Option(None) if name == "next" || name == "0" => {
+                        RuntimeValue::Null
+                    }
+                    RuntimeValue::Result(Ok(x)) if name == "next" || name == "0" => {
+                        x.as_ref().clone()
+                    }
+                    RuntimeValue::Result(Err(x)) if name == "next" || name == "0" => {
+                        x.as_ref().clone()
+                    }
+                    RuntimeValue::Ptr(id) if name == "next" || name == "0" => {
+                        self.ptr_heap.get(&id).cloned().unwrap_or(RuntimeValue::Null)
+                    }
+                    other => return Err(RuntimeError::UnexpectedType(other)),
+                };
                 self.set_reg_value(*dst, val);
             }
             VMInstruction::SetMember {
@@ -920,7 +928,11 @@ impl VM {
                 let name = self.local_string(block, *member)?;
                 let value = self.get_reg_value(*value);
                 let tuple_index = name.parse::<usize>().ok();
-                let short_name = name.rsplit_once(':').map(|(_, short)| short);
+                let short_name = if let Some(pos) = name.rfind("::") {
+                    Some(&name[pos + 2..])
+                } else {
+                    None
+                };
 
                 let update_aggregate =
                     |agg_name: &Option<String>, mut map: Gc<crate::value::GcMap>| {
@@ -1041,82 +1053,32 @@ impl VM {
                     let e = e.min(len as i64) as usize;
                     if e < s { (s, s) } else { (s, e) }
                 };
-                let value_resolved =
-                    self.resolve_value_for_op_ref(self.get_reg_value_ref(*value))?;
                 let index_val = self.get_reg_value(*index);
-                let val = match value_resolved {
-                    RuntimeValue::List(x) => match index_val {
-                        RuntimeValue::Int(index) => resolve_idx(x.as_ref().0.len(), index)
-                            .and_then(|i| x.as_ref().0.get(i).cloned())
-                            .unwrap_or(RuntimeValue::Null),
-                        RuntimeValue::Range(start, end) => {
-                            let (s, e) = resolve_range(x.as_ref().0.len(), start, end);
-                            let slice = x.as_ref().0[s..e].to_vec();
-                            RuntimeValue::List(Gc::new(crate::value::GcVec(slice)))
-                        }
-                        _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
-                    },
-                    RuntimeValue::Ref(x) => match self
-                        .variables
-                        .get(&x)
-                        .cloned()
-                        .unwrap_or(RuntimeValue::Null)
-                    {
-                        RuntimeValue::List(list) => match index_val {
-                            RuntimeValue::Int(index) => resolve_idx(list.as_ref().0.len(), index)
-                                .and_then(|i| list.as_ref().0.get(i).cloned())
-                                .unwrap_or(RuntimeValue::Null),
-                            RuntimeValue::Range(start, end) => {
-                                let (s, e) = resolve_range(list.as_ref().0.len(), start, end);
-                                let slice = list.as_ref().0[s..e].to_vec();
-                                RuntimeValue::List(Gc::new(crate::value::GcVec(slice)))
+                let index_list =
+                    |list: &Gc<crate::value::GcVec>| -> Result<RuntimeValue, RuntimeError> {
+                        match &index_val {
+                            RuntimeValue::Int(index) => {
+                                Ok(resolve_idx(list.as_ref().0.len(), *index)
+                            .and_then(|i| list.as_ref().0.get(i).cloned())
+                            .unwrap_or(RuntimeValue::Null))
                             }
-                            _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
-                        },
-                        other => return Err(RuntimeError::UnexpectedType(other)),
-                    },
-                    RuntimeValue::VarRef(id) => {
-                        match self.variables.get_by_id(id).unwrap_or(RuntimeValue::Null) {
-                            RuntimeValue::List(list) => match index_val {
-                                RuntimeValue::Int(index) => {
-                                    resolve_idx(list.as_ref().0.len(), index)
-                                        .and_then(|i| list.as_ref().0.get(i).cloned())
-                                        .unwrap_or(RuntimeValue::Null)
-                                }
-                                RuntimeValue::Range(start, end) => {
-                                    let (s, e) = resolve_range(list.as_ref().0.len(), start, end);
-                                    let slice = list.as_ref().0[s..e].to_vec();
-                                    RuntimeValue::List(Gc::new(crate::value::GcVec(slice)))
-                                }
-                                _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
-                            },
-                            other => return Err(RuntimeError::UnexpectedType(other)),
+                            RuntimeValue::Range(start, end) => {
+                                let (s, e) = resolve_range(list.as_ref().0.len(), *start, *end);
+                                let slice = list.as_ref().0[s..e].to_vec();
+                                Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(slice))))
+                            }
+                            _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
                         }
-                    }
-                    RuntimeValue::RegRef { frame, reg } => {
-                        match self.get_reg_value_in_frame(frame, reg) {
-                            RuntimeValue::List(list) => match index_val {
-                                RuntimeValue::Int(index) => {
-                                    resolve_idx(list.as_ref().0.len(), index)
-                                        .and_then(|i| list.as_ref().0.get(i).cloned())
-                                        .unwrap_or(RuntimeValue::Null)
-                                }
-                                RuntimeValue::Range(start, end) => {
-                                    let (s, e) = resolve_range(list.as_ref().0.len(), start, end);
-                                    let slice = list.as_ref().0[s..e].to_vec();
-                                    RuntimeValue::List(Gc::new(crate::value::GcVec(slice)))
-                                }
-                                _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
-                            },
-                            other => return Err(RuntimeError::UnexpectedType(other)),
-                        }
-                    }
-                    RuntimeValue::Aggregate(None, tuple) => match index_val {
-                        RuntimeValue::Int(index) => resolve_idx(tuple.as_ref().0.0.len(), index)
+                    };
+                let resolved = self.resolve_value_for_op_ref(self.get_reg_value_ref(*value))?;
+                let val = match resolved {
+                    RuntimeValue::List(list) => index_list(&list)?,
+                    RuntimeValue::Aggregate(None, tuple) => match &index_val {
+                        RuntimeValue::Int(index) => resolve_idx(tuple.as_ref().0.0.len(), *index)
                             .and_then(|i| tuple.as_ref().0.0.get(i).map(|(_, v)| v.clone()))
                             .unwrap_or(RuntimeValue::Null),
                         RuntimeValue::Range(start, end) => {
-                            let (s, e) = resolve_range(tuple.as_ref().0.0.len(), start, end);
+                            let (s, e) = resolve_range(tuple.as_ref().0.0.len(), *start, *end);
                             let slice = tuple.as_ref().0.0[s..e].to_vec();
                             RuntimeValue::Aggregate(
                                 None,
@@ -1126,14 +1088,22 @@ impl VM {
                         _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
                     },
                     RuntimeValue::Str(s) => {
-                        let v = s.chars().collect::<Vec<char>>();
-                        match index_val {
-                            RuntimeValue::Int(index) => resolve_idx(v.len(), index)
-                                .and_then(|i| v.get(i).copied())
-                                .map(RuntimeValue::Char)
-                                .unwrap_or(RuntimeValue::Null),
+                        match &index_val {
+                            RuntimeValue::Int(index) => {
+                                let resolved = if *index < 0 {
+                                    let len = s.chars().count();
+                                    resolve_idx(len, *index)
+                                } else {
+                                    Some(*index as usize)
+                                };
+                                resolved
+                                    .and_then(|i| s.chars().nth(i))
+                                    .map(RuntimeValue::Char)
+                                    .unwrap_or(RuntimeValue::Null)
+                            }
                             RuntimeValue::Range(start, end) => {
-                                let (s, e) = resolve_range(v.len(), start, end);
+                                let v = s.chars().collect::<Vec<char>>();
+                                let (s, e) = resolve_range(v.len(), *start, *end);
                                 let slice: String = v[s..e].iter().collect();
                                 RuntimeValue::Str(Arc::new(slice))
                             }

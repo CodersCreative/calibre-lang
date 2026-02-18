@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::path::PathBuf;
 
 pub fn get_path(path: &str) -> String {
     let mut new_path = env!("CARGO_MANIFEST_DIR").to_string();
@@ -7,14 +7,14 @@ pub fn get_path(path: &str) -> String {
 }
 
 pub fn get_stdlib_path() -> PathBuf {
-    PathBuf::from_str(&get_path("stdlib/main.cal")).unwrap()
+    PathBuf::from(get_path("stdlib/main.cal"))
 }
 
 pub fn get_stdlib_module_path(name: &str) -> PathBuf {
     let path = format!("stdlib/{}/main.cal", name);
-    PathBuf::from_str(&get_path(&path)).unwrap()
+    PathBuf::from(get_path(&path))
 }
 
 pub fn get_globals_path() -> PathBuf {
-    PathBuf::from_str(&get_path("global/main.cal")).unwrap()
+    PathBuf::from(get_path("global/main.cal"))
 }

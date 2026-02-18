@@ -368,6 +368,20 @@ pub fn parse_program_with_source(
                         ParserInnerType::List(Box::new(dt)),
                     ))
                 }),
+            lex(pad.clone(), just("ptr"))
+                .ignore_then(lex(pad.clone(), just(":<")))
+                .ignore_then(ty.clone())
+                .then_ignore(lex(pad.clone(), just('>')))
+                .map(|inner| {
+                    let dt = match inner {
+                        PotentialNewType::DataType(x) => x,
+                        _ => ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
+                    };
+                    PotentialNewType::DataType(ParserDataType::new(
+                        Span::default(),
+                        ParserInnerType::Ptr(Box::new(dt)),
+                    ))
+                }),
             lex(pad.clone(), just("fn"))
                 .ignore_then(lex(pad.clone(), just('(')))
                 .ignore_then(
@@ -510,7 +524,34 @@ pub fn parse_program_with_source(
             let labelled_scope = lex(pad.clone(), just('@'))
                 .ignore_then(ident.clone())
                 .then(lex(pad.clone(), just("[]")).or_not())
-                .ignore_then(scope.clone())
+                .then(scope.clone())
+                .map(|(((name, sp), _), body)| match body.node_type {
+                    NodeType::ScopeDeclaration {
+                        body,
+                        is_temp,
+                        create_new_scope,
+                        define,
+                        ..
+                    } => Node::new(
+                        body.as_ref()
+                            .and_then(|b| b.first().zip(b.last()))
+                            .map(|(a, b)| Span::new_from_spans(a.span, b.span))
+                            .unwrap_or(Span::default()),
+                        NodeType::ScopeDeclaration {
+                            body,
+                            named: Some(NamedScope {
+                                name: PotentialDollarIdentifier::Identifier(ParserText::new(
+                                    sp, name,
+                                )),
+                                args: Vec::new(),
+                            }),
+                            is_temp,
+                            create_new_scope,
+                            define,
+                        },
+                    ),
+                    _ => body,
+                })
                 .boxed();
 
             let tuple_param = lex(pad.clone(), just('('))
@@ -1149,10 +1190,12 @@ pub fn parse_program_with_source(
                             for tail in tails {
                                 path.push(tail);
                             }
-                            let sp = Span::new_from_spans(
-                                path.first().unwrap().0.span,
-                                path.last().unwrap().0.span,
-                            );
+                            let sp = match (path.first(), path.last()) {
+                                (Some(first), Some(last)) => {
+                                    Span::new_from_spans(first.0.span, last.0.span)
+                                }
+                                _ => Span::default(),
+                            };
                             Node::new(sp, NodeType::MemberExpression { path })
                         }
                     }),
@@ -1217,10 +1260,12 @@ pub fn parse_program_with_source(
                     .map(|(first, rest)| {
                         let mut path = vec![first];
                         path.extend(rest);
-                        let sp = Span::new_from_spans(
-                            path.first().unwrap().span,
-                            path.last().unwrap().span,
-                        );
+                        let sp = match (path.first(), path.last()) {
+                            (Some(first), Some(last)) => {
+                                Span::new_from_spans(first.span, last.span)
+                            }
+                            _ => Span::default(),
+                        };
                         Node::new(sp, NodeType::ScopeMemberExpression { path })
                     }),
                 struct_lit,
@@ -1242,7 +1287,10 @@ pub fn parse_program_with_source(
                         move |values, r| {
                             let sp = span(ls.as_ref(), r);
                             let inner = if values.len() == 1 {
-                                values.into_iter().next().unwrap()
+                                values
+                                    .first()
+                                    .cloned()
+                                    .unwrap_or_else(|| Node::new(sp, NodeType::EmptyLine))
                             } else {
                                 Node::new(sp, NodeType::TupleLiteral { values })
                             };
@@ -1320,10 +1368,12 @@ pub fn parse_program_with_source(
                                 for idx in indexes {
                                     path.push((idx, true));
                                 }
-                                let sp = Span::new_from_spans(
-                                    path.first().unwrap().0.span,
-                                    path.last().unwrap().0.span,
-                                );
+                                let sp = match (path.first(), path.last()) {
+                                    (Some(first), Some(last)) => {
+                                        Span::new_from_spans(first.0.span, last.0.span)
+                                    }
+                                    _ => Span::default(),
+                                };
                                 Node::new(sp, NodeType::MemberExpression { path })
                             }
                         })
@@ -1355,10 +1405,12 @@ pub fn parse_program_with_source(
                                 for idx in indexes {
                                     path.push((idx, true));
                                 }
-                                let sp = Span::new_from_spans(
-                                    path.first().unwrap().0.span,
-                                    path.last().unwrap().0.span,
-                                );
+                                let sp = match (path.first(), path.last()) {
+                                    (Some(first), Some(last)) => {
+                                        Span::new_from_spans(first.0.span, last.0.span)
+                                    }
+                                    _ => Span::default(),
+                                };
                                 Node::new(sp, NodeType::MemberExpression { path })
                             }
                         })
@@ -1444,10 +1496,12 @@ pub fn parse_program_with_source(
                         }
                         let mut path = vec![(head, false)];
                         path.extend(rest);
-                        let sp = Span::new_from_spans(
-                            path.first().unwrap().0.span,
-                            path.last().unwrap().0.span,
-                        );
+                        let sp = match (path.first(), path.last()) {
+                            (Some(first), Some(last)) => {
+                                Span::new_from_spans(first.0.span, last.0.span)
+                            }
+                            _ => Span::default(),
+                        };
                         Node::new(sp, NodeType::MemberExpression { path })
                     }
                 })
@@ -1525,10 +1579,12 @@ pub fn parse_program_with_source(
                     } else {
                         let mut path = vec![(list, false)];
                         path.extend(tails);
-                        let sp = Span::new_from_spans(
-                            path.first().unwrap().0.span,
-                            path.last().unwrap().0.span,
-                        );
+                        let sp = match (path.first(), path.last()) {
+                            (Some(first), Some(last)) => {
+                                Span::new_from_spans(first.0.span, last.0.span)
+                            }
+                            _ => Span::default(),
+                        };
                         Node::new(sp, NodeType::MemberExpression { path })
                     }
                 })
@@ -2231,9 +2287,17 @@ pub fn parse_program_with_source(
                             .map(|x| x.unwrap_or(LoopType::Loop)))),
                     )
                     .then_ignore(fat_arrow.clone())
+                    .then(
+                        lex(pad.clone(), just('@'))
+                            .ignore_then(ident.clone())
+                            .then(lex(pad.clone(), just("[]")).or_not())
+                            .map(|((name, sp), _)| {
+                                PotentialDollarIdentifier::Identifier(ParserText::new(sp, name))
+                            })
+                            .or_not(),
+                    )
                     .then(choice((
                         scope.clone(),
-                        labelled_scope.clone(),
                         statement.clone(),
                         expr.clone(),
                     )))
@@ -2252,7 +2316,7 @@ pub fn parse_program_with_source(
                             .ignore_then(expr.clone())
                             .or_not(),
                     )
-                    .map(|(((loop_type, body), else_body), until)| {
+                    .map(|((((loop_type, label), body), else_body), until)| {
                         let body = match body.node_type {
                             NodeType::ScopeDeclaration { .. } => body,
                             _ => scope_node(vec![body], true, false),
@@ -2269,7 +2333,7 @@ pub fn parse_program_with_source(
                                 loop_type: Box::new(loop_type),
                                 body: Box::new(body),
                                 until: until.map(Box::new),
-                                label: None,
+                                label,
                                 else_body,
                             },
                         )
@@ -3059,14 +3123,39 @@ pub fn parse_program_with_source(
                 )
             });
 
-        let labelled_scope_stmt = lex(pad.clone(), just('@'))
+        let _labelled_scope_stmt = lex(pad.clone(), just('@'))
             .ignore_then(ident.clone())
             .then(lex(pad.clone(), just("[]")).or_not())
-            .ignore_then(scope_node_parser(
+            .then(scope_node_parser(
                 statement.clone(),
                 delim.clone(),
                 pad.clone(),
             ))
+            .map(|(((name, sp), _), body)| {
+                let (body_items, is_temp, create_new_scope, define) = match body.node_type {
+                    NodeType::ScopeDeclaration {
+                        body,
+                        is_temp,
+                        create_new_scope,
+                        define,
+                        ..
+                    } => (body, is_temp, create_new_scope, define),
+                    _ => (Some(vec![body]), true, Some(true), false),
+                };
+                Node::new(
+                    Span::default(),
+                    NodeType::ScopeDeclaration {
+                        body: body_items,
+                        named: Some(NamedScope {
+                            name: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
+                            args: Vec::new(),
+                        }),
+                        is_temp,
+                        create_new_scope,
+                        define,
+                    },
+                )
+            })
             .boxed();
 
         let for_stmt = lex(pad.clone(), just("for"))
@@ -3158,9 +3247,15 @@ pub fn parse_program_with_source(
                             .map(|x| x.unwrap_or(LoopType::Loop)))),
             )
             .then_ignore(fat_arrow.clone())
+            .then(
+                scope_name
+                    .clone()
+                    .then(lex(pad.clone(), just("[]")).or_not())
+                    .map(|(name, _)| name)
+                    .or_not(),
+            )
             .then(choice((
                 scope_node_parser(statement.clone(), delim.clone(), pad.clone()),
-                labelled_scope_stmt.clone(),
                 statement.clone(),
                 expr.clone(),
             )))
@@ -3194,7 +3289,7 @@ pub fn parse_program_with_source(
                     .ignore_then(expr.clone())
                     .or_not(),
             )
-            .map(|(((lt, body), else_body), until)| {
+            .map(|((((lt, label), body), else_body), until)| {
                 let body = match body.node_type {
                     NodeType::ScopeDeclaration { .. } => body,
                     _ => scope_node(vec![body], true, false),
@@ -3211,7 +3306,7 @@ pub fn parse_program_with_source(
                         loop_type: Box::new(lt),
                         body: Box::new(body),
                         until: until.map(Box::new),
-                        label: None,
+                        label: label,
                         else_body,
                     },
                 )
@@ -3605,10 +3700,12 @@ pub fn parse_program_with_source(
                 } else {
                     let mut path = vec![(head, false)];
                     path.extend(rest);
-                    let sp = Span::new_from_spans(
-                        path.first().unwrap().0.span,
-                        path.last().unwrap().0.span,
-                    );
+                    let sp = match (path.first(), path.last()) {
+                        (Some(first), Some(last)) => {
+                            Span::new_from_spans(first.0.span, last.0.span)
+                        }
+                        _ => Span::default(),
+                    };
                     Node::new(sp, NodeType::MemberExpression { path })
                 }
             })

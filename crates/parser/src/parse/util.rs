@@ -159,10 +159,13 @@ pub(super) fn normalize_scope_member_chain(
         (NodeType::ScopeMemberExpression { path }, NodeType::Identifier(_)) => {
             let mut new_path = path.clone();
             new_path.push(first);
-            let sp = Span::new_from_spans(
-                new_path.first().unwrap().span,
-                new_path.last().unwrap().span,
-            );
+            let Some(start) = new_path.first() else {
+                return (head, remaining);
+            };
+            let Some(end) = new_path.last() else {
+                return (head, remaining);
+            };
+            let sp = Span::new_from_spans(start.span, end.span);
             (
                 Node::new(sp, NodeType::ScopeMemberExpression { path: new_path }),
                 remaining,
@@ -181,10 +184,13 @@ pub(super) fn normalize_scope_member_chain(
             if let NodeType::Identifier(_) = caller.node_type {
                 let mut new_path = path.clone();
                 new_path.push(*caller.clone());
-                let caller_span = Span::new_from_spans(
-                    new_path.first().unwrap().span,
-                    new_path.last().unwrap().span,
-                );
+                let Some(start) = new_path.first() else {
+                    return (head, remaining);
+                };
+                let Some(end) = new_path.last() else {
+                    return (head, remaining);
+                };
+                let caller_span = Span::new_from_spans(start.span, end.span);
                 let scoped_caller = Node::new(
                     caller_span,
                     NodeType::ScopeMemberExpression { path: new_path },

@@ -849,17 +849,25 @@ impl MiddleEnvironment {
                 node_type: {
                     let mut lst = Vec::new();
 
+                    let raw_label_text = label.as_ref().map(|l| l.to_string());
                     let label_text = label
                         .as_ref()
                         .and_then(|l| self.resolve_dollar_ident_only(scope, l))
                         .map(|t| t.text);
 
                     let (result_target, broke_target, target_scope) = {
-                        let target_ctx = if let Some(label_text) = label_text.as_ref() {
+                        let target_ctx = if label.is_some() {
                             self.loop_stack
                                 .iter()
                                 .rev()
-                                .find(|ctx| ctx.label.as_deref() == Some(label_text.as_str()))
+                                .find(|ctx| {
+                                    label_text
+                                        .as_ref()
+                                        .is_some_and(|l| ctx.label.as_deref() == Some(l.as_str()))
+                                        || raw_label_text
+                                            .as_ref()
+                                            .is_some_and(|l| ctx.label.as_deref() == Some(l.as_str()))
+                                })
                         } else {
                             self.loop_stack.last()
                         };
@@ -938,7 +946,7 @@ impl MiddleEnvironment {
 
                     let break_node = MiddleNode::new(
                         MiddleNodeType::Break {
-                            label: label_text.map(Into::into),
+                            label: label_text.or(raw_label_text).map(Into::into),
                             value: None,
                         },
                         self.current_span(),
@@ -963,22 +971,30 @@ impl MiddleEnvironment {
                 node_type: {
                     let mut lst = Vec::new();
 
+                    let raw_label_text = label.as_ref().map(|l| l.to_string());
                     let label_text = label
                         .as_ref()
                         .and_then(|l| self.resolve_dollar_ident_only(scope, l))
                         .map(|t| t.text);
 
-                    let continue_ctx = if let Some(label_text) = label_text.as_ref() {
+                    let continue_ctx = if label.is_some() {
                         self.loop_stack
                             .iter()
                             .rev()
-                            .find(|ctx| ctx.label.as_deref() == Some(label_text.as_str()))
+                            .find(|ctx| {
+                                label_text
+                                    .as_ref()
+                                    .is_some_and(|l| ctx.label.as_deref() == Some(l.as_str()))
+                                    || raw_label_text
+                                        .as_ref()
+                                        .is_some_and(|l| ctx.label.as_deref() == Some(l.as_str()))
+                            })
                             .cloned()
                     } else {
                         self.loop_stack.last().cloned()
                     };
 
-                    if let Some(ctx) = continue_ctx {
+                    if let Some(ctx) = continue_ctx.clone() {
                         let chain_defers = self.collect_defers_until(scope, ctx.scope_id);
                         for x in chain_defers {
                             lst.push(self.evaluate(scope, x));
@@ -1012,7 +1028,7 @@ impl MiddleEnvironment {
 
                     let cont_node = MiddleNode::new(
                         MiddleNodeType::Continue {
-                            label: label_text.map(Into::into),
+                            label: label_text.or(raw_label_text).map(Into::into),
                         },
                         self.current_span(),
                     );
