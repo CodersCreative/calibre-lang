@@ -312,6 +312,7 @@ impl MiddleEnvironment {
     }
 }
 
+
 impl MiddleEnvironment {
     pub fn get_scope_member_scope_path(
         &mut self,

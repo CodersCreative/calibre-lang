@@ -1136,16 +1136,69 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
                 Some(Commands::Clear) => {
+                    fn clear_target(target: &Path) -> Result<bool, Box<dyn Error>> {
+                        if !target.exists() || !target.is_dir() {
+                            return Ok(false);
+                        }
+
+                        let calibre_dir = target.join("calibre");
+                        let mut entries = std::fs::read_dir(target)?
+                            .flatten()
+                            .map(|e| e.path())
+                            .collect::<Vec<_>>();
+                        entries.sort();
+
+                        let only_calibre = entries.len() == 1
+                            && entries
+                                .first()
+                                .map(|p| p.file_name() == Some(std::ffi::OsStr::new("calibre")))
+                                .unwrap_or(false);
+
+                        if only_calibre {
+                            std::fs::remove_dir_all(target)?;
+                            println!("Removed {}", target.display());
+                            return Ok(true);
+                        }
+
+                        if calibre_dir.exists() {
+                            std::fs::remove_dir_all(&calibre_dir)?;
+                            println!("Removed {}", calibre_dir.display());
+                            return Ok(true);
+                        }
+
+                        Ok(false)
+                    }
+
                     let cwd = std::env::current_dir()?;
                     let project =
                         load_project_from(&cwd).map_err(|e| format!("config error: {e}"))?;
-                    let base = project.as_ref().map(|p| p.root.clone()).unwrap_or(cwd);
-                    let target = base.join("target");
-                    if target.exists() {
-                        std::fs::remove_dir_all(&target)?;
-                        println!("Removed {}", target.display());
-                    } else {
-                        println!("Nothing to clear at {}", target.display());
+                    let mut targets_to_clear = Vec::<PathBuf>::new();
+
+                    if let Some(project) = &project {
+                        targets_to_clear.push(project.root.join("target"));
+                    }
+
+                    let cwd_target = cwd.join("target");
+                    let already_has_cwd_target = targets_to_clear.iter().any(|p| {
+                        let a = std::fs::canonicalize(p).unwrap_or_else(|_| p.clone());
+                        let b = std::fs::canonicalize(&cwd_target).unwrap_or(cwd_target.clone());
+                        a == b
+                    });
+                    if !already_has_cwd_target {
+                        targets_to_clear.push(cwd_target);
+                    }
+
+                    let mut removed_any = false;
+                    for target in targets_to_clear {
+                        removed_any |= clear_target(&target)?;
+                    }
+
+                    if !removed_any {
+                        if let Some(project) = &project {
+                            println!("Nothing to clear at {}", project.root.join("target").display());
+                        } else {
+                            println!("Nothing to clear at {}", cwd.join("target").display());
+                        }
                     }
                     Ok(())
                 }

@@ -251,15 +251,12 @@ impl CalEngine {
             });
         }
         let ast = filter_ast_for_mode(ast, self.compile_mode);
+        let ast_for_artifacts = ast.clone();
 
         let (mut env, scope, middle_node) = if let Some(metadata) = &self.package_metadata {
-            MiddleEnvironment::new_and_evaluate_with_package(
-                ast.clone(),
-                path.clone(),
-                Some(metadata.clone()),
-            )
+            MiddleEnvironment::new_and_evaluate_with_package(ast, path.clone(), Some(metadata.clone()))
         } else {
-            MiddleEnvironment::new_and_evaluate(ast.clone(), path.clone())
+            MiddleEnvironment::new_and_evaluate(ast, path.clone())
         };
 
         let mir_errors = env.take_errors();
@@ -284,7 +281,7 @@ impl CalEngine {
         let registry = VMRegistry::from(lir);
 
         Ok(CalArtifacts {
-            ast: Some(ast),
+            ast: Some(ast_for_artifacts),
             mir: Some(mir),
             registry,
             mappings,
@@ -571,7 +568,7 @@ fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
     map_opt(node, mode).unwrap_or_else(|| Node::new(Default::default(), NodeType::EmptyLine))
 }
 
-const CACHE_FORMAT_VERSION: &str = "cal-engine-cache-v1";
+const CACHE_FORMAT_VERSION: &str = "cal-engine-cache-v2";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CachedProgramBlob {

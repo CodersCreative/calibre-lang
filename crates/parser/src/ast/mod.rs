@@ -1150,6 +1150,13 @@ pub enum NodeType {
         conditionals: Vec<Node>,
         until: Option<Box<Node>>,
     },
+    InlineGenerator {
+        map: Box<Node>,
+        data_type: Option<PotentialNewType>,
+        loop_type: Box<LoopType>,
+        conditionals: Vec<Node>,
+        until: Option<Box<Node>>,
+    },
     LoopDeclaration {
         loop_type: Box<LoopType>,
         body: Box<Node>,

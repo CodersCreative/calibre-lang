@@ -114,6 +114,7 @@ pub struct BlockId(pub u32);
 #[derive(Debug, Clone, PartialEq)]
 pub enum LirLiteral {
     Int(i64),
+    UInt(u64),
     Float(f64),
     Char(char),
     String(String),
@@ -124,6 +125,7 @@ impl Display for LirLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Int(x) => write!(f, "{x}"),
+            Self::UInt(x) => write!(f, "{x}u"),
             Self::Float(x) => write!(f, "{x}f"),
             Self::Char(x) => write!(f, "'{x}'"),
             Self::String(x) => write!(f, "{x:?}"),
@@ -473,7 +475,13 @@ impl<'a> LirEnvironment<'a> {
     fn member_field(step: MiddleNode) -> Box<str> {
         match step.node_type {
             MiddleNodeType::Identifier(name) => name.text.into_boxed_str(),
-            MiddleNodeType::IntLiteral(x) => x.to_string().into_boxed_str(),
+            MiddleNodeType::IntLiteral { value, signed } => {
+                if signed {
+                    value.to_string().into_boxed_str()
+                } else {
+                    format!("{value}u").into_boxed_str()
+                }
+            }
             MiddleNodeType::FloatLiteral(x) => x.to_string().into_boxed_str(),
             _ => "<invalid>".to_string().into_boxed_str(),
         }
@@ -548,7 +556,13 @@ impl<'a> LirEnvironment<'a> {
     pub fn lower_node(&mut self, node: MiddleNode) -> LirNodeType {
         let span = node.span;
         match node.node_type {
-            MiddleNodeType::IntLiteral(i) => LirNodeType::Literal(LirLiteral::Int(i)),
+            MiddleNodeType::IntLiteral { value, signed } => {
+                if signed {
+                    LirNodeType::Literal(LirLiteral::Int(value))
+                } else {
+                    LirNodeType::Literal(LirLiteral::UInt(value as u64))
+                }
+            }
             MiddleNodeType::FloatLiteral(f) => LirNodeType::Literal(LirLiteral::Float(f)),
             MiddleNodeType::CharLiteral(c) => LirNodeType::Literal(LirLiteral::Char(c)),
             MiddleNodeType::Null => LirNodeType::Literal(LirLiteral::Null),
@@ -695,7 +709,7 @@ impl<'a> LirEnvironment<'a> {
                         let simple_fallback = matches!(
                             expr.node_type,
                             MiddleNodeType::Identifier(_)
-                                | MiddleNodeType::IntLiteral(_)
+                                | MiddleNodeType::IntLiteral { .. }
                                 | MiddleNodeType::FloatLiteral(_)
                                 | MiddleNodeType::StringLiteral(_)
                                 | MiddleNodeType::CharLiteral(_)

@@ -221,17 +221,12 @@ impl MiddleEnvironment {
                 spawned_loop_items.push(Node::new(
                     self.current_span(),
                     NodeType::IfStatement {
-                        comparison: Box::new(IfComparisonType::If(Node::new(
-                            self.current_span(),
-                            NodeType::NegExpression {
-                                value: Box::new(condition),
-                            },
-                        ))),
-                        then: Box::new(Node::new(
+                        comparison: Box::new(IfComparisonType::If(condition)),
+                        then: Box::new(Node::new(self.current_span(), NodeType::EmptyLine)),
+                        otherwise: Some(Box::new(Node::new(
                             self.current_span(),
                             NodeType::Continue { label: None },
-                        )),
-                        otherwise: None,
+                        ))),
                     },
                 ));
             }
@@ -629,25 +624,18 @@ impl MiddleEnvironment {
             ParserInnerType::List(Box::new(resolved_data_type.clone())),
         );
 
-        let mut loop_items = Vec::new();
-        for condition in conditionals {
-            loop_items.push(Node::new(
+        let guard = conditionals.into_iter().reduce(|left, right| {
+            Node::new(
                 self.current_span(),
-                NodeType::IfStatement {
-                    comparison: Box::new(IfComparisonType::If(Node::new(
-                        self.current_span(),
-                        NodeType::NegExpression {
-                            value: Box::new(condition),
-                        },
-                    ))),
-                    then: Box::new(Node::new(
-                        self.current_span(),
-                        NodeType::Continue { label: None },
-                    )),
-                    otherwise: None,
+                NodeType::BooleanExpression {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    operator: calibre_parser::ast::comparison::BooleanOperator::And,
                 },
-            ));
-        }
+            )
+        });
+
+        let mut loop_items = Vec::new();
 
         if spawned {
             let chan_ident: PotentialDollarIdentifier =
@@ -998,7 +986,22 @@ impl MiddleEnvironment {
             };
             return self.evaluate_inner(scope, node);
         } else {
-            loop_items.push(Node::new(
+            let map_tmp_ident: PotentialDollarIdentifier =
+                ParserText::from(String::from("__iter_map_value")).into();
+            let map_tmp_decl = Node::new(
+                self.current_span(),
+                NodeType::VariableDeclaration {
+                    var_type: VarType::Immutable,
+                    identifier: map_tmp_ident.clone(),
+                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                        self.current_span(),
+                        ParserInnerType::Auto(None),
+                    )),
+                    value: map,
+                },
+            );
+
+            let append_node = Node::new(
                 self.current_span(),
                 NodeType::AssignmentExpression {
                     identifier: Box::new(list_ident_node.clone()),
@@ -1006,12 +1009,38 @@ impl MiddleEnvironment {
                         self.current_span(),
                         NodeType::BinaryExpression {
                             left: Box::new(list_ident_node.clone()),
-                            right: map,
+                            right: Box::new(Node::new(
+                                self.current_span(),
+                                NodeType::Identifier(map_tmp_ident.into()),
+                            )),
                             operator: calibre_parser::ast::binary::BinaryOperator::Shl,
                         },
                     )),
                 },
-            ));
+            );
+            let filtered_block = Node::new(
+                self.current_span(),
+                NodeType::ScopeDeclaration {
+                    body: Some(vec![map_tmp_decl, append_node]),
+                    create_new_scope: Some(true),
+                    define: false,
+                    named: None,
+                    is_temp: true,
+                },
+            );
+
+            if let Some(cond) = guard {
+                loop_items.push(Node::new(
+                    self.current_span(),
+                    NodeType::IfStatement {
+                        comparison: Box::new(IfComparisonType::If(cond)),
+                        then: Box::new(filtered_block),
+                        otherwise: None,
+                    },
+                ));
+            } else {
+                loop_items.push(filtered_block);
+            }
         }
 
         let loop_node = Node::new(

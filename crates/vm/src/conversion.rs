@@ -262,6 +262,7 @@ pub struct AggregateLayout {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VMLiteral {
     Int(i64),
+    UInt(u64),
     Float(f64),
     Char(char),
     String(String),
@@ -283,6 +284,7 @@ impl Display for VMLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Int(x) => write!(f, "{x}"),
+            Self::UInt(x) => write!(f, "{x}u"),
             Self::Float(x) => write!(f, "{x}f"),
             Self::Char(x) => write!(f, "'{x}'"),
             Self::String(x) => write!(f, "{x:?}"),
@@ -315,6 +317,7 @@ impl From<LirLiteral> for VMLiteral {
     fn from(value: LirLiteral) -> Self {
         match value {
             LirLiteral::Int(x) => Self::Int(x),
+            LirLiteral::UInt(x) => Self::UInt(x),
             LirLiteral::Float(x) => Self::Float(x),
             LirLiteral::Char(x) => Self::Char(x),
             LirLiteral::String(x) => Self::String(x),
@@ -915,6 +918,7 @@ impl FunctionLowering {
                 is_global: self.is_global,
                 string_map: FxHashMap::default(),
                 int_literals: FxHashMap::default(),
+                uint_literals: FxHashMap::default(),
                 float_literals: FxHashMap::default(),
                 char_literals: FxHashMap::default(),
                 string_literals: FxHashMap::default(),
@@ -1017,6 +1021,7 @@ struct BlockLoweringCtx<'a> {
     is_global: bool,
     string_map: FxHashMap<String, u16>,
     int_literals: FxHashMap<i64, u16>,
+    uint_literals: FxHashMap<u64, u16>,
     float_literals: FxHashMap<u64, u16>,
     char_literals: FxHashMap<char, u16>,
     string_literals: FxHashMap<String, u16>,
@@ -1070,6 +1075,11 @@ impl<'a> BlockLoweringCtx<'a> {
                     return idx;
                 }
             }
+            VMLiteral::UInt(x) => {
+                if let Some(idx) = self.uint_literals.get(x).copied() {
+                    return idx;
+                }
+            }
             VMLiteral::Float(x) => {
                 let bits = x.to_bits();
                 if let Some(idx) = self.float_literals.get(&bits).copied() {
@@ -1093,6 +1103,9 @@ impl<'a> BlockLoweringCtx<'a> {
         match &self.block.local_literals[idx as usize] {
             VMLiteral::Int(x) => {
                 self.int_literals.insert(*x, idx);
+            }
+            VMLiteral::UInt(x) => {
+                self.uint_literals.insert(*x, idx);
             }
             VMLiteral::Float(x) => {
                 self.float_literals.insert(x.to_bits(), idx);

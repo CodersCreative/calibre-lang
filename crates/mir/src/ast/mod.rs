@@ -114,7 +114,7 @@ pub enum MiddleNodeType {
     ListLiteral(ParserDataType, Vec<MiddleNode>),
     CharLiteral(char),
     FloatLiteral(f64),
-    IntLiteral(i64),
+    IntLiteral { value: i64, signed: bool },
     MemberExpression {
         path: Vec<(MiddleNode, bool)>,
     },
@@ -362,7 +362,13 @@ impl Into<NodeType> for MiddleNodeType {
             }),
             Self::CharLiteral(x) => NodeType::CharLiteral(x),
             Self::FloatLiteral(x) => NodeType::FloatLiteral(x),
-            Self::IntLiteral(x) => NodeType::IntLiteral(x.to_string()),
+            Self::IntLiteral { value, signed } => {
+                let mut out = value.to_string();
+                if !signed {
+                    out.push('u');
+                }
+                NodeType::IntLiteral(out)
+            }
             Self::MemberExpression { path } => NodeType::MemberExpression {
                 path: {
                     let mut lst = Vec::new();

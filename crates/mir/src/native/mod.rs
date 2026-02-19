@@ -60,6 +60,7 @@ impl MiddleEnvironment {
             "len",
             "panic",
             "assert",
+            "gen_suspend",
             "tuple",
             "discriminant",
             "min_or_zero",
@@ -165,6 +166,7 @@ impl MiddleEnvironment {
             &["split", "contains", "starts_with", "ends_with"],
         );
         self.setup_std_module(scope, "range", &[]);
+        self.setup_std_module(scope, "generators", &[]);
         self.setup_std_module(scope, "crypto", &["sha256", "sha512", "blake3"]);
         self.setup_std_module(scope, "regex", &["is_match", "find", "replace"]);
         self.setup_std_module(

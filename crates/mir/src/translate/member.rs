@@ -89,6 +89,10 @@ impl MiddleEnvironment {
         receiver_is_value: bool,
         target_type: Option<ParserDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
+        let receiver_middle = list
+            .last()
+            .map(|(node, _)| node.clone())
+            .unwrap_or_else(|| MiddleNode::new(MiddleNodeType::EmptyLine, self.current_span()));
         let receiver_node: Node = list
             .last()
             .map(|(node, _)| node.clone().into())
@@ -127,9 +131,55 @@ impl MiddleEnvironment {
         };
 
         let caller_node = if let Some(function_name) = resolved_caller {
+            let mut lowered_args = Vec::new();
             if receiver_is_value {
+                let mut self_arg = receiver_middle;
+                if let Some(var) = self.variables.get(&function_name)
+                    && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
+                    && let Some(first) = parameters.first()
+                    && let ParserInnerType::Ref(_, mutability) = &first.data_type
+                {
+                    self_arg = MiddleNode::new(
+                        MiddleNodeType::RefStatement {
+                            mutability: mutability.clone(),
+                            value: Box::new(self_arg),
+                        },
+                        self.current_span(),
+                    );
+                }
+                lowered_args.push(self_arg);
+            }
+
+            for arg in args {
+                lowered_args.push(self.evaluate(scope, arg.into()));
+            }
+            for arg in reverse_args {
+                lowered_args.push(self.evaluate(scope, arg));
+            }
+            if lowered_args.len() >= 2
+                && lowered_args[0].to_string() == lowered_args[1].to_string()
+            {
+                lowered_args.remove(1);
+            }
+
+            return Ok(MiddleNode::new(
+                MiddleNodeType::CallExpression {
+                    caller: Box::new(MiddleNode::new(
+                        MiddleNodeType::Identifier(ParserText::from(function_name)),
+                        self.current_span(),
+                    )),
+                    args: lowered_args,
+                },
+                self.current_span(),
+            ));
+        } else {
+            if receiver_is_value {
+                let unresolved_name = match &caller.node_type {
+                    NodeType::Identifier(id) => id.to_string(),
+                    _ => String::new(),
+                };
                 let self_arg =
-                    self.receiver_arg_for_member_call(&function_name, receiver_node, list.len());
+                    self.receiver_arg_for_member_call(&unresolved_name, receiver_node, list.len());
                 self.add_receiver_if_missing(scope, &mut args, self_arg);
                 if args.len() >= 2 {
                     let a0: Node = args[0].clone().into();
@@ -139,13 +189,6 @@ impl MiddleEnvironment {
                     }
                 }
             }
-            Node::new(
-                self.current_span(),
-                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                    ParserText::from(function_name).into(),
-                )),
-            )
-        } else {
             *caller
         };
 

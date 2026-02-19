@@ -170,7 +170,14 @@ fn visit(
     }
 
     match &node.node_type {
-        NodeType::IntLiteral(_) => Ok(Type::TCon(TypeCon::Int)),
+        NodeType::IntLiteral(number) => {
+            let is_unsigned = number.ends_with('u');
+            Ok(Type::TCon(if is_unsigned {
+                TypeCon::UInt
+            } else {
+                TypeCon::Int
+            }))
+        }
         NodeType::FloatLiteral(_) => Ok(Type::TCon(TypeCon::Float)),
         NodeType::StringLiteral(_) => Ok(Type::TCon(TypeCon::Str)),
         NodeType::CharLiteral(_) => Ok(Type::TCon(TypeCon::Char)),

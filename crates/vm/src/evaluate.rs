@@ -80,11 +80,12 @@ impl VM {
         callsite: (usize, usize, u32),
     ) -> Option<Arc<VMFunction>> {
         if let Some(cached) = self.caches.callsite.get(&callsite) {
-            return Some(cached.clone());
+            return Some(Arc::clone(cached));
         }
         if let Some(cached) = self.caches.call.get(name) {
-            self.caches.callsite.insert(callsite, cached.clone());
-            return Some(cached.clone());
+            let resolved = Arc::clone(cached);
+            self.caches.callsite.insert(callsite, Arc::clone(&resolved));
+            return Some(resolved);
         }
 
         let found = if let Some(x) = self.get_function(name) {
@@ -95,7 +96,7 @@ impl VM {
                 .iter()
                 .filter(|(k, _)| !self.moved_functions.contains(*k))
                 .find(|(k, _)| k.starts_with(prefix))
-                .map(|(_, v)| v.clone())
+                .map(|(_, v)| Arc::clone(v))
         } else if let Some((_, short_name)) = name.rsplit_once(':') {
             self.find_unique_function_by_suffix(short_name)
         } else {
@@ -215,17 +216,13 @@ impl VM {
     where
         I: IntoIterator<Item = RuntimeValue>,
     {
+        state.yielded = None;
         let mut prev_vars: Vec<(String, Option<RuntimeValue>)> = Vec::new();
-        if !captures.as_ref().is_empty() {
-            prev_vars = Vec::with_capacity(captures.as_ref().len());
-            prev_vars.extend(
-                captures
-                    .as_ref()
-                    .iter()
-                    .map(|(name, _)| (name.clone(), self.variables.get(name).cloned())),
-            );
-            for (name, value) in captures.as_ref().iter() {
-                self.variables.insert(name.clone(), value.clone());
+        if !captures.is_empty() {
+            prev_vars = Vec::with_capacity(captures.len());
+            for (name, value) in captures.iter() {
+                let old = self.variables.insert(name.clone(), value.clone());
+                prev_vars.push((name.clone(), old));
             }
         }
 
@@ -285,10 +282,12 @@ impl VM {
                     block,
                     ip,
                     prev_block,
+                    yielded,
                 } => {
                     state.block = Some(block);
                     state.ip = ip;
                     state.prev_block = prev_block;
+                    state.yielded = yielded;
                     return Ok(None);
                 }
                 TerminateValue::None => break,
@@ -357,7 +356,9 @@ impl VM {
         start_ip: usize,
         budget: Option<usize>,
     ) -> Result<TerminateValue, RuntimeError> {
-        self.apply_phis(block, prev)?;
+        if start_ip == 0 {
+            self.apply_phis(block, prev)?;
+        }
         let mut instr_exec_count: u64 = 0;
         let mut fuel = budget.unwrap_or(usize::MAX);
         for (ip, instruction) in block.instructions.iter().enumerate().skip(start_ip) {
@@ -365,7 +366,7 @@ impl VM {
                 self.maybe_collect_garbage();
             }
             instr_exec_count = instr_exec_count.wrapping_add(1);
-            let step = match self.run_instruction(instruction, block, ip as u32) {
+            let step = match self.run_instruction(instruction, block, ip as u32, prev) {
                 Ok(step) => step,
                 Err(e) => {
                     let span = block.instruction_spans.get(ip).cloned().unwrap_or_default();
@@ -385,6 +386,7 @@ impl VM {
                         block: block.id,
                         ip: ip + 1,
                         prev_block: prev,
+                        yielded: None,
                     });
                 }
             }
@@ -398,6 +400,7 @@ impl VM {
         instruction: &VMInstruction,
         block: &VMBlock,
         ip: u32,
+        prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         match instruction {
             VMInstruction::LoadLiteral { dst, literal } => {
@@ -433,7 +436,7 @@ impl VM {
                         let mut last_err = None;
                         let mut handle_opt = None;
                         for candidate in Self::resolve_library_candidates(&library) {
-                            match unsafe { libloading::Library::new(candidate.clone()) } {
+                            match unsafe { libloading::Library::new(&candidate) } {
                                 Ok(h) => {
                                     handle_opt = Some(h);
                                     break;
@@ -482,26 +485,28 @@ impl VM {
                 } else {
                     let resolved = self.resolve_var_name(name);
                     match resolved {
-                        VarName::Func(func) => self
-                            .get_function(&func)
-                            .map(|f| {
-                                resolved_name = Some(func.clone());
+                        VarName::Func(func) => {
+                            if let Some(f) = self.get_function(&func) {
+                                resolved_name = Some(func);
                                 self.make_runtime_function(f.as_ref())
-                            })
-                            .unwrap_or(RuntimeValue::Null),
-                        VarName::Var(var) => self
-                            .variables
-                            .get(&var)
-                            .cloned()
-                            .map(|v| {
-                                resolved_name = Some(var.clone());
+                            } else {
+                                RuntimeValue::Null
+                            }
+                        }
+                        VarName::Var(var) => {
+                            if let Some(v) = self.variables.get(&var).cloned() {
+                                resolved_name = Some(var);
                                 self.copy_saveable_into_runtime_var(v)
-                            })
-                            .unwrap_or(RuntimeValue::Null),
+                            } else {
+                                RuntimeValue::Null
+                            }
+                        }
                         VarName::Global => RuntimeValue::Null,
                     }
                 };
-                if let Some(resolved_name) = resolved_name {
+                if let Some(resolved_name) = resolved_name
+                    && !matches!(value, RuntimeValue::Null)
+                {
                     self.caches.globals.insert(resolved_name, value.clone());
                 }
                 self.set_reg_value(*dst, value);
@@ -510,16 +515,16 @@ impl VM {
                 let name = self.local_string(block, *name)?;
                 let resolved = self.resolve_var_name(name);
                 let value = self.try_move_global_runtime_value(name).unwrap_or_else(|| {
-                    match resolved.clone() {
+                    match &resolved {
                         VarName::Func(func) => {
-                            if let Some(func) = self.take_function(&func) {
+                            if let Some(func) = self.take_function(func) {
                                 self.make_runtime_function(&func)
                             } else {
                                 RuntimeValue::Null
                             }
                         }
                         VarName::Var(var) => {
-                            if let Some(var) = self.variables.remove(&var) {
+                            if let Some(var) = self.variables.remove(var) {
                                 self.move_saveable_into_runtime_var(var)
                             } else {
                                 RuntimeValue::Null
@@ -625,7 +630,11 @@ impl VM {
             }
             VMInstruction::AccBinary { op, right } => {
                 let right = self.resolve_operand_value(self.get_reg_value(*right))?;
-                let left = self.resolve_operand_value(self.current_frame().acc.clone())?;
+                let left_raw = {
+                    let frame = self.current_frame_mut();
+                    std::mem::replace(&mut frame.acc, RuntimeValue::Null)
+                };
+                let left = self.resolve_operand_value(left_raw)?;
                 self.current_frame_mut().acc = binary(self, op, left, right)?;
             }
             VMInstruction::Comparison {
@@ -693,6 +702,47 @@ impl VM {
                 for (name, reg) in layout.members.iter().zip(fields.iter()) {
                     entries.push((name.clone(), self.get_reg_value(*reg)));
                 }
+                if let Some(type_name) = layout.name.clone()
+                    && Self::is_gen_type_name(&type_name)
+                {
+                    let mut next_fn: Option<RuntimeValue> = None;
+                    for (field, value) in entries.iter() {
+                        let short = field.rsplit("::").next().unwrap_or(field.as_str());
+                        match short {
+                            "data" => next_fn = Some(value.clone()),
+                            _ => {}
+                        }
+                    }
+                    if let Some(RuntimeValue::Function { name, captures }) = next_fn {
+                        let mut gen_vm = VM::new_shared(
+                            self.registry.clone(),
+                            self.mappings.clone(),
+                            self.config.clone(),
+                        );
+                        gen_vm.variables = self.variables.clone();
+                        gen_vm.ptr_heap = self.ptr_heap.clone();
+                        gen_vm.moved_functions = self.moved_functions.clone();
+
+                        self.set_reg_value(
+                            *dst,
+                            RuntimeValue::Generator {
+                                type_name: Arc::new(type_name),
+                                state: Arc::new(std::sync::Mutex::new(
+                                    crate::value::GeneratorState {
+                                        vm: gen_vm,
+                                        function_name: name,
+                                        captures,
+                                        task_state: crate::TaskState::default(),
+                                        index: 0,
+                                        completed: false,
+                                    },
+                                )),
+                            },
+                        );
+                        return Ok(TerminateValue::None);
+                    }
+                }
+
                 self.set_reg_value(
                     *dst,
                     RuntimeValue::Aggregate(
@@ -784,6 +834,16 @@ impl VM {
                     }
                     RuntimeValue::NativeFunction(func) => {
                         let result = func.run(self, call_args.into_vec())?;
+                        if let RuntimeValue::GeneratorSuspend(value) = result {
+                            let yielded = *value;
+                            self.set_reg_value(*dst, yielded.clone());
+                            return Ok(TerminateValue::Yield {
+                                block: block.id,
+                                ip: ip as usize + 1,
+                                prev_block,
+                                yielded: Some(yielded),
+                            });
+                        }
                         self.set_reg_value(*dst, result);
                     }
                     RuntimeValue::ExternFunction(func) => {
@@ -829,18 +889,87 @@ impl VM {
                 let tuple_index = name.parse::<usize>().ok();
                 let resolved = self.resolve_value_for_op_ref(self.get_reg_value_ref(*value))?;
                 let val = match resolved {
+                    RuntimeValue::Generator {
+                        type_name,
+                        state,
+                    } => {
+                        let member_short = short_name.unwrap_or(name);
+                        match member_short {
+                            "data" => RuntimeValue::NativeFunction(Arc::new(
+                                crate::value::GeneratorResumeFn { state: state.clone() },
+                            )),
+                            "index" => {
+                                let guard = state
+                                    .lock()
+                                    .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                                RuntimeValue::Int(guard.index)
+                            }
+                            "done" => {
+                                let guard = state
+                                    .lock()
+                                    .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                                RuntimeValue::Bool(guard.completed)
+                            }
+                            _ => {
+                                let mut path = String::with_capacity(type_name.len() + name.len() + 2);
+                                path.push_str(type_name.as_str());
+                                path.push_str("::");
+                                path.push_str(name);
+                                if let Some(func) = self.get_function(&path) {
+                                    self.make_runtime_function(func.as_ref())
+                                } else {
+                                    let found = if let Some(short) = short_name {
+                                        path.clear();
+                                        path.push_str(type_name.as_str());
+                                        path.push_str("::");
+                                        path.push_str(short);
+                                        self.get_function(&path)
+                                    } else {
+                                        None
+                                    }
+                                    .or_else(|| {
+                                        let short_type =
+                                            type_name.rsplit_once(':').map(|(_, short)| short)?;
+                                        path.clear();
+                                        path.push_str(short_type);
+                                        path.push_str("::");
+                                        path.push_str(name);
+                                        self.get_function(&path).or_else(|| {
+                                            let short = short_name?;
+                                            path.clear();
+                                            path.push_str(short_type);
+                                            path.push_str("::");
+                                            path.push_str(short);
+                                            self.get_function(&path)
+                                        })
+                                    });
+
+                                    if let Some(func) = found {
+                                        self.make_runtime_function(func.as_ref())
+                                    } else {
+                                        return Err(RuntimeError::MissingMember {
+                                            target: RuntimeValue::Generator {
+                                                type_name,
+                                                state,
+                                            },
+                                            member: name.to_string(),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
                     RuntimeValue::Aggregate(None, map) => {
                         let idx = tuple_index
                             .ok_or(RuntimeError::UnexpectedType(RuntimeValue::Null))?;
-                        map.as_ref()
-                            .0
-                            .0
-                            .get(idx)
-                            .map(|(_, v)| v.clone())
-                            .ok_or_else(|| RuntimeError::MissingMember {
-                                target: RuntimeValue::Aggregate(None, map.clone()),
+                        if let Some((_, value)) = map.as_ref().0.0.get(idx) {
+                            value.clone()
+                        } else {
+                            return Err(RuntimeError::MissingMember {
+                                target: RuntimeValue::Aggregate(None, map),
                                 member: name.to_string(),
-                            })?
+                            });
+                        }
                     }
                     RuntimeValue::Aggregate(Some(type_name), map) => {
                         if let Some(idx) = self.resolve_aggregate_member_slot(
@@ -958,6 +1087,48 @@ impl VM {
                         }
                         Ok(map)
                     };
+                let update_generator =
+                    |generator_value: RuntimeValue| -> Result<RuntimeValue, RuntimeError> {
+                    let RuntimeValue::Generator {
+                        type_name,
+                        state,
+                    } = generator_value
+                    else {
+                        return Err(RuntimeError::UnexpectedType(generator_value));
+                    };
+
+                    if !matches!(short_name.unwrap_or(name), "done" | "index") {
+                        return Err(RuntimeError::MissingMember {
+                            target: RuntimeValue::Generator {
+                                type_name,
+                                state,
+                            },
+                            member: name.to_string(),
+                        });
+                    }
+
+                    let mut guard = state
+                        .lock()
+                        .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                    match short_name.unwrap_or(name) {
+                        "index" => match &value {
+                            RuntimeValue::Int(x) => guard.index = (*x).max(0),
+                            RuntimeValue::UInt(x) => guard.index = *x as i64,
+                            other => return Err(RuntimeError::UnexpectedType(other.clone())),
+                        },
+                        "done" => match &value {
+                            RuntimeValue::Bool(x) => guard.completed = *x,
+                            other => return Err(RuntimeError::UnexpectedType(other.clone())),
+                        },
+                        _ => {}
+                    }
+                    drop(guard);
+
+                    Ok(RuntimeValue::Generator {
+                        type_name,
+                        state,
+                    })
+                };
 
                 match self.get_reg_value(*target) {
                     RuntimeValue::Ref(ref_name) => {
@@ -970,10 +1141,11 @@ impl VM {
                         self.variables.insert(
                             ref_name,
                             match current {
-                                RuntimeValue::Aggregate(name, map) => RuntimeValue::Aggregate(
-                                    name.clone(),
-                                    update_aggregate(&name, map.clone())?,
-                                ),
+                                RuntimeValue::Aggregate(name, map) => {
+                                    let updated = update_aggregate(&name, map)?;
+                                    RuntimeValue::Aggregate(name, updated)
+                                }
+                                RuntimeValue::Generator { .. } => update_generator(current)?,
                                 other => return Err(RuntimeError::UnexpectedType(other)),
                             },
                         );
@@ -984,10 +1156,11 @@ impl VM {
                             .get_by_id(id)
                             .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?;
                         let updated = match current {
-                            RuntimeValue::Aggregate(name, map) => RuntimeValue::Aggregate(
-                                name.clone(),
-                                update_aggregate(&name, map.clone())?,
-                            ),
+                            RuntimeValue::Aggregate(name, map) => {
+                                let updated = update_aggregate(&name, map)?;
+                                RuntimeValue::Aggregate(name, updated)
+                            }
+                            RuntimeValue::Generator { .. } => update_generator(current)?,
                             other => return Err(RuntimeError::UnexpectedType(other)),
                         };
                         let _ = self.variables.set_by_id(id, updated);
@@ -999,22 +1172,26 @@ impl VM {
                             match self.resolve_value_for_op_ref(
                                 self.get_reg_value_in_frame_ref(frame, reg),
                             )? {
-                                RuntimeValue::Aggregate(name, map) => RuntimeValue::Aggregate(
-                                    name.clone(),
-                                    update_aggregate(&name, map.clone())?,
-                                ),
+                                RuntimeValue::Aggregate(name, map) => {
+                                    let updated = update_aggregate(&name, map)?;
+                                    RuntimeValue::Aggregate(name, updated)
+                                }
+                                current @ RuntimeValue::Generator { .. } => {
+                                    update_generator(current)?
+                                }
                                 other => return Err(RuntimeError::UnexpectedType(other)),
                             },
                         );
                     }
                     RuntimeValue::Aggregate(name, map) => {
+                        let updated = update_aggregate(&name, map)?;
                         self.set_reg_value(
                             *target,
-                            RuntimeValue::Aggregate(
-                                name.clone(),
-                                update_aggregate(&name, map.clone())?,
-                            ),
+                            RuntimeValue::Aggregate(name, updated),
                         );
+                    }
+                    current @ RuntimeValue::Generator { .. } => {
+                        self.set_reg_value(*target, update_generator(current)?);
                     }
                     other => return Err(RuntimeError::UnexpectedType(other)),
                 }
@@ -1148,7 +1325,7 @@ impl VM {
                         if let Some(RuntimeValue::List(list)) =
                             self.variables.get(id.as_str()).cloned()
                         {
-                            let mut list = list.clone();
+                            let mut list = list;
                             let vec = &mut Gc::make_mut(&mut list).0;
                             let idx = resolve_idx(vec.len(), index)?;
                             vec[idx] = value;
@@ -1157,7 +1334,7 @@ impl VM {
                     }
                     RuntimeValue::VarRef(id) => {
                         if let Some(RuntimeValue::List(list)) = self.variables.get_by_id(*id) {
-                            let mut list = list.clone();
+                            let mut list = list;
                             let vec = &mut Gc::make_mut(&mut list).0;
                             let idx = resolve_idx(vec.len(), index)?;
                             vec[idx] = value;
@@ -1167,7 +1344,7 @@ impl VM {
                     RuntimeValue::RegRef { frame, reg } => {
                         if let RuntimeValue::List(list) = self.get_reg_value_in_frame(*frame, *reg)
                         {
-                            let mut list = list.clone();
+                            let mut list = list;
                             let vec = &mut Gc::make_mut(&mut list).0;
                             let idx = resolve_idx(vec.len(), index)?;
                             vec[idx] = value;

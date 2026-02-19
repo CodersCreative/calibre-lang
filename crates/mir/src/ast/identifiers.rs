@@ -14,7 +14,7 @@ impl MiddleNode {
             }
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::CharLiteral(_)
-            | MiddleNodeType::IntLiteral(_)
+            | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return { value: None } => Vec::new(),
             MiddleNodeType::Break {
@@ -168,7 +168,7 @@ impl MiddleNode {
             }
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::CharLiteral(_)
-            | MiddleNodeType::IntLiteral(_)
+            | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return { value: None }
             | MiddleNodeType::Identifier(_)

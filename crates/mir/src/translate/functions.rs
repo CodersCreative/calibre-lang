@@ -1,9 +1,9 @@
 use calibre_parser::{
     Span,
     ast::{
-        CallArg, FunctionHeader, GenericTypes, Node, NodeType, ParserDataType, ParserInnerType,
-        ParserText, PotentialDollarIdentifier, PotentialFfiDataType,
-        PotentialGenericTypeIdentifier, PotentialNewType, VarType,
+        CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
+        ObjectType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
+        PotentialFfiDataType, PotentialGenericTypeIdentifier, PotentialNewType, TryCatch, VarType,
     },
 };
 
@@ -15,6 +15,343 @@ use crate::{
 };
 
 impl MiddleEnvironment {
+    pub(crate) fn is_generator_return_type(return_type: &ParserDataType) -> Option<ParserDataType> {
+        let ty_txt = return_type.data_type.to_string();
+        if ty_txt == "gen" || ty_txt.starts_with("gen->") || ty_txt.contains(":gen->") {
+            return Some(ParserDataType::new(return_type.span, ParserInnerType::Auto(None)));
+        }
+
+        match &return_type.data_type {
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } if identifier == "gen" && generic_types.len() == 1 => {
+                Some(generic_types[0].clone())
+            }
+            ParserInnerType::Struct(identifier) if identifier == "gen" => {
+                Some(ParserDataType::new(return_type.span, ParserInnerType::Auto(None)))
+            }
+            _ => None,
+        }
+    }
+
+    fn gen_ident(span: Span, name: &str) -> Node {
+        Node::new(
+            span,
+            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                PotentialDollarIdentifier::Identifier(ParserText::new(span, name.to_string())),
+            )),
+        )
+    }
+
+    fn rewrite_generator_returns(node: Node) -> Node {
+        let span = node.span;
+        match node.node_type {
+            NodeType::Return { value: Some(value) } => {
+                let suspend_call = Node::new(
+                    span,
+                    NodeType::CallExpression {
+                        string_fn: None,
+                        caller: Box::new(Self::gen_ident(span, "gen_suspend")),
+                        generic_types: Vec::new(),
+                        args: vec![CallArg::Value(*value)],
+                        reverse_args: Vec::new(),
+                    },
+                );
+                let tmp_ident = PotentialDollarIdentifier::Identifier(ParserText::new(
+                    span,
+                    format!("gen_yield_tmp_{}_{}", span.from.line, span.from.col),
+                ));
+                Node::new(
+                    span,
+                    NodeType::ScopeDeclaration {
+                        body: Some(vec![
+                            Node::new(
+                                span,
+                                NodeType::VariableDeclaration {
+                                    var_type: VarType::Immutable,
+                                    identifier: tmp_ident,
+                                    value: Box::new(suspend_call),
+                                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                                        span,
+                                        ParserInnerType::Auto(None),
+                                    )),
+                                },
+                            ),
+                            Node::new(span, NodeType::EmptyLine),
+                        ]),
+                        named: None,
+                        is_temp: true,
+                        create_new_scope: Some(true),
+                        define: false,
+                    },
+                )
+            }
+            NodeType::Return { value: None } => Node::new(
+                span,
+                NodeType::Return {
+                    value: Some(Box::new(Self::gen_ident(span, "none"))),
+                },
+            ),
+            NodeType::ScopeDeclaration {
+                body,
+                named,
+                is_temp,
+                create_new_scope,
+                define,
+            } => Node::new(
+                span,
+                NodeType::ScopeDeclaration {
+                    body: body.map(|items| {
+                        items
+                            .into_iter()
+                            .map(Self::rewrite_generator_returns)
+                            .collect()
+                    }),
+                    named,
+                    is_temp,
+                    create_new_scope,
+                    define,
+                },
+            ),
+            NodeType::LoopDeclaration {
+                loop_type,
+                body,
+                until,
+                label,
+                else_body,
+            } => Node::new(
+                span,
+                NodeType::LoopDeclaration {
+                    loop_type,
+                    body: Box::new(Self::rewrite_generator_returns(*body)),
+                    until: until.map(|n| Box::new(Self::rewrite_generator_returns(*n))),
+                    label,
+                    else_body: else_body.map(|n| Box::new(Self::rewrite_generator_returns(*n))),
+                },
+            ),
+            NodeType::IfStatement {
+                comparison,
+                then,
+                otherwise,
+            } => Node::new(
+                span,
+                NodeType::IfStatement {
+                    comparison,
+                    then: Box::new(Self::rewrite_generator_returns(*then)),
+                    otherwise: otherwise.map(|n| Box::new(Self::rewrite_generator_returns(*n))),
+                },
+            ),
+            NodeType::MatchStatement { value, body } => Node::new(
+                span,
+                NodeType::MatchStatement {
+                    value,
+                    body: body
+                        .into_iter()
+                        .map(|(arm, conditions, node)| {
+                            (
+                                arm,
+                                conditions,
+                                Box::new(Self::rewrite_generator_returns(*node)),
+                            )
+                        })
+                        .collect(),
+                },
+            ),
+            NodeType::Try { value, catch } => Node::new(
+                span,
+                NodeType::Try {
+                    value: Box::new(Self::rewrite_generator_returns(*value)),
+                    catch: catch.map(|c| TryCatch {
+                        name: c.name,
+                        body: Box::new(Self::rewrite_generator_returns(*c.body)),
+                    }),
+                },
+            ),
+            other => Node::new(span, other),
+        }
+    }
+
+    pub(crate) fn wrap_generator_body(body: Node, elem_type: ParserDataType, span: Span) -> Node {
+        let suffix = format!("{}_{}", span.from.line, span.from.col);
+        let next_name = format!("gennext{}", suffix);
+        let rewritten = Self::rewrite_generator_returns(body);
+        let next_body = match rewritten.node_type {
+            NodeType::ScopeDeclaration {
+                body: Some(mut items),
+                ..
+            } => {
+                let mut out = Vec::with_capacity(items.len() + 1);
+                out.append(&mut items);
+                out.push(Self::gen_ident(span, "none"));
+                Node::new(
+                    span,
+                    NodeType::ScopeDeclaration {
+                        body: Some(out),
+                        named: None,
+                        is_temp: true,
+                        create_new_scope: Some(true),
+                        define: false,
+                    },
+                )
+            }
+            other => Node::new(
+                span,
+                NodeType::ScopeDeclaration {
+                    body: Some(vec![Node::new(span, other), Self::gen_ident(span, "none")]),
+                    named: None,
+                    is_temp: true,
+                    create_new_scope: Some(true),
+                    define: false,
+                },
+            ),
+        };
+
+        let next_decl = Node::new(
+            span,
+            NodeType::VariableDeclaration {
+                var_type: VarType::Immutable,
+                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
+                    span,
+                    next_name.clone(),
+                )),
+                data_type: PotentialNewType::DataType(ParserDataType::new(
+                    span,
+                    ParserInnerType::Function {
+                        return_type: Box::new(ParserDataType::new(
+                            span,
+                            ParserInnerType::Option(Box::new(elem_type.clone())),
+                        )),
+                        parameters: vec![],
+                    },
+                )),
+                value: Box::new(Node::new(
+                    span,
+                    NodeType::FunctionDeclaration {
+                        header: FunctionHeader {
+                            generics: GenericTypes::default(),
+                            parameters: vec![],
+                            return_type: PotentialNewType::DataType(ParserDataType::new(
+                                span,
+                                ParserInnerType::Option(Box::new(elem_type.clone())),
+                            )),
+                            param_destructures: Vec::new(),
+                        },
+                        body: Box::new(next_body),
+                    },
+                )),
+            },
+        );
+
+        let gen_value = Node::new(
+            span,
+            NodeType::StructLiteral {
+                identifier: PotentialGenericTypeIdentifier::Generic {
+                    identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
+                        span,
+                        String::from("gen"),
+                    )),
+                    generic_types: vec![PotentialNewType::DataType(elem_type)],
+                },
+                value: ObjectType::Map(vec![
+                    (String::from("data"), Self::gen_ident(span, &next_name)),
+                    (
+                        String::from("index"),
+                        Node::new(span, NodeType::IntLiteral(String::from("0"))),
+                    ),
+                    (String::from("done"), Self::gen_ident(span, "false")),
+                ]),
+            },
+        );
+
+        Node::new(
+            span,
+            NodeType::ScopeDeclaration {
+                body: Some(vec![next_decl, gen_value]),
+                named: None,
+                is_temp: true,
+                create_new_scope: Some(false),
+                define: false,
+            },
+        )
+    }
+
+    pub(crate) fn wrap_inline_generator(
+        span: Span,
+        map: Node,
+        loop_type: LoopType,
+        conditionals: Vec<Node>,
+        until: Option<Box<Node>>,
+        elem_type: ParserDataType,
+    ) -> Node {
+        let guard = conditionals.into_iter().reduce(|left, right| {
+            Node::new(
+                span,
+                NodeType::BooleanExpression {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    operator: calibre_parser::ast::comparison::BooleanOperator::And,
+                },
+            )
+        });
+
+        let mut loop_body_items = Vec::new();
+        let yield_node = Node::new(
+            span,
+            NodeType::Return {
+                value: Some(Box::new(map)),
+            },
+        );
+
+        if let Some(guard) = guard {
+            loop_body_items.push(Node::new(
+                span,
+                NodeType::IfStatement {
+                    comparison: Box::new(IfComparisonType::If(guard)),
+                    then: Box::new(yield_node),
+                    otherwise: Some(Box::new(Node::new(span, NodeType::Continue { label: None }))),
+                },
+            ));
+        } else {
+            loop_body_items.push(yield_node);
+        }
+
+        let loop_node = Node::new(
+            span,
+            NodeType::LoopDeclaration {
+                loop_type: Box::new(loop_type),
+                body: Box::new(Node::new(
+                    span,
+                    NodeType::ScopeDeclaration {
+                        body: Some(loop_body_items),
+                        named: None,
+                        is_temp: true,
+                        create_new_scope: Some(true),
+                        define: false,
+                    },
+                )),
+                until,
+                label: None,
+                else_body: None,
+            },
+        );
+
+        Self::wrap_generator_body(
+            Node::new(
+                span,
+                NodeType::ScopeDeclaration {
+                    body: Some(vec![loop_node]),
+                    named: None,
+                    is_temp: true,
+                    create_new_scope: Some(false),
+                    define: false,
+                },
+            ),
+            elem_type,
+            span,
+        )
+    }
+
     #[inline]
     fn is_callable_type(data_type: &ParserDataType) -> bool {
         matches!(
@@ -229,6 +566,10 @@ impl MiddleEnvironment {
             };
         }
 
+        if let Some(elem_type) = Self::is_generator_return_type(&return_type) {
+            body_node = Self::wrap_generator_body(body_node, elem_type, span);
+        }
+
         let body = self.evaluate(&new_scope, body_node);
         let mut func_defers = Vec::new();
         func_defers.append(&mut self.func_defers);
@@ -253,7 +594,7 @@ impl MiddleEnvironment {
                         let simple_return = matches!(
                             last_node.node_type,
                             MiddleNodeType::Identifier(_)
-                                | MiddleNodeType::IntLiteral(_)
+                                | MiddleNodeType::IntLiteral { .. }
                                 | MiddleNodeType::FloatLiteral(_)
                                 | MiddleNodeType::StringLiteral(_)
                                 | MiddleNodeType::CharLiteral(_)

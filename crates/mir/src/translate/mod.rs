@@ -156,14 +156,22 @@ impl MiddleEnvironment {
             }),
             NodeType::IntLiteral(number) => {
                 let literal = number.clone();
-                let parsed = if let Some((_, x)) = number.split_once("x") {
+                let (number_text, int_suffix) = match number.chars().last() {
+                    Some(c) if matches!(c, 'u' | 'i') => {
+                        (&number[..number.len().saturating_sub(1)], Some(c))
+                    }
+                    _ => (number.as_str(), None),
+                };
+                let number_text = number_text.replace('_', "");
+
+                let parsed = if let Some((_, x)) = number_text.split_once("x") {
                     i64::from_str_radix(x, 16)
-                } else if let Some((_, x)) = number.split_once("o") {
+                } else if let Some((_, x)) = number_text.split_once("o") {
                     i64::from_str_radix(x, 8)
-                } else if let Some((_, x)) = number.split_once("b") {
+                } else if let Some((_, x)) = number_text.split_once("b") {
                     i64::from_str_radix(x, 2)
                 } else {
-                    number.parse()
+                    number_text.parse()
                 };
 
                 let number = parsed.map_err(|_| {
@@ -176,7 +184,10 @@ impl MiddleEnvironment {
                 })?;
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::IntLiteral(number),
+                    node_type: MiddleNodeType::IntLiteral {
+                        value: number,
+                        signed: !matches!(int_suffix, Some('u')),
+                    },
                     span: node.span,
                 })
             }
@@ -905,7 +916,10 @@ impl MiddleEnvironment {
                                     self.current_span(),
                                 )),
                                 value: Box::new(MiddleNode::new(
-                                    MiddleNodeType::IntLiteral(1),
+                                    MiddleNodeType::IntLiteral {
+                                        value: 1,
+                                        signed: true,
+                                    },
                                     self.current_span(),
                                 )),
                             },
@@ -1918,6 +1932,33 @@ impl MiddleEnvironment {
                 conditionals,
                 until,
             ),
+            NodeType::InlineGenerator {
+                map,
+                data_type,
+                loop_type,
+                conditionals,
+                until,
+            } => {
+                let elem_ty = match data_type {
+                    Some(PotentialNewType::DataType(dt)) => dt,
+                    _ => self
+                        .resolve_type_from_node(scope, &map)
+                        .unwrap_or_else(|| {
+                            ParserDataType::new(node.span, ParserInnerType::Auto(None))
+                        }),
+                };
+                self.evaluate_inner(
+                    scope,
+                    Self::wrap_inline_generator(
+                        node.span,
+                        *map,
+                        *loop_type,
+                        conditionals,
+                        until,
+                        elem_ty,
+                    ),
+                )
+            }
             NodeType::AssignmentExpression { identifier, value } => {
                 match identifier.node_type.clone() {
                     NodeType::Ternary {

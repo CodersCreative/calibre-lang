@@ -55,6 +55,10 @@ impl ParserDataType {
             ("len", ParserInnerType::Int),
             ("panic", ParserInnerType::Null),
             ("assert", ParserInnerType::Null),
+            (
+                "gen_suspend",
+                ParserInnerType::Dynamic,
+            ),
             ("tuple", ParserInnerType::Dynamic),
             ("trim", ParserInnerType::Str),
             (

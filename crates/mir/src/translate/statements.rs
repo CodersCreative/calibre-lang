@@ -277,6 +277,7 @@ impl MiddleEnvironment {
         }
 
         if data_type.contains_auto()
+            && !matches!(original_value_node.node_type, NodeType::InlineGenerator { .. })
             && let Some((hm_t, subst)) = infer_node_hm(self, scope, &original_value_node)
         {
             let t_applied = hm::apply_subst(&subst, &hm_t);

@@ -897,6 +897,30 @@ impl Formatter {
 
                 txt
             }
+            NodeType::InlineGenerator {
+                map,
+                data_type,
+                loop_type,
+                conditionals,
+                until,
+            } => {
+                let mut txt = format!("fn({} for {}", self.format(map), self.fmt_loop_type(loop_type));
+                if !conditionals.is_empty() {
+                    txt.push(' ');
+                    txt.push_str(&self.fmt_conditionals(conditionals));
+                }
+                if let Some(until) = until {
+                    txt.push_str(&format!(" until {}", self.format(until)));
+                }
+                txt.push(')');
+                if let Some(data_type) = data_type {
+                    txt.push_str(&format!(
+                        " -> gen:<{}>",
+                        self.fmt_potential_new_type(data_type)
+                    ));
+                }
+                txt
+            }
 
             NodeType::FunctionDeclaration { header, body } => {
                 let mut txt = String::from("fn");

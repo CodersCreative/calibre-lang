@@ -1,0 +1,28 @@
+const fib_gen = fn (n : int) -> gen:<int> => {
+	let mut i = 0;
+	let mut a = 0;
+	let mut b = 1;
+
+	for i < n => {
+		return a;
+		let next = a + b;
+		a = b;
+		b = next;
+		i += 1;
+	};
+};
+
+const main = fn () => {
+	let n = 30;
+	let mut it = fib_gen(n + 1);
+	for let .Some : v <- it.next() => print(v);
+};
+
+bench fib_gen => main();
+
+test fib_gen_10 => {
+	let mut it = fib_gen(11);
+	let mut out = 0;
+	for let .Some : v <- it.next() => out = v;
+	assert(out == 55, "Fib 10 did not equal 55 as expected");
+};

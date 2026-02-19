@@ -2521,6 +2521,21 @@ impl MiddleEnvironment {
                 node.span,
                 ParserInnerType::Struct(String::from("WaitGroup")),
             )),
+            NodeType::InlineGenerator { map, data_type, .. } => {
+                let elem = match data_type {
+                    Some(PotentialNewType::DataType(dt)) => dt.clone(),
+                    _ => self.resolve_type_from_node(scope, map).unwrap_or_else(|| {
+                        ParserDataType::new(node.span, ParserInnerType::Auto(None))
+                    }),
+                };
+                Some(ParserDataType::new(
+                    node.span,
+                    ParserInnerType::StructWithGenerics {
+                        identifier: "gen".to_string(),
+                        generic_types: vec![elem],
+                    },
+                ))
+            }
             NodeType::Null | NodeType::Defer { .. } | NodeType::Drop(_) | NodeType::EmptyLine => {
                 Some(ParserDataType::new(node.span, ParserInnerType::Null))
             }
@@ -2773,8 +2788,12 @@ impl MiddleEnvironment {
                 data_type: ParserInnerType::Range,
                 span: node.span,
             }),
-            NodeType::IntLiteral(_) => Some(ParserDataType {
-                data_type: ParserInnerType::Int,
+            NodeType::IntLiteral(number) => Some(ParserDataType {
+                data_type: if number.ends_with('u') {
+                    ParserInnerType::UInt
+                } else {
+                    ParserInnerType::Int
+                },
                 span: node.span,
             }),
             NodeType::CharLiteral(_) => Some(ParserDataType {
@@ -2993,6 +3012,8 @@ impl MiddleEnvironment {
                             | ParserInnerType::Ptr(inner) => *inner,
                             ParserInnerType::Tuple(values) => match &segment.node_type {
                                 NodeType::IntLiteral(i) => i
+                                    .trim_end_matches('u')
+                                    .trim_end_matches('i')
                                     .parse::<usize>()
                                     .ok()
                                     .and_then(|idx| values.get(idx).cloned())
@@ -3101,6 +3122,9 @@ impl MiddleEnvironment {
 
         if let Some(typ) = typ {
             let resolved = self.resolve_data_type(scope, typ);
+            if matches!(node.node_type, NodeType::InlineGenerator { .. }) {
+                return Some(resolved);
+            }
 
             fn contains_auto(dt: &ParserDataType) -> bool {
                 match &dt.data_type {

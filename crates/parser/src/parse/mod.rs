@@ -192,23 +192,55 @@ pub fn parse_program_with_source(
     })
     .boxed();
 
+    let dec_digits = any()
+        .filter(|c: &char| c.is_ascii_digit() || *c == '_')
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
+        .try_map(|s: String, sp| {
+            if s.chars().any(|c| c.is_ascii_digit()) {
+                Ok(s)
+            } else {
+                Err(Rich::custom(sp, "expected digits"))
+            }
+        })
+        .boxed();
+
     let float_suffix_lit = lex(
         pad.clone(),
-        text::int(10)
-            .map(|s: &str| s.to_string())
-            .then_ignore(choice((just('f'), just('F'))))
+        dec_digits
+            .clone()
+            .then_ignore(just('f'))
             .map(|n| n),
     )
     .map_with_span({
         let ls = line_starts.clone();
         move |n: String, r| {
-            let v = n.parse::<f64>().unwrap_or_default();
+            let v = n.replace('_', "").parse::<f64>().unwrap_or_default();
             Node::new(span(ls.as_ref(), r), NodeType::FloatLiteral(v))
         }
     })
     .boxed();
 
-    let int_lit = lex(pad.clone(), text::int(10).map(|s: &str| s.to_string()))
+    let int_lit = lex(
+        pad.clone(),
+        dec_digits
+            .clone()
+            .then(
+                choice((just('u'), just('i')))
+                    .or_not()
+                    .map(|x| x.unwrap_or('\0')),
+            )
+            .map(|(n, suffix)| {
+                if suffix == '\0' {
+                    n
+                } else {
+                    let mut out = n;
+                    out.push(suffix);
+                    out
+                }
+            }),
+    )
         .map_with_span({
             let ls = line_starts.clone();
             move |n: String, r| Node::new(span(ls.as_ref(), r), NodeType::IntLiteral(n))
@@ -217,22 +249,17 @@ pub fn parse_program_with_source(
 
     let float_lit = lex(
         pad.clone(),
-        text::int(10)
-            .map(|s: &str| s.to_string())
+        dec_digits
+            .clone()
             .then_ignore(just('.'))
-            .then(
-                any()
-                    .filter(|c: &char| c.is_ascii_digit())
-                    .repeated()
-                    .at_least(1)
-                    .collect::<String>(),
-            )
+            .then(dec_digits.clone())
+            .then_ignore(just('f').or_not())
             .map(|(a, b)| format!("{a}.{b}")),
     )
     .map_with_span({
         let ls = line_starts.clone();
         move |n: String, r| {
-            let v = n.parse::<f64>().unwrap_or_default();
+            let v = n.replace('_', "").parse::<f64>().unwrap_or_default();
             Node::new(span(ls.as_ref(), r), NodeType::FloatLiteral(v))
         }
     })
@@ -609,7 +636,7 @@ pub fn parse_program_with_source(
                 .map(|groups| groups.into_iter().flatten().collect::<Vec<_>>())
                 .boxed();
 
-            let fn_expr = lex(pad.clone(), just("fn"))
+            let fn_standard_expr = lex(pad.clone(), just("fn"))
                 .ignore_then(
                     lex(pad.clone(), just('<'))
                         .ignore_then(
@@ -1107,8 +1134,6 @@ pub fn parse_program_with_source(
             let atom = choice((
                 fat_scope_expr,
                 match_expr,
-                fn_match_expr,
-                fn_expr,
                 lex(pad.clone(), just("list"))
                     .ignore_then(lex(pad.clone(), just(":<")))
                     .ignore_then(type_name.clone())
@@ -1452,39 +1477,39 @@ pub fn parse_program_with_source(
             ))
             .boxed();
 
+            let call_suffix = choice((
+                call_args
+                    .clone()
+                    .then(reverse_args.clone().or_not())
+                    .map(|(args, rev)| (None::<ParserText>, args, rev.unwrap_or_default())),
+                template_call_args
+                    .clone()
+                    .then(reverse_args.clone().or_not())
+                    .map(|((string_fn, args), rev)| (Some(string_fn), args, rev.unwrap_or_default())),
+            ))
+            .boxed();
+
+            let apply_calls = |head: Node,
+                               calls: Vec<(Option<ParserText>, Vec<CallArg>, Vec<Node>)>| {
+                calls
+                    .into_iter()
+                    .fold(head, |c, (string_fn, args, reverse_args)| {
+                        Node::new(
+                            c.span,
+                            NodeType::CallExpression {
+                                string_fn,
+                                caller: Box::new(c),
+                                generic_types: Vec::new(),
+                                args,
+                                reverse_args,
+                            },
+                        )
+                    })
+            };
+
             let postfix = atom
-                .then(
-                    choice((
-                        call_args
-                            .clone()
-                            .then(reverse_args.clone().or_not())
-                            .map(|(args, rev)| (None::<ParserText>, args, rev.unwrap_or_default())),
-                        template_call_args
-                            .clone()
-                            .then(reverse_args.clone().or_not())
-                            .map(|((string_fn, args), rev)| {
-                                (Some(string_fn), args, rev.unwrap_or_default())
-                            }),
-                    ))
-                    .repeated()
-                    .collect::<Vec<_>>(),
-                )
-                .map(|(head, calls)| {
-                    calls
-                        .into_iter()
-                        .fold(head, |c, (string_fn, args, reverse_args)| {
-                            Node::new(
-                                c.span,
-                                NodeType::CallExpression {
-                                    string_fn,
-                                    caller: Box::new(c),
-                                    generic_types: Vec::new(),
-                                    args,
-                                    reverse_args,
-                                },
-                            )
-                        })
-                })
+                .then(call_suffix.clone().repeated().collect::<Vec<_>>())
+                .map(move |(head, calls)| apply_calls(head, calls))
                 .then(member.clone().repeated().collect::<Vec<_>>())
                 .map(|(head, rest)| {
                     if rest.is_empty() {
@@ -1505,6 +1530,18 @@ pub fn parse_program_with_source(
                         Node::new(sp, NodeType::MemberExpression { path })
                     }
                 })
+                .boxed();
+
+            let fn_standard_postfix = fn_standard_expr
+                .clone()
+                .then(call_suffix.clone().repeated().collect::<Vec<_>>())
+                .map(move |(head, calls)| apply_calls(head, calls))
+                .boxed();
+
+            let fn_match_postfix = fn_match_expr
+                .clone()
+                .then(call_suffix.clone().repeated().collect::<Vec<_>>())
+                .map(move |(head, calls)| apply_calls(head, calls))
                 .boxed();
 
             let enum_expr_value = expr.clone();
@@ -1637,8 +1674,8 @@ pub fn parse_program_with_source(
                         .or_not()
                         .map(|x| x.unwrap_or(false)),
                 )
-                .then_ignore(lex(pad.clone(), just("for")))
-                .then(iter_loop_type)
+                .then_ignore(lex(pad.clone(), text::keyword("for")))
+                .then(iter_loop_type.clone())
                 .then(
                     lex(pad.clone(), just("if"))
                         .ignore_then(expr.clone())
@@ -1968,12 +2005,20 @@ pub fn parse_program_with_source(
 
             let pipe_seg = choice((
                 lex(pad.clone(), just("|>"))
-                    .ignore_then(ternary_expr.clone())
+                    .ignore_then(choice((
+                        fn_standard_postfix.clone(),
+                        fn_match_postfix.clone(),
+                        ternary_expr.clone(),
+                    )))
                     .map(PipeSegment::Unnamed),
                 lex(pad.clone(), just("|:"))
                     .ignore_then(named_ident.clone())
                     .then_ignore(lex(pad.clone(), just('>')))
-                    .then(ternary_expr.clone())
+                    .then(choice((
+                        fn_standard_postfix.clone(),
+                        fn_match_postfix.clone(),
+                        ternary_expr.clone(),
+                    )))
                     .map(|(identifier, node)| PipeSegment::Named { identifier, node }),
             ))
             .boxed();
@@ -2013,6 +2058,88 @@ pub fn parse_program_with_source(
                     }
 
                     Node::new(Span::default(), NodeType::PipeExpression(items))
+                })
+                .boxed();
+
+            let fn_inline_gen_expr = lex(pad.clone(), just("fn"))
+                .ignore_then(lex(pad.clone(), just('(')))
+                .ignore_then(
+                    pipe_expr
+                        .clone()
+                        .then_ignore(lex(pad.clone(), text::keyword("for")))
+                        .then(iter_loop_type.clone())
+                        .then(
+                            lex(pad.clone(), just("if"))
+                                .ignore_then(expr.clone())
+                                .repeated()
+                                .collect::<Vec<_>>(),
+                        )
+                        .then(
+                            lex(pad.clone(), just("until"))
+                                .ignore_then(expr.clone())
+                                .or_not(),
+                        ),
+                )
+                .then_ignore(lex(pad.clone(), just(')')))
+                .then(arrow.clone().ignore_then(type_name.clone()).or_not())
+                .try_map(
+                    |((((map_expr, loop_type), conditionals), until), explicit_return), sp| {
+                        let data_type = match explicit_return {
+                            Some(PotentialNewType::DataType(ParserDataType {
+                                data_type:
+                                    ParserInnerType::StructWithGenerics {
+                                        identifier,
+                                        generic_types,
+                                    },
+                                ..
+                            })) if identifier == "gen" && generic_types.len() == 1 => {
+                                Some(PotentialNewType::DataType(generic_types[0].clone()))
+                            }
+                            Some(_) => {
+                                return Err(Rich::custom(
+                                    sp,
+                                    "inline generator return type must be gen:<T>",
+                                ));
+                            }
+                            None => None,
+                        };
+                        Ok((map_expr, loop_type, conditionals, until, data_type))
+                    },
+                )
+                .map_with_span({
+                    let ls = line_starts.clone();
+                    move |(map_expr, loop_type, conditionals, until, data_type), r| {
+                        Node::new(
+                            span(ls.as_ref(), r),
+                            NodeType::InlineGenerator {
+                                map: Box::new(map_expr),
+                                data_type,
+                                loop_type: Box::new(loop_type),
+                                conditionals,
+                                until: until.map(Box::new),
+                            },
+                        )
+                    }
+                })
+                .boxed();
+
+            let fn_inline_postfix = fn_inline_gen_expr
+                .clone()
+                .then(member.clone().repeated().collect::<Vec<_>>())
+                .map(|(head, rest)| {
+                    if rest.is_empty() {
+                        head
+                    } else {
+                        let mut path = vec![(head, false)];
+                        path.extend(rest);
+                        let sp = match (path.first(), path.last()) {
+                            (Some(first), Some(last)) => {
+                                Span::new_from_spans(first.0.span, last.0.span)
+                            }
+                            _ => Span::default(),
+                        };
+                        Node::new(sp, NodeType::MemberExpression { path })
+                    }
                 })
                 .boxed();
 
@@ -2149,7 +2276,7 @@ pub fn parse_program_with_source(
                         .then_ignore(delim.clone().or_not())
                         .then_ignore(lex(pad.clone(), just('}')))
                         .map(|items| Node::new(Span::default(), NodeType::Spawn { items })),
-                    lex(pad.clone(), just("for"))
+                    lex(pad.clone(), text::keyword("for"))
                         .ignore_then(
                             ident
                                 .clone()
@@ -2199,92 +2326,95 @@ pub fn parse_program_with_source(
                 .boxed();
 
             let for_expr =
-                lex(pad.clone(), just("for"))
+                lex(pad.clone(), text::keyword("for"))
                     .ignore_then(
-                        fat_arrow.clone().rewind().to(LoopType::Loop).or(lex(
-                            pad.clone(),
-                            just("let"),
-                        )
-                        .ignore_then(
-                            lex(pad.clone(), just('.'))
-                                .ignore_then(ident.clone())
-                                .then(
-                                    lex(pad.clone(), just(':'))
-                                        .ignore_then(ident.clone())
-                                        .or_not(),
-                                )
-                                .map(|((variant, vsp), name)| {
-                                    let value = PotentialDollarIdentifier::Identifier(
-                                        ParserText::new(vsp, variant),
-                                    );
-                                    let name = name.map(|(n, nsp)| {
-                                        PotentialDollarIdentifier::Identifier(ParserText::new(
-                                            nsp, n,
-                                        ))
-                                    });
-                                    MatchArmType::Enum {
-                                        value,
-                                        var_type: VarType::Immutable,
-                                        name,
-                                        destructure: None,
-                                    }
-                                })
-                                .then(
-                                    lex(pad.clone(), just('|'))
-                                        .ignore_then(
-                                            lex(pad.clone(), just('.'))
-                                                .ignore_then(ident.clone())
-                                                .then(
-                                                    lex(pad.clone(), just(':'))
-                                                        .ignore_then(ident.clone())
-                                                        .or_not(),
-                                                )
-                                                .map(|((variant, vsp), name)| {
-                                                    let value =
-                                                        PotentialDollarIdentifier::Identifier(
-                                                            ParserText::new(vsp, variant),
-                                                        );
-                                                    let name = name.map(|(n, nsp)| {
-                                                        PotentialDollarIdentifier::Identifier(
-                                                            ParserText::new(nsp, n),
-                                                        )
-                                                    });
-                                                    MatchArmType::Enum {
-                                                        value,
-                                                        var_type: VarType::Immutable,
-                                                        name,
-                                                        destructure: None,
-                                                    }
-                                                }),
-                                        )
-                                        .repeated()
-                                        .collect::<Vec<_>>(),
-                                )
-                                .map(|(first, rest)| {
-                                    let mut all = vec![first];
-                                    all.extend(rest);
-                                    all
-                                }),
-                        )
-                        .then_ignore(left_arrow.clone())
-                        .then(expr.clone())
-                        .map(|(values, value)| LoopType::Let {
-                            value,
-                            pattern: (values, Vec::new()),
-                        })
-                        .or(ident
+                        fat_arrow
                             .clone()
-                            .then_ignore(lex(pad.clone(), just("in")))
+                            .rewind()
+                            .to(LoopType::Loop)
+                            .or(lex(pad.clone(), just("let"))
+                            .ignore_then(
+                                lex(pad.clone(), just('.'))
+                                    .ignore_then(ident.clone())
+                                    .then(
+                                        lex(pad.clone(), just(':'))
+                                            .ignore_then(ident.clone())
+                                            .or_not(),
+                                    )
+                                    .map(|((variant, vsp), name)| {
+                                        let value = PotentialDollarIdentifier::Identifier(
+                                            ParserText::new(vsp, variant),
+                                        );
+                                        let name = name.map(|(n, nsp)| {
+                                            PotentialDollarIdentifier::Identifier(ParserText::new(
+                                                nsp, n,
+                                            ))
+                                        });
+                                        MatchArmType::Enum {
+                                            value,
+                                            var_type: VarType::Immutable,
+                                            name,
+                                            destructure: None,
+                                        }
+                                    })
+                                    .then(
+                                        lex(pad.clone(), just('|'))
+                                            .ignore_then(
+                                                lex(pad.clone(), just('.'))
+                                                    .ignore_then(ident.clone())
+                                                    .then(
+                                                        lex(pad.clone(), just(':'))
+                                                            .ignore_then(ident.clone())
+                                                            .or_not(),
+                                                    )
+                                                    .map(|((variant, vsp), name)| {
+                                                        let value =
+                                                            PotentialDollarIdentifier::Identifier(
+                                                                ParserText::new(vsp, variant),
+                                                            );
+                                                        let name = name.map(|(n, nsp)| {
+                                                            PotentialDollarIdentifier::Identifier(
+                                                                ParserText::new(nsp, n),
+                                                            )
+                                                        });
+                                                        MatchArmType::Enum {
+                                                            value,
+                                                            var_type: VarType::Immutable,
+                                                            name,
+                                                            destructure: None,
+                                                        }
+                                                    }),
+                                            )
+                                            .repeated()
+                                            .collect::<Vec<_>>(),
+                                    )
+                                    .map(|(first, rest)| {
+                                        let mut all = vec![first];
+                                        all.extend(rest);
+                                        all
+                                    }),
+                            )
+                            .then_ignore(left_arrow.clone())
                             .then(expr.clone())
-                            .map(|((n, sp), iter)| {
-                                LoopType::For(
-                                    PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
-                                    iter,
-                                )
+                            .map(|(values, value)| LoopType::Let {
+                                value,
+                                pattern: (values, Vec::new()),
                             })
-                            .or(expr.clone().map(LoopType::While))
-                            .or_not()
-                            .map(|x| x.unwrap_or(LoopType::Loop)))),
+                            .or(ident
+                                .clone()
+                                .then_ignore(lex(pad.clone(), just("in")))
+                                .then(expr.clone())
+                                .map(|((n, sp), iter)| {
+                                    LoopType::For(
+                                        PotentialDollarIdentifier::Identifier(ParserText::new(
+                                            sp, n,
+                                        )),
+                                        iter,
+                                    )
+                                })
+                                .or(expr.clone().map(LoopType::While))
+                                .or_not()
+                                .map(|x| x.unwrap_or(LoopType::Loop)))),
                     )
                     .then_ignore(fat_arrow.clone())
                     .then(
@@ -2435,6 +2565,9 @@ pub fn parse_program_with_source(
             .boxed();
 
             choice((
+                fn_standard_postfix,
+                fn_inline_postfix,
+                fn_match_postfix,
                 iter_expr,
                 list_lit,
                 break_expr,
@@ -2772,7 +2905,7 @@ pub fn parse_program_with_source(
             )
             .then(type_name.clone())
             .then(
-                lex(pad.clone(), just("for"))
+                lex(pad.clone(), text::keyword("for"))
                     .ignore_then(type_name.clone())
                     .or_not(),
             )
@@ -3158,7 +3291,7 @@ pub fn parse_program_with_source(
             })
             .boxed();
 
-        let for_stmt = lex(pad.clone(), just("for"))
+        let for_stmt = lex(pad.clone(), text::keyword("for"))
             .ignore_then(
                 fat_arrow
                     .clone()

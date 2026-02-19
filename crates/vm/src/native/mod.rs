@@ -104,6 +104,7 @@ impl VM {
             "len",
             "panic",
             "assert",
+            "gen_suspend",
             "tuple",
             "discriminant",
             "min_or_zero",

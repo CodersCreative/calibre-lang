@@ -44,6 +44,7 @@ pub struct TaskState {
     pub block: Option<BlockId>,
     pub ip: usize,
     pub prev_block: Option<BlockId>,
+    pub yielded: Option<RuntimeValue>,
 }
 
 impl Default for VMFrame {
@@ -818,6 +819,7 @@ impl VM {
                     self.drop_runtime_value_inner_ref(val.as_ref(), seen, seen_regs);
                 }
             }
+            RuntimeValue::Generator { .. } => {}
             RuntimeValue::Channel(ch) => {
                 if let Ok(mut queue) = ch.queue.lock() {
                     while let Some(item) = queue.pop_front() {
@@ -875,6 +877,12 @@ enum VarName {
 }
 
 impl VM {
+    #[inline]
+    pub(crate) fn is_gen_type_name(type_name: &str) -> bool {
+        let short = type_name.rsplit(':').next().unwrap_or(type_name);
+        short == "gen" || short.starts_with("gen->")
+    }
+
     pub(crate) fn resolve_aggregate_member_slot(
         &mut self,
         type_name: &str,

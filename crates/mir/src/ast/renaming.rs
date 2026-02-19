@@ -30,7 +30,7 @@ impl MiddleNodeType {
             | MiddleNodeType::EnumExpression { data: None, .. }
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::FloatLiteral(_)
-            | MiddleNodeType::IntLiteral(_)
+            | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::ExternFunction { .. } => self,
             MiddleNodeType::Break {
