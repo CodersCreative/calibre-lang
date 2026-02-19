@@ -21,7 +21,7 @@ use std::os::raw::c_char;
 use std::os::raw::c_void;
 
 use crate::{
-    VM,
+    TaskState, VM,
     conversion::{Reg, VMLiteral},
     error::RuntimeError,
     native::{self, NativeFunction, stdlib},
@@ -35,6 +35,21 @@ pub struct GcVec(pub Vec<RuntimeValue>);
 
 #[derive(Debug, Clone)]
 pub struct GcMap(pub ObjectMap<RuntimeValue>);
+
+#[derive(Debug, Clone)]
+pub struct GeneratorState {
+    pub vm: VM,
+    pub function_name: Arc<String>,
+    pub captures: std::sync::Arc<Vec<(String, RuntimeValue)>>,
+    pub task_state: TaskState,
+    pub index: i64,
+    pub completed: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct GeneratorResumeFn {
+    pub state: Arc<Mutex<GeneratorState>>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HashKey {
@@ -265,6 +280,11 @@ pub enum RuntimeValue {
         name: Arc<String>,
         captures: std::sync::Arc<Vec<(String, RuntimeValue)>>,
     },
+    Generator {
+        type_name: Arc<String>,
+        state: Arc<Mutex<GeneratorState>>,
+    },
+    GeneratorSuspend(Box<RuntimeValue>),
 }
 
 impl RuntimeValue {
@@ -292,6 +312,13 @@ impl RuntimeValue {
                 name: name.clone(),
                 captures: captures.clone(),
             },
+            RuntimeValue::Generator { type_name, state } => RuntimeValue::Generator {
+                type_name: type_name.clone(),
+                state: state.clone(),
+            },
+            RuntimeValue::GeneratorSuspend(value) => {
+                RuntimeValue::GeneratorSuspend(Box::new(value.as_ref().clone_for_arg()))
+            }
             RuntimeValue::Ref(x) => RuntimeValue::Ref(x.clone()),
             RuntimeValue::VarRef(x) => RuntimeValue::VarRef(*x),
             RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef {
@@ -349,6 +376,8 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
                 }
                 Ok(())
             }
+            RuntimeValue::Generator { .. } => Ok(()),
+            RuntimeValue::GeneratorSuspend(value) => value.accept(visitor),
             RuntimeValue::ExternFunction(_) => Ok(()),
             RuntimeValue::Ptr(_) => Ok(()),
             RuntimeValue::VarRef(_) => Ok(()),
@@ -387,6 +416,84 @@ enum FfiArg {
     Struct { backing: Vec<u64> },
 }
 
+fn resolve_function_by_name(vm: &VM, name: &str) -> Option<Arc<crate::conversion::VMFunction>> {
+    if let Some(found) = vm.get_function(name) {
+        return Some(found);
+    }
+    if let Some((prefix, _)) = name.split_once("->")
+        && let Some(found) = vm
+            .registry
+            .functions
+            .iter()
+            .filter(|(k, _)| !vm.moved_functions.contains(*k))
+            .find(|(k, _)| k.starts_with(prefix))
+            .map(|(_, v)| v.clone())
+    {
+        return Some(found);
+    }
+    if let Some((_, short)) = name.rsplit_once(':') {
+        let suffix = format!(":{}", short);
+        let mut found = None;
+        for (k, v) in vm.registry.functions.iter() {
+            if vm.moved_functions.contains(k) {
+                continue;
+            }
+            if k.ends_with(&suffix) {
+                if found.is_some() {
+                    return None;
+                }
+                found = Some(v.clone());
+            }
+        }
+        return found;
+    }
+    None
+}
+
+impl NativeFunction for GeneratorResumeFn {
+    fn run(&self, _env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+
+        if state.completed {
+            return Ok(RuntimeValue::Option(None));
+        }
+
+        let Some(func) = resolve_function_by_name(&state.vm, state.function_name.as_str()) else {
+            state.completed = true;
+            return Ok(RuntimeValue::Option(None));
+        };
+
+        let captures = state.captures.clone();
+        let mut task_state = std::mem::take(&mut state.task_state);
+        let status = state.vm.run_function_with_budget(
+            func.as_ref(),
+            Vec::<RuntimeValue>::new(),
+            captures,
+            usize::MAX,
+            &mut task_state,
+        )?;
+        state.task_state = task_state;
+
+        if let Some(yielded) = state.task_state.yielded.take() {
+            state.index += 1;
+            return Ok(RuntimeValue::Option(Some(Gc::new(yielded))));
+        }
+
+        if status.is_some() {
+            state.completed = true;
+        }
+
+        Ok(RuntimeValue::Option(None))
+    }
+
+    fn name(&self) -> String {
+        String::from("gen_resume")
+    }
+}
+
 impl RuntimeValue {
     pub fn constants() -> FxHashMap<String, Self> {
         let lst = [
@@ -421,6 +528,8 @@ impl RuntimeValue {
             ("discriminant", Arc::new(native::global::DiscriminantFn())),
             ("tuple", Arc::new(native::global::TupleFn())),
             ("panic", Arc::new(native::global::PanicFn())),
+            ("assert", Arc::new(native::global::AssertFn())),
+            ("gen_suspend", Arc::new(native::global::GenSuspendFn())),
             ("min_or_zero", Arc::new(native::global::MinOrZero())),
             ("async.channel_new", Arc::new(stdlib::r#async::ChannelNew())),
             (
@@ -576,6 +685,7 @@ impl From<VMLiteral> for RuntimeValue {
     fn from(value: VMLiteral) -> Self {
         match value {
             VMLiteral::Int(x) => Self::Int(x),
+            VMLiteral::UInt(x) => Self::UInt(x),
             VMLiteral::Float(x) => Self::Float(x),
             VMLiteral::Char(x) => Self::Char(x),
             VMLiteral::String(x) => Self::Str(x.into()),
@@ -667,6 +777,8 @@ impl RuntimeValue {
                 txt.push(']');
                 txt
             }
+            Self::Generator { type_name, .. } => format!("{} {{ ... }}", pretty_name(type_name)),
+            Self::GeneratorSuspend(value) => format!("<gen-suspend {}>", value.display(vm)),
             Self::Option(Some(x)) => format!("Some : {}", x.display(vm)),
             Self::Result(Ok(x)) => format!("Ok : {}", x.display(vm)),
             Self::Result(Err(x)) => format!("Err : {}", x.display(vm)),
@@ -704,7 +816,7 @@ impl Display for RuntimeValue {
         match self {
             Self::Null => write!(f, "null"),
             Self::Float(x) => write!(f, "{}f", x),
-            Self::UInt(x) => write!(f, "{}", x),
+            Self::UInt(x) => write!(f, "{}u", x),
             Self::Ptr(x) => write!(f, "ptr -> {}", x),
             Self::Int(x) => write!(f, "{}", x),
             Self::Enum(x, y, Some(z)) => write!(f, "{}[{}] : {}", x, y, z.as_ref()),
@@ -772,6 +884,8 @@ impl Display for RuntimeValue {
             Self::Str(x) => write!(f, "{}", x),
             Self::Char(x) => write!(f, "{}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
+            Self::Generator { type_name, .. } => write!(f, "{}{{ ... }}", type_name),
+            Self::GeneratorSuspend(value) => write!(f, "<gen-suspend {}>", value),
         }
     }
 }
@@ -784,6 +898,7 @@ pub enum TerminateValue {
         block: BlockId,
         ip: usize,
         prev_block: Option<BlockId>,
+        yielded: Option<RuntimeValue>,
     },
 }
 
@@ -887,6 +1002,12 @@ impl VM {
                         }
                     }
                     RuntimeValue::HashSet(Arc::new(Mutex::new(new_set)))
+                }
+                RuntimeValue::Generator { type_name, state } => {
+                    RuntimeValue::Generator { type_name, state }
+                }
+                RuntimeValue::GeneratorSuspend(value) => {
+                    RuntimeValue::GeneratorSuspend(Box::new(transform(env, *value)))
                 }
                 other => other,
             }

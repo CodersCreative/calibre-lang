@@ -5,3 +5,7 @@ const main = fn () => {
 	let result = fib(n);
 	print(result);
 };
+
+bench fib => main();
+
+test fib_10 => assert(fib(10) == 55, "Fib 10 did not equal 55 as expected");

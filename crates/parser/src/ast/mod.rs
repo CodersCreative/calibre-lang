@@ -1,10 +1,9 @@
 pub mod binary;
 pub mod comparison;
 pub mod formatter;
-
 use crate::{
+    Span,
     ast::{comparison::BooleanOperator, formatter::Formatter},
-    lexer::{Span, Token, TokenType},
 };
 use binary::BinaryOperator;
 use comparison::ComparisonOperator;
@@ -18,7 +17,8 @@ use std::{
     string::ParseError,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum RefMutability {
     Value,
     Ref,
@@ -44,17 +44,6 @@ impl Display for RefMutability {
             Self::Ref => write!(f, "&"),
             Self::MutRef => write!(f, "&mut"),
             Self::MutValue => write!(f, "mut"),
-        }
-    }
-}
-
-impl From<TokenType> for RefMutability {
-    fn from(value: TokenType) -> Self {
-        match value {
-            TokenType::Mut => RefMutability::MutValue,
-            TokenType::RefMut => RefMutability::MutRef,
-            TokenType::Ref => RefMutability::Ref,
-            _ => RefMutability::Value,
         }
     }
 }
@@ -780,7 +769,8 @@ impl<T> DerefMut for ObjectMap<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum VarType {
     Mutable,
     Immutable,
@@ -829,11 +819,6 @@ pub struct ParserText {
     pub span: Span,
 }
 
-impl From<Token> for ParserText {
-    fn from(value: Token) -> Self {
-        Self::new(value.span, value.value)
-    }
-}
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum PotentialDollarIdentifier {
     DollarIdentifier(ParserText),
@@ -923,6 +908,7 @@ impl Node {
     }
 }
 
+#[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MatchArmType {
     Enum {
@@ -1010,6 +996,7 @@ impl Into<Node> for CallArg {
     }
 }
 
+#[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     Break {
@@ -1022,9 +1009,6 @@ pub enum NodeType {
     EmptyLine,
     Null,
     Spawn {
-        value: Box<Node>,
-    },
-    SpawnBlock {
         items: Vec<Node>,
     },
     Use {
@@ -1162,6 +1146,13 @@ pub enum NodeType {
         data_type: PotentialNewType,
         map: Box<Node>,
         spawned: bool,
+        loop_type: Box<LoopType>,
+        conditionals: Vec<Node>,
+        until: Option<Box<Node>>,
+    },
+    InlineGenerator {
+        map: Box<Node>,
+        data_type: Option<PotentialNewType>,
         loop_type: Box<LoopType>,
         conditionals: Vec<Node>,
         until: Option<Box<Node>>,

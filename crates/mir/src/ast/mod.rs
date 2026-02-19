@@ -1,4 +1,5 @@
 use calibre_parser::{
+    Span,
     ast::{
         CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
         ObjectMap, ObjectType, ParserDataType, ParserText, PotentialFfiDataType, RefMutability,
@@ -6,9 +7,9 @@ use calibre_parser::{
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
-    lexer::Span,
 };
 use std::fmt::Display;
+
 pub mod hm;
 pub mod identifiers;
 pub mod renaming;
@@ -25,6 +26,7 @@ impl MiddleNode {
     }
 }
 
+#[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
     Break {
@@ -112,7 +114,10 @@ pub enum MiddleNodeType {
     ListLiteral(ParserDataType, Vec<MiddleNode>),
     CharLiteral(char),
     FloatLiteral(f64),
-    IntLiteral(i64),
+    IntLiteral {
+        value: i64,
+        signed: bool,
+    },
     MemberExpression {
         path: Vec<(MiddleNode, bool)>,
     },
@@ -139,7 +144,7 @@ pub enum MiddleNodeType {
         identifier: Option<ParserText>,
         value: ObjectMap<MiddleNode>,
     },
-    IfStatement {
+    Conditional {
         comparison: Box<MiddleNode>,
         then: Box<MiddleNode>,
         otherwise: Option<Box<MiddleNode>>,
@@ -172,7 +177,7 @@ impl Into<NodeType> for MiddleNodeType {
     fn into(self) -> NodeType {
         match self {
             Self::Spawn { value } => NodeType::Spawn {
-                value: Box::new((*value).into()),
+                items: vec![(*value).into()],
             },
             Self::Drop(x) => NodeType::Drop(x.into()),
             Self::Move(x) => NodeType::MoveExpression {
@@ -290,7 +295,7 @@ impl Into<NodeType> for MiddleNodeType {
                 value: Box::new((*value).into()),
                 data_type: data_type.into(),
             },
-            Self::IfStatement {
+            Self::Conditional {
                 comparison,
                 then,
                 otherwise,
@@ -360,7 +365,13 @@ impl Into<NodeType> for MiddleNodeType {
             }),
             Self::CharLiteral(x) => NodeType::CharLiteral(x),
             Self::FloatLiteral(x) => NodeType::FloatLiteral(x),
-            Self::IntLiteral(x) => NodeType::IntLiteral(x.to_string()),
+            Self::IntLiteral { value, signed } => {
+                let mut out = value.to_string();
+                if !signed {
+                    out.push('u');
+                }
+                NodeType::IntLiteral(out)
+            }
             Self::MemberExpression { path } => NodeType::MemberExpression {
                 path: {
                     let mut lst = Vec::new();

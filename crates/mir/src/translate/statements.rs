@@ -8,11 +8,11 @@ use crate::{
     infer::infer_node_hm,
 };
 use calibre_parser::{
+    Span,
     ast::{
         Node, NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
         PotentialNewType, VarType,
     },
-    lexer::Span,
 };
 use rustc_hash::FxHashMap;
 
@@ -30,17 +30,69 @@ impl MiddleEnvironment {
             .resolve_dollar_ident_only(scope, &identifier)
             .ok_or_else(|| self.err_at_current(MiddleErr::Scope(identifier.to_string())))?;
 
+        let is_reserved_constructor =
+            matches!(identifier.text.as_str(), "ok" | "err" | "some" | "none");
+
         let new_name = if let Some(existing) = self
             .scopes
             .get(scope)
             .and_then(|s| s.mappings.get(&identifier.text))
         {
-            existing.clone()
+            let existing_is_native = self.variables.get(existing).is_some_and(|var| {
+                matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+            });
+            if is_reserved_constructor && existing_is_native {
+                get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))
+            } else {
+                existing.clone()
+            }
         } else if identifier.text.contains("->") {
             identifier.text.clone()
         } else {
             get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))
         };
+
+        let mut value = value;
+
+        if let NodeType::CallExpression {
+            caller,
+            generic_types,
+            args,
+            reverse_args,
+            ..
+        } = value.clone().node_type
+            && let NodeType::Identifier(callee_ident) = &caller.node_type
+            && callee_ident.to_string() == identifier.text
+            && let Some(first_arg) = args.first().cloned().map(|a| -> Node { a.into() })
+        {
+            let first_ty = self.resolve_type_from_node(scope, &first_arg).or_else(|| {
+                match &first_arg.node_type {
+                    NodeType::RefStatement { value, .. } => {
+                        self.resolve_type_from_node(scope, value.as_ref())
+                    }
+                    _ => None,
+                }
+            });
+            if let Some(first_ty) = first_ty
+                && let Some(mapped_name) = self
+                    .resolve_member_fn_name(&first_ty.unwrap_all_refs(), &callee_ident.to_string())
+                && mapped_name != callee_ident.to_string()
+            {
+                value = Node::new(
+                    value.span,
+                    NodeType::CallExpression {
+                        string_fn: None,
+                        caller: Box::new(Node::new(
+                            value.span,
+                            NodeType::Identifier(ParserText::from(mapped_name).into()),
+                        )),
+                        generic_types,
+                        args,
+                        reverse_args,
+                    },
+                );
+            }
+        }
 
         let original_value_node = value.clone();
 
@@ -71,8 +123,28 @@ impl MiddleEnvironment {
         );
 
         let mut data_type = if data_type.is_auto() {
-            self.resolve_type_from_node(scope, &value)
-                .unwrap_or(self.resolve_potential_new_type(scope, data_type))
+            let inferred = self.resolve_type_from_node(scope, &value).or_else(|| {
+                if let NodeType::CallExpression { caller, .. } = &value.node_type
+                    && let NodeType::MemberExpression { path } = &caller.node_type
+                    && path.len() >= 2
+                    && let Some((last, _)) = path.last()
+                    && let NodeType::Identifier(ident) = &last.node_type
+                    && ident.to_string() == "new"
+                {
+                    let receiver_path = path[..path.len() - 1].to_vec();
+                    let receiver = Node::new(
+                        span,
+                        NodeType::MemberExpression {
+                            path: receiver_path,
+                        },
+                    );
+                    self.resolve_type_from_node(scope, &receiver)
+                } else {
+                    None
+                }
+            });
+
+            inferred.unwrap_or(self.resolve_potential_new_type(scope, data_type))
         } else {
             self.resolve_potential_new_type(scope, data_type)
         };
@@ -134,9 +206,18 @@ impl MiddleEnvironment {
 
             let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
             let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
-            scope_ref
+            let existing_is_native = scope_ref
                 .mappings
-                .insert(identifier.text.clone(), new_name.clone());
+                .get(&identifier.text)
+                .and_then(|name| self.variables.get(name))
+                .is_some_and(|var| {
+                    matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+                });
+            if !(is_reserved_constructor && existing_is_native) {
+                scope_ref
+                    .mappings
+                    .insert(identifier.text.clone(), new_name.clone());
+            }
 
             let new_scope = self.new_scope_from_parent_shallow(*scope);
 
@@ -187,10 +268,23 @@ impl MiddleEnvironment {
 
             let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
             let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
-            scope_ref.mappings.insert(identifier.text, new_name.clone());
+            let existing_is_native = scope_ref
+                .mappings
+                .get(&identifier.text)
+                .and_then(|name| self.variables.get(name))
+                .is_some_and(|var| {
+                    matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+                });
+            if !(is_reserved_constructor && existing_is_native) {
+                scope_ref.mappings.insert(identifier.text, new_name.clone());
+            }
         }
 
         if data_type.contains_auto()
+            && !matches!(
+                original_value_node.node_type,
+                NodeType::InlineGenerator { .. }
+            )
             && let Some((hm_t, subst)) = infer_node_hm(self, scope, &original_value_node)
         {
             let t_applied = hm::apply_subst(&subst, &hm_t);

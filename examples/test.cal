@@ -170,10 +170,12 @@ const main = fn () => {
 		.Some : v => v,
 		.None => 0
 	};
+	
 	let fac = match fac_ch.get() {
 		.Some : v => v,
 		.None => 0
 	};
+	
 	print("parallel sum=" & sum);
 	print("parallel fac=" & fac);
 	print("Ho");

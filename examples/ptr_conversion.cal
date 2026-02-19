@@ -4,14 +4,14 @@ const main = fn () => {
 	let p = value as ptr:<int>;
 	print(p);
 	match p {
-		.Ok : val => print(val as int),
+		.Ok : val => print(try val as int => 0),
 		.Err : msg => print("err: " & msg)
 	};
 	
 	let any = value as ptr:<null>;
 	print(any);
 	match any {
-		.Ok : val => print(val as int),
+		.Ok : val => print(try val as int => 0),
 		.Err : msg => print("err: " & msg)
 	};
 };

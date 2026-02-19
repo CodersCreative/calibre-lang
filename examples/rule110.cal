@@ -47,11 +47,13 @@ const main = fn () => {
 			.Some : v => v,
 			.None => ""
 		};
+		
 		print(line);
 		let next_cells = match next_ch.get() {
 			.Some : v => v,
 			.None => list:<int>[]
 		};
+		
 		cells = move next_cells;
 	};
 };

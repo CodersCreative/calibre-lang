@@ -10,3 +10,6 @@ const main = fn () => {
 	let n : int = 2000;
 	print(loop_call(n));
 };
+
+bench call_hot => main();
+

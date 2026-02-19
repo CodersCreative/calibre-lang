@@ -1,0 +1,39 @@
+[package]
+name = "the-first-project"
+description = "The fist ever project "
+version = "0.0.1"
+authors = ["Creative Coders <officialccoders@gmail.com>"]
+cal = ">= 0.0.1"
+readme = "README.md"
+homepage = ""
+# source path to the projet defaults to src/
+src = "./examples/showcase"
+repository = "https://github.com/CodersCreative/calibre-lang"
+license = "MIT"
+
+# [dependencies]
+# They use greater than and equal signs
+# ... = ">= 0.0.1 and < 2.0.0"
+# ... = { git = "git@...", ref = "main/a8b3c5d82" }
+
+# [dev-dependencies]
+# Same syntax as dependencies
+
+
+# [features]
+# Similar syntax to rust
+# ... = []
+
+[examples]
+# It will automatically add the files found as examples using appropriate names
+members = ["./examples/*", "fib"]
+
+# To specify an example
+# It will always prioritize most specific first so the other examples tag wont contain this file
+[[example]]
+name = "pi"
+path = "./examples/bench/pi/test.cal"
+
+[[example]]
+name = "fib"
+path = "./examples/bench/fib/test.cal"

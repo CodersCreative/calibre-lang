@@ -5,5 +5,7 @@ import * from data;
 const language_forced : Language = Language.ENGLISH : 6;
 
 const main = fn () => {
-	print("hello");
+	let language = Language.French : FrenchData { data : 10, code : 5 };
+	let mut recursive_language : Language = Language.Arabic : language, Language.Spanish;
+	print(language);
 };

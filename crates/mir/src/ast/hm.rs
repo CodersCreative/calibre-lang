@@ -1,6 +1,6 @@
 use calibre_parser::{
+    Span,
     ast::{ParserDataType, ParserInnerType},
-    lexer::Span,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{fmt, sync::Arc};

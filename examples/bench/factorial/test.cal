@@ -9,3 +9,7 @@ const main = fn () => {
 	let result = factorial(n);
 	print(result);
 };
+
+bench factorial => main();
+
+test factorial_10 => assert(factorial(10) == 3628800, "10! did not equal 3628800 as expected");

@@ -4,16 +4,16 @@ impl Player {
 	const default = fn () -> Player => Player.None;
 
 	const get_opposite = fn match &Player -> Player {
-		Player.X => Player.O,
-		Player.O => Player.X,
+		.X => Player.O,
+		.O => Player.X,
 		_ => Player.None
 	};
 
 	const switch = fn (self : &mut Player) => self = self.get_opposite();
 
 	const to_char = fn match &Player -> char {
-		Player.X => 'X',
-		Player.O => 'O',
+		.X => 'X',
+		.O => 'O',
 		_ => ' '
 	};
 };
@@ -31,8 +31,8 @@ const get_user_input = fn () -> int => {
 		_ => "1"
 	};
 	
-	let mut x : int = x_txt as int;
-	let mut y : int = y_txt as int;
+	let mut x : int = try x_txt as int => 1;
+	let mut y : int = try y_txt as int => 1;
 	
 	x -= 1;
 	y -= 1;
@@ -134,28 +134,27 @@ impl Board {
 
 const minimax = fn (board : &mut Board, player : Player, depth : int) -> int => {
 	match board.get_winner() {
-		Player.X => return 100 - depth,
-		Player.O => return -100 + depth,
-		Player.None => {}
+		.X => return 100 - depth,
+		.O => return -100 + depth,
+		.None => {}
 	};
 	
-	if board.is_full() => return 0;
+	(board.is_full()) ? return 0 : null;
 	
 	let maximising = player == Player.X;
-	let mut best_value = INT_MAX;
-	if maximising => best_value = INT_MIN;
+	let mut best_value = (maximising) ? INT_MIN : INT_MAX;
 	
 	for i in 0..9 => {
-		if board.0[i] != Player.None => continue;
+		(board.0[i] != Player.None) ? continue : null;
 		
 		board.0[i] = player;
 		let value = minimax(board, player.get_opposite(), depth + 1);
 		board.0[i] = Player.None;
 		
-		if maximising => {
-			if best_value < value => best_value = value;
-		} else => {
-			if best_value > value => best_value = value;
+		match maximising {
+			true if best_value < value => best_value = value,
+			false if best_value > value => best_value = value,
+			_ => {}
 		};
 	};
 	best_value;
@@ -206,9 +205,9 @@ const main = fn () => {
 		board.print_board();
 		
 		match board.get_winner() {
-			Player.X => print("Player X Won!"),
-			Player.O => print("Player O Won!"),
-			Player.None => print("Tied!")
+			.X => print("Player X Won!"),
+			.O => print("Player O Won!"),
+			.None => print("Tied!")
 		};
 	};
 };

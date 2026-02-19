@@ -105,6 +105,24 @@ impl RuntimeValue {
                 })?;
                 Ok(RuntimeValue::Char(ch))
             }
+            (RuntimeValue::Str(x), ParserInnerType::List(t))
+                if t.data_type == ParserInnerType::Str =>
+            {
+                Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(
+                    x.chars()
+                        .map(|x| RuntimeValue::Str(Arc::new(x.to_string())))
+                        .collect::<Vec<RuntimeValue>>(),
+                ))))
+            }
+            (RuntimeValue::Str(x), ParserInnerType::List(t))
+                if t.data_type == ParserInnerType::Char =>
+            {
+                Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(
+                    x.chars()
+                        .map(|x| RuntimeValue::Char(x))
+                        .collect::<Vec<RuntimeValue>>(),
+                ))))
+            }
             (RuntimeValue::Ptr(id), ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Ptr(id)),
             (RuntimeValue::Null, ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Ptr(0)),
             (value, ParserInnerType::Ptr(inner)) => {

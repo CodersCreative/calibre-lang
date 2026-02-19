@@ -32,6 +32,8 @@ const fmt = fn (splits : list:<str>, inputs : list:<str>) -> str => {
 
 type ListIter:<T> = struct { data : list:<T>, index : int };
 
+type gen:<T> = struct { data : fn () -> T?, index : int, done : bool };
+
 type RangeIter = struct { range : range, index : int };
 
 type StrIter = struct { data : list:<char>, index : int };

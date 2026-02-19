@@ -38,14 +38,13 @@ const BASIC_CODE: &str = r#"
 use calibre_cranelift::Compiler;
 use calibre_lir::{LirEnvironment, LirRegistry};
 use calibre_mir::environment::MiddleEnvironment;
-use calibre_parser::{Parser, lexer::Tokenizer};
+use calibre_parser::Parser;
 use std::{fmt::Debug, mem, path::PathBuf, str::FromStr};
 
 fn parse(text: String) -> (LirRegistry, MiddleEnvironment) {
     let mut parser = Parser::default();
-    let mut tokenizer = Tokenizer::default();
     parser.set_source_path(Some(PathBuf::from_str("./main.cl").unwrap()));
-    let program = parser.produce_ast(tokenizer.tokenize(&text).unwrap());
+    let program = parser.produce_ast(&text);
 
     let middle_result =
         MiddleEnvironment::new_and_evaluate(program, PathBuf::from_str("./main.cl").unwrap());

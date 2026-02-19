@@ -1,4 +1,4 @@
-use calibre_parser::{ParserError, lexer::Span};
+use calibre_parser::{ParserError, Span};
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     files::SimpleFiles,
@@ -44,12 +44,6 @@ pub fn emit_parser_errors(path: &Path, contents: &str, errors: &[ParserError]) {
 
         match err {
             ParserError::Syntax { span, .. } => {
-                let range = span_to_range(contents, span);
-                diagnostic = diagnostic
-                    .with_labels(vec![Label::primary(file_id, range).with_message("here")]);
-            }
-            ParserError::Lexer(err) => {
-                let calibre_parser::lexer::LexerError::Unrecognized { span, .. } = err;
                 let range = span_to_range(contents, span);
                 diagnostic = diagnostic
                     .with_labels(vec![Label::primary(file_id, range).with_message("here")]);

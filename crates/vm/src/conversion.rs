@@ -2,12 +2,12 @@ use calibre_lir::{
     BlockId, LirBlock, LirFunction, LirGlobal, LirInstr, LirLValue, LirLiteral, LirNodeType,
     LirRegistry, LirTerminator,
 };
+use calibre_parser::Span;
 use calibre_parser::ast::{
     ParserDataType, ParserInnerType, PotentialFfiDataType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
-use calibre_parser::lexer::Span;
 use rand::random_range;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -61,7 +61,7 @@ impl From<LirRegistry> for VMRegistry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VMGlobal {
     pub name: String,
-    pub blocks: Vec<VMBlock>,
+    pub blocks: Box<[VMBlock]>,
     pub reg_count: Reg,
     pub entry: BlockId,
     #[serde(with = "crate::serialization::serde_fxhashmap")]
@@ -82,9 +82,9 @@ impl Display for VMGlobal {
 
 impl From<LirGlobal> for VMGlobal {
     fn from(value: LirGlobal) -> Self {
-        let func = VMFunction::from_global(value.name.clone(), value.blocks);
+        let func = VMFunction::from_global(value.name.to_string(), value.blocks.into_vec());
         Self {
-            name: value.name,
+            name: value.name.to_string(),
             blocks: func.blocks,
             reg_count: func.reg_count,
             entry: func.entry,
@@ -96,10 +96,10 @@ impl From<LirGlobal> for VMGlobal {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VMFunction {
     pub name: String,
-    pub params: Vec<String>,
-    pub captures: Vec<String>,
+    pub params: Box<[String]>,
+    pub captures: Box<[String]>,
     pub returns_value: bool,
-    pub blocks: Vec<VMBlock>,
+    pub blocks: Box<[VMBlock]>,
     #[serde(with = "crate::serialization::serde_fxhashmap")]
     pub renamed: FxHashMap<String, String>,
     pub reg_count: Reg,
@@ -163,22 +163,22 @@ impl VMFunction {
 
     fn from_global(name: String, blocks: Vec<LirBlock>) -> Self {
         let func = LirFunction {
-            name,
-            params: Vec::new(),
-            captures: Vec::new(),
+            name: name.into_boxed_str(),
+            params: Vec::new().into_boxed_slice(),
+            captures: Vec::new().into_boxed_slice(),
             return_type: ParserDataType::new(Span::default(), ParserInnerType::Null),
-            blocks,
+            blocks: blocks.into_boxed_slice(),
         };
         let mut lower = FunctionLowering::new(func, true);
         lower.build_cfg();
         lower.build_ssa();
         lower.emit_blocks();
         VMFunction {
-            name: lower.func.name.clone(),
-            params: Vec::new(),
-            captures: Vec::new(),
+            name: lower.func.name.to_string(),
+            params: Vec::new().into_boxed_slice(),
+            captures: Vec::new().into_boxed_slice(),
             returns_value: false,
-            blocks: lower.blocks,
+            blocks: lower.blocks.into_boxed_slice(),
             renamed: FxHashMap::default(),
             reg_count: lower.reg_count,
             param_regs: lower.param_regs,
@@ -262,6 +262,7 @@ pub struct AggregateLayout {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VMLiteral {
     Int(i64),
+    UInt(u64),
     Float(f64),
     Char(char),
     String(String),
@@ -283,6 +284,7 @@ impl Display for VMLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Int(x) => write!(f, "{x}"),
+            Self::UInt(x) => write!(f, "{x}u"),
             Self::Float(x) => write!(f, "{x}f"),
             Self::Char(x) => write!(f, "'{x}'"),
             Self::String(x) => write!(f, "{x:?}"),
@@ -315,6 +317,7 @@ impl From<LirLiteral> for VMLiteral {
     fn from(value: LirLiteral) -> Self {
         match value {
             LirLiteral::Int(x) => Self::Int(x),
+            LirLiteral::UInt(x) => Self::UInt(x),
             LirLiteral::Float(x) => Self::Float(x),
             LirLiteral::Char(x) => Self::Char(x),
             LirLiteral::String(x) => Self::String(x),
@@ -624,12 +627,24 @@ impl FunctionLowering {
         lower.emit_blocks();
 
         VMFunction {
-            name: lower.func.name.clone(),
-            params: lower.func.params.iter().map(|(n, _)| n.clone()).collect(),
-            captures: lower.func.captures.iter().map(|(n, _)| n.clone()).collect(),
+            name: lower.func.name.to_string(),
+            params: lower
+                .func
+                .params
+                .iter()
+                .map(|(n, _)| n.to_string())
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            captures: lower
+                .func
+                .captures
+                .iter()
+                .map(|(n, _)| n.to_string())
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
             returns_value: lower.func.return_type
                 != ParserDataType::new(Span::default(), ParserInnerType::Null),
-            blocks: lower.blocks,
+            blocks: lower.blocks.into_boxed_slice(),
             renamed: FxHashMap::default(),
             reg_count: lower.reg_count,
             param_regs: lower.param_regs,
@@ -649,19 +664,19 @@ impl FunctionLowering {
         let mut locals = FxHashSet::default();
         if !is_global {
             for (name, _) in &func.params {
-                locals.insert(name.clone());
+                locals.insert(name.to_string());
             }
             for block in &func.blocks {
                 for instr in &block.instructions {
                     match &instr.node_type {
                         LirNodeType::Declare { dest, .. } => {
-                            locals.insert(dest.clone());
+                            locals.insert(dest.to_string());
                         }
                         LirNodeType::Assign {
                             dest: LirLValue::Var(name),
                             ..
                         } => {
-                            locals.insert(name.clone());
+                            locals.insert(name.to_string());
                         }
                         _ => {}
                     }
@@ -669,7 +684,8 @@ impl FunctionLowering {
             }
         }
 
-        let captures: FxHashSet<String> = func.captures.iter().map(|(n, _)| n.clone()).collect();
+        let captures: FxHashSet<String> =
+            func.captures.iter().map(|(n, _)| n.to_string()).collect();
 
         let mut reg_count: Reg = 0;
         let mut param_regs = Vec::new();
@@ -810,7 +826,7 @@ impl FunctionLowering {
                 .map(|(n, _)| n)
                 .zip(self.param_regs.iter().copied())
             {
-                incoming.insert(name.clone(), reg);
+                incoming.insert(name.to_string(), reg);
             }
             return incoming;
         }
@@ -902,6 +918,7 @@ impl FunctionLowering {
                 is_global: self.is_global,
                 string_map: FxHashMap::default(),
                 int_literals: FxHashMap::default(),
+                uint_literals: FxHashMap::default(),
                 float_literals: FxHashMap::default(),
                 char_literals: FxHashMap::default(),
                 string_literals: FxHashMap::default(),
@@ -970,11 +987,11 @@ impl FunctionLowering {
 
 fn assigned_local_name(node: &LirNodeType) -> Option<&str> {
     match node {
-        LirNodeType::Declare { dest, .. } => Some(dest.as_str()),
+        LirNodeType::Declare { dest, .. } => Some(dest.as_ref()),
         LirNodeType::Assign {
             dest: LirLValue::Var(name),
             ..
-        } => Some(name.as_str()),
+        } => Some(name.as_ref()),
         _ => None,
     }
 }
@@ -1004,12 +1021,47 @@ struct BlockLoweringCtx<'a> {
     is_global: bool,
     string_map: FxHashMap<String, u16>,
     int_literals: FxHashMap<i64, u16>,
+    uint_literals: FxHashMap<u64, u16>,
     float_literals: FxHashMap<u64, u16>,
     char_literals: FxHashMap<char, u16>,
     string_literals: FxHashMap<String, u16>,
 }
 
 impl<'a> BlockLoweringCtx<'a> {
+    fn symbol_tail(name: &str) -> &str {
+        name.rsplit(':').next().unwrap_or(name)
+    }
+
+    fn resolve_local_key(&self, name: &str) -> Option<String> {
+        if self.locals.contains(name) {
+            return Some(name.to_string());
+        }
+        if !name.contains(':') || name.contains("::") {
+            return None;
+        }
+
+        let tail = Self::symbol_tail(name);
+        self.locals
+            .iter()
+            .find(|candidate| Self::symbol_tail(candidate.as_str()) == tail)
+            .cloned()
+    }
+
+    fn resolve_mapped_reg(&self, name: &str) -> Option<Reg> {
+        if let Some(reg) = self.map.get(name).copied() {
+            return Some(reg);
+        }
+        if !name.contains(':') || name.contains("::") {
+            return None;
+        }
+
+        let tail = Self::symbol_tail(name);
+        self.map
+            .iter()
+            .find(|(candidate, _)| Self::symbol_tail(candidate.as_str()) == tail)
+            .map(|(_, reg)| *reg)
+    }
+
     fn alloc_reg(&mut self) -> Reg {
         let r = *self.reg_count;
         *self.reg_count += 1;
@@ -1020,6 +1072,11 @@ impl<'a> BlockLoweringCtx<'a> {
         match &lit {
             VMLiteral::Int(x) => {
                 if let Some(idx) = self.int_literals.get(x).copied() {
+                    return idx;
+                }
+            }
+            VMLiteral::UInt(x) => {
+                if let Some(idx) = self.uint_literals.get(x).copied() {
                     return idx;
                 }
             }
@@ -1046,6 +1103,9 @@ impl<'a> BlockLoweringCtx<'a> {
         match &self.block.local_literals[idx as usize] {
             VMLiteral::Int(x) => {
                 self.int_literals.insert(*x, idx);
+            }
+            VMLiteral::UInt(x) => {
+                self.uint_literals.insert(*x, idx);
             }
             VMLiteral::Float(x) => {
                 self.float_literals.insert(x.to_bits(), idx);
@@ -1094,8 +1154,8 @@ impl<'a> BlockLoweringCtx<'a> {
                             node.span,
                         );
                     }
-                    let name_idx = self.add_string(dest.clone());
-                    self.map.insert(dest.clone(), target);
+                    let name_idx = self.add_string(dest.to_string());
+                    self.map.insert(dest.to_string(), target);
                     self.emit(
                         VMInstruction::SetLocalName {
                             name: name_idx,
@@ -1103,17 +1163,17 @@ impl<'a> BlockLoweringCtx<'a> {
                         },
                         node.span,
                     );
-                    let name = self.add_string(dest);
+                    let name = self.add_string(dest.to_string());
                     self.emit(VMInstruction::StoreGlobal { name, src: target }, node.span);
                 } else {
-                    let name = self.add_string(dest);
+                    let name = self.add_string(dest.to_string());
                     self.emit(VMInstruction::StoreGlobal { name, src: reg }, node.span);
                 }
             }
             LirNodeType::Assign { dest, value } => match dest {
                 LirLValue::Var(dest) => {
                     let reg = self.lower_node(*value, node.span);
-                    if !self.is_global && self.locals.contains(&dest) {
+                    if !self.is_global && self.locals.contains(dest.as_ref()) {
                         let target = assigned.unwrap_or(reg);
                         if target != reg {
                             self.emit(
@@ -1124,8 +1184,8 @@ impl<'a> BlockLoweringCtx<'a> {
                                 node.span,
                             );
                         }
-                        let name_idx = self.add_string(dest.clone());
-                        self.map.insert(dest.clone(), target);
+                        let name_idx = self.add_string(dest.to_string());
+                        self.map.insert(dest.to_string(), target);
                         self.emit(
                             VMInstruction::SetLocalName {
                                 name: name_idx,
@@ -1133,10 +1193,10 @@ impl<'a> BlockLoweringCtx<'a> {
                             },
                             node.span,
                         );
-                        let name = self.add_string(dest);
+                        let name = self.add_string(dest.to_string());
                         self.emit(VMInstruction::StoreGlobal { name, src: target }, node.span);
                     } else {
-                        let name = self.add_string(dest);
+                        let name = self.add_string(dest.to_string());
                         self.emit(VMInstruction::StoreGlobal { name, src: reg }, node.span);
                     }
                 }
@@ -1145,7 +1205,7 @@ impl<'a> BlockLoweringCtx<'a> {
                     match *ptr {
                         LirNodeType::Member(base, member) => {
                             let base_reg = self.lower_node(*base, node.span);
-                            let member = self.add_string(member);
+                            let member = self.add_string(member.to_string());
                             self.emit(
                                 VMInstruction::SetMember {
                                     target: base_reg,
@@ -1220,7 +1280,21 @@ impl<'a> BlockLoweringCtx<'a> {
                 for arg in args {
                     arg_regs.push(self.lower_node(arg, span));
                 }
-                let callee = self.lower_node(*caller, span);
+                let callee = match *caller {
+                    LirNodeType::Load(name) if !name.contains(':') => {
+                        let idx = self.add_string(name.to_string());
+                        let dst = self.alloc_reg();
+                        self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
+                        dst
+                    }
+                    LirNodeType::Move(name) if !name.contains(':') => {
+                        let idx = self.add_string(name.to_string());
+                        let dst = self.alloc_reg();
+                        self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
+                        dst
+                    }
+                    other => self.lower_node(other, span),
+                };
                 let dst = self.alloc_reg();
                 self.emit(
                     VMInstruction::Call {
@@ -1242,38 +1316,50 @@ impl<'a> BlockLoweringCtx<'a> {
                 dst
             }
             LirNodeType::Move(name) => {
-                if self.captures.contains(&name) || !self.locals.contains(&name) {
-                    let idx = self.add_string(name);
+                if self.captures.contains(name.as_ref())
+                    || self.resolve_local_key(name.as_ref()).is_none()
+                {
+                    let idx = self.add_string(name.to_string());
                     let dst = self.alloc_reg();
                     self.emit(VMInstruction::MoveGlobal { dst, name: idx }, span);
                     dst
                 } else {
-                    let reg = self.map.get(&name).copied().unwrap_or(self.null_reg);
-                    self.map.insert(name, self.null_reg);
+                    let reg = self
+                        .resolve_mapped_reg(name.as_ref())
+                        .unwrap_or(self.null_reg);
+                    let key = self
+                        .resolve_local_key(name.as_ref())
+                        .unwrap_or_else(|| name.to_string());
+                    self.map.insert(key, self.null_reg);
                     reg
                 }
             }
             LirNodeType::Drop(name) => {
-                if self.captures.contains(&name) || !self.locals.contains(&name) {
-                    let idx = self.add_string(name);
+                if self.captures.contains(name.as_ref())
+                    || self.resolve_local_key(name.as_ref()).is_none()
+                {
+                    let idx = self.add_string(name.to_string());
                     self.emit(VMInstruction::DropGlobal { name: idx }, span);
                 } else {
-                    self.map.insert(name, self.null_reg);
+                    let key = self
+                        .resolve_local_key(name.as_ref())
+                        .unwrap_or_else(|| name.to_string());
+                    self.map.insert(key, self.null_reg);
                 }
                 self.null_reg
             }
             LirNodeType::Load(name) => {
-                if self.locals.contains(&name) {
-                    if let Some(reg) = self.map.get(&name).copied() {
+                if self.resolve_local_key(name.as_ref()).is_some() {
+                    if let Some(reg) = self.resolve_mapped_reg(name.as_ref()) {
                         reg
                     } else {
-                        let idx = self.add_string(name);
+                        let idx = self.add_string(name.to_string());
                         let dst = self.alloc_reg();
                         self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
                         dst
                     }
                 } else {
-                    let idx = self.add_string(name);
+                    let idx = self.add_string(name.to_string());
                     let dst = self.alloc_reg();
                     self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
                     dst
@@ -1386,15 +1472,18 @@ impl<'a> BlockLoweringCtx<'a> {
             }
             LirNodeType::Ref(x) => match *x {
                 LirNodeType::Load(name) => {
-                    if !self.captures.contains(&name)
-                        && (self.locals.contains(&name) || self.map.contains_key(&name))
+                    if !self.captures.contains(name.as_ref())
+                        && (self.resolve_local_key(name.as_ref()).is_some()
+                            || self.resolve_mapped_reg(name.as_ref()).is_some())
                     {
-                        let src = self.map.get(&name).copied().unwrap_or(self.null_reg);
+                        let src = self
+                            .resolve_mapped_reg(name.as_ref())
+                            .unwrap_or(self.null_reg);
                         let dst = self.alloc_reg();
                         self.emit(VMInstruction::LoadRegRef { dst, src }, span);
                         dst
                     } else {
-                        let idx = self.add_string(name);
+                        let idx = self.add_string(name.to_string());
                         let dst = self.alloc_reg();
                         self.emit(VMInstruction::LoadGlobalRef { dst, name: idx }, span);
                         dst
@@ -1426,7 +1515,7 @@ impl<'a> BlockLoweringCtx<'a> {
                 payload,
             } => {
                 let payload = payload.map(|v| self.lower_node(*v, span));
-                let name = self.add_string(name);
+                let name = self.add_string(name.to_string());
                 let dst = self.alloc_reg();
                 self.emit(
                     VMInstruction::Enum {
@@ -1448,15 +1537,16 @@ impl<'a> BlockLoweringCtx<'a> {
             }
             LirNodeType::Member(value, member) => {
                 let value = self.lower_node(*value, span);
-                let member = self.add_string(member);
+                let member = self.add_string(member.to_string());
                 let dst = self.alloc_reg();
                 self.emit(VMInstruction::LoadMember { dst, value, member }, span);
                 dst
             }
             LirNodeType::Closure { label, captures } => {
-                self.block
-                    .local_literals
-                    .push(VMLiteral::Closure { label, captures });
+                self.block.local_literals.push(VMLiteral::Closure {
+                    label: label.to_string(),
+                    captures: captures.into_iter().map(|x| x.to_string()).collect(),
+                });
                 let lit = (self.block.local_literals.len() - 1) as u16;
                 let dst = self.alloc_reg();
                 self.emit(VMInstruction::LoadLiteral { dst, literal: lit }, span);
@@ -1470,9 +1560,9 @@ impl<'a> BlockLoweringCtx<'a> {
                 return_type,
             } => {
                 self.block.local_literals.push(VMLiteral::ExternFunction {
-                    abi,
-                    library,
-                    symbol,
+                    abi: abi.to_string(),
+                    library: library.to_string(),
+                    symbol: symbol.to_string(),
                     parameters,
                     return_type,
                 });

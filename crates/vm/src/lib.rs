@@ -2,7 +2,7 @@ use crate::{
     config::VMConfig,
     conversion::{Reg, VMBlock, VMFunction, VMRegistry},
     error::RuntimeError,
-    value::{RuntimeValue, WaitGroupInner},
+    value::{GcMap, RuntimeValue, WaitGroupInner},
     variables::VariableStore,
 };
 use calibre_lir::BlockId;
@@ -44,6 +44,7 @@ pub struct TaskState {
     pub block: Option<BlockId>,
     pub ip: usize,
     pub prev_block: Option<BlockId>,
+    pub yielded: Option<RuntimeValue>,
 }
 
 impl Default for VMFrame {
@@ -77,17 +78,20 @@ pub struct VM {
     scheduler: scheduler::SchedulerHandle,
     task_state: TaskState,
     pub(crate) moved_functions: FxHashSet<String>,
+    pub suppress_output: bool,
+    pub captured_output: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct VMCaches {
     call: FxHashMap<String, Arc<VMFunction>>,
     globals: FxHashMap<String, RuntimeValue>,
-    callsite: FxHashMap<(usize, u32), Arc<VMFunction>>,
+    callsite: FxHashMap<(usize, usize, u32), Arc<VMFunction>>,
     globals_direct: FxHashMap<String, RuntimeValue>,
     locals: FxHashMap<usize, Arc<FxHashMap<Arc<str>, Reg>>>,
     globals_id: FxHashMap<String, usize>,
     local_str: FxHashMap<(u32, u16), Arc<str>>,
+    aggregate_member_slots: FxHashMap<String, FxHashMap<String, usize>>,
 }
 
 impl Default for VMCaches {
@@ -100,6 +104,7 @@ impl Default for VMCaches {
             locals: FxHashMap::default(),
             globals_id: FxHashMap::default(),
             local_str: FxHashMap::default(),
+            aggregate_member_slots: FxHashMap::default(),
         }
     }
 }
@@ -147,6 +152,8 @@ impl From<VMRegistry> for VM {
             scheduler,
             task_state: TaskState::default(),
             moved_functions: FxHashSet::default(),
+            suppress_output: false,
+            captured_output: String::new(),
         }
     }
 }
@@ -373,6 +380,8 @@ impl VM {
             scheduler,
             task_state: TaskState::default(),
             moved_functions: FxHashSet::default(),
+            suppress_output: false,
+            captured_output: String::new(),
         };
 
         if let Some(interval) = config.gc_interval {
@@ -412,6 +421,8 @@ impl VM {
             scheduler,
             task_state: TaskState::default(),
             moved_functions: FxHashSet::default(),
+            suppress_output: false,
+            captured_output: String::new(),
         };
 
         if let Some(interval) = config.gc_interval {
@@ -433,6 +444,10 @@ impl VM {
 
     pub fn store_task_state(&mut self, state: TaskState) {
         self.task_state = state;
+    }
+
+    pub fn take_captured_output(&mut self) -> String {
+        std::mem::take(&mut self.captured_output)
     }
 
     pub fn get_ref_id(&mut self) -> u64 {
@@ -642,11 +657,8 @@ impl VM {
         {
             return;
         }
-        let in_flight = self.gc.in_flight.clone();
-        std::thread::spawn(move || {
-            dumpster::sync::collect();
-            in_flight.store(false, Ordering::Release);
-        });
+        dumpster::sync::collect();
+        self.gc.in_flight.store(false, Ordering::Release);
     }
 
     #[inline(always)]
@@ -754,7 +766,7 @@ impl VM {
                     return;
                 }
                 if let Some(inner) = self.variables.remove(name) {
-                    self.drop_runtime_value(inner);
+                    self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
                 }
             }
             RuntimeValue::VarRef(id) => {
@@ -763,7 +775,7 @@ impl VM {
                     return;
                 }
                 if let Some(inner) = self.variables.remove_by_id(*id) {
-                    self.drop_runtime_value(inner);
+                    self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
                 }
             }
             RuntimeValue::RegRef { frame, reg } => {
@@ -773,7 +785,7 @@ impl VM {
                 }
                 let inner = self.get_reg_value_in_frame(*frame, *reg);
                 self.set_reg_value_in_frame(*frame, *reg, RuntimeValue::Null);
-                self.drop_runtime_value(inner);
+                self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
             }
             RuntimeValue::List(list) => {
                 for item in list.as_ref().0.iter() {
@@ -807,10 +819,11 @@ impl VM {
                     self.drop_runtime_value_inner_ref(val.as_ref(), seen, seen_regs);
                 }
             }
+            RuntimeValue::Generator { .. } => {}
             RuntimeValue::Channel(ch) => {
                 if let Ok(mut queue) = ch.queue.lock() {
                     while let Some(item) = queue.pop_front() {
-                        self.drop_runtime_value(item);
+                        self.drop_runtime_value_inner_ref(&item, seen, seen_regs);
                     }
                 }
             }
@@ -864,6 +877,60 @@ enum VarName {
 }
 
 impl VM {
+    #[inline]
+    pub(crate) fn is_gen_type_name(type_name: &str) -> bool {
+        let short = type_name.rsplit(':').next().unwrap_or(type_name);
+        short == "gen" || short.starts_with("gen->")
+    }
+
+    pub(crate) fn resolve_aggregate_member_slot(
+        &mut self,
+        type_name: &str,
+        map: &GcMap,
+        name: &str,
+        short_name: Option<&str>,
+    ) -> Option<usize> {
+        if map.0.0.len() <= 3 {
+            return map.0.0.iter().enumerate().find_map(|(idx, (field, _))| {
+                if field == name || short_name.is_some_and(|short| field == short) {
+                    Some(idx)
+                } else {
+                    None
+                }
+            });
+        }
+
+        if let Some(slots) = self.caches.aggregate_member_slots.get(type_name) {
+            if let Some(idx) = slots.get(name).copied() {
+                return Some(idx);
+            }
+            if let Some(short) = short_name
+                && let Some(idx) = slots.get(short).copied()
+            {
+                return Some(idx);
+            }
+        }
+
+        let idx = map.0.0.iter().enumerate().find_map(|(idx, (field, _))| {
+            if field == name || short_name.is_some_and(|short| field == short) {
+                Some(idx)
+            } else {
+                None
+            }
+        })?;
+
+        let slots = self
+            .caches
+            .aggregate_member_slots
+            .entry(type_name.to_string())
+            .or_default();
+        slots.insert(name.to_string(), idx);
+        if let Some(short) = short_name {
+            let _ = slots.entry(short.to_string()).or_insert(idx);
+        }
+        Some(idx)
+    }
+
     fn resolve_var_name(&self, name: &str) -> VarName {
         if self.get_function(name).is_some() {
             return VarName::Func(name.to_string());

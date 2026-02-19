@@ -13,7 +13,7 @@ const write_fd = fn (fd : int, msg : dyn) => {
 
 const out = fn (msg : dyn) => console_output(1, msg);
 
-const err = fn (msg : dyn) => console_output(2, msg);
+const stderr = fn (msg : dyn) => console_output(2, msg);
 
 const clear = fn () => {
 	out("x1b[2Jx1b[1;1H");
@@ -24,7 +24,7 @@ const input = fn (prompt : dyn) -> str => {
 	out(prompt);
 	let handle = c_fdopen(0, "r");
 	let size = 4096;
-	let buf = c_malloc(size as usize);
+	let buf = c_malloc(try size as usize => 0usize);
 	let line = c_fgets(buf, size, handle);
 	c_free(buf);
 	trim(line);

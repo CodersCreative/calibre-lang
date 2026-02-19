@@ -14,7 +14,7 @@ impl MiddleNode {
             }
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::CharLiteral(_)
-            | MiddleNodeType::IntLiteral(_)
+            | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return { value: None } => Vec::new(),
             MiddleNodeType::Break {
@@ -126,7 +126,7 @@ impl MiddleNode {
                 Vec::new()
             }
             MiddleNodeType::LoopDeclaration { body, .. } => body.identifiers_used(),
-            MiddleNodeType::IfStatement {
+            MiddleNodeType::Conditional {
                 comparison,
                 then,
                 otherwise,
@@ -168,7 +168,7 @@ impl MiddleNode {
             }
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::CharLiteral(_)
-            | MiddleNodeType::IntLiteral(_)
+            | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return { value: None }
             | MiddleNodeType::Identifier(_)
@@ -282,7 +282,7 @@ impl MiddleNode {
             }
             MiddleNodeType::ExternFunction { .. } => Vec::new(),
             MiddleNodeType::LoopDeclaration { body, .. } => body.identifiers_declared(),
-            MiddleNodeType::IfStatement {
+            MiddleNodeType::Conditional {
                 comparison,
                 then,
                 otherwise,
