@@ -18,19 +18,19 @@ const open_write = fn (path : str) -> ptr:<uint> => c_fopen(path, "w");
 const open_append = fn (path : str) -> ptr:<uint> => c_fopen(path, "a");
 
 const close = fn (handle : ptr:<uint>) => {
-	if (handle as int) == 0 => return null;
+	if (try handle as int => 0) == 0 => return null;
 	c_fclose(handle);
 	null;
 };
 
 const flush = fn (handle : ptr:<uint>) => {
-	if (handle as int) == 0 => return null;
+	if (try handle as int => 0) == 0 => return null;
 	c_fflush(handle);
 	null;
 };
 
 const write = fn (handle : ptr:<uint>, content) => {
-	if (handle as int) == 0 => return null;
+	if (try handle as int => 0) == 0 => return null;
 	let txt = "" & content;
 	let len = c_strlen(txt);
 	c_fwrite(txt, 1, len, handle);
@@ -47,7 +47,7 @@ const exists = fn (path : str) -> bool => c_access(path, 0) == 0;
 const remove = fn (path : str) -> bool => c_remove(path) == 0;
 
 const read_line = fn (handle : ptr:<uint>, max : int) -> str => {
-	if (handle as int) == 0 => return "";
+	if (try handle as int => 0) == 0 => return "";
 	let size = if max <= 0 => 1 else => max + 1;
 	let buf = c_malloc(size);
 	let line = c_fgets(buf, size, handle);

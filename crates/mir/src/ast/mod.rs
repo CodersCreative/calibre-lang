@@ -114,7 +114,10 @@ pub enum MiddleNodeType {
     ListLiteral(ParserDataType, Vec<MiddleNode>),
     CharLiteral(char),
     FloatLiteral(f64),
-    IntLiteral { value: i64, signed: bool },
+    IntLiteral {
+        value: i64,
+        signed: bool,
+    },
     MemberExpression {
         path: Vec<(MiddleNode, bool)>,
     },

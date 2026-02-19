@@ -18,19 +18,20 @@ impl MiddleEnvironment {
     pub(crate) fn is_generator_return_type(return_type: &ParserDataType) -> Option<ParserDataType> {
         let ty_txt = return_type.data_type.to_string();
         if ty_txt == "gen" || ty_txt.starts_with("gen->") || ty_txt.contains(":gen->") {
-            return Some(ParserDataType::new(return_type.span, ParserInnerType::Auto(None)));
+            return Some(ParserDataType::new(
+                return_type.span,
+                ParserInnerType::Auto(None),
+            ));
         }
 
         match &return_type.data_type {
             ParserInnerType::StructWithGenerics {
                 identifier,
                 generic_types,
-            } if identifier == "gen" && generic_types.len() == 1 => {
-                Some(generic_types[0].clone())
-            }
-            ParserInnerType::Struct(identifier) if identifier == "gen" => {
-                Some(ParserDataType::new(return_type.span, ParserInnerType::Auto(None)))
-            }
+            } if identifier == "gen" && generic_types.len() == 1 => Some(generic_types[0].clone()),
+            ParserInnerType::Struct(identifier) if identifier == "gen" => Some(
+                ParserDataType::new(return_type.span, ParserInnerType::Auto(None)),
+            ),
             _ => None,
         }
     }
@@ -309,7 +310,10 @@ impl MiddleEnvironment {
                 NodeType::IfStatement {
                     comparison: Box::new(IfComparisonType::If(guard)),
                     then: Box::new(yield_node),
-                    otherwise: Some(Box::new(Node::new(span, NodeType::Continue { label: None }))),
+                    otherwise: Some(Box::new(Node::new(
+                        span,
+                        NodeType::Continue { label: None },
+                    ))),
                 },
             ));
         } else {

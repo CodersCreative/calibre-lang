@@ -1003,10 +1003,9 @@ impl VM {
                     }
                     RuntimeValue::HashSet(Arc::new(Mutex::new(new_set)))
                 }
-                RuntimeValue::Generator { type_name, state } => RuntimeValue::Generator {
-                    type_name,
-                    state,
-                },
+                RuntimeValue::Generator { type_name, state } => {
+                    RuntimeValue::Generator { type_name, state }
+                }
                 RuntimeValue::GeneratorSuspend(value) => {
                     RuntimeValue::GeneratorSuspend(Box::new(transform(env, *value)))
                 }

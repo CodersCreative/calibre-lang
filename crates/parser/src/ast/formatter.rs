@@ -904,7 +904,11 @@ impl Formatter {
                 conditionals,
                 until,
             } => {
-                let mut txt = format!("fn({} for {}", self.format(map), self.fmt_loop_type(loop_type));
+                let mut txt = format!(
+                    "fn({} for {}",
+                    self.format(map),
+                    self.fmt_loop_type(loop_type)
+                );
                 if !conditionals.is_empty() {
                     txt.push(' ');
                     txt.push_str(&self.fmt_conditionals(conditionals));

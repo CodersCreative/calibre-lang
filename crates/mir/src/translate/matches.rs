@@ -545,7 +545,8 @@ impl MiddleEnvironment {
             Node::new(self.current_span(), NodeType::EmptyLine)
         } else {
             let Some(mut cur_if) = ifs.pop() else {
-                return self.evaluate_inner(scope, Node::new(self.current_span(), NodeType::EmptyLine));
+                return self
+                    .evaluate_inner(scope, Node::new(self.current_span(), NodeType::EmptyLine));
             };
             while let Some(mut prev) = ifs.pop() {
                 if let NodeType::IfStatement { otherwise, .. } = &mut prev.node_type {

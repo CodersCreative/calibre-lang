@@ -24,7 +24,7 @@ const input = fn (prompt : dyn) -> str => {
 	out(prompt);
 	let handle = c_fdopen(0, "r");
 	let size = 4096;
-	let buf = c_malloc(size as usize);
+	let buf = c_malloc(try size as usize => 0usize);
 	let line = c_fgets(buf, size, handle);
 	c_free(buf);
 	trim(line);

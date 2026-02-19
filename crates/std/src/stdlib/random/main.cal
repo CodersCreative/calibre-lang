@@ -5,12 +5,12 @@ extern "c" const c_time = fn(@usize) -> @int from "libc" as "time";
 const RAND_MAX = 2147483647;
 
 const seed = fn () => {
-	c_srand(c_time(0) as uint);
+	c_srand(try c_time(0) as uint => 0u);
 	null;
 };
 
 const seed_with = fn (value : int) => {
-	c_srand(value as uint);
+	c_srand(try value as uint => 0u);
 	null;
 };
 
@@ -18,7 +18,7 @@ const generate = fn () -> int => c_rand();
 
 const bool = fn () -> bool => (c_rand() & 1) == 1;
 
-const ratio = fn () -> float => (c_rand() as float) / (RAND_MAX as float);
+const ratio = fn () -> float => (try c_rand() as float => 0.0f) / (try RAND_MAX as float => 1.0f);
 
 const range = fn (min : int, max : int) -> int => {
 	if max <= min => min else => {

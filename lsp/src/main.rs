@@ -2124,9 +2124,9 @@ fn main() {
                 })
                 .request::<request::DocumentHighlightRequest, _>(|st, params| {
                     st.poll_index_results();
-                    let response = if let Some(path) =
-                        ServerState::path_from_url(&params.text_document_position_params.text_document.uri)
-                    {
+                    let response = if let Some(path) = ServerState::path_from_url(
+                        &params.text_document_position_params.text_document.uri,
+                    ) {
                         st.activate_path(&path);
                         st.document_highlights(&path, &params)
                     } else {
@@ -2136,14 +2136,13 @@ fn main() {
                 })
                 .request::<request::DocumentColor, _>(|st, params: DocumentColorParams| {
                     st.poll_index_results();
-                    let response = if let Some(path) =
-                        ServerState::path_from_url(&params.text_document.uri)
-                    {
-                        st.activate_path(&path);
-                        st.document_colors(&path).unwrap_or_default()
-                    } else {
-                        Vec::new()
-                    };
+                    let response =
+                        if let Some(path) = ServerState::path_from_url(&params.text_document.uri) {
+                            st.activate_path(&path);
+                            st.document_colors(&path).unwrap_or_default()
+                        } else {
+                            Vec::new()
+                        };
                     async move { Ok(response) }
                 })
                 .request::<request::ColorPresentationRequest, _>(|_st, params| {
@@ -2188,8 +2187,10 @@ fn main() {
                         let position = params.text_document_position.position;
                         let word = st.get_word_at(position);
                         Some(
-                            word.map(|w| st.find_references_across_indexed_files(&path, &w, position))
-                                .unwrap_or_default(),
+                            word.map(|w| {
+                                st.find_references_across_indexed_files(&path, &w, position)
+                            })
+                            .unwrap_or_default(),
                         )
                     } else {
                         None
@@ -2230,14 +2231,13 @@ fn main() {
                 })
                 .request::<request::InlayHintRequest, _>(|st, params: InlayHintParams| {
                     st.poll_index_results();
-                    let response = if let Some(path) =
-                        ServerState::path_from_url(&params.text_document.uri)
-                    {
-                        st.activate_path(&path);
-                        Some(st.inlay_hints_for_path(&path, params.range))
-                    } else {
-                        None
-                    };
+                    let response =
+                        if let Some(path) = ServerState::path_from_url(&params.text_document.uri) {
+                            st.activate_path(&path);
+                            Some(st.inlay_hints_for_path(&path, params.range))
+                        } else {
+                            None
+                        };
                     async move { Ok(response) }
                 })
                 .request::<request::SignatureHelpRequest, _>(|st, params| {
@@ -2254,14 +2254,13 @@ fn main() {
                 })
                 .request::<request::DocumentSymbolRequest, _>(|st, params: DocumentSymbolParams| {
                     st.poll_index_results();
-                    let response = if let Some(path) =
-                        ServerState::path_from_url(&params.text_document.uri)
-                    {
-                        st.activate_path(&path);
-                        st.document_symbols(&path)
-                    } else {
-                        None
-                    };
+                    let response =
+                        if let Some(path) = ServerState::path_from_url(&params.text_document.uri) {
+                            st.activate_path(&path);
+                            st.document_symbols(&path)
+                        } else {
+                            None
+                        };
                     async move { Ok(response) }
                 })
                 .request::<request::SemanticTokensFullRequest, _>(
@@ -2271,11 +2270,10 @@ fn main() {
                             ServerState::path_from_url(&params.text_document.uri)
                         {
                             st.activate_path(&path);
-                            let text = st
-                                .files
-                                .get(&path)
-                                .cloned()
-                                .unwrap_or_else(|| fs::read_to_string(&path).unwrap_or_default());
+                            let text =
+                                st.files.get(&path).cloned().unwrap_or_else(|| {
+                                    fs::read_to_string(&path).unwrap_or_default()
+                                });
                             st.semantic_tokens_for(&path, &text)
                                 .map(SemanticTokensResult::Tokens)
                         } else {

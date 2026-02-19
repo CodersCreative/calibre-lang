@@ -2783,7 +2783,16 @@ impl MiddleEnvironment {
             NodeType::AsExpression {
                 value: _,
                 data_type,
-            } => Some(self.resolve_potential_new_type(scope, data_type.clone())),
+            } => {
+                let ok = self.resolve_potential_new_type(scope, data_type.clone());
+                Some(ParserDataType {
+                    data_type: ParserInnerType::Result {
+                        ok: Box::new(ok),
+                        err: Box::new(ParserDataType::new(node.span, ParserInnerType::Dynamic)),
+                    },
+                    span: node.span,
+                })
+            }
             NodeType::RangeDeclaration { .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Range,
                 span: node.span,

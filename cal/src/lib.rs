@@ -254,7 +254,11 @@ impl CalEngine {
         let ast_for_artifacts = ast.clone();
 
         let (mut env, scope, middle_node) = if let Some(metadata) = &self.package_metadata {
-            MiddleEnvironment::new_and_evaluate_with_package(ast, path.clone(), Some(metadata.clone()))
+            MiddleEnvironment::new_and_evaluate_with_package(
+                ast,
+                path.clone(),
+                Some(metadata.clone()),
+            )
         } else {
             MiddleEnvironment::new_and_evaluate(ast, path.clone())
         };

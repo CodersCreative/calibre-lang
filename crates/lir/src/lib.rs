@@ -1036,9 +1036,7 @@ impl<'a> LirEnvironment<'a> {
                         .map(|(_, exit, _)| *exit)
                         .or_else(|| self.loop_stack.last().map(|(_, exit, _)| *exit))
                 } else {
-                    self.loop_stack
-                        .last()
-                        .map(|(_, exit, _)| *exit)
+                    self.loop_stack.last().map(|(_, exit, _)| *exit)
                 };
                 if let Some(target) = target {
                     self.set_terminator(LirTerminator::Jump { span, target });
@@ -1054,9 +1052,7 @@ impl<'a> LirEnvironment<'a> {
                         .map(|(header, _, _)| *header)
                         .or_else(|| self.loop_stack.last().map(|(header, _, _)| *header))
                 } else {
-                    self.loop_stack
-                        .last()
-                        .map(|(header, _, _)| *header)
+                    self.loop_stack.last().map(|(header, _, _)| *header)
                 };
                 if let Some(target) = target {
                     self.set_terminator(LirTerminator::Jump { span, target });

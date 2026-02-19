@@ -31,8 +31,8 @@ const get_user_input = fn () -> int => {
 		_ => "1"
 	};
 	
-	let mut x : int = x_txt as int;
-	let mut y : int = y_txt as int;
+	let mut x : int = try x_txt as int => 1;
+	let mut y : int = try y_txt as int => 1;
 	
 	x -= 1;
 	y -= 1;

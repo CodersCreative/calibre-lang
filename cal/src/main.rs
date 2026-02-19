@@ -1144,15 +1144,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                         let calibre_dir = target.join("calibre");
                         let mut entries = std::fs::read_dir(target)?
                             .flatten()
-                            .map(|e| e.path())
+                            .map(|e| e.file_name())
+                            .take(2)
                             .collect::<Vec<_>>();
-                        entries.sort();
-
                         let only_calibre = entries.len() == 1
-                            && entries
-                                .first()
-                                .map(|p| p.file_name() == Some(std::ffi::OsStr::new("calibre")))
-                                .unwrap_or(false);
+                            && entries.pop().as_deref() == Some(std::ffi::OsStr::new("calibre"));
 
                         if only_calibre {
                             std::fs::remove_dir_all(target)?;
@@ -1195,7 +1191,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     if !removed_any {
                         if let Some(project) = &project {
-                            println!("Nothing to clear at {}", project.root.join("target").display());
+                            println!(
+                                "Nothing to clear at {}",
+                                project.root.join("target").display()
+                            );
                         } else {
                             println!("Nothing to clear at {}", cwd.join("target").display());
                         }

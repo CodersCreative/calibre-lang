@@ -104,8 +104,11 @@ impl VM {
         };
 
         if let Some(ref func) = found {
-            self.caches.call.insert(name.to_string(), func.clone());
-            self.caches.callsite.insert(callsite, func.clone());
+            let cached = Arc::clone(func);
+            self.caches
+                .call
+                .insert(name.to_string(), Arc::clone(&cached));
+            self.caches.callsite.insert(callsite, cached);
         }
         found
     }
@@ -469,11 +472,12 @@ impl VM {
             VMInstruction::LoadGlobal { dst, name } => {
                 let name_idx = *name;
                 let name = self.local_string(block, name_idx)?;
-                if let Some(cache) = self.caches.globals_direct.get(name) {
-                    self.set_reg_value(*dst, cache.clone());
-                    return Ok(TerminateValue::None);
-                }
-                if let Some(cache) = self.caches.globals.get(name) {
+                let cached = self
+                    .caches
+                    .globals_direct
+                    .get(name)
+                    .or_else(|| self.caches.globals.get(name));
+                if let Some(cache) = cached {
                     self.set_reg_value(*dst, cache.clone());
                     return Ok(TerminateValue::None);
                 }
@@ -514,25 +518,25 @@ impl VM {
             VMInstruction::MoveGlobal { dst, name } => {
                 let name = self.local_string(block, *name)?;
                 let resolved = self.resolve_var_name(name);
-                let value = self.try_move_global_runtime_value(name).unwrap_or_else(|| {
-                    match &resolved {
-                        VarName::Func(func) => {
-                            if let Some(func) = self.take_function(func) {
-                                self.make_runtime_function(&func)
-                            } else {
-                                RuntimeValue::Null
+                let value =
+                    self.try_move_global_runtime_value(name)
+                        .unwrap_or_else(|| match &resolved {
+                            VarName::Func(func) => {
+                                if let Some(func) = self.take_function(func) {
+                                    self.make_runtime_function(&func)
+                                } else {
+                                    RuntimeValue::Null
+                                }
                             }
-                        }
-                        VarName::Var(var) => {
-                            if let Some(var) = self.variables.remove(var) {
-                                self.move_saveable_into_runtime_var(var)
-                            } else {
-                                RuntimeValue::Null
+                            VarName::Var(var) => {
+                                if let Some(var) = self.variables.remove(var) {
+                                    self.move_saveable_into_runtime_var(var)
+                                } else {
+                                    RuntimeValue::Null
+                                }
                             }
-                        }
-                        VarName::Global => RuntimeValue::Null,
-                    }
-                });
+                            VarName::Global => RuntimeValue::Null,
+                        });
 
                 self.set_reg_value(*dst, value);
             }
@@ -607,7 +611,12 @@ impl VM {
                 data_type,
             } => {
                 let value = self.get_reg_value(*src);
-                let converted = value.convert(self, &data_type.data_type)?;
+                let converted = match value.convert(self, &data_type.data_type) {
+                    Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
+                    Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Arc::new(
+                        err.to_string(),
+                    ))))),
+                };
                 self.set_reg_value(*dst, converted);
             }
             VMInstruction::Binary {
@@ -889,29 +898,29 @@ impl VM {
                 let tuple_index = name.parse::<usize>().ok();
                 let resolved = self.resolve_value_for_op_ref(self.get_reg_value_ref(*value))?;
                 let val = match resolved {
-                    RuntimeValue::Generator {
-                        type_name,
-                        state,
-                    } => {
+                    RuntimeValue::Generator { type_name, state } => {
                         let member_short = short_name.unwrap_or(name);
                         match member_short {
                             "data" => RuntimeValue::NativeFunction(Arc::new(
-                                crate::value::GeneratorResumeFn { state: state.clone() },
+                                crate::value::GeneratorResumeFn {
+                                    state: state.clone(),
+                                },
                             )),
                             "index" => {
-                                let guard = state
-                                    .lock()
-                                    .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                                let guard = state.lock().map_err(|_| {
+                                    RuntimeError::UnexpectedType(RuntimeValue::Null)
+                                })?;
                                 RuntimeValue::Int(guard.index)
                             }
                             "done" => {
-                                let guard = state
-                                    .lock()
-                                    .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                                let guard = state.lock().map_err(|_| {
+                                    RuntimeError::UnexpectedType(RuntimeValue::Null)
+                                })?;
                                 RuntimeValue::Bool(guard.completed)
                             }
                             _ => {
-                                let mut path = String::with_capacity(type_name.len() + name.len() + 2);
+                                let mut path =
+                                    String::with_capacity(type_name.len() + name.len() + 2);
                                 path.push_str(type_name.as_str());
                                 path.push_str("::");
                                 path.push_str(name);
@@ -948,10 +957,7 @@ impl VM {
                                         self.make_runtime_function(func.as_ref())
                                     } else {
                                         return Err(RuntimeError::MissingMember {
-                                            target: RuntimeValue::Generator {
-                                                type_name,
-                                                state,
-                                            },
+                                            target: RuntimeValue::Generator { type_name, state },
                                             member: name.to_string(),
                                         });
                                     }
@@ -960,8 +966,8 @@ impl VM {
                         }
                     }
                     RuntimeValue::Aggregate(None, map) => {
-                        let idx = tuple_index
-                            .ok_or(RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                        let idx =
+                            tuple_index.ok_or(RuntimeError::UnexpectedType(RuntimeValue::Null))?;
                         if let Some((_, value)) = map.as_ref().0.0.get(idx) {
                             value.clone()
                         } else {
@@ -972,12 +978,9 @@ impl VM {
                         }
                     }
                     RuntimeValue::Aggregate(Some(type_name), map) => {
-                        if let Some(idx) = self.resolve_aggregate_member_slot(
-                            &type_name,
-                            &map,
-                            name,
-                            short_name,
-                        ) {
+                        if let Some(idx) =
+                            self.resolve_aggregate_member_slot(&type_name, &map, name, short_name)
+                        {
                             map.0.0[idx].1.clone()
                         } else {
                             let mut path = String::with_capacity(type_name.len() + name.len() + 2);
@@ -1042,9 +1045,11 @@ impl VM {
                     RuntimeValue::Result(Err(x)) if name == "next" || name == "0" => {
                         x.as_ref().clone()
                     }
-                    RuntimeValue::Ptr(id) if name == "next" || name == "0" => {
-                        self.ptr_heap.get(&id).cloned().unwrap_or(RuntimeValue::Null)
-                    }
+                    RuntimeValue::Ptr(id) if name == "next" || name == "0" => self
+                        .ptr_heap
+                        .get(&id)
+                        .cloned()
+                        .unwrap_or(RuntimeValue::Null),
                     other => return Err(RuntimeError::UnexpectedType(other)),
                 };
                 self.set_reg_value(*dst, val);
@@ -1089,46 +1094,36 @@ impl VM {
                     };
                 let update_generator =
                     |generator_value: RuntimeValue| -> Result<RuntimeValue, RuntimeError> {
-                    let RuntimeValue::Generator {
-                        type_name,
-                        state,
-                    } = generator_value
-                    else {
-                        return Err(RuntimeError::UnexpectedType(generator_value));
-                    };
+                        let RuntimeValue::Generator { type_name, state } = generator_value else {
+                            return Err(RuntimeError::UnexpectedType(generator_value));
+                        };
 
-                    if !matches!(short_name.unwrap_or(name), "done" | "index") {
-                        return Err(RuntimeError::MissingMember {
-                            target: RuntimeValue::Generator {
-                                type_name,
-                                state,
+                        if !matches!(short_name.unwrap_or(name), "done" | "index") {
+                            return Err(RuntimeError::MissingMember {
+                                target: RuntimeValue::Generator { type_name, state },
+                                member: name.to_string(),
+                            });
+                        }
+
+                        let mut guard = state
+                            .lock()
+                            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                        match short_name.unwrap_or(name) {
+                            "index" => match &value {
+                                RuntimeValue::Int(x) => guard.index = (*x).max(0),
+                                RuntimeValue::UInt(x) => guard.index = *x as i64,
+                                other => return Err(RuntimeError::UnexpectedType(other.clone())),
                             },
-                            member: name.to_string(),
-                        });
-                    }
+                            "done" => match &value {
+                                RuntimeValue::Bool(x) => guard.completed = *x,
+                                other => return Err(RuntimeError::UnexpectedType(other.clone())),
+                            },
+                            _ => {}
+                        }
+                        drop(guard);
 
-                    let mut guard = state
-                        .lock()
-                        .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
-                    match short_name.unwrap_or(name) {
-                        "index" => match &value {
-                            RuntimeValue::Int(x) => guard.index = (*x).max(0),
-                            RuntimeValue::UInt(x) => guard.index = *x as i64,
-                            other => return Err(RuntimeError::UnexpectedType(other.clone())),
-                        },
-                        "done" => match &value {
-                            RuntimeValue::Bool(x) => guard.completed = *x,
-                            other => return Err(RuntimeError::UnexpectedType(other.clone())),
-                        },
-                        _ => {}
-                    }
-                    drop(guard);
-
-                    Ok(RuntimeValue::Generator {
-                        type_name,
-                        state,
-                    })
-                };
+                        Ok(RuntimeValue::Generator { type_name, state })
+                    };
 
                 match self.get_reg_value(*target) {
                     RuntimeValue::Ref(ref_name) => {
@@ -1185,10 +1180,7 @@ impl VM {
                     }
                     RuntimeValue::Aggregate(name, map) => {
                         let updated = update_aggregate(&name, map)?;
-                        self.set_reg_value(
-                            *target,
-                            RuntimeValue::Aggregate(name, updated),
-                        );
+                        self.set_reg_value(*target, RuntimeValue::Aggregate(name, updated));
                     }
                     current @ RuntimeValue::Generator { .. } => {
                         self.set_reg_value(*target, update_generator(current)?);
@@ -1236,8 +1228,8 @@ impl VM {
                         match &index_val {
                             RuntimeValue::Int(index) => {
                                 Ok(resolve_idx(list.as_ref().0.len(), *index)
-                            .and_then(|i| list.as_ref().0.get(i).cloned())
-                            .unwrap_or(RuntimeValue::Null))
+                                    .and_then(|i| list.as_ref().0.get(i).cloned())
+                                    .unwrap_or(RuntimeValue::Null))
                             }
                             RuntimeValue::Range(start, end) => {
                                 let (s, e) = resolve_range(list.as_ref().0.len(), *start, *end);
@@ -1264,29 +1256,27 @@ impl VM {
                         }
                         _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
                     },
-                    RuntimeValue::Str(s) => {
-                        match &index_val {
-                            RuntimeValue::Int(index) => {
-                                let resolved = if *index < 0 {
-                                    let len = s.chars().count();
-                                    resolve_idx(len, *index)
-                                } else {
-                                    Some(*index as usize)
-                                };
-                                resolved
-                                    .and_then(|i| s.chars().nth(i))
-                                    .map(RuntimeValue::Char)
-                                    .unwrap_or(RuntimeValue::Null)
-                            }
-                            RuntimeValue::Range(start, end) => {
-                                let v = s.chars().collect::<Vec<char>>();
-                                let (s, e) = resolve_range(v.len(), *start, *end);
-                                let slice: String = v[s..e].iter().collect();
-                                RuntimeValue::Str(Arc::new(slice))
-                            }
-                            _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                    RuntimeValue::Str(s) => match &index_val {
+                        RuntimeValue::Int(index) => {
+                            let resolved = if *index < 0 {
+                                let len = s.chars().count();
+                                resolve_idx(len, *index)
+                            } else {
+                                Some(*index as usize)
+                            };
+                            resolved
+                                .and_then(|i| s.chars().nth(i))
+                                .map(RuntimeValue::Char)
+                                .unwrap_or(RuntimeValue::Null)
                         }
-                    }
+                        RuntimeValue::Range(start, end) => {
+                            let v = s.chars().collect::<Vec<char>>();
+                            let (s, e) = resolve_range(v.len(), *start, *end);
+                            let slice: String = v[s..e].iter().collect();
+                            RuntimeValue::Str(Arc::new(slice))
+                        }
+                        _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                    },
                     RuntimeValue::Enum(_, _, Some(x)) => x.as_ref().clone(),
                     RuntimeValue::Option(Some(x)) => x.as_ref().clone(),
                     RuntimeValue::Result(Ok(x)) => x.as_ref().clone(),

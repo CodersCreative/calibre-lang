@@ -1941,11 +1941,9 @@ impl MiddleEnvironment {
             } => {
                 let elem_ty = match data_type {
                     Some(PotentialNewType::DataType(dt)) => dt,
-                    _ => self
-                        .resolve_type_from_node(scope, &map)
-                        .unwrap_or_else(|| {
-                            ParserDataType::new(node.span, ParserInnerType::Auto(None))
-                        }),
+                    _ => self.resolve_type_from_node(scope, &map).unwrap_or_else(|| {
+                        ParserDataType::new(node.span, ParserInnerType::Auto(None))
+                    }),
                 };
                 self.evaluate_inner(
                     scope,

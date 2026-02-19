@@ -1,9 +1,19 @@
+use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex};
+use std::net::{TcpListener, TcpStream, ToSocketAddrs};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
 use dumpster::sync::Gc;
+
+fn port_redirects() -> &'static Mutex<HashMap<String, i64>> {
+    static REDIRECTS: OnceLock<Mutex<HashMap<String, i64>>> = OnceLock::new();
+    REDIRECTS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn key_for(host: &str, port: i64) -> String {
+    format!("{host}:{port}")
+}
 
 pub struct HttpRequest;
 
@@ -11,13 +21,19 @@ fn parse_http_args(args: Vec<RuntimeValue>) -> Result<(String, String, String), 
     if args.len() != 3 {
         return Err(RuntimeError::InvalidFunctionCall);
     }
-    let mut parts = Vec::with_capacity(3);
-    for value in args {
-        let RuntimeValue::Str(s) = value else {
-            return Err(RuntimeError::UnexpectedType(value));
-        };
-        parts.push(s.to_string());
-    }
+    let [a, b, c]: [RuntimeValue; 3] = args
+        .try_into()
+        .map_err(|_| RuntimeError::InvalidFunctionCall)?;
+    let RuntimeValue::Str(a) = a else {
+        return Err(RuntimeError::UnexpectedType(a));
+    };
+    let RuntimeValue::Str(b) = b else {
+        return Err(RuntimeError::UnexpectedType(b));
+    };
+    let RuntimeValue::Str(c) = c else {
+        return Err(RuntimeError::UnexpectedType(c));
+    };
+    let parts = [a.to_string(), b.to_string(), c.to_string()];
 
     let looks_like_method = |s: &str| {
         matches!(
@@ -44,9 +60,9 @@ fn parse_http_args(args: Vec<RuntimeValue>) -> Result<(String, String, String), 
         .find(|idx| *idx != method_idx && *idx != url_idx)
         .unwrap_or(2);
 
-    let method = parts[method_idx].clone();
-    let url = parts[url_idx].clone();
-    let body = parts[body_idx].clone();
+    let method = parts[method_idx].to_string();
+    let url = parts[url_idx].to_string();
+    let body = parts[body_idx].to_string();
     Ok((method, url, body))
 }
 
@@ -120,7 +136,15 @@ impl NativeFunction for TcpConnect {
         let RuntimeValue::Str(host) = host else {
             return Err(RuntimeError::UnexpectedType(host));
         };
-        let addr = format!("{}:{}", host, port);
+        let remapped_port = {
+            let key = key_for(host.as_str(), port);
+            port_redirects()
+                .lock()
+                .ok()
+                .and_then(|m| m.get(&key).copied())
+                .unwrap_or(port)
+        };
+        let addr = format!("{}:{}", host, remapped_port);
         let stream = TcpStream::connect(addr).map_err(|e| RuntimeError::Io(e.to_string()))?;
         stream
             .set_nonblocking(false)
@@ -152,7 +176,55 @@ impl NativeFunction for TcpListen {
             return Err(RuntimeError::UnexpectedType(host));
         };
         let addr = format!("{}:{}", host, port);
-        let listener = TcpListener::bind(addr).map_err(|e| RuntimeError::Io(e.to_string()))?;
+        let socket_addr = addr
+            .to_socket_addrs()
+            .map_err(|e| RuntimeError::Io(e.to_string()))?
+            .next()
+            .ok_or_else(|| RuntimeError::Io("no socket address resolved".to_string()))?;
+        let domain = if socket_addr.is_ipv4() {
+            socket2::Domain::IPV4
+        } else {
+            socket2::Domain::IPV6
+        };
+        let socket =
+            socket2::Socket::new(domain, socket2::Type::STREAM, Some(socket2::Protocol::TCP))
+                .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        socket
+            .set_reuse_address(true)
+            .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        let requested = socket_addr;
+        let bind_result = socket.bind(&requested.into());
+        if let Err(err) = bind_result {
+            if err.kind() == std::io::ErrorKind::AddrInUse {
+                let fallback_addr = format!("{}:0", host);
+                let fallback = fallback_addr
+                    .to_socket_addrs()
+                    .map_err(|e| RuntimeError::Io(e.to_string()))?
+                    .next()
+                    .ok_or_else(|| {
+                        RuntimeError::Io("no fallback socket address resolved".to_string())
+                    })?;
+                socket
+                    .bind(&fallback.into())
+                    .map_err(|e| RuntimeError::Io(e.to_string()))?;
+            } else {
+                return Err(RuntimeError::Io(err.to_string()));
+            }
+        }
+        socket
+            .listen(128)
+            .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        let listener: TcpListener = socket.into();
+        if let Ok(local_addr) = listener.local_addr()
+            && let Ok(mut redirects) = port_redirects().lock()
+        {
+            let key = key_for(host.as_str(), port);
+            if local_addr.port() as i64 != port {
+                redirects.insert(key, local_addr.port() as i64);
+            } else {
+                redirects.remove(&key);
+            }
+        }
         Ok(RuntimeValue::TcpListener(Arc::new(listener)))
     }
 }

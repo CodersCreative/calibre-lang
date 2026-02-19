@@ -245,73 +245,9 @@ impl MiddleEnvironment {
         defined: &[String],
         protected_extra: &[String],
     ) {
-        use rustc_hash::FxHashMap;
-        use rustc_hash::FxHashSet;
-        let mut last_use: FxHashMap<String, usize> = FxHashMap::default();
-        let mut protected: FxHashSet<String> = FxHashSet::default();
-        let mut returned_idents: FxHashSet<String> = FxHashSet::default();
-        for ident in protected_extra {
-            protected.insert(ident.clone());
-        }
-
-        for (idx, stmt) in stmts.iter().enumerate() {
-            if let MiddleNodeType::Return { value: Some(val) } = &stmt.node_type {
-                for ident in val.identifiers_used() {
-                    let ident = ident.to_string();
-                    protected.insert(ident.clone());
-                    returned_idents.insert(ident);
-                }
-            }
-            if let MiddleNodeType::FunctionDeclaration { .. } = &stmt.node_type {
-                for ident in stmt.captured() {
-                    protected.insert(ident.to_string());
-                }
-            }
-            for ident in stmt.identifiers_used() {
-                last_use.insert(ident.to_string(), idx);
-            }
-            if let MiddleNodeType::Drop(name) = &stmt.node_type {
-                last_use.insert(name.to_string(), idx);
-            }
-        }
-
-        let mut inserts: Vec<(usize, String)> = Vec::new();
-        for name in defined {
-            if protected.contains(name) {
-                continue;
-            }
-            let must_keep = returned_idents.contains(name);
-            if let Some(&idx) = last_use.get(name) {
-                if idx >= stmts.len() {
-                    continue;
-                } else if let Some(stmt) = stmts.get(idx) {
-                    match &stmt.node_type {
-                        MiddleNodeType::Return { .. }
-                        | MiddleNodeType::Break { .. }
-                        | MiddleNodeType::Continue { .. } => continue,
-                        MiddleNodeType::Drop(drop_name) if drop_name.text == *name => continue,
-                        _ => {}
-                    }
-                }
-                let insert_idx = (idx + 1).min(stmts.len());
-                inserts.push((insert_idx, name.clone()));
-            } else if !must_keep {
-                inserts.push((stmts.len(), name.clone()));
-            }
-        }
-
-        inserts.sort_by(|a, b| b.0.cmp(&a.0));
-        for (idx, name) in inserts {
-            if idx <= stmts.len() {
-                stmts.insert(
-                    idx,
-                    MiddleNode::new(MiddleNodeType::Drop(name.into()), self.current_span()),
-                );
-            }
-        }
+        let _ = (stmts, defined, protected_extra);
     }
 }
-
 
 impl MiddleEnvironment {
     pub fn get_scope_member_scope_path(

@@ -60,12 +60,7 @@ impl MiddleEnvironment {
         self_arg
     }
 
-    fn add_receiver_if_missing(
-        &mut self,
-        scope: &u64,
-        args: &mut Vec<CallArg>,
-        receiver: Node,
-    ) {
+    fn add_receiver_if_missing(&mut self, scope: &u64, args: &mut Vec<CallArg>, receiver: Node) {
         let _ = scope;
         let receiver_text = receiver.to_string();
         let already_has_receiver = args.iter().any(|arg| match arg {
@@ -156,8 +151,7 @@ impl MiddleEnvironment {
             for arg in reverse_args {
                 lowered_args.push(self.evaluate(scope, arg));
             }
-            if lowered_args.len() >= 2
-                && lowered_args[0].to_string() == lowered_args[1].to_string()
+            if lowered_args.len() >= 2 && lowered_args[0].to_string() == lowered_args[1].to_string()
             {
                 lowered_args.remove(1);
             }
@@ -715,7 +709,7 @@ impl MiddleEnvironment {
                                     )
                                     .into(),
                                 )
-                                    .map(|x| x.unwrap_all_refs())
+                                .map(|x| x.unwrap_all_refs())
                             });
 
                         let receiver_is_value = list

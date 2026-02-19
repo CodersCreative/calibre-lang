@@ -458,6 +458,7 @@ dependencies = [
  "serde",
  "sha2",
  "smallvec",
+ "socket2",
  "thiserror",
  "ureq",
 ]

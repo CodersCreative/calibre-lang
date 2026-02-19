@@ -532,13 +532,20 @@ fn visit(
                 .map_err(|e| e)?;
             Ok(bool_t)
         }
-        NodeType::AsExpression { data_type, .. } => Ok(hm::from_parser_data_type(
-            &match data_type {
+        NodeType::AsExpression { data_type, .. } => {
+            let ok_type = match data_type {
                 PotentialNewType::DataType(dt) => dt.clone(),
                 _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
-            },
-            tg,
-        )),
+            };
+            let result_type = ParserDataType::new(
+                node.span,
+                ParserInnerType::Result {
+                    ok: Box::new(ok_type),
+                    err: Box::new(ParserDataType::new(node.span, ParserInnerType::Dynamic)),
+                },
+            );
+            Ok(hm::from_parser_data_type(&result_type, tg))
+        }
         NodeType::VariableDeclaration {
             identifier,
             value,

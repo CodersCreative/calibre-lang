@@ -210,7 +210,9 @@ impl MiddleEnvironment {
                 .mappings
                 .get(&identifier.text)
                 .and_then(|name| self.variables.get(name))
-                .is_some_and(|var| matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_)));
+                .is_some_and(|var| {
+                    matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+                });
             if !(is_reserved_constructor && existing_is_native) {
                 scope_ref
                     .mappings
@@ -270,14 +272,19 @@ impl MiddleEnvironment {
                 .mappings
                 .get(&identifier.text)
                 .and_then(|name| self.variables.get(name))
-                .is_some_and(|var| matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_)));
+                .is_some_and(|var| {
+                    matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+                });
             if !(is_reserved_constructor && existing_is_native) {
                 scope_ref.mappings.insert(identifier.text, new_name.clone());
             }
         }
 
         if data_type.contains_auto()
-            && !matches!(original_value_node.node_type, NodeType::InlineGenerator { .. })
+            && !matches!(
+                original_value_node.node_type,
+                NodeType::InlineGenerator { .. }
+            )
             && let Some((hm_t, subst)) = infer_node_hm(self, scope, &original_value_node)
         {
             let t_applied = hm::apply_subst(&subst, &hm_t);

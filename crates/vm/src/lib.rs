@@ -911,18 +911,13 @@ impl VM {
             }
         }
 
-        let idx = map
-            .0
-            .0
-            .iter()
-            .enumerate()
-            .find_map(|(idx, (field, _))| {
-                if field == name || short_name.is_some_and(|short| field == short) {
-                    Some(idx)
-                } else {
-                    None
-                }
-            })?;
+        let idx = map.0.0.iter().enumerate().find_map(|(idx, (field, _))| {
+            if field == name || short_name.is_some_and(|short| field == short) {
+                Some(idx)
+            } else {
+                None
+            }
+        })?;
 
         let slots = self
             .caches

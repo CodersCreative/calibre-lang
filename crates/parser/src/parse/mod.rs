@@ -208,10 +208,7 @@ pub fn parse_program_with_source(
 
     let float_suffix_lit = lex(
         pad.clone(),
-        dec_digits
-            .clone()
-            .then_ignore(just('f'))
-            .map(|n| n),
+        dec_digits.clone().then_ignore(just('f')).map(|n| n),
     )
     .map_with_span({
         let ls = line_starts.clone();
@@ -241,11 +238,11 @@ pub fn parse_program_with_source(
                 }
             }),
     )
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |n: String, r| Node::new(span(ls.as_ref(), r), NodeType::IntLiteral(n))
-        })
-        .boxed();
+    .map_with_span({
+        let ls = line_starts.clone();
+        move |n: String, r| Node::new(span(ls.as_ref(), r), NodeType::IntLiteral(n))
+    })
+    .boxed();
 
     let float_lit = lex(
         pad.clone(),
@@ -1485,27 +1482,29 @@ pub fn parse_program_with_source(
                 template_call_args
                     .clone()
                     .then(reverse_args.clone().or_not())
-                    .map(|((string_fn, args), rev)| (Some(string_fn), args, rev.unwrap_or_default())),
+                    .map(|((string_fn, args), rev)| {
+                        (Some(string_fn), args, rev.unwrap_or_default())
+                    }),
             ))
             .boxed();
 
-            let apply_calls = |head: Node,
-                               calls: Vec<(Option<ParserText>, Vec<CallArg>, Vec<Node>)>| {
-                calls
-                    .into_iter()
-                    .fold(head, |c, (string_fn, args, reverse_args)| {
-                        Node::new(
-                            c.span,
-                            NodeType::CallExpression {
-                                string_fn,
-                                caller: Box::new(c),
-                                generic_types: Vec::new(),
-                                args,
-                                reverse_args,
-                            },
-                        )
-                    })
-            };
+            let apply_calls =
+                |head: Node, calls: Vec<(Option<ParserText>, Vec<CallArg>, Vec<Node>)>| {
+                    calls
+                        .into_iter()
+                        .fold(head, |c, (string_fn, args, reverse_args)| {
+                            Node::new(
+                                c.span,
+                                NodeType::CallExpression {
+                                    string_fn,
+                                    caller: Box::new(c),
+                                    generic_types: Vec::new(),
+                                    args,
+                                    reverse_args,
+                                },
+                            )
+                        })
+                };
 
             let postfix = atom
                 .then(call_suffix.clone().repeated().collect::<Vec<_>>())
@@ -2328,93 +2327,90 @@ pub fn parse_program_with_source(
             let for_expr =
                 lex(pad.clone(), text::keyword("for"))
                     .ignore_then(
-                        fat_arrow
-                            .clone()
-                            .rewind()
-                            .to(LoopType::Loop)
-                            .or(lex(pad.clone(), just("let"))
-                            .ignore_then(
-                                lex(pad.clone(), just('.'))
-                                    .ignore_then(ident.clone())
-                                    .then(
-                                        lex(pad.clone(), just(':'))
-                                            .ignore_then(ident.clone())
-                                            .or_not(),
-                                    )
-                                    .map(|((variant, vsp), name)| {
-                                        let value = PotentialDollarIdentifier::Identifier(
-                                            ParserText::new(vsp, variant),
-                                        );
-                                        let name = name.map(|(n, nsp)| {
-                                            PotentialDollarIdentifier::Identifier(ParserText::new(
-                                                nsp, n,
-                                            ))
-                                        });
-                                        MatchArmType::Enum {
-                                            value,
-                                            var_type: VarType::Immutable,
-                                            name,
-                                            destructure: None,
-                                        }
-                                    })
-                                    .then(
-                                        lex(pad.clone(), just('|'))
-                                            .ignore_then(
-                                                lex(pad.clone(), just('.'))
-                                                    .ignore_then(ident.clone())
-                                                    .then(
-                                                        lex(pad.clone(), just(':'))
-                                                            .ignore_then(ident.clone())
-                                                            .or_not(),
-                                                    )
-                                                    .map(|((variant, vsp), name)| {
-                                                        let value =
-                                                            PotentialDollarIdentifier::Identifier(
-                                                                ParserText::new(vsp, variant),
-                                                            );
-                                                        let name = name.map(|(n, nsp)| {
-                                                            PotentialDollarIdentifier::Identifier(
-                                                                ParserText::new(nsp, n),
-                                                            )
-                                                        });
-                                                        MatchArmType::Enum {
-                                                            value,
-                                                            var_type: VarType::Immutable,
-                                                            name,
-                                                            destructure: None,
-                                                        }
-                                                    }),
-                                            )
-                                            .repeated()
-                                            .collect::<Vec<_>>(),
-                                    )
-                                    .map(|(first, rest)| {
-                                        let mut all = vec![first];
-                                        all.extend(rest);
-                                        all
-                                    }),
-                            )
-                            .then_ignore(left_arrow.clone())
-                            .then(expr.clone())
-                            .map(|(values, value)| LoopType::Let {
-                                value,
-                                pattern: (values, Vec::new()),
-                            })
-                            .or(ident
-                                .clone()
-                                .then_ignore(lex(pad.clone(), just("in")))
-                                .then(expr.clone())
-                                .map(|((n, sp), iter)| {
-                                    LoopType::For(
+                        fat_arrow.clone().rewind().to(LoopType::Loop).or(lex(
+                            pad.clone(),
+                            just("let"),
+                        )
+                        .ignore_then(
+                            lex(pad.clone(), just('.'))
+                                .ignore_then(ident.clone())
+                                .then(
+                                    lex(pad.clone(), just(':'))
+                                        .ignore_then(ident.clone())
+                                        .or_not(),
+                                )
+                                .map(|((variant, vsp), name)| {
+                                    let value = PotentialDollarIdentifier::Identifier(
+                                        ParserText::new(vsp, variant),
+                                    );
+                                    let name = name.map(|(n, nsp)| {
                                         PotentialDollarIdentifier::Identifier(ParserText::new(
-                                            sp, n,
-                                        )),
-                                        iter,
-                                    )
+                                            nsp, n,
+                                        ))
+                                    });
+                                    MatchArmType::Enum {
+                                        value,
+                                        var_type: VarType::Immutable,
+                                        name,
+                                        destructure: None,
+                                    }
                                 })
-                                .or(expr.clone().map(LoopType::While))
-                                .or_not()
-                                .map(|x| x.unwrap_or(LoopType::Loop)))),
+                                .then(
+                                    lex(pad.clone(), just('|'))
+                                        .ignore_then(
+                                            lex(pad.clone(), just('.'))
+                                                .ignore_then(ident.clone())
+                                                .then(
+                                                    lex(pad.clone(), just(':'))
+                                                        .ignore_then(ident.clone())
+                                                        .or_not(),
+                                                )
+                                                .map(|((variant, vsp), name)| {
+                                                    let value =
+                                                        PotentialDollarIdentifier::Identifier(
+                                                            ParserText::new(vsp, variant),
+                                                        );
+                                                    let name = name.map(|(n, nsp)| {
+                                                        PotentialDollarIdentifier::Identifier(
+                                                            ParserText::new(nsp, n),
+                                                        )
+                                                    });
+                                                    MatchArmType::Enum {
+                                                        value,
+                                                        var_type: VarType::Immutable,
+                                                        name,
+                                                        destructure: None,
+                                                    }
+                                                }),
+                                        )
+                                        .repeated()
+                                        .collect::<Vec<_>>(),
+                                )
+                                .map(|(first, rest)| {
+                                    let mut all = vec![first];
+                                    all.extend(rest);
+                                    all
+                                }),
+                        )
+                        .then_ignore(left_arrow.clone())
+                        .then(expr.clone())
+                        .map(|(values, value)| LoopType::Let {
+                            value,
+                            pattern: (values, Vec::new()),
+                        })
+                        .or(ident
+                            .clone()
+                            .then_ignore(lex(pad.clone(), just("in")))
+                            .then(expr.clone())
+                            .map(|((n, sp), iter)| {
+                                LoopType::For(
+                                    PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
+                                    iter,
+                                )
+                            })
+                            .or(expr.clone().map(LoopType::While))
+                            .or_not()
+                            .map(|x| x.unwrap_or(LoopType::Loop)))),
                     )
                     .then_ignore(fat_arrow.clone())
                     .then(
@@ -2426,11 +2422,7 @@ pub fn parse_program_with_source(
                             })
                             .or_not(),
                     )
-                    .then(choice((
-                        scope.clone(),
-                        statement.clone(),
-                        expr.clone(),
-                    )))
+                    .then(choice((scope.clone(), statement.clone(), expr.clone())))
                     .then(
                         lex(pad.clone(), just("else"))
                             .ignore_then(fat_arrow.clone())
@@ -3057,8 +3049,22 @@ pub fn parse_program_with_source(
                 .collect::<Vec<_>>(),
             )
             .then_ignore(lex(pad.clone(), just('=')))
-            .then(expr.clone())
-            .map(|(items, value)| {
+            .then(
+                expr.clone().then(
+                    lex(pad.clone(), just(','))
+                        .ignore_then(expr.clone())
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                ),
+            )
+            .map(|(items, (first_value, rest_values))| {
+                let value = if rest_values.is_empty() {
+                    first_value
+                } else {
+                    let mut values = vec![first_value];
+                    values.extend(rest_values);
+                    Node::new(Span::default(), NodeType::TupleLiteral { values })
+                };
                 Node::new(
                     value.span,
                     NodeType::DestructureDeclaration {
