@@ -4,7 +4,7 @@ use calibre_lir::{
 };
 use calibre_parser::Span;
 use calibre_parser::ast::{
-    ParserDataType, ParserInnerType,
+    AsFailureMode, ParserDataType, ParserInnerType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
@@ -367,6 +367,7 @@ pub enum VMInstruction {
         dst: Reg,
         src: Reg,
         data_type: ParserDataType,
+        failure_mode: AsFailureMode,
     },
     Binary {
         dst: Reg,
@@ -486,8 +487,14 @@ impl Display for VMInstruction {
                 dst,
                 src,
                 data_type,
+                failure_mode,
             } => {
-                write!(f, "%r{dst} = %r{src} AS {data_type}")
+                let suffix = match failure_mode {
+                    AsFailureMode::Panic => "!",
+                    AsFailureMode::Option => "?",
+                    AsFailureMode::Result => "",
+                };
+                write!(f, "%r{dst} = %r{src} AS{} {data_type}", suffix)
             }
             VMInstruction::Binary {
                 dst,
@@ -1496,7 +1503,7 @@ impl<'a> BlockLoweringCtx<'a> {
                     dst
                 }
             },
-            LirNodeType::As(value, data_type) => {
+            LirNodeType::As(value, data_type, failure_mode) => {
                 let src = self.lower_node(*value, span);
                 let dst = self.alloc_reg();
                 self.emit(
@@ -1504,6 +1511,7 @@ impl<'a> BlockLoweringCtx<'a> {
                         dst,
                         src,
                         data_type,
+                        failure_mode,
                     },
                     span,
                 );

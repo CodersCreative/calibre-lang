@@ -14,6 +14,8 @@ impl PairEnum {
 };
 
 const sum_pair = fn ((a, b)) => a + b;
+const sum_pair_struct = fn ({left : a, right : b}: Pair) => a + b;
+const sum_pair_struct_basic = fn ({left, right}: Pair) => left + right;
 
 const main = fn () => {
 	let pair = Pair { left : 10, right : 20 };
@@ -37,6 +39,58 @@ const main = fn () => {
 	pair_enum = PairEnum.Normal : pair;
 	print(pair_enum);
 	pair_enum.display();
+
+	match 10, 90, 20 {
+		20, 40, 80 | 30 | 90 => print(other),
+		10, .., 50 => print(10 + 50),
+		10, mut value, 20 => {
+			value += 90;
+			print(value);
+		},
+		10, const value, _ => print(value),
+		_ => {}
+	};
+
+	match 30, PairEnum.Tuple : (10, 30) {
+		10, .Normal : val => print(val),
+		10, .Normal : {left : l, right : r} => print(l + r),
+		_, .Tuple : (val, 20) => print(val),
+		_, .Tuple : (90, 50 | 40) => print(90 - 50),
+		_ => {}
+	};
+
+	match Pair {left : 30, right : 50} {
+		{left : 50, right} => print(50 - right),
+		{left, right} => print(left + right),
+		_ => {}
+	};
+
+	match 50 {
+		let value => print(value),
+		_ => {}
+	};
+
+	match 50 {
+		value => print(value),
+		_ => {}
+	};
+
+	if let {left : l, right : r} <- Pair { left : 4, right : 6 } => {
+		print(l + r);
+	};
+
+	if let .Tuple : (a, 9) <- PairEnum.Tuple : (3, 9) => {
+		print(a);
+	} else => {
+		print(0);
+	};
+
+	for let .Tuple : (x, y) <- PairEnum.Tuple : (7, 8) => {
+		print(x + y);
+		break;
+	};
 	
-	print(sum_pair(tuple(7, 8)));
+	print(sum_pair((7, 8)));
+	print(sum_pair_struct(Pair { left : 2, right : 20 }));
+	print(sum_pair_struct_basic(Pair { left : 2, right : 2 }));
 };

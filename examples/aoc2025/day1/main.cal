@@ -1,16 +1,16 @@
 import (File, exists) from std::file;
 
 const parse_direction = fn (line : str) -> char => {
-	let chars = try trim(line) as list:<char> => panic("invalid instruction");
+	let chars = trim(line) as! list:<char>;
 	chars[0];
 };
 
 const parse_distance = fn (line : str) -> int => {
-	let chars = try trim(line) as list:<char> => panic("invalid instruction");
+	let chars = trim(line) as! list:<char>;
 	let mut num_text : str = "";
 	
 	for i in 0..(len(chars) - 1) => num_text &= chars[i + 1];
-	try num_text as int => panic("invalid number in instruction");
+	num_text as! int;
 };
 
 const count_zeros_part1 = fn (lines : list:<str>) -> int => {

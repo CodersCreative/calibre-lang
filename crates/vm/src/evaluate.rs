@@ -609,13 +609,30 @@ impl VM {
                 dst,
                 src,
                 data_type,
+                failure_mode,
             } => {
                 let value = self.get_reg_value(*src);
-                let converted = match value.convert(self, &data_type.data_type) {
-                    Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
-                    Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Arc::new(
-                        err.to_string(),
-                    ))))),
+                let conversion = value.convert(self, &data_type.data_type);
+                let converted = match failure_mode {
+                    calibre_parser::ast::AsFailureMode::Panic => match conversion {
+                        Ok(value) => value,
+                        Err(err) => {
+                            return Err(RuntimeError::Panic(Some(format!(
+                                "failed `as!` conversion to {}: {}",
+                                data_type, err
+                            ))));
+                        }
+                    },
+                    calibre_parser::ast::AsFailureMode::Option => match conversion {
+                        Ok(value) => RuntimeValue::Option(Some(Gc::new(value))),
+                        Err(_) => RuntimeValue::Option(None),
+                    },
+                    calibre_parser::ast::AsFailureMode::Result => match conversion {
+                        Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
+                        Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+                            Arc::new(err.to_string()),
+                        )))),
+                    },
                 };
                 self.set_reg_value(*dst, converted);
             }

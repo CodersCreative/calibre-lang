@@ -241,6 +241,38 @@ pub fn get_disamubiguous_name(
 }
 
 impl MiddleEnvironment {
+    pub fn scope_ref_or_err(&self, scope: &u64) -> Result<&MiddleScope, MiddleErr> {
+        self.scopes
+            .get(scope)
+            .ok_or_else(|| MiddleErr::Internal(format!("missing scope {scope}")))
+    }
+
+    pub fn scope_mut_or_err(&mut self, scope: &u64) -> Result<&mut MiddleScope, MiddleErr> {
+        self.scopes
+            .get_mut(scope)
+            .ok_or_else(|| MiddleErr::Internal(format!("missing scope {scope}")))
+    }
+
+    pub fn temp_name_at(&self, prefix: &str, span: Span) -> String {
+        format!("{}_{}_{}", prefix, span.from.line, span.from.col)
+    }
+
+    pub fn temp_name(&self, prefix: &str) -> String {
+        self.temp_name_at(prefix, self.current_span())
+    }
+
+    pub fn temp_name_at_index(&self, prefix: &str, span: Span, index: usize) -> String {
+        format!("{}_{}", self.temp_name_at(prefix, span), index)
+    }
+
+    pub fn temp_ident_at(&self, prefix: &str, span: Span) -> PotentialDollarIdentifier {
+        ParserText::from(self.temp_name_at(prefix, span)).into()
+    }
+
+    pub fn temp_ident(&self, prefix: &str) -> PotentialDollarIdentifier {
+        ParserText::from(self.temp_name(prefix)).into()
+    }
+
     fn lookup_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
         if let Some(obj) = self.objects.get(struct_name) {
             return Some(obj);
@@ -1126,31 +1158,7 @@ impl MiddleEnvironment {
                 value,
                 ..
             } => {
-                fn contains_auto(dt: &ParserDataType) -> bool {
-                    match &dt.data_type {
-                        ParserInnerType::Auto(_) => true,
-                        ParserInnerType::Tuple(xs) => xs.iter().any(contains_auto),
-                        ParserInnerType::List(x) => contains_auto(x),
-                        ParserInnerType::Ptr(x) => contains_auto(x),
-                        ParserInnerType::Option(x) => contains_auto(x),
-                        ParserInnerType::Result { ok, err } => {
-                            contains_auto(ok) || contains_auto(err)
-                        }
-                        ParserInnerType::Function {
-                            return_type,
-                            parameters,
-                            ..
-                        } => contains_auto(return_type) || parameters.iter().any(contains_auto),
-                        ParserInnerType::Ref(x, _) => contains_auto(x),
-                        ParserInnerType::StructWithGenerics { generic_types, .. } => {
-                            generic_types.iter().any(contains_auto)
-                        }
-                        ParserInnerType::Scope(xs) => xs.iter().any(contains_auto),
-                        _ => false,
-                    }
-                }
-
-                if data_type.is_auto() || contains_auto(data_type) {
+                if data_type.is_auto() || data_type.contains_auto() {
                     if let Some(v) = self.variables.get(&identifier.text) {
                         *data_type = v.data_type.clone();
                     }
@@ -2520,10 +2528,11 @@ impl MiddleEnvironment {
             NodeType::InlineGenerator { map, data_type, .. } => {
                 let elem = match data_type {
                     Some(PotentialNewType::DataType(dt)) => dt.clone(),
-                    _ => self.resolve_type_from_node(scope, map).unwrap_or_else(|| {
-                        ParserDataType::new(node.span, ParserInnerType::Auto(None))
-                    }),
+                    _ => self
+                        .resolve_type_from_node(scope, &map)
+                        .unwrap_or(ParserDataType::new(node.span, ParserInnerType::Auto(None))),
                 };
+
                 Some(ParserDataType::new(
                     node.span,
                     ParserInnerType::StructWithGenerics {
@@ -2779,15 +2788,23 @@ impl MiddleEnvironment {
             NodeType::AsExpression {
                 value: _,
                 data_type,
+                failure_mode,
             } => {
                 let ok = self.resolve_potential_new_type(scope, data_type.clone());
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Result {
-                        ok: Box::new(ok),
-                        err: Box::new(ParserDataType::new(node.span, ParserInnerType::Dynamic)),
-                    },
-                    span: node.span,
-                })
+                match failure_mode {
+                    calibre_parser::ast::AsFailureMode::Panic => Some(ok),
+                    calibre_parser::ast::AsFailureMode::Option => Some(ParserDataType {
+                        data_type: ParserInnerType::Option(Box::new(ok)),
+                        span: node.span,
+                    }),
+                    calibre_parser::ast::AsFailureMode::Result => Some(ParserDataType {
+                        data_type: ParserInnerType::Result {
+                            ok: Box::new(ok),
+                            err: Box::new(ParserDataType::new(node.span, ParserInnerType::Dynamic)),
+                        },
+                        span: node.span,
+                    }),
+                }
             }
             NodeType::RangeDeclaration { .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Range,
@@ -3107,9 +3124,94 @@ impl MiddleEnvironment {
 
                 Some(current)
             }
-            NodeType::PipeExpression(path) => path
-                .last()
-                .and_then(|p| self.resolve_type_from_node(scope, p.get_node())),
+            NodeType::PipeExpression(path) => {
+                let mut iter = path.iter();
+                let first = iter.next()?;
+                let mut current = self.resolve_type_from_node(scope, first.get_node())?;
+
+                let apply_callable =
+                    |callable: ParserDataType, applied_args: usize, span: Span| match callable
+                        .unwrap_all_refs()
+                        .data_type
+                    {
+                        ParserInnerType::Function {
+                            return_type,
+                            parameters,
+                        } => {
+                            if parameters.len() > applied_args {
+                                ParserDataType::new(
+                                    span,
+                                    ParserInnerType::Function {
+                                        return_type,
+                                        parameters: parameters
+                                            .into_iter()
+                                            .skip(applied_args)
+                                            .collect(),
+                                    },
+                                )
+                            } else {
+                                *return_type
+                            }
+                        }
+                        ParserInnerType::NativeFunction(ret) => *ret,
+                        _ => ParserDataType::new(span, ParserInnerType::Auto(None)),
+                    };
+
+                let mut idx = 1usize;
+                while idx < path.len() {
+                    let point = &path[idx];
+                    let point_ty = self.resolve_type_from_node(scope, point.get_node());
+                    let point_callable = point_ty.as_ref().is_some_and(|ty| {
+                        matches!(
+                            ty.clone().unwrap_all_refs().data_type,
+                            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
+                        ) && !point.is_named()
+                            && !point.get_node().node_type.is_call()
+                    });
+
+                    if !point_callable && let Some(next) = path.get(idx + 1) {
+                        let next_ty = self.resolve_type_from_node(scope, next.get_node());
+                        let next_callable = next_ty.as_ref().is_some_and(|ty| {
+                            matches!(
+                                ty.clone().unwrap_all_refs().data_type,
+                                ParserInnerType::Function { .. }
+                                    | ParserInnerType::NativeFunction(_)
+                            ) && !next.is_named()
+                                && !next.get_node().node_type.is_call()
+                        });
+
+                        if next_callable {
+                            current = apply_callable(
+                                next_ty.unwrap_or(ParserDataType::new(
+                                    node.span,
+                                    ParserInnerType::Auto(None),
+                                )),
+                                2,
+                                node.span,
+                            );
+                            idx += 2;
+                            continue;
+                        }
+                    }
+
+                    current = if point_callable {
+                        apply_callable(
+                            point_ty.unwrap_or(ParserDataType::new(
+                                node.span,
+                                ParserInnerType::Auto(None),
+                            )),
+                            1,
+                            node.span,
+                        )
+                    } else {
+                        point_ty
+                            .unwrap_or(ParserDataType::new(node.span, ParserInnerType::Auto(None)))
+                    };
+                    idx += 1;
+                }
+
+                Some(current)
+            }
             NodeType::DerefStatement { value } => {
                 let typ = self.resolve_type_from_node(scope, &value)?;
 
@@ -3131,29 +3233,7 @@ impl MiddleEnvironment {
                 return Some(resolved);
             }
 
-            fn contains_auto(dt: &ParserDataType) -> bool {
-                match &dt.data_type {
-                    ParserInnerType::Auto(_) => true,
-                    ParserInnerType::Tuple(xs) => xs.iter().any(|x| contains_auto(x)),
-                    ParserInnerType::List(x) => contains_auto(x),
-                    ParserInnerType::Ptr(x) => contains_auto(x),
-                    ParserInnerType::Option(x) => contains_auto(x),
-                    ParserInnerType::Result { ok, err } => contains_auto(ok) || contains_auto(err),
-                    ParserInnerType::Function {
-                        return_type,
-                        parameters,
-                        ..
-                    } => contains_auto(return_type) || parameters.iter().any(|p| contains_auto(p)),
-                    ParserInnerType::Ref(x, _) => contains_auto(x),
-                    ParserInnerType::StructWithGenerics { generic_types, .. } => {
-                        generic_types.iter().any(|g| contains_auto(g))
-                    }
-                    ParserInnerType::Scope(xs) => xs.iter().any(|x| contains_auto(x)),
-                    _ => false,
-                }
-            }
-
-            if contains_auto(&resolved) {
+            if resolved.contains_auto() {
                 if let Some(inferred) = infer_node_type(self, scope, &node) {
                     return Some(self.resolve_data_type(scope, inferred));
                 }

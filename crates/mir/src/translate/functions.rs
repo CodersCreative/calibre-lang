@@ -15,6 +15,10 @@ use crate::{
 };
 
 impl MiddleEnvironment {
+    fn span_suffix(span: Span) -> String {
+        format!("{}_{}", span.from.line, span.from.col)
+    }
+
     pub(crate) fn is_generator_return_type(return_type: &ParserDataType) -> Option<ParserDataType> {
         let ty_txt = return_type.data_type.to_string();
         if ty_txt == "gen" || ty_txt.starts_with("gen->") || ty_txt.contains(":gen->") {
@@ -61,7 +65,7 @@ impl MiddleEnvironment {
                 );
                 let tmp_ident = PotentialDollarIdentifier::Identifier(ParserText::new(
                     span,
-                    format!("gen_yield_tmp_{}_{}", span.from.line, span.from.col),
+                    format!("gen_yield_tmp_{}", Self::span_suffix(span)),
                 ));
                 Node::new(
                     span,
@@ -174,7 +178,7 @@ impl MiddleEnvironment {
     }
 
     pub(crate) fn wrap_generator_body(body: Node, elem_type: ParserDataType, span: Span) -> Node {
-        let suffix = format!("{}_{}", span.from.line, span.from.col);
+        let suffix = Self::span_suffix(span);
         let next_name = format!("gennext{}", suffix);
         let rewritten = Self::rewrite_generator_returns(body);
         let next_body = match rewritten.node_type {
@@ -725,6 +729,16 @@ impl MiddleEnvironment {
         allow_curry: bool,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut caller = caller;
+        if generic_types.is_empty()
+            && args.is_empty()
+            && reverse_args.is_empty()
+            && let NodeType::FunctionDeclaration { header, body } = caller.node_type.clone()
+            && header.parameters.is_empty()
+            && header.param_destructures.is_empty()
+        {
+            return self.evaluate_inner(scope, *body);
+        }
+
         if let NodeType::MemberExpression { mut path } = caller.node_type.clone() {
             if let Some((last_node, is_dynamic)) = path.last_mut()
                 && !*is_dynamic
@@ -1164,11 +1178,7 @@ impl MiddleEnvironment {
                             span,
                         };
 
-                        let tmp_name = format!(
-                            "__curry_fn_{}_{}",
-                            self.current_span().from.line,
-                            self.current_span().from.col
-                        );
+                        let tmp_name = self.temp_name("__curry_fn");
                         let tmp_ident: PotentialDollarIdentifier =
                             ParserText::from(tmp_name.clone()).into();
                         let tmp_ident_node = Node::new(

@@ -26,3 +26,5 @@ impl CountryBase {
 		self.language;
 	};
 };
+
+const main = fn() => print("This is just a script to help main.cal and to showcase importing");

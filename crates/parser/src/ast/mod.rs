@@ -48,6 +48,14 @@ impl Display for RefMutability {
     }
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum AsFailureMode {
+    Result,
+    Panic,
+    Option,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoopType {
     Let {
@@ -935,13 +943,48 @@ impl Node {
 
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
+pub enum MatchTupleItem {
+    Rest(Span),
+    Wildcard(Span),
+    Value(Node),
+    Enum {
+        value: PotentialDollarIdentifier,
+        var_type: VarType,
+        name: Option<PotentialDollarIdentifier>,
+        destructure: Option<DestructurePattern>,
+        pattern: Option<Box<MatchArmType>>,
+    },
+    Binding {
+        var_type: VarType,
+        name: PotentialDollarIdentifier,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum MatchStructFieldPattern {
+    Value {
+        field: String,
+        value: Node,
+    },
+    Binding {
+        field: String,
+        var_type: VarType,
+        name: PotentialDollarIdentifier,
+    },
+}
+
+#[repr(u8)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MatchArmType {
     Enum {
         value: PotentialDollarIdentifier,
         var_type: VarType,
         name: Option<PotentialDollarIdentifier>,
         destructure: Option<DestructurePattern>,
+        pattern: Option<Box<MatchArmType>>,
     },
+    TuplePattern(Vec<MatchTupleItem>),
+    StructPattern(Vec<MatchStructFieldPattern>),
     Let {
         var_type: VarType,
         name: PotentialDollarIdentifier,
@@ -954,6 +997,34 @@ impl MatchArmType {
     pub fn span(&self) -> &Span {
         match self {
             Self::Enum { value, .. } => value.span(),
+            Self::TuplePattern(items) => {
+                for item in items {
+                    match item {
+                        MatchTupleItem::Rest(sp) | MatchTupleItem::Wildcard(sp) => return sp,
+                        MatchTupleItem::Value(node) => return &node.span,
+                        MatchTupleItem::Enum { value, .. } => return value.span(),
+                        MatchTupleItem::Binding { name, .. } => return name.span(),
+                    }
+                }
+                static DEFAULT: Span = Span {
+                    from: crate::Position { line: 0, col: 0 },
+                    to: crate::Position { line: 0, col: 0 },
+                };
+                &DEFAULT
+            }
+            Self::StructPattern(fields) => {
+                for field in fields {
+                    match field {
+                        MatchStructFieldPattern::Value { value, .. } => return &value.span,
+                        MatchStructFieldPattern::Binding { name, .. } => return name.span(),
+                    }
+                }
+                static DEFAULT: Span = Span {
+                    from: crate::Position { line: 0, col: 0 },
+                    to: crate::Position { line: 0, col: 0 },
+                };
+                &DEFAULT
+            }
             Self::Let { var_type: _, name } => name.span(),
             Self::Value(x) => &x.span,
             Self::Wildcard(x) => &x,
@@ -1157,6 +1228,7 @@ pub enum NodeType {
     AsExpression {
         value: Box<Node>,
         data_type: PotentialNewType,
+        failure_mode: AsFailureMode,
     },
     InDeclaration {
         identifier: Box<Node>,

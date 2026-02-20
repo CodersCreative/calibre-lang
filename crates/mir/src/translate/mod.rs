@@ -1,4 +1,5 @@
 use crate::{
+    ast::hm::Type,
     ast::{MiddleNode, MiddleNodeType},
     environment::{
         MiddleEnvironment, MiddleObject, MiddleOverload, MiddleTrait, MiddleTraitMember,
@@ -334,12 +335,7 @@ impl MiddleEnvironment {
                             },
                         );
 
-                        let fn_ident: PotentialDollarIdentifier = ParserText::from(format!(
-                            "__spawn_fn_{}_{}",
-                            self.current_span().from.line,
-                            self.current_span().from.col,
-                        ))
-                        .into();
+                        let fn_ident: PotentialDollarIdentifier = self.temp_ident("__spawn_fn");
 
                         body.push(Node::new(
                             self.current_span(),
@@ -381,14 +377,10 @@ impl MiddleEnvironment {
                         label,
                         else_body,
                     } => {
-                        let wg_name =
-                            format!("__spawn_wg_{}_{}", node.span.from.line, node.span.from.col);
+                        let wg_name = self.temp_name_at("__spawn_wg", node.span);
                         let wg_ident: PotentialDollarIdentifier =
                             ParserText::from(wg_name.clone()).into();
-                        let start_name = format!(
-                            "__spawn_start_{}_{}",
-                            node.span.from.line, node.span.from.col
-                        );
+                        let start_name = self.temp_name_at("__spawn_start", node.span);
                         let start_ident: PotentialDollarIdentifier =
                             ParserText::from(start_name.clone()).into();
                         let wg_ident_node = Node::new(
@@ -561,12 +553,7 @@ impl MiddleEnvironment {
                         return Ok(self.evaluate(scope, scope_node));
                     }
                     NodeType::FunctionDeclaration { header, body } => {
-                        let fn_ident: PotentialDollarIdentifier = ParserText::from(format!(
-                            "__spawn_fn_{}_{}",
-                            self.current_span().from.line,
-                            self.current_span().from.col,
-                        ))
-                        .into();
+                        let fn_ident: PotentialDollarIdentifier = self.temp_ident("__spawn_fn");
 
                         let scope_node = Node::new(
                             self.current_span(),
@@ -616,11 +603,8 @@ impl MiddleEnvironment {
             }
             NodeType::Spawn { items } => {
                 let span = node.span;
-                let wg_ident: PotentialDollarIdentifier = ParserText::from(format!(
-                    "__spawn_block_wg_{}_{}",
-                    span.from.line, span.from.col
-                ))
-                .into();
+                let wg_ident: PotentialDollarIdentifier =
+                    self.temp_ident_at("__spawn_block_wg", span);
                 let wg_ident_node = Node::new(
                     span,
                     NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
@@ -728,9 +712,7 @@ impl MiddleEnvironment {
                         ));
                     };
 
-                    let tmp_ident = PotentialDollarIdentifier::Identifier(ParserText::from(
-                        format!("__move_tmp_{}_{}", node.span.from.line, node.span.from.col),
-                    ));
+                    let tmp_ident = self.temp_ident_at("__move_tmp", node.span);
 
                     let tmp_decl = Node::new(
                         node.span,
@@ -1160,10 +1142,7 @@ impl MiddleEnvironment {
                 pattern,
                 value,
             } => {
-                let tmp_ident = PotentialDollarIdentifier::Identifier(ParserText::from(format!(
-                    "__destructure_tmp_{}_{}",
-                    node.span.from.line, node.span.from.col
-                )));
+                let tmp_ident = self.temp_ident_at("__destructure_tmp", node.span);
 
                 let tmp_decl = Node::new(
                     node.span,
@@ -1199,10 +1178,7 @@ impl MiddleEnvironment {
                 )
             }
             NodeType::DestructureAssignment { pattern, value } => {
-                let tmp_ident = PotentialDollarIdentifier::Identifier(ParserText::from(format!(
-                    "__destructure_tmp_{}_{}",
-                    node.span.from.line, node.span.from.col
-                )));
+                let tmp_ident = self.temp_ident_at("__destructure_tmp", node.span);
 
                 let tmp_decl = Node::new(
                     node.span,
@@ -1627,7 +1603,11 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::AsExpression { value, data_type } => {
+            NodeType::AsExpression {
+                value,
+                data_type,
+                failure_mode,
+            } => {
                 let target = self.resolve_potential_new_type(scope, data_type);
                 if let Some(x) =
                     self.handle_as_overload(scope, node.span, *value.clone(), target.clone())?
@@ -1638,6 +1618,7 @@ impl MiddleEnvironment {
                     node_type: MiddleNodeType::AsExpression {
                         value: Box::new(self.evaluate_inner(scope, *value)?),
                         data_type: target,
+                        failure_mode,
                     },
                     span: node.span,
                 })
@@ -1766,6 +1747,7 @@ impl MiddleEnvironment {
                                                     .into(),
                                             ),
                                             destructure: None,
+                                            pattern: None,
                                         },
                                         Vec::new(),
                                         Box::new(Node {
@@ -1784,6 +1766,7 @@ impl MiddleEnvironment {
                                                     .into(),
                                                 name: catch.name,
                                                 destructure: None,
+                                                pattern: None,
                                             },
                                             Vec::new(),
                                             catch.body,
@@ -1796,6 +1779,7 @@ impl MiddleEnvironment {
                                                     .into(),
                                                 name: None,
                                                 destructure: None,
+                                                pattern: None,
                                             },
                                             Vec::new(),
                                             Box::new(Node {
@@ -1835,6 +1819,7 @@ impl MiddleEnvironment {
                                                     .into(),
                                             ),
                                             destructure: None,
+                                            pattern: None,
                                         },
                                         Vec::new(),
                                         Box::new(Node {
@@ -1852,6 +1837,7 @@ impl MiddleEnvironment {
                                                 value: ParserText::from(String::from("Err")).into(),
                                                 name: catch.name,
                                                 destructure: None,
+                                                pattern: None,
                                             },
                                             Vec::new(),
                                             catch.body,
@@ -1868,6 +1854,7 @@ impl MiddleEnvironment {
                                                     .into(),
                                                 ),
                                                 destructure: None,
+                                                pattern: None,
                                             },
                                             Vec::new(),
                                             Box::new(Node {
@@ -2012,9 +1999,7 @@ impl MiddleEnvironment {
             } => {
                 let elem_ty = match data_type {
                     Some(PotentialNewType::DataType(dt)) => dt,
-                    _ => self.resolve_type_from_node(scope, &map).unwrap_or_else(|| {
-                        ParserDataType::new(node.span, ParserInnerType::Auto(None))
-                    }),
+                    _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
                 };
                 self.evaluate_inner(
                     scope,
@@ -2057,6 +2042,23 @@ impl MiddleEnvironment {
                             span: node.span,
                         },
                     ),
+                    NodeType::DerefStatement {
+                        value: deref_target,
+                    } => Ok(MiddleNode {
+                        node_type: MiddleNodeType::AssignmentExpression {
+                            identifier: Box::new(self.evaluate(
+                                scope,
+                                Node::new(
+                                    node.span,
+                                    NodeType::DerefStatement {
+                                        value: deref_target,
+                                    },
+                                ),
+                            )),
+                            value: Box::new(self.evaluate(scope, *value)),
+                        },
+                        span: node.span,
+                    }),
                     NodeType::MemberExpression { path } => {
                         let path_len = path.len();
                         let last = path.last();
@@ -3009,10 +3011,7 @@ impl MiddleEnvironment {
                 }))
             }
             NodeType::SelectStatement { arms } => {
-                let done_ident = PotentialDollarIdentifier::Identifier(ParserText::from(format!(
-                    "__select_done_{}_{}",
-                    node.span.from.line, node.span.from.col
-                )));
+                let done_ident = self.temp_ident_at("__select_done", node.span);
 
                 let done_decl = Node::new(
                     node.span,
@@ -3072,9 +3071,10 @@ impl MiddleEnvironment {
                                 let Some(left) = left.clone() else { continue };
                                 let Some(right) = right.clone() else { continue };
                                 let tmp_ident = PotentialDollarIdentifier::Identifier(
-                                    ParserText::from(format!(
-                                        "__select_tmp_{}_{}",
-                                        node.span.from.line, arm_index
+                                    ParserText::from(self.temp_name_at_index(
+                                        "__select_tmp",
+                                        node.span,
+                                        arm_index,
                                     )),
                                 );
 
@@ -3376,28 +3376,47 @@ impl MiddleEnvironment {
             NodeType::PipeExpression(mut path) if !path.is_empty() => {
                 let mut value = path.remove(0).into();
                 let mut prior_mappings = FxHashMap::default();
+                let is_callable_point =
+                    |env: &mut Self, point: &calibre_parser::ast::PipeSegment| {
+                        if let NodeType::Identifier(id) = &point.get_node().node_type
+                            && let Some(resolved) = env.resolve_potential_generic_ident(scope, id)
+                        {
+                            if env.variables.get(&resolved.text).is_some_and(|var| {
+                                matches!(
+                                    var.data_type.data_type,
+                                    ParserInnerType::Function { .. }
+                                        | ParserInnerType::NativeFunction(_)
+                                )
+                            }) || env
+                                .hm_env
+                                .get(&resolved.text)
+                                .is_some_and(|scheme| matches!(scheme.ty, Type::TArrow(_, _)))
+                            {
+                                return true;
+                            }
+                        }
+                        let from_type = env
+                            .resolve_type_from_node(scope, point.get_node())
+                            .map(|x| x.unwrap_all_refs().data_type);
+                        if matches!(
+                            from_type,
+                            Some(ParserInnerType::Function { .. })
+                                | Some(ParserInnerType::NativeFunction(_))
+                        ) {
+                            return true;
+                        }
+                        false
+                    };
                 let get_mapping = |env: &Self, key: &str| -> Result<Option<String>, MiddleErr> {
                     Ok(env
-                        .scopes
-                        .get(scope)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                            )
-                        })?
+                        .scope_ref_or_err(scope)?
                         .mappings
                         .get(key)
                         .map(|x| x.to_string()))
                 };
                 let restore_mapping =
                     |env: &mut Self, key: String, value: Option<String>| -> Result<(), MiddleErr> {
-                        let scope_ref = env.scopes.get_mut(scope).ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                            )
-                        })?;
+                        let scope_ref = env.scope_mut_or_err(scope)?;
                         if let Some(v) = value {
                             scope_ref.mappings.insert(key, v);
                         } else {
@@ -3408,15 +3427,36 @@ impl MiddleEnvironment {
 
                 prior_mappings.insert("$".to_string(), get_mapping(self, "$")?);
 
-                for point in path.into_iter() {
-                    match self
-                        .resolve_type_from_node(scope, point.get_node())
-                        .map(|x| x.unwrap_all_refs().data_type)
+                let mut idx = 0usize;
+                while idx < path.len() {
+                    let point = path[idx].clone();
+                    let next_point = path.get(idx + 1).cloned();
+                    let point_callable = is_callable_point(self, &point);
+                    let point_is_identifier =
+                        matches!(point.get_node().node_type, NodeType::Identifier(_));
+
+                    // Allow value currying chains like `3 |> 4 |> mul3` by fusing into
+                    // `mul3(3, 4)` before normal pipe rewriting.
+                    if !point.is_named()
+                        && !point.get_node().node_type.is_call()
+                        && !point_callable
+                        && let Some(next) = next_point
+                        && !next.is_named()
+                        && !next.get_node().node_type.is_call()
                     {
-                        Some(ParserInnerType::Function { .. })
-                        | Some(ParserInnerType::NativeFunction(_))
-                            if !point.is_named() && !point.get_node().node_type.is_call() =>
-                        {
+                        if is_callable_point(self, &next) {
+                            value = Self::call_expr(
+                                self.current_span(),
+                                next.into(),
+                                vec![CallArg::Value(value), CallArg::Value(point.into())],
+                            );
+                            idx += 2;
+                            continue;
+                        }
+                    }
+
+                    match point_callable || point_is_identifier {
+                        true if !point.is_named() && !point.get_node().node_type.is_call() => {
                             value = Self::call_expr(
                                 self.current_span(),
                                 point.into(),
@@ -3505,6 +3545,7 @@ impl MiddleEnvironment {
                             }
                         }
                     }
+                    idx += 1;
                 }
 
                 for (k, v) in prior_mappings {

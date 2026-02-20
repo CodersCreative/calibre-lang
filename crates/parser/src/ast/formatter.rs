@@ -1,9 +1,10 @@
 use crate::{
     Parser, Span,
     ast::{
-        CallArg, DestructurePattern, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node,
-        NodeType, ObjectType, Overload, ParserDataType, ParserInnerType, PipeSegment,
-        PotentialDollarIdentifier, PotentialNewType, SelectArmKind, TypeDefType, VarType,
+        CallArg, DestructurePattern, GenericTypes, IfComparisonType, LoopType, MatchArmType,
+        MatchStructFieldPattern, MatchTupleItem, Node, NodeType, ObjectType, Overload,
+        ParserDataType, ParserInnerType, PipeSegment, PotentialDollarIdentifier, PotentialNewType,
+        SelectArmKind, TypeDefType, VarType,
     },
 };
 use rustc_hash::FxHashMap;
@@ -774,10 +775,19 @@ impl Formatter {
                 let multi = format!("{} =\n{}", txt, self.fmt_txt_with_tab(&rhs, 1, true));
                 self.wrap_if_wide(single, &multi)
             }
-            NodeType::AsExpression { value, data_type } => {
+            NodeType::AsExpression {
+                value,
+                data_type,
+                failure_mode,
+            } => {
                 format!(
-                    "{} as {}",
+                    "{} as{} {}",
                     self.format(value),
+                    match failure_mode {
+                        crate::ast::AsFailureMode::Panic => "!",
+                        crate::ast::AsFailureMode::Option => "?",
+                        crate::ast::AsFailureMode::Result => "",
+                    },
                     self.fmt_potential_new_type(data_type)
                 )
             }
@@ -1539,14 +1549,20 @@ impl Formatter {
                         var_type: VarType::Immutable,
                         name: Some(name),
                         destructure: None,
+                        pattern: None,
                         ..
                     } => txt.push_str(&format!(" : {}", name)),
                     MatchArmType::Enum {
                         var_type,
                         name: Some(name),
                         destructure: None,
+                        pattern: None,
                         ..
                     } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
+                    MatchArmType::Enum {
+                        pattern: Some(pattern),
+                        ..
+                    } => txt.push_str(&format!(" : {}", self.fmt_match_arm(pattern, false))),
                     MatchArmType::Enum {
                         destructure: Some(pattern),
                         ..
@@ -2165,6 +2181,13 @@ impl Formatter {
         match arm {
             MatchArmType::Enum {
                 value,
+                pattern: Some(pattern),
+                ..
+            } if write_name => {
+                format!(".{} : {}", value, self.fmt_match_arm(pattern, false))
+            }
+            MatchArmType::Enum {
+                value,
                 destructure: Some(pattern),
                 ..
             } if write_name => {
@@ -2188,6 +2211,73 @@ impl Formatter {
             } if write_name => format!(".{} : {} {}", value, var_type.print_only_ends(), name),
             MatchArmType::Let { var_type, name } => format!("{} {}", var_type, name),
             MatchArmType::Enum { value, .. } => format!(".{}", value),
+            MatchArmType::TuplePattern(items) => {
+                let mut out = Vec::new();
+                for item in items {
+                    out.push(match item {
+                        MatchTupleItem::Rest(_) => "..".to_string(),
+                        MatchTupleItem::Wildcard(_) => "_".to_string(),
+                        MatchTupleItem::Value(node) => self.format(node),
+                        MatchTupleItem::Enum {
+                            value,
+                            var_type,
+                            name,
+                            destructure,
+                            pattern,
+                        } => {
+                            if let Some(pattern) = pattern {
+                                format!(".{} : {}", value, self.fmt_match_arm(pattern, false))
+                            } else if let Some(pattern) = destructure {
+                                format!(
+                                    ".{} : {}",
+                                    value,
+                                    self.fmt_destructure_pattern(pattern, false)
+                                )
+                            } else if let Some(name) = name {
+                                if *var_type == VarType::Immutable {
+                                    format!(".{} : {}", value, name)
+                                } else {
+                                    format!(".{} : {} {}", value, var_type.print_only_ends(), name)
+                                }
+                            } else {
+                                format!(".{}", value)
+                            }
+                        }
+                        MatchTupleItem::Binding { var_type, name } => {
+                            if *var_type == VarType::Immutable {
+                                name.to_string()
+                            } else {
+                                format!("{} {}", var_type.print_only_ends(), name)
+                            }
+                        }
+                    });
+                }
+                out.join(", ")
+            }
+            MatchArmType::StructPattern(fields) => {
+                let mut out = Vec::new();
+                for field in fields {
+                    out.push(match field {
+                        MatchStructFieldPattern::Value { field, value } => {
+                            format!("{} : {}", field, self.format(value))
+                        }
+                        MatchStructFieldPattern::Binding {
+                            field,
+                            var_type,
+                            name,
+                        } => {
+                            if field == &name.to_string() && *var_type == VarType::Immutable {
+                                field.to_string()
+                            } else if *var_type == VarType::Immutable {
+                                format!("{} : {}", field, name)
+                            } else {
+                                format!("{} : {} {}", field, var_type.print_only_ends(), name)
+                            }
+                        }
+                    });
+                }
+                format!("{{{}}}", out.join(", "))
+            }
             MatchArmType::Value(x) => self.format(x),
             MatchArmType::Wildcard(_) => String::from("_"),
         }

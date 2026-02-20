@@ -1,8 +1,8 @@
 use calibre_parser::{
     Span,
     ast::{
-        CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
-        ObjectMap, ObjectType, ParserDataType, ParserText, RefMutability, VarType,
+        AsFailureMode, CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node,
+        NodeType, ObjectMap, ObjectType, ParserDataType, ParserText, RefMutability, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
@@ -93,6 +93,7 @@ pub enum MiddleNodeType {
     AsExpression {
         value: Box<MiddleNode>,
         data_type: ParserDataType,
+        failure_mode: AsFailureMode,
     },
     RangeDeclaration {
         from: Box<MiddleNode>,
@@ -290,9 +291,14 @@ impl Into<NodeType> for MiddleNodeType {
             Self::NegExpression { value } => NodeType::NotExpression {
                 value: Box::new((*value).into()),
             },
-            Self::AsExpression { value, data_type } => NodeType::AsExpression {
+            Self::AsExpression {
+                value,
+                data_type,
+                failure_mode,
+            } => NodeType::AsExpression {
                 value: Box::new((*value).into()),
                 data_type: data_type.into(),
+                failure_mode,
             },
             Self::Conditional {
                 comparison,

@@ -38,11 +38,7 @@ impl MiddleEnvironment {
             let wg_ident = if let Some(first) = identifiers.first() {
                 first.clone()
             } else {
-                ParserText::from(format!(
-                    "__use_spawn_wg_{}_{}",
-                    span.from.line, span.from.col
-                ))
-                .into()
+                self.temp_ident_at("__use_spawn_wg", span)
             };
 
             let wg_decl = Node::new(
@@ -239,14 +235,7 @@ impl MiddleEnvironment {
             ..scope_macro
         };
 
-        self.scopes
-            .get_mut(scope)
-            .ok_or_else(|| {
-                MiddleErr::At(
-                    span,
-                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                )
-            })?
+        self.scope_mut_or_err(scope)?
             .macros
             .insert(identifer, scope_macro);
 
@@ -287,14 +276,7 @@ impl MiddleEnvironment {
                     create_new_scope: og_create_new_scope.unwrap_or(create_new_scope),
                 };
 
-                self.scopes
-                    .get_mut(scope)
-                    .ok_or_else(|| {
-                        MiddleErr::At(
-                            span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        )
-                    })?
+                self.scope_mut_or_err(scope)?
                     .macros
                     .insert(name, scope_macro);
 
@@ -318,14 +300,7 @@ impl MiddleEnvironment {
                         body: body.clone().unwrap_or_default(),
                         create_new_scope,
                     };
-                    self.scopes
-                        .get_mut(scope)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                            )
-                        })?
+                    self.scope_mut_or_err(scope)?
                         .macros
                         .insert(name.clone(), scope_macro);
                 }
@@ -409,12 +384,7 @@ impl MiddleEnvironment {
         };
 
         if !macro_args_to_insert.is_empty() {
-            let scope_data = self.scopes.get_mut(&new_scope).ok_or_else(|| {
-                MiddleErr::At(
-                    span,
-                    Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
-                )
-            })?;
+            let scope_data = self.scope_mut_or_err(&new_scope)?;
             for (key, value) in macro_args_to_insert {
                 scope_data.macro_args.insert(key, value);
             }
@@ -441,14 +411,7 @@ impl MiddleEnvironment {
                     } else {
                         get_disamubiguous_name(&new_scope, Some(ident.text.trim()), Some(var_type))
                     };
-                    self.scopes
-                        .get_mut(&new_scope)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
-                            )
-                        })?
+                    self.scope_mut_or_err(&new_scope)?
                         .mappings
                         .entry(ident.text.clone())
                         .or_insert(new_name);
@@ -475,30 +438,12 @@ impl MiddleEnvironment {
                     None
                 };
 
-                for x in self
-                    .scopes
-                    .get(&new_scope)
-                    .ok_or_else(|| {
-                        MiddleErr::At(
-                            span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
-                        )
-                    })?
-                    .defers
-                    .clone()
-                {
+                for x in self.scope_ref_or_err(&new_scope)?.defers.clone() {
                     stmts.push(self.evaluate(&new_scope, x));
                 }
 
                 for value in self
-                    .scopes
-                    .get(&new_scope)
-                    .ok_or_else(|| {
-                        MiddleErr::At(
-                            span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
-                        )
-                    })?
+                    .scope_ref_or_err(&new_scope)?
                     .defined
                     .clone()
                     .into_iter()
@@ -544,37 +489,18 @@ impl MiddleEnvironment {
 
         if &new_scope != scope && !og_create_new_scope.unwrap_or(create_new_scope) {
             let (mappings, macros) = {
-                let scope = self.scopes.get(&new_scope).ok_or_else(|| {
-                    MiddleErr::At(
-                        span,
-                        Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
-                    )
-                })?;
+                let scope = self.scope_ref_or_err(&new_scope)?;
                 (scope.mappings.clone(), scope.macros.clone())
             };
 
             for mapping in mappings {
-                self.scopes
-                    .get_mut(scope)
-                    .ok_or_else(|| {
-                        MiddleErr::At(
-                            span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        )
-                    })?
+                self.scope_mut_or_err(scope)?
                     .mappings
                     .insert(mapping.0, mapping.1);
             }
 
             for scope_macro in macros {
-                self.scopes
-                    .get_mut(scope)
-                    .ok_or_else(|| {
-                        MiddleErr::At(
-                            span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        )
-                    })?
+                self.scope_mut_or_err(scope)?
                     .macros
                     .insert(scope_macro.0, scope_macro.1);
             }
