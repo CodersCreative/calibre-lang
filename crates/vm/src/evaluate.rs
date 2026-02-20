@@ -675,14 +675,22 @@ impl VM {
             } => {
                 let from = self.resolve_value_for_op_ref(self.get_reg_value_ref(*from))?;
                 let to = self.resolve_value_for_op_ref(self.get_reg_value_ref(*to))?;
-                let from = match from {
-                    RuntimeValue::Int(v) => v,
-                    other => return Err(RuntimeError::UnexpectedType(other)),
+                let as_range_bound = |value: RuntimeValue| -> Result<i64, RuntimeError> {
+                    match value {
+                        RuntimeValue::Int(v) => Ok(v),
+                        RuntimeValue::UInt(v) => Ok(v as i64),
+                        RuntimeValue::Float(v) => Ok(v as i64),
+                        RuntimeValue::Bool(v) => Ok(v as i64),
+                        RuntimeValue::Char(v) => Ok(v as i64),
+                        RuntimeValue::List(v) => Ok(v.as_ref().0.len() as i64),
+                        RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as i64),
+                        RuntimeValue::Str(v) => Ok(v.len() as i64),
+                        RuntimeValue::Range(from, to) => Ok((to - from).max(0)),
+                        other => Err(RuntimeError::UnexpectedType(other)),
+                    }
                 };
-                let to = match to {
-                    RuntimeValue::Int(v) => v,
-                    other => return Err(RuntimeError::UnexpectedType(other)),
-                };
+                let from = as_range_bound(from)?;
+                let to = as_range_bound(to)?;
                 let end = if *inclusive { to + 1 } else { to };
                 self.set_reg_value(*dst, RuntimeValue::Range(from, end));
             }
@@ -1242,6 +1250,20 @@ impl VM {
                 let resolved = self.resolve_value_for_op_ref(self.get_reg_value_ref(*value))?;
                 let val = match resolved {
                     RuntimeValue::List(list) => index_list(&list)?,
+                    RuntimeValue::Range(start, end) => match &index_val {
+                        RuntimeValue::Int(index) => {
+                            let len = (end - start).max(0) as usize;
+                            resolve_idx(len, *index)
+                                .map(|i| RuntimeValue::Int(start + i as i64))
+                                .unwrap_or(RuntimeValue::Null)
+                        }
+                        RuntimeValue::Range(slice_start, slice_end) => {
+                            let len = (end - start).max(0) as usize;
+                            let (s, e) = resolve_range(len, *slice_start, *slice_end);
+                            RuntimeValue::Range(start + s as i64, start + e as i64)
+                        }
+                        _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                    },
                     RuntimeValue::Aggregate(None, tuple) => match &index_val {
                         RuntimeValue::Int(index) => resolve_idx(tuple.as_ref().0.0.len(), *index)
                             .and_then(|i| tuple.as_ref().0.0.get(i).map(|(_, v)| v.clone()))

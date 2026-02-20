@@ -2,7 +2,6 @@ use crate::ast::hm::{self, Subst, Type, TypeGenerator};
 use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::errors::MiddleErr;
 use crate::infer::infer_node_type;
-use calibre_parser::ast::PotentialFfiDataType;
 use calibre_parser::{
     Location, Parser, Span,
     ast::{
@@ -1581,17 +1580,12 @@ impl MiddleEnvironment {
         }
     }
 
-    pub fn resolve_potential_ffi_type(
+    pub fn resolve_ffi_data_type(
         &mut self,
         scope: &u64,
-        data_type: PotentialFfiDataType,
-    ) -> PotentialFfiDataType {
-        match data_type {
-            PotentialFfiDataType::Normal(x) => {
-                PotentialFfiDataType::Normal(self.resolve_data_type(scope, x))
-            }
-            x => x,
-        }
+        data_type: ParserDataType,
+    ) -> ParserDataType {
+        self.resolve_data_type(scope, data_type).resolve_ffi()
     }
 
     pub fn resolve_potential_new_type(
@@ -2511,6 +2505,8 @@ impl MiddleEnvironment {
             | NodeType::DestructureDeclaration { .. }
             | NodeType::DestructureAssignment { .. }
             | NodeType::LoopDeclaration { .. }
+            | NodeType::TestDeclaration { .. }
+            | NodeType::BenchDeclaration { .. }
             | NodeType::ScopeDeclaration { define: true, .. }
             | NodeType::ScopeAlias { .. }
             | NodeType::DataType { .. }

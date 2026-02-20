@@ -2,9 +2,10 @@ const fib_gen = fn (n : int) -> gen:<int> => {
 	let mut i = 0;
 	let mut a = 0;
 	let mut b = 1;
-
+	
 	for i < n => {
 		return a;
+		
 		let next = a + b;
 		a = b;
 		b = next;

@@ -9,6 +9,7 @@ const range = fn (start end : mut int, step : int, inclusive : bool) -> list:<in
 	if inclusive => end += step;
 	
 	let mut lst = list:<int>[];
+	
 	let mut index : int = start;
 	
 	for (index < end && step > 0) || (index > end && step < 0) => {
@@ -18,6 +19,8 @@ const range = fn (start end : mut int, step : int, inclusive : bool) -> list:<in
 	
 	lst;
 };
+
+const raw_len = len;
 
 const fmt = fn (splits : list:<str>, inputs : list:<str>) -> str => {
 	let mut txt : str = "";
@@ -32,7 +35,7 @@ const fmt = fn (splits : list:<str>, inputs : list:<str>) -> str => {
 
 type ListIter:<T> = struct { data : list:<T>, index : int };
 
-type gen:<T> = struct { data : fn () -> T?, index : int, done : bool };
+type gen:<T> = struct { data : fn() -> T?, index : int, done : bool };
 
 type RangeIter = struct { range : range, index : int };
 
@@ -45,43 +48,57 @@ trait Iter {
 
 	const collect = fn (self : Self) -> list:<Self::Item> => {
 		let mut out = list:<Self::Item>[];
+		
 		let mut it = self;
+		
 		for  => {
 			let v = it.next();
 			if v == none => break;
+			
 			out <<= v.next;
 		};
+		
 		out;
 	};
 
 	const map = fn <U> (self : Self, op : fn(Self::Item) -> U) -> ListIter:<U> => {
 		let mut out = list:<U>[];
+		
 		let mut it = self;
+		
 		for  => {
 			let v = it.next();
 			if v == none => break;
+			
 			out <<= op(v.next);
 		};
+		
 		ListIter:<U> { data : out, index : 0 };
 	};
 
 	const filter = fn (self : Self, pred : fn(Self::Item) -> bool) -> ListIter:<Self::Item> => {
 		let mut out = list:<Self::Item>[];
+		
 		let mut it = self;
+		
 		for  => {
 			let v = it.next();
 			if v == none => break;
+			
 			let value = v.next;
 			if pred(value) => out <<= value;
 		};
+		
 		ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
 	const for_each = fn (self : Self, op : fn(Self::Item) -> null) => {
 		let mut it = self;
+		
 		for  => {
 			let v = it.next();
 			if v == none => break;
+			
 			op(v.next);
 		};
 	};
@@ -89,83 +106,108 @@ trait Iter {
 	const fold = fn <U> (self : Self, init : U, op : fn(U, Self::Item) -> U) -> U => {
 		let mut acc = init;
 		let mut it = self;
+		
 		for  => {
 			let v = it.next();
 			if v == none => break;
+			
 			acc = op(acc, v.next);
 		};
+		
 		acc;
 	};
 
 	const any = fn (self : Self, pred : fn(Self::Item) -> bool) -> bool => {
 		let mut it = self;
+		
 		for  => {
 			let v = it.next();
 			if v == none => break;
+			
 			if pred(v.next) => return true;
 		};
+		
 		false;
 	};
 
 	const all = fn (self : Self, pred : fn(Self::Item) -> bool) -> bool => {
 		let mut it = self;
+		
 		for  => {
 			let v = it.next();
 			if v == none => break;
+			
 			if !pred(v.next) => return false;
 		};
+		
 		true;
 	};
 
 	const find = fn (self : Self, pred : fn(Self::Item) -> bool) -> Self::Item? => {
 		let mut it = self;
+		
 		for  => {
 			let v = it.next();
 			if v == none => break;
+			
 			let value = v.next;
 			if pred(value) => return some(value);
 		};
+		
 		none;
 	};
 
 	const count = fn (self : Self) -> int => {
 		let mut it = self;
 		let mut n = 0;
+		
 		for  => {
 			let v = it.next();
 			if v == none => break;
+			
 			n = n + 1;
 		};
+		
 		n;
 	};
 
 	const take = fn (self : Self, n : int) -> ListIter:<Self::Item> => {
 		let mut out = list:<Self::Item>[];
+		
 		let mut it = self;
 		let mut i = 0;
+		
 		for i < n => {
 			let v = it.next();
 			if v == none => break;
+			
 			out <<= v.next;
 			i = i + 1;
 		};
+		
 		ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
 	const skip = fn (self : Self, n : int) -> ListIter:<Self::Item> => {
 		let mut it = self;
 		let mut i = 0;
+		
 		for i < n => {
 			let v = it.next();
 			if v == none => break;
+			
 			i = i + 1;
 		};
+		
 		let mut out = list:<Self::Item>[];
+		
 		for  => {
 			let v = it.next();
 			if v == none => break;
+			
 			out <<= v.next;
 		};
+		
 		ListIter:<Self::Item> { data : out, index : 0 };
 	};
 };

@@ -3,7 +3,7 @@ use calibre_parser::{
     ast::{
         CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
         ObjectType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
-        PotentialFfiDataType, PotentialGenericTypeIdentifier, PotentialNewType, TryCatch, VarType,
+        PotentialGenericTypeIdentifier, PotentialNewType, TryCatch, VarType,
     },
 };
 
@@ -409,8 +409,8 @@ impl MiddleEnvironment {
         span: Span,
         abi: String,
         identifier: PotentialDollarIdentifier,
-        parameters: Vec<PotentialFfiDataType>,
-        return_type: PotentialFfiDataType,
+        parameters: Vec<ParserDataType>,
+        return_type: ParserDataType,
         library: String,
         symbol: Option<String>,
     ) -> Result<MiddleNode, MiddleErr> {
@@ -421,29 +421,16 @@ impl MiddleEnvironment {
 
         let mut params = Vec::new();
         for ty in parameters {
-            let resolved = self.resolve_potential_ffi_type(scope, ty);
-            params.push(resolved);
+            params.push(self.resolve_ffi_data_type(scope, ty));
         }
 
-        let return_type = self.resolve_potential_ffi_type(scope, return_type);
+        let return_type = self.resolve_ffi_data_type(scope, return_type);
 
         let fn_type = ParserDataType::new(
             self.current_span(),
             ParserInnerType::Function {
-                return_type: Box::new(match return_type.clone() {
-                    PotentialFfiDataType::Normal(x) => x,
-                    PotentialFfiDataType::Ffi(x) => ParserDataType::new(x.span, x.data_type.into()),
-                }),
-                parameters: params
-                    .clone()
-                    .into_iter()
-                    .map(|x| match x {
-                        PotentialFfiDataType::Normal(x) => x,
-                        PotentialFfiDataType::Ffi(x) => {
-                            ParserDataType::new(x.span, x.data_type.into())
-                        }
-                    })
-                    .collect(),
+                return_type: Box::new(return_type.clone()),
+                parameters: params.clone(),
             },
         );
 

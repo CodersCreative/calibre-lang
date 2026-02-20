@@ -27,6 +27,7 @@ impl ThingEnum {
 const main = fn () => {
 	let a = [10, 20, 450];
 	for i in a => "a : " & i |> print;
+	
 	print(a[0]);
 	let thing = Thing { name : "Ty" };
 	print(thing.name);

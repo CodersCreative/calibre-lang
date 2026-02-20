@@ -5,6 +5,7 @@ import * from std::regex;
 
 const main = fn () => {
 	let mut nums = list:<int>[1, 2, 3, 4, 5];
+	
 	print("pop => " & nums.pop());
 	nums.insert(2, 99);
 	nums.remove_value(4);
@@ -13,6 +14,7 @@ const main = fn () => {
 	print("sum/min/max => " & nums.sum() & ", " & nums.min() & ", " & nums.max());
 	
 	let words = list:<str>["alpha", "beta", "gamma"];
+	
 	print("join => " & words.join("-"));
 	
 	let text = "a\nb\nc\n";

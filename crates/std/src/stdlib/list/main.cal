@@ -32,10 +32,12 @@ impl<T> list:<T> {
 
 	const last_index_of = fn (self : list:<T>, needle : T) -> int => {
 		let mut i = len(self) - 1;
+		
 		for i >= 0 => {
 			if self[i] == needle => return i;
 			i = i - 1;
 		};
+		
 		-1;
 	};
 
@@ -48,29 +50,37 @@ impl<T> list:<T> {
 	const slice = fn (self : list:<T>, start : int, end : int) -> list:<T> => {
 		let l = len(self);
 		let s = if start < 0 => 0 else => start;
+		
 		let e = if end > l => l else => end;
+		
 		let mut out = list:<T>[];
+		
 		for i in s..e => out <<= self[i];
 		out;
 	};
 
 	const take = fn (self : list:<T>, n : int) -> list:<T> => {
 		let end = if n < 0 => 0 else => n;
+		
 		self.slice(0, end);
 	};
 
 	const skip = fn (self : list:<T>, n : int) -> list:<T> => {
 		let start = if n < 0 => 0 else => n;
+		
 		self.slice(start, len(self));
 	};
 
 	const reverse = fn (self : list:<T>) -> list:<T> => {
 		let mut out = list:<T>[];
+		
 		let mut i = len(self) - 1;
+		
 		for i >= 0 => {
 			out <<= self[i];
 			i = i - 1;
 		};
+		
 		out;
 	};
 
@@ -96,6 +106,7 @@ impl<T> list:<T> {
 		if idx < 0 || idx >= l => none;
 		let removed = self[idx];
 		let mut out = list:<T>[];
+		
 		for i in 0..l => if i != idx => out <<= self[i];
 		self = move out;
 		some(removed);
@@ -112,10 +123,12 @@ impl<T> list:<T> {
 		let l = len(self);
 		if idx < 0 || idx > l => false;
 		let mut out = list:<T>[];
+		
 		for i in 0..(l + 1) => {
 			if i == idx => out <<= value;
 			if i < l => out <<= self[i];
 		};
+		
 		self = move out;
 		true;
 	};
@@ -132,14 +145,15 @@ impl<T> list:<T> {
 
 	const join = fn (self : list:<str>, sep : str) -> str => {
 		let mut out = "";
+		
 		for i in 0..len(self) => {
 			if i > 0 => out &= sep;
 			out &= self[i];
 		};
+		
 		out;
 	};
 };
-
 impl list:<int> {
 	const sum = fn (self : list:<int>) -> int => {
 		let mut acc = 0;
@@ -161,7 +175,6 @@ impl list:<int> {
 		some(m);
 	};
 };
-
 impl list:<float> {
 	const sum = fn (self : list:<float>) -> float => {
 		let mut acc = 0f;

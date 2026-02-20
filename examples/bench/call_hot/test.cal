@@ -12,4 +12,3 @@ const main = fn () => {
 };
 
 bench call_hot => main();
-

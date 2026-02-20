@@ -8,7 +8,7 @@ const parse_direction = fn (line : str) -> char => {
 const parse_distance = fn (line : str) -> int => {
 	let chars = try trim(line) as list:<char> => panic("invalid instruction");
 	let mut num_text : str = "";
-
+	
 	for i in 0..(len(chars) - 1) => num_text &= chars[i + 1];
 	try num_text as int => panic("invalid number in instruction");
 };
@@ -16,28 +16,28 @@ const parse_distance = fn (line : str) -> int => {
 const count_zeros_part1 = fn (lines : list:<str>) -> int => {
 	let mut dial = 50;
 	let mut zero_count = 0;
-
+	
 	for i in 0..len(lines) => {
 		let direction, distance = parse_direction(lines[i]), parse_distance(lines[i]);
 		
 		dial += (direction == 'L') ? -distance : distance;
-
+		
 		for dial < 0 => dial += 100;
 		for dial > 99 => dial -= 100;
-
+		
 		if dial == 0 => zero_count += 1;
 	};
-
+	
 	zero_count;
 };
 
 const count_zeros_part2 = fn (lines : list:<str>) -> int => {
 	let mut dial = 50;
 	let mut zero_count = 0;
-
+	
 	for i in 0..len(lines) => {
 		let direction, distance = parse_direction(lines[i]), parse_distance(lines[i]);
-
+		
 		for _ in 0..distance => {
 			if direction == 'L' => {
 				dial -= 1;
@@ -46,11 +46,11 @@ const count_zeros_part2 = fn (lines : list:<str>) -> int => {
 				dial += 1;
 				if dial > 99 => dial = 0;
 			};
-
+			
 			if dial == 0 => zero_count += 1;
 		};
 	};
-
+	
 	zero_count;
 };
 
@@ -58,13 +58,15 @@ const main = fn () => {
 	let file_path = __file__.replace("main.cal", "input.txt");
 	if !exists(file_path) => {
 		print("Missing input file: " & file_path);
+		
 		return;
 	};
-
+	
 	let file : File = File.open_read(file_path);
 	let lines = file.read_lines(100000);
+	
 	let part1, part2 = count_zeros_part1(lines), count_zeros_part2(lines);
-
+	
 	print("Part 1 - The password is: " & part1);
 	print("Part 2 - The password using 0x434C49434B is: " & part2);
 };

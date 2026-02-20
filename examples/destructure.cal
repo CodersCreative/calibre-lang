@@ -21,6 +21,7 @@ const main = fn () => {
 	let mut first, mut second = tuple(1, 2);
 	print(first + second);
 	let t = 10, 20, 30, 40;
+	
 	let start, .., end = t;
 	print(start + end);
 	

@@ -1915,6 +1915,70 @@ impl MiddleEnvironment {
             } => self.evaluate_loop_statement(
                 scope, node.span, *loop_type, *body, until, label, else_body,
             ),
+            NodeType::TestDeclaration { identifier, body } => self.evaluate_inner(
+                scope,
+                Node::new(
+                    node.span,
+                    NodeType::VariableDeclaration {
+                        var_type: VarType::Constant,
+                        identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
+                            node.span,
+                            format!("__test__{}", identifier),
+                        )),
+                        data_type: PotentialNewType::DataType(ParserDataType::new(
+                            node.span,
+                            ParserInnerType::Auto(None),
+                        )),
+                        value: Box::new(Node::new(
+                            node.span,
+                            NodeType::FunctionDeclaration {
+                                header: FunctionHeader {
+                                    generics: GenericTypes::default(),
+                                    parameters: Vec::new(),
+                                    return_type: PotentialNewType::DataType(ParserDataType::new(
+                                        node.span,
+                                        ParserInnerType::Auto(None),
+                                    )),
+                                    param_destructures: Vec::new(),
+                                },
+                                body,
+                            },
+                        )),
+                    },
+                ),
+            ),
+            NodeType::BenchDeclaration { identifier, body } => self.evaluate_inner(
+                scope,
+                Node::new(
+                    node.span,
+                    NodeType::VariableDeclaration {
+                        var_type: VarType::Constant,
+                        identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
+                            node.span,
+                            format!("__bench__{}", identifier),
+                        )),
+                        data_type: PotentialNewType::DataType(ParserDataType::new(
+                            node.span,
+                            ParserInnerType::Auto(None),
+                        )),
+                        value: Box::new(Node::new(
+                            node.span,
+                            NodeType::FunctionDeclaration {
+                                header: FunctionHeader {
+                                    generics: GenericTypes::default(),
+                                    parameters: Vec::new(),
+                                    return_type: PotentialNewType::DataType(ParserDataType::new(
+                                        node.span,
+                                        ParserInnerType::Auto(None),
+                                    )),
+                                    param_destructures: Vec::new(),
+                                },
+                                body,
+                            },
+                        )),
+                    },
+                ),
+            ),
             NodeType::IterExpression {
                 data_type,
                 map,

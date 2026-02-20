@@ -15,7 +15,9 @@ type Vec2 = struct { x y : int } @overload {
 
 	const "[]" = fn (self : Vec2, idx : int) -> int => {
 		if idx == 0 => return self.x;
+		
 		if idx == 1 => return self.y;
+		
 		0;
 	};
 
@@ -45,6 +47,7 @@ const main = fn () => {
 	print(v == Vec2 { x : 9, y : 2 });
 	
 	let mut nums = list:<int>[1, 2, 3];
+	
 	print(2 in nums);
 	nums[1] = 20;
 	print(nums[1]);

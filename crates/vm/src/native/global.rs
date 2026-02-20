@@ -237,7 +237,7 @@ impl NativeFunction for Len {
             Ok(RuntimeValue::Int(match current {
                 RuntimeValue::List(data) => data.as_ref().0.len() as i64,
                 RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as i64,
-                RuntimeValue::Range(_, x) => x,
+                RuntimeValue::Range(from, to) => (to - from).max(0),
                 RuntimeValue::Str(x) => x.len() as i64,
                 RuntimeValue::HashMap(map) => map.lock().map(|m| m.len() as i64).unwrap_or(0),
                 RuntimeValue::HashSet(set) => set.lock().map(|s| s.len() as i64).unwrap_or(0),
@@ -260,7 +260,7 @@ impl NativeFunction for MinOrZero {
 
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         if let Some(x) = args.into_iter().next() {
-            let current = resolve_native_input(env, x, false)?;
+            let current = resolve_native_input(env, x, true)?;
             Ok(RuntimeValue::Int(match current {
                 RuntimeValue::Range(from, _) => from,
                 _ => 0,

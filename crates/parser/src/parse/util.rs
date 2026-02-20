@@ -1,8 +1,8 @@
 use crate::{
     Position, Span,
     ast::{
-        Node, NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
-        PotentialGenericTypeIdentifier, PotentialNewType,
+        NamedScope, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
+        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
     },
 };
 use chumsky::prelude::*;
@@ -103,18 +103,6 @@ pub(super) fn parse_embedded_expr(txt: &str) -> Node {
     }
 }
 
-pub(super) fn parse_block_scope(txt: &str) -> Node {
-    match super::parse_program(txt) {
-        Ok(node) => match node.node_type {
-            NodeType::ScopeDeclaration { body, .. } => {
-                scope_node(body.unwrap_or_default(), true, false)
-            }
-            _ => scope_node(Vec::new(), true, false),
-        },
-        Err(_) => scope_node(Vec::new(), true, false),
-    }
-}
-
 pub(super) fn scope_node(items: Vec<Node>, is_temp: bool, define: bool) -> Node {
     let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
         Span::new_from_spans(a.span, b.span)
@@ -127,10 +115,50 @@ pub(super) fn scope_node(items: Vec<Node>, is_temp: bool, define: bool) -> Node 
             body: Some(items),
             named: None,
             is_temp,
-            create_new_scope: Some(true),
+            create_new_scope: Some(false),
             define,
         },
     )
+}
+
+pub(super) fn ensure_scope_node(node: Node, is_temp: bool, define: bool) -> Node {
+    if matches!(&node.node_type, NodeType::ScopeDeclaration { .. }) {
+        node
+    } else {
+        scope_node(vec![node], is_temp, define)
+    }
+}
+
+pub(super) fn scope_body_or_single(node: Node) -> Option<Vec<Node>> {
+    match node.node_type {
+        NodeType::ScopeDeclaration { body, .. } => body,
+        _ => Some(vec![node]),
+    }
+}
+
+pub(super) fn with_named_scope(node: Node, named: NamedScope) -> Node {
+    match node.node_type {
+        NodeType::ScopeDeclaration {
+            body,
+            is_temp,
+            create_new_scope,
+            define,
+            ..
+        } => Node::new(
+            body.as_ref()
+                .and_then(|b| b.first().zip(b.last()))
+                .map(|(a, b)| Span::new_from_spans(a.span, b.span))
+                .unwrap_or(Span::default()),
+            NodeType::ScopeDeclaration {
+                body,
+                named: Some(named),
+                is_temp,
+                create_new_scope,
+                define,
+            },
+        ),
+        _ => node,
+    }
 }
 
 pub(super) fn normalize_scope_member_chain(
@@ -351,18 +379,46 @@ pub(super) fn scope_node_parser<'a, P>(
 where
     P: Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a,
 {
-    just('{')
+    let body_items = statement
+        .separated_by(delim.clone())
+        .allow_trailing()
+        .collect::<Vec<_>>()
+        .or_not()
+        .map(|x| x.unwrap_or_default());
+
+    let mk_scope = |items: Vec<Node>, create_new_scope: bool| {
+        let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
+            Span::new_from_spans(a.span, b.span)
+        } else {
+            Span::default()
+        };
+        Node::new(
+            sp,
+            NodeType::ScopeDeclaration {
+                body: Some(items),
+                named: None,
+                is_temp: true,
+                create_new_scope: Some(create_new_scope),
+                define: false,
+            },
+        )
+    };
+
+    let no_new_scope = just("{{")
         .padded_by(pad.clone())
         .then_ignore(delim.clone().repeated())
-        .ignore_then(
-            statement
-                .separated_by(delim.clone())
-                .allow_trailing()
-                .collect::<Vec<_>>()
-                .or_not()
-                .map(|x| x.unwrap_or_default()),
-        )
+        .ignore_then(body_items.clone())
+        .then_ignore(delim.clone().or_not())
+        .then_ignore(just("}}").padded_by(pad.clone()))
+        .map(move |items| mk_scope(items, false));
+
+    let new_scope = just('{')
+        .padded_by(pad.clone())
+        .then_ignore(delim.clone().repeated())
+        .ignore_then(body_items)
         .then_ignore(delim.or_not())
         .then_ignore(just('}').padded_by(pad))
-        .map(|items| scope_node(items, true, false))
+        .map(move |items| mk_scope(items, true));
+
+    no_new_scope.or(new_scope)
 }

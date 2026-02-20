@@ -36,11 +36,13 @@ const strip_prefix = fn (s : str, prefix : str) -> str => {
 	if len(parts) <= 1 => s;
 	let mut out = "";
 	let mut idx = 1;
+	
 	for idx < len(parts) => {
 		if idx > 1 => out &= prefix;
 		out &= parts[idx];
 		idx = idx + 1;
 	};
+	
 	out;
 };
 

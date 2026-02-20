@@ -56,11 +56,10 @@ type NumType = struct { num : int } @overload {
 
 let => @mult_scope [$ident = adder_int, $t = type : int] const $ident = fn (first : dyn, second : $t) -> $t => {
 	print("multiplyer");
+	
 	return first * second;
 };
-
 let @float_mult_scope => @mult_scope [$ident = adder_float, $t = type : float];
-
 => @mult_scope [];
 => @float_mult_scope [];
 => @float_mult_scope [$ident = adder_flt];
@@ -80,6 +79,7 @@ const main = fn () => {
 	print(adder_float(90, 10.6));
 	
 	print("piping");
+	
 	40 |: forty > adder_float(forty) |> $(80) |> fn (input : float) => print(input);
 	
 	print("overload");
@@ -94,6 +94,7 @@ const main = fn () => {
 	print_text("1", "2", "6");
 	
 	let mut d = [[2, 0, 4], [1, 9, 3], [4, 7, 9], [9, 0, 1]];
+	
 	let lst = list:<int>[2, 0, 4];
 	
 	let mtchfn = fn match str -> int {
@@ -116,15 +117,15 @@ const main = fn () => {
 		print("add_scope: ");
 		print(sum);
 	};
-	
 	=> @add_scope [];
+	
 	match_res = 60;
-	=> @add_scope [];
 	
+	=> @add_scope [];
 	=> @add_scope [$first = (5f / 99f)];
+	=> @add_scope [$first = 30, $second = 70, $t = type : int] {{}};
 	
 	// Now it doesn't create a new scope overriding the default implementation
-	=> @add_scope [$first = 30, $second = 70, $t = type : int] {{}};
 	print(sum + 10);
 	
 	let mut correct = -10;

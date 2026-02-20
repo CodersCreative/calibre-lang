@@ -22,6 +22,7 @@ const main = fn () => {
 	for i in 0..len(keys) => print("key => " & keys[i]);
 	
 	let entries = map.entries();
+	
 	for i in 0..len(entries) => {
 		let pair = entries[i];
 		print("entry => " & pair.0 & ":" & pair.1);

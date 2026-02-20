@@ -4,7 +4,7 @@ use calibre_mir::{
 };
 use calibre_parser::Span;
 use calibre_parser::ast::{
-    ObjectMap, ParserDataType, ParserInnerType, PotentialFfiDataType,
+    ObjectMap, ParserDataType, ParserInnerType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
@@ -203,8 +203,8 @@ pub enum LirNodeType {
         abi: Box<str>,
         library: Box<str>,
         symbol: Box<str>,
-        parameters: Vec<PotentialFfiDataType>,
-        return_type: PotentialFfiDataType,
+        parameters: Vec<ParserDataType>,
+        return_type: ParserDataType,
     },
 }
 

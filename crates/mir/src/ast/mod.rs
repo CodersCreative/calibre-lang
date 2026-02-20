@@ -2,8 +2,7 @@ use calibre_parser::{
     Span,
     ast::{
         CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
-        ObjectMap, ObjectType, ParserDataType, ParserText, PotentialFfiDataType, RefMutability,
-        VarType,
+        ObjectMap, ObjectType, ParserDataType, ParserText, RefMutability, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
@@ -77,8 +76,8 @@ pub enum MiddleNodeType {
         abi: String,
         library: String,
         symbol: String,
-        parameters: Vec<PotentialFfiDataType>,
-        return_type: PotentialFfiDataType,
+        parameters: Vec<ParserDataType>,
+        return_type: ParserDataType,
     },
     AssignmentExpression {
         identifier: Box<MiddleNode>,

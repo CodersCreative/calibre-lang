@@ -1,15 +1,19 @@
-const count_up = fn(start : int, end : int) -> gen:<int> => {
+const count_up = fn (start : int, end : int) -> gen:<int> => {
 	let mut i = start;
+	
 	for i < end => {
 		if i % 2 == 0 => return i;
+		
 		i += 1;
 	};
 };
 
-const evens_from = fn(start : int) -> gen:<int> => {
+const evens_from = fn (start : int) -> gen:<int> => {
 	let mut i = start;
+	
 	for  => {
 		if i % 2 == 0 => return i;
+		
 		i += 1;
 	};
 };
@@ -17,18 +21,19 @@ const evens_from = fn(start : int) -> gen:<int> => {
 const main = fn () => {
 	let mut g = count_up(0, 10);
 	for let .Some : value <- g.next() => print(value);
-
+	
 	let evens = fn(x for x in 0..20 if x % 2 == 0);
 	print(evens.collect());
-
+	
 	let odds = fn(x for x in 0..20 if x % 2 != 0) -> gen:<int>;
 	print("odds " & odds.collect());
-
+	
 	let mapped = fn(x + 1 for x in 0..5).map(fn (x : int) -> int => x * 10).collect();
 	print(mapped);
-
+	
 	let mut infinite = evens_from(0);
+	
 	for i in 0..10 => {
 		print(infinite.next());
-	}
+	};
 };

@@ -333,6 +333,9 @@ pub fn from_parser_data_type(pd: &ParserDataType, tg: &mut TypeGenerator) -> Typ
         ),
         ParserInnerType::DollarIdentifier(_) => tg.fresh(),
         ParserInnerType::Range => Type::TCon(TypeCon::Range),
+        ParserInnerType::FfiType(ffi) => {
+            from_parser_data_type(&ParserDataType::new(pd.span, ffi.clone().into()), tg)
+        }
     }
 }
 

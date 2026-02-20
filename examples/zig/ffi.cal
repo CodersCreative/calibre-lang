@@ -13,6 +13,7 @@ const main = fn () => {
 	print(dot);
 	
 	let nums = [1, 2, 3, 4, 5, 6];
+	
 	let total = zig_sum_bytes(nums, len(nums));
 	print(total);
 };

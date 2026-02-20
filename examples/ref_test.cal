@@ -25,6 +25,7 @@ const main = fn () => {
 	print(p.get_a());
 	
 	let mut it : ListIter:<int> = list:<int>[0, 1, 2, 3, 4].iter();
+	
 	for  => {
 		let next = it.next();
 		match next {
