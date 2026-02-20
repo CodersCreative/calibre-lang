@@ -137,6 +137,13 @@ impl MiddleEnvironment {
                 node_type: MiddleNodeType::Identifier(
                     if let Some(x) = self.resolve_potential_generic_ident(scope, &x) {
                         x
+                    } else if matches!(
+                        &x,
+                        PotentialGenericTypeIdentifier::Identifier(
+                            PotentialDollarIdentifier::Identifier(text)
+                        ) if text.text.contains("::")
+                    ) {
+                        ParserText::from(x.to_string())
                     } else if let PotentialDollarIdentifier::DollarIdentifier(x) = x.get_ident() {
                         let val = self.resolve_macro_arg(scope, x).cloned().ok_or_else(|| {
                             MiddleErr::At(
@@ -2130,6 +2137,24 @@ impl MiddleEnvironment {
                     .map(|g| g.identifier.to_string())
                     .collect();
                 let impl_key = self.get_or_create_impl(resolved.clone(), generic_params);
+
+                {
+                    let impl_ref = self.impls.get_mut(&impl_key).ok_or_else(|| {
+                        MiddleErr::At(
+                            node.span,
+                            Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
+                        )
+                    })?;
+                    for var in &variables {
+                        if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
+                            let resolved_iden = format!("{}::{}", target_key, identifier);
+                            impl_ref
+                                .variables
+                                .entry(identifier.to_string())
+                                .or_insert((resolved_iden, false));
+                        }
+                    }
+                }
 
                 let previous_self = self
                     .scopes

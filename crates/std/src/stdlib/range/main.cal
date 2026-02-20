@@ -13,7 +13,11 @@ impl range {
 		value >= s && value < e;
 	};
 
-	const to_list = fn (self : range) -> list:<int> => list:<int>[i for i in self];
+	const to_list = fn (self : range) -> list:<int> => {
+		let mut out = list:<int>[];
+		for i in self => out = out << i;
+		out;
+	};
 
 	const sum = fn (self : range) -> int => {
 		let mut acc = 0;

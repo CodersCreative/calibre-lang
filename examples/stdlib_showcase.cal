@@ -2,6 +2,8 @@ import * from std::thread;
 import * from std::option;
 import * from std::crypto;
 import * from std::regex;
+import * from std::math;
+import * from std::net;
 
 const main = fn () => {
 	let mut nums = list:<int>[1, 2, 3, 4, 5];
@@ -51,4 +53,31 @@ const main = fn () => {
 	
 	print("sha256 => " & sha256("abc"));
 	print("regex is_match => " & is_match("a.c", "abc"));
+
+	print("math consts => PI=" & PI & ", E=" & E);
+	print("int => min/max/abs => " & int.min(-4, 9) & ", " & int.max(-4, 9) & ", " & int.abs(-42));
+	print("int => gcd/lcm => " & int.gcd(84, 18) & ", " & int.lcm(12, 18));
+	print("int => fact/perm/comb => " & int.factorial(6) & ", " & int.permutations(8, 3) & ", " & int.combinations(8, 3));
+	print("int => is_prime(97) => " & int.is_prime(97));
+
+	print("uint => min/max/pow => " & uint.min(4u, 9u) & ", " & uint.max(4u, 9u) & ", " & uint.pow(2u, 10u));
+	print("uint => gcd/lcm => " & uint.gcd(84u, 18u) & ", " & uint.lcm(12u, 18u));
+	print("uint => fact/perm/comb => " & uint.factorial(6u) & ", " & uint.permutations(8u, 3u) & ", " & uint.combinations(8u, 3u));
+	print("uint => is_prime(97u) => " & uint.is_prime(97u));
+
+	print("float => floor/ceil/round => " & float.floor(3.7f) & ", " & float.ceil(3.2f) & ", " & float.round(3.5f));
+	print("float => frac/sqrt/cbrt => " & float.frac(3.25f) & ", " & float.sqrt(9f) & ", " & float.cbrt(27f));
+	print("float => ln/log10/log2 => " & float.ln(E) & ", " & float.log10(1000f) & ", " & float.log2(8f));
+	print("float => sin/cos/tan(PI/4) => " & float.sin(PI / 4f) & ", " & float.cos(PI / 4f) & ", " & float.tan(PI / 4f));
+	print("float => deg/rad => " & float.deg_to_rad(180f) & ", " & float.rad_to_deg(PI));
+	print("float => lerp/remap => " & float.lerp(10f, 20f, 0.25f) & ", " & float.remap(0f, 100f, -1f, 1f, 75f));
+	print("float approx_eq => " & float.approx_eq(float.sqrt(2f) * float.sqrt(2f), 2f, EPSILON));
+
+	let stats = list:<float>[1f, 2f, 3f, 4f, 5f, 10f];
+	print("list<float> => mean/var/std/median => " & stats.mean() & ", " & stats.variance() & ", " & stats.std_dev() & ", " & stats.median());
+
+	let http_client = Http.client("https://example.com", 443).with_header("Accept: text/plain");
+	print("http base url => " & http_client.base_url());
+	let http_client2 = Http.with_scheme("api.example.com", 0, "https");
+	print("http with_scheme base => " & http_client2.base_url());
 };

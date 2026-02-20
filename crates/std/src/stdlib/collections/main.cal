@@ -12,7 +12,6 @@ type HashMap:<K, V> = struct { } @overload {
 };
 
 type HashSet:<T> = struct { } @overload {
-
 	const "in" = fn (value : T, set : HashSet:<T>) -> bool => set.contains(value);
 };
 

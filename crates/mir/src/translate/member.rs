@@ -304,6 +304,18 @@ impl MiddleEnvironment {
         let resolved = self
             .resolve_data_type(scope, data_type.clone())
             .unwrap_all_refs();
+        let resolved_impl_key = self.impl_key(&resolved);
+        if let Some(imp) = self.impls.get(&resolved_impl_key)
+            && let Some((mapped, _)) = imp.variables.get(member)
+        {
+            return Some(mapped.clone());
+        }
+        let input_impl_key = self.impl_key(data_type);
+        if let Some(imp) = self.impls.get(&input_impl_key)
+            && let Some((mapped, _)) = imp.variables.get(member)
+        {
+            return Some(mapped.clone());
+        }
         if let Some(found) =
             resolve_from(self, &resolved, member).or_else(|| resolve_from(self, data_type, member))
         {
@@ -373,6 +385,13 @@ impl MiddleEnvironment {
             cur
         }
         let target_family: Option<String> = match &target_inner {
+            ParserInnerType::Int => Some("int".to_string()),
+            ParserInnerType::UInt => Some("uint".to_string()),
+            ParserInnerType::Float => Some("float".to_string()),
+            ParserInnerType::Bool => Some("bool".to_string()),
+            ParserInnerType::Char => Some("char".to_string()),
+            ParserInnerType::Dynamic => Some("dyn".to_string()),
+            ParserInnerType::Null => Some("null".to_string()),
             ParserInnerType::List(_) => Some("list".to_string()),
             ParserInnerType::Range => Some("range".to_string()),
             ParserInnerType::Str => Some("str".to_string()),
@@ -401,13 +420,33 @@ impl MiddleEnvironment {
                     return false;
                 }
                 let owner = normalize_owner(owner);
+                let owner_family = owner
+                    .split("->")
+                    .next()
+                    .unwrap_or(owner.as_str())
+                    .rsplit_once("::")
+                    .map(|(_, rhs)| rhs)
+                    .unwrap_or_else(|| owner.split("->").next().unwrap_or(owner.as_str()));
                 if target_family == "list" {
-                    return owner.starts_with("list:<");
+                    return owner_family.starts_with("list:<") || owner.starts_with("list:<");
                 }
-                owner.split("->").next().unwrap_or(owner.as_str()) == target_family
+                owner_family == target_family
             })
         {
             return Some(found.clone());
+        }
+        if let Some(target_family) = match &target_inner {
+            ParserInnerType::Int => Some("int"),
+            ParserInnerType::UInt => Some("uint"),
+            ParserInnerType::Float => Some("float"),
+            ParserInnerType::Bool => Some("bool"),
+            ParserInnerType::Char => Some("char"),
+            ParserInnerType::Str => Some("str"),
+            ParserInnerType::Range => Some("range"),
+            ParserInnerType::List(_) => Some("list"),
+            _ => None,
+        } {
+            return Some(format!("{target_family}::{member}"));
         }
         let target = resolved.clone();
         let target_name = match &target.data_type {
@@ -485,13 +524,14 @@ impl MiddleEnvironment {
         if path.len() > 1
             && let NodeType::Identifier(x) = &path[0].0.node_type
         {
-            let base_is_value = self
-                .resolve_potential_generic_ident(scope, x)
+            let resolved_ident = self.resolve_potential_generic_ident(scope, x);
+            let base_has_value_binding = resolved_ident
+                .as_ref()
                 .map(|id| self.variables.contains_key(&id.text))
                 .unwrap_or(false);
-            if let Some(Some(object)) = self
-                .resolve_potential_generic_ident(scope, x)
-                .map(|x| self.objects.get(&x.text))
+            let base_type = self.resolve_type_from_ident(scope, x);
+            let base_is_value = base_has_value_binding && base_type.is_none();
+            if let Some(Some(object)) = resolved_ident.as_ref().map(|x| self.objects.get(&x.text))
             {
                 match (&object.object_type, &path[1].0.node_type) {
                     (MiddleTypeDefType::Enum(variants), NodeType::Identifier(y))
@@ -519,7 +559,7 @@ impl MiddleEnvironment {
                 }
             }
 
-            if let Some(ty) = self.resolve_type_from_ident(scope, x) {
+            if let Some(ty) = base_type {
                 match &path[1].0.node_type {
                     NodeType::CallExpression {
                         string_fn,

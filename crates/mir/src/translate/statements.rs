@@ -46,7 +46,7 @@ impl MiddleEnvironment {
             } else {
                 existing.clone()
             }
-        } else if identifier.text.contains("->") {
+        } else if identifier.text.contains("->") || identifier.text.contains("::") {
             identifier.text.clone()
         } else {
             get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))

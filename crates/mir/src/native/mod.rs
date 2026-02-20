@@ -169,6 +169,7 @@ impl MiddleEnvironment {
         self.setup_std_module(scope, "generators", &[]);
         self.setup_std_module(scope, "crypto", &["sha256", "sha512", "blake3"]);
         self.setup_std_module(scope, "regex", &["is_match", "find", "replace"]);
+        self.setup_std_module(scope, "math", &[]);
         self.setup_std_module(
             scope,
             "net",

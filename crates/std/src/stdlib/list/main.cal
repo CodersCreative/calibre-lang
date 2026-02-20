@@ -154,6 +154,7 @@ impl<T> list:<T> {
 		out;
 	};
 };
+
 impl list:<int> {
 	const sum = fn (self : list:<int>) -> int => {
 		let mut acc = 0;
@@ -175,6 +176,29 @@ impl list:<int> {
 		some(m);
 	};
 };
+
+impl list:<uint> {
+	const sum = fn (self : list:<uint>) -> uint => {
+		let mut acc = 0;
+		for i in 0..len(self) => acc = acc + self[i];
+		acc;
+	};
+
+	const min = fn (self : list:<uint>) -> uint? => {
+		if len(self) == 0 => none;
+		let mut m = self[0];
+		for i in 1..len(self) => if self[i] < m => m = self[i];
+		some(m);
+	};
+
+	const max = fn (self : list:<uint>) -> uint? => {
+		if len(self) == 0 => none;
+		let mut m = self[0];
+		for i in 1..len(self) => if self[i] > m => m = self[i];
+		some(m);
+	};
+};
+
 impl list:<float> {
 	const sum = fn (self : list:<float>) -> float => {
 		let mut acc = 0f;
@@ -194,5 +218,49 @@ impl list:<float> {
 		let mut m = self[0];
 		for i in 1..len(self) => if self[i] > m => m = self[i];
 		some(m);
+	};
+
+	const mean = fn (values : list:<float>) -> float => {
+		if len(values) == 0 => return 0f;
+		let mut acc = 0f;
+		for i in 0..len(values) => acc = acc + values[i];
+		acc / (try len(values) as float => 1f);
+	};
+
+	const variance = fn (values : list:<float>) -> float => {
+		let n = len(values);
+		if n == 0 => return 0f;
+		let m = values.mean();
+		let mut acc = 0f;
+		for i in 0..n => {
+			let d = values[i] - m;
+			acc = acc + (d * d);
+		};
+		acc / (try n as float => 1f);
+	};
+
+	const std_dev = fn (values : list:<float>) -> float => float.sqrt(values.variance());
+
+	const median = fn (values : list:<float>) -> float => {
+		let n = len(values);
+		if n == 0 => return 0f;
+		
+		let mut tmp = list:<float>[values[i] for i in 0..n];
+		
+		let mut i = 0;
+		for i < n => {
+			let mut j = 0;
+			for j + 1 < n - i => {
+				if tmp[j] > tmp[j + 1] => {
+					let t = tmp[j];
+					tmp[j] = tmp[j + 1];
+					tmp[j + 1] = t;
+				};
+				j = j + 1;
+			};
+			i = i + 1;
+		};
+		
+		if n % 2 == 1 => tmp[n / 2] else => (tmp[(n / 2) - 1] + tmp[n / 2]) / 2f;
 	};
 };

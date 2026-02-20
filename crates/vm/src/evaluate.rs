@@ -1239,6 +1239,12 @@ impl VM {
                                     .and_then(|i| list.as_ref().0.get(i).cloned())
                                     .unwrap_or(RuntimeValue::Null))
                             }
+                            RuntimeValue::UInt(index) => Ok(list
+                                .as_ref()
+                                .0
+                                .get(*index as usize)
+                                .cloned()
+                                .unwrap_or(RuntimeValue::Null)),
                             RuntimeValue::Range(start, end) => {
                                 let (s, e) = resolve_range(list.as_ref().0.len(), *start, *end);
                                 let slice = list.as_ref().0[s..e].to_vec();
@@ -1257,6 +1263,14 @@ impl VM {
                                 .map(|i| RuntimeValue::Int(start + i as i64))
                                 .unwrap_or(RuntimeValue::Null)
                         }
+                        RuntimeValue::UInt(index) => {
+                            let len = (end - start).max(0) as usize;
+                            if (*index as usize) < len {
+                                RuntimeValue::Int(start + *index as i64)
+                            } else {
+                                RuntimeValue::Null
+                            }
+                        }
                         RuntimeValue::Range(slice_start, slice_end) => {
                             let len = (end - start).max(0) as usize;
                             let (s, e) = resolve_range(len, *slice_start, *slice_end);
@@ -1267,6 +1281,13 @@ impl VM {
                     RuntimeValue::Aggregate(None, tuple) => match &index_val {
                         RuntimeValue::Int(index) => resolve_idx(tuple.as_ref().0.0.len(), *index)
                             .and_then(|i| tuple.as_ref().0.0.get(i).map(|(_, v)| v.clone()))
+                            .unwrap_or(RuntimeValue::Null),
+                        RuntimeValue::UInt(index) => tuple
+                            .as_ref()
+                            .0
+                            .0
+                            .get(*index as usize)
+                            .map(|(_, v)| v.clone())
                             .unwrap_or(RuntimeValue::Null),
                         RuntimeValue::Range(start, end) => {
                             let (s, e) = resolve_range(tuple.as_ref().0.0.len(), *start, *end);
@@ -1291,6 +1312,11 @@ impl VM {
                                 .map(RuntimeValue::Char)
                                 .unwrap_or(RuntimeValue::Null)
                         }
+                        RuntimeValue::UInt(index) => s
+                            .chars()
+                            .nth(*index as usize)
+                            .map(RuntimeValue::Char)
+                            .unwrap_or(RuntimeValue::Null),
                         RuntimeValue::Range(start, end) => {
                             let v = s.chars().collect::<Vec<char>>();
                             let (s, e) = resolve_range(v.len(), *start, *end);
@@ -1314,9 +1340,17 @@ impl VM {
             } => {
                 let index_val = self.get_reg_value(*index);
                 let value = self.get_reg_value(*value);
-                let RuntimeValue::Int(index) = index_val else {
-                    return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                let index = match index_val {
+                    RuntimeValue::Int(index) => index,
+                    RuntimeValue::UInt(index) => index as i64,
+                    _ => {
+                        return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                    }
                 };
+                let target_val_ref = self.get_reg_value_ref(*target);
+                if index < 0 && !matches!(target_val_ref, RuntimeValue::List(_)) {
+                    return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                }
                 let resolve_idx = |len: usize, idx: i64| -> Result<usize, RuntimeError> {
                     let resolved = if idx < 0 { len as i64 + idx } else { idx };
                     if resolved < 0 || resolved as usize >= len {
@@ -1324,7 +1358,6 @@ impl VM {
                     }
                     Ok(resolved as usize)
                 };
-                let target_val_ref = self.get_reg_value_ref(*target);
                 match target_val_ref {
                     RuntimeValue::List(list) => {
                         let mut list = list.clone();
