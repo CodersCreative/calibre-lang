@@ -1369,7 +1369,7 @@ impl Formatter {
                     && *create_new_scope
                 {
                     txt.push_str(" {}");
-                } else if create_new_scope.is_some(){
+                } else if create_new_scope.is_some() {
                     txt.push_str(" {{}}");
                 }
 

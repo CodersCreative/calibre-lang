@@ -22,8 +22,7 @@ use diagnostics::to_parser_errors;
 use util::{
     auto_type, ensure_scope_node, ident_node, is_keyword, lex, normalize_scope_member_chain,
     parse_embedded_expr, parse_splits, scope_body_or_single, scope_node, scope_node_parser, span,
-    strip_block_comments_keep_layout, unescape_char, unescape_string,
-    with_named_scope,
+    strip_block_comments_keep_layout, unescape_char, unescape_string, with_named_scope,
 };
 
 trait LegacySpanMapExt<'a, O>: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Sized {
@@ -598,7 +597,9 @@ pub fn parse_program_with_source(
                                     } else {
                                         VarType::Immutable
                                     },
-                                    PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
+                                    PotentialDollarIdentifier::Identifier(ParserText::new(
+                                        sp, name,
+                                    )),
                                 ))
                             }),
                     ))
@@ -635,14 +636,14 @@ pub fn parse_program_with_source(
                     let t = ty.unwrap_or_else(|| auto_type(Span::default()));
                     FnParamGroup::Plain(
                         names
-                        .into_iter()
-                        .map(|(n, sp)| {
-                            (
-                                PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
-                                t.clone(),
-                            )
-                        })
-                        .collect::<Vec<_>>(),
+                            .into_iter()
+                            .map(|(n, sp)| {
+                                (
+                                    PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
+                                    t.clone(),
+                                )
+                            })
+                            .collect::<Vec<_>>(),
                     )
                 });
 
@@ -2449,9 +2450,8 @@ pub fn parse_program_with_source(
                     )
                     .map(|((((loop_type, label), body), else_body), until)| {
                         let body = ensure_scope_node(body, true, false);
-                        let else_body = else_body.map(|body| {
-                            Box::new(ensure_scope_node(body, true, false))
-                        });
+                        let else_body =
+                            else_body.map(|body| Box::new(ensure_scope_node(body, true, false)));
                         Node::new(
                             body.span,
                             NodeType::LoopDeclaration {
@@ -3146,9 +3146,8 @@ pub fn parse_program_with_source(
                 .then_ignore(delim.clone().or_not())
                 .then_ignore(lex(pad.clone(), just("}}")))
                 .map(|items| (Some(items), Some(false))),
-            scope_node_parser(statement.clone(), delim.clone(), pad.clone()).map(|body| {
-                (scope_body_or_single(body), Some(true))
-            }),
+            scope_node_parser(statement.clone(), delim.clone(), pad.clone())
+                .map(|body| (scope_body_or_single(body), Some(true))),
             pad_with_newline
                 .clone()
                 .ignore_then(choice((statement.clone(), expr.clone())))
@@ -3231,13 +3230,13 @@ pub fn parse_program_with_source(
             .map_with_span({
                 let ls = line_starts.clone();
                 move |value, r| {
-                Node::new(
-                    span(ls.as_ref(), r),
-                    NodeType::Return {
-                        value: value.map(Box::new),
-                    },
-                )
-            }
+                    Node::new(
+                        span(ls.as_ref(), r),
+                        NodeType::Return {
+                            value: value.map(Box::new),
+                        },
+                    )
+                }
             });
 
         let _labelled_scope_stmt = lex(pad.clone(), just('@'))
@@ -3408,9 +3407,8 @@ pub fn parse_program_with_source(
             )
             .map(|((((lt, label), body), else_body), until)| {
                 let body = ensure_scope_node(body, true, false);
-                let else_body = else_body.map(|body| {
-                    Box::new(ensure_scope_node(body, true, false))
-                });
+                let else_body =
+                    else_body.map(|body| Box::new(ensure_scope_node(body, true, false)));
                 Node::new(
                     body.span,
                     NodeType::LoopDeclaration {

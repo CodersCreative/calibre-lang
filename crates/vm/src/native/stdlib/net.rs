@@ -68,6 +68,7 @@ fn parse_http_args(args: Vec<RuntimeValue>) -> Result<(String, String, String), 
 
 fn send_http_request(method: &str, url: &str, body: &str) -> Result<String, RuntimeError> {
     let config = ureq::Agent::config_builder()
+        .http_status_as_error(false)
         .timeout_global(Some(std::time::Duration::from_secs(5)))
         .build();
     let agent = ureq::Agent::new_with_config(config);

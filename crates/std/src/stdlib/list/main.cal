@@ -154,7 +154,6 @@ impl<T> list:<T> {
 		out;
 	};
 };
-
 impl list:<int> {
 	const sum = fn (self : list:<int>) -> int => {
 		let mut acc = 0;
@@ -176,7 +175,6 @@ impl list:<int> {
 		some(m);
 	};
 };
-
 impl list:<uint> {
 	const sum = fn (self : list:<uint>) -> uint => {
 		let mut acc = 0;
@@ -198,7 +196,6 @@ impl list:<uint> {
 		some(m);
 	};
 };
-
 impl list:<float> {
 	const sum = fn (self : list:<float>) -> float => {
 		let mut acc = 0f;
@@ -232,10 +229,12 @@ impl list:<float> {
 		if n == 0 => return 0f;
 		let m = values.mean();
 		let mut acc = 0f;
+		
 		for i in 0..n => {
 			let d = values[i] - m;
 			acc = acc + (d * d);
 		};
+		
 		acc / (try n as float => 1f);
 	};
 
@@ -248,16 +247,20 @@ impl list:<float> {
 		let mut tmp = list:<float>[values[i] for i in 0..n];
 		
 		let mut i = 0;
+		
 		for i < n => {
 			let mut j = 0;
+			
 			for j + 1 < n - i => {
 				if tmp[j] > tmp[j + 1] => {
 					let t = tmp[j];
 					tmp[j] = tmp[j + 1];
 					tmp[j + 1] = t;
 				};
+				
 				j = j + 1;
 			};
+			
 			i = i + 1;
 		};
 		

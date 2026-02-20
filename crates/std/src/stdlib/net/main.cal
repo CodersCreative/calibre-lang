@@ -25,13 +25,17 @@ impl Tcp {
 
 impl TcpStream {
 	const connect = fn (host : str, port : int) -> TcpStream => Tcp.connect(host, port);
+
 	const read = fn (self : &TcpStream, size : int) -> str => tcp_read(self.inner, size);
+
 	const write = fn (self : &TcpStream, data : str) -> int => tcp_write(self.inner, data);
+
 	const close = fn (self : &TcpStream) => tcp_close(self.inner);
 };
 
 impl TcpListener {
 	const listen = fn (host : str, port : int) -> TcpListener => Tcp.listen(host, port);
+
 	const accept = fn (self : &TcpListener) -> TcpStream => TcpStream { inner : tcp_accept(self.inner) };
 };
 
@@ -59,26 +63,31 @@ const normalize_host = fn (host : str) -> str => {
 	out;
 };
 
-const infer_scheme = fn (host : str) -> str => if starts_with(host, "https://") => "https" else => "http";
+const infer_scheme = fn (host : str, port : int) -> str => {
+	if starts_with(host, "https://") => "https" else => if starts_with(host, "http://") => "http" else => if port == 443 => "https" else => "http";
+};
 
 const build_url = fn (scheme : str, host : str, port : int, path : str) -> str => {
 	let mut url = scheme & "://" & host;
 	if port != default_port(scheme) => url &= ":" & port;
 	if starts_with(path, "/") => url &= path else => url &= "/" & path;
+	
 	url;
 };
 
 impl Http {
 	const client = fn (host : str, port : int) -> HttpClient => {
-		let scheme = infer_scheme(host);
+		let scheme = infer_scheme(host, port);
 		let resolved_port = if port <= 0 => default_port(scheme) else => port;
-		let client = HttpClient { host : normalize_host(host), port : resolved_port, headers : list:<str>[], scheme : scheme };
+		
+		let client = HttpClient { host : normalize_host(host), port : resolved_port, headers : list:<str>[], scheme };
 		client;
 	};
 
 	const with_scheme = fn (host : str, port : int, scheme : str) -> HttpClient => {
 		let resolved_port = if port <= 0 => default_port(scheme) else => port;
-		let client = HttpClient { host : normalize_host(host), port : resolved_port, headers : list:<str>[], scheme : scheme };
+		
+		let client = HttpClient { host : normalize_host(host), port : resolved_port, headers : list:<str>[], scheme };
 		client;
 	};
 
@@ -119,6 +128,7 @@ impl HttpClient {
 	};
 
 	const get = fn (self : HttpClient, path : str) -> HttpResponse => self.request("GET", path, "");
+
 	const post = fn (self : HttpClient, path : str, body : str) -> HttpResponse => self.request("POST", path, body);
 };
 

@@ -531,8 +531,7 @@ impl MiddleEnvironment {
                 .unwrap_or(false);
             let base_type = self.resolve_type_from_ident(scope, x);
             let base_is_value = base_has_value_binding && base_type.is_none();
-            if let Some(Some(object)) = resolved_ident.as_ref().map(|x| self.objects.get(&x.text))
-            {
+            if let Some(Some(object)) = resolved_ident.as_ref().map(|x| self.objects.get(&x.text)) {
                 match (&object.object_type, &path[1].0.node_type) {
                     (MiddleTypeDefType::Enum(variants), NodeType::Identifier(y))
                         if path.len() == 2 =>
