@@ -1012,22 +1012,18 @@ struct Args {
 
 #[derive(Debug, Default, Clone, Parser, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum Verbosity {
-    #[default]
     All,
     AST,
     MIR,
     LIR,
     Byte,
+    #[default]
     None,
 }
 
 impl Verbosity {
     pub fn is_level(&self, other: &Verbosity) -> bool {
-        if self == &Verbosity::All || other == &Verbosity::All {
-            return true;
-        }
-
-        self == other
+        matches!(self, Verbosity::All) || self == other
     }
 }
 

@@ -69,6 +69,7 @@ pub struct VM {
     pub ptr_heap: FxHashMap<u64, RuntimeValue>,
     pub config: VMConfig,
     reg_arena: Vec<RuntimeValue>,
+    reg_top: usize,
     name_arena: FxHashMap<Arc<str>, Arc<str>>,
     frames: Vec<VMFrame>,
     frame_pool: Vec<VMFrame>,
@@ -119,7 +120,7 @@ pub struct VMGC {
 impl Default for VMGC {
     fn default() -> Self {
         Self {
-            interval: 4096,
+            interval: 1_048_576,
             counter: 0,
             in_flight: Arc::new(AtomicBool::new(false)),
         }
@@ -140,6 +141,7 @@ impl From<VMRegistry> for VM {
             ptr_heap: FxHashMap::default(),
             config,
             reg_arena: Vec::new(),
+            reg_top: 0,
             name_arena: FxHashMap::default(),
             frames: vec![VMFrame::default()],
             frame_pool: Vec::new(),
@@ -368,6 +370,7 @@ impl VM {
             ptr_heap: FxHashMap::default(),
             config: config.clone(),
             reg_arena: Vec::new(),
+            reg_top: 0,
             name_arena: FxHashMap::default(),
             frames: vec![VMFrame::default()],
             frame_pool: Vec::new(),
@@ -409,6 +412,7 @@ impl VM {
             ptr_heap: FxHashMap::default(),
             config: config.clone(),
             reg_arena: Vec::new(),
+            reg_top: 0,
             name_arena: FxHashMap::default(),
             frames: vec![VMFrame::default()],
             frame_pool: Vec::new(),
@@ -457,8 +461,11 @@ impl VM {
     }
 
     fn push_frame(&mut self, reg_count: usize, func_ptr: usize) {
-        let start = self.reg_arena.len();
-        self.reg_arena.resize(start + reg_count, RuntimeValue::Null);
+        let start = self.reg_top;
+        self.reg_top = self.reg_top.saturating_add(reg_count);
+        if self.reg_top > self.reg_arena.len() {
+            self.reg_arena.resize(self.reg_top, RuntimeValue::Null);
+        }
         if let Some(mut frame) = self.frame_pool.pop() {
             frame.reg_start = start;
             frame.reg_count = reg_count;
@@ -482,13 +489,13 @@ impl VM {
     fn pop_frame(&mut self) {
         if self.frames.len() <= 1 {
             if let Some(frame) = self.frames.pop() {
-                self.reg_arena.truncate(frame.reg_start);
+                self.reg_top = frame.reg_start;
                 self.frame_pool.push(frame);
             }
             return;
         }
         if let Some(frame) = self.frames.pop() {
-            self.reg_arena.truncate(frame.reg_start);
+            self.reg_top = frame.reg_start;
             self.frame_pool.push(frame);
         }
     }
@@ -549,6 +556,21 @@ impl VM {
             }
         }
         &NULL_RUNTIME_VALUE
+    }
+
+    #[inline(always)]
+    pub(crate) fn get_reg_value_in_frame_mut(
+        &mut self,
+        frame_idx: usize,
+        reg: Reg,
+    ) -> Option<&mut RuntimeValue> {
+        let frame = self.frames.get(frame_idx)?;
+        let idx = reg as usize;
+        if idx >= frame.reg_count {
+            return None;
+        }
+        let pos = frame.reg_start + idx;
+        self.reg_arena.get_mut(pos)
     }
 
     #[inline(always)]
@@ -633,6 +655,9 @@ impl VM {
             let new_len = idx + 1;
             if start + new_len > self.reg_arena.len() {
                 self.reg_arena.resize(start + new_len, RuntimeValue::Null);
+            }
+            if start + new_len > self.reg_top {
+                self.reg_top = start + new_len;
             }
             reg_count = new_len;
             let frame = self.current_frame_mut();

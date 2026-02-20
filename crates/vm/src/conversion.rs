@@ -423,6 +423,15 @@ pub enum VMInstruction {
         callee: Reg,
         args: Vec<Reg>,
     },
+    CallDirect {
+        dst: Reg,
+        name: u16,
+        args: Vec<Reg>,
+    },
+    CallSelf {
+        dst: Reg,
+        args: Vec<Reg>,
+    },
     Spawn {
         dst: Reg,
         callee: Reg,
@@ -542,6 +551,8 @@ impl Display for VMInstruction {
                 write!(f, "%r{dst} = ENUM {name}:{variant}")
             }
             VMInstruction::Call { dst, callee, .. } => write!(f, "%r{dst} = CALL %r{callee}"),
+            VMInstruction::CallDirect { dst, name, .. } => write!(f, "%r{dst} = CALL @{name}"),
+            VMInstruction::CallSelf { dst, .. } => write!(f, "%r{dst} = CALL_SELF"),
             VMInstruction::Spawn { dst, callee } => write!(f, "SPAWN %r{dst}, %r{callee}"),
             VMInstruction::LoadMember { dst, value, member } => {
                 write!(f, "%r{dst} = LOADMEMBER %r{value}.{member}")
@@ -929,6 +940,14 @@ impl FunctionLowering {
                 float_literals: FxHashMap::default(),
                 char_literals: FxHashMap::default(),
                 string_literals: FxHashMap::default(),
+                current_fn_name: self.func.name.to_string(),
+                current_fn_short: self
+                    .func
+                    .name
+                    .rsplit(':')
+                    .next()
+                    .unwrap_or(self.func.name.as_ref())
+                    .to_string(),
             };
 
             if block.id == self.entry {
@@ -1032,6 +1051,8 @@ struct BlockLoweringCtx<'a> {
     float_literals: FxHashMap<u64, u16>,
     char_literals: FxHashMap<char, u16>,
     string_literals: FxHashMap<String, u16>,
+    current_fn_name: String,
+    current_fn_short: String,
 }
 
 impl<'a> BlockLoweringCtx<'a> {
@@ -1287,30 +1308,54 @@ impl<'a> BlockLoweringCtx<'a> {
                 for arg in args {
                     arg_regs.push(self.lower_node(arg, span));
                 }
-                let callee = match *caller {
+                let dst = self.alloc_reg();
+                match *caller {
                     LirNodeType::Load(name) if !name.contains(':') => {
-                        let idx = self.add_string(name.to_string());
-                        let dst = self.alloc_reg();
-                        self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
-                        dst
+                        let current_name = self.current_fn_name.as_str();
+                        let current_short = self.current_fn_short.as_str();
+                        if name.as_ref() == current_name || name.as_ref() == current_short {
+                            self.emit(VMInstruction::CallSelf { dst, args: arg_regs }, span);
+                        } else {
+                            let idx = self.add_string(name.to_string());
+                            self.emit(
+                                VMInstruction::CallDirect {
+                                    dst,
+                                    name: idx,
+                                    args: arg_regs,
+                                },
+                                span,
+                            );
+                        }
                     }
                     LirNodeType::Move(name) if !name.contains(':') => {
-                        let idx = self.add_string(name.to_string());
-                        let dst = self.alloc_reg();
-                        self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
-                        dst
+                        let current_name = self.current_fn_name.as_str();
+                        let current_short = self.current_fn_short.as_str();
+                        if name.as_ref() == current_name || name.as_ref() == current_short {
+                            self.emit(VMInstruction::CallSelf { dst, args: arg_regs }, span);
+                        } else {
+                            let idx = self.add_string(name.to_string());
+                            self.emit(
+                                VMInstruction::CallDirect {
+                                    dst,
+                                    name: idx,
+                                    args: arg_regs,
+                                },
+                                span,
+                            );
+                        }
                     }
-                    other => self.lower_node(other, span),
-                };
-                let dst = self.alloc_reg();
-                self.emit(
-                    VMInstruction::Call {
-                        dst,
-                        callee,
-                        args: arg_regs,
-                    },
-                    span,
-                );
+                    other => {
+                        let callee = self.lower_node(other, span);
+                        self.emit(
+                            VMInstruction::Call {
+                                dst,
+                                callee,
+                                args: arg_regs,
+                            },
+                            span,
+                        );
+                    }
+                }
                 dst
             }
             LirNodeType::List { elements, .. } => {

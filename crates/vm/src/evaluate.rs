@@ -16,6 +16,20 @@ use crate::{
 };
 
 impl VM {
+    #[inline(always)]
+    fn call_arg_from_reg(&self, reg: u16) -> RuntimeValue {
+        let frame = self.frames.len().saturating_sub(1);
+        match self.get_reg_value_ref(reg) {
+            RuntimeValue::Aggregate(_, _)
+            | RuntimeValue::List(_)
+            | RuntimeValue::Enum(_, _, _)
+            | RuntimeValue::Option(_)
+            | RuntimeValue::Result(_)
+            | RuntimeValue::Ptr(_) => RuntimeValue::RegRef { frame, reg },
+            other => other.clone_for_arg(),
+        }
+    }
+
     #[inline]
     fn resolve_operand_value(&mut self, value: RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
         match value {
@@ -798,32 +812,126 @@ impl VM {
                     RuntimeValue::Enum(name.to_string(), *variant as usize, payload),
                 );
             }
-            VMInstruction::Call { dst, callee, args } => {
-                let func = self.resolve_value_for_op_ref(self.get_reg_value_ref(*callee))?;
-                let mut call_args: SmallVec<[RuntimeValue; 4]> =
-                    SmallVec::with_capacity(args.len());
-                for reg in args {
-                    let frame = self.frames.len().saturating_sub(1);
-                    match self.get_reg_value_ref(*reg) {
-                        RuntimeValue::Aggregate(_, _)
-                        | RuntimeValue::List(_)
-                        | RuntimeValue::Enum(_, _, _)
-                        | RuntimeValue::Option(_)
-                        | RuntimeValue::Result(_)
-                        | RuntimeValue::Ptr(_) => {
-                            call_args.push(RuntimeValue::RegRef { frame, reg: *reg });
-                        }
-                        other => {
-                            call_args.push(other.clone_for_arg());
-                        }
+            VMInstruction::CallDirect { dst, name, args } => {
+                let func_name = self.local_string(block, *name)?;
+                let callsite = (self.current_frame().func_ptr, block.id.0 as usize, ip);
+
+                if let Some(func) = self.resolve_callable_cached(func_name, callsite) {
+                    if args.len() == 1 && func.param_regs.len() == 1 {
+                        let arg0 = self.call_arg_from_reg(args[0]);
+                        let value = self.run_function(
+                            func.as_ref(),
+                            std::iter::once(arg0),
+                            std::sync::Arc::new(Vec::new()),
+                        )?;
+                        self.set_reg_value(*dst, value);
+                        return Ok(TerminateValue::None);
                     }
+
+                    let mut call_args: SmallVec<[RuntimeValue; 4]> =
+                        SmallVec::with_capacity(args.len());
+                    for reg in args {
+                        call_args.push(self.call_arg_from_reg(*reg));
+                    }
+                    let value =
+                        self.run_function(func.as_ref(), call_args, std::sync::Arc::new(Vec::new()))?;
+                    self.set_reg_value(*dst, value);
+                    return Ok(TerminateValue::None);
                 }
+
+                let func = if let Some((value, _)) = self.try_resolve_global_runtime_value(func_name) {
+                    value
+                } else {
+                    RuntimeValue::Null
+                };
+                match func {
+                    RuntimeValue::NativeFunction(func) => {
+                        let mut call_args: SmallVec<[RuntimeValue; 4]> =
+                            SmallVec::with_capacity(args.len());
+                        for reg in args {
+                            call_args.push(self.call_arg_from_reg(*reg));
+                        }
+                        let result = func.run(self, call_args.into_vec())?;
+                        self.set_reg_value(*dst, result);
+                    }
+                    RuntimeValue::ExternFunction(func) => {
+                        let mut call_args: SmallVec<[RuntimeValue; 4]> =
+                            SmallVec::with_capacity(args.len());
+                        for reg in args {
+                            call_args.push(self.call_arg_from_reg(*reg));
+                        }
+                        let value = func.call(self, call_args.into_vec())?;
+                        self.set_reg_value(*dst, value);
+                    }
+                    RuntimeValue::Function { name, captures } => {
+                        let resolved = self.resolve_callable_cached(name.as_ref(), callsite).ok_or_else(
+                            || RuntimeError::FunctionNotFound(name.as_str().to_string()),
+                        )?;
+                        let mut call_args: SmallVec<[RuntimeValue; 4]> =
+                            SmallVec::with_capacity(args.len());
+                        for reg in args {
+                            call_args.push(self.call_arg_from_reg(*reg));
+                        }
+                        let value = self.run_function(resolved.as_ref(), call_args, captures)?;
+                        self.set_reg_value(*dst, value);
+                    }
+                    _ => return Err(RuntimeError::FunctionNotFound(func_name.to_string())),
+                }
+            }
+            VMInstruction::CallSelf { dst, args } => {
+                let func_ptr = self.current_frame().func_ptr as *const VMFunction;
+                if func_ptr.is_null() {
+                    return Err(RuntimeError::InvalidBytecode(
+                        "missing current function frame".to_string(),
+                    ));
+                }
+                let func = unsafe { &*func_ptr };
+                if args.len() == 1 && func.param_regs.len() == 1 {
+                    let arg0 = self.call_arg_from_reg(args[0]);
+                    let value =
+                        self.run_function(func, std::iter::once(arg0), std::sync::Arc::new(Vec::new()))?;
+                    self.set_reg_value(*dst, value);
+                } else {
+                    let mut call_args: SmallVec<[RuntimeValue; 4]> =
+                        SmallVec::with_capacity(args.len());
+                    for reg in args {
+                        call_args.push(self.call_arg_from_reg(*reg));
+                    }
+                    let value = self.run_function(func, call_args, std::sync::Arc::new(Vec::new()))?;
+                    self.set_reg_value(*dst, value);
+                }
+            }
+            VMInstruction::Call { dst, callee, args } => {
+                let func = match self.get_reg_value_ref(*callee) {
+                    RuntimeValue::Function { name, captures } => RuntimeValue::Function {
+                        name: name.clone(),
+                        captures: captures.clone(),
+                    },
+                    RuntimeValue::NativeFunction(func) => RuntimeValue::NativeFunction(func.clone()),
+                    RuntimeValue::ExternFunction(func) => RuntimeValue::ExternFunction(func.clone()),
+                    other => self.resolve_value_for_op_ref(other)?,
+                };
                 match func {
                     RuntimeValue::Function { name, captures } => {
                         let callsite = (self.current_frame().func_ptr, block.id.0 as usize, ip);
                         let func_opt = self.resolve_callable_cached(name.as_str(), callsite);
 
                         if let Some(func) = func_opt {
+                            if args.len() == 1 && func.param_regs.len() == 1 {
+                                let arg0 = self.call_arg_from_reg(args[0]);
+                                let value = self.run_function(
+                                    func.as_ref(),
+                                    std::iter::once(arg0),
+                                    captures.clone(),
+                                )?;
+                                self.set_reg_value(*dst, value);
+                                return Ok(TerminateValue::None);
+                            }
+                            let mut call_args: SmallVec<[RuntimeValue; 4]> =
+                                SmallVec::with_capacity(args.len());
+                            for reg in args {
+                                call_args.push(self.call_arg_from_reg(*reg));
+                            }
                             if captures.as_ref().is_empty()
                                 && func.as_ref() as *const VMFunction
                                     == self.current_frame().func_ptr as *const VMFunction
@@ -867,6 +975,11 @@ impl VM {
                         }
                     }
                     RuntimeValue::NativeFunction(func) => {
+                        let mut call_args: SmallVec<[RuntimeValue; 4]> =
+                            SmallVec::with_capacity(args.len());
+                        for reg in args {
+                            call_args.push(self.call_arg_from_reg(*reg));
+                        }
                         let result = func.run(self, call_args.into_vec())?;
                         if let RuntimeValue::GeneratorSuspend(value) = result {
                             let yielded = *value;
@@ -881,6 +994,11 @@ impl VM {
                         self.set_reg_value(*dst, result);
                     }
                     RuntimeValue::ExternFunction(func) => {
+                        let mut call_args: SmallVec<[RuntimeValue; 4]> =
+                            SmallVec::with_capacity(args.len());
+                        for reg in args {
+                            call_args.push(self.call_arg_from_reg(*reg));
+                        }
                         let value = func.call(self, call_args.into_vec())?;
                         self.set_reg_value(*dst, value);
                     }
@@ -1214,6 +1332,34 @@ impl VM {
                 }
             }
             VMInstruction::Index { dst, value, index } => {
+                let value_ref = self.get_reg_value_ref(*value);
+                let index_ref = self.get_reg_value_ref(*index);
+                if let RuntimeValue::List(list) = value_ref {
+                    match index_ref {
+                        RuntimeValue::UInt(i) => {
+                            let out = list
+                                .as_ref()
+                                .0
+                                .get(*i as usize)
+                                .cloned()
+                                .unwrap_or(RuntimeValue::Null);
+                            self.set_reg_value(*dst, out);
+                            return Ok(TerminateValue::None);
+                        }
+                        RuntimeValue::Int(i) if *i >= 0 => {
+                            let out = list
+                                .as_ref()
+                                .0
+                                .get(*i as usize)
+                                .cloned()
+                                .unwrap_or(RuntimeValue::Null);
+                            self.set_reg_value(*dst, out);
+                            return Ok(TerminateValue::None);
+                        }
+                        _ => {}
+                    }
+                }
+
                 let resolve_idx = |len: usize, idx: i64| -> Option<usize> {
                     if len == 0 {
                         return None;
@@ -1364,10 +1510,6 @@ impl VM {
                         return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
                     }
                 };
-                let target_val_ref = self.get_reg_value_ref(*target);
-                if index < 0 && !matches!(target_val_ref, RuntimeValue::List(_)) {
-                    return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
-                }
                 let resolve_idx = |len: usize, idx: i64| -> Result<usize, RuntimeError> {
                     let resolved = if idx < 0 { len as i64 + idx } else { idx };
                     if resolved < 0 || resolved as usize >= len {
@@ -1375,45 +1517,56 @@ impl VM {
                     }
                     Ok(resolved as usize)
                 };
-                match target_val_ref {
-                    RuntimeValue::List(list) => {
-                        let mut list = list.clone();
-                        let vec = &mut Gc::make_mut(&mut list).0;
+                let target_value = self.get_reg_value(*target);
+                match target_value {
+                    RuntimeValue::List(_) => {
+                        let frame_idx = self.frames.len().saturating_sub(1);
+                        let Some(slot) = self.get_reg_value_in_frame_mut(frame_idx, *target) else {
+                            return Err(RuntimeError::StackUnderflow);
+                        };
+                        let RuntimeValue::List(list) = slot else {
+                            return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                        };
+                        let vec = &mut Gc::make_mut(list).0;
                         let idx = resolve_idx(vec.len(), index)?;
                         vec[idx] = value;
-                        self.set_reg_value(*target, RuntimeValue::List(list));
                     }
                     RuntimeValue::Ref(id) => {
-                        if let Some(RuntimeValue::List(list)) =
-                            self.variables.get(id.as_str()).cloned()
-                        {
-                            let mut list = list;
-                            let vec = &mut Gc::make_mut(&mut list).0;
-                            let idx = resolve_idx(vec.len(), index)?;
-                            vec[idx] = value;
-                            self.variables.insert(id.clone(), RuntimeValue::List(list));
-                        }
+                        let Some(slot) = self.variables.get_mut(id.as_str()) else {
+                            return Err(RuntimeError::DanglingRef(id));
+                        };
+                        let RuntimeValue::List(list) = slot else {
+                            return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                        };
+                        let vec = &mut Gc::make_mut(list).0;
+                        let idx = resolve_idx(vec.len(), index)?;
+                        vec[idx] = value;
                     }
                     RuntimeValue::VarRef(id) => {
-                        if let Some(RuntimeValue::List(list)) = self.variables.get_by_id(*id) {
-                            let mut list = list;
-                            let vec = &mut Gc::make_mut(&mut list).0;
-                            let idx = resolve_idx(vec.len(), index)?;
-                            vec[idx] = value;
-                            let _ = self.variables.set_by_id(*id, RuntimeValue::List(list));
-                        }
+                        let Some(slot) = self.variables.get_mut_by_id(id) else {
+                            return Err(RuntimeError::DanglingRef(format!("#{}", id)));
+                        };
+                        let RuntimeValue::List(list) = slot else {
+                            return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                        };
+                        let vec = &mut Gc::make_mut(list).0;
+                        let idx = resolve_idx(vec.len(), index)?;
+                        vec[idx] = value;
                     }
                     RuntimeValue::RegRef { frame, reg } => {
-                        if let RuntimeValue::List(list) = self.get_reg_value_in_frame(*frame, *reg)
-                        {
-                            let mut list = list;
-                            let vec = &mut Gc::make_mut(&mut list).0;
-                            let idx = resolve_idx(vec.len(), index)?;
-                            vec[idx] = value;
-                            self.set_reg_value_in_frame(*frame, *reg, RuntimeValue::List(list));
-                        }
+                        let Some(slot) = self.get_reg_value_in_frame_mut(frame, reg) else {
+                            return Err(RuntimeError::StackUnderflow);
+                        };
+                        let RuntimeValue::List(list) = slot else {
+                            return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                        };
+                        let vec = &mut Gc::make_mut(list).0;
+                        let idx = resolve_idx(vec.len(), index)?;
+                        vec[idx] = value;
                     }
-                    _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                    _ => {
+                        return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                    }
                 }
             }
             VMInstruction::Ref { dst, value } => {
