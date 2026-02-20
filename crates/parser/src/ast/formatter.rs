@@ -1559,17 +1559,6 @@ impl Formatter {
                         pattern: None,
                         ..
                     } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
-                    MatchArmType::Enum {
-                        pattern: Some(pattern),
-                        ..
-                    } => txt.push_str(&format!(" : {}", self.fmt_match_arm(pattern, false))),
-                    MatchArmType::Enum {
-                        destructure: Some(pattern),
-                        ..
-                    } => txt.push_str(&format!(
-                        " : {}",
-                        self.fmt_destructure_pattern(pattern, false)
-                    )),
                     _ => {}
                 }
 
@@ -2183,14 +2172,20 @@ impl Formatter {
                 value,
                 pattern: Some(pattern),
                 ..
-            } if write_name => {
-                format!(".{} : {}", value, self.fmt_match_arm(pattern, false))
+            } => {
+                let payload = self.fmt_match_arm(pattern, false);
+                let payload = if matches!(pattern.as_ref(), MatchArmType::TuplePattern(_)) {
+                    format!("({})", payload)
+                } else {
+                    payload
+                };
+                format!(".{} : {}", value, payload)
             }
             MatchArmType::Enum {
                 value,
                 destructure: Some(pattern),
                 ..
-            } if write_name => {
+            } => {
                 format!(
                     ".{} : {}",
                     value,
@@ -2226,7 +2221,14 @@ impl Formatter {
                             pattern,
                         } => {
                             if let Some(pattern) = pattern {
-                                format!(".{} : {}", value, self.fmt_match_arm(pattern, false))
+                                let payload = self.fmt_match_arm(pattern, false);
+                                let payload =
+                                    if matches!(pattern.as_ref(), MatchArmType::TuplePattern(_)) {
+                                        format!("({})", payload)
+                                    } else {
+                                        payload
+                                    };
+                                format!(".{} : {}", value, payload)
                             } else if let Some(pattern) = destructure {
                                 format!(
                                     ".{} : {}",

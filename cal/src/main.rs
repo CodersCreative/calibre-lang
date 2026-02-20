@@ -48,7 +48,6 @@ async fn run_source(
     contents: String,
     path: &Path,
     cache: bool,
-    verbose: bool,
     verbosity: Verbosity,
     entry_name: Option<String>,
     vm_config: VMConfig,
@@ -72,8 +71,7 @@ async fn run_source(
         engine = engine.with_entry_name(name);
     }
 
-    let wants_full_ir =
-        verbose && (verbosity.is_level(&Verbosity::AST) || verbosity.is_level(&Verbosity::MIR));
+    let wants_full_ir = verbosity.is_level(&Verbosity::AST) || verbosity.is_level(&Verbosity::MIR);
 
     let artifacts = match if wants_full_ir {
         engine.compile_source(contents.clone())
@@ -101,7 +99,7 @@ async fn run_source(
         Err(other) => return Err(other.to_string().into()),
     };
 
-    if verbose && verbosity.is_level(&Verbosity::AST) {
+    if verbosity.is_level(&Verbosity::AST) {
         println!("Parser - elapsed {}ms:", start.elapsed().as_millis());
         if let Some(ast) = &artifacts.ast {
             println!("{}", ast);
@@ -111,7 +109,7 @@ async fn run_source(
         }
     }
 
-    if verbose && verbosity.is_level(&Verbosity::MIR) {
+    if verbosity.is_level(&Verbosity::MIR) {
         println!("Mir - elapsed {}ms:", start.elapsed().as_millis());
         if let Some(mir) = &artifacts.mir {
             if module_only {
@@ -131,7 +129,7 @@ async fn run_source(
         }
     }
 
-    if verbose && verbosity.is_level(&Verbosity::LIR) {
+    if verbosity.is_level(&Verbosity::LIR) {
         println!("Lir/Bytecode - elapsed {}ms:", start.elapsed().as_millis());
         if module_only {
             let token = scope_filter_token(&artifacts.entry_name);
@@ -148,7 +146,7 @@ async fn run_source(
         vm_config,
     );
 
-    if verbose && verbosity.is_level(&Verbosity::Byte) {
+    if verbosity.is_level(&Verbosity::Byte) {
         println!("Bytecode - elapsed {}ms:", start.elapsed().as_millis());
         if module_only {
             let token = scope_filter_token(&artifacts.entry_name);
@@ -181,7 +179,7 @@ async fn run_source(
         return Err("runtime error".into());
     }
 
-    if verbose {
+    if !verbosity.is_level(&Verbosity::None) {
         println!("Finished - elapsed {}ms", start.elapsed().as_millis());
     }
 
@@ -1008,8 +1006,6 @@ async fn repl(initial_session: Vec<String>) -> Result<(), Box<dyn Error>> {
 struct Args {
     #[arg(long, default_value_t = false)]
     no_cache: bool,
-    #[arg(short, long)]
-    verbose: bool,
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -1022,6 +1018,7 @@ enum Verbosity {
     MIR,
     LIR,
     Byte,
+    None,
 }
 
 impl Verbosity {
@@ -1051,7 +1048,7 @@ enum Commands {
         path: Option<String>,
         #[arg(short, long)]
         example: Option<String>,
-        #[arg(long, default_value_t = false)]
+        #[arg(short,long, default_value_t = false)]
         recursive: bool,
         #[arg(short, long, default_value_t = false)]
         verbose: bool,
@@ -1062,7 +1059,7 @@ enum Commands {
         path: Option<String>,
         #[arg(short, long)]
         example: Option<String>,
-        #[arg(long, default_value_t = false)]
+        #[arg(short, long, default_value_t = false)]
         recursive: bool,
         #[arg(short, long, default_value_t = false)]
         verbose: bool,
@@ -1122,7 +1119,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                             contents,
                             &path,
                             !args.no_cache,
-                            args.verbose,
                             verbosity.unwrap_or_default(),
                             None,
                             vm_config,
@@ -1214,7 +1210,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         path,
                         example,
                         recursive,
-                        args.verbose || verbose,
+                        verbose,
                     )
                     .await
                 }
@@ -1239,7 +1235,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         min_runs,
                         max_runs,
                         time_limit_ms,
-                        args.verbose || verbose,
+                        verbose,
                     )
                     .await
                 }

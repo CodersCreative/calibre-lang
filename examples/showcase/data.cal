@@ -27,4 +27,4 @@ impl CountryBase {
 	};
 };
 
-const main = fn() => print("This is just a script to help main.cal and to showcase importing");
+const main = fn () => print("This is just a script to help main.cal and to showcase importing");
