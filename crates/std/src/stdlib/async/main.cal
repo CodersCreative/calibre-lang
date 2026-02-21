@@ -3,7 +3,7 @@ type WaitGroup = struct { };
 type Mutex:<T> = struct { };
 
 impl<T> Channel:<T> {
-	const new = fn () -> Channel:<T> => channel_new();
+	const new = fn -> Channel:<T> => channel_new();
 
 	const send = fn (self : &mut Channel:<T>, value : T) => channel_send(self, value);
 
@@ -34,7 +34,7 @@ impl<T> Channel:<T> {
 };
 
 impl WaitGroup {
-	const new = fn () -> WaitGroup => waitgroup_new();
+	const new = fn -> WaitGroup => waitgroup_new();
 
 	const raw_add = fn (self : &mut WaitGroup, value : int) => waitgroup_raw_add(self, value);
 

@@ -2,7 +2,7 @@ import * from std::net;
 import * from std::thread;
 import * from std::console;
 
-const main = fn () => {
+const main = fn => {
 	let listener = Tcp.listen("127.0.0.1", 41001);
 	
 	spawn => {

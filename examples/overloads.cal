@@ -33,7 +33,7 @@ type Vec2 = struct { x y : int } @overload {
 	const "as" = fn (self : Vec2) -> str => "Vec2";
 };
 
-const main = fn () => {
+const main = fn => {
 	let mut v = Vec2 { x : 1, y : 2 };
 	let w = Vec2 { x : 3, y : 4 };
 	

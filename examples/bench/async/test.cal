@@ -17,7 +17,7 @@ const worker = fn (id : int, jobs : &Channel:<int>, results : &mut Channel:<int>
 	print("worker " & id & " done (" & handled & " jobs)\n");
 };
 
-const main = fn () => {
+const main = fn => {
 	let mut jobs : Channel:<int> = Channel:<int>.new();
 	let mut results : Channel:<int> = Channel:<int>.new();
 	let mut total : Mutex:<int> = Mutex:<int>.new(0);

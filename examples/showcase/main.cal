@@ -96,7 +96,7 @@ impl int {
 	} 
 }
 
-const main = fn () => {
+const main = fn => {
 	print("5 days in seconds : " & 5.days());
 
 	// Struct/enum literals.
@@ -185,7 +185,7 @@ const main = fn () => {
 	let mut maybe = some(9).map(fn (n : int) -> int => n * 2).unwrap_or(0);
 	
 	// Examples of mutable references and capturing
-	fn () => {
+	fn => {
 		let maybe_mut = &mut maybe;
 		*maybe_mut += 1;
 	}();

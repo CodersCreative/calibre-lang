@@ -6,7 +6,7 @@ const test_str = fn (splits : list:<str>, inputs : list:<str>, extra : bool, ext
 	print("extra : " & extra & " and " & extra2);
 };
 
-const main = fn () => {
+const main = fn => {
 	let name = "Ty";
 	let age = "10";
 	test_str"Hello, my name is {name} and I'm {age} years old!"<(true, 900003);
@@ -84,7 +84,7 @@ const main = fn () => {
 	null;
 };
 
-const a_fn = fn () => {
+const a_fn = fn => {
 	let mut a = 1;
 	print(a + => {
 		a += 1;
@@ -92,10 +92,10 @@ const a_fn = fn () => {
 	});
 };
 
-const a_two_fn = fn () => {
+const a_two_fn = fn => {
 	let mut a = 1;
 	
-	let f = fn () => {
+	let f = fn => {
 		a += 1;
 		a;
 	};

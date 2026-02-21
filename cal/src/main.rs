@@ -1044,7 +1044,7 @@ enum Commands {
         path: Option<String>,
         #[arg(short, long)]
         example: Option<String>,
-        #[arg(short,long, default_value_t = false)]
+        #[arg(short, long, default_value_t = false)]
         recursive: bool,
         #[arg(short, long, default_value_t = false)]
         verbose: bool,

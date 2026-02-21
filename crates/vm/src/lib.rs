@@ -2,7 +2,8 @@ use crate::{
     config::VMConfig,
     conversion::{Reg, VMBlock, VMFunction, VMRegistry},
     error::RuntimeError,
-    value::{GcMap, RuntimeValue, WaitGroupInner},
+    native::NativeFunction,
+    value::{ExternFunction, GcMap, RuntimeValue, WaitGroupInner},
     variables::VariableStore,
 };
 use calibre_lir::BlockId;
@@ -94,6 +95,8 @@ pub struct VMCaches {
     globals_id: FxHashMap<String, usize>,
     local_str: FxHashMap<(u32, u16), Arc<str>>,
     aggregate_member_slots: FxHashMap<String, FxHashMap<String, usize>>,
+    prepared_direct_calls: FxHashMap<(usize, usize, u32), PreparedDirectCall>,
+    unique_var_suffix: FxHashMap<String, Option<String>>,
 }
 
 impl Default for VMCaches {
@@ -107,8 +110,17 @@ impl Default for VMCaches {
             globals_id: FxHashMap::default(),
             local_str: FxHashMap::default(),
             aggregate_member_slots: FxHashMap::default(),
+            prepared_direct_calls: FxHashMap::default(),
+            unique_var_suffix: FxHashMap::default(),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum PreparedDirectCall {
+    Vm(Arc<VMFunction>),
+    Native(Arc<dyn NativeFunction>),
+    Extern(Arc<ExternFunction>),
 }
 
 #[derive(Debug, Clone)]
@@ -134,7 +146,7 @@ impl From<VMRegistry> for VM {
         let scheduler = scheduler::SchedulerHandle::new(&config);
         let func_suffix = build_function_suffix_index(&value);
         let globals_direct = build_globals_direct_cache(&value);
-        Self {
+        let mut vm = Self {
             variables: VariableStore::default(),
             mappings: Arc::new(Vec::new()),
             registry: Arc::new(value),
@@ -157,11 +169,25 @@ impl From<VMRegistry> for VM {
             moved_functions: FxHashSet::default(),
             suppress_output: false,
             captured_output: String::new(),
-        }
+        };
+        vm.preallocate_execution_buffers();
+        vm
     }
 }
 
 impl VM {
+    fn preallocate_execution_buffers(&mut self) {
+        let mut max_regs = 0usize;
+        for func in self.registry.functions.values() {
+            max_regs = max_regs.max(func.reg_count as usize);
+        }
+        let frame_capacity = 256usize;
+        let reg_capacity = max_regs.max(32).saturating_mul(16).min(1_000_000);
+        self.frames.reserve(frame_capacity);
+        self.frame_pool.reserve(frame_capacity);
+        self.reg_arena.reserve(reg_capacity);
+    }
+
     #[inline]
     pub(crate) fn empty_captures() -> std::sync::Arc<Vec<(String, RuntimeValue)>> {
         EMPTY_CAPTURES
@@ -210,6 +236,23 @@ impl VM {
         }
 
         None
+    }
+
+    #[inline]
+    fn find_unique_var_by_suffix_cached(&mut self, short_name: &str) -> Option<String> {
+        if let Some(cached) = self.caches.unique_var_suffix.get(short_name) {
+            return cached.clone();
+        }
+        let found = self.find_unique_var_by_suffix(short_name);
+        self.caches
+            .unique_var_suffix
+            .insert(short_name.to_string(), found.clone());
+        found
+    }
+
+    #[inline]
+    pub(crate) fn invalidate_name_resolution_caches(&mut self) {
+        self.caches.unique_var_suffix.clear();
     }
 
     fn find_unique_local_by_suffix(&self, short_name: &str) -> Option<Reg> {
@@ -399,6 +442,7 @@ impl VM {
             vm.gc.interval = interval;
         }
 
+        vm.preallocate_execution_buffers();
         vm.setup_global();
         vm.setup_stdlib();
         vm
@@ -441,6 +485,7 @@ impl VM {
             vm.gc.interval = interval;
         }
 
+        vm.preallocate_execution_buffers();
         vm.setup_global();
         vm.setup_stdlib();
         vm
@@ -553,6 +598,17 @@ impl VM {
             }
         }
         RuntimeValue::Null
+    }
+
+    #[inline(always)]
+    pub(crate) fn get_reg_value_in_frame_ref(&self, frame_idx: usize, reg: Reg) -> &RuntimeValue {
+        if let Some(frame) = self.frames.get(frame_idx) {
+            let idx = reg as usize;
+            if idx < frame.reg_count {
+                return &self.reg_arena[frame.reg_start + idx];
+            }
+        }
+        &NULL_RUNTIME_VALUE
     }
 
     #[inline(always)]

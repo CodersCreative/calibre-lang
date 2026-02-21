@@ -13,7 +13,7 @@ impl ThingEnum {
 	};
 };
 
-const main = fn () => {
+const main = fn => {
 	let a = [10, 20, 450];
 	for i in a => "a : " & i |> print;
 	

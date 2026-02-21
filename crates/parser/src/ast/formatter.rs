@@ -958,90 +958,92 @@ impl Formatter {
                     txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
                 }
 
-                txt.push_str(" (");
+                if !header.parameters.is_empty() {
+                    txt.push_str(" (");
 
-                let mut adjusted_params = header
-                    .parameters
-                    .first()
-                    .map(|x| vec![vec![x]])
-                    .unwrap_or(Vec::new());
+                    let mut adjusted_params = header
+                        .parameters
+                        .first()
+                        .map(|x| vec![vec![x]])
+                        .unwrap_or(Vec::new());
 
-                for param in header.parameters.iter().skip(1) {
-                    let should_group = adjusted_params
-                        .last()
-                        .and_then(|v| v.first())
-                        .map(|last| last.1 == param.1)
-                        .unwrap_or(false);
-                    if should_group {
-                        if let Some(group) = adjusted_params.last_mut() {
-                            group.push(param);
+                    for param in header.parameters.iter().skip(1) {
+                        let should_group = adjusted_params
+                            .last()
+                            .and_then(|v| v.first())
+                            .map(|last| last.1 == param.1)
+                            .unwrap_or(false);
+                        if should_group {
+                            if let Some(group) = adjusted_params.last_mut() {
+                                group.push(param);
+                            } else {
+                                adjusted_params.push(vec![param]);
+                            }
                         } else {
                             adjusted_params.push(vec![param]);
                         }
+                    }
+
+                    let mut destructure_map = FxHashMap::default();
+                    for (idx, pattern) in header.param_destructures.iter() {
+                        destructure_map.insert(*idx, pattern);
+                    }
+
+                    let mut param_txt = Vec::new();
+                    let mut param_txt_expanded = Vec::new();
+                    let mut param_index = 0usize;
+                    for params in &adjusted_params {
+                        let mut chunk = String::new();
+                        for id in params {
+                            let mut expanded_chunk = String::new();
+                            if let Some(pattern) = destructure_map.get(&param_index) {
+                                let pattern_txt = self.fmt_destructure_pattern(pattern, true);
+                                chunk.push_str(&format!("{} ", pattern_txt));
+                                expanded_chunk.push_str(&pattern_txt);
+                            } else {
+                                chunk.push_str(&format!("{} ", id.0));
+                                expanded_chunk.push_str(&id.0.to_string());
+                            }
+                            if !id.1.is_auto() {
+                                expanded_chunk
+                                    .push_str(&format!(": {}", self.fmt_potential_new_type(&id.1)));
+                            }
+                            param_txt_expanded.push(expanded_chunk);
+                            param_index += 1;
+                        }
+
+                        if let Some(last) = params.last()
+                            && !last.1.is_auto()
+                        {
+                            chunk.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
+                        }
+                        param_txt.push(chunk.trim_end().to_string());
+                    }
+
+                    let single = format!("{}{})", txt, param_txt.join(", "));
+                    let multi = format!(
+                        "{}\n{}\n{})",
+                        txt,
+                        self.fmt_txt_with_tab(&param_txt.join(",\n"), 1, true),
+                        self.tab.get_tab_from_amt(0)
+                    );
+                    let multi_expanded = format!(
+                        "{}\n{}\n{})",
+                        txt,
+                        self.fmt_txt_with_tab(&param_txt_expanded.join(",\n"), 1, true),
+                        self.tab.get_tab_from_amt(0)
+                    );
+                    let force_third_layout = self.has_comment_between_spans(&node.span, &body.span);
+                    txt = if force_third_layout {
+                        multi_expanded
+                    } else if !self.should_wrap_width_only(&single) {
+                        single
+                    } else if !self.should_wrap_width_only(&multi) {
+                        multi
                     } else {
-                        adjusted_params.push(vec![param]);
-                    }
+                        multi_expanded
+                    };
                 }
-
-                let mut destructure_map = FxHashMap::default();
-                for (idx, pattern) in header.param_destructures.iter() {
-                    destructure_map.insert(*idx, pattern);
-                }
-
-                let mut param_txt = Vec::new();
-                let mut param_txt_expanded = Vec::new();
-                let mut param_index = 0usize;
-                for params in &adjusted_params {
-                    let mut chunk = String::new();
-                    for id in params {
-                        let mut expanded_chunk = String::new();
-                        if let Some(pattern) = destructure_map.get(&param_index) {
-                            let pattern_txt = self.fmt_destructure_pattern(pattern, true);
-                            chunk.push_str(&format!("{} ", pattern_txt));
-                            expanded_chunk.push_str(&pattern_txt);
-                        } else {
-                            chunk.push_str(&format!("{} ", id.0));
-                            expanded_chunk.push_str(&id.0.to_string());
-                        }
-                        if !id.1.is_auto() {
-                            expanded_chunk
-                                .push_str(&format!(": {}", self.fmt_potential_new_type(&id.1)));
-                        }
-                        param_txt_expanded.push(expanded_chunk);
-                        param_index += 1;
-                    }
-
-                    if let Some(last) = params.last()
-                        && !last.1.is_auto()
-                    {
-                        chunk.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
-                    }
-                    param_txt.push(chunk.trim_end().to_string());
-                }
-
-                let single = format!("{}{})", txt, param_txt.join(", "));
-                let multi = format!(
-                    "{}\n{}\n{})",
-                    txt,
-                    self.fmt_txt_with_tab(&param_txt.join(",\n"), 1, true),
-                    self.tab.get_tab_from_amt(0)
-                );
-                let multi_expanded = format!(
-                    "{}\n{}\n{})",
-                    txt,
-                    self.fmt_txt_with_tab(&param_txt_expanded.join(",\n"), 1, true),
-                    self.tab.get_tab_from_amt(0)
-                );
-                let force_third_layout = self.has_comment_between_spans(&node.span, &body.span);
-                txt = if force_third_layout {
-                    multi_expanded
-                } else if !self.should_wrap_width_only(&single) {
-                    single
-                } else if !self.should_wrap_width_only(&multi) {
-                    multi
-                } else {
-                    multi_expanded
-                };
 
                 if !header.return_type.is_auto() {
                     txt.push_str(&format!(

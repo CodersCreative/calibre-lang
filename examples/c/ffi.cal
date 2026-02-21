@@ -7,7 +7,7 @@ extern "c" const bytes_equal = fn(Bytes, Bytes) -> @int from "libcalffi.so" as "
 
 type Bytes = struct { first second third : @i64 };
 
-const main = fn () => {
+const main = fn => {
 	let value = c_abs(-7);
 	print(value);
 	let value = c_strlen("hello");

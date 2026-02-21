@@ -15,7 +15,7 @@ const out = fn (msg : dyn) => console_output(1, msg);
 
 const stderr = fn (msg : dyn) => console_output(2, msg);
 
-const clear = fn () => {
+const clear = fn => {
 	out("x1b[2Jx1b[1;1H");
 	null;
 };

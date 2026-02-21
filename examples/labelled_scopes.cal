@@ -1,4 +1,4 @@
-const main = fn () => {
+const main = fn => {
 	let mut value = for i in 0..10 => {
 		if i > 8 => break i;
 	} else => {

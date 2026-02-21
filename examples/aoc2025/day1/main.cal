@@ -54,7 +54,7 @@ const count_zeros_part2 = fn (lines : list:<str>) -> int => {
 	zero_count;
 };
 
-const main = fn () => {
+const main = fn => {
 	let file_path = __file__.replace("main.cal", "input.txt");
 	if !exists(file_path) => {
 		print("Missing input file: " & file_path);

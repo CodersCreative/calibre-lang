@@ -12,7 +12,7 @@ const sum_pairs = fn (n : int) -> int => {
 	acc;
 };
 
-const main = fn () => {
+const main = fn => {
 	let n : int = 2000;
 	print(sum_pairs(n));
 };

@@ -1888,17 +1888,14 @@ impl MiddleEnvironment {
         );
         let file_value = Node::new(
             sp,
-            NodeType::StringLiteral(ParserText::new(
-                sp,
-                {
-                    let file = scope_ref.path.to_string_lossy().to_string();
-                    if file.is_empty() {
-                        "__file__".to_string()
-                    } else {
-                        file
-                    }
-                },
-            )),
+            NodeType::StringLiteral(ParserText::new(sp, {
+                let file = scope_ref.path.to_string_lossy().to_string();
+                if file.is_empty() {
+                    "__file__".to_string()
+                } else {
+                    file
+                }
+            })),
         );
 
         prefix.push(Node::new(
@@ -1938,23 +1935,25 @@ impl MiddleEnvironment {
                 root: scope_ref.path.to_string_lossy().to_string(),
             }
         } else if scope_ref.namespace == "root" {
-            self.package_metadata.clone().unwrap_or_else(|| PackageMetadata {
-                name: "__package__".to_string(),
-                version: "0.0.0".to_string(),
-                description: "default package metadata".to_string(),
-                license: String::new(),
-                repository: String::new(),
-                homepage: String::new(),
-                src: {
-                    let src = scope_ref.path.to_string_lossy().to_string();
-                    if src.is_empty() {
-                        "__file__".to_string()
-                    } else {
-                        src
-                    }
-                },
-                root: String::new(),
-            })
+            self.package_metadata
+                .clone()
+                .unwrap_or_else(|| PackageMetadata {
+                    name: "__package__".to_string(),
+                    version: "0.0.0".to_string(),
+                    description: "default package metadata".to_string(),
+                    license: String::new(),
+                    repository: String::new(),
+                    homepage: String::new(),
+                    src: {
+                        let src = scope_ref.path.to_string_lossy().to_string();
+                        if src.is_empty() {
+                            "__file__".to_string()
+                        } else {
+                            src
+                        }
+                    },
+                    root: String::new(),
+                })
         } else {
             PackageMetadata {
                 name: scope_ref.namespace.clone(),
@@ -1988,59 +1987,35 @@ impl MiddleEnvironment {
                 object: TypeDefType::Struct(ObjectType::Map(vec![
                     (
                         "name".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::Str,
-                        )),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
                     ),
                     (
                         "version".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::Str,
-                        )),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
                     ),
                     (
                         "description".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::Str,
-                        )),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
                     ),
                     (
                         "license".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::Str,
-                        )),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
                     ),
                     (
                         "repository".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::Str,
-                        )),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
                     ),
                     (
                         "homepage".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::Str,
-                        )),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
                     ),
                     (
                         "src".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::Str,
-                        )),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
                     ),
                     (
                         "root".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::Str,
-                        )),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
                     ),
                 ])),
                 overloads: Vec::new(),

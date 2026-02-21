@@ -26,7 +26,7 @@ const print_text = fn (values : list:<str>) => {
 	print(values);
 };
 
-const main = fn () => {
+const main = fn => {
 	let name = "Ty";
 	let age = "10";
 	

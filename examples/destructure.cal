@@ -17,7 +17,7 @@ const sum_pair = fn ((a, b)) => a + b;
 const sum_pair_struct = fn ({left: a, right: b} : Pair) => a + b;
 const sum_pair_struct_basic = fn ({left, right} : Pair) => left + right;
 
-const main = fn () => {
+const main = fn => {
 	let pair = Pair { left : 10, right : 20 };
 	let {left, right} = pair;
 	let mut first, mut second = tuple(1, 2);

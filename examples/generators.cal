@@ -18,7 +18,7 @@ const evens_from = fn (start : int) -> gen:<int> => {
 	};
 };
 
-const main = fn () => {
+const main = fn => {
 	let mut g = count_up(0, 10);
 	for let .Some : value <- g.next() => print(value);
 	

@@ -1,6 +1,6 @@
 type Node = struct { id : int, data : list:<int> };
 
-const main = fn () => {
+const main = fn => {
 	let mut i = 0;
 	
 	for i in 1000000 => {

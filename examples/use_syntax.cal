@@ -5,7 +5,7 @@ const with_prefix = fn (prefix : str, op : fn(str) -> null) => {
 	op(val);
 };
 
-const main = fn () => {
+const main = fn => {
 	use value <- with_prefix("id");
 	print("value => " & value);
 	print("done");

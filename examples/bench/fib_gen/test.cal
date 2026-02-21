@@ -13,7 +13,7 @@ const fib_gen = fn (n : int) -> gen:<int> => {
 	};
 };
 
-const main = fn () => {
+const main = fn => {
 	let n = 30;
 	let mut it = fib_gen(n + 1);
 	for let .Some : v <- it.next() => print(v);

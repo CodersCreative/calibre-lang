@@ -12,7 +12,7 @@ impl Iter for Counter {
 	};
 };
 
-const main = fn () => {
+const main = fn => {
 	let mut list_it : ListIter:<int> = list:<int>[1, 2, 3].iter();
 	
 	for  => {

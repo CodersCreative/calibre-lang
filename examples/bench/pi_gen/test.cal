@@ -23,7 +23,7 @@ const calculate_pi_gen = fn (n_terms : int) -> float => {
 	pi;
 };
 
-const main = fn () => {
+const main = fn => {
 	let n = 100_000;
 	let result = calculate_pi_gen(n);
 	print(result);

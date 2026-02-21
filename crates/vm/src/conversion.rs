@@ -1314,7 +1314,13 @@ impl<'a> BlockLoweringCtx<'a> {
                         let current_name = self.current_fn_name.as_str();
                         let current_short = self.current_fn_short.as_str();
                         if name.as_ref() == current_name || name.as_ref() == current_short {
-                            self.emit(VMInstruction::CallSelf { dst, args: arg_regs }, span);
+                            self.emit(
+                                VMInstruction::CallSelf {
+                                    dst,
+                                    args: arg_regs,
+                                },
+                                span,
+                            );
                         } else {
                             let idx = self.add_string(name.to_string());
                             self.emit(
@@ -1331,7 +1337,13 @@ impl<'a> BlockLoweringCtx<'a> {
                         let current_name = self.current_fn_name.as_str();
                         let current_short = self.current_fn_short.as_str();
                         if name.as_ref() == current_name || name.as_ref() == current_short {
-                            self.emit(VMInstruction::CallSelf { dst, args: arg_regs }, span);
+                            self.emit(
+                                VMInstruction::CallSelf {
+                                    dst,
+                                    args: arg_regs,
+                                },
+                                span,
+                            );
                         } else {
                             let idx = self.add_string(name.to_string());
                             self.emit(

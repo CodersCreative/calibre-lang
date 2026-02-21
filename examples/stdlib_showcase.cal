@@ -5,7 +5,7 @@ import * from std::regex;
 import * from std::math;
 import * from std::net;
 
-const main = fn () => {
+const main = fn => {
 	let mut nums = list:<int>[1, 2, 3, 4, 5];
 	
 	print("pop => " & nums.pop());

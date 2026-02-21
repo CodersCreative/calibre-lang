@@ -6,7 +6,7 @@ const loop_call = fn (n : int) -> int => {
 	x;
 };
 
-const main = fn () => {
+const main = fn => {
 	let n : int = 2000;
 	print(loop_call(n));
 };

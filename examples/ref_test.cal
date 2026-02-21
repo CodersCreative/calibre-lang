@@ -12,7 +12,7 @@ impl Pair {
 	const get_a = fn (self : &Pair) -> int => self.a;
 };
 
-const main = fn () => {
+const main = fn => {
 	print("REF TEST START");
 	
 	let mut p = Pair { a : 0, b : 10 };
