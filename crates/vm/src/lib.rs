@@ -18,6 +18,7 @@ use std::{
 
 static NULL_RUNTIME_VALUE: RuntimeValue = RuntimeValue::Null;
 static EMPTY_FRAME: OnceLock<VMFrame> = OnceLock::new();
+static EMPTY_CAPTURES: OnceLock<std::sync::Arc<Vec<(String, RuntimeValue)>>> = OnceLock::new();
 
 pub mod config;
 pub mod conversion;
@@ -161,6 +162,13 @@ impl From<VMRegistry> for VM {
 }
 
 impl VM {
+    #[inline]
+    pub(crate) fn empty_captures() -> std::sync::Arc<Vec<(String, RuntimeValue)>> {
+        EMPTY_CAPTURES
+            .get_or_init(|| std::sync::Arc::new(Vec::new()))
+            .clone()
+    }
+
     pub(crate) fn get_function(&self, name: &str) -> Option<Arc<VMFunction>> {
         if self.moved_functions.contains(name) {
             return None;
@@ -545,17 +553,6 @@ impl VM {
             }
         }
         RuntimeValue::Null
-    }
-
-    #[inline(always)]
-    pub(crate) fn get_reg_value_in_frame_ref(&self, frame_idx: usize, reg: Reg) -> &RuntimeValue {
-        if let Some(frame) = self.frames.get(frame_idx) {
-            let idx = reg as usize;
-            if idx < frame.reg_count {
-                return &self.reg_arena[frame.reg_start + idx];
-            }
-        }
-        &NULL_RUNTIME_VALUE
     }
 
     #[inline(always)]

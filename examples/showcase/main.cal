@@ -89,7 +89,16 @@ bench showcase_generator_throughput => {
 	assert(sum > 0, "benchmark sum should be positive");
 };
 
+// You can impl custom functions/traits on native types
+impl int {
+	const days = fn(self : Self) -> Self => {
+		return self * 24 * 60 * 60;
+	} 
+}
+
 const main = fn () => {
+	print("5 days in seconds : " & 5.days());
+
 	// Struct/enum literals.
 	let language = Language.FRENCH : FrenchData { data : 10, code : 5 };
 	let mut recursive_language : Language = Language.ARABIC : language, Language.SPANISH;
@@ -124,10 +133,10 @@ const main = fn () => {
 	// Match with enum payload destructuring.
 	let nested_lang : Language = Language.ARABIC : Language.FRENCH : FrenchData { data : 1, code : 2 }, Language.SPANISH;
 	
-	match nested_lang {
+	/*match nested_lang {
 		.ARABIC : (.FRENCH : {data: l, code: r}, _) => print("nested enum/struct => " & (l + r)),
 		_ => print("no enum match")
-	};
+	};*/
 	
 	// if let / for let with destructuring.
 	if let .FRENCH : {data: v, code: c} <- language => {

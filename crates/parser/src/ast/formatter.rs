@@ -503,6 +503,8 @@ impl Formatter {
                 } else {
                     if values.len() == 1 && &values[0].to_string() == "*" {
                         txt.push_str("*");
+                    } else if values.len() == 1 {
+                        txt.push_str(&values[0].to_string());
                     } else if !values.is_empty() {
                         txt.push_str("(");
 

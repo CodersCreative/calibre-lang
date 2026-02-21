@@ -1,47 +1,5 @@
 import (Channel, WaitGroup) from std::async;
 
-/* Label scopes & loops pseudocode
-const main = fn() => {
-	// Example of a simple loop that is able to return a value
-	// value's type should be able to be inferred
-	let mut value = for i in 0..10 => {
-		if i > 8 => break i;
-	} else => {
-		0;
-	};
-
-	// Example of a simple labelled block
-	value = => @basic_block {
-		if value > 8 => break @basic_block 100;
-
-		60;
-	};
-
-	// This does the same thing as the previous example except it now creates a scope macro as well
-	// The previous example was just a labelled scope that couldn't be re-used as a scope macro, this one can but still manages to still allow for scope breaking 
-	value = => @basic_block[$val = 100, $other = 60] {
-		if value > 8 => break @basic_block $val;
-
-		$other;
-	};
-
-	// reusing the scope macro from before with different values
-	value = => @basic_block[$val = 800, $other = 90];
-	
-	// This showcases how labelled loops can work allowing you to break/continue an outer loop from an inner one 
-	value = for x in 0..100 => @outer{
-		for y in 0..100 => {
-			if y > 40 => continue @outer;
-
-			if x == y => break @outer 50;
-		}else {
-			60;
-		}
-	} else => {
-		70;	
-	}
-}
-*/
 type NumType = struct { num : int } @overload {
 
 	const "+" = fn (self : NumType, value : int) -> int => {
