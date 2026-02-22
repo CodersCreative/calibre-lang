@@ -70,3 +70,13 @@ pub(crate) enum CompletionContext {
     Global { prefix: String },
     Member { base_expr: String, prefix: String },
 }
+
+impl CompletionContext {
+    pub(crate) fn prefix(&self) -> &str {
+        match self {
+            CompletionContext::Global { prefix } | CompletionContext::Member { prefix, .. } => {
+                prefix
+            }
+        }
+    }
+}

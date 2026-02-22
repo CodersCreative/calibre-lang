@@ -1,122 +1,229 @@
 # Calibre Language
 
-Calibre is a modern, statically-typed language built in Rust with a fast interpreter, a growing toolchain, and a pragmatic syntax for systems scripting. It emphasizes clear data modeling, expressive pattern matching, and straightforward FFI via `extern` with explicit C/Zig types.
+Calibre is a statically typed language implemented in Rust with a working stackless bytecode VM, formatter, and LSP.
+The project is actively evolving, but it already supports a broad set of language features and a usable workflow.
 
 ---
 
-## Features
+## Current Status
 
-- **Statically Typed**: Type inference and explicit typing for safety and expressiveness.
-- **Pattern Matching**: Powerful `match` for enums, tuples, and structs.
-- **Enums & Structs**: Algebraic data types with tuple and map-like variants.
-- **Immutability by Default**: `let` for immutable, `let mut` for mutable variables.
-- **First-Class Functions**: Functions as values, with concise syntax.
-- **FFI**: `extern "c"` / `extern "zig"` with `@`-typed signatures and `ptr:<T>` pointers.
-- **Interpreted Execution**: Fast iteration with a bytecode VM.
-- **Tooling**: Tree-sitter grammar, formatter (`fmt`) with max-width option, and LSP (in progress).
+- Parser and AST pipeline are implemented (`crates/parser`)
+- MIR lowering and type inference are implemented (`crates/mir`)
+- LIR/bytecode lowering is implemented (`crates/lir`)
+- VM runtime/interpreter is implemented (`crates/vm`)
+- Formatter is implemented (`fmt`)
+- LSP server is implemented and actively improving (`lsp`)
+- Cranelift backend exists but is still in-progress (`crates/cranelift`)
 
 ---
 
-## Example
+## Language Tour
 
-```cl
-type Point = struct {
-  x: int,
-  y: int,
-};
+### Variables and Mutability
 
-const dot = fn(p: Point) -> int => p.x * p.y;
+- `let` creates immutable bindings
+- `let mut` creates mutable bindings
+- tuple and struct destructuring declarations are supported
 
-const classify = fn match &int {
-  .Ok : value => "ok: " & value,
-  .Err : msg => "err: " & msg,
-};
+```cal
+let x = 10;
+let mut y = 20;
+let mut a, mut b = 1, 2;
+```
 
-const main = fn() => {
-  let p = Point { x: 6, y: 7 };
-  print(dot(p));
+### Functions
 
-  let mut a, mut b = 10, 20;
-  print(a + b);
+- Functions in calibre are first-class values and can even have param types and return types inferred if enough information is provided
+
+```cal
+const add = fn (a, b) => a + b;
+
+const main = fn => {
+  let result = add(2, 3);
+  print(result);
 };
 ```
 
-### FFI (C/Zig)
+### Data Types
 
-```cl
-extern "c" const c_strlen = fn(str) -> @usize from "..." as "strlen";
-extern "zig" const zig_add = fn(@i32, @i32) -> @i32 from "..." as "zig_add";
+Calibre currently supports primitives and structured types including:
 
-const main = fn() => {
-  print(c_strlen("hello"));
-  print(zig_add(40, 2));
+- `int`, `uint`, `float`, `bool`, `char`, `str`, `null`
+- `list:<T>`
+- `T?` / `Err!Ok`
+- generators (`gen:<T>`)
+- references/pointers in relevant contexts (`&T`, `&mut T`, `ptr:<T>`)
+
+### Structs, Enums, and Match
+
+```cal
+type Point = struct { x : int, y : int };
+
+type MaybeInt = enum {
+  Some : int,
+  None,
 };
+
+const inspect = fn (v : MaybeInt) => {
+  match v {
+    .Some : x => print("value=" & x),
+    .None => print("none")
+  };
+};
+```
+
+### Traits and Impl
+
+```cal
+trait Person {
+  const name : fn (&Self) -> str;
+  const greeting = fn (self : &Self) -> str => "Hello " & self.name();
+};
+
+type User = struct { name : str };
+
+impl Person for User {
+  const name = fn (self : &User) -> str => self.name;
+};
+```
+
+### Control Flow
+
+Calibre currently supports:
+
+- `if` / `else`
+- `match` with value and condition styles
+- loops and list comprehensions `for`
+- `break`, `continue`, `return`, `defer`
+
+```cal
+for i in 0..10 => {
+  if i % 2 == 0 => continue;
+  print(i);
+};
+```
+
+### Generators and Collection-style Pipelines
+
+```cal
+const evens = fn(x for x in 0..20 if x % 2 == 0);
+print(evens.collect());
+```
+
+### Async/Concurrency Primitives
+
+The standard library includes runtime-backed primitives such as:
+
+- `Channel`
+- `WaitGroup`
+- `Mutex`
+- `spawn`
+- `select`
+
+Examples are available in `examples/async.cal`.
+
+### FFI (`extern`)
+
+Calibre supports C/Zig-style extern declarations with explicit signatures.
+
+```cal
+extern "c" const c_strlen = fn(str) -> @usize from "libc" as "strlen";
 ```
 
 ---
 
-## Getting Started
+## CLI Usage
 
-1. **Clone the repository:**
-   ```sh
-   git clone https://github.com/CodersCreative/calibre-lang.git
-   cd calibre-lang/cal
-   ```
+### Build
 
-2. **Run a REPL:**
-   ```sh
-   cargo run -p cal
-   ```
+```sh
+cargo build -p cal
+```
 
-3. **Run an example:**
-   ```sh
-   cargo run -p cal -- ../examples/examples.cl
-   ```
+### REPL
 
-4. **Format code (optional):**
-   ```sh
-   cargo run -p cal-fmt -- --max-width 100 --path ../examples/examples.cl
-   ```
+```sh
+cargo run -p cal
+```
 
-5. **Install cal**
-   ```sh
-   cargo install -p cal
-   ```
+### Run a file
 
-6. **Install cal-fmt**
-   ```sh
-   cargo install -p cal-fmt
-   ```
+```sh
+cargo run -p cal -- run examples/examples.cal
+```
+
+### Run project example by name (inside a `cal.toml` project)
+
+```sh
+cargo run -p cal -- run --example my_example
+```
+
+### Run tests / benchmarks
+
+```sh
+cargo run -p cal -- test
+cargo run -p cal -- bench
+```
+
+### Formatter
+
+```sh
+cargo run -p cal-fmt -- --max-width 100 --path examples/examples.cal
+```
+
+### LSP
+
+```sh
+cargo run -p cal-lsp
+```
+
+---
+
+## Examples
+
+The `examples/` directory contains practical programs for current language/runtime features, including:
+
+- `examples/showcase/main.cal` (general language surface)
+- `examples/traits.cal` (traits/impl)
+- `examples/generators.cal` (generators/pipelines)
+- `examples/async.cal` (channels, mutexes, spawn/select)
+- `examples/hashmap.cal` (collections)
+- `examples/stdlib_showcase.cal` (stdlib breadth)
+
+---
+
+## Repository Structure
+
+- `cal/`: CLI frontend and REPL
+- `lsp/`: language server
+- `fmt/`: source formatter
+- `crates/parser/`: parser + AST + parser diagnostics
+- `crates/mir/`: semantic analysis, type resolution, MIR
+- `crates/lir/`: lower-level IR / bytecode prep
+- `crates/vm/`: runtime VM + native stdlib bindings
+- `crates/std/`: the standard library written in calibre
+- `crates/diagnostics/`: diagnostics emission helpers
+- `crates/cranelift/`: JIT/AOT compilation backend work-in-progress
 
 ---
 
 ## Roadmap
 
 - [x] Interpreter backend
-- [ ] Cranelift backend (`crates/cranelift`)
-- [x] Tree-sitter grammar (https://github.com/CodersCreative/tree-sitter-calibre)
-- [x] Formatter ('fmt')
-- [ ] Language Server Protocol (LSP) (`lsp`)
+- [ ] Cranelift backend
+- [x] Formatter
+- [x] LSP support
 - [ ] Package manager
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please see CONTRIBUTING.md for guidelines.
+Pull requests are welcome. For major changes, please open an issue first
+to discuss what you would like to change.
 
 ---
 
 ## License
 
-MIT License. See LICENSE for details.
-
----
-
-## Repository Structure
-
-- `cal/`: Main interpreter frontend
-- `fmt/`: Formatter implementation
-- `crates/`: Core language crates (parser, interpreter, VM, etc.)
-- `examples/`: Example Calibre programs (including FFI and Zig)
-- `lsp/`: Language Server Protocol implementation (in progress)
+[MIT](https://choosealicense.com/licenses/mit/)

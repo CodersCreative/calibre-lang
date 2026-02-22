@@ -419,7 +419,7 @@ version = "0.0.1"
 dependencies = [
  "calibre-parser",
  "calibre-std",
- "rand",
+ "fastrand",
  "rustc-hash",
  "thiserror",
 ]
@@ -446,6 +446,7 @@ dependencies = [
  "calibre-lir",
  "calibre-parser",
  "dumpster",
+ "fastrand",
  "hex",
  "libffi",
  "libloading",

@@ -283,10 +283,7 @@ impl LanguageServer for CalibreLanguageServer {
             let items = smol::unblock(move || {
                 let completion_ctx =
                     CalibreLanguageServer::parse_completion_context(&text, position);
-                let prefix = match &completion_ctx {
-                    CompletionContext::Global { prefix } => prefix.clone(),
-                    CompletionContext::Member { prefix, .. } => prefix.clone(),
-                };
+                let prefix = completion_ctx.prefix();
                 let mut out: HashMap<String, CompletionItem> = HashMap::new();
 
                 if let Some(path) = CalibreLanguageServer::path_from_url(&uri) {
@@ -303,24 +300,24 @@ impl LanguageServer for CalibreLanguageServer {
                             &mut env,
                             current_scope,
                             base_expr,
-                            &prefix,
+                            prefix,
                             &mut out,
                         );
                     } else {
                         CalibreLanguageServer::collect_global_semantic_completions(
                             &env,
                             current_scope,
-                            &prefix,
+                            prefix,
                             &mut out,
                         );
                     }
                 }
 
                 let all_texts = document_snapshot.into_values().collect::<Vec<_>>();
-                for item in CalibreLanguageServer::lexical_completion_items(all_texts, &prefix) {
+                for item in CalibreLanguageServer::lexical_completion_items(all_texts, prefix) {
                     out.entry(item.label.clone()).or_insert(item);
                 }
-                for item in CalibreLanguageServer::keyword_completion_items(&prefix) {
+                for item in CalibreLanguageServer::keyword_completion_items(prefix) {
                     out.entry(item.label.clone()).or_insert(item);
                 }
 
@@ -371,13 +368,7 @@ impl LanguageServer for CalibreLanguageServer {
             }
 
             let edits = smol::unblock(move || {
-                let mut formatter = if options.insert_spaces {
-                    let mut formatter = Formatter::default();
-                    formatter.tab = Tab::new(' ', options.tab_size as usize);
-                    formatter
-                } else {
-                    Formatter::default()
-                };
+                let mut formatter = CalibreLanguageServer::formatter_from_options(&options);
 
                 let Ok(formatted) = formatter.start_format(&contents, None) else {
                     return None;
@@ -420,13 +411,7 @@ impl LanguageServer for CalibreLanguageServer {
             }
 
             let edits = smol::unblock(move || {
-                let mut formatter = if options.insert_spaces {
-                    let mut formatter = Formatter::default();
-                    formatter.tab = Tab::new(' ', options.tab_size as usize);
-                    formatter
-                } else {
-                    Formatter::default()
-                };
+                let mut formatter = CalibreLanguageServer::formatter_from_options(&options);
 
                 let cal_span = CalibreLanguageServer::lsp_range_to_cal_span(range);
                 let Ok(formatted_slice) = formatter.start_format(&contents, Some(cal_span)) else {

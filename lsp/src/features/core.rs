@@ -27,6 +27,39 @@ impl CalibreLanguageServer {
         Self::path_from_url(uri).and_then(|path| std::fs::read_to_string(path).ok())
     }
 
+    #[inline]
+    fn latest_diagnostics_job_for(&self, uri: &Url) -> u64 {
+        self.documents
+            .get(uri)
+            .map(|doc| doc.latest_diagnostics_job)
+            .unwrap_or(0)
+    }
+
+    #[inline]
+    fn insert_document_state(&mut self, uri: Url, version: i32, text: String) {
+        let latest_diagnostics_job = self.latest_diagnostics_job_for(&uri);
+        self.documents.insert(
+            uri,
+            DocumentState {
+                version,
+                text,
+                latest_diagnostics_job,
+            },
+        );
+    }
+
+    pub(super) fn formatter_from_options(
+        options: &async_lsp::lsp_types::FormattingOptions,
+    ) -> Formatter {
+        if options.insert_spaces {
+            let mut formatter = Formatter::default();
+            formatter.tab = Tab::new(' ', options.tab_size as usize);
+            formatter
+        } else {
+            Formatter::default()
+        }
+    }
+
     pub(super) fn lsp_pos(pos: CalPosition) -> Position {
         Position {
             line: pos.line.saturating_sub(1),
@@ -131,20 +164,7 @@ impl CalibreLanguageServer {
         let text = content_changes.iter().fold(current_text, |acc, change| {
             Self::apply_incremental_change(&acc, change)
         });
-
-        let latest_diagnostics_job = self
-            .documents
-            .get(&uri)
-            .map(|doc| doc.latest_diagnostics_job)
-            .unwrap_or(0);
-        self.documents.insert(
-            uri,
-            DocumentState {
-                version,
-                text,
-                latest_diagnostics_job,
-            },
-        );
+        self.insert_document_state(uri, version, text);
 
         if self.documents.len() > MAX_OPEN_DOCUMENTS {
             // Hard guardrail against unbounded growth on misbehaving clients.
@@ -153,19 +173,7 @@ impl CalibreLanguageServer {
     }
 
     pub(super) fn set_document_text(&mut self, uri: Url, version: i32, text: String) {
-        let latest_diagnostics_job = self
-            .documents
-            .get(&uri)
-            .map(|doc| doc.latest_diagnostics_job)
-            .unwrap_or(0);
-        self.documents.insert(
-            uri,
-            DocumentState {
-                version,
-                text,
-                latest_diagnostics_job,
-            },
-        );
+        self.insert_document_state(uri, version, text);
     }
 
     pub(super) fn hover_for(&self, uri: &Url, position: Position) -> Option<Hover> {

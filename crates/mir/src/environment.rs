@@ -1,3 +1,4 @@
+use crate::COUNTER;
 use crate::ast::hm::{self, Subst, Type, TypeGenerator};
 use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::errors::MiddleErr;
@@ -12,7 +13,6 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
     },
 };
-use rand::random_range;
 use rustc_hash::FxHashMap;
 use std::{fs, path::PathBuf, str::FromStr};
 
@@ -227,6 +227,12 @@ pub fn get_disamubiguous_name(
     name: Option<&str>,
     var_type: Option<&VarType>,
 ) -> String {
+    let count: u64 = {
+        let mut counter = COUNTER.write().unwrap();
+        *counter += 1;
+        *counter
+    };
+
     format!(
         "{0}-{1}-{2}:{3}",
         match var_type {
@@ -235,12 +241,30 @@ pub fn get_disamubiguous_name(
             _ => "const",
         },
         scope,
-        random_range(0..100000),
+        count,
         name.unwrap_or("anon")
     )
 }
 
 impl MiddleEnvironment {
+    #[inline]
+    fn normalized_type(ty: &ParserDataType) -> ParserDataType {
+        ty.clone().unwrap_all_refs()
+    }
+
+    #[inline]
+    fn normalized_inner_type(ty: &ParserDataType) -> ParserInnerType {
+        Self::normalized_type(ty).data_type
+    }
+
+    #[inline]
+    fn is_callable_parser_type(ty: &ParserDataType) -> bool {
+        matches!(
+            Self::normalized_inner_type(ty),
+            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
+        )
+    }
+
     pub fn scope_ref_or_err(&self, scope: &u64) -> Result<&MiddleScope, MiddleErr> {
         self.scopes
             .get(scope)
@@ -284,15 +308,15 @@ impl MiddleEnvironment {
     }
 
     pub fn type_key(&self, ty: &ParserDataType) -> String {
-        ty.clone().unwrap_all_refs().data_type.to_string()
+        Self::normalized_inner_type(ty).to_string()
     }
 
     pub fn impl_key(&self, ty: &ParserDataType) -> ParserInnerType {
-        ty.clone().unwrap_all_refs().data_type
+        Self::normalized_inner_type(ty)
     }
 
     pub fn impl_self_name(&self, ty: &ParserDataType) -> String {
-        match ty.clone().unwrap_all_refs().data_type {
+        match Self::normalized_inner_type(ty) {
             ParserInnerType::Struct(name) => name,
             ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
             ParserInnerType::Int => String::from("int"),
@@ -407,7 +431,7 @@ impl MiddleEnvironment {
         if let Some(imp) = self.impls.get(&key) {
             return Some(imp);
         }
-        let target = ty.clone().unwrap_all_refs().data_type;
+        let target = Self::normalized_inner_type(ty);
         self.impls.values().find(|imp| {
             self.impl_type_matches(&imp.data_type.data_type, &target, &imp.generic_params)
         })
@@ -418,7 +442,7 @@ impl MiddleEnvironment {
         if self.impls.contains_key(&key) {
             return self.impls.get_mut(&key);
         }
-        let target = ty.clone().unwrap_all_refs().data_type;
+        let target = Self::normalized_inner_type(ty);
         let key = self
             .impls
             .iter()
@@ -431,7 +455,7 @@ impl MiddleEnvironment {
 
     fn member_base_name_candidates(&self, ty: &ParserDataType) -> Vec<String> {
         let mut names = Vec::new();
-        let base = ty.clone().unwrap_all_refs();
+        let base = Self::normalized_type(ty);
         let base_key = base.data_type.to_string();
         names.push(base_key.clone());
 
@@ -479,7 +503,7 @@ impl MiddleEnvironment {
     pub fn member_fn_candidates(&self, ty: &ParserDataType, member: &str) -> Vec<String> {
         let mut candidates = Vec::new();
 
-        if let Some(imp) = self.find_impl_for_type(&ty.clone().unwrap_all_refs())
+        if let Some(imp) = self.find_impl_for_type(ty)
             && let Some((mapped_name, _)) = imp.variables.get(member)
         {
             candidates.push(mapped_name.clone());
@@ -3175,21 +3199,16 @@ impl MiddleEnvironment {
                     let point = &path[idx];
                     let point_ty = self.resolve_type_from_node(scope, point.get_node());
                     let point_callable = point_ty.as_ref().is_some_and(|ty| {
-                        matches!(
-                            ty.clone().unwrap_all_refs().data_type,
-                            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
-                        ) && !point.is_named()
+                        Self::is_callable_parser_type(ty)
+                            && !point.is_named()
                             && !point.get_node().node_type.is_call()
                     });
 
                     if !point_callable && let Some(next) = path.get(idx + 1) {
                         let next_ty = self.resolve_type_from_node(scope, next.get_node());
                         let next_callable = next_ty.as_ref().is_some_and(|ty| {
-                            matches!(
-                                ty.clone().unwrap_all_refs().data_type,
-                                ParserInnerType::Function { .. }
-                                    | ParserInnerType::NativeFunction(_)
-                            ) && !next.is_named()
+                            Self::is_callable_parser_type(ty)
+                                && !next.is_named()
                                 && !next.get_node().node_type.is_call()
                         });
 

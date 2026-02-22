@@ -68,6 +68,20 @@ pub struct Parser {
     source_path: Option<std::path::PathBuf>,
 }
 
+#[inline]
+fn empty_scope_node() -> Node {
+    Node::new(
+        Span::default(),
+        NodeType::ScopeDeclaration {
+            body: Some(Vec::new()),
+            is_temp: false,
+            define: false,
+            named: None,
+            create_new_scope: Some(false),
+        },
+    )
+}
+
 impl Parser {
     pub fn set_source_path(&mut self, path: Option<std::path::PathBuf>) {
         self.source_path = path;
@@ -81,16 +95,7 @@ impl Parser {
             }
             Err(errs) => {
                 self.errors = errs;
-                Node::new(
-                    Span::default(),
-                    NodeType::ScopeDeclaration {
-                        body: Some(Vec::new()),
-                        is_temp: false,
-                        define: false,
-                        named: None,
-                        create_new_scope: Some(false),
-                    },
-                )
+                empty_scope_node()
             }
         }
     }

@@ -1,6 +1,5 @@
 use crate::{MiddleNode, MiddleNodeType};
 use calibre_parser::ast::{ObjectMap, ParserText};
-use rand::random_range;
 use rustc_hash::FxHashMap;
 
 #[derive(Default)]
@@ -15,6 +14,11 @@ impl MiddleNode {
             span: self.span,
         }
     }
+}
+
+#[inline]
+fn mapped_name_or_original(state: &AlphaRenameState, original: String) -> String {
+    state.data.get(&original).cloned().unwrap_or(original)
 }
 
 impl MiddleNodeType {
@@ -51,22 +55,10 @@ impl MiddleNodeType {
                 value: Box::new(value.rename(state)),
             },
             MiddleNodeType::Drop(x) => {
-                let name = if let Some(x) = state.data.get(&x.text) {
-                    x.clone()
-                } else {
-                    x.text
-                };
-
-                MiddleNodeType::Drop(name.into())
+                MiddleNodeType::Drop(mapped_name_or_original(state, x.text).into())
             }
             MiddleNodeType::Move(x) => {
-                let name = if let Some(x) = state.data.get(&x.text) {
-                    x.clone()
-                } else {
-                    x.text
-                };
-
-                MiddleNodeType::Move(name.into())
+                MiddleNodeType::Move(mapped_name_or_original(state, x.text).into())
             }
             MiddleNodeType::VariableDeclaration {
                 var_type,
@@ -74,7 +66,7 @@ impl MiddleNodeType {
                 value,
                 data_type,
             } => {
-                let new_name = format!("{}->{}", identifier.text, random_range(0..10000000));
+                let new_name = format!("{}->{}", identifier.text, fastrand::u32(0..u32::MAX));
                 state.data.insert(identifier.text, new_name.clone());
 
                 MiddleNodeType::VariableDeclaration {
@@ -116,7 +108,7 @@ impl MiddleNodeType {
                 parameters: parameters
                     .into_iter()
                     .map(|x| {
-                        let new_name = format!("{}->{}", x.0.text, random_range(0..10000000));
+                        let new_name = format!("{}->{}", x.0.text, fastrand::u32(0..u32::MAX));
                         state.data.insert(x.0.text, new_name.clone());
 
                         (
@@ -180,18 +172,10 @@ impl MiddleNodeType {
             MiddleNodeType::Return { value } => MiddleNodeType::Return {
                 value: value.map(|value| Box::new(value.rename(state))),
             },
-            MiddleNodeType::Identifier(x) => {
-                let name = if let Some(x) = state.data.get(&x.text) {
-                    x.clone()
-                } else {
-                    x.text
-                };
-
-                MiddleNodeType::Identifier(ParserText {
-                    text: name,
-                    span: x.span,
-                })
-            }
+            MiddleNodeType::Identifier(x) => MiddleNodeType::Identifier(ParserText {
+                text: mapped_name_or_original(state, x.text),
+                span: x.span,
+            }),
             MiddleNodeType::ListLiteral(data_type, x) => MiddleNodeType::ListLiteral(
                 data_type,
                 x.into_iter().map(|x| x.rename(state)).collect(),

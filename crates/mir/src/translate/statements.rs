@@ -26,6 +26,32 @@ impl MiddleEnvironment {
         value: Node,
         data_type: PotentialNewType,
     ) -> Result<MiddleNode, MiddleErr> {
+        fn mapping_target_is_native_fn(
+            variables: &FxHashMap<String, MiddleVariable>,
+            mappings: &FxHashMap<String, String>,
+            identifier: &str,
+        ) -> bool {
+            mappings
+                .get(identifier)
+                .and_then(|name| variables.get(name))
+                .is_some_and(|var| {
+                    matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+                })
+        }
+        #[inline]
+        fn insert_mapping_if_allowed(
+            variables: &FxHashMap<String, MiddleVariable>,
+            mappings: &mut FxHashMap<String, String>,
+            identifier: String,
+            new_name: String,
+            is_reserved_constructor: bool,
+        ) {
+            let existing_is_native = mapping_target_is_native_fn(variables, mappings, &identifier);
+            if !(is_reserved_constructor && existing_is_native) {
+                mappings.insert(identifier, new_name);
+            }
+        }
+
         let identifier = self
             .resolve_dollar_ident_only(scope, &identifier)
             .ok_or_else(|| self.err_at_current(MiddleErr::Scope(identifier.to_string())))?;
@@ -96,11 +122,11 @@ impl MiddleEnvironment {
 
         let original_value_node = value.clone();
 
-        if let NodeType::FunctionDeclaration {
-            ref header,
-            ref body,
-            ..
-        } = original_value_node.node_type
+        let function_decl = match &original_value_node.node_type {
+            NodeType::FunctionDeclaration { header, body, .. } => Some((header, body)),
+            _ => None,
+        };
+        if let Some((header, body)) = function_decl
             && !header.generics.0.is_empty()
         {
             let base_name = new_name.clone();
@@ -112,15 +138,13 @@ impl MiddleEnvironment {
                 .collect();
             self.generic_fn_templates.entry(base_name).or_insert((
                 template_params,
-                header.clone(),
+                (*header).clone(),
                 (**body).clone(),
             ));
         }
 
-        let is_function_decl = matches!(
-            original_value_node.node_type,
-            NodeType::FunctionDeclaration { .. }
-        );
+        let is_function_decl = function_decl.is_some();
+        let current_location = self.current_location.clone();
 
         let mut data_type = if data_type.is_auto() {
             let inferred = self.resolve_type_from_node(scope, &value).or_else(|| {
@@ -149,7 +173,7 @@ impl MiddleEnvironment {
             self.resolve_potential_new_type(scope, data_type)
         };
 
-        if let NodeType::FunctionDeclaration { ref header, .. } = original_value_node.node_type {
+        if let Some((header, _)) = function_decl {
             data_type = ParserDataType::new(
                 span,
                 ParserInnerType::Function {
@@ -163,9 +187,7 @@ impl MiddleEnvironment {
                         .collect(),
                 },
             );
-        }
 
-        if let NodeType::FunctionDeclaration { ref header, .. } = original_value_node.node_type {
             let mut tg = TypeGenerator::default();
             let ret_pd = self.resolve_potential_new_type(scope, header.return_type.clone());
 
@@ -192,32 +214,25 @@ impl MiddleEnvironment {
             }
         }
 
-        let mut value = if let NodeType::FunctionDeclaration { ref header, .. } =
-            original_value_node.node_type
-        {
+        let mut value = if let Some((header, _)) = function_decl {
             self.variables.insert(
                 new_name.clone(),
                 MiddleVariable {
                     data_type: data_type.clone(),
                     var_type: var_type.clone(),
-                    location: self.current_location.clone(),
+                    location: current_location.clone(),
                 },
             );
 
             let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
             let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
-            let existing_is_native = scope_ref
-                .mappings
-                .get(&identifier.text)
-                .and_then(|name| self.variables.get(name))
-                .is_some_and(|var| {
-                    matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
-                });
-            if !(is_reserved_constructor && existing_is_native) {
-                scope_ref
-                    .mappings
-                    .insert(identifier.text.clone(), new_name.clone());
-            }
+            insert_mapping_if_allowed(
+                &self.variables,
+                &mut scope_ref.mappings,
+                identifier.text.clone(),
+                new_name.clone(),
+                is_reserved_constructor,
+            );
 
             let new_scope = self.new_scope_from_parent_shallow(*scope);
 
@@ -236,7 +251,7 @@ impl MiddleEnvironment {
                     MiddleVariable {
                         data_type: data_type.clone(),
                         var_type: VarType::Mutable,
-                        location: self.current_location.clone(),
+                        location: current_location.clone(),
                     },
                 );
 
@@ -262,22 +277,19 @@ impl MiddleEnvironment {
                 MiddleVariable {
                     data_type: data_type.clone(),
                     var_type: var_type.clone(),
-                    location: self.current_location.clone(),
+                    location: current_location.clone(),
                 },
             );
 
             let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
             let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
-            let existing_is_native = scope_ref
-                .mappings
-                .get(&identifier.text)
-                .and_then(|name| self.variables.get(name))
-                .is_some_and(|var| {
-                    matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
-                });
-            if !(is_reserved_constructor && existing_is_native) {
-                scope_ref.mappings.insert(identifier.text, new_name.clone());
-            }
+            insert_mapping_if_allowed(
+                &self.variables,
+                &mut scope_ref.mappings,
+                identifier.text,
+                new_name.clone(),
+                is_reserved_constructor,
+            );
         }
 
         if data_type.contains_auto()
@@ -289,11 +301,6 @@ impl MiddleEnvironment {
         {
             let t_applied = hm::apply_subst(&subst, &hm_t);
 
-            let mut tenv: FxHashMap<String, hm::TypeScheme> = FxHashMap::default();
-            for (k, s) in self.hm_env.iter() {
-                tenv.insert(k.clone(), s.clone());
-            }
-
             let parser_ty = hm::to_parser_data_type(&t_applied, &mut self.type_cache);
             let scheme = match &parser_ty.data_type {
                 calibre_parser::ast::ParserInnerType::Function { .. }
@@ -301,34 +308,32 @@ impl MiddleEnvironment {
                 {
                     hm::TypeScheme::new(Vec::new(), t_applied.clone())
                 }
-                _ => hm::generalize(&tenv, &t_applied),
+                _ => hm::generalize(&self.hm_env, &t_applied),
             };
             self.hm_env.insert(new_name.clone(), scheme);
 
-            if let Some(v) = self.variables.get_mut(&new_name) {
-                if !is_function_decl {
-                    v.data_type = parser_ty.clone();
-                    data_type = parser_ty.clone();
+            if !is_function_decl && let Some(v) = self.variables.get_mut(&new_name) {
+                v.data_type = parser_ty.clone();
+                data_type = parser_ty.clone();
 
-                    if let MiddleNodeType::FunctionDeclaration {
-                        parameters: ref mut params,
-                        return_type: ref mut ret_type,
-                        ..
-                    } = value.node_type
-                        && let ParserInnerType::Function {
-                            return_type: inferred_ret,
-                            parameters: inferred_params,
-                        } = parser_ty.data_type
-                    {
-                        for (i, (_name, p_ty)) in params.iter_mut().enumerate() {
-                            if i < inferred_params.len() && p_ty.contains_auto() {
-                                *p_ty = inferred_params[i].clone();
-                            }
+                if let MiddleNodeType::FunctionDeclaration {
+                    parameters: ref mut params,
+                    return_type: ref mut ret_type,
+                    ..
+                } = value.node_type
+                    && let ParserInnerType::Function {
+                        return_type: inferred_ret,
+                        parameters: inferred_params,
+                    } = parser_ty.data_type
+                {
+                    for (i, (_name, p_ty)) in params.iter_mut().enumerate() {
+                        if i < inferred_params.len() && p_ty.contains_auto() {
+                            *p_ty = inferred_params[i].clone();
                         }
+                    }
 
-                        if ret_type.contains_auto() {
-                            *ret_type = *inferred_ret.clone();
-                        }
+                    if ret_type.contains_auto() {
+                        *ret_type = *inferred_ret.clone();
                     }
                 }
             }

@@ -15,6 +15,7 @@ license.workspace = true
 calibre-lir = { workspace = true }
 calibre-parser = { workspace = true }
 rand = { workspace = true }
+fastrand = { workspace = true }
 rustyline = { workspace = true }
 thiserror = { workspace = true }
 rustc-hash = { workspace = true }

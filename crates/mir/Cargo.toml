@@ -16,4 +16,5 @@ thiserror = { workspace = true }
 calibre-parser = { workspace = true }
 calibre-std = { workspace = true }
 rustc-hash = { workspace = true }
-rand = { workspace = true }
+fastrand = { workspace = true }
+

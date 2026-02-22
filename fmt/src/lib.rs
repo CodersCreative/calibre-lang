@@ -136,18 +136,14 @@ pub fn format_all(formatter: &mut Formatter, path: &PathBuf) -> Result<(), Box<d
         };
 
         if module.len() == 1 {
-            let path = base.join(format!("{}.cal", module[0]));
-            if path.exists() {
-                format_all(formatter, &path)?;
-            } else {
-                let path = base.join(format!("{}/mod.cal", module[0]));
-                if path.exists() {
-                    format_all(formatter, &path)?;
-                } else {
-                    let path = base.join(format!("{}/main.cal", module[0]));
-                    if path.exists() {
-                        format_all(formatter, &path)?;
-                    }
+            for candidate in [
+                base.join(format!("{}.cal", module[0])),
+                base.join(format!("{}/mod.cal", module[0])),
+                base.join(format!("{}/main.cal", module[0])),
+            ] {
+                if candidate.exists() {
+                    format_all(formatter, &candidate)?;
+                    break;
                 }
             }
         }

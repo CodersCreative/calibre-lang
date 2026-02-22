@@ -1,3 +1,5 @@
+use std::sync::{LazyLock, RwLock};
+
 use ast::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Span,
@@ -18,6 +20,8 @@ pub mod infer;
 pub mod inline;
 pub mod native;
 pub mod translate;
+
+static COUNTER: LazyLock<RwLock<u64>> = LazyLock::new(|| RwLock::new(0));
 
 impl MiddleEnvironment {
     fn emit_destructure_statements(

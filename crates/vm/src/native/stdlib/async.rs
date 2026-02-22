@@ -393,27 +393,7 @@ impl NativeFunction for MutexWith {
 
         let result = match func {
             RuntimeValue::Function { name, captures } => {
-                let func_opt = if let Some(x) = env.get_function(name.as_str()) {
-                    Some(x)
-                } else if let Some((prefix, _)) = name.split_once("->") {
-                    env.registry
-                        .functions
-                        .iter()
-                        .filter(|(k, _)| !env.moved_functions.contains(*k))
-                        .find(|(k, _)| k.starts_with(prefix))
-                        .map(|(_, v)| v.clone())
-                } else if let Some((_, short)) = name.rsplit_once(':') {
-                    let suffix = format!(":{}", short);
-                    env.registry
-                        .functions
-                        .iter()
-                        .filter(|(k, _)| !env.moved_functions.contains(*k))
-                        .find(|(k, _)| k.ends_with(&suffix))
-                        .map(|(_, v)| v.clone())
-                } else {
-                    None
-                };
-                let Some(func_def) = func_opt else {
+                let Some(func_def) = env.resolve_function_by_name(name.as_str()) else {
                     return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
                 };
                 env.run_function(func_def.as_ref(), vec![current], captures)?

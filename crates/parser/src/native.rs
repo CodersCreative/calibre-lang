@@ -10,7 +10,7 @@ impl ParserDataType {
     }
 
     pub fn constants() -> FxHashMap<String, Self> {
-        let lst: Vec<(&'static str, ParserInnerType)> = vec![
+        let lst = [
             ("true", ParserInnerType::Bool),
             ("false", ParserInnerType::Bool),
             (
@@ -23,15 +23,15 @@ impl ParserDataType {
 
         let mut map = FxHashMap::with_capacity_and_hasher(lst.len(), Default::default());
 
-        for val in lst {
-            map.insert(val.0.to_string(), Self::native_type(val.1));
+        for (name, inner) in lst {
+            map.insert(name.to_string(), Self::native_type(inner));
         }
 
         map
     }
 
     pub fn natives() -> FxHashMap<String, ParserDataType> {
-        let lst: Vec<(&'static str, ParserInnerType)> = vec![
+        let lst = [
             ("console_output", ParserInnerType::Null),
             (
                 "ok",
@@ -190,11 +190,11 @@ impl ParserDataType {
 
         let mut map = FxHashMap::with_capacity_and_hasher(lst.len(), Default::default());
 
-        for val in lst {
+        for (name, inner) in lst {
             map.insert(
-                val.0.to_string(),
+                name.to_string(),
                 Self::native_type(ParserInnerType::NativeFunction(Box::new(
-                    Self::native_type(val.1),
+                    Self::native_type(inner),
                 ))),
             );
         }

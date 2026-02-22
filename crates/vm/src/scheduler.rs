@@ -10,7 +10,6 @@ use std::{
 use crate::{
     VM,
     config::VMConfig,
-    conversion::VMFunction,
     value::{RuntimeValue, WaitGroupInner},
 };
 
@@ -164,45 +163,10 @@ enum TaskStatus {
     Finished,
 }
 
-fn resolve_function(vm: &VM, name: &str) -> Option<Arc<VMFunction>> {
-    if let Some(found) = vm.get_function(name) {
-        return Some(found);
-    }
-    if let Some((prefix, _)) = name.split_once("->") {
-        if let Some(found) = vm
-            .registry
-            .functions
-            .iter()
-            .filter(|(k, _)| !vm.moved_functions.contains(*k))
-            .find(|(k, _)| k.starts_with(prefix))
-            .map(|(_, v)| v.clone())
-        {
-            return Some(found);
-        }
-    }
-    if let Some((_, short)) = name.rsplit_once(':') {
-        let suffix = format!(":{}", short);
-        let mut found = None;
-        for (k, v) in vm.registry.functions.iter() {
-            if vm.moved_functions.contains(k) {
-                continue;
-            }
-            if k.ends_with(&suffix) {
-                if found.is_some() {
-                    return None;
-                }
-                found = Some(v.clone());
-            }
-        }
-        return found;
-    }
-    None
-}
-
 fn run_task_slice(task: &mut Task, quantum: usize) -> Option<TaskStatus> {
     match &task.func {
         RuntimeValue::Function { name, captures } => {
-            let Some(func) = resolve_function(&task.vm, name) else {
+            let Some(func) = task.vm.resolve_function_by_name(name) else {
                 return Some(TaskStatus::Finished);
             };
             let mut state = task.vm.take_task_state();

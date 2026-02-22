@@ -188,7 +188,7 @@ impl NativeFunction for HashMapKeys {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let map_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let map_val = env.resolve_value_for_op(map_val)?;
+        let map_val = env.resolve_value_for_op_ref(&map_val)?;
         let RuntimeValue::HashMap(map) = map_val else {
             return Err(RuntimeError::UnexpectedType(map_val));
         };
@@ -212,7 +212,7 @@ impl NativeFunction for HashMapValues {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let map_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let map_val = env.resolve_value_for_op(map_val)?;
+        let map_val = env.resolve_value_for_op_ref(&map_val)?;
         let RuntimeValue::HashMap(map) = map_val else {
             return Err(RuntimeError::UnexpectedType(map_val));
         };
@@ -236,7 +236,7 @@ impl NativeFunction for HashMapEntries {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let map_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let map_val = env.resolve_value_for_op(map_val)?;
+        let map_val = env.resolve_value_for_op_ref(&map_val)?;
         let RuntimeValue::HashMap(map) = map_val else {
             return Err(RuntimeError::UnexpectedType(map_val));
         };
@@ -270,7 +270,7 @@ impl NativeFunction for HashMapClear {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let map_val = args.pop().unwrap_or(RuntimeValue::Null);
-        let map_val = env.resolve_value_for_op(map_val)?;
+        let map_val = env.resolve_value_for_op_ref(&map_val)?;
         let RuntimeValue::HashMap(map) = map_val else {
             return Err(RuntimeError::UnexpectedType(map_val));
         };

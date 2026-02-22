@@ -67,13 +67,13 @@ async fn run_source(
     if let Some(metadata) = package_metadata {
         engine = engine.with_package_metadata(metadata);
     }
-    if let Some(name) = entry_name.clone() {
+    if let Some(name) = entry_name {
         engine = engine.with_entry_name(name);
     }
 
     let wants_full_ir = verbosity.is_level(&Verbosity::AST) || verbosity.is_level(&Verbosity::MIR);
 
-    let artifacts = match if wants_full_ir {
+    let mut artifacts = match if wants_full_ir {
         engine.compile_source(contents.clone())
     } else {
         engine.compile_cached_program_source(contents.clone())
@@ -140,11 +140,8 @@ async fn run_source(
         }
     }
 
-    let mut vm: VM = VM::new(
-        artifacts.registry.clone(),
-        artifacts.mappings.clone(),
-        vm_config,
-    );
+    let entry_name = std::mem::take(&mut artifacts.entry_name);
+    let mut vm: VM = VM::new(artifacts.registry, artifacts.mappings, vm_config);
 
     if verbosity.is_level(&Verbosity::Byte) {
         println!("Bytecode - elapsed {}ms:", start.elapsed().as_millis());
@@ -157,7 +154,7 @@ async fn run_source(
         }
     }
 
-    if let Some(main) = vm.registry.functions.get(&artifacts.entry_name).cloned() {
+    if let Some(main) = vm.registry.functions.get(&entry_name).cloned() {
         if let Err(err) = vm.run(main.as_ref(), Vec::new()) {
             let (span, inner) = err.innermost();
             calibre_diagnostics::emit_runtime_error(
@@ -173,7 +170,7 @@ async fn run_source(
         calibre_diagnostics::emit_error(
             path,
             &contents,
-            format!("Missing entry point: {}", artifacts.entry_name),
+            format!("Missing entry point: {}", entry_name),
             None,
         );
         return Err("runtime error".into());
@@ -766,10 +763,8 @@ async fn run_repl_source(
         .map(|x| x.0.to_string())
         .collect();
 
-    let registry = VMRegistry::from(lir_result);
-    let mut vm: VM = VM::new(registry.clone(), mappings, vm_config);
-
-    let mut globals = registry.globals.clone();
+    let mut vm: VM = VM::new(VMRegistry::from(lir_result), mappings, vm_config);
+    let mut globals = vm.registry.globals.clone();
     let repl_global = globals.remove("__repl");
 
     for (_, global) in globals {

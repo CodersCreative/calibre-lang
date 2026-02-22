@@ -165,6 +165,18 @@ pub(super) fn normalize_scope_member_chain(
     head: Node,
     rest: Vec<(Node, bool)>,
 ) -> (Node, Vec<(Node, bool)>) {
+    #[inline]
+    fn prepend_member(
+        first: Node,
+        first_is_index: bool,
+        mut remaining: Vec<(Node, bool)>,
+    ) -> Vec<(Node, bool)> {
+        let mut out = Vec::with_capacity(remaining.len() + 1);
+        out.push((first, first_is_index));
+        out.append(&mut remaining);
+        out
+    }
+
     if rest.is_empty() {
         return (head, rest);
     }
@@ -175,13 +187,10 @@ pub(super) fn normalize_scope_member_chain(
     };
 
     if first_is_index {
-        let mut out = vec![(first, true)];
-        out.extend(iter);
-        return (head, out);
+        return (head, prepend_member(first, true, iter.collect()));
     }
 
-    let mut remaining = Vec::new();
-    remaining.extend(iter);
+    let remaining: Vec<(Node, bool)> = iter.collect();
 
     match (&head.node_type, &first.node_type) {
         (NodeType::ScopeMemberExpression { path }, NodeType::Identifier(_)) => {
@@ -237,16 +246,10 @@ pub(super) fn normalize_scope_member_chain(
                     remaining,
                 )
             } else {
-                let mut out = vec![(first, false)];
-                out.extend(remaining);
-                (head, out)
+                (head, prepend_member(first, false, remaining))
             }
         }
-        _ => {
-            let mut out = vec![(first, false)];
-            out.extend(remaining);
-            (head, out)
-        }
+        _ => (head, prepend_member(first, false, remaining)),
     }
 }
 
