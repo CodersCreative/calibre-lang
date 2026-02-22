@@ -14,7 +14,7 @@ impl Person for User {
 	const name = fn (self : &User) -> str => self.name;
 };
 
-const main = fn () => {
+const main = fn => {
 	let user = User { name : "Ty" };
 	print(user.greeting());
 	

@@ -3,6 +3,7 @@ import (Channel, Mutex, WaitGroup) from std::async;
 const worker = fn (id : int, jobs : &Channel:<int>, results : &mut Channel:<int>, total : &mut Mutex:<int>) => {
 	print("worker " & id & " start\n");
 	let mut handled = 0;
+	
 	for !jobs.closed() => {
 		if let .Some : job <- jobs.get() => {
 			let score = job * (id + 1);
@@ -12,10 +13,11 @@ const worker = fn (id : int, jobs : &Channel:<int>, results : &mut Channel:<int>
 			handled = handled + 1;
 		};
 	};
+	
 	print("worker " & id & " done (" & handled & " jobs)\n");
 };
 
-const main = fn () => {
+const main = fn => {
 	let mut jobs : Channel:<int> = Channel:<int>.new();
 	let mut results : Channel:<int> = Channel:<int>.new();
 	let mut total : Mutex:<int> = Mutex:<int>.new(0);
@@ -36,11 +38,13 @@ const main = fn () => {
 	jobs.close();
 	
 	let mut received = 0;
+	
 	for _ in 0..200 => {
 		if let .Some : value <- results.get() => {
 			received = received + 1;
 			print("received " & received & " => " & value & "\n");
 		};
+		
 		if received >= total_jobs => break;
 	};
 	
@@ -49,4 +53,3 @@ const main = fn () => {
 };
 
 bench async => main();
-

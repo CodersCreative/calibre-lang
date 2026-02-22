@@ -48,6 +48,14 @@ impl Display for RefMutability {
     }
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum AsFailureMode {
+    Result,
+    Panic,
+    Option,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoopType {
     Let {
@@ -93,7 +101,7 @@ impl Deref for ParserFfiDataType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ParserFfiInnerType {
     F32,
     F64,
@@ -263,6 +271,7 @@ pub enum ParserInnerType {
         identifier: String,
         generic_types: Vec<ParserDataType>,
     },
+    FfiType(ParserFfiInnerType),
     NativeFunction(Box<ParserDataType>),
     Ptr(Box<ParserDataType>),
 }
@@ -282,6 +291,13 @@ impl ParserDataType {
     pub fn verify(self) -> Self {
         Self {
             data_type: self.data_type.verify(),
+            span: self.span,
+        }
+    }
+
+    pub fn resolve_ffi(self) -> Self {
+        Self {
+            data_type: self.data_type.resolve_ffi(),
             span: self.span,
         }
     }
@@ -354,6 +370,37 @@ impl ParserInnerType {
             }
             ParserInnerType::Scope(x) => x.iter().any(|x| x.contains_auto()),
             _ => false,
+        }
+    }
+
+    pub fn resolve_ffi(self) -> Self {
+        match self {
+            Self::FfiType(ffi) => ffi.into(),
+            Self::Result { ok, err } => Self::Result {
+                ok: Box::new(ok.resolve_ffi()),
+                err: Box::new(err.resolve_ffi()),
+            },
+            Self::Ref(x, m) => Self::Ref(Box::new(x.resolve_ffi()), m),
+            Self::Ptr(x) => Self::Ptr(Box::new(x.resolve_ffi())),
+            Self::Option(x) => Self::Option(Box::new(x.resolve_ffi())),
+            Self::List(x) => Self::List(Box::new(x.resolve_ffi())),
+            Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.resolve_ffi()).collect()),
+            Self::Function {
+                return_type,
+                parameters,
+            } => Self::Function {
+                return_type: Box::new(return_type.resolve_ffi()),
+                parameters: parameters.into_iter().map(|x| x.resolve_ffi()).collect(),
+            },
+            Self::StructWithGenerics {
+                identifier,
+                generic_types,
+            } => Self::StructWithGenerics {
+                identifier,
+                generic_types: generic_types.into_iter().map(|x| x.resolve_ffi()).collect(),
+            },
+            Self::Scope(x) => Self::Scope(x.into_iter().map(|x| x.resolve_ffi()).collect()),
+            x => x,
         }
     }
 }
@@ -493,6 +540,7 @@ impl Display for ParserInnerType {
                     write!(f, "{}", txt)
                 }
             }
+            Self::FfiType(x) => write!(f, "@{}", x),
             Self::List(x) => write!(f, "list:<{}>", x),
             Self::Tuple(types) => {
                 let mut txt = format!(
@@ -575,21 +623,6 @@ pub enum PotentialGenericTypeIdentifier {
         identifier: PotentialDollarIdentifier,
         generic_types: Vec<PotentialNewType>,
     },
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum PotentialFfiDataType {
-    Ffi(ParserFfiDataType),
-    Normal(ParserDataType),
-}
-
-impl Display for PotentialFfiDataType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ffi(x) => write!(f, "@{}", x),
-            Self::Normal(x) => write!(f, "{}", x),
-        }
-    }
 }
 
 impl Display for PotentialGenericTypeIdentifier {
@@ -910,13 +943,48 @@ impl Node {
 
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
+pub enum MatchTupleItem {
+    Rest(Span),
+    Wildcard(Span),
+    Value(Node),
+    Enum {
+        value: PotentialDollarIdentifier,
+        var_type: VarType,
+        name: Option<PotentialDollarIdentifier>,
+        destructure: Option<DestructurePattern>,
+        pattern: Option<Box<MatchArmType>>,
+    },
+    Binding {
+        var_type: VarType,
+        name: PotentialDollarIdentifier,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum MatchStructFieldPattern {
+    Value {
+        field: String,
+        value: Node,
+    },
+    Binding {
+        field: String,
+        var_type: VarType,
+        name: PotentialDollarIdentifier,
+    },
+}
+
+#[repr(u8)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MatchArmType {
     Enum {
         value: PotentialDollarIdentifier,
         var_type: VarType,
         name: Option<PotentialDollarIdentifier>,
         destructure: Option<DestructurePattern>,
+        pattern: Option<Box<MatchArmType>>,
     },
+    TuplePattern(Vec<MatchTupleItem>),
+    StructPattern(Vec<MatchStructFieldPattern>),
     Let {
         var_type: VarType,
         name: PotentialDollarIdentifier,
@@ -929,6 +997,34 @@ impl MatchArmType {
     pub fn span(&self) -> &Span {
         match self {
             Self::Enum { value, .. } => value.span(),
+            Self::TuplePattern(items) => {
+                for item in items {
+                    match item {
+                        MatchTupleItem::Rest(sp) | MatchTupleItem::Wildcard(sp) => return sp,
+                        MatchTupleItem::Value(node) => return &node.span,
+                        MatchTupleItem::Enum { value, .. } => return value.span(),
+                        MatchTupleItem::Binding { name, .. } => return name.span(),
+                    }
+                }
+                static DEFAULT: Span = Span {
+                    from: crate::Position { line: 0, col: 0 },
+                    to: crate::Position { line: 0, col: 0 },
+                };
+                &DEFAULT
+            }
+            Self::StructPattern(fields) => {
+                for field in fields {
+                    match field {
+                        MatchStructFieldPattern::Value { value, .. } => return &value.span,
+                        MatchStructFieldPattern::Binding { name, .. } => return name.span(),
+                    }
+                }
+                static DEFAULT: Span = Span {
+                    from: crate::Position { line: 0, col: 0 },
+                    to: crate::Position { line: 0, col: 0 },
+                };
+                &DEFAULT
+            }
             Self::Let { var_type: _, name } => name.span(),
             Self::Value(x) => &x.span,
             Self::Wildcard(x) => &x,
@@ -1102,8 +1198,8 @@ pub enum NodeType {
     ExternFunctionDeclaration {
         abi: String,
         identifier: PotentialDollarIdentifier,
-        parameters: Vec<PotentialFfiDataType>,
-        return_type: PotentialFfiDataType,
+        parameters: Vec<ParserDataType>,
+        return_type: ParserDataType,
         library: String,
         symbol: Option<String>,
     },
@@ -1132,6 +1228,7 @@ pub enum NodeType {
     AsExpression {
         value: Box<Node>,
         data_type: PotentialNewType,
+        failure_mode: AsFailureMode,
     },
     InDeclaration {
         identifier: Box<Node>,
@@ -1163,6 +1260,14 @@ pub enum NodeType {
         until: Option<Box<Node>>,
         label: Option<PotentialDollarIdentifier>,
         else_body: Option<Box<Node>>,
+    },
+    TestDeclaration {
+        identifier: PotentialDollarIdentifier,
+        body: Box<Node>,
+    },
+    BenchDeclaration {
+        identifier: PotentialDollarIdentifier,
+        body: Box<Node>,
     },
     Try {
         value: Box<Node>,
@@ -1294,15 +1399,7 @@ impl Into<Node> for PipeSegment {
 
 impl NodeType {
     pub fn unwrap(self) -> NodeType {
-        match self {
-            NodeType::ParenExpression { value } => value.node_type,
-            NodeType::ScopeDeclaration {
-                body: Some(mut body),
-                create_new_scope: Some(false),
-                ..
-            } if body.len() == 1 => body.remove(0).node_type,
-            _ => self,
-        }
+        self
     }
 
     pub fn is_call(&self) -> bool {

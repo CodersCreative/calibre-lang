@@ -5,7 +5,7 @@ extern "c" const c_fgets = fn(ptr:<@u8>, @int, ptr:<@u8>) -> str from "libc" as 
 extern "c" const c_fwrite = fn(str, @usize, @usize, ptr:<@u8>) -> @usize from "libc" as "fwrite";
 extern "c" const c_strlen = fn(str) -> @usize from "libc" as "strlen";
 extern "c" const c_malloc = fn(@usize) -> ptr:<@u8> from "libc" as "malloc";
-extern "c" const c_free = fn(ptr:<@u8>) -> null from "libc" as "free";
+extern "c" const c_free = fn(ptr:<@u8>) from "libc" as "free";
 extern "c" const c_access = fn(str, @int) -> @int from "libc" as "access";
 extern "c" const c_remove = fn(str) -> @int from "libc" as "remove";
 
@@ -49,6 +49,7 @@ const remove = fn (path : str) -> bool => c_remove(path) == 0;
 const read_line = fn (handle : ptr:<uint>, max : int) -> str => {
 	if (try handle as int => 0) == 0 => return "";
 	let size = if max <= 0 => 1 else => max + 1;
+	
 	let buf = c_malloc(size);
 	let line = c_fgets(buf, size, handle);
 	c_free(buf);
@@ -57,21 +58,27 @@ const read_line = fn (handle : ptr:<uint>, max : int) -> str => {
 
 const read_lines = fn (handle : ptr:<uint>, max : int) -> list:<str> => {
 	let mut out = list:<str>[];
+	
 	for  => {
 		let line = read_line(handle, max);
 		if len(line) == 0 => break;
+		
 		out <<= line;
 	};
+	
 	out;
 };
 
 const read_all = fn (handle : ptr:<uint>, max : int) -> str => {
 	let mut out = "";
+	
 	for  => {
 		let line = read_line(handle, max);
 		if len(line) == 0 => break;
+		
 		out &= line;
 	};
+	
 	out;
 };
 

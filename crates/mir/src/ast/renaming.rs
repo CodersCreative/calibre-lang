@@ -148,9 +148,14 @@ impl MiddleNodeType {
                 pretty_printed_str,
                 value: Box::new(value.rename(state)),
             },
-            MiddleNodeType::AsExpression { value, data_type } => MiddleNodeType::AsExpression {
+            MiddleNodeType::AsExpression {
+                value,
+                data_type,
+                failure_mode,
+            } => MiddleNodeType::AsExpression {
                 value: Box::new(value.rename(state)),
                 data_type,
+                failure_mode,
             },
             MiddleNodeType::RangeDeclaration {
                 from,

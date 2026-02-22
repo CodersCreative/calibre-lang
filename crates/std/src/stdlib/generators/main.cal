@@ -10,6 +10,7 @@ impl<T> Iter for gen:<T> {
 			self.done = true;
 			return none;
 		};
+		
 		self.index = self.index + 1;
 		value;
 	};

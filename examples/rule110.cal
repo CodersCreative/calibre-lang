@@ -3,7 +3,7 @@ import (Channel, WaitGroup) from std::async;
 const width = 180;
 const steps = 180;
 
-const main = fn () => {
+const main = fn => {
 	const half_width = width / 2;
 	let mut cells = [(x > half_width) ? 1 : 0 for x in 0..=width];
 	
@@ -19,6 +19,7 @@ const main = fn () => {
 			},
 			=> {
 				let mut next_cells = list:<int>[];
+				
 				for i in 0..len(cells) => {
 					let left = (i > 0) ? cells[i - 1] : 0;
 					let center = cells[i];
@@ -38,6 +39,7 @@ const main = fn () => {
 						};
 					};
 				};
+				
 				next_ch.send(next_cells);
 			}
 		};

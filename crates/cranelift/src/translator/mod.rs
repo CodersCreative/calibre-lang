@@ -136,7 +136,7 @@ impl<'a> FunctionTranslator<'a> {
             LirNodeType::Literal(LirLiteral::Float(x)) => {
                 RuntimeValue::new(self.builder.ins().f64const(x), RuntimeType::Float)
             }
-            LirNodeType::As(value, data_type) => {
+            LirNodeType::As(value, data_type, _failure_mode) => {
                 let value = self.translate(*value);
                 value.into_type(self, data_type.into())
             }

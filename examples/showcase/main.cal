@@ -1,11 +1,364 @@
 import data;
 import * from data;
+import * from std::option;
+import * from std::math;
+import (File) from std::file;
+import (Channel) from std::async;
 
-// The const keyword creates an immutable variable that cannot be shadowed.
+// Constants are immutable.
 const language_forced : Language = Language.ENGLISH : 6;
 
-const main = fn () => {
-	let language = Language.French : FrenchData { data : 10, code : 5 };
-	let mut recursive_language : Language = Language.Arabic : language, Language.Spanish;
-	print(language);
+// A typed generator function: fn(...) -> gen:<T>
+const even_numbers = fn (start stop : int) -> gen:<int> => {
+	let mut i = start;
+	
+	for i < stop => {
+		if i % 2 == 0 => return i;
+		i += 1;
+	};
+	
+	// The generator will end once it exists the function scope or when a return with no value is used;
+	return;
+};
+
+/* Result-returning function + `as` conversion semantics.
+Results in the language are parsed as err!ok or just !ok
+*/
+const parse_and_add = fn (txt : str, extra : int) -> str!int => {
+	let n = try txt as int;
+	ok(n + extra);
+};
+
+// Function arguments can be grouped if they share the same type.
+const mul3 = fn (a b c : int) -> int => a * b * c;
+
+const factorial = fn (x : int) -> int => if x <= 1 => 1 else => x * factorial(x - 1);
+
+const is_a_triangle = fn (a b c : float) -> bool => a + b > c && b + c > a && c + a > b;
+const heron = fn (a b c : float) -> float => {
+	let p = (a + b + c) / 2;
+	(p * (p - a) * (p - b) * (p - c)) ** 0.5;
+};
+
+// Example of a function return options and also how to use options
+const area_of_triangle = fn (a b c : float) -> float? => if is_a_triangle(a, b, c) => some(heron(a, b, c)) else => none;
+
+// struct fields can also be grouped if they share the same type.
+type Pair = struct { left right : int };
+
+// Function parameters can be destructured
+const sum_pair_tuple = fn ((a, b)) => a + b;
+const sum_pair_struct = fn ({left: a, right: b} : Pair) => a + b;
+
+// An example of traits in the language;
+trait Describe {
+	const describe : fn (&Self) -> str;
+};
+
+// An example of a trait being implemented on an type
+impl Describe for Pair {
+	const describe = fn (self : &Pair) -> str => "Pair(" & self.left & ", " & self.right & ")";
+};
+
+// Test showcase: run with "cal test".
+test showcase_core_math => {
+	assert(factorial(6) == 720, "factorial(6) should equal 720");
+	assert(int.gcd(84, 18) == 6, "int.gcd(84, 18) should equal 6");
+	assert(float.sqrt(9f) == 3f, "float.sqrt(9f) should equal 3f");
+};
+
+test showcase_conversions => {
+	let ok = parse_and_add("50", 7);
+	assert(ok.is_ok(), "parse_and_add should return ok on valid int text");
+	assert(("oops" as? int).is_none(), "as? should return none on conversion failure");
+};
+
+// Benchmark showcase: run with "cal bench".
+bench showcase_generator_throughput => {
+	let gen = even_numbers(0, 20000);
+	let mut count = 0;
+	let mut sum = 0;
+	
+	for count < 2000 => {
+		let next = gen.next();
+		assert(next.is_some(), "generator ended too early during benchmark");
+		sum += next.unwrap_or(0);
+		count += 1;
+	};
+	
+	assert(sum > 0, "benchmark sum should be positive");
+};
+
+// You can impl custom functions/traits on native types
+impl int {
+	const days = fn(self : Self) -> Self => {
+		return self * 24 * 60 * 60;
+	} 
+}
+
+const main = fn => {
+	print("5 days in seconds : " & 5.days());
+
+	// Struct/enum literals.
+	let language = Language.FRENCH : FrenchData { data : 10, code : 5 };
+	let mut recursive_language : Language = Language.ARABIC : language, Language.SPANISH;
+	
+	print("== Basic Values ==");
+	print(language_forced);
+	print(recursive_language);
+	
+	// Numeric literal suffixes: int default, "i" explicit int, "u" uint, "f" float.
+	let a = 10;
+	let b = 10i;
+	let c = 10u;
+	let d = 10f;
+	print("suffixes => " & a & ", " & b & ", " & c & ", " & d);
+	
+	let mut x, mut y = 5, 6;
+	
+	// Destructuring declaration and assignment.
+	print("destructure assign => " & x & ", " & y);
+	
+	let pair = Pair { left : 30, right : 12 };
+	let {left, right} = pair;
+	print("struct destructure => " & (left + right));
+	
+	// Match with tuple patterns, rest, binding inference, and OR alternatives.
+	match 20, 40, 30 {
+		20, 40, 80 | 30 | 90 => print("or-arm "),
+		20, .., 90 => print("rest match"),
+		_ => print("fallback")
+	};
+	
+	// Match with enum payload destructuring.
+	let nested_lang : Language = Language.ARABIC : Language.FRENCH : FrenchData { data : 1, code : 2 }, Language.SPANISH;
+	
+	/*match nested_lang {
+		.ARABIC : (.FRENCH : {data: l, code: r}, _) => print("nested enum/struct => " & (l + r)),
+		_ => print("no enum match")
+	};*/
+	
+	// if let / for let with destructuring.
+	if let .FRENCH : {data: v, code: c} <- language => {
+		print("if let => " & (v + c));
+	};
+	
+	for let .ARABIC : left_lang, right_lang <- recursive_language => {
+		print("for let left => " & left_lang);
+		print("for let right => " & right_lang);
+		
+		break;
+	};
+	
+	/* List comprehensions with loops.
+			Also an example of the until statement that can be used to create end tested loops.
+	*/
+	let mut lst : list:<int> = [n ** 2 for n in 0..20 if n % 2 == 0 if n % 4 != 0];
+	
+	for n in &mut lst => {
+		*n *= 2;
+	} until n > 16;
+	
+	print("list comp => " & lst);
+	
+	let mut total = 0;
+	for i in 1..=10 => total += i;
+	print("range loop total => " & total);
+	
+	// Generator function and inline generator expression.
+	let gen = even_numbers(0, 12);
+	print("generator fn firsts => " & gen.next() & ", " & gen.next() & ", " & gen.next());
+	
+	// Until can also be used in generators and list comprehensions.
+	let inline = fn(n * 3 for n in 0..20 if n % 3 == 0 until n > 16);
+	print("inline gen firsts => " & inline.next() & ", " & inline.next() & ", " & inline.next());
+	
+	// Result and Option flow.
+	let parsed = parse_and_add("50", 7);
+	
+	parsed |> fn match {
+		// The fn match statement that turns a pattern matching into functions easily
+		.Ok : v => print("result ok => " & v),
+		.Err : e => print("result err => " & e)
+	};
+	
+	let mut maybe = some(9).map(fn (n : int) -> int => n * 2).unwrap_or(0);
+	
+	// Examples of mutable references and capturing
+	fn => {
+		let maybe_mut = &mut maybe;
+		*maybe_mut += 1;
+	}();
+	
+	=> {
+		let maybe_mut = &mut maybe;
+		*maybe_mut += 1;
+	};
+	
+	print("option map/unwrap_or => " & maybe);
+	
+	// All cast modes: `as` -> result, `as!` -> panic on fail, `as?` -> option.
+	let cast_result = "64" as int;
+	let cast_option = "64" as? int;
+	let cast_option_fail = "oops" as? int;
+	let cast_panic_style = "64" as! int;
+	print("cast result => " & cast_result);
+	print("cast option => " & cast_option & ", fail => " & cast_option_fail);
+	print("cast as! => " & cast_panic_style);
+	
+	200 |> fn (s : dyn) => print("pipe closure => " & s);
+	
+	// Pipe + closure + currying.
+	let curried = 3 |> mul3 |> $(4);
+	
+	print("currying => " & (5 |> curried));
+	let curried = 3 |> 4 |> mul3;
+	
+	print("currying => " & (5 |> curried));
+	
+	// Function-match declaration.
+	let classify = fn match int -> str {
+		0 => "zero",
+		1 => "one",
+		_ => "many"
+	};
+	print("fn match => " & classify(1));
+	
+	// Destructured params and trait methods.
+	let p = Pair { left : 7, right : 8 };
+	print("sum pair tuple => " & sum_pair_tuple((10, 20)));
+	print("sum pair struct => " & sum_pair_struct(p));
+	print("trait describe => " & p.describe());
+	
+	// Recursive-ish match destructuring on tuples/structs/options.
+	match 10, 90, 20 {
+		20, 40, 80 | 30 | 90 => print("match or-arm"),
+		10, mut value, 20 => {
+			value += 1;
+			print("match mut bind => " & value);
+		},
+		10, const value, _ => print("match const bind => " & value),
+		_ => {}
+	};
+	
+	match Pair { left : 30, right : 50 } {
+		{left : 50, right} => print(50 - right),
+		{left, right} => print("pair match => " & (left + right)),
+		_ => {}
+	};
+	
+	// if let / for let on options.
+	if let .Some : value <- some(12) => print("if let some => " & value);
+	
+	for let .Some : value <- some(99) => {
+		print("for let some => " & value);
+		
+		break;
+	};
+	
+	// Match without value (guard-style arms).
+	let age = "10";
+	match {
+		age == "10" => print("match no-value => ten"),
+		_ => print("match no-value => other")
+	};
+	
+	// String-template function call syntax.
+	let name = "Ty";
+	let intro = fn (splits : list:<str>, inputs : list:<str>) -> str => {
+		let mut txt : str = "";
+		
+		for i in len(splits) => {
+			txt &= splits[i];
+			if i < len(inputs) => txt &= inputs[i];
+		};
+		
+		txt;
+	}"Hello, my name is {name} and age is {age}";
+	
+	print("template fn => " & intro);
+	
+	// Iter helpers from std iter trait implementations.
+	let mapped = list:<int>[1, 2, 3].iter().map(fn (x : int) -> int => x * 10).collect();
+	let filtered = list:<int>[1, 2, 3, 4].iter().filter(fn (x : int) -> bool => x % 2 == 0).collect();
+	let folded = list:<int>[1, 2, 3, 4].iter().fold(0, fn (acc : int, x : int) -> int => acc + x);
+	print("iter mapped => " & mapped);
+	print("iter filtered => " & filtered);
+	print("iter folded => " & folded);
+	
+	// While-style `for` loop form.
+	let mut countdown = 3;
+	
+	for countdown > 0 => {
+		print("countdown => " & countdown);
+		countdown -= 1;
+	};
+	
+	// Inline scope expression in arithmetic.
+	let mut counter = 1;
+	print("scope expr => " & (counter + => {
+		counter += 1;
+		counter;
+	}));
+	
+	=> {
+		// Defer in a temp scope.
+		defer print("defer fired");
+		print("before defer");
+	};
+	
+	// move semantics showcase.
+	let tri = "moved value";
+	print(move tri);
+	
+	// Pointer conversions and pointer casts.
+	let ptr_val = 42 as? ptr:<int>;
+	let raw_ptr = 42 as! ptr:<null>;
+	print("ptr as? => " & ptr_val);
+	print("ptr as! => " & raw_ptr);
+	
+	/* Small async + select showcase.
+			Unlike in golang my channels can store a small temporary stack of values.
+	*/
+	let mut channel : Channel:<int> = Channel.new();
+	
+	use spawn {
+		=> channel.send(41),
+		=> channel.send(42),
+		=> channel.close()
+	};
+	
+	let mut received = 0;
+	
+	for received < 2 => {
+		select {
+			value <- channel => {
+				print("select recv => " & value);
+				received += 1;
+			},
+			_ => {}
+		};
+	};
+	
+	// Membership checks.
+	if (4 in [4, 16, 32]) => print("4 in list");
+	
+	// Built-in package metadata.
+	print("__name__ => " & __name__);
+	print("__file__ => " & __file__);
+	print("__package__ => " & __package__);
+	
+	// File IO (read current showcase data module).
+	let file = File.open_read(__file__.replace("main.cal", "data.cal"));
+	let text = file.read_all(200);
+	print("file prefix => " & text);
+	
+	// Recursion + option return.
+	print("factorial(6) => " & factorial(6));
+	print("area triangle => " & area_of_triangle(3f, 4f, 5f));
+	
+	// Static functions on primitive families.
+	print("int gcd/lcm => " & int.gcd(84, 18) & ", " & int.lcm(12, 18));
+	print("uint pow => " & uint.pow(2u, 10u));
+	print("float sqrt => " & float.sqrt(9f));
 };

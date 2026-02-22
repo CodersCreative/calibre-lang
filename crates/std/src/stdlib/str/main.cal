@@ -35,11 +35,13 @@ impl str {
 		if len(parts) == 0 => self;
 		let mut out = "";
 		let mut idx = 0;
+		
 		for _ in parts => {
 			if idx > 0 => out &= to;
 			out &= parts[idx];
 			idx = idx + 1;
 		};
+		
 		out;
 	};
 
@@ -49,10 +51,12 @@ impl str {
 		if len(rest) <= 1 => some("");
 		let mut out = "";
 		let mut idx = 1;
+		
 		for _ in rest => {
 			if idx > 0 && idx < len(rest) => out &= rest[idx];
 			idx = idx + 1;
 		};
+		
 		some(out);
 	};
 
@@ -62,10 +66,12 @@ impl str {
 		if len(parts) <= 1 => return some("");
 		let mut out = "";
 		let mut idx = 0;
+		
 		for _ in parts => {
 			if idx < len(parts) - 1 => out &= parts[idx];
 			idx = idx + 1;
 		};
+		
 		some(out);
 	};
 };

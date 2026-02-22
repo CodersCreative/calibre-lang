@@ -1,7 +1,7 @@
 import * from std::collections;
 import * from std::console;
 
-const main = fn () => {
+const main = fn => {
 	let mut map = HashMap.new(("a", 1), ("b", 2), ("c", 3));
 	
 	print("len => " & map.len());
@@ -22,6 +22,7 @@ const main = fn () => {
 	for i in 0..len(keys) => print("key => " & keys[i]);
 	
 	let entries = map.entries();
+	
 	for i in 0..len(entries) => {
 		let pair = entries[i];
 		print("entry => " & pair.0 & ":" & pair.1);

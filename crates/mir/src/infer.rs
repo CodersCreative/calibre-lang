@@ -532,19 +532,35 @@ fn visit(
                 .map_err(|e| e)?;
             Ok(bool_t)
         }
-        NodeType::AsExpression { data_type, .. } => {
+        NodeType::AsExpression {
+            data_type,
+            failure_mode,
+            ..
+        } => {
             let ok_type = match data_type {
                 PotentialNewType::DataType(dt) => dt.clone(),
                 _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
             };
-            let result_type = ParserDataType::new(
-                node.span,
-                ParserInnerType::Result {
-                    ok: Box::new(ok_type),
-                    err: Box::new(ParserDataType::new(node.span, ParserInnerType::Dynamic)),
-                },
-            );
-            Ok(hm::from_parser_data_type(&result_type, tg))
+            match failure_mode {
+                calibre_parser::ast::AsFailureMode::Panic => {
+                    Ok(hm::from_parser_data_type(&ok_type, tg))
+                }
+                calibre_parser::ast::AsFailureMode::Option => {
+                    let option_type =
+                        ParserDataType::new(node.span, ParserInnerType::Option(Box::new(ok_type)));
+                    Ok(hm::from_parser_data_type(&option_type, tg))
+                }
+                calibre_parser::ast::AsFailureMode::Result => {
+                    let result_type = ParserDataType::new(
+                        node.span,
+                        ParserInnerType::Result {
+                            ok: Box::new(ok_type),
+                            err: Box::new(ParserDataType::new(node.span, ParserInnerType::Dynamic)),
+                        },
+                    );
+                    Ok(hm::from_parser_data_type(&result_type, tg))
+                }
+            }
         }
         NodeType::VariableDeclaration {
             identifier,
@@ -817,29 +833,7 @@ pub fn infer_node_hm(
     let mut var_types: FxHashMap<String, Type> = FxHashMap::default();
     for (k, v) in env.variables.iter() {
         if !tenv.contains_key(k) {
-            fn contains_auto(pd: &ParserDataType) -> bool {
-                match &pd.data_type {
-                    ParserInnerType::Auto(_) => true,
-                    ParserInnerType::Tuple(xs) => xs.iter().any(|x| contains_auto(x)),
-                    ParserInnerType::List(x) => contains_auto(x),
-                    ParserInnerType::Ptr(x) => contains_auto(x),
-                    ParserInnerType::Option(x) => contains_auto(x),
-                    ParserInnerType::Result { ok, err } => contains_auto(ok) || contains_auto(err),
-                    ParserInnerType::Function {
-                        return_type,
-                        parameters,
-                        ..
-                    } => contains_auto(return_type) || parameters.iter().any(|p| contains_auto(p)),
-                    ParserInnerType::Ref(x, _) => contains_auto(x),
-                    ParserInnerType::StructWithGenerics { generic_types, .. } => {
-                        generic_types.iter().any(|g| contains_auto(g))
-                    }
-                    ParserInnerType::Scope(xs) => xs.iter().any(|x| contains_auto(x)),
-                    _ => false,
-                }
-            }
-
-            if contains_auto(&v.data_type) {
+            if v.data_type.contains_auto() {
                 let t = tg.fresh();
                 var_types.insert(k.clone(), t.clone());
                 let scheme = TypeScheme::new(Vec::new(), t.clone());

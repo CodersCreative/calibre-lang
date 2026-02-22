@@ -2,7 +2,8 @@ use crate::{
     config::VMConfig,
     conversion::{Reg, VMBlock, VMFunction, VMRegistry},
     error::RuntimeError,
-    value::{GcMap, RuntimeValue, WaitGroupInner},
+    native::NativeFunction,
+    value::{ExternFunction, GcMap, RuntimeValue, WaitGroupInner},
     variables::VariableStore,
 };
 use calibre_lir::BlockId;
@@ -18,6 +19,7 @@ use std::{
 
 static NULL_RUNTIME_VALUE: RuntimeValue = RuntimeValue::Null;
 static EMPTY_FRAME: OnceLock<VMFrame> = OnceLock::new();
+static EMPTY_CAPTURES: OnceLock<std::sync::Arc<Vec<(String, RuntimeValue)>>> = OnceLock::new();
 
 pub mod config;
 pub mod conversion;
@@ -69,6 +71,7 @@ pub struct VM {
     pub ptr_heap: FxHashMap<u64, RuntimeValue>,
     pub config: VMConfig,
     reg_arena: Vec<RuntimeValue>,
+    reg_top: usize,
     name_arena: FxHashMap<Arc<str>, Arc<str>>,
     frames: Vec<VMFrame>,
     frame_pool: Vec<VMFrame>,
@@ -92,6 +95,8 @@ pub struct VMCaches {
     globals_id: FxHashMap<String, usize>,
     local_str: FxHashMap<(u32, u16), Arc<str>>,
     aggregate_member_slots: FxHashMap<String, FxHashMap<String, usize>>,
+    prepared_direct_calls: FxHashMap<(usize, usize, u32), PreparedDirectCall>,
+    unique_var_suffix: FxHashMap<String, Option<String>>,
 }
 
 impl Default for VMCaches {
@@ -105,8 +110,17 @@ impl Default for VMCaches {
             globals_id: FxHashMap::default(),
             local_str: FxHashMap::default(),
             aggregate_member_slots: FxHashMap::default(),
+            prepared_direct_calls: FxHashMap::default(),
+            unique_var_suffix: FxHashMap::default(),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum PreparedDirectCall {
+    Vm(Arc<VMFunction>),
+    Native(Arc<dyn NativeFunction>),
+    Extern(Arc<ExternFunction>),
 }
 
 #[derive(Debug, Clone)]
@@ -119,7 +133,7 @@ pub struct VMGC {
 impl Default for VMGC {
     fn default() -> Self {
         Self {
-            interval: 4096,
+            interval: 1_048_576,
             counter: 0,
             in_flight: Arc::new(AtomicBool::new(false)),
         }
@@ -132,7 +146,7 @@ impl From<VMRegistry> for VM {
         let scheduler = scheduler::SchedulerHandle::new(&config);
         let func_suffix = build_function_suffix_index(&value);
         let globals_direct = build_globals_direct_cache(&value);
-        Self {
+        let mut vm = Self {
             variables: VariableStore::default(),
             mappings: Arc::new(Vec::new()),
             registry: Arc::new(value),
@@ -140,6 +154,7 @@ impl From<VMRegistry> for VM {
             ptr_heap: FxHashMap::default(),
             config,
             reg_arena: Vec::new(),
+            reg_top: 0,
             name_arena: FxHashMap::default(),
             frames: vec![VMFrame::default()],
             frame_pool: Vec::new(),
@@ -154,11 +169,32 @@ impl From<VMRegistry> for VM {
             moved_functions: FxHashSet::default(),
             suppress_output: false,
             captured_output: String::new(),
-        }
+        };
+        vm.preallocate_execution_buffers();
+        vm
     }
 }
 
 impl VM {
+    fn preallocate_execution_buffers(&mut self) {
+        let mut max_regs = 0usize;
+        for func in self.registry.functions.values() {
+            max_regs = max_regs.max(func.reg_count as usize);
+        }
+        let frame_capacity = 256usize;
+        let reg_capacity = max_regs.max(32).saturating_mul(16).min(1_000_000);
+        self.frames.reserve(frame_capacity);
+        self.frame_pool.reserve(frame_capacity);
+        self.reg_arena.reserve(reg_capacity);
+    }
+
+    #[inline]
+    pub(crate) fn empty_captures() -> std::sync::Arc<Vec<(String, RuntimeValue)>> {
+        EMPTY_CAPTURES
+            .get_or_init(|| std::sync::Arc::new(Vec::new()))
+            .clone()
+    }
+
     pub(crate) fn get_function(&self, name: &str) -> Option<Arc<VMFunction>> {
         if self.moved_functions.contains(name) {
             return None;
@@ -200,6 +236,23 @@ impl VM {
         }
 
         None
+    }
+
+    #[inline]
+    fn find_unique_var_by_suffix_cached(&mut self, short_name: &str) -> Option<String> {
+        if let Some(cached) = self.caches.unique_var_suffix.get(short_name) {
+            return cached.clone();
+        }
+        let found = self.find_unique_var_by_suffix(short_name);
+        self.caches
+            .unique_var_suffix
+            .insert(short_name.to_string(), found.clone());
+        found
+    }
+
+    #[inline]
+    pub(crate) fn invalidate_name_resolution_caches(&mut self) {
+        self.caches.unique_var_suffix.clear();
     }
 
     fn find_unique_local_by_suffix(&self, short_name: &str) -> Option<Reg> {
@@ -368,6 +421,7 @@ impl VM {
             ptr_heap: FxHashMap::default(),
             config: config.clone(),
             reg_arena: Vec::new(),
+            reg_top: 0,
             name_arena: FxHashMap::default(),
             frames: vec![VMFrame::default()],
             frame_pool: Vec::new(),
@@ -388,6 +442,7 @@ impl VM {
             vm.gc.interval = interval;
         }
 
+        vm.preallocate_execution_buffers();
         vm.setup_global();
         vm.setup_stdlib();
         vm
@@ -409,6 +464,7 @@ impl VM {
             ptr_heap: FxHashMap::default(),
             config: config.clone(),
             reg_arena: Vec::new(),
+            reg_top: 0,
             name_arena: FxHashMap::default(),
             frames: vec![VMFrame::default()],
             frame_pool: Vec::new(),
@@ -429,6 +485,7 @@ impl VM {
             vm.gc.interval = interval;
         }
 
+        vm.preallocate_execution_buffers();
         vm.setup_global();
         vm.setup_stdlib();
         vm
@@ -457,8 +514,11 @@ impl VM {
     }
 
     fn push_frame(&mut self, reg_count: usize, func_ptr: usize) {
-        let start = self.reg_arena.len();
-        self.reg_arena.resize(start + reg_count, RuntimeValue::Null);
+        let start = self.reg_top;
+        self.reg_top = self.reg_top.saturating_add(reg_count);
+        if self.reg_top > self.reg_arena.len() {
+            self.reg_arena.resize(self.reg_top, RuntimeValue::Null);
+        }
         if let Some(mut frame) = self.frame_pool.pop() {
             frame.reg_start = start;
             frame.reg_count = reg_count;
@@ -482,13 +542,13 @@ impl VM {
     fn pop_frame(&mut self) {
         if self.frames.len() <= 1 {
             if let Some(frame) = self.frames.pop() {
-                self.reg_arena.truncate(frame.reg_start);
+                self.reg_top = frame.reg_start;
                 self.frame_pool.push(frame);
             }
             return;
         }
         if let Some(frame) = self.frames.pop() {
-            self.reg_arena.truncate(frame.reg_start);
+            self.reg_top = frame.reg_start;
             self.frame_pool.push(frame);
         }
     }
@@ -549,6 +609,21 @@ impl VM {
             }
         }
         &NULL_RUNTIME_VALUE
+    }
+
+    #[inline(always)]
+    pub(crate) fn get_reg_value_in_frame_mut(
+        &mut self,
+        frame_idx: usize,
+        reg: Reg,
+    ) -> Option<&mut RuntimeValue> {
+        let frame = self.frames.get(frame_idx)?;
+        let idx = reg as usize;
+        if idx >= frame.reg_count {
+            return None;
+        }
+        let pos = frame.reg_start + idx;
+        self.reg_arena.get_mut(pos)
     }
 
     #[inline(always)]
@@ -633,6 +708,9 @@ impl VM {
             let new_len = idx + 1;
             if start + new_len > self.reg_arena.len() {
                 self.reg_arena.resize(start + new_len, RuntimeValue::Null);
+            }
+            if start + new_len > self.reg_top {
+                self.reg_top = start + new_len;
             }
             reg_count = new_len;
             let frame = self.current_frame_mut();

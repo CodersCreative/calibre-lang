@@ -3,7 +3,7 @@ extern "c" const c_strlen = fn(str) -> @usize from "libc" as "strlen";
 extern "c" const c_fdopen = fn(@int, str) -> ptr:<@u8> from "libc" as "fdopen";
 extern "c" const c_fgets = fn(ptr:<@u8>, @int, ptr:<@u8>) -> str from "libc" as "fgets";
 extern "c" const c_malloc = fn(@usize) -> ptr:<@u8> from "libc" as "malloc";
-extern "c" const c_free = fn(ptr:<@u8>) -> null from "libc" as "free";
+extern "c" const c_free = fn(ptr:<@u8>) from "libc" as "free";
 
 const write_fd = fn (fd : int, msg : dyn) => {
 	let txt = "" & msg;
@@ -15,7 +15,7 @@ const out = fn (msg : dyn) => console_output(1, msg);
 
 const stderr = fn (msg : dyn) => console_output(2, msg);
 
-const clear = fn () => {
+const clear = fn => {
 	out("x1b[2Jx1b[1;1H");
 	null;
 };
@@ -24,7 +24,7 @@ const input = fn (prompt : dyn) -> str => {
 	out(prompt);
 	let handle = c_fdopen(0, "r");
 	let size = 4096;
-	let buf = c_malloc(try size as usize => 0usize);
+	let buf = c_malloc(try size as uint => 0u);
 	let line = c_fgets(buf, size, handle);
 	c_free(buf);
 	trim(line);

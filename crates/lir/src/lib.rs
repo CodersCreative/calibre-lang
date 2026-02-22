@@ -4,7 +4,7 @@ use calibre_mir::{
 };
 use calibre_parser::Span;
 use calibre_parser::ast::{
-    ObjectMap, ParserDataType, ParserInnerType, PotentialFfiDataType,
+    AsFailureMode, ObjectMap, ParserDataType, ParserInnerType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
@@ -190,7 +190,7 @@ pub enum LirNodeType {
         variant: u32,
         payload: Option<Box<LirNodeType>>,
     },
-    As(Box<LirNodeType>, ParserDataType),
+    As(Box<LirNodeType>, ParserDataType, AsFailureMode),
     Assign {
         dest: LirLValue,
         value: Box<LirNodeType>,
@@ -203,8 +203,8 @@ pub enum LirNodeType {
         abi: Box<str>,
         library: Box<str>,
         symbol: Box<str>,
-        parameters: Vec<PotentialFfiDataType>,
-        return_type: PotentialFfiDataType,
+        parameters: Vec<ParserDataType>,
+        return_type: ParserDataType,
     },
 }
 
@@ -247,7 +247,14 @@ impl Display for LirNodeType {
                     txt
                 }
                 Self::Literal(x) => x.to_string(),
-                Self::As(node, data_type) => format!("{} as {}", node, data_type),
+                Self::As(node, data_type, failure_mode) => {
+                    let suffix = match failure_mode {
+                        AsFailureMode::Panic => "!",
+                        AsFailureMode::Option => "?",
+                        AsFailureMode::Result => "",
+                    };
+                    format!("{} as{} {}", node, suffix, data_type)
+                }
                 Self::Declare { dest, value } => format!("let {} = {}", dest, value),
                 Self::Assign { dest, value } => format!("{} = {}", dest, value),
                 Self::ExternFunction {
@@ -1142,9 +1149,11 @@ impl<'a> LirEnvironment<'a> {
                     args: l_args,
                 }
             }
-            MiddleNodeType::AsExpression { value, data_type } => {
-                LirNodeType::As(Box::new(self.lower_node(*value)), data_type)
-            }
+            MiddleNodeType::AsExpression {
+                value,
+                data_type,
+                failure_mode,
+            } => LirNodeType::As(Box::new(self.lower_node(*value)), data_type, failure_mode),
             MiddleNodeType::DebugExpression { value, .. } => self.lower_node(*value),
             MiddleNodeType::NegExpression { value } => {
                 let val = self.lower_node(*value);

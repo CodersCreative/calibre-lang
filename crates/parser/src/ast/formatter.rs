@@ -1,10 +1,10 @@
 use crate::{
     Parser, Span,
     ast::{
-        CallArg, DestructurePattern, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node,
-        NodeType, ObjectType, Overload, ParserDataType, ParserInnerType, PipeSegment,
-        PotentialDollarIdentifier, PotentialFfiDataType, PotentialNewType, SelectArmKind,
-        TypeDefType, VarType,
+        CallArg, DestructurePattern, GenericTypes, IfComparisonType, LoopType, MatchArmType,
+        MatchStructFieldPattern, MatchTupleItem, Node, NodeType, ObjectType, Overload,
+        ParserDataType, ParserInnerType, PipeSegment, PotentialDollarIdentifier, PotentialNewType,
+        SelectArmKind, TypeDefType, VarType,
     },
 };
 use rustc_hash::FxHashMap;
@@ -503,6 +503,8 @@ impl Formatter {
                 } else {
                     if values.len() == 1 && &values[0].to_string() == "*" {
                         txt.push_str("*");
+                    } else if values.len() == 1 {
+                        txt.push_str(&values[0].to_string());
                     } else if !values.is_empty() {
                         txt.push_str("(");
 
@@ -546,12 +548,20 @@ impl Formatter {
                 comparison,
                 then,
                 otherwise,
-            } => format!(
-                "({}) ? {} : {}",
-                self.format(&*comparison),
-                self.format(&*then),
-                self.format(&*otherwise)
-            ),
+            } => {
+                let cmp = self.format(&*comparison);
+                let cmp = if cmp.starts_with('(') && cmp.ends_with(')') {
+                    cmp
+                } else {
+                    format!("({cmp})")
+                };
+                format!(
+                    "{} ? {} : {}",
+                    cmp,
+                    self.format(&*then),
+                    self.format(&*otherwise)
+                )
+            }
             NodeType::BooleanExpression {
                 left,
                 right,
@@ -699,6 +709,12 @@ impl Formatter {
             }
             NodeType::NegExpression { value } => format!("-{}", self.format(&*value)),
             NodeType::NotExpression { value } => format!("!{}", self.format(&*value)),
+            NodeType::TestDeclaration { identifier, body } => {
+                format!("test {} {}", identifier, self.format(body))
+            }
+            NodeType::BenchDeclaration { identifier, body } => {
+                format!("bench {} {}", identifier, self.format(body))
+            }
             NodeType::Try { value, catch } => {
                 let mut txt = format!("try {}", self.format(&*value));
                 if let Some(catch) = catch {
@@ -761,10 +777,19 @@ impl Formatter {
                 let multi = format!("{} =\n{}", txt, self.fmt_txt_with_tab(&rhs, 1, true));
                 self.wrap_if_wide(single, &multi)
             }
-            NodeType::AsExpression { value, data_type } => {
+            NodeType::AsExpression {
+                value,
+                data_type,
+                failure_mode,
+            } => {
                 format!(
-                    "{} as {}",
+                    "{} as{} {}",
                     self.format(value),
+                    match failure_mode {
+                        crate::ast::AsFailureMode::Panic => "!",
+                        crate::ast::AsFailureMode::Option => "?",
+                        crate::ast::AsFailureMode::Result => "",
+                    },
                     self.fmt_potential_new_type(data_type)
                 )
             }
@@ -933,90 +958,92 @@ impl Formatter {
                     txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
                 }
 
-                txt.push_str(" (");
+                if !header.parameters.is_empty() {
+                    txt.push_str(" (");
 
-                let mut adjusted_params = header
-                    .parameters
-                    .first()
-                    .map(|x| vec![vec![x]])
-                    .unwrap_or(Vec::new());
+                    let mut adjusted_params = header
+                        .parameters
+                        .first()
+                        .map(|x| vec![vec![x]])
+                        .unwrap_or(Vec::new());
 
-                for param in header.parameters.iter().skip(1) {
-                    let should_group = adjusted_params
-                        .last()
-                        .and_then(|v| v.first())
-                        .map(|last| last.1 == param.1)
-                        .unwrap_or(false);
-                    if should_group {
-                        if let Some(group) = adjusted_params.last_mut() {
-                            group.push(param);
+                    for param in header.parameters.iter().skip(1) {
+                        let should_group = adjusted_params
+                            .last()
+                            .and_then(|v| v.first())
+                            .map(|last| last.1 == param.1)
+                            .unwrap_or(false);
+                        if should_group {
+                            if let Some(group) = adjusted_params.last_mut() {
+                                group.push(param);
+                            } else {
+                                adjusted_params.push(vec![param]);
+                            }
                         } else {
                             adjusted_params.push(vec![param]);
                         }
+                    }
+
+                    let mut destructure_map = FxHashMap::default();
+                    for (idx, pattern) in header.param_destructures.iter() {
+                        destructure_map.insert(*idx, pattern);
+                    }
+
+                    let mut param_txt = Vec::new();
+                    let mut param_txt_expanded = Vec::new();
+                    let mut param_index = 0usize;
+                    for params in &adjusted_params {
+                        let mut chunk = String::new();
+                        for id in params {
+                            let mut expanded_chunk = String::new();
+                            if let Some(pattern) = destructure_map.get(&param_index) {
+                                let pattern_txt = self.fmt_destructure_pattern(pattern, true);
+                                chunk.push_str(&format!("{} ", pattern_txt));
+                                expanded_chunk.push_str(&pattern_txt);
+                            } else {
+                                chunk.push_str(&format!("{} ", id.0));
+                                expanded_chunk.push_str(&id.0.to_string());
+                            }
+                            if !id.1.is_auto() {
+                                expanded_chunk
+                                    .push_str(&format!(": {}", self.fmt_potential_new_type(&id.1)));
+                            }
+                            param_txt_expanded.push(expanded_chunk);
+                            param_index += 1;
+                        }
+
+                        if let Some(last) = params.last()
+                            && !last.1.is_auto()
+                        {
+                            chunk.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
+                        }
+                        param_txt.push(chunk.trim_end().to_string());
+                    }
+
+                    let single = format!("{}{})", txt, param_txt.join(", "));
+                    let multi = format!(
+                        "{}\n{}\n{})",
+                        txt,
+                        self.fmt_txt_with_tab(&param_txt.join(",\n"), 1, true),
+                        self.tab.get_tab_from_amt(0)
+                    );
+                    let multi_expanded = format!(
+                        "{}\n{}\n{})",
+                        txt,
+                        self.fmt_txt_with_tab(&param_txt_expanded.join(",\n"), 1, true),
+                        self.tab.get_tab_from_amt(0)
+                    );
+                    let force_third_layout = self.has_comment_between_spans(&node.span, &body.span);
+                    txt = if force_third_layout {
+                        multi_expanded
+                    } else if !self.should_wrap_width_only(&single) {
+                        single
+                    } else if !self.should_wrap_width_only(&multi) {
+                        multi
                     } else {
-                        adjusted_params.push(vec![param]);
-                    }
+                        multi_expanded
+                    };
                 }
-
-                let mut destructure_map = FxHashMap::default();
-                for (idx, pattern) in header.param_destructures.iter() {
-                    destructure_map.insert(*idx, pattern);
-                }
-
-                let mut param_txt = Vec::new();
-                let mut param_txt_expanded = Vec::new();
-                let mut param_index = 0usize;
-                for params in &adjusted_params {
-                    let mut chunk = String::new();
-                    for id in params {
-                        let mut expanded_chunk = String::new();
-                        if let Some(pattern) = destructure_map.get(&param_index) {
-                            let pattern_txt = self.fmt_destructure_pattern(pattern, true);
-                            chunk.push_str(&format!("{} ", pattern_txt));
-                            expanded_chunk.push_str(&pattern_txt);
-                        } else {
-                            chunk.push_str(&format!("{} ", id.0));
-                            expanded_chunk.push_str(&id.0.to_string());
-                        }
-                        if !id.1.is_auto() {
-                            expanded_chunk
-                                .push_str(&format!(": {}", self.fmt_potential_new_type(&id.1)));
-                        }
-                        param_txt_expanded.push(expanded_chunk);
-                        param_index += 1;
-                    }
-
-                    if let Some(last) = params.last()
-                        && !last.1.is_auto()
-                    {
-                        chunk.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
-                    }
-                    param_txt.push(chunk.trim_end().to_string());
-                }
-
-                let single = format!("{}{})", txt, param_txt.join(", "));
-                let multi = format!(
-                    "{}\n{}\n{})",
-                    txt,
-                    self.fmt_txt_with_tab(&param_txt.join(",\n"), 1, true),
-                    self.tab.get_tab_from_amt(0)
-                );
-                let multi_expanded = format!(
-                    "{}\n{}\n{})",
-                    txt,
-                    self.fmt_txt_with_tab(&param_txt_expanded.join(",\n"), 1, true),
-                    self.tab.get_tab_from_amt(0)
-                );
-                let force_third_layout = self.has_comment_between_spans(&node.span, &body.span);
-                txt = if force_third_layout {
-                    multi_expanded
-                } else if !self.should_wrap_width_only(&single) {
-                    single
-                } else if !self.should_wrap_width_only(&multi) {
-                    multi
-                } else {
-                    multi_expanded
-                };
 
                 if !header.return_type.is_auto() {
                     txt.push_str(&format!(
@@ -1047,7 +1074,7 @@ impl Formatter {
                     self.tab.get_tab_from_amt(0)
                 );
                 txt = self.wrap_if_wide(single, &multi);
-                if *return_type != PotentialFfiDataType::Normal(ParserInnerType::Null.into()) {
+                if return_type.data_type != ParserInnerType::Null {
                     txt.push_str(&format!(" -> {}", self.fmt_ffi_type(return_type)));
                 }
                 txt.push_str(&format!(" from \"{}\"", library));
@@ -1316,51 +1343,48 @@ impl Formatter {
                     txt.push_str("]");
                 }
 
-                let mut empty_body = false;
-
-                if let Some(body) = &body {
-                    if !body.is_empty() {
-                        let create_new_scope = create_new_scope.as_ref().copied().unwrap_or(false);
-                        if body.len() > 1 || create_new_scope {
-                            txt.push_str(" {");
-                            if !create_new_scope {
-                                txt.push_str("{");
-                            }
-                            txt.push_str("\n");
+                if let Some(body) = &body
+                    && !body.is_empty()
+                {
+                    let create_new_scope = create_new_scope.as_ref().copied().unwrap_or(false);
+                    if create_new_scope {
+                        txt.push_str(" {\n");
+                        if let Some(first_stmt) = body.first()
+                            && let Some(comment) =
+                                self.take_leading_scope_comments(&node.span, &first_stmt.span)
+                        {
+                            txt.push_str(&format!("{};\n", comment));
                         }
-
-                        if body.len() > 1 || create_new_scope {
-                            let lines = self.get_scope_lines(&body);
-
-                            for line in lines {
-                                txt.push_str(&line);
-                            }
-
-                            txt = self.fmt_txt_with_tab(&txt, 1, false).trim_end().to_string();
-                        } else {
-                            txt.push_str(&format!(" {}", self.format(&body[0])));
+                        let lines = self.get_scope_lines(&body);
+                        for line in lines {
+                            txt.push_str(&line);
                         }
-
-                        if body.len() > 1 || create_new_scope {
-                            txt.push_str("\n");
-                            if !create_new_scope {
-                                txt.push_str("}");
-                            }
-                            txt.push_str("}");
-                        }
+                        txt = self.fmt_txt_with_tab(&txt, 1, false).trim_end().to_string();
+                        txt.push_str("\n");
+                        txt.push_str("}");
+                    } else if body.len() == 1 {
+                        txt.push_str(&format!(" {}", self.format(&body[0])));
                     } else {
-                        empty_body = true;
+                        txt.push_str(" {{\n");
+                        if let Some(first_stmt) = body.first()
+                            && let Some(comment) =
+                                self.take_leading_scope_comments(&node.span, &first_stmt.span)
+                        {
+                            txt.push_str(&format!("{};\n", comment));
+                        }
+                        let lines = self.get_scope_lines(&body);
+                        for line in lines {
+                            txt.push_str(&line);
+                        }
+                        txt = self.fmt_txt_with_tab(&txt, 1, false).trim_end().to_string();
+                        txt.push_str("\n}}");
                     }
-                } else {
-                    empty_body = true;
-                }
-
-                if empty_body && let Some(create_new_scope) = create_new_scope {
-                    if *create_new_scope {
-                        txt.push_str(" {}");
-                    } else {
-                        txt.push_str(" {{}}");
-                    }
+                } else if let Some(create_new_scope) = create_new_scope
+                    && *create_new_scope
+                {
+                    txt.push_str(" {}");
+                } else if create_new_scope.is_some() {
+                    txt.push_str(" {{}}");
                 }
 
                 txt
@@ -1394,35 +1418,37 @@ impl Formatter {
             }
 
             NodeType::PipeExpression(values) => {
-                let mut txt = self.format(values[0].get_node());
+                let mut single = self.format(values[0].get_node());
+                let mut multi_lines = vec![self.format(values[0].get_node())];
 
                 for value in values.iter().skip(1) {
                     match value {
-                        PipeSegment::Unnamed(x) => txt.push_str(&format!(" |> {}", self.format(x))),
+                        PipeSegment::Unnamed(x) => {
+                            let formatted = self.format(x);
+                            single.push_str(&format!(" |> {}", formatted));
+                            multi_lines.push(format!("|> {}", formatted));
+                        }
                         PipeSegment::Named { identifier, node } => {
-                            txt.push_str(&format!(" |: {} > {}", identifier, self.format(node)))
+                            let formatted = self.format(node);
+                            single.push_str(&format!(" |: {} > {}", identifier, formatted));
+                            multi_lines.push(format!("|: {} > {}", identifier, formatted));
                         }
                     }
                 }
 
-                if self.should_wrap(&txt) {
-                    let mut parts = Vec::new();
-                    for value in values.iter().skip(1) {
-                        match value {
-                            PipeSegment::Unnamed(x) => parts.push(format!("|> {}", self.format(x))),
-                            PipeSegment::Named { identifier, node } => {
-                                parts.push(format!("|: {} > {}", identifier, self.format(node)))
-                            }
-                        }
-                    }
-                    format!(
-                        "{}\n{}",
-                        self.format(values[0].get_node()),
-                        self.fmt_txt_with_tab(&parts.join("\n"), 1, true)
-                    )
+                let head = multi_lines.first().cloned().unwrap_or_default();
+                let tail = multi_lines
+                    .iter()
+                    .skip(1)
+                    .map(|line| self.fmt_txt_with_tab(line, 1, true))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let multi = if tail.is_empty() {
+                    format!("({})", head)
                 } else {
-                    txt
-                }
+                    format!("({}\n{})", head, tail)
+                };
+                self.wrap_if_wide(single, &multi)
             }
             NodeType::ParenExpression { value } => format!("({})", self.format(&*value)),
             NodeType::TypeDeclaration {
@@ -1527,21 +1553,16 @@ impl Formatter {
                         var_type: VarType::Immutable,
                         name: Some(name),
                         destructure: None,
+                        pattern: None,
                         ..
                     } => txt.push_str(&format!(" : {}", name)),
                     MatchArmType::Enum {
                         var_type,
                         name: Some(name),
                         destructure: None,
+                        pattern: None,
                         ..
                     } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
-                    MatchArmType::Enum {
-                        destructure: Some(pattern),
-                        ..
-                    } => txt.push_str(&format!(
-                        " : {}",
-                        self.fmt_destructure_pattern(pattern, false)
-                    )),
                     _ => {}
                 }
 
@@ -1689,7 +1710,7 @@ impl Formatter {
     fn fmt_comments(mut comments: Vec<Comment>) -> String {
         let comment = comments.remove(0);
 
-        if comments.len() > 1 {
+        if !comments.is_empty() {
             let mut txt = format!("/* {}\n", comment.value.trim());
 
             while comments.len() > 0 {
@@ -1736,6 +1757,31 @@ impl Formatter {
             }
         }
         None
+    }
+
+    fn take_leading_scope_comments(
+        &mut self,
+        scope_span: &Span,
+        first_body_span: &Span,
+    ) -> Option<String> {
+        let mut comments = Vec::new();
+        while let Some(first) = self.comments.first() {
+            let within_scope = first.span.from >= scope_span.from && first.span.to <= scope_span.to;
+            let before_first = first.span.to.line < first_body_span.from.line
+                || (first.span.to.line == first_body_span.from.line
+                    && first.span.to.col < first_body_span.from.col);
+            if within_scope && before_first {
+                comments.push(self.comments.remove(0));
+            } else {
+                break;
+            }
+        }
+
+        if comments.is_empty() {
+            None
+        } else {
+            Some(Self::fmt_comments(comments))
+        }
     }
 
     fn fmt_new_type_obj(&mut self, obj: &ObjectType<PotentialNewType>) -> String {
@@ -1997,6 +2043,7 @@ impl Formatter {
             ParserInnerType::NativeFunction(typ) => {
                 format!("native -> {}", self.fmt_parser_data_type(typ))
             }
+            ParserInnerType::FfiType(typ) => typ.to_string(),
             ParserInnerType::Ptr(typ) => format!("ptr:<{}>", self.fmt_parser_data_type(typ)),
             ParserInnerType::List(typ) => format!("list:<{}>", self.fmt_parser_data_type(typ)),
             ParserInnerType::Tuple(types) => {
@@ -2127,9 +2174,22 @@ impl Formatter {
         match arm {
             MatchArmType::Enum {
                 value,
+                pattern: Some(pattern),
+                ..
+            } => {
+                let payload = self.fmt_match_arm(pattern, false);
+                let payload = if matches!(pattern.as_ref(), MatchArmType::TuplePattern(_)) {
+                    format!("({})", payload)
+                } else {
+                    payload
+                };
+                format!(".{} : {}", value, payload)
+            }
+            MatchArmType::Enum {
+                value,
                 destructure: Some(pattern),
                 ..
-            } if write_name => {
+            } => {
                 format!(
                     ".{} : {}",
                     value,
@@ -2150,6 +2210,80 @@ impl Formatter {
             } if write_name => format!(".{} : {} {}", value, var_type.print_only_ends(), name),
             MatchArmType::Let { var_type, name } => format!("{} {}", var_type, name),
             MatchArmType::Enum { value, .. } => format!(".{}", value),
+            MatchArmType::TuplePattern(items) => {
+                let mut out = Vec::new();
+                for item in items {
+                    out.push(match item {
+                        MatchTupleItem::Rest(_) => "..".to_string(),
+                        MatchTupleItem::Wildcard(_) => "_".to_string(),
+                        MatchTupleItem::Value(node) => self.format(node),
+                        MatchTupleItem::Enum {
+                            value,
+                            var_type,
+                            name,
+                            destructure,
+                            pattern,
+                        } => {
+                            if let Some(pattern) = pattern {
+                                let payload = self.fmt_match_arm(pattern, false);
+                                let payload =
+                                    if matches!(pattern.as_ref(), MatchArmType::TuplePattern(_)) {
+                                        format!("({})", payload)
+                                    } else {
+                                        payload
+                                    };
+                                format!(".{} : {}", value, payload)
+                            } else if let Some(pattern) = destructure {
+                                format!(
+                                    ".{} : {}",
+                                    value,
+                                    self.fmt_destructure_pattern(pattern, false)
+                                )
+                            } else if let Some(name) = name {
+                                if *var_type == VarType::Immutable {
+                                    format!(".{} : {}", value, name)
+                                } else {
+                                    format!(".{} : {} {}", value, var_type.print_only_ends(), name)
+                                }
+                            } else {
+                                format!(".{}", value)
+                            }
+                        }
+                        MatchTupleItem::Binding { var_type, name } => {
+                            if *var_type == VarType::Immutable {
+                                name.to_string()
+                            } else {
+                                format!("{} {}", var_type.print_only_ends(), name)
+                            }
+                        }
+                    });
+                }
+                out.join(", ")
+            }
+            MatchArmType::StructPattern(fields) => {
+                let mut out = Vec::new();
+                for field in fields {
+                    out.push(match field {
+                        MatchStructFieldPattern::Value { field, value } => {
+                            format!("{} : {}", field, self.format(value))
+                        }
+                        MatchStructFieldPattern::Binding {
+                            field,
+                            var_type,
+                            name,
+                        } => {
+                            if field == &name.to_string() && *var_type == VarType::Immutable {
+                                field.to_string()
+                            } else if *var_type == VarType::Immutable {
+                                format!("{} : {}", field, name)
+                            } else {
+                                format!("{} : {} {}", field, var_type.print_only_ends(), name)
+                            }
+                        }
+                    });
+                }
+                format!("{{{}}}", out.join(", "))
+            }
             MatchArmType::Value(x) => self.format(x),
             MatchArmType::Wildcard(_) => String::from("_"),
         }
@@ -2269,11 +2403,8 @@ impl Formatter {
         out
     }
 
-    fn fmt_ffi_type(&mut self, data_type: &PotentialFfiDataType) -> String {
-        match data_type {
-            PotentialFfiDataType::Ffi(ffi) => ffi.to_string(),
-            PotentialFfiDataType::Normal(typ) => self.fmt_ffi_normal_type(typ),
-        }
+    fn fmt_ffi_type(&mut self, data_type: &ParserDataType) -> String {
+        self.fmt_ffi_normal_type(data_type)
     }
 
     fn fmt_ffi_normal_type(&mut self, data_type: &ParserDataType) -> String {
@@ -2323,6 +2454,45 @@ mod tests {
         let out = formatter.start_format(src, None).expect("format");
         assert!(out.contains("let tpl = (1, 2);"), "{out}");
         assert!(out.contains("tpl = (3, 4);"), "{out}");
+        assert!(parse_has_no_errors(&out), "{out}");
+    }
+
+    #[test]
+    fn preserves_stacked_comments_before_statement() {
+        let src = "// one\n// two\nlet x = 1;";
+        let mut formatter = Formatter::default();
+        let out = formatter.start_format(src, None).expect("format");
+        assert!(out.contains("one"), "{out}");
+        assert!(out.contains("two"), "{out}");
+        assert!(out.contains("let x = 1;"), "{out}");
+        assert!(parse_has_no_errors(&out), "{out}");
+    }
+
+    #[test]
+    fn pow_expression_is_not_rewritten_as_deref() {
+        let src = "const bmi = fn (mass height : float) -> float => mass / height ** 2;";
+        let mut formatter = Formatter::default();
+        let out = formatter.start_format(src, None).expect("format");
+        assert!(out.contains("height ** 2"), "{out}");
+        assert!(!out.contains("* *2"), "{out}");
+        assert!(parse_has_no_errors(&out), "{out}");
+    }
+
+    #[test]
+    fn function_param_destructure_roundtrips() {
+        let src = "const sum_pair = fn ((a, b)) => a + b;";
+        let mut formatter = Formatter::default();
+        let out = formatter.start_format(src, None).expect("format");
+        assert!(out.contains("fn ((a, b))"), "{out}");
+        assert!(parse_has_no_errors(&out), "{out}");
+    }
+
+    #[test]
+    fn result_type_preserves_err_ok_order() {
+        let src = "const f = fn () -> str!int => 1;";
+        let mut formatter = Formatter::default();
+        let out = formatter.start_format(src, None).expect("format");
+        assert!(out.contains("-> str!int"), "{out}");
         assert!(parse_has_no_errors(&out), "{out}");
     }
 }

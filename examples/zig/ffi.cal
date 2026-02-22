@@ -4,7 +4,7 @@ extern "zig" const zig_sum_bytes = fn(ptr:<@u8>, @usize) -> @i64 from "./libzigf
 
 type Point = struct { x y : @i64 };
 
-const main = fn () => {
+const main = fn => {
 	let value = zig_add(40, 2);
 	print(value);
 	
@@ -13,6 +13,7 @@ const main = fn () => {
 	print(dot);
 	
 	let nums = [1, 2, 3, 4, 5, 6];
+	
 	let total = zig_sum_bytes(nums, len(nums));
 	print(total);
 };

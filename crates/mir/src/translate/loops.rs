@@ -2,8 +2,8 @@ use calibre_parser::{
     Span,
     ast::{
         CallArg, IfComparisonType, LoopType, MatchArmType, Node, NodeType, ParserDataType,
-        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialNewType, VarType,
-        binary::BinaryOperator,
+        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialNewType, RefMutability,
+        VarType, binary::BinaryOperator,
     },
 };
 
@@ -14,6 +14,198 @@ use crate::{
 };
 
 impl MiddleEnvironment {
+    fn rewrite_mut_iter_alias_deref(
+        &self,
+        node: Node,
+        alias: &str,
+        iter_id: &PotentialDollarIdentifier,
+        idx_id: &PotentialDollarIdentifier,
+    ) -> Node {
+        let span = node.span;
+        let member_at_index = || {
+            Node::new(
+                self.current_span(),
+                NodeType::MemberExpression {
+                    path: vec![
+                        (
+                            Node::new(
+                                self.current_span(),
+                                NodeType::Identifier(iter_id.clone().into()),
+                            ),
+                            false,
+                        ),
+                        (
+                            Node::new(
+                                self.current_span(),
+                                NodeType::Identifier(idx_id.clone().into()),
+                            ),
+                            true,
+                        ),
+                    ],
+                },
+            )
+        };
+
+        match node.node_type {
+            NodeType::DerefStatement { value } => match value.node_type {
+                NodeType::Identifier(id) if id.get_ident().to_string() == alias => {
+                    member_at_index()
+                }
+                other => Node::new(
+                    span,
+                    NodeType::DerefStatement {
+                        value: Box::new(self.rewrite_mut_iter_alias_deref(
+                            Node::new(span, other),
+                            alias,
+                            iter_id,
+                            idx_id,
+                        )),
+                    },
+                ),
+            },
+            NodeType::AssignmentExpression { identifier, value } => Node::new(
+                span,
+                NodeType::AssignmentExpression {
+                    identifier: Box::new(self.rewrite_mut_iter_alias_deref(
+                        *identifier,
+                        alias,
+                        iter_id,
+                        idx_id,
+                    )),
+                    value: Box::new(
+                        self.rewrite_mut_iter_alias_deref(*value, alias, iter_id, idx_id),
+                    ),
+                },
+            ),
+            NodeType::BinaryExpression {
+                left,
+                right,
+                operator,
+            } => Node::new(
+                span,
+                NodeType::BinaryExpression {
+                    left: Box::new(
+                        self.rewrite_mut_iter_alias_deref(*left, alias, iter_id, idx_id),
+                    ),
+                    right: Box::new(
+                        self.rewrite_mut_iter_alias_deref(*right, alias, iter_id, idx_id),
+                    ),
+                    operator,
+                },
+            ),
+            NodeType::BooleanExpression {
+                left,
+                right,
+                operator,
+            } => Node::new(
+                span,
+                NodeType::BooleanExpression {
+                    left: Box::new(
+                        self.rewrite_mut_iter_alias_deref(*left, alias, iter_id, idx_id),
+                    ),
+                    right: Box::new(
+                        self.rewrite_mut_iter_alias_deref(*right, alias, iter_id, idx_id),
+                    ),
+                    operator,
+                },
+            ),
+            NodeType::ComparisonExpression {
+                left,
+                right,
+                operator,
+            } => Node::new(
+                span,
+                NodeType::ComparisonExpression {
+                    left: Box::new(
+                        self.rewrite_mut_iter_alias_deref(*left, alias, iter_id, idx_id),
+                    ),
+                    right: Box::new(
+                        self.rewrite_mut_iter_alias_deref(*right, alias, iter_id, idx_id),
+                    ),
+                    operator,
+                },
+            ),
+            NodeType::CallExpression {
+                string_fn,
+                caller,
+                generic_types,
+                args,
+                reverse_args,
+            } => Node::new(
+                span,
+                NodeType::CallExpression {
+                    string_fn,
+                    caller: Box::new(
+                        self.rewrite_mut_iter_alias_deref(*caller, alias, iter_id, idx_id),
+                    ),
+                    generic_types,
+                    args: args
+                        .into_iter()
+                        .map(|a| match a {
+                            CallArg::Value(v) => CallArg::Value(
+                                self.rewrite_mut_iter_alias_deref(v, alias, iter_id, idx_id),
+                            ),
+                            CallArg::Named(n, v) => CallArg::Named(
+                                n,
+                                self.rewrite_mut_iter_alias_deref(v, alias, iter_id, idx_id),
+                            ),
+                        })
+                        .collect(),
+                    reverse_args: reverse_args
+                        .into_iter()
+                        .map(|n| self.rewrite_mut_iter_alias_deref(n, alias, iter_id, idx_id))
+                        .collect(),
+                },
+            ),
+            NodeType::IfStatement {
+                comparison,
+                then,
+                otherwise,
+            } => Node::new(
+                span,
+                NodeType::IfStatement {
+                    comparison: Box::new(match *comparison {
+                        IfComparisonType::If(n) => IfComparisonType::If(
+                            self.rewrite_mut_iter_alias_deref(n, alias, iter_id, idx_id),
+                        ),
+                        IfComparisonType::IfLet { value, pattern } => IfComparisonType::IfLet {
+                            value: self.rewrite_mut_iter_alias_deref(value, alias, iter_id, idx_id),
+                            pattern,
+                        },
+                    }),
+                    then: Box::new(
+                        self.rewrite_mut_iter_alias_deref(*then, alias, iter_id, idx_id),
+                    ),
+                    otherwise: otherwise.map(|n| {
+                        Box::new(self.rewrite_mut_iter_alias_deref(*n, alias, iter_id, idx_id))
+                    }),
+                },
+            ),
+            NodeType::ScopeDeclaration {
+                body,
+                named,
+                is_temp,
+                create_new_scope,
+                define,
+            } => Node::new(
+                span,
+                NodeType::ScopeDeclaration {
+                    body: body.map(|items| {
+                        items
+                            .into_iter()
+                            .map(|n| self.rewrite_mut_iter_alias_deref(n, alias, iter_id, idx_id))
+                            .collect()
+                    }),
+                    named,
+                    is_temp,
+                    create_new_scope,
+                    define,
+                },
+            ),
+            other => Node::new(span, other),
+        }
+    }
+
     fn wrap_loop_body(&mut self, target_body: Node, injection: Node, at_start: bool) -> Node {
         let mut instructions = match target_body.node_type {
             NodeType::ScopeDeclaration { body: Some(b), .. } => b,
@@ -382,6 +574,7 @@ impl MiddleEnvironment {
                                                 var_type: VarType::Immutable,
                                                 name: Some(item_ident.clone()),
                                                 destructure: None,
+                                                pattern: None,
                                             },
                                             Vec::new(),
                                             Box::new(Node::new(
@@ -880,6 +1073,7 @@ impl MiddleEnvironment {
                                                 var_type: VarType::Immutable,
                                                 name: Some(item_ident.clone()),
                                                 destructure: None,
+                                                pattern: None,
                                             },
                                             Vec::new(),
                                             Box::new(Node::new(
@@ -1120,8 +1314,8 @@ impl MiddleEnvironment {
         }
 
         let (result_raw, broke_raw, result_ident, broke_ident) = if else_body.is_some() {
-            let result_raw = format!("__loop_result_{}_{}", span.from.line, span.from.col);
-            let broke_raw = format!("__loop_broke_{}_{}", span.from.line, span.from.col);
+            let result_raw = self.temp_name_at("__loop_result", span);
+            let broke_raw = self.temp_name_at("__loop_broke", span);
             let result_mapped = crate::environment::get_disamubiguous_name(
                 &scope,
                 Some(result_raw.trim()),
@@ -1254,14 +1448,80 @@ impl MiddleEnvironment {
             }
 
             LoopType::For(name, range) => {
-                let range_dt = self.resolve_type_from_node(&scope, &range);
-                let idx_id_name = format!(
-                    "__anon_loop_index_{}_{}",
-                    self.current_span().from.line,
-                    self.current_span().from.col
+                let loop_alias_name = name.to_string();
+                let iter_by_mut_ref = matches!(
+                    range.node_type,
+                    NodeType::RefStatement {
+                        mutability: RefMutability::MutRef,
+                        ..
+                    }
                 );
+                let range_dt = self.resolve_type_from_node(&scope, &range);
+                let explicit_range = match &range.node_type {
+                    NodeType::RangeDeclaration {
+                        from,
+                        to,
+                        inclusive,
+                    } => Some(((*from.clone()), (*to.clone()), *inclusive)),
+                    _ => None,
+                };
+                let iter_id_name = self.temp_name("__anon_loop_iterable");
+                let iter_id: PotentialDollarIdentifier = ParserText::from(iter_id_name).into();
+                let iter_node = Node::new(
+                    self.current_span(),
+                    NodeType::Identifier(iter_id.clone().into()),
+                );
+                let idx_id_name = self.temp_name("__anon_loop_index");
                 let idx_id: PotentialDollarIdentifier = ParserText::from(idx_id_name).into();
-                let state = Some(Box::new(
+                let is_count_loop = explicit_range.is_some()
+                    || matches!(
+                        range_dt.as_ref().map(|x| &x.data_type),
+                        Some(ParserInnerType::Int) | Some(ParserInnerType::UInt)
+                    );
+                let (iter_value, idx_initial) = if let Some((from, to, inclusive)) = explicit_range
+                {
+                    let end = if inclusive {
+                        Node::new(
+                            self.current_span(),
+                            NodeType::BinaryExpression {
+                                left: Box::new(to),
+                                right: Box::new(Node::new(
+                                    self.current_span(),
+                                    NodeType::IntLiteral(String::from("1")),
+                                )),
+                                operator: BinaryOperator::Add,
+                            },
+                        )
+                    } else {
+                        to
+                    };
+                    (end, from)
+                } else {
+                    (
+                        range.clone(),
+                        Node::new(self.current_span(), NodeType::IntLiteral(String::from("0"))),
+                    )
+                };
+                let mut state_nodes = Vec::new();
+                state_nodes.push(
+                    self.evaluate(
+                        &scope,
+                        Node::new(
+                            self.current_span(),
+                            NodeType::VariableDeclaration {
+                                var_type: VarType::Immutable,
+                                identifier: iter_id.clone(),
+                                value: Box::new(iter_value),
+                                data_type: ParserDataType::new(
+                                    self.current_span(),
+                                    ParserInnerType::Auto(None),
+                                )
+                                .into(),
+                            },
+                        ),
+                    ),
+                );
+                state_nodes.push(
                     self.evaluate(
                         &scope,
                         Node::new(
@@ -1269,21 +1529,7 @@ impl MiddleEnvironment {
                             NodeType::VariableDeclaration {
                                 var_type: VarType::Mutable,
                                 identifier: idx_id.clone(),
-                                value: Box::new(Node::new(
-                                    self.current_span(),
-                                    NodeType::CallExpression {
-                                        string_fn: None,
-                                        caller: Box::new(Node::new(
-                                            self.current_span(),
-                                            NodeType::Identifier(
-                                                ParserText::from("min_or_zero".to_string()).into(),
-                                            ),
-                                        )),
-                                        generic_types: vec![],
-                                        args: vec![CallArg::Value(range.clone())],
-                                        reverse_args: vec![],
-                                    },
-                                )),
+                                value: Box::new(idx_initial),
                                 data_type: ParserDataType::new(
                                     self.current_span(),
                                     ParserInnerType::Int,
@@ -1292,25 +1538,70 @@ impl MiddleEnvironment {
                             },
                         ),
                     ),
-                ));
+                );
+                let state = Some(Box::new(MiddleNode {
+                    node_type: MiddleNodeType::ScopeDeclaration {
+                        body: state_nodes,
+                        create_new_scope: false,
+                        is_temp: true,
+                        scope_id: scope,
+                    },
+                    span: self.current_span(),
+                }));
 
                 let break_node = Node::new(self.current_span(), NodeType::IfStatement {
                             comparison: Box::new(IfComparisonType::If(Node::new(self.current_span(),
                                 NodeType::ComparisonExpression {
                                     left: Box::new(Node::new(self.current_span(), NodeType::Identifier(idx_id.clone().into()))),
-                                    right: Box::new(Node::new(self.current_span(), NodeType::CallExpression {
-                                        string_fn: None,
-                                        caller: Box::new(Node::new(self.current_span(), NodeType::Identifier(ParserText::from("len".to_string()).into()))),
-                                        generic_types: vec![],
-                                        args: vec![CallArg::Value(range.clone())],
-                                        reverse_args: vec![],
-                                    })),
+                                    right: Box::new(if is_count_loop {
+                                        iter_node.clone()
+                                    } else {
+                                        Node::new(self.current_span(), NodeType::CallExpression {
+                                            string_fn: None,
+                                            caller: Box::new(Node::new(self.current_span(), NodeType::Identifier(ParserText::from("raw_len".to_string()).into()))),
+                                            generic_types: vec![],
+                                            args: vec![CallArg::Value(iter_node.clone())],
+                                            reverse_args: vec![],
+                                        })
+                                    }),
                                     operator: calibre_parser::ast::comparison::ComparisonOperator::GreaterEqual,
                                 }
                             ))),
                             then: Box::new(Node::new(self.current_span(), NodeType::Break { label: None, value: None })),
                             otherwise: None,
                         });
+
+                let indexed_value_node = Node::new(
+                    self.current_span(),
+                    NodeType::MemberExpression {
+                        path: vec![
+                            (iter_node.clone(), false),
+                            (
+                                Node::new(
+                                    self.current_span(),
+                                    NodeType::Identifier(idx_id.clone().into()),
+                                ),
+                                true,
+                            ),
+                        ],
+                    },
+                );
+                let loop_item_value = if is_count_loop {
+                    Node::new(
+                        self.current_span(),
+                        NodeType::Identifier(idx_id.clone().into()),
+                    )
+                } else if iter_by_mut_ref {
+                    Node::new(
+                        self.current_span(),
+                        NodeType::RefStatement {
+                            mutability: RefMutability::MutRef,
+                            value: Box::new(indexed_value_node),
+                        },
+                    )
+                } else {
+                    indexed_value_node
+                };
 
                 let var_name_node = Node::new(
                     self.current_span(),
@@ -1321,42 +1612,7 @@ impl MiddleEnvironment {
                             self.current_span(),
                             ParserInnerType::Auto(None),
                         )),
-                        value: match range_dt.map(|x| x.data_type) {
-                            Some(ParserInnerType::List(_)) => Box::new(Node::new(
-                                self.current_span(),
-                                NodeType::MemberExpression {
-                                    path: vec![
-                                        (range.clone(), false),
-                                        (
-                                            Node::new(
-                                                self.current_span(),
-                                                NodeType::Identifier(idx_id.clone().into()),
-                                            ),
-                                            true,
-                                        ),
-                                    ],
-                                },
-                            )),
-                            Some(ParserInnerType::Tuple(_)) => Box::new(Node::new(
-                                self.current_span(),
-                                NodeType::MemberExpression {
-                                    path: vec![
-                                        (range.clone(), false),
-                                        (
-                                            Node::new(
-                                                self.current_span(),
-                                                NodeType::Identifier(idx_id.clone().into()),
-                                            ),
-                                            false,
-                                        ),
-                                    ],
-                                },
-                            )),
-                            _ => Box::new(Node::new(
-                                self.current_span(),
-                                NodeType::Identifier(idx_id.clone().into()),
-                            )),
-                        },
+                        value: Box::new(loop_item_value),
                     },
                 );
 
@@ -1372,7 +1628,7 @@ impl MiddleEnvironment {
                             NodeType::BinaryExpression {
                                 left: Box::new(Node::new(
                                     self.current_span(),
-                                    NodeType::Identifier(idx_id.into()),
+                                    NodeType::Identifier(idx_id.clone().into()),
                                 )),
                                 right: Box::new(Node::new(
                                     self.current_span(),
@@ -1384,6 +1640,11 @@ impl MiddleEnvironment {
                     },
                 );
 
+                let body = if iter_by_mut_ref {
+                    self.rewrite_mut_iter_alias_deref(body, &loop_alias_name, &iter_id, &idx_id)
+                } else {
+                    body
+                };
                 let mut instructions = match body.node_type {
                     NodeType::ScopeDeclaration { body: Some(b), .. } => b,
                     _ => vec![body],

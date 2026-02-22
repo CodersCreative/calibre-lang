@@ -2,7 +2,6 @@ use crate::ast::hm::{self, Subst, Type, TypeGenerator};
 use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::errors::MiddleErr;
 use crate::infer::infer_node_type;
-use calibre_parser::ast::PotentialFfiDataType;
 use calibre_parser::{
     Location, Parser, Span,
     ast::{
@@ -242,6 +241,38 @@ pub fn get_disamubiguous_name(
 }
 
 impl MiddleEnvironment {
+    pub fn scope_ref_or_err(&self, scope: &u64) -> Result<&MiddleScope, MiddleErr> {
+        self.scopes
+            .get(scope)
+            .ok_or_else(|| MiddleErr::Internal(format!("missing scope {scope}")))
+    }
+
+    pub fn scope_mut_or_err(&mut self, scope: &u64) -> Result<&mut MiddleScope, MiddleErr> {
+        self.scopes
+            .get_mut(scope)
+            .ok_or_else(|| MiddleErr::Internal(format!("missing scope {scope}")))
+    }
+
+    pub fn temp_name_at(&self, prefix: &str, span: Span) -> String {
+        format!("{}_{}_{}", prefix, span.from.line, span.from.col)
+    }
+
+    pub fn temp_name(&self, prefix: &str) -> String {
+        self.temp_name_at(prefix, self.current_span())
+    }
+
+    pub fn temp_name_at_index(&self, prefix: &str, span: Span, index: usize) -> String {
+        format!("{}_{}", self.temp_name_at(prefix, span), index)
+    }
+
+    pub fn temp_ident_at(&self, prefix: &str, span: Span) -> PotentialDollarIdentifier {
+        ParserText::from(self.temp_name_at(prefix, span)).into()
+    }
+
+    pub fn temp_ident(&self, prefix: &str) -> PotentialDollarIdentifier {
+        ParserText::from(self.temp_name(prefix)).into()
+    }
+
     fn lookup_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
         if let Some(obj) = self.objects.get(struct_name) {
             return Some(obj);
@@ -1127,31 +1158,7 @@ impl MiddleEnvironment {
                 value,
                 ..
             } => {
-                fn contains_auto(dt: &ParserDataType) -> bool {
-                    match &dt.data_type {
-                        ParserInnerType::Auto(_) => true,
-                        ParserInnerType::Tuple(xs) => xs.iter().any(contains_auto),
-                        ParserInnerType::List(x) => contains_auto(x),
-                        ParserInnerType::Ptr(x) => contains_auto(x),
-                        ParserInnerType::Option(x) => contains_auto(x),
-                        ParserInnerType::Result { ok, err } => {
-                            contains_auto(ok) || contains_auto(err)
-                        }
-                        ParserInnerType::Function {
-                            return_type,
-                            parameters,
-                            ..
-                        } => contains_auto(return_type) || parameters.iter().any(contains_auto),
-                        ParserInnerType::Ref(x, _) => contains_auto(x),
-                        ParserInnerType::StructWithGenerics { generic_types, .. } => {
-                            generic_types.iter().any(contains_auto)
-                        }
-                        ParserInnerType::Scope(xs) => xs.iter().any(contains_auto),
-                        _ => false,
-                    }
-                }
-
-                if data_type.is_auto() || contains_auto(data_type) {
+                if data_type.is_auto() || data_type.contains_auto() {
                     if let Some(v) = self.variables.get(&identifier.text) {
                         *data_type = v.data_type.clone();
                     }
@@ -1581,17 +1588,12 @@ impl MiddleEnvironment {
         }
     }
 
-    pub fn resolve_potential_ffi_type(
+    pub fn resolve_ffi_data_type(
         &mut self,
         scope: &u64,
-        data_type: PotentialFfiDataType,
-    ) -> PotentialFfiDataType {
-        match data_type {
-            PotentialFfiDataType::Normal(x) => {
-                PotentialFfiDataType::Normal(self.resolve_data_type(scope, x))
-            }
-            x => x,
-        }
+        data_type: ParserDataType,
+    ) -> ParserDataType {
+        self.resolve_data_type(scope, data_type).resolve_ffi()
     }
 
     pub fn resolve_potential_new_type(
@@ -1886,10 +1888,14 @@ impl MiddleEnvironment {
         );
         let file_value = Node::new(
             sp,
-            NodeType::StringLiteral(ParserText::new(
-                sp,
-                scope_ref.path.to_string_lossy().to_string(),
-            )),
+            NodeType::StringLiteral(ParserText::new(sp, {
+                let file = scope_ref.path.to_string_lossy().to_string();
+                if file.is_empty() {
+                    "__file__".to_string()
+                } else {
+                    file
+                }
+            })),
         );
 
         prefix.push(Node::new(
@@ -1918,7 +1924,7 @@ impl MiddleEnvironment {
         ));
 
         let package_meta = if scope_ref.namespace == "std" {
-            Some(PackageMetadata {
+            PackageMetadata {
                 name: "std".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 description: "Calibre standard library".to_string(),
@@ -1927,131 +1933,140 @@ impl MiddleEnvironment {
                 homepage: String::new(),
                 src: scope_ref.path.to_string_lossy().to_string(),
                 root: scope_ref.path.to_string_lossy().to_string(),
-            })
+            }
         } else if scope_ref.namespace == "root" {
-            self.package_metadata.clone()
+            self.package_metadata
+                .clone()
+                .unwrap_or_else(|| PackageMetadata {
+                    name: "__package__".to_string(),
+                    version: "0.0.0".to_string(),
+                    description: "default package metadata".to_string(),
+                    license: String::new(),
+                    repository: String::new(),
+                    homepage: String::new(),
+                    src: {
+                        let src = scope_ref.path.to_string_lossy().to_string();
+                        if src.is_empty() {
+                            "__file__".to_string()
+                        } else {
+                            src
+                        }
+                    },
+                    root: String::new(),
+                })
         } else {
-            None
+            PackageMetadata {
+                name: scope_ref.namespace.clone(),
+                version: "0.0.0".to_string(),
+                description: "default package metadata".to_string(),
+                license: String::new(),
+                repository: String::new(),
+                homepage: String::new(),
+                src: {
+                    let src = scope_ref.path.to_string_lossy().to_string();
+                    if src.is_empty() {
+                        "__file__".to_string()
+                    } else {
+                        src
+                    }
+                },
+                root: String::new(),
+            }
         };
 
-        if let Some(meta) = package_meta {
-            let package_type = Node::new(
-                sp,
-                NodeType::TypeDeclaration {
-                    identifier: PotentialGenericTypeIdentifier::Identifier(
-                        PotentialDollarIdentifier::Identifier(ParserText::new(
-                            sp,
-                            "__Package".to_string(),
-                        )),
+        let meta = package_meta;
+        let package_type = Node::new(
+            sp,
+            NodeType::TypeDeclaration {
+                identifier: PotentialGenericTypeIdentifier::Identifier(
+                    PotentialDollarIdentifier::Identifier(ParserText::new(
+                        sp,
+                        "__Package".to_string(),
+                    )),
+                ),
+                object: TypeDefType::Struct(ObjectType::Map(vec![
+                    (
+                        "name".to_string(),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
                     ),
-                    object: TypeDefType::Struct(ObjectType::Map(vec![
-                        (
-                            "name".to_string(),
-                            PotentialNewType::DataType(ParserDataType::new(
-                                sp,
-                                ParserInnerType::Str,
-                            )),
-                        ),
-                        (
-                            "version".to_string(),
-                            PotentialNewType::DataType(ParserDataType::new(
-                                sp,
-                                ParserInnerType::Str,
-                            )),
-                        ),
-                        (
-                            "description".to_string(),
-                            PotentialNewType::DataType(ParserDataType::new(
-                                sp,
-                                ParserInnerType::Str,
-                            )),
-                        ),
-                        (
-                            "license".to_string(),
-                            PotentialNewType::DataType(ParserDataType::new(
-                                sp,
-                                ParserInnerType::Str,
-                            )),
-                        ),
-                        (
-                            "repository".to_string(),
-                            PotentialNewType::DataType(ParserDataType::new(
-                                sp,
-                                ParserInnerType::Str,
-                            )),
-                        ),
-                        (
-                            "homepage".to_string(),
-                            PotentialNewType::DataType(ParserDataType::new(
-                                sp,
-                                ParserInnerType::Str,
-                            )),
-                        ),
-                        (
-                            "src".to_string(),
-                            PotentialNewType::DataType(ParserDataType::new(
-                                sp,
-                                ParserInnerType::Str,
-                            )),
-                        ),
-                        (
-                            "root".to_string(),
-                            PotentialNewType::DataType(ParserDataType::new(
-                                sp,
-                                ParserInnerType::Str,
-                            )),
-                        ),
-                    ])),
-                    overloads: Vec::new(),
-                },
-            );
-            prefix.push(package_type);
+                    (
+                        "version".to_string(),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
+                    ),
+                    (
+                        "description".to_string(),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
+                    ),
+                    (
+                        "license".to_string(),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
+                    ),
+                    (
+                        "repository".to_string(),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
+                    ),
+                    (
+                        "homepage".to_string(),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
+                    ),
+                    (
+                        "src".to_string(),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
+                    ),
+                    (
+                        "root".to_string(),
+                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
+                    ),
+                ])),
+                overloads: Vec::new(),
+            },
+        );
+        prefix.push(package_type);
 
-            let value = |v: String| Node::new(sp, NodeType::StringLiteral(ParserText::new(sp, v)));
-            let package_value = Node::new(
-                sp,
-                NodeType::StructLiteral {
-                    identifier: PotentialGenericTypeIdentifier::Identifier(
-                        PotentialDollarIdentifier::Identifier(ParserText::new(
-                            sp,
-                            "__Package".to_string(),
-                        )),
-                    ),
-                    value: ObjectType::Map(vec![
-                        ("name".to_string(), value(meta.name)),
-                        ("version".to_string(), value(meta.version)),
-                        ("description".to_string(), value(meta.description)),
-                        ("license".to_string(), value(meta.license)),
-                        ("repository".to_string(), value(meta.repository)),
-                        ("homepage".to_string(), value(meta.homepage)),
-                        ("src".to_string(), value(meta.src)),
-                        ("root".to_string(), value(meta.root)),
-                    ]),
-                },
-            );
-            let package_ident = get_disamubiguous_name(&scope, Some("__package__"), None);
-            if let Some(scope_ref) = self.scopes.get_mut(&scope) {
-                scope_ref
-                    .mappings
-                    .entry("__package__".to_string())
-                    .or_insert_with(|| package_ident.clone());
-            }
-            prefix.push(Node::new(
-                sp,
-                NodeType::VariableDeclaration {
-                    var_type: VarType::Constant,
-                    identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
+        let value = |v: String| Node::new(sp, NodeType::StringLiteral(ParserText::new(sp, v)));
+        let package_value = Node::new(
+            sp,
+            NodeType::StructLiteral {
+                identifier: PotentialGenericTypeIdentifier::Identifier(
+                    PotentialDollarIdentifier::Identifier(ParserText::new(
                         sp,
-                        package_ident,
+                        "__Package".to_string(),
                     )),
-                    data_type: PotentialNewType::DataType(ParserDataType::new(
-                        sp,
-                        ParserInnerType::Struct("__Package".to_string()),
-                    )),
-                    value: Box::new(package_value),
-                },
-            ));
+                ),
+                value: ObjectType::Map(vec![
+                    ("name".to_string(), value(meta.name)),
+                    ("version".to_string(), value(meta.version)),
+                    ("description".to_string(), value(meta.description)),
+                    ("license".to_string(), value(meta.license)),
+                    ("repository".to_string(), value(meta.repository)),
+                    ("homepage".to_string(), value(meta.homepage)),
+                    ("src".to_string(), value(meta.src)),
+                    ("root".to_string(), value(meta.root)),
+                ]),
+            },
+        );
+        let package_ident = get_disamubiguous_name(&scope, Some("__package__"), None);
+        if let Some(scope_ref) = self.scopes.get_mut(&scope) {
+            scope_ref
+                .mappings
+                .entry("__package__".to_string())
+                .or_insert_with(|| package_ident.clone());
         }
+        prefix.push(Node::new(
+            sp,
+            NodeType::VariableDeclaration {
+                var_type: VarType::Constant,
+                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
+                    sp,
+                    package_ident,
+                )),
+                data_type: PotentialNewType::DataType(ParserDataType::new(
+                    sp,
+                    ParserInnerType::Struct("__Package".to_string()),
+                )),
+                value: Box::new(package_value),
+            },
+        ));
 
         let mut body = match program.node_type {
             NodeType::ScopeDeclaration { body, .. } => body.unwrap_or_default(),
@@ -2511,6 +2526,8 @@ impl MiddleEnvironment {
             | NodeType::DestructureDeclaration { .. }
             | NodeType::DestructureAssignment { .. }
             | NodeType::LoopDeclaration { .. }
+            | NodeType::TestDeclaration { .. }
+            | NodeType::BenchDeclaration { .. }
             | NodeType::ScopeDeclaration { define: true, .. }
             | NodeType::ScopeAlias { .. }
             | NodeType::DataType { .. }
@@ -2524,10 +2541,11 @@ impl MiddleEnvironment {
             NodeType::InlineGenerator { map, data_type, .. } => {
                 let elem = match data_type {
                     Some(PotentialNewType::DataType(dt)) => dt.clone(),
-                    _ => self.resolve_type_from_node(scope, map).unwrap_or_else(|| {
-                        ParserDataType::new(node.span, ParserInnerType::Auto(None))
-                    }),
+                    _ => self
+                        .resolve_type_from_node(scope, &map)
+                        .unwrap_or(ParserDataType::new(node.span, ParserInnerType::Auto(None))),
                 };
+
                 Some(ParserDataType::new(
                     node.span,
                     ParserInnerType::StructWithGenerics {
@@ -2783,15 +2801,23 @@ impl MiddleEnvironment {
             NodeType::AsExpression {
                 value: _,
                 data_type,
+                failure_mode,
             } => {
                 let ok = self.resolve_potential_new_type(scope, data_type.clone());
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Result {
-                        ok: Box::new(ok),
-                        err: Box::new(ParserDataType::new(node.span, ParserInnerType::Dynamic)),
-                    },
-                    span: node.span,
-                })
+                match failure_mode {
+                    calibre_parser::ast::AsFailureMode::Panic => Some(ok),
+                    calibre_parser::ast::AsFailureMode::Option => Some(ParserDataType {
+                        data_type: ParserInnerType::Option(Box::new(ok)),
+                        span: node.span,
+                    }),
+                    calibre_parser::ast::AsFailureMode::Result => Some(ParserDataType {
+                        data_type: ParserInnerType::Result {
+                            ok: Box::new(ok),
+                            err: Box::new(ParserDataType::new(node.span, ParserInnerType::Dynamic)),
+                        },
+                        span: node.span,
+                    }),
+                }
             }
             NodeType::RangeDeclaration { .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Range,
@@ -3111,9 +3137,94 @@ impl MiddleEnvironment {
 
                 Some(current)
             }
-            NodeType::PipeExpression(path) => path
-                .last()
-                .and_then(|p| self.resolve_type_from_node(scope, p.get_node())),
+            NodeType::PipeExpression(path) => {
+                let mut iter = path.iter();
+                let first = iter.next()?;
+                let mut current = self.resolve_type_from_node(scope, first.get_node())?;
+
+                let apply_callable =
+                    |callable: ParserDataType, applied_args: usize, span: Span| match callable
+                        .unwrap_all_refs()
+                        .data_type
+                    {
+                        ParserInnerType::Function {
+                            return_type,
+                            parameters,
+                        } => {
+                            if parameters.len() > applied_args {
+                                ParserDataType::new(
+                                    span,
+                                    ParserInnerType::Function {
+                                        return_type,
+                                        parameters: parameters
+                                            .into_iter()
+                                            .skip(applied_args)
+                                            .collect(),
+                                    },
+                                )
+                            } else {
+                                *return_type
+                            }
+                        }
+                        ParserInnerType::NativeFunction(ret) => *ret,
+                        _ => ParserDataType::new(span, ParserInnerType::Auto(None)),
+                    };
+
+                let mut idx = 1usize;
+                while idx < path.len() {
+                    let point = &path[idx];
+                    let point_ty = self.resolve_type_from_node(scope, point.get_node());
+                    let point_callable = point_ty.as_ref().is_some_and(|ty| {
+                        matches!(
+                            ty.clone().unwrap_all_refs().data_type,
+                            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
+                        ) && !point.is_named()
+                            && !point.get_node().node_type.is_call()
+                    });
+
+                    if !point_callable && let Some(next) = path.get(idx + 1) {
+                        let next_ty = self.resolve_type_from_node(scope, next.get_node());
+                        let next_callable = next_ty.as_ref().is_some_and(|ty| {
+                            matches!(
+                                ty.clone().unwrap_all_refs().data_type,
+                                ParserInnerType::Function { .. }
+                                    | ParserInnerType::NativeFunction(_)
+                            ) && !next.is_named()
+                                && !next.get_node().node_type.is_call()
+                        });
+
+                        if next_callable {
+                            current = apply_callable(
+                                next_ty.unwrap_or(ParserDataType::new(
+                                    node.span,
+                                    ParserInnerType::Auto(None),
+                                )),
+                                2,
+                                node.span,
+                            );
+                            idx += 2;
+                            continue;
+                        }
+                    }
+
+                    current = if point_callable {
+                        apply_callable(
+                            point_ty.unwrap_or(ParserDataType::new(
+                                node.span,
+                                ParserInnerType::Auto(None),
+                            )),
+                            1,
+                            node.span,
+                        )
+                    } else {
+                        point_ty
+                            .unwrap_or(ParserDataType::new(node.span, ParserInnerType::Auto(None)))
+                    };
+                    idx += 1;
+                }
+
+                Some(current)
+            }
             NodeType::DerefStatement { value } => {
                 let typ = self.resolve_type_from_node(scope, &value)?;
 
@@ -3135,29 +3246,7 @@ impl MiddleEnvironment {
                 return Some(resolved);
             }
 
-            fn contains_auto(dt: &ParserDataType) -> bool {
-                match &dt.data_type {
-                    ParserInnerType::Auto(_) => true,
-                    ParserInnerType::Tuple(xs) => xs.iter().any(|x| contains_auto(x)),
-                    ParserInnerType::List(x) => contains_auto(x),
-                    ParserInnerType::Ptr(x) => contains_auto(x),
-                    ParserInnerType::Option(x) => contains_auto(x),
-                    ParserInnerType::Result { ok, err } => contains_auto(ok) || contains_auto(err),
-                    ParserInnerType::Function {
-                        return_type,
-                        parameters,
-                        ..
-                    } => contains_auto(return_type) || parameters.iter().any(|p| contains_auto(p)),
-                    ParserInnerType::Ref(x, _) => contains_auto(x),
-                    ParserInnerType::StructWithGenerics { generic_types, .. } => {
-                        generic_types.iter().any(|g| contains_auto(g))
-                    }
-                    ParserInnerType::Scope(xs) => xs.iter().any(|x| contains_auto(x)),
-                    _ => false,
-                }
-            }
-
-            if contains_auto(&resolved) {
+            if resolved.contains_auto() {
                 if let Some(inferred) = infer_node_type(self, scope, &node) {
                     return Some(self.resolve_data_type(scope, inferred));
                 }

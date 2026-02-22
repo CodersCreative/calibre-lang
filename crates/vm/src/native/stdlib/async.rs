@@ -263,11 +263,17 @@ impl NativeFunction for WaitGroupJoin {
             return Err(RuntimeError::UnexpectedType(inner));
         };
 
+        if Arc::ptr_eq(&outer, &inner) {
+            return Ok(RuntimeValue::Null);
+        }
+
         let mut joined = outer
             .joined
             .lock()
             .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
-        joined.push(inner);
+        if joined.iter().all(|existing| !Arc::ptr_eq(existing, &inner)) {
+            joined.push(inner);
+        }
         Ok(RuntimeValue::Null)
     }
 }

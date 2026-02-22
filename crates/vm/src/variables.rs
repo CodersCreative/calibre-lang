@@ -30,6 +30,15 @@ impl VariableStore {
         self.values.get(id)?.as_ref().cloned()
     }
 
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut RuntimeValue> {
+        let idx = *self.map.get(name)?;
+        self.values.get_mut(idx)?.as_mut()
+    }
+
+    pub fn get_mut_by_id(&mut self, id: usize) -> Option<&mut RuntimeValue> {
+        self.values.get_mut(id)?.as_mut()
+    }
+
     pub fn set_by_id(&mut self, id: usize, value: RuntimeValue) -> Option<RuntimeValue> {
         let slot = self.values.get_mut(id)?;
         slot.replace(value)

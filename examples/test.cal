@@ -1,47 +1,5 @@
 import (Channel, WaitGroup) from std::async;
 
-/* Label scopes & loops pseudocode
-const main = fn() => {
-	// Example of a simple loop that is able to return a value
-	// value's type should be able to be inferred
-	let mut value = for i in 0..10 => {
-		if i > 8 => break i;
-	} else => {
-		0;
-	};
-
-	// Example of a simple labelled block
-	value = => @basic_block {
-		if value > 8 => break @basic_block 100;
-
-		60;
-	};
-
-	// This does the same thing as the previous example except it now creates a scope macro as well
-	// The previous example was just a labelled scope that couldn't be re-used as a scope macro, this one can but still manages to still allow for scope breaking 
-	value = => @basic_block[$val = 100, $other = 60] {
-		if value > 8 => break @basic_block $val;
-
-		$other;
-	};
-
-	// reusing the scope macro from before with different values
-	value = => @basic_block[$val = 800, $other = 90];
-	
-	// This showcases how labelled loops can work allowing you to break/continue an outer loop from an inner one 
-	value = for x in 0..100 => @outer{
-		for y in 0..100 => {
-			if y > 40 => continue @outer;
-
-			if x == y => break @outer 50;
-		}else {
-			60;
-		}
-	} else => {
-		70;	
-	}
-}
-*/
 type NumType = struct { num : int } @overload {
 
 	const "+" = fn (self : NumType, value : int) -> int => {
@@ -56,11 +14,10 @@ type NumType = struct { num : int } @overload {
 
 let => @mult_scope [$ident = adder_int, $t = type : int] const $ident = fn (first : dyn, second : $t) -> $t => {
 	print("multiplyer");
+	
 	return first * second;
 };
-
 let @float_mult_scope => @mult_scope [$ident = adder_float, $t = type : float];
-
 => @mult_scope [];
 => @float_mult_scope [];
 => @float_mult_scope [$ident = adder_flt];
@@ -69,7 +26,7 @@ const print_text = fn (values : list:<str>) => {
 	print(values);
 };
 
-const main = fn () => {
+const main = fn => {
 	let name = "Ty";
 	let age = "10";
 	
@@ -80,6 +37,7 @@ const main = fn () => {
 	print(adder_float(90, 10.6));
 	
 	print("piping");
+	
 	40 |: forty > adder_float(forty) |> $(80) |> fn (input : float) => print(input);
 	
 	print("overload");
@@ -94,6 +52,7 @@ const main = fn () => {
 	print_text("1", "2", "6");
 	
 	let mut d = [[2, 0, 4], [1, 9, 3], [4, 7, 9], [9, 0, 1]];
+	
 	let lst = list:<int>[2, 0, 4];
 	
 	let mtchfn = fn match str -> int {
@@ -116,15 +75,15 @@ const main = fn () => {
 		print("add_scope: ");
 		print(sum);
 	};
-	
 	=> @add_scope [];
+	
 	match_res = 60;
-	=> @add_scope [];
 	
+	=> @add_scope [];
 	=> @add_scope [$first = (5f / 99f)];
+	=> @add_scope [$first = 30, $second = 70, $t = type : int] {{}};
 	
 	// Now it doesn't create a new scope overriding the default implementation
-	=> @add_scope [$first = 30, $second = 70, $t = type : int] {{}};
 	print(sum + 10);
 	
 	let mut correct = -10;

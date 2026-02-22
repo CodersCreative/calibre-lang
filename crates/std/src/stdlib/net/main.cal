@@ -1,13 +1,30 @@
 import * from std::str;
 
 type TcpStream = struct { inner : dyn };
-
 type TcpListener = struct { inner : dyn };
 
 type HttpResponse = struct { status : int, headers : list:<str>, body : str };
+type HttpClient = struct { host : str, port : int, headers : list:<str>, scheme : str };
+
+type Tcp = struct { };
+type Http = struct { };
+
+impl Tcp {
+	const connect = fn (host : str, port : int) -> TcpStream => TcpStream { inner : tcp_connect(host, port) };
+
+	const listen = fn (host : str, port : int) -> TcpListener => TcpListener { inner : tcp_listen(host, port) };
+
+	const accept = fn (listener : TcpListener) -> TcpStream => TcpStream { inner : tcp_accept(listener.inner) };
+
+	const read = fn (stream : TcpStream, size : int) -> str => tcp_read(stream.inner, size);
+
+	const write = fn (stream : TcpStream, data : str) -> int => tcp_write(stream.inner, data);
+
+	const close = fn (stream : TcpStream) => tcp_close(stream.inner);
+};
 
 impl TcpStream {
-	const connect = fn (host : str, port : int) -> TcpStream => TcpStream { inner : tcp_connect(host, port) };
+	const connect = fn (host : str, port : int) -> TcpStream => Tcp.connect(host, port);
 
 	const read = fn (self : &TcpStream, size : int) -> str => tcp_read(self.inner, size);
 
@@ -17,72 +34,104 @@ impl TcpStream {
 };
 
 impl TcpListener {
-	const listen = fn (host : str, port : int) -> TcpListener => TcpListener { inner : tcp_listen(host, port) };
+	const listen = fn (host : str, port : int) -> TcpListener => Tcp.listen(host, port);
 
 	const accept = fn (self : &TcpListener) -> TcpStream => TcpStream { inner : tcp_accept(self.inner) };
 };
-
-const listen = fn (host : str, port : int) -> TcpListener => TcpListener { inner : tcp_listen(host, port) };
-const accept = fn (listener : TcpListener) -> TcpStream => TcpStream { inner : tcp_accept(listener.inner) };
-const connect = fn (host : str, port : int) -> TcpStream => TcpStream { inner : tcp_connect(host, port) };
-const read = fn (stream : TcpStream, size : int) -> str => tcp_read(stream.inner, size);
-const write = fn (stream : TcpStream, data : str) -> int => tcp_write(stream.inner, data);
-const close = fn (stream : TcpStream) => tcp_close(stream.inner);
-
-type HttpClient = struct { host : str, port : int, headers : list:<str> };
 
 const strip_prefix = fn (s : str, prefix : str) -> str => {
 	let parts = split(s, prefix);
 	if len(parts) <= 1 => s;
 	let mut out = "";
 	let mut idx = 1;
+	
 	for idx < len(parts) => {
 		if idx > 1 => out &= prefix;
 		out &= parts[idx];
 		idx = idx + 1;
 	};
+	
 	out;
 };
 
+const default_port = fn (scheme : str) -> int => if scheme == "https" => 443 else => 80;
+
+const normalize_host = fn (host : str) -> str => {
+	let mut out = host;
+	if starts_with(out, "https://") => out = strip_prefix(out, "https://");
+	if starts_with(out, "http://") => out = strip_prefix(out, "http://");
+	out;
+};
+
+const infer_scheme = fn (host : str, port : int) -> str => {
+	if starts_with(host, "https://") => "https" else => if starts_with(host, "http://") => "http" else => if port == 443 => "https" else => "http";
+};
+
+const build_url = fn (scheme : str, host : str, port : int, path : str) -> str => {
+	let mut url = scheme & "://" & host;
+	if port != default_port(scheme) => url &= ":" & port;
+	if starts_with(path, "/") => url &= path else => url &= "/" & path;
+	
+	url;
+};
+
+impl Http {
+	const client = fn (host : str, port : int) -> HttpClient => {
+		let scheme = infer_scheme(host, port);
+		let resolved_port = if port <= 0 => default_port(scheme) else => port;
+		
+		let client = HttpClient { host : normalize_host(host), port : resolved_port, headers : list:<str>[], scheme };
+		client;
+	};
+
+	const with_scheme = fn (host : str, port : int, scheme : str) -> HttpClient => {
+		let resolved_port = if port <= 0 => default_port(scheme) else => port;
+		
+		let client = HttpClient { host : normalize_host(host), port : resolved_port, headers : list:<str>[], scheme };
+		client;
+	};
+
+	const get = fn (url : str) -> HttpResponse => {
+		let body = try http_request_try("GET", url, "") => http_request_raw("GET", url, "");
+		HttpResponse { status : 0, headers : list:<str>[], body };
+	};
+
+	const post = fn (url : str, payload : str) -> HttpResponse => {
+		let body = try http_request_try("POST", url, payload) => http_request_raw("POST", url, payload);
+		HttpResponse { status : 0, headers : list:<str>[], body };
+	};
+
+	const request = fn (method : str, url : str, payload : str) -> HttpResponse => {
+		let body = try http_request_try(method, url, payload) => http_request_raw(method, url, payload);
+		HttpResponse { status : 0, headers : list:<str>[], body };
+	};
+};
+
 impl HttpClient {
-	const new = fn (host : str, port : int) -> HttpClient => HttpClient { host, port, headers : list:<str>[] };
+	const new = fn (host : str, port : int) -> HttpClient => Http.client(host, port);
+
+	const with_scheme = fn (host : str, port : int, scheme : str) -> HttpClient => Http.with_scheme(host, port, scheme);
+
+	const with_header = fn (self : HttpClient, value : str) -> HttpClient => {
+		let mut next = HttpClient { host : self.host, port : self.port, headers : list:<str>[h for h in self.headers], scheme : self.scheme };
+		next.headers <<= value;
+		next;
+	};
 
 	const header = fn (self : &mut HttpClient, value : str) => self.headers <<= value;
 
+	const base_url = fn (self : HttpClient) -> str => build_url(self.scheme, self.host, self.port, "/");
+
 	const request = fn (self : HttpClient, method : str, path : str, body : str) -> HttpResponse => {
-		let mut host = self.host;
-		let mut scheme = "https://";
-		if starts_with(self.host, "http://") => scheme = "http://";
-		if starts_with(host, "https://") => host = strip_prefix(host, "https://");
-		if starts_with(host, "http://") => host = strip_prefix(host, "http://");
-		
-		let mut url = scheme & host;
-		if self.port != 80 && self.port != 443 => url &= ":" & self.port;
-		url &= path;
-		
-		let body_out = if starts_with(self.host, "http://") || starts_with(self.host, "https://") => {
-			http_request_raw(method, url, body);
-		} else => {
-			try http_request_try(method, url, body) => {
-				let mut url2 = "http://" & host;
-				if self.port != 80 && self.port != 443 => url2 &= ":" & self.port;
-				url2 &= path;
-				http_request_raw(method, url2, body);
-			};
-		};
-		
-		HttpResponse { status : 0, headers : list:<str>[], body : body_out };
+		let url = build_url(self.scheme, self.host, self.port, path);
+		Http.request(method, url, body);
 	};
 
 	const get = fn (self : HttpClient, path : str) -> HttpResponse => self.request("GET", path, "");
 
 	const post = fn (self : HttpClient, path : str, body : str) -> HttpResponse => self.request("POST", path, body);
-
-	const with_header = fn (self : HttpClient, value : str) => {
-		let mut next = HttpClient { host : self.host, port : self.port, headers : list:<str>[h for h in self.headers] };
-		next.headers <<= value;
-		next;
-	};
 };
 
-const http = fn (host : str, port : int) -> HttpClient => HttpClient { host, port, headers : list:<str>[] };
+const http = fn (host : str, port : int) -> HttpClient => Http.client(host, port);
+const connect = fn (host : str, port : int) -> TcpStream => Tcp.connect(host, port);
+const listen = fn (host : str, port : int) -> TcpListener => Tcp.listen(host, port);

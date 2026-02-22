@@ -13,7 +13,7 @@ const calculate_pi = fn (n_terms : float) -> float => {
 	return pi;
 };
 
-const main = fn () => {
+const main = fn => {
 	let n = 1000000f;
 	let result = calculate_pi(n);
 	print(result);

@@ -450,16 +450,19 @@ impl CalEngine {
         let path = root
             .join(env!("CARGO_PKG_VERSION"))
             .join(format!("{}.bin", key.to_hex()));
-        let file = match std::fs::File::open(path) {
+        let file = match std::fs::File::open(&path) {
             Ok(file) => file,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(err) => return Err(CalError::Io(err)),
         };
         let mut reader = std::io::BufReader::new(file);
-        let cache: CachedProgramBlob = bincode::deserialize_from(&mut reader)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-            .map_err(CalError::Io)?;
-        Ok(Some(cache))
+        match bincode::deserialize_from::<_, CachedProgramBlob>(&mut reader) {
+            Ok(cache) => Ok(Some(cache)),
+            Err(_) => {
+                let _ = std::fs::remove_file(path);
+                Ok(None)
+            }
+        }
     }
 
     fn store_cached_program(
@@ -572,7 +575,7 @@ fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
     map_opt(node, mode).unwrap_or_else(|| Node::new(Default::default(), NodeType::EmptyLine))
 }
 
-const CACHE_FORMAT_VERSION: &str = "cal-engine-cache-v2";
+const CACHE_FORMAT_VERSION: &str = "cal-engine-cache-v3";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CachedProgramBlob {

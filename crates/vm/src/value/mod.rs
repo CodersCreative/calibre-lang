@@ -10,7 +10,7 @@ use std::{
 };
 
 use calibre_lir::BlockId;
-use calibre_parser::ast::{ObjectMap, ParserFfiInnerType, ParserInnerType, PotentialFfiDataType};
+use calibre_parser::ast::{ObjectMap, ParserDataType, ParserFfiInnerType, ParserInnerType};
 use dumpster::sync::Gc;
 use dumpster::{TraceWith, Visitor};
 use libffi::middle::{Arg, Cif, CodePtr, Type};
@@ -391,8 +391,8 @@ pub struct ExternFunction {
     pub abi: String,
     pub library: String,
     pub symbol: String,
-    pub parameters: Vec<PotentialFfiDataType>,
-    pub return_type: PotentialFfiDataType,
+    pub parameters: Vec<ParserDataType>,
+    pub return_type: ParserDataType,
     pub handle: Arc<Library>,
 }
 
@@ -1039,20 +1039,17 @@ impl ExternFunction {
             other => other,
         }
     }
-    fn type_to_libffi_type(typ: &PotentialFfiDataType) -> Type {
-        match typ {
-            PotentialFfiDataType::Normal(x) => match x.data_type {
-                ParserInnerType::Int => Type::i64(),
-                ParserInnerType::UInt => Type::u64(),
-                ParserInnerType::Float => Type::f64(),
-                ParserInnerType::Bool => Type::u8(),
-                ParserInnerType::Char => Type::u8(),
-                ParserInnerType::Str => Type::pointer(),
-                ParserInnerType::Ptr(_) => Type::pointer(),
-                ParserInnerType::Null => Type::void(),
-                _ => Type::pointer(),
-            },
-            PotentialFfiDataType::Ffi(x) => match x.data_type {
+    fn type_to_libffi_type(typ: &ParserDataType) -> Type {
+        match &typ.data_type {
+            ParserInnerType::Int => Type::i64(),
+            ParserInnerType::UInt => Type::u64(),
+            ParserInnerType::Float => Type::f64(),
+            ParserInnerType::Bool => Type::u8(),
+            ParserInnerType::Char => Type::u8(),
+            ParserInnerType::Str => Type::pointer(),
+            ParserInnerType::Ptr(_) => Type::pointer(),
+            ParserInnerType::Null => Type::void(),
+            ParserInnerType::FfiType(x) => match x {
                 ParserFfiInnerType::F32 => Type::f32(),
                 ParserFfiInnerType::F64 | ParserFfiInnerType::LongDouble => Type::f64(),
                 ParserFfiInnerType::U8 | ParserFfiInnerType::UChar => Type::u8(),
@@ -1070,6 +1067,7 @@ impl ExternFunction {
                 ParserFfiInnerType::USize => Type::u64(),
                 ParserFfiInnerType::ISize => Type::i64(),
             },
+            _ => Type::pointer(),
         }
     }
 
@@ -1225,9 +1223,9 @@ impl ExternFunction {
         }
 
         for (param, value) in self.parameters.iter().zip(args.into_iter()) {
-            match param {
-                PotentialFfiDataType::Normal(x) => {
-                    match (Self::resolve_value(env, value), &x.data_type) {
+            match &param.data_type {
+                x if !matches!(x, ParserInnerType::FfiType(_)) => {
+                    match (Self::resolve_value(env, value), x) {
                         (RuntimeValue::Str(x), ParserInnerType::Str) => {
                             arg_types.push(Type::pointer());
                             let value = CString::new(x.as_str())
@@ -1393,10 +1391,10 @@ impl ExternFunction {
                         _ => return Err(RuntimeError::InvalidFunctionCall),
                     }
                 }
-                PotentialFfiDataType::Ffi(x) => {
+                ParserInnerType::FfiType(x) => {
                     arg_types.push(Self::type_to_libffi_type(param));
                     let value = Self::resolve_value(env, value);
-                    let arg = match (&x.data_type, value) {
+                    let arg = match (x, value) {
                         (
                             ParserFfiInnerType::U8 | ParserFfiInnerType::UChar,
                             RuntimeValue::UInt(x),
@@ -1550,6 +1548,7 @@ impl ExternFunction {
                     };
                     Self::push_arg(&mut ffi_args, &mut libffi_args, arg);
                 }
+                _ => unreachable!(),
             }
         }
 
@@ -1564,8 +1563,8 @@ impl ExternFunction {
         let code = CodePtr::from_ptr(*symbol as *mut c_void);
 
         unsafe {
-            match &self.return_type {
-                PotentialFfiDataType::Normal(x) => match x.data_type {
+            match &self.return_type.data_type {
+                x if !matches!(x, ParserInnerType::FfiType(_)) => match x {
                     ParserInnerType::Float => {
                         Ok(RuntimeValue::Float(cif.call(code, &mut libffi_args)))
                     }
@@ -1602,7 +1601,7 @@ impl ExternFunction {
                     }
                     _ => Err(RuntimeError::InvalidFunctionCall),
                 },
-                PotentialFfiDataType::Ffi(x) => match x.data_type {
+                ParserInnerType::FfiType(x) => match x {
                     ParserFfiInnerType::F32 => {
                         let res: f32 = cif.call(code, &mut libffi_args);
                         Ok(RuntimeValue::Float(res as f64))
@@ -1637,6 +1636,7 @@ impl ExternFunction {
                         Ok(RuntimeValue::Int(res))
                     }
                 },
+                _ => unreachable!(),
             }
         }
     }

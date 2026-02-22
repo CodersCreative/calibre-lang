@@ -1,12 +1,14 @@
 use calibre_lir::BlockId;
 use calibre_parser::ast::ObjectMap;
+use calibre_parser::ast::binary::BinaryOperator;
+use calibre_parser::ast::comparison::ComparisonOperator;
 use dumpster::sync::Gc;
 use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 use std::sync::Arc;
 
 use crate::{
-    VM, VarName,
+    PreparedDirectCall, VM, VarName,
     conversion::{VMBlock, VMFunction, VMGlobal, VMInstruction, VMLiteral},
     error::RuntimeError,
     value::{
@@ -16,6 +18,34 @@ use crate::{
 };
 
 impl VM {
+    #[inline(always)]
+    fn call_arg_from_reg(&self, reg: u16) -> RuntimeValue {
+        let frame = self.frames.len().saturating_sub(1);
+        self.call_arg_from_frame_reg(frame, reg)
+    }
+
+    #[inline(always)]
+    fn call_arg_from_frame_reg(&self, frame: usize, reg: u16) -> RuntimeValue {
+        match self.get_reg_value_in_frame_ref(frame, reg) {
+            RuntimeValue::Aggregate(_, _)
+            | RuntimeValue::List(_)
+            | RuntimeValue::Enum(_, _, _)
+            | RuntimeValue::Option(_)
+            | RuntimeValue::Result(_)
+            | RuntimeValue::Ptr(_) => RuntimeValue::RegRef { frame, reg },
+            other => other.clone_for_arg(),
+        }
+    }
+
+    #[inline]
+    fn collect_call_args_vec(&self, args: &[u16]) -> Vec<RuntimeValue> {
+        let mut call_args = Vec::with_capacity(args.len());
+        for reg in args {
+            call_args.push(self.call_arg_from_reg(*reg));
+        }
+        call_args
+    }
+
     #[inline]
     fn resolve_operand_value(&mut self, value: RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
         match value {
@@ -25,6 +55,73 @@ impl VM {
             | RuntimeValue::MutexGuard(_) => self.resolve_value_for_op_ref(&value),
             other => Ok(other),
         }
+    }
+
+    #[inline(always)]
+    fn try_fast_int_binary(
+        &mut self,
+        op: BinaryOperator,
+        left_reg: u16,
+        right_reg: u16,
+    ) -> Option<RuntimeValue> {
+        let left = match self.get_reg_value_ref(left_reg) {
+            RuntimeValue::Int(v) => *v,
+            _ => return None,
+        };
+        let right = match self.get_reg_value_ref(right_reg) {
+            RuntimeValue::Int(v) => *v,
+            _ => return None,
+        };
+        let out = match op {
+            BinaryOperator::Add => RuntimeValue::Int(left.wrapping_add(right)),
+            BinaryOperator::Sub => RuntimeValue::Int(left.wrapping_sub(right)),
+            BinaryOperator::Mul => RuntimeValue::Int(left.wrapping_mul(right)),
+            BinaryOperator::Div => {
+                if right == 0 {
+                    return None;
+                }
+                RuntimeValue::Int(left / right)
+            }
+            BinaryOperator::Mod => {
+                if right == 0 {
+                    return None;
+                }
+                RuntimeValue::Int(left % right)
+            }
+            BinaryOperator::BitAnd => RuntimeValue::Int(left & right),
+            BinaryOperator::BitOr => RuntimeValue::Int(left | right),
+            BinaryOperator::BitXor => RuntimeValue::Int(left ^ right),
+            BinaryOperator::Shl => RuntimeValue::Int(left.wrapping_shl(right as u32)),
+            BinaryOperator::Shr => RuntimeValue::Int(left.wrapping_shr(right as u32)),
+            BinaryOperator::Pow => return None,
+        };
+        Some(out)
+    }
+
+    #[inline(always)]
+    fn try_fast_int_comparison(
+        &self,
+        op: ComparisonOperator,
+        left_reg: u16,
+        right_reg: u16,
+    ) -> Option<RuntimeValue> {
+        let left = match self.get_reg_value_ref(left_reg) {
+            RuntimeValue::Int(v) => *v,
+            _ => return None,
+        };
+        let right = match self.get_reg_value_ref(right_reg) {
+            RuntimeValue::Int(v) => *v,
+            _ => return None,
+        };
+        let out = match op {
+            ComparisonOperator::Greater => left > right,
+            ComparisonOperator::Lesser => left < right,
+            ComparisonOperator::LesserEqual => left <= right,
+            ComparisonOperator::GreaterEqual => left >= right,
+            ComparisonOperator::Equal => left == right,
+            ComparisonOperator::NotEqual => left != right,
+        };
+        Some(RuntimeValue::Bool(out))
     }
 
     fn try_resolve_global_runtime_value(&mut self, name: &str) -> Option<(RuntimeValue, String)> {
@@ -55,7 +152,7 @@ impl VM {
             if let Some(func) = self.find_unique_function_by_suffix(base) {
                 return Some((self.make_runtime_function(func.as_ref()), func.name.clone()));
             }
-            if let Some(var_name) = self.find_unique_var_by_suffix(base)
+            if let Some(var_name) = self.find_unique_var_by_suffix_cached(base)
                 && let Some(var) = self.variables.get(&var_name)
             {
                 return Some((self.copy_saveable_into_runtime_var(var.clone()), var_name));
@@ -65,7 +162,7 @@ impl VM {
         if let Some(func) = self.find_unique_function_by_suffix(short_name) {
             return Some((self.make_runtime_function(func.as_ref()), func.name.clone()));
         }
-        if let Some(var_name) = self.find_unique_var_by_suffix(short_name)
+        if let Some(var_name) = self.find_unique_var_by_suffix_cached(short_name)
             && let Some(var) = self.variables.get(&var_name)
         {
             return Some((self.copy_saveable_into_runtime_var(var.clone()), var_name));
@@ -131,7 +228,7 @@ impl VM {
             self.moved_functions.insert(func.name.clone());
             return Some(self.make_runtime_function(func.as_ref()));
         }
-        if let Some(var_name) = self.find_unique_var_by_suffix(short_name)
+        if let Some(var_name) = self.find_unique_var_by_suffix_cached(short_name)
             && let Some(var) = self.variables.remove(&var_name)
         {
             return Some(self.move_saveable_into_runtime_var(var));
@@ -145,16 +242,16 @@ impl VM {
         args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
         let _ = self.run_globals()?;
-        self.run_function(function, args, std::sync::Arc::new(Vec::new()))
+        self.run_function(function, args, Self::empty_captures())
     }
 
     pub fn run_globals(&mut self) -> Result<(), RuntimeError> {
         if self.registry.globals.is_empty() {
             return Ok(());
         }
-        let globals: Vec<VMGlobal> = self.registry.globals.values().cloned().collect();
-        for global in globals {
-            let _ = self.run_global(&global)?;
+        let registry = Arc::clone(&self.registry);
+        for global in registry.globals.values() {
+            let _ = self.run_global(global)?;
         }
         Ok(())
     }
@@ -208,6 +305,183 @@ impl VM {
         }
     }
 
+    #[inline]
+    fn run_function_from_regs(
+        &mut self,
+        function: &VMFunction,
+        args: &[u16],
+        captures: std::sync::Arc<Vec<(String, RuntimeValue)>>,
+    ) -> Result<RuntimeValue, RuntimeError> {
+        let caller_frame = self.frames.len().saturating_sub(1);
+        let mut prev_vars: Vec<(String, Option<RuntimeValue>)> = Vec::new();
+        if !captures.is_empty() {
+            prev_vars = Vec::with_capacity(captures.len());
+            for (name, value) in captures.iter() {
+                let old = self.variables.insert(name.clone(), value.clone());
+                prev_vars.push((name.clone(), old));
+            }
+        }
+
+        let func_ptr = function as *const VMFunction as usize;
+        self.push_frame(function.reg_count as usize, func_ptr);
+        for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
+            let arg = self.call_arg_from_frame_reg(caller_frame, arg_reg);
+            self.set_reg_value(*reg, arg);
+        }
+        let base = self.local_map_base_for(function);
+        let frame = self.current_frame_mut();
+        frame.local_map_base = Some(base);
+
+        let mut block_id = function.entry;
+        let mut block = function
+            .blocks
+            .get(*function.block_map.get(&block_id).unwrap_or(&0))
+            .ok_or_else(|| RuntimeError::InvalidBytecode("function has no blocks".to_string()))?;
+        let mut prev_block: Option<BlockId> = None;
+        let mut result = RuntimeValue::Null;
+        let mut returned = false;
+        loop {
+            match self.run_block(block, prev_block)? {
+                TerminateValue::Jump(target) => {
+                    prev_block = Some(block.id);
+                    block_id = target;
+                    block = function
+                        .blocks
+                        .get(*function.block_map.get(&block_id).unwrap_or(&0))
+                        .ok_or_else(|| {
+                            RuntimeError::InvalidBytecode(format!(
+                                "invalid function block {}",
+                                target.0
+                            ))
+                        })?;
+                }
+                TerminateValue::Return(x) => {
+                    result = x;
+                    returned = true;
+                    break;
+                }
+                TerminateValue::Yield { .. } => break,
+                TerminateValue::None => break,
+            }
+        }
+
+        if function.returns_value && !returned {
+            result = self.get_reg_value(function.ret_reg);
+        }
+
+        if let RuntimeValue::RegRef { frame, reg } = result {
+            result = self.get_reg_value_in_frame(frame, reg);
+        }
+
+        self.pop_frame();
+        if !prev_vars.is_empty() {
+            for (name, old) in prev_vars {
+                match old {
+                    Some(v) => {
+                        self.variables.insert(name, v);
+                    }
+                    None => {
+                        self.variables.remove(&name);
+                    }
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
+    fn try_trampoline_self_tail_call(
+        &mut self,
+        block: &VMBlock,
+        ip: u32,
+        dst: u16,
+        args: &[u16],
+        func: &VMFunction,
+    ) -> Option<TerminateValue> {
+        let Some(VMInstruction::Return {
+            value: Some(ret_reg),
+        }) = block.instructions.get((ip as usize).saturating_add(1))
+        else {
+            return None;
+        };
+        if *ret_reg != dst || args.len() != func.param_regs.len() {
+            return None;
+        }
+
+        let caller_frame = self.frames.len().saturating_sub(1);
+        let mut call_args: SmallVec<[RuntimeValue; 8]> = SmallVec::with_capacity(args.len());
+        for reg in args {
+            call_args.push(self.call_arg_from_frame_reg(caller_frame, *reg));
+        }
+
+        let base = self.local_map_base_for(func);
+        let start = self.current_frame().reg_start;
+        let reg_count = func.reg_count as usize;
+        let frame_end = start + reg_count;
+        if frame_end > self.reg_arena.len() {
+            self.reg_arena.resize(frame_end, RuntimeValue::Null);
+        }
+        for slot in &mut self.reg_arena[start..frame_end] {
+            *slot = RuntimeValue::Null;
+        }
+        self.reg_top = frame_end;
+        {
+            let frame = self.current_frame_mut();
+            frame.reg_count = reg_count;
+            frame.local_map_base = Some(base);
+            frame.acc = RuntimeValue::Null;
+            frame.func_ptr = func as *const VMFunction as usize;
+        }
+        for (reg, arg) in func.param_regs.iter().zip(call_args) {
+            let idx = *reg as usize;
+            if idx < reg_count {
+                self.reg_arena[start + idx] = arg;
+            }
+        }
+        Some(TerminateValue::Jump(func.entry))
+    }
+
+    fn resolve_direct_callsite_cached(
+        &mut self,
+        block: &VMBlock,
+        ip: u32,
+        name_idx: u16,
+    ) -> Result<Option<PreparedDirectCall>, RuntimeError> {
+        let callsite = (self.current_frame().func_ptr, block.id.0 as usize, ip);
+        if let Some(cached) = self.caches.prepared_direct_calls.get(&callsite) {
+            return Ok(Some(cached.clone()));
+        }
+
+        let func_name = self.local_string(block, name_idx)?;
+        if let Some(func) = self.resolve_callable_cached(func_name, callsite) {
+            let prepared = PreparedDirectCall::Vm(func);
+            self.caches
+                .prepared_direct_calls
+                .insert(callsite, prepared.clone());
+            return Ok(Some(prepared));
+        }
+
+        let Some((value, _)) = self.try_resolve_global_runtime_value(func_name) else {
+            return Ok(None);
+        };
+
+        let prepared = match value {
+            RuntimeValue::NativeFunction(func) => PreparedDirectCall::Native(func),
+            RuntimeValue::ExternFunction(func) => PreparedDirectCall::Extern(func),
+            RuntimeValue::Function { name, captures } if captures.as_ref().is_empty() => {
+                let Some(func) = self.resolve_callable_cached(name.as_ref(), callsite) else {
+                    return Ok(None);
+                };
+                PreparedDirectCall::Vm(func)
+            }
+            _ => return Ok(None),
+        };
+        self.caches
+            .prepared_direct_calls
+            .insert(callsite, prepared.clone());
+        Ok(Some(prepared))
+    }
+
     pub fn run_function_with_budget<I>(
         &mut self,
         function: &VMFunction,
@@ -238,7 +512,6 @@ impl VM {
             let base = self.local_map_base_for(function);
             let frame = self.current_frame_mut();
             frame.local_map_base = Some(base);
-            frame.local_map.clear();
             state.block = Some(function.entry);
             state.ip = 0;
             state.prev_block = None;
@@ -539,6 +812,7 @@ impl VM {
                         });
 
                 self.set_reg_value(*dst, value);
+                self.invalidate_name_resolution_caches();
             }
             VMInstruction::DropGlobal { name } => {
                 let name = self.local_string(block, *name)?;
@@ -554,15 +828,20 @@ impl VM {
                     }
                     VarName::Global => {}
                 }
+                self.invalidate_name_resolution_caches();
             }
             VMInstruction::StoreGlobal { name, src } => {
                 let name = self.local_string(block, *name)?;
                 let value = self.get_reg_value(*src);
+                let existed = self.variables.contains_key(name);
                 if let Some(id) = self.caches.globals_id.get(name).copied() {
                     let _ = self.variables.set_by_id(id, value);
                 } else {
                     let id = self.variables.insert_str_with_id(name, value);
                     self.caches.globals_id.insert(name.to_string(), id);
+                }
+                if !existed {
+                    self.invalidate_name_resolution_caches();
                 }
             }
             VMInstruction::SetLocalName { name, src } => {
@@ -609,13 +888,30 @@ impl VM {
                 dst,
                 src,
                 data_type,
+                failure_mode,
             } => {
                 let value = self.get_reg_value(*src);
-                let converted = match value.convert(self, &data_type.data_type) {
-                    Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
-                    Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Arc::new(
-                        err.to_string(),
-                    ))))),
+                let conversion = value.convert(self, &data_type.data_type);
+                let converted = match failure_mode {
+                    calibre_parser::ast::AsFailureMode::Panic => match conversion {
+                        Ok(value) => value,
+                        Err(err) => {
+                            return Err(RuntimeError::Panic(Some(format!(
+                                "failed `as!` conversion to {}: {}",
+                                data_type, err
+                            ))));
+                        }
+                    },
+                    calibre_parser::ast::AsFailureMode::Option => match conversion {
+                        Ok(value) => RuntimeValue::Option(Some(Gc::new(value))),
+                        Err(_) => RuntimeValue::Option(None),
+                    },
+                    calibre_parser::ast::AsFailureMode::Result => match conversion {
+                        Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
+                        Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+                            Arc::new(err.to_string()),
+                        )))),
+                    },
                 };
                 self.set_reg_value(*dst, converted);
             }
@@ -625,6 +921,10 @@ impl VM {
                 left,
                 right,
             } => {
+                if let Some(value) = self.try_fast_int_binary(*op, *left, *right) {
+                    self.set_reg_value(*dst, value);
+                    return Ok(TerminateValue::None);
+                }
                 let left = self.resolve_operand_value(self.get_reg_value(*left))?;
                 let right = self.resolve_operand_value(self.get_reg_value(*right))?;
                 self.set_reg_value(*dst, binary(self, op, left, right)?);
@@ -638,6 +938,50 @@ impl VM {
                 self.set_reg_value(*dst, value);
             }
             VMInstruction::AccBinary { op, right } => {
+                if let RuntimeValue::Int(left) = self.current_frame().acc.clone()
+                    && let RuntimeValue::Int(right) = self.get_reg_value(*right)
+                    && let Some(value) = {
+                        let out = match op {
+                            BinaryOperator::Add => {
+                                Some(RuntimeValue::Int(left.wrapping_add(right)))
+                            }
+                            BinaryOperator::Sub => {
+                                Some(RuntimeValue::Int(left.wrapping_sub(right)))
+                            }
+                            BinaryOperator::Mul => {
+                                Some(RuntimeValue::Int(left.wrapping_mul(right)))
+                            }
+                            BinaryOperator::Div => {
+                                if right == 0 {
+                                    None
+                                } else {
+                                    Some(RuntimeValue::Int(left / right))
+                                }
+                            }
+                            BinaryOperator::Mod => {
+                                if right == 0 {
+                                    None
+                                } else {
+                                    Some(RuntimeValue::Int(left % right))
+                                }
+                            }
+                            BinaryOperator::BitAnd => Some(RuntimeValue::Int(left & right)),
+                            BinaryOperator::BitOr => Some(RuntimeValue::Int(left | right)),
+                            BinaryOperator::BitXor => Some(RuntimeValue::Int(left ^ right)),
+                            BinaryOperator::Shl => {
+                                Some(RuntimeValue::Int(left.wrapping_shl(right as u32)))
+                            }
+                            BinaryOperator::Shr => {
+                                Some(RuntimeValue::Int(left.wrapping_shr(right as u32)))
+                            }
+                            BinaryOperator::Pow => None,
+                        };
+                        out
+                    }
+                {
+                    self.current_frame_mut().acc = value;
+                    return Ok(TerminateValue::None);
+                }
                 let right = self.resolve_operand_value(self.get_reg_value(*right))?;
                 let left_raw = {
                     let frame = self.current_frame_mut();
@@ -652,6 +996,10 @@ impl VM {
                 left,
                 right,
             } => {
+                if let Some(cmp_val) = self.try_fast_int_comparison(*op, *left, *right) {
+                    self.set_reg_value(*dst, cmp_val);
+                    return Ok(TerminateValue::None);
+                }
                 let right = self.resolve_operand_value(self.get_reg_value(*right))?;
                 let left = self.resolve_operand_value(self.get_reg_value(*left))?;
                 let cmp_val = comparison(op, left, right)?;
@@ -675,14 +1023,22 @@ impl VM {
             } => {
                 let from = self.resolve_value_for_op_ref(self.get_reg_value_ref(*from))?;
                 let to = self.resolve_value_for_op_ref(self.get_reg_value_ref(*to))?;
-                let from = match from {
-                    RuntimeValue::Int(v) => v,
-                    other => return Err(RuntimeError::UnexpectedType(other)),
+                let as_range_bound = |value: RuntimeValue| -> Result<i64, RuntimeError> {
+                    match value {
+                        RuntimeValue::Int(v) => Ok(v),
+                        RuntimeValue::UInt(v) => Ok(v as i64),
+                        RuntimeValue::Float(v) => Ok(v as i64),
+                        RuntimeValue::Bool(v) => Ok(v as i64),
+                        RuntimeValue::Char(v) => Ok(v as i64),
+                        RuntimeValue::List(v) => Ok(v.as_ref().0.len() as i64),
+                        RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as i64),
+                        RuntimeValue::Str(v) => Ok(v.len() as i64),
+                        RuntimeValue::Range(from, to) => Ok((to - from).max(0)),
+                        other => Err(RuntimeError::UnexpectedType(other)),
+                    }
                 };
-                let to = match to {
-                    RuntimeValue::Int(v) => v,
-                    other => return Err(RuntimeError::UnexpectedType(other)),
-                };
+                let from = as_range_bound(from)?;
+                let to = as_range_bound(to)?;
                 let end = if *inclusive { to + 1 } else { to };
                 self.set_reg_value(*dst, RuntimeValue::Range(from, end));
             }
@@ -773,26 +1129,59 @@ impl VM {
                     RuntimeValue::Enum(name.to_string(), *variant as usize, payload),
                 );
             }
-            VMInstruction::Call { dst, callee, args } => {
-                let func = self.resolve_value_for_op_ref(self.get_reg_value_ref(*callee))?;
-                let mut call_args: SmallVec<[RuntimeValue; 4]> =
-                    SmallVec::with_capacity(args.len());
-                for reg in args {
-                    let frame = self.frames.len().saturating_sub(1);
-                    match self.get_reg_value_ref(*reg) {
-                        RuntimeValue::Aggregate(_, _)
-                        | RuntimeValue::List(_)
-                        | RuntimeValue::Enum(_, _, _)
-                        | RuntimeValue::Option(_)
-                        | RuntimeValue::Result(_)
-                        | RuntimeValue::Ptr(_) => {
-                            call_args.push(RuntimeValue::RegRef { frame, reg: *reg });
-                        }
-                        other => {
-                            call_args.push(other.clone_for_arg());
-                        }
+            VMInstruction::CallDirect { dst, name, args } => {
+                match self.resolve_direct_callsite_cached(block, ip, *name)? {
+                    Some(PreparedDirectCall::Vm(func)) => {
+                        let value = self.run_function_from_regs(
+                            func.as_ref(),
+                            args,
+                            Self::empty_captures(),
+                        )?;
+                        self.set_reg_value(*dst, value);
+                    }
+                    Some(PreparedDirectCall::Native(func)) => {
+                        let result = func.run(self, self.collect_call_args_vec(args))?;
+                        self.set_reg_value(*dst, result);
+                    }
+                    Some(PreparedDirectCall::Extern(func)) => {
+                        let value = func.call(self, self.collect_call_args_vec(args))?;
+                        self.set_reg_value(*dst, value);
+                    }
+                    None => {
+                        let func_name = self.local_string(block, *name)?;
+                        return Err(RuntimeError::FunctionNotFound(func_name.to_string()));
                     }
                 }
+            }
+            VMInstruction::CallSelf { dst, args } => {
+                let func_ptr = self.current_frame().func_ptr as *const VMFunction;
+                if func_ptr.is_null() {
+                    return Err(RuntimeError::InvalidBytecode(
+                        "missing current function frame".to_string(),
+                    ));
+                }
+                let func = unsafe { &*func_ptr };
+                if let Some(step) = self.try_trampoline_self_tail_call(block, ip, *dst, args, func)
+                {
+                    return Ok(step);
+                }
+                let value = self.run_function_from_regs(func, args, Self::empty_captures())?;
+                self.set_reg_value(*dst, value);
+            }
+            VMInstruction::Call { dst, callee, args } => {
+                let func = match self.get_reg_value_ref(*callee) {
+                    RuntimeValue::Function { name, captures } => RuntimeValue::Function {
+                        name: name.clone(),
+                        captures: captures.clone(),
+                    },
+                    RuntimeValue::NativeFunction(func) => {
+                        RuntimeValue::NativeFunction(func.clone())
+                    }
+                    RuntimeValue::ExternFunction(func) => {
+                        RuntimeValue::ExternFunction(func.clone())
+                    }
+                    other => self.resolve_value_for_op_ref(other)?,
+                };
                 match func {
                     RuntimeValue::Function { name, captures } => {
                         let callsite = (self.current_frame().func_ptr, block.id.0 as usize, ip);
@@ -803,46 +1192,25 @@ impl VM {
                                 && func.as_ref() as *const VMFunction
                                     == self.current_frame().func_ptr as *const VMFunction
                             {
-                                if let Some(VMInstruction::Return {
-                                    value: Some(ret_reg),
-                                }) = block.instructions.get((ip as usize).saturating_add(1))
-                                {
-                                    if *ret_reg == *dst && call_args.len() == func.param_regs.len()
-                                    {
-                                        let base = self.local_map_base_for(func.as_ref());
-                                        let start = self.current_frame().reg_start;
-                                        let reg_count = func.reg_count as usize;
-                                        self.reg_arena.truncate(start);
-                                        self.reg_arena
-                                            .resize(start + reg_count, RuntimeValue::Null);
-                                        {
-                                            let frame = self.current_frame_mut();
-                                            frame.reg_count = reg_count;
-                                            frame.local_map_base = Some(base);
-                                            frame.local_map.clear();
-                                            frame.acc = RuntimeValue::Null;
-                                            frame.func_ptr =
-                                                func.as_ref() as *const VMFunction as usize;
-                                        }
-                                        for (reg, arg) in func.param_regs.iter().zip(call_args) {
-                                            let idx = *reg as usize;
-                                            if idx < reg_count {
-                                                self.reg_arena[start + idx] = arg;
-                                            }
-                                        }
-                                        return Ok(TerminateValue::Jump(func.entry));
-                                    }
+                                if let Some(step) = self.try_trampoline_self_tail_call(
+                                    block,
+                                    ip,
+                                    *dst,
+                                    args,
+                                    func.as_ref(),
+                                ) {
+                                    return Ok(step);
                                 }
                             }
                             let value =
-                                self.run_function(func.as_ref(), call_args, captures.clone())?;
+                                self.run_function_from_regs(func.as_ref(), args, captures.clone())?;
                             self.set_reg_value(*dst, value);
                         } else {
                             return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
                         }
                     }
                     RuntimeValue::NativeFunction(func) => {
-                        let result = func.run(self, call_args.into_vec())?;
+                        let result = func.run(self, self.collect_call_args_vec(args))?;
                         if let RuntimeValue::GeneratorSuspend(value) = result {
                             let yielded = *value;
                             self.set_reg_value(*dst, yielded.clone());
@@ -856,7 +1224,7 @@ impl VM {
                         self.set_reg_value(*dst, result);
                     }
                     RuntimeValue::ExternFunction(func) => {
-                        let value = func.call(self, call_args.into_vec())?;
+                        let value = func.call(self, self.collect_call_args_vec(args))?;
                         self.set_reg_value(*dst, value);
                     }
                     _other => return Err(RuntimeError::InvalidFunctionCall),
@@ -1161,22 +1529,22 @@ impl VM {
                         let _ = self.variables.set_by_id(id, updated);
                     }
                     RuntimeValue::RegRef { frame, reg } => {
-                        self.set_reg_value_in_frame(
-                            frame,
-                            reg,
-                            match self.resolve_value_for_op_ref(
-                                self.get_reg_value_in_frame_ref(frame, reg),
-                            )? {
-                                RuntimeValue::Aggregate(name, map) => {
-                                    let updated = update_aggregate(&name, map)?;
-                                    RuntimeValue::Aggregate(name, updated)
-                                }
-                                current @ RuntimeValue::Generator { .. } => {
-                                    update_generator(current)?
-                                }
-                                other => return Err(RuntimeError::UnexpectedType(other)),
-                            },
-                        );
+                        let slot = self
+                            .get_reg_value_in_frame_mut(frame, reg)
+                            .ok_or(RuntimeError::StackUnderflow)?;
+                        match slot {
+                            RuntimeValue::Aggregate(name, map) => {
+                                let updated = update_aggregate(name, map.clone())?;
+                                *slot = RuntimeValue::Aggregate(name.clone(), updated);
+                            }
+                            RuntimeValue::Generator { .. } => {
+                                let updated = update_generator(slot.clone())?;
+                                *slot = updated;
+                            }
+                            other => {
+                                return Err(RuntimeError::UnexpectedType(other.clone()));
+                            }
+                        }
                     }
                     RuntimeValue::Aggregate(name, map) => {
                         let updated = update_aggregate(&name, map)?;
@@ -1189,6 +1557,34 @@ impl VM {
                 }
             }
             VMInstruction::Index { dst, value, index } => {
+                let value_ref = self.get_reg_value_ref(*value);
+                let index_ref = self.get_reg_value_ref(*index);
+                if let RuntimeValue::List(list) = value_ref {
+                    match index_ref {
+                        RuntimeValue::UInt(i) => {
+                            let out = list
+                                .as_ref()
+                                .0
+                                .get(*i as usize)
+                                .cloned()
+                                .unwrap_or(RuntimeValue::Null);
+                            self.set_reg_value(*dst, out);
+                            return Ok(TerminateValue::None);
+                        }
+                        RuntimeValue::Int(i) if *i >= 0 => {
+                            let out = list
+                                .as_ref()
+                                .0
+                                .get(*i as usize)
+                                .cloned()
+                                .unwrap_or(RuntimeValue::Null);
+                            self.set_reg_value(*dst, out);
+                            return Ok(TerminateValue::None);
+                        }
+                        _ => {}
+                    }
+                }
+
                 let resolve_idx = |len: usize, idx: i64| -> Option<usize> {
                     if len == 0 {
                         return None;
@@ -1231,6 +1627,12 @@ impl VM {
                                     .and_then(|i| list.as_ref().0.get(i).cloned())
                                     .unwrap_or(RuntimeValue::Null))
                             }
+                            RuntimeValue::UInt(index) => Ok(list
+                                .as_ref()
+                                .0
+                                .get(*index as usize)
+                                .cloned()
+                                .unwrap_or(RuntimeValue::Null)),
                             RuntimeValue::Range(start, end) => {
                                 let (s, e) = resolve_range(list.as_ref().0.len(), *start, *end);
                                 let slice = list.as_ref().0[s..e].to_vec();
@@ -1242,9 +1644,38 @@ impl VM {
                 let resolved = self.resolve_value_for_op_ref(self.get_reg_value_ref(*value))?;
                 let val = match resolved {
                     RuntimeValue::List(list) => index_list(&list)?,
+                    RuntimeValue::Range(start, end) => match &index_val {
+                        RuntimeValue::Int(index) => {
+                            let len = (end - start).max(0) as usize;
+                            resolve_idx(len, *index)
+                                .map(|i| RuntimeValue::Int(start + i as i64))
+                                .unwrap_or(RuntimeValue::Null)
+                        }
+                        RuntimeValue::UInt(index) => {
+                            let len = (end - start).max(0) as usize;
+                            if (*index as usize) < len {
+                                RuntimeValue::Int(start + *index as i64)
+                            } else {
+                                RuntimeValue::Null
+                            }
+                        }
+                        RuntimeValue::Range(slice_start, slice_end) => {
+                            let len = (end - start).max(0) as usize;
+                            let (s, e) = resolve_range(len, *slice_start, *slice_end);
+                            RuntimeValue::Range(start + s as i64, start + e as i64)
+                        }
+                        _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                    },
                     RuntimeValue::Aggregate(None, tuple) => match &index_val {
                         RuntimeValue::Int(index) => resolve_idx(tuple.as_ref().0.0.len(), *index)
                             .and_then(|i| tuple.as_ref().0.0.get(i).map(|(_, v)| v.clone()))
+                            .unwrap_or(RuntimeValue::Null),
+                        RuntimeValue::UInt(index) => tuple
+                            .as_ref()
+                            .0
+                            .0
+                            .get(*index as usize)
+                            .map(|(_, v)| v.clone())
                             .unwrap_or(RuntimeValue::Null),
                         RuntimeValue::Range(start, end) => {
                             let (s, e) = resolve_range(tuple.as_ref().0.0.len(), *start, *end);
@@ -1269,6 +1700,11 @@ impl VM {
                                 .map(RuntimeValue::Char)
                                 .unwrap_or(RuntimeValue::Null)
                         }
+                        RuntimeValue::UInt(index) => s
+                            .chars()
+                            .nth(*index as usize)
+                            .map(RuntimeValue::Char)
+                            .unwrap_or(RuntimeValue::Null),
                         RuntimeValue::Range(start, end) => {
                             let v = s.chars().collect::<Vec<char>>();
                             let (s, e) = resolve_range(v.len(), *start, *end);
@@ -1292,8 +1728,12 @@ impl VM {
             } => {
                 let index_val = self.get_reg_value(*index);
                 let value = self.get_reg_value(*value);
-                let RuntimeValue::Int(index) = index_val else {
-                    return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                let index = match index_val {
+                    RuntimeValue::Int(index) => index,
+                    RuntimeValue::UInt(index) => index as i64,
+                    _ => {
+                        return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                    }
                 };
                 let resolve_idx = |len: usize, idx: i64| -> Result<usize, RuntimeError> {
                     let resolved = if idx < 0 { len as i64 + idx } else { idx };
@@ -1303,6 +1743,9 @@ impl VM {
                     Ok(resolved as usize)
                 };
                 let target_val_ref = self.get_reg_value_ref(*target);
+                if index < 0 && !matches!(target_val_ref, RuntimeValue::List(_)) {
+                    return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                }
                 match target_val_ref {
                     RuntimeValue::List(list) => {
                         let mut list = list.clone();
@@ -1339,6 +1782,8 @@ impl VM {
                             let idx = resolve_idx(vec.len(), index)?;
                             vec[idx] = value;
                             self.set_reg_value_in_frame(*frame, *reg, RuntimeValue::List(list));
+                        } else {
+                            return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
                         }
                     }
                     _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
@@ -1379,7 +1824,11 @@ impl VM {
                 let value = self.get_reg_value(*value);
                 match target {
                     RuntimeValue::Ref(name) => {
+                        let existed = self.variables.contains_key(&name);
                         self.variables.insert(name, value);
+                        if !existed {
+                            self.invalidate_name_resolution_caches();
+                        }
                     }
                     RuntimeValue::VarRef(id) => {
                         let _ = self.variables.set_by_id(id, value);
@@ -1399,6 +1848,13 @@ impl VM {
                 then_block,
                 else_block,
             } => {
+                if let RuntimeValue::Bool(v) = self.get_reg_value_ref(*cond) {
+                    return if *v {
+                        Ok(TerminateValue::Jump(*then_block))
+                    } else {
+                        Ok(TerminateValue::Jump(*else_block))
+                    };
+                }
                 let cond_val = self.resolve_value_for_op_ref(self.get_reg_value_ref(*cond))?;
                 match cond_val {
                     RuntimeValue::Bool(true) => return Ok(TerminateValue::Jump(*then_block)),
