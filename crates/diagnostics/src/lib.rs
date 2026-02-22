@@ -40,14 +40,16 @@ pub fn emit_parser_errors(path: &Path, contents: &str, errors: &[ParserError]) {
     let config = term::Config::default();
 
     for err in errors {
-        let mut diagnostic = Diagnostic::error().with_message(err.to_string());
+        let mut diagnostic = Diagnostic::error()
+            .with_message(format!("{} ({})", err.summary(), err.code()))
+            .with_code(err.code().to_string());
 
-        match err {
-            ParserError::Syntax { span, .. } => {
-                let range = span_to_range(contents, span);
-                diagnostic = diagnostic
-                    .with_labels(vec![Label::primary(file_id, range).with_message("here")]);
-            }
+        let range = span_to_range(contents, &err.span());
+        diagnostic = diagnostic.with_labels(vec![
+            Label::primary(file_id, range).with_message(err.to_string()),
+        ]);
+        if let Some(hint) = err.hint_message() {
+            diagnostic = diagnostic.with_notes(vec![format!("hint: {hint}")]);
         }
 
         let mut writer = writer.lock();
