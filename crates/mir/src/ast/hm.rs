@@ -9,6 +9,7 @@ use std::{fmt, sync::Arc};
 pub enum TypeCon {
     Int,
     UInt,
+    Byte,
     Float,
     Bool,
     Str,
@@ -46,6 +47,7 @@ impl fmt::Debug for Type {
             Type::TCon(tc) => match tc {
                 TypeCon::Int => write!(f, "Int"),
                 TypeCon::UInt => write!(f, "UInt"),
+                TypeCon::Byte => write!(f, "Byte"),
                 TypeCon::Float => write!(f, "Float"),
                 TypeCon::Bool => write!(f, "Bool"),
                 TypeCon::Str => write!(f, "Str"),
@@ -270,6 +272,7 @@ pub fn from_parser_data_type(pd: &ParserDataType, tg: &mut TypeGenerator) -> Typ
         ParserInnerType::Float => Type::TCon(TypeCon::Float),
         ParserInnerType::Int => Type::TCon(TypeCon::Int),
         ParserInnerType::UInt => Type::TCon(TypeCon::UInt),
+        ParserInnerType::Byte => Type::TCon(TypeCon::Byte),
         ParserInnerType::Null => Type::TCon(TypeCon::Null),
         ParserInnerType::Bool => Type::TCon(TypeCon::Bool),
         ParserInnerType::Str => Type::TCon(TypeCon::Str),
@@ -352,6 +355,7 @@ pub fn to_parser_data_type(
         Type::TCon(tc) => match tc {
             TypeCon::Int => ParserDataType::new(Span::default(), ParserInnerType::Int),
             TypeCon::UInt => ParserDataType::new(Span::default(), ParserInnerType::UInt),
+            TypeCon::Byte => ParserDataType::new(Span::default(), ParserInnerType::Byte),
             TypeCon::Float => ParserDataType::new(Span::default(), ParserInnerType::Float),
             TypeCon::Bool => ParserDataType::new(Span::default(), ParserInnerType::Bool),
             TypeCon::Str => ParserDataType::new(Span::default(), ParserInnerType::Str),

@@ -244,6 +244,7 @@ impl Deref for ParserDataType {
 pub enum ParserInnerType {
     Float,
     UInt,
+    Byte,
     Int,
     Null,
     Bool,
@@ -499,6 +500,7 @@ impl Display for ParserInnerType {
             Self::Float => write!(f, "float"),
             Self::Int => write!(f, "int"),
             Self::UInt => write!(f, "uint"),
+            Self::Byte => write!(f, "byte"),
             Self::Null => write!(f, "null"),
             Self::Dynamic => write!(f, "dyn"),
             Self::Bool => write!(f, "bool"),
@@ -713,6 +715,8 @@ impl FromStr for ParserInnerType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "int" => Self::Int,
+            "uint" => Self::UInt,
+            "byte" => Self::Byte,
             "float" => Self::Float,
             "bool" => Self::Bool,
             "str" => Self::Str,

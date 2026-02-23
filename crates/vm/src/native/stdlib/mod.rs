@@ -55,7 +55,7 @@ impl VM {
             "hashset_clear",
         ];
         let crypto_funcs = &["sha256", "sha512", "blake3"];
-        let list_funcs = &["sort_by", "binary_search_by"];
+        let list_funcs = &["sort_by", "binary_search_by", "raw_remove"];
         let regex_funcs = &["is_match", "find", "replace"];
         let net_funcs = &[
             "tcp_connect",

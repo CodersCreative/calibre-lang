@@ -136,7 +136,11 @@ impl MiddleEnvironment {
         );
         self.setup_std_module(scope, "random", &[]);
         self.setup_std_module(scope, "file", &[]);
-        self.setup_std_module(scope, "list", &["sort_by", "binary_search_by"]);
+        self.setup_std_module(
+            scope,
+            "list",
+            &["sort_by", "binary_search_by", "raw_remove"],
+        );
         self.setup_std_module(
             scope,
             "collections",

@@ -1,0 +1,111 @@
+import File from std::file;
+import Args from std::args;
+
+type BrainFuck = struct { pointer : uint, memory : list:<byte>, capacity : uint };
+
+impl BrainFuck {
+	const new = fn -> BrainFuck => BrainFuck { pointer : 0u, memory : [], capacity : 65535u };
+
+	const ensure_cell = fn (self : &mut Self) => {
+		for self.pointer >= len(self.memory) => self.memory <<= 0b;
+	};
+
+	const interpret = fn (self : &mut Self, s : str) -> null => {
+		let mut c = 0;
+		let s : list:<char> = s.to_chars();
+		let mut i = 0;
+		
+		for i < len(s) => {
+			match s[i] {
+				'>' => {
+					if self.pointer >= (self.capacity - 1) => {
+						self.pointer = 0;
+					} else => {
+						self.pointer += 1;
+					};
+				},
+				'<' => {
+					if self.pointer == 0 => {
+						self.pointer = self.capacity - 1;
+					} else => {
+						self.pointer -= 1;
+					};
+				},
+				'+' => {
+					self.ensure_cell();
+					self.memory[self.pointer] += 1;
+				},
+				'-' => {
+					self.ensure_cell();
+					self.memory[self.pointer] -= 1;
+				},
+				'.' => {
+					self.ensure_cell();
+					std::console::out(self.memory[self.pointer] as! char);
+				},
+				',' => {
+					self.ensure_cell();
+					let inp : str = std::console::input();
+					let inp : char = inp.to_chars()[0];
+					self.memory[self.pointer] = inp as! byte;
+				},
+				'[' => {
+					self.ensure_cell();
+					if self.memory[self.pointer] == 0 => {
+						c = 0;
+						i += 1;
+						
+						for c > 0 || s[i] != ']' => {
+							if s[i] == '[' => {
+								c += 1;
+							} else if s[i] == ']' => {
+								c -= 1;
+							};
+							
+							i += 1;
+						};
+					};
+				},
+				']' => {
+					self.ensure_cell();
+					if self.memory[self.pointer] != 0 => {
+						c = 0;
+						i -= 1;
+						
+						for c > 0 || s[i] != '[' => {
+							if s[i] == ']' => {
+								c += 1;
+							} else if s[i] == '[' => {
+								c -= 1;
+							};
+							
+							i -= 1;
+						};
+						
+						i -= 1;
+					};
+				}
+			};
+			
+			i += 1;
+		};
+	};
+};
+
+const main = fn => {
+	let input_path = match Args.first() {
+		.Some : p => p,
+		.None => __file__.replace("interpreter.cal", "helloworld.bf")
+	};
+	
+	let mut file = try File.open_read(input_path) : e => {
+		print(e);
+		return;
+	};
+	
+	let text : str = try file.read_all(100000) => panic("Failed to read file.");
+	let text : str = text.replace("\n", "").replace("\r", "").replace(" ", "").replace("\t", "");
+	
+	let mut interpreter = BrainFuck.new();
+	interpreter.interpret(text);
+};

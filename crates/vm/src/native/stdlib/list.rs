@@ -172,3 +172,101 @@ impl NativeFunction for ListBinarySearchBy {
         Ok(RuntimeValue::Option(None))
     }
 }
+
+pub struct ListRawRemove;
+
+fn normalize_remove_index(len: usize, idx: i64) -> Option<usize> {
+    if idx < 0 || idx as usize >= len {
+        return None;
+    }
+    Some(idx as usize)
+}
+
+fn remove_from_list_value(list: &mut Gc<crate::value::GcVec>, idx: i64) -> Option<RuntimeValue> {
+    let vec = &mut Gc::make_mut(list).0;
+    let idx = normalize_remove_index(vec.len(), idx)?;
+    Some(vec.remove(idx))
+}
+
+fn remove_from_target(
+    env: &mut VM,
+    target: RuntimeValue,
+    idx: i64,
+) -> Result<Option<RuntimeValue>, RuntimeError> {
+    match target {
+        RuntimeValue::Ref(name) => {
+            let Some(RuntimeValue::List(mut list)) = env.variables.get(&name).cloned() else {
+                return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+            };
+            let removed = remove_from_list_value(&mut list, idx);
+            env.variables.insert(name, RuntimeValue::List(list));
+            Ok(removed)
+        }
+        RuntimeValue::VarRef(id) => {
+            let Some(RuntimeValue::List(mut list)) = env.variables.get_by_id(id) else {
+                return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+            };
+            let removed = remove_from_list_value(&mut list, idx);
+            let _ = env.variables.set_by_id(id, RuntimeValue::List(list));
+            Ok(removed)
+        }
+        RuntimeValue::RegRef { frame, reg } => {
+            let RuntimeValue::List(mut list) = env.get_reg_value_in_frame(frame, reg) else {
+                return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+            };
+            let removed = remove_from_list_value(&mut list, idx);
+            env.set_reg_value_in_frame(frame, reg, RuntimeValue::List(list));
+            Ok(removed)
+        }
+        other => {
+            let resolved = env.resolve_value_for_op_ref(&other)?;
+            let RuntimeValue::List(mut list) = resolved else {
+                return Err(RuntimeError::UnexpectedType(other));
+            };
+            Ok(remove_from_list_value(&mut list, idx))
+        }
+    }
+}
+
+impl NativeFunction for ListRawRemove {
+    fn name(&self) -> String {
+        String::from("list.raw_remove")
+    }
+
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let mut list_target = None;
+        let mut idx = None;
+
+        for arg in args {
+            if list_target.is_none()
+                && matches!(
+                    arg,
+                    RuntimeValue::Ref(_)
+                        | RuntimeValue::VarRef(_)
+                        | RuntimeValue::RegRef { .. }
+                        | RuntimeValue::List(_)
+                )
+            {
+                list_target = Some(arg);
+                continue;
+            }
+            if idx.is_none() {
+                match env.resolve_value_for_op_ref(&arg)? {
+                    RuntimeValue::Int(v) => idx = Some(v),
+                    RuntimeValue::UInt(v) => idx = Some(v as i64),
+                    _ => {}
+                }
+            }
+        }
+
+        let Some(target) = list_target else {
+            return Err(RuntimeError::InvalidFunctionCall);
+        };
+        let Some(idx) = idx else {
+            return Err(RuntimeError::InvalidFunctionCall);
+        };
+
+        let removed = remove_from_target(env, target, idx)?;
+        Ok(RuntimeValue::Option(removed.map(Gc::new)))
+    }
+}

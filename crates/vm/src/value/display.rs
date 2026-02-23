@@ -118,6 +118,7 @@ impl Display for RuntimeValue {
             Self::Null => write!(f, "null"),
             Self::Float(x) => write!(f, "{}f", x),
             Self::UInt(x) => write!(f, "{}u", x),
+            Self::Byte(x) => write!(f, "{}b", x),
             Self::Ptr(x) => write!(f, "ptr -> {}", x),
             Self::Int(x) => write!(f, "{}", x),
             Self::Enum(x, y, Some(z)) => write!(f, "{}[{}] : {}", x, y, z.as_ref()),

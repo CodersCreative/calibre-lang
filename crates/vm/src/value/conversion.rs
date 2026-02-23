@@ -32,7 +32,11 @@ impl RuntimeValue {
 
         match (self, data_type) {
             (RuntimeValue::UInt(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
+            (RuntimeValue::UInt(x), ParserInnerType::Bool) => {
+                Ok(RuntimeValue::Bool(if x > 0 { true } else { false }))
+            }
             (RuntimeValue::UInt(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x)),
+            (RuntimeValue::UInt(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::UInt(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x as f64)),
             (RuntimeValue::UInt(x), ParserInnerType::Char) => {
                 Ok(RuntimeValue::Char((x as u8) as char))
@@ -42,7 +46,11 @@ impl RuntimeValue {
             }
 
             (RuntimeValue::Int(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x)),
+            (RuntimeValue::Int(x), ParserInnerType::Bool) => {
+                Ok(RuntimeValue::Bool(if x > 0 { true } else { false }))
+            }
             (RuntimeValue::Int(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Int(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::Int(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x as f64)),
             (RuntimeValue::Int(x), ParserInnerType::Char) => {
                 Ok(RuntimeValue::Char((x as u8) as char))
@@ -52,7 +60,11 @@ impl RuntimeValue {
             }
             (RuntimeValue::Float(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x)),
             (RuntimeValue::Float(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
+            (RuntimeValue::Float(x), ParserInnerType::Bool) => {
+                Ok(RuntimeValue::Bool(if x > 0.0 { true } else { false }))
+            }
             (RuntimeValue::Float(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Float(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::Float(x), ParserInnerType::Char) => {
                 Ok(RuntimeValue::Char((x as u8) as char))
             }
@@ -63,7 +75,11 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Range(from, to))
             }
             (RuntimeValue::Range(_, x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x)),
+            (RuntimeValue::Range(_, x), ParserInnerType::Bool) => {
+                Ok(RuntimeValue::Bool(if x > 0 { true } else { false }))
+            }
             (RuntimeValue::Range(_, x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Range(_, x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::Range(_, x), ParserInnerType::Float) => {
                 Ok(RuntimeValue::Float(x as f64))
             }
@@ -74,6 +90,9 @@ impl RuntimeValue {
             (RuntimeValue::Bool(x), ParserInnerType::UInt) => {
                 Ok(RuntimeValue::UInt(if x { 1 } else { 0 }))
             }
+            (RuntimeValue::Bool(x), ParserInnerType::Byte) => {
+                Ok(RuntimeValue::Byte(if x { 1 } else { 0 }))
+            }
             (RuntimeValue::Bool(x), ParserInnerType::Float) => {
                 Ok(RuntimeValue::Float(if x { 1.0 } else { 0.0 }))
             }
@@ -81,7 +100,11 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Str(Arc::new(x.to_string())))
             }
             (RuntimeValue::Char(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(x)),
+            (RuntimeValue::Char(x), ParserInnerType::Bool) => {
+                Ok(RuntimeValue::Bool(if x as u16 > 0 { true } else { false }))
+            }
             (RuntimeValue::Char(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Char(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::Char(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
             (RuntimeValue::Char(x), ParserInnerType::Float) => {
                 Ok(RuntimeValue::Float((x as u8) as f64))
@@ -96,8 +119,22 @@ impl RuntimeValue {
             (RuntimeValue::Str(x), ParserInnerType::UInt) => {
                 Ok(RuntimeValue::UInt(x.as_str().trim().parse()?))
             }
+            (RuntimeValue::Str(x), ParserInnerType::Byte) => {
+                Ok(RuntimeValue::Byte(x.as_str().trim().parse()?))
+            }
             (RuntimeValue::Str(x), ParserInnerType::Int) => {
                 Ok(RuntimeValue::Int(x.as_str().trim().parse()?))
+            }
+            (RuntimeValue::Byte(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x)),
+            (RuntimeValue::Byte(x), ParserInnerType::Bool) => {
+                Ok(RuntimeValue::Bool(if x > 0 { true } else { false }))
+            }
+            (RuntimeValue::Byte(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Byte(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
+            (RuntimeValue::Byte(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x as f64)),
+            (RuntimeValue::Byte(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(x as char)),
+            (RuntimeValue::Byte(x), ParserInnerType::Str) => {
+                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
             }
             (RuntimeValue::Str(x), ParserInnerType::Char) => {
                 let ch = x.as_str().chars().next().ok_or_else(|| {
@@ -124,6 +161,9 @@ impl RuntimeValue {
                 ))))
             }
             (RuntimeValue::Ptr(id), ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Ptr(id)),
+            (RuntimeValue::Ptr(x), ParserInnerType::Bool) => {
+                Ok(RuntimeValue::Bool(if x > 0 { true } else { false }))
+            }
             (RuntimeValue::Null, ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Ptr(0)),
             (value, ParserInnerType::Ptr(inner)) => {
                 let converted = if inner.data_type == ParserInnerType::Null {

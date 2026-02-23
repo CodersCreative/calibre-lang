@@ -190,15 +190,48 @@ impl<'a> BlockLoweringCtx<'a> {
                         }
                         LirNodeType::Index(base, index) => {
                             let index_reg = self.lower_node(*index, node.span);
-                            let base_reg = self.lower_node(*base, node.span);
-                            self.emit(
-                                VMInstruction::SetIndex {
-                                    target: base_reg,
-                                    index: index_reg,
-                                    value: value_reg,
-                                },
-                                node.span,
-                            );
+                            match *base {
+                                LirNodeType::Member(owner, member) => {
+                                    let owner_reg = self.lower_node(*owner, node.span);
+                                    let member_idx = self.add_string(member.to_string());
+                                    let member_val_reg = self.alloc_reg();
+                                    self.emit(
+                                        VMInstruction::LoadMember {
+                                            dst: member_val_reg,
+                                            value: owner_reg,
+                                            member: member_idx,
+                                        },
+                                        node.span,
+                                    );
+                                    self.emit(
+                                        VMInstruction::SetIndex {
+                                            target: member_val_reg,
+                                            index: index_reg,
+                                            value: value_reg,
+                                        },
+                                        node.span,
+                                    );
+                                    self.emit(
+                                        VMInstruction::SetMember {
+                                            target: owner_reg,
+                                            member: member_idx,
+                                            value: member_val_reg,
+                                        },
+                                        node.span,
+                                    );
+                                }
+                                other_base => {
+                                    let base_reg = self.lower_node(other_base, node.span);
+                                    self.emit(
+                                        VMInstruction::SetIndex {
+                                            target: base_reg,
+                                            index: index_reg,
+                                            value: value_reg,
+                                        },
+                                        node.span,
+                                    );
+                                }
+                            }
                         }
                         other => {
                             let target_reg = self.lower_node(other, node.span);

@@ -71,6 +71,7 @@ impl TryFrom<RuntimeValue> for HashKey {
         match value {
             RuntimeValue::Int(x) => Ok(Self::Int(x)),
             RuntimeValue::UInt(x) => Ok(Self::UInt(x)),
+            RuntimeValue::Byte(x) => Ok(Self::UInt(x as u64)),
             RuntimeValue::Bool(x) => Ok(Self::Bool(x)),
             RuntimeValue::Char(x) => Ok(Self::Char(x)),
             RuntimeValue::Str(x) => Ok(Self::Str(x)),
@@ -255,6 +256,7 @@ pub enum RuntimeValue {
     Float(f64),
     Int(i64),
     UInt(u64),
+    Byte(u8),
     Ptr(u64),
     Range(i64, i64),
     Bool(bool),
@@ -560,6 +562,7 @@ impl RuntimeValue {
                 "list.binary_search_by",
                 Arc::new(stdlib::list::ListBinarySearchBy),
             ),
+            ("list.raw_remove", Arc::new(stdlib::list::ListRawRemove)),
             ("net.tcp_connect", Arc::new(stdlib::net::TcpConnect)),
             ("net.tcp_listen", Arc::new(stdlib::net::TcpListen)),
             ("net.tcp_accept", Arc::new(stdlib::net::TcpAccept)),
@@ -619,6 +622,7 @@ impl From<VMLiteral> for RuntimeValue {
         match value {
             VMLiteral::Int(x) => Self::Int(x),
             VMLiteral::UInt(x) => Self::UInt(x),
+            VMLiteral::Byte(x) => Self::Byte(x),
             VMLiteral::Float(x) => Self::Float(x),
             VMLiteral::Char(x) => Self::Char(x),
             VMLiteral::String(x) => Self::Str(x.into()),

@@ -235,6 +235,15 @@ pub fn parse_program_with_source(
         })
         .boxed();
 
+    let exponent_part = just('e')
+        .ignore_then(choice((just('+'), just('-'))).or_not())
+        .then(dec_digits.clone())
+        .map(|(sign, exp)| match sign {
+            Some(s) => format!("{s}{exp}"),
+            None => exp,
+        })
+        .boxed();
+
     let float_suffix_lit = lex(
         pad.clone(),
         dec_digits.clone().then_ignore(just('f')).map(|n| n),
@@ -252,19 +261,22 @@ pub fn parse_program_with_source(
         pad.clone(),
         dec_digits
             .clone()
+            .then(exponent_part.clone().or_not())
             .then(
-                choice((just('u'), just('i')))
+                choice((just('u'), just('i'), just('b')))
                     .or_not()
                     .map(|x| x.unwrap_or('\0')),
             )
-            .map(|(n, suffix)| {
-                if suffix == '\0' {
-                    n
-                } else {
-                    let mut out = n;
-                    out.push(suffix);
-                    out
+            .map(|((n, exp), suffix)| {
+                let mut out = n;
+                if let Some(exp) = exp {
+                    out.push('e');
+                    out.push_str(&exp);
                 }
+                if suffix != '\0' {
+                    out.push(suffix);
+                }
+                out
             }),
     )
     .map_with_span({
@@ -275,12 +287,27 @@ pub fn parse_program_with_source(
 
     let float_lit = lex(
         pad.clone(),
-        dec_digits
-            .clone()
-            .then_ignore(just('.'))
-            .then(dec_digits.clone())
-            .then_ignore(just('f').or_not())
-            .map(|(a, b)| format!("{a}.{b}")),
+        choice((
+            dec_digits
+                .clone()
+                .then_ignore(just('.'))
+                .then(dec_digits.clone())
+                .then(exponent_part.clone().or_not())
+                .then_ignore(just('f').or_not())
+                .map(|((a, b), exp)| {
+                    if let Some(exp) = exp {
+                        format!("{a}.{b}e{exp}")
+                    } else {
+                        format!("{a}.{b}")
+                    }
+                }),
+            dec_digits
+                .clone()
+                .then(exponent_part.clone())
+                .then_ignore(choice((just('u'), just('i'), just('b'))).not())
+                .then_ignore(just('f').or_not())
+                .map(|(n, exp)| format!("{n}e{exp}")),
+        )),
     )
     .map_with_span({
         let ls = line_starts.clone();
@@ -358,6 +385,7 @@ pub fn parse_program_with_source(
                         match name.as_str() {
                             "int" => ParserInnerType::Int,
                             "uint" => ParserInnerType::UInt,
+                            "byte" => ParserInnerType::Byte,
                             "float" => ParserInnerType::Float,
                             "bool" => ParserInnerType::Bool,
                             "str" => ParserInnerType::Str,
@@ -836,15 +864,32 @@ pub fn parse_program_with_source(
                 })
                 .boxed();
 
+            let struct_field_ident = lex(
+                pad_with_newline.clone(),
+                text::ident().map(|s: &str| s.to_string()),
+            )
+            .try_map(|s: String, span| {
+                if is_keyword(&s) {
+                    Err(Rich::custom(span, "keyword cannot be identifier"))
+                } else {
+                    Ok(s)
+                }
+            })
+            .map_with_span({
+                let ls = line_starts.clone();
+                move |s: String, r| (s, span(ls.as_ref(), r))
+            })
+            .boxed();
+
             let struct_lit = generic_ident
                 .clone()
                 .then(
-                    lex(pad.clone(), just('{'))
+                    lex(pad_with_newline.clone(), just('{'))
                         .ignore_then(
-                            ident
+                            struct_field_ident
                                 .clone()
                                 .then(
-                                    lex(pad.clone(), just(':'))
+                                    lex(pad_with_newline.clone(), just(':'))
                                         .ignore_then(expr.clone())
                                         .or_not(),
                                 )
@@ -852,13 +897,13 @@ pub fn parse_program_with_source(
                                     let value = value.unwrap_or_else(|| ident_node(sp, &k));
                                     (k, value)
                                 })
-                                .separated_by(lex(pad.clone(), just(',')))
+                                .separated_by(lex(pad_with_newline.clone(), just(',')))
                                 .allow_trailing()
                                 .collect::<Vec<_>>()
                                 .or_not()
                                 .map(|x| x.unwrap_or_default()),
                         )
-                        .then_ignore(lex(pad.clone(), just('}'))),
+                        .then_ignore(lex(pad_with_newline.clone(), just('}'))),
                 )
                 .map(|(identifier, fields)| {
                     let sp = *identifier.span();

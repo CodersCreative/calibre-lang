@@ -321,6 +321,7 @@ impl MiddleEnvironment {
             ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
             ParserInnerType::Int => String::from("int"),
             ParserInnerType::UInt => String::from("uint"),
+            ParserInnerType::Byte => String::from("byte"),
             ParserInnerType::Float => String::from("float"),
             ParserInnerType::Bool => String::from("bool"),
             ParserInnerType::Char => String::from("char"),
@@ -340,28 +341,13 @@ impl MiddleEnvironment {
             let short = name.rsplit_once("::").map(|(lhs, _)| lhs).unwrap_or(name);
             short.split("->").next().unwrap_or(short)
         }
+
         match (impl_ty, target) {
-            (ParserInnerType::Struct(s), ParserInnerType::Int) if struct_base(s) == "int" => {
-                return true;
+            (ParserInnerType::Struct(s), target)
+                if ParserInnerType::from_str(struct_base(s)).as_ref() == Ok(target) =>
+            {
+                true
             }
-            (ParserInnerType::Struct(s), ParserInnerType::Float) if struct_base(s) == "float" => {
-                return true;
-            }
-            (ParserInnerType::Struct(s), ParserInnerType::Bool) if struct_base(s) == "bool" => {
-                return true;
-            }
-            (ParserInnerType::Struct(s), ParserInnerType::Char) if struct_base(s) == "char" => {
-                return true;
-            }
-            (ParserInnerType::Struct(s), ParserInnerType::Str) if struct_base(s) == "str" => {
-                return true;
-            }
-            (ParserInnerType::Struct(s), ParserInnerType::Range) if struct_base(s) == "range" => {
-                return true;
-            }
-            _ => {}
-        }
-        match (impl_ty, target) {
             (ParserInnerType::Struct(a), _) if generic_params.contains(a) => true,
             (ParserInnerType::Struct(a), ParserInnerType::Struct(b))
                 if b == a
@@ -2848,7 +2834,9 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             NodeType::IntLiteral(number) => Some(ParserDataType {
-                data_type: if number.ends_with('u') {
+                data_type: if number.ends_with('b') {
+                    ParserInnerType::Byte
+                } else if number.ends_with('u') {
                     ParserInnerType::UInt
                 } else {
                     ParserInnerType::Int

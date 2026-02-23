@@ -82,21 +82,25 @@ impl MiddleEnvironment {
 
         if let Some(function_name) = resolved_caller {
             let mut lowered_args = Vec::new();
-            let mut should_prepend_receiver = receiver_is_bound_value;
-            if !should_prepend_receiver
-                && let Some(var) = self.variables.get(&function_name)
+            let mut should_prepend_receiver = false;
+            if let Some(var) = self.variables.get(&function_name)
                 && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
                 && let Some(first) = parameters.first()
-                && let Some(target) = target_type.as_ref()
             {
-                let target_inner = target.clone().unwrap_all_refs().data_type;
-                let first_inner = match &first.data_type {
-                    ParserInnerType::Ref(inner, _) => &inner.data_type,
-                    other => other,
-                };
-                if self.impl_type_matches(first_inner, &target_inner, &Vec::new()) {
+                if let Some(target) = target_type.as_ref() {
+                    let target_inner = target.clone().unwrap_all_refs().data_type;
+                    let first_inner = match &first.data_type {
+                        ParserInnerType::Ref(inner, _) => &inner.data_type,
+                        other => other,
+                    };
+                    if self.impl_type_matches(first_inner, &target_inner, &Vec::new()) {
+                        should_prepend_receiver = true;
+                    }
+                } else if receiver_is_bound_value {
                     should_prepend_receiver = true;
                 }
+            } else {
+                should_prepend_receiver = receiver_is_bound_value;
             }
 
             if should_prepend_receiver {
@@ -378,6 +382,7 @@ impl MiddleEnvironment {
         let target_family: Option<String> = match &target_inner {
             ParserInnerType::Int => Some("int".to_string()),
             ParserInnerType::UInt => Some("uint".to_string()),
+            ParserInnerType::Byte => Some("byte".to_string()),
             ParserInnerType::Float => Some("float".to_string()),
             ParserInnerType::Bool => Some("bool".to_string()),
             ParserInnerType::Char => Some("char".to_string()),
@@ -429,6 +434,7 @@ impl MiddleEnvironment {
         if let Some(target_family) = match &target_inner {
             ParserInnerType::Int => Some("int"),
             ParserInnerType::UInt => Some("uint"),
+            ParserInnerType::Byte => Some("byte"),
             ParserInnerType::Float => Some("float"),
             ParserInnerType::Bool => Some("bool"),
             ParserInnerType::Char => Some("char"),

@@ -96,10 +96,7 @@ impl<T> list:<T> {
 	const pop = fn (self : &mut list:<T>) -> T? => {
 		let l = len(self);
 		if l == 0 => none;
-		let last = self[l - 1];
-		let mut out = list:<T>[self[i] for i in 0..(l - 1)];
-		self = move out;
-		some(last);
+		raw_remove(self, l - 1);
 	};
 
 	const clear = fn (self : &mut list:<T>) => {
@@ -107,14 +104,7 @@ impl<T> list:<T> {
 	};
 
 	const remove = fn (self : &mut list:<T>, idx : int) -> T? => {
-		let l = len(self);
-		if idx < 0 || idx >= l => none;
-		let removed = self[idx];
-		let mut out = list:<T>[];
-		
-		for i in 0..l => if i != idx => out <<= self[i];
-		self = move out;
-		some(removed);
+		raw_remove(self, idx);
 	};
 
 	const remove_value = fn (self : &mut list:<T>, needle : T) -> bool => {

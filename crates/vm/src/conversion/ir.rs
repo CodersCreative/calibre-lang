@@ -226,6 +226,7 @@ pub struct AggregateLayout {
 pub enum VMLiteral {
     Int(i64),
     UInt(u64),
+    Byte(u8),
     Float(f64),
     Char(char),
     String(String),
@@ -248,6 +249,7 @@ impl Display for VMLiteral {
         match self {
             Self::Int(x) => write!(f, "{x}"),
             Self::UInt(x) => write!(f, "{x}u"),
+            Self::Byte(x) => write!(f, "{x}b"),
             Self::Float(x) => write!(f, "{x}f"),
             Self::Char(x) => write!(f, "'{x}'"),
             Self::String(x) => write!(f, "{x:?}"),
@@ -281,6 +283,7 @@ impl From<LirLiteral> for VMLiteral {
         match value {
             LirLiteral::Int(x) => Self::Int(x),
             LirLiteral::UInt(x) => Self::UInt(x),
+            LirLiteral::Byte(x) => Self::Byte(x),
             LirLiteral::Float(x) => Self::Float(x),
             LirLiteral::Char(x) => Self::Char(x),
             LirLiteral::String(x) => Self::String(x),

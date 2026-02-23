@@ -25,6 +25,13 @@ impl MiddleNode {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IntLiteralType {
+    Int,
+    UInt,
+    Byte,
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
@@ -116,7 +123,7 @@ pub enum MiddleNodeType {
     FloatLiteral(f64),
     IntLiteral {
         value: i64,
-        signed: bool,
+        int_type: IntLiteralType,
     },
     MemberExpression {
         path: Vec<(MiddleNode, bool)>,
@@ -370,10 +377,12 @@ impl Into<NodeType> for MiddleNodeType {
             }),
             Self::CharLiteral(x) => NodeType::CharLiteral(x),
             Self::FloatLiteral(x) => NodeType::FloatLiteral(x),
-            Self::IntLiteral { value, signed } => {
+            Self::IntLiteral { value, int_type } => {
                 let mut out = value.to_string();
-                if !signed {
-                    out.push('u');
+                match int_type {
+                    IntLiteralType::Int => {}
+                    IntLiteralType::UInt => out.push('u'),
+                    IntLiteralType::Byte => out.push('b'),
                 }
                 NodeType::IntLiteral(out)
             }

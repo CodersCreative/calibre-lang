@@ -1,6 +1,6 @@
 use crate::{
     ast::hm::Type,
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{IntLiteralType, MiddleNode, MiddleNodeType},
     environment::{
         MiddleEnvironment, MiddleObject, MiddleOverload, MiddleTrait, MiddleTraitMember,
         MiddleTypeDefType, Operator, get_disamubiguous_name,
@@ -165,21 +165,34 @@ impl MiddleEnvironment {
             NodeType::IntLiteral(number) => {
                 let literal = number.clone();
                 let (number_text, int_suffix) = match number.chars().last() {
-                    Some(c) if matches!(c, 'u' | 'i') => {
+                    Some(c) if matches!(c, 'u' | 'i' | 'b') => {
                         (&number[..number.len().saturating_sub(1)], Some(c))
                     }
                     _ => (number.as_str(), None),
                 };
                 let number_text = number_text.replace('_', "");
 
-                let parsed = if let Some((_, x)) = number_text.split_once("x") {
-                    i64::from_str_radix(x, 16)
-                } else if let Some((_, x)) = number_text.split_once("o") {
-                    i64::from_str_radix(x, 8)
-                } else if let Some((_, x)) = number_text.split_once("b") {
-                    i64::from_str_radix(x, 2)
+                let parse_base = |text: &str| {
+                    if let Some((_, x)) = text.split_once("x") {
+                        i64::from_str_radix(x, 16)
+                    } else if let Some((_, x)) = text.split_once("o") {
+                        i64::from_str_radix(x, 8)
+                    } else if let Some((_, x)) = text.split_once("b") {
+                        i64::from_str_radix(x, 2)
+                    } else {
+                        text.parse()
+                    }
+                };
+
+                let parsed = if let Some((base, exp)) = number_text.split_once('e') {
+                    match (parse_base(base).ok(), exp.parse::<u32>().ok()) {
+                        (Some(base_val), Some(power)) => {
+                            base_val.checked_mul(10_i64.pow(power)).ok_or(())
+                        }
+                        _ => Err(()),
+                    }
                 } else {
-                    number_text.parse()
+                    parse_base(&number_text).map_err(|_| ())
                 };
 
                 let number = parsed.map_err(|_| {
@@ -194,7 +207,11 @@ impl MiddleEnvironment {
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::IntLiteral {
                         value: number,
-                        signed: !matches!(int_suffix, Some('u')),
+                        int_type: match int_suffix {
+                            Some('u') => IntLiteralType::UInt,
+                            Some('b') => IntLiteralType::Byte,
+                            _ => IntLiteralType::Int,
+                        },
                     },
                     span: node.span,
                 })
@@ -907,7 +924,7 @@ impl MiddleEnvironment {
                                 value: Box::new(MiddleNode::new(
                                     MiddleNodeType::IntLiteral {
                                         value: 1,
-                                        signed: true,
+                                        int_type: IntLiteralType::Int,
                                     },
                                     self.current_span(),
                                 )),

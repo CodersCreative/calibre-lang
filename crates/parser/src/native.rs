@@ -172,6 +172,10 @@ impl ParserDataType {
                 "list.binary_search_by",
                 ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Int))),
             ),
+            (
+                "list.raw_remove",
+                ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Dynamic))),
+            ),
             ("net.http_request_raw", ParserInnerType::Str),
             ("http_request_raw", ParserInnerType::Str),
             (

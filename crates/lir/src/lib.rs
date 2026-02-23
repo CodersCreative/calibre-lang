@@ -1,5 +1,5 @@
 use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{IntLiteralType, MiddleNode, MiddleNodeType},
     environment::{MiddleEnvironment, MiddleTypeDefType},
 };
 use calibre_parser::Span;
@@ -115,6 +115,7 @@ pub struct BlockId(pub u32);
 pub enum LirLiteral {
     Int(i64),
     UInt(u64),
+    Byte(u8),
     Float(f64),
     Char(char),
     String(String),
@@ -126,6 +127,7 @@ impl Display for LirLiteral {
         match self {
             Self::Int(x) => write!(f, "{x}"),
             Self::UInt(x) => write!(f, "{x}u"),
+            Self::Byte(x) => write!(f, "{x}b"),
             Self::Float(x) => write!(f, "{x}f"),
             Self::Char(x) => write!(f, "'{x}'"),
             Self::String(x) => write!(f, "{x:?}"),
@@ -482,13 +484,11 @@ impl<'a> LirEnvironment<'a> {
     fn member_field(step: MiddleNode) -> Box<str> {
         match step.node_type {
             MiddleNodeType::Identifier(name) => name.text.into_boxed_str(),
-            MiddleNodeType::IntLiteral { value, signed } => {
-                if signed {
-                    value.to_string().into_boxed_str()
-                } else {
-                    format!("{value}u").into_boxed_str()
-                }
-            }
+            MiddleNodeType::IntLiteral { value, int_type } => match int_type {
+                IntLiteralType::Int => value.to_string().into_boxed_str(),
+                IntLiteralType::UInt => format!("{value}u").into_boxed_str(),
+                IntLiteralType::Byte => format!("{value}b").into_boxed_str(),
+            },
             MiddleNodeType::FloatLiteral(x) => x.to_string().into_boxed_str(),
             _ => "<invalid>".to_string().into_boxed_str(),
         }
@@ -563,13 +563,11 @@ impl<'a> LirEnvironment<'a> {
     pub fn lower_node(&mut self, node: MiddleNode) -> LirNodeType {
         let span = node.span;
         match node.node_type {
-            MiddleNodeType::IntLiteral { value, signed } => {
-                if signed {
-                    LirNodeType::Literal(LirLiteral::Int(value))
-                } else {
-                    LirNodeType::Literal(LirLiteral::UInt(value as u64))
-                }
-            }
+            MiddleNodeType::IntLiteral { value, int_type } => match int_type {
+                IntLiteralType::Int => LirNodeType::Literal(LirLiteral::Int(value)),
+                IntLiteralType::UInt => LirNodeType::Literal(LirLiteral::UInt(value as u64)),
+                IntLiteralType::Byte => LirNodeType::Literal(LirLiteral::Byte(value as u8)),
+            },
             MiddleNodeType::FloatLiteral(f) => LirNodeType::Literal(LirLiteral::Float(f)),
             MiddleNodeType::CharLiteral(c) => LirNodeType::Literal(LirLiteral::Char(c)),
             MiddleNodeType::Null => LirNodeType::Literal(LirLiteral::Null),

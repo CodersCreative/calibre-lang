@@ -49,6 +49,7 @@ async fn run_source(
     path: &Path,
     cache: bool,
     verbosity: Verbosity,
+    program_args: Vec<String>,
     entry_name: Option<String>,
     vm_config: VMConfig,
     package_metadata: Option<PackageMetadata>,
@@ -142,6 +143,7 @@ async fn run_source(
 
     let entry_name = std::mem::take(&mut artifacts.entry_name);
     let mut vm: VM = VM::new(artifacts.registry, artifacts.mappings, vm_config);
+    vm.set_program_args(program_args);
 
     if verbosity.is_level(&Verbosity::Byte) {
         println!("Bytecode - elapsed {}ms:", start.elapsed().as_millis());
@@ -1032,6 +1034,8 @@ enum Commands {
         verbosity: Option<Verbosity>,
         #[arg(long)]
         module_only: bool,
+        #[arg(last = true)]
+        program_args: Vec<String>,
     },
     Clear,
     Test {
@@ -1092,6 +1096,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     example,
                     verbosity,
                     module_only,
+                    program_args,
                 }) => {
                     if let Some(path) = resolve_run_target(path, example)? {
                         let path = PathBuf::from_str(path.to_string_lossy().as_ref())?;
@@ -1111,6 +1116,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             &path,
                             !args.no_cache,
                             verbosity.unwrap_or_default(),
+                            program_args,
                             None,
                             vm_config,
                             package_metadata,
