@@ -450,6 +450,9 @@ impl RuntimeValue {
             ("str.contains", Arc::new(stdlib::str::StrContains())),
             ("str.starts_with", Arc::new(stdlib::str::StrStartsWith())),
             ("str.ends_with", Arc::new(stdlib::str::StrEndsWith())),
+            ("args.len", Arc::new(stdlib::args::ArgsLen)),
+            ("args.get", Arc::new(stdlib::args::ArgsGet)),
+            ("args.all", Arc::new(stdlib::args::ArgsAll)),
             ("discriminant", Arc::new(native::global::DiscriminantFn())),
             ("tuple", Arc::new(native::global::TupleFn())),
             ("panic", Arc::new(native::global::PanicFn())),
@@ -551,6 +554,11 @@ impl RuntimeValue {
             (
                 "collections.hashset_clear",
                 Arc::new(stdlib::collections::HashSetClear),
+            ),
+            ("list.sort_by", Arc::new(stdlib::list::ListSortBy)),
+            (
+                "list.binary_search_by",
+                Arc::new(stdlib::list::ListBinarySearchBy),
             ),
             ("net.tcp_connect", Arc::new(stdlib::net::TcpConnect)),
             ("net.tcp_listen", Arc::new(stdlib::net::TcpListen)),

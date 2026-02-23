@@ -1,4 +1,4 @@
-import (File) from std::file;
+import File from std::file;
 
 trait Person {
 	const name : fn (&Self) -> str;

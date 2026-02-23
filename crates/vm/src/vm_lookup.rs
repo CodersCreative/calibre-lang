@@ -31,6 +31,9 @@ impl VM {
                 .find(|(k, _)| k.starts_with(prefix))
                 .map(|(_, v)| Arc::clone(v));
         }
+        if name.contains("::") {
+            return None;
+        }
         let (_, short_name) = name.rsplit_once(':')?;
         let func = self.func_suffix.get(short_name)?.as_ref()?;
         (!self.moved_functions.contains(&func.name)).then(|| func.clone())
@@ -274,11 +277,10 @@ impl VM {
         if self.variables.contains_key(name) {
             return VarName::Var(name.to_string());
         }
-        if let Some((_prefix, short)) = name.split_once("::") {
-            if let Some(resolved) = resolve_by_suffix(short) {
-                return resolved;
-            }
-        } else if let Some((_, short_name)) = name.rsplit_once(':') {
+        if name.contains("::") {
+            return VarName::Global;
+        }
+        if let Some((_, short_name)) = name.rsplit_once(':') {
             if let Some(resolved) = resolve_by_suffix(short_name) {
                 return resolved;
             };

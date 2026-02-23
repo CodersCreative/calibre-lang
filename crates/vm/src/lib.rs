@@ -70,6 +70,7 @@ pub struct VM {
     pub variables: VariableStore,
     pub registry: Arc<VMRegistry>,
     pub mappings: Arc<Vec<String>>,
+    pub program_args: Arc<Vec<String>>,
     pub counter: u64,
     pub ptr_heap: FxHashMap<u64, RuntimeValue>,
     pub config: VMConfig,
@@ -167,6 +168,7 @@ impl VM {
         let mut vm = Self {
             registry,
             mappings,
+            program_args: Arc::new(Vec::new()),
             variables: VariableStore::default(),
             counter: 0,
             ptr_heap: FxHashMap::default(),
@@ -253,6 +255,14 @@ impl VM {
 
     pub fn spawn_async_task(&self, func: RuntimeValue, wait_group: Option<Arc<WaitGroupInner>>) {
         self.scheduler.spawn(self, func, wait_group);
+    }
+
+    pub fn set_program_args(&mut self, args: Vec<String>) {
+        self.program_args = Arc::new(args);
+    }
+
+    pub fn program_args(&self) -> &[String] {
+        self.program_args.as_ref()
     }
 
     pub fn take_task_state(&mut self) -> TaskState {

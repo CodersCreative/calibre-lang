@@ -143,6 +143,10 @@ impl<T> list:<T> {
 		out;
 	};
 
+	const sort = fn (self : list:<T>, compare : fn(T, T) -> int) -> list:<T> => sort_by(self, compare);
+
+	const binary_search = fn (self : list:<T>, needle : T, compare : fn(T, T) -> int) -> int? => binary_search_by(self, needle, compare);
+
 	const join = fn (self : list:<str>, sep : str) -> str => {
 		let mut out = "";
 		

@@ -2,8 +2,8 @@ import data;
 import * from data;
 import * from std::option;
 import * from std::math;
-import (File) from std::file;
-import (Channel) from std::async;
+import File from std::file;
+import Channel from std::async;
 
 // Constants are immutable.
 const language_forced : Language = Language.ENGLISH : 6;
@@ -91,14 +91,14 @@ bench showcase_generator_throughput => {
 
 // You can impl custom functions/traits on native types
 impl int {
-	const days = fn(self : Self) -> Self => {
+	const days = fn (self : Self) -> Self => {
 		return self * 24 * 60 * 60;
-	} 
-}
+	};
+};
 
 const main = fn => {
 	print("5 days in seconds : " & 5.days());
-
+	
 	// Struct/enum literals.
 	let language = Language.FRENCH : FrenchData { data : 10, code : 5 };
 	let mut recursive_language : Language = Language.ARABIC : language, Language.SPANISH;

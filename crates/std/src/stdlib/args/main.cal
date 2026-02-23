@@ -1,0 +1,13 @@
+type Args = struct { };
+
+impl Args {
+	const len = fn -> int => len();
+
+	const nth = fn (idx : int) -> str? => get(idx);
+
+	const all = fn -> list:<str> => all();
+
+	const first = fn -> str? => get(0);
+
+	const is_empty = fn -> bool => len() == 0;
+};

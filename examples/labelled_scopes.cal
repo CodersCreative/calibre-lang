@@ -7,7 +7,7 @@ const main = fn => {
 	
 	print("loop result = " & value);
 	
-	value = => @basic_block [] {
+	value = => @basic_block {
 		defer print("basic_block defer");
 		if value > 8 => break @basic_block 100;
 		

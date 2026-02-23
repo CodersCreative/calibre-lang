@@ -65,6 +65,15 @@ impl ParserDataType {
             ("str.contains", ParserInnerType::Bool),
             ("str.starts_with", ParserInnerType::Bool),
             ("str.ends_with", ParserInnerType::Bool),
+            ("args.len", ParserInnerType::Int),
+            (
+                "args.get",
+                ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),
+            ),
+            (
+                "args.all",
+                ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Str))),
+            ),
             ("discriminant", ParserInnerType::Int),
             ("async.channel_new", ParserInnerType::Dynamic),
             ("async.channel_send", ParserInnerType::Null),
@@ -155,6 +164,14 @@ impl ParserDataType {
                 ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Dynamic))),
             ),
             ("collections.hashset_clear", ParserInnerType::Null),
+            (
+                "list.sort_by",
+                ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Dynamic))),
+            ),
+            (
+                "list.binary_search_by",
+                ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Int))),
+            ),
             ("net.http_request_raw", ParserInnerType::Str),
             ("http_request_raw", ParserInnerType::Str),
             (

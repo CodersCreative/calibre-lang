@@ -47,9 +47,9 @@ const main = fn => {
 	let mut lock_ch : Channel:<bool> = Channel.new();
 	
 	let wg = spawn {
-		bmi_ch.send(bmi(52.5, 1.65)),
-		fac_ch.send(factorial(5)),
-		lock_ch.send(lock(3, 4, 6))
+		=> bmi_ch.send(bmi(52.5, 1.65)),
+		=> fac_ch.send(factorial(5)),
+		=> lock_ch.send(lock(3, 4, 6))
 	};
 	
 	wg.wait();

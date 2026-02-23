@@ -157,6 +157,9 @@ impl VM {
         if let Some(found) = self.resolve_named_global_runtime_value(name) {
             return Some(found);
         }
+        if name.contains("::") {
+            return None;
+        }
 
         let (_, short_name) = name.rsplit_once(':')?;
         if let Some(found) = self.resolve_named_global_runtime_value(short_name) {
@@ -199,6 +202,9 @@ impl VM {
     fn try_move_global_runtime_value(&mut self, name: &str) -> Option<RuntimeValue> {
         if let Some(found) = self.move_named_global_runtime_value(name) {
             return Some(found);
+        }
+        if name.contains("::") {
+            return None;
         }
         let (_, short_name) = name.rsplit_once(':')?;
         if let Some(found) = self.move_named_global_runtime_value(short_name) {

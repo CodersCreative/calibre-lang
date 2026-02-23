@@ -1335,12 +1335,16 @@ impl Formatter {
                 };
 
                 if let Some(named) = named {
-                    txt.push_str(&format!(" @{} [", named.name));
-                    for arg in &named.args {
-                        txt.push_str(&format!("${} = {}, ", &arg.0, self.format(&arg.1)));
+                    txt.push_str(&format!(" @{}", named.name));
+                    
+                    if !named.args.is_empty() {
+                        txt.push_str(" [");
+                        for arg in &named.args {
+                            txt.push_str(&format!("${} = {}, ", &arg.0, self.format(&arg.1)));
+                        }
+                        txt = txt.trim_end().trim_end_matches(",").to_string();
+                        txt.push_str("]");
                     }
-                    txt = txt.trim_end().trim_end_matches(",").to_string();
-                    txt.push_str("]");
                 }
 
                 if let Some(body) = &body

@@ -1,9 +1,11 @@
 use crate::{VM, value::RuntimeValue};
 use rustc_hash::FxHashMap;
 
+pub mod args;
 pub mod r#async;
 pub mod collections;
 pub mod crypto;
+pub mod list;
 pub mod net;
 pub mod regex;
 pub mod str;
@@ -32,6 +34,7 @@ impl VM {
             "mutex_write",
         ];
         let str_funcs = &["split", "contains", "starts_with", "ends_with"];
+        let args_funcs = &["len", "get", "all"];
         let collections_funcs = &[
             "hashmap_new",
             "hashmap_set",
@@ -52,6 +55,7 @@ impl VM {
             "hashset_clear",
         ];
         let crypto_funcs = &["sha256", "sha512", "blake3"];
+        let list_funcs = &["sort_by", "binary_search_by"];
         let regex_funcs = &["is_match", "find", "replace"];
         let net_funcs = &[
             "tcp_connect",
@@ -69,23 +73,29 @@ impl VM {
             let collections_h =
                 s.spawn(|| prepare_scope(mapping_index_ref, "collections", collections_funcs));
             let crypto_h = s.spawn(|| prepare_scope(mapping_index_ref, "crypto", crypto_funcs));
+            let list_h = s.spawn(|| prepare_scope(mapping_index_ref, "list", list_funcs));
             let regex_h = s.spawn(|| prepare_scope(mapping_index_ref, "regex", regex_funcs));
             let net_h = s.spawn(|| prepare_scope(mapping_index_ref, "net", net_funcs));
+            let args_h = s.spawn(|| prepare_scope(mapping_index_ref, "args", args_funcs));
 
             let mut out = Vec::with_capacity(
                 async_funcs.len()
                     + str_funcs.len()
                     + collections_funcs.len()
                     + crypto_funcs.len()
+                    + list_funcs.len()
                     + regex_funcs.len()
-                    + net_funcs.len(),
+                    + net_funcs.len()
+                    + args_funcs.len(),
             );
             out.extend(async_h.join().unwrap_or_default());
             out.extend(str_h.join().unwrap_or_default());
             out.extend(collections_h.join().unwrap_or_default());
             out.extend(crypto_h.join().unwrap_or_default());
+            out.extend(list_h.join().unwrap_or_default());
             out.extend(regex_h.join().unwrap_or_default());
             out.extend(net_h.join().unwrap_or_default());
+            out.extend(args_h.join().unwrap_or_default());
             out
         });
 

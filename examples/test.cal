@@ -18,8 +18,8 @@ let => @mult_scope [$ident = adder_int, $t = type : int] const $ident = fn (firs
 	return first * second;
 };
 let @float_mult_scope => @mult_scope [$ident = adder_float, $t = type : float];
-=> @mult_scope [];
-=> @float_mult_scope [];
+=> @mult_scope;
+=> @float_mult_scope;
 => @float_mult_scope [$ident = adder_flt];
 
 const print_text = fn (values : list:<str>) => {
@@ -75,11 +75,11 @@ const main = fn => {
 		print("add_scope: ");
 		print(sum);
 	};
-	=> @add_scope [];
+	=> @add_scope;
 	
 	match_res = 60;
 	
-	=> @add_scope [];
+	=> @add_scope;
 	=> @add_scope [$first = (5f / 99f)];
 	=> @add_scope [$first = 30, $second = 70, $t = type : int] {{}};
 	
