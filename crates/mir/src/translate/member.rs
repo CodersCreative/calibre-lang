@@ -61,6 +61,7 @@ impl MiddleEnvironment {
                             }
                         })
                 })
+                .or_else(|| self.resolve_str(scope, &name))
         } else {
             None
         };
@@ -676,18 +677,19 @@ impl MiddleEnvironment {
                                 )),
                             )
                         })?;
-                        let unresolved = match &x {
-                            PotentialGenericTypeIdentifier::Identifier(id) => {
-                                ParserText::from(id.to_string())
-                            }
-                            PotentialGenericTypeIdentifier::Generic { identifier, .. } => {
-                                ParserText::from(identifier.to_string())
-                            }
-                        };
+                        let x = self
+                            .resolve_dollar_ident_potential_generic_only(scope, &x)
+                            .unwrap_or_else(|| match &x {
+                                PotentialGenericTypeIdentifier::Identifier(id) => {
+                                    ParserText::from(id.to_string())
+                                }
+                                PotentialGenericTypeIdentifier::Generic { identifier, .. } => {
+                                    ParserText::from(identifier.to_string())
+                                }
+                            });
 
                         if let Some(ty) = self.member_base_type(scope, &first.0)
-                            && let Some(static_var) =
-                                self.resolve_impl_member(scope, &ty, unresolved.text.as_str())
+                            && let Some(static_var) = self.resolve_impl_member(scope, &ty, &x.text)
                         {
                             self.evaluate_inner(
                                 scope,
@@ -702,22 +704,24 @@ impl MiddleEnvironment {
                             )?
                         } else {
                             MiddleNode {
-                                node_type: MiddleNodeType::Identifier(unresolved),
+                                node_type: MiddleNodeType::Identifier(x),
                                 span,
                             }
                         }
                     }
                     NodeType::Identifier(x) => {
-                        let unresolved = match &x {
-                            PotentialGenericTypeIdentifier::Identifier(id) => {
-                                ParserText::from(id.to_string())
-                            }
-                            PotentialGenericTypeIdentifier::Generic { identifier, .. } => {
-                                ParserText::from(identifier.to_string())
-                            }
-                        };
+                        let resolved = self
+                            .resolve_dollar_ident_potential_generic_only(scope, &x)
+                            .unwrap_or_else(|| match &x {
+                                PotentialGenericTypeIdentifier::Identifier(id) => {
+                                    ParserText::from(id.to_string())
+                                }
+                                PotentialGenericTypeIdentifier::Generic { identifier, .. } => {
+                                    ParserText::from(identifier.to_string())
+                                }
+                            });
                         MiddleNode {
-                            node_type: MiddleNodeType::Identifier(unresolved),
+                            node_type: MiddleNodeType::Identifier(resolved),
                             span,
                         }
                     }

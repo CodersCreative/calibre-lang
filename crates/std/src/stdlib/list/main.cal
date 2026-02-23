@@ -59,6 +59,11 @@ impl<T> list:<T> {
 		out;
 	};
 
+	const split_at = fn (self : list:<T>, idx : int) -> <list:<T>, list:<T>> => {
+		let cut = if idx < 0 => 0 else => if idx > len(self) => len(self) else => idx;
+		tuple(self.slice(0, cut), self.slice(cut, len(self)));
+	};
+
 	const take = fn (self : list:<T>, n : int) -> list:<T> => {
 		let end = if n < 0 => 0 else => n;
 		

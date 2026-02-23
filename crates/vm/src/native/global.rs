@@ -116,8 +116,9 @@ impl NativeFunction for ErrFn {
         String::from("err")
     }
 
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         Ok(if let Some(x) = args.into_iter().next() {
+            let x = resolve_native_input(env, x, true)?;
             RuntimeValue::Result(Err(Gc::new(x)))
         } else {
             RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(std::sync::Arc::new(
@@ -133,8 +134,9 @@ impl NativeFunction for OkFn {
     fn name(&self) -> String {
         String::from("ok")
     }
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         Ok(if let Some(x) = args.into_iter().next() {
+            let x = resolve_native_input(env, x, true)?;
             RuntimeValue::Result(Ok(Gc::new(x)))
         } else {
             RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(std::sync::Arc::new(
@@ -164,8 +166,9 @@ impl NativeFunction for SomeFn {
     fn name(&self) -> String {
         String::from("some")
     }
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         Ok(if let Some(x) = args.into_iter().next() {
+            let x = resolve_native_input(env, x, true)?;
             RuntimeValue::Option(Some(Gc::new(x)))
         } else {
             RuntimeValue::Option(None)
@@ -239,6 +242,7 @@ impl NativeFunction for Len {
                 RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as i64,
                 RuntimeValue::Range(from, to) => (to - from).max(0),
                 RuntimeValue::Str(x) => x.len() as i64,
+                RuntimeValue::Null => 0,
                 RuntimeValue::HashMap(map) => map.lock().map(|m| m.len() as i64).unwrap_or(0),
                 RuntimeValue::HashSet(set) => set.lock().map(|s| s.len() as i64).unwrap_or(0),
                 RuntimeValue::Int(x) => x,

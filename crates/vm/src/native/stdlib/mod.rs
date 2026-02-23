@@ -76,7 +76,8 @@ impl VM {
             let list_h = s.spawn(|| prepare_scope(mapping_index_ref, "list", list_funcs));
             let regex_h = s.spawn(|| prepare_scope(mapping_index_ref, "regex", regex_funcs));
             let net_h = s.spawn(|| prepare_scope(mapping_index_ref, "net", net_funcs));
-            let args_h = s.spawn(|| prepare_scope(mapping_index_ref, "args", args_funcs));
+            let args_h =
+                s.spawn(|| prepare_scope_with_alias(mapping_index_ref, "args", args_funcs, false));
 
             let mut out = Vec::with_capacity(
                 async_funcs.len()
@@ -173,6 +174,15 @@ fn prepare_scope(
     name: &str,
     funcs: &[&'static str],
 ) -> Vec<(String, RuntimeValue)> {
+    prepare_scope_with_alias(mapping_index, name, funcs, true)
+}
+
+fn prepare_scope_with_alias(
+    mapping_index: &FxHashMap<String, Option<String>>,
+    name: &str,
+    funcs: &[&'static str],
+    include_short_alias: bool,
+) -> Vec<(String, RuntimeValue)> {
     let map: FxHashMap<String, RuntimeValue> = RuntimeValue::natives();
     let mut out = Vec::with_capacity(funcs.len());
     for func in funcs {
@@ -182,7 +192,7 @@ fn prepare_scope(
                 .and_then(|x| x.clone())
                 .unwrap_or_else(|| (*func).to_string());
             out.push((key.clone(), value.clone()));
-            if key != *func {
+            if include_short_alias && key != *func {
                 out.push(((*func).to_string(), value));
             }
         }

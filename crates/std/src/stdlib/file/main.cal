@@ -11,111 +11,103 @@ extern "c" const c_remove = fn(str) -> @int from "libc" as "remove";
 
 type File = struct { handle : ptr:<uint> };
 
-const open = fn (path : str, mode : str) -> ptr:<uint> => c_fopen(path, mode);
-
-const open_read = fn (path : str) -> ptr:<uint> => c_fopen(path, "r");
-const open_write = fn (path : str) -> ptr:<uint> => c_fopen(path, "w");
-const open_append = fn (path : str) -> ptr:<uint> => c_fopen(path, "a");
-
-const close = fn (handle : ptr:<uint>) => {
-	if (try handle as int => 0) == 0 => return null;
-	c_fclose(handle);
-	null;
-};
-
-const flush = fn (handle : ptr:<uint>) => {
-	if (try handle as int => 0) == 0 => return null;
-	c_fflush(handle);
-	null;
-};
-
-const write = fn (handle : ptr:<uint>, content) => {
-	if (try handle as int => 0) == 0 => return null;
-	let txt = "" & content;
-	let len = c_strlen(txt);
-	c_fwrite(txt, 1, len, handle);
-	null;
-};
-
-const write_line = fn (handle : ptr:<uint>, content) => {
-	write(handle, ("" & content) & "\n");
-	null;
-};
-
-const exists = fn (path : str) -> bool => c_access(path, 0) == 0;
-
-const remove = fn (path : str) -> bool => c_remove(path) == 0;
-
-const read_line = fn (handle : ptr:<uint>, max : int) -> str => {
-	if (try handle as int => 0) == 0 => return "";
-	let size = if max <= 0 => 1 else => max + 1;
-	
-	let buf = c_malloc(size);
-	let line = c_fgets(buf, size, handle);
-	c_free(buf);
-	line;
-};
-
-const read_lines = fn (handle : ptr:<uint>, max : int) -> list:<str> => {
-	let mut out = list:<str>[];
-	
-	for  => {
-		let line = read_line(handle, max);
-		if len(line) == 0 => break;
-		
-		out <<= line;
-	};
-	
-	out;
-};
-
-const read_all = fn (handle : ptr:<uint>, max : int) -> str => {
-	let mut out = "";
-	
-	for  => {
-		let line = read_line(handle, max);
-		if len(line) == 0 => break;
-		
-		out &= line;
-	};
-	
-	out;
-};
-
-const read_to_string = fn (path : str, max : int) -> str => {
-	let handle = open_read(path);
-	let txt = read_all(handle, max);
-	close(handle);
-	txt;
-};
-
-const read_lines_path = fn (path : str, max : int) -> list:<str> => {
-	let handle = open_read(path);
-	let lines = read_lines(handle, max);
-	close(handle);
-	lines;
-};
-
 impl File {
-	const open = fn (path : str, mode : str) -> File => File { handle : open(path, mode) };
+	const is_null_handle = fn (handle : ptr:<uint>) -> bool => (try handle as int => 0) == 0;
 
-	const open_read = fn (path : str) -> File => File { handle : open_read(path) };
+	const open = fn (path : str, mode : str) -> str!File => {
+		let handle = c_fopen(path, mode);
+		if File.is_null_handle(handle) => return err("failed to open file: " & path & " (mode=" & mode & ")");
+		ok(File { handle });
+	};
 
-	const open_write = fn (path : str) -> File => File { handle : open_write(path) };
+	const open_read = fn (path : str) -> str!File => File.open(path, "r");
 
-	const open_append = fn (path : str) -> File => File { handle : open_append(path) };
+	const open_write = fn (path : str) -> str!File => File.open(path, "w");
 
-	const close = fn (self : &File) => close(self.handle);
+	const open_append = fn (path : str) -> str!File => File.open(path, "a");
 
-	const flush = fn (self : &File) => flush(self.handle);
+	const close = fn (self : &File) -> str!null => {
+		if File.is_null_handle(self.handle) => return err("close on null file handle");
+		if c_fclose(self.handle) != 0 => return err("fclose failed");
+		ok(null);
+	};
 
-	const write = fn (self : &File, content) => write(self.handle, content);
+	const flush = fn (self : &File) -> str!null => {
+		if File.is_null_handle(self.handle) => return err("flush on null file handle");
+		if c_fflush(self.handle) != 0 => return err("fflush failed");
+		ok(null);
+	};
 
-	const write_line = fn (self : &File, content) => write_line(self.handle, content);
+	const write = fn (self : &File, content) -> str!null => {
+		if File.is_null_handle(self.handle) => return err("write on null file handle");
+		let txt = "" & content;
+		let len = c_strlen(txt);
+		let written = c_fwrite(txt, 1, len, self.handle);
+		if written != len => return err("short write");
+		ok(null);
+	};
 
-	const read_line = fn (self : &File, max : int) -> str => read_line(self.handle, max);
+	const write_line = fn (self : &File, content) -> str!null => self.write(("" & content) & "\n");
 
-	const read_lines = fn (self : &File, max : int) -> list:<str> => read_lines(self.handle, max);
+	const read_line = fn (self : &File, max : int) -> str!str => {
+		if File.is_null_handle(self.handle) => return err("read_line on null file handle");
+		let size = if max <= 0 => 1 else => max + 1;
+		let buf = c_malloc(size);
+		if (try buf as int => 0) == 0 => return err("malloc failed while reading file");
+		let line = c_fgets(buf, size, self.handle);
+		c_free(buf);
+		if len(line) == 0 => err("eof") else => ok(line);
+	};
 
-	const read_all = fn (self : &File, max : int) -> str => read_all(self.handle, max);
+	const read_lines = fn (self : &File, max : int) -> str!list:<str> => {
+		let mut out = list:<str>[];
+		
+		for  => {
+			match self.read_line(max) {
+				.Ok : line => out <<= line,
+				.Err : e => {
+					if e == "eof" => break;
+					
+					return err(e);
+				}
+			};
+		};
+		
+		ok(out);
+	};
+
+	const read_all = fn (self : &File, max : int) -> str!str => {
+		let mut out = "";
+		
+		for  => {
+			match self.read_line(max) {
+				.Ok : line => out &= line,
+				.Err : e => {
+					if e == "eof" => break;
+					
+					return err(e);
+				}
+			};
+		};
+		
+		ok(out);
+	};
+
+	const read_to_string = fn (path : str, max : int) -> str!str => {
+		let file = try File.open_read(path) => return err("failed to read: " & path);
+		let txt = file.read_all(max);
+		let _ = file.close();
+		txt;
+	};
+
+	const read_lines_path = fn (path : str, max : int) -> str!list:<str> => {
+		let file = try File.open_read(path) => return err("failed to read lines: " & path);
+		let lines = file.read_lines(max);
+		let _ = file.close();
+		lines;
+	};
+
+	const exists = fn (path : str) -> bool => c_access(path, 0) == 0;
+
+	const remove = fn (path : str) -> bool => c_remove(path) == 0;
 };

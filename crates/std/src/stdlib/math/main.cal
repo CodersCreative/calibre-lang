@@ -14,6 +14,20 @@ impl int {
 
 	const clamp = fn (x lo hi : int) -> int => if x < lo => lo else => if x > hi => hi else => x;
 
+	const floor_div = fn (a b : int) -> int => {
+		if b == 0 => return 0;
+		let q = a / b;
+		let r = a % b;
+		if r != 0 && ((r > 0) != (b > 0)) => q - 1 else => q;
+	};
+
+	const ceil_div = fn (a b : int) -> int => {
+		if b == 0 => return 0;
+		let q = a / b;
+		let r = a % b;
+		if r != 0 && ((r > 0) == (b > 0)) => q + 1 else => q;
+	};
+
 	const pow = fn (base exp : int) -> int => {
 		if exp < 0 => return 0;
 		let mut b = base;
@@ -92,6 +106,14 @@ impl uint {
 	const sign = fn (x : uint) -> int => if x == 0u => 0 else => 1;
 
 	const clamp = fn (x lo hi : uint) -> uint => if x < lo => lo else => if x > hi => hi else => x;
+
+	const floor_div = fn (a b : uint) -> uint => if b == 0u => 0u else => a / b;
+
+	const ceil_div = fn (a b : uint) -> uint => {
+		if b == 0u => return 0u;
+		let q = a / b;
+		if a % b == 0u => q else => q + 1u;
+	};
 
 	const pow = fn (base exp : uint) -> uint => {
 		let mut b = base;
@@ -183,6 +205,10 @@ impl float {
 		let t = float.trunc(x);
 		if x > 0f && (try t as float => 0f) != x => t + 1 else => t;
 	};
+
+	const floor_div = fn (a b : float) -> int => if b == 0f => 0 else => float.floor(a / b);
+
+	const ceil_div = fn (a b : float) -> int => if b == 0f => 0 else => float.ceil(a / b);
 
 	const round = fn (x : float) -> int => {
 		if x >= 0f => float.floor(x + 0.5) else => float.ceil(x - 0.5);

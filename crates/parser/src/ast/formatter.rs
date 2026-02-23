@@ -1336,7 +1336,7 @@ impl Formatter {
 
                 if let Some(named) = named {
                     txt.push_str(&format!(" @{}", named.name));
-                    
+
                     if !named.args.is_empty() {
                         txt.push_str(" [");
                         for arg in &named.args {

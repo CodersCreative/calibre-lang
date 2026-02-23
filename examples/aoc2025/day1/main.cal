@@ -1,4 +1,4 @@
-import (File, exists) from std::file;
+import File from std::file;
 
 const parse_direction = fn (line : str) -> char => {
 	let chars = trim(line) as! list:<char>;
@@ -55,14 +55,11 @@ const count_zeros_part2 = fn (lines : list:<str>) -> int => {
 };
 
 const main = fn => {
-	let file_path = __file__.replace("main.cal", "input.txt");
-	if !exists(file_path) => {
-		print("Missing input file: " & file_path);
-		
+	let file : File = try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
+		print(e);
 		return;
 	};
 	
-	let file : File = File.open_read(file_path);
 	let lines = file.read_lines(100000);
 	
 	let part1, part2 = count_zeros_part1(lines), count_zeros_part2(lines);
