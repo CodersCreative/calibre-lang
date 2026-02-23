@@ -1,0 +1,132 @@
+import File from std::file;
+import Channel from std::async;
+
+const main = fn => {
+	let file : File = try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
+		try File.open_read(__file__.replace("main.cal", "custom_input.txt")) => {
+			print(e);
+			return;
+		};
+	};
+	
+	let lines : list:<str> = try file.read_lines(100000) => panic("Failed to read file.");
+	
+	let worker_count = 12;
+	let part1 = solve_part1(lines, worker_count);
+	let part2 = solve_part2(lines, worker_count);
+	
+	print("Part 1 - The total output joltage is: " & part1);
+	print("Part 2 - The total output joltage is: " & part2);
+};
+
+const solve_part1 = fn (banks : list:<str>, worker_count : int) -> int => {
+	let mut out = Channel:<int>.new();
+	use spawn for i in 0..worker_count => worker_part1(banks, i, worker_count, out);
+	
+	let mut sum = 0;
+	
+	for _ in 0..worker_count => {
+		let part = match out.get() {
+			.Some : v => v,
+			.None => 0
+		};
+		sum += part;
+	};
+	
+	sum;
+};
+
+const solve_part2 = fn (banks : list:<str>, worker_count : int) -> int => {
+	let mut out = Channel:<int>.new();
+	use spawn for i in 0..worker_count => worker_part2(banks, i, worker_count, out);
+	
+	let mut sum = 0;
+	
+	for _ in 0..worker_count => {
+		let part = match out.get() {
+			.Some : v => v,
+			.None => 0
+		};
+		sum += part;
+	};
+	
+	sum;
+};
+
+const worker_part1 = fn (banks : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
+	let mut idx = start_idx;
+	let mut local = 0;
+	
+	for idx < len(banks) => {
+		local += handle_part1(banks[idx]);
+		idx += step;
+	};
+	
+	out.send(local);
+};
+
+const worker_part2 = fn (banks : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
+	let mut idx = start_idx;
+	let mut local = 0;
+	
+	for idx < len(banks) => {
+		local += max_joltage_for_count_part2(banks[idx], 12);
+		idx += step;
+	};
+	
+	out.send(local);
+};
+
+const handle_part1 = fn (bank : str) -> int => {
+	let bank : list:<int> = bank.to_chars();
+	
+	let mut current = bank[0] & bank[1];
+	
+	for i in 1..(len(bank) - 1) => {
+		let mut x = bank[i] & bank[i + 1];
+		let mut biggest = current[0] & bank[i + 1];
+		
+		if (x as! int) > (biggest as! int) => {
+			biggest = move x;
+		};
+		
+		if (biggest as! int) > (current as! int) => {
+			current = move biggest;
+		};
+	};
+	
+	current as! int;
+};
+
+const max_joltage_for_count_part2 = fn (bank : str, count : int) -> int => {
+	let bank : list:<char> = trim(bank).to_chars();
+	let n = len(bank);
+	if count <= 0 => return 0;
+	if count >= n => return bank as! int;
+	
+	let mut out = "";
+	let mut start = 0;
+	let mut picked = 0;
+	
+	for picked < count => {
+		let end = n - (count - picked);
+		let mut best_idx = start;
+		let mut best = bank[start];
+		let mut i = start + 1;
+		
+		for i <= end => {
+			if bank[i] > best => {
+				best = bank[i];
+				best_idx = i;
+			};
+			
+			i += 1;
+		};
+		
+		out &= best;
+		start = best_idx + 1;
+		picked += 1;
+	};
+	
+	out as! int;
+};

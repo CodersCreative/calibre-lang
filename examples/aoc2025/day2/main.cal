@@ -21,9 +21,8 @@ const main = fn => {
 
 const solve_part1 = fn (ranges : list:<str>, worker_count : int) -> int => {
 	let mut out : Channel:<int> = Channel:<int>.new();
-	let wg = spawn for i in 0..worker_count => worker_sum_part1(ranges, i, worker_count, out);
+	use spawn for i in 0..worker_count => worker_sum_part1(ranges, i, worker_count, out);
 	
-	wg.wait();
 	let mut sum = 0;
 	
 	for _ in 0..worker_count => {
@@ -39,9 +38,8 @@ const solve_part1 = fn (ranges : list:<str>, worker_count : int) -> int => {
 
 const solve_part2 = fn (ranges : list:<str>, worker_count : int) -> int => {
 	let mut out : Channel:<int> = Channel:<int>.new();
-	let wg = spawn for i in 0..worker_count => worker_sum_part2(ranges, i, worker_count, out);
+	use spawn for i in 0..worker_count => worker_sum_part2(ranges, i, worker_count, out);
 	
-	wg.wait();
 	let mut sum = 0;
 	
 	for _ in 0..worker_count => {
