@@ -56,11 +56,13 @@ const count_zeros_part2 = fn (lines : list:<str>) -> int => {
 
 const main = fn => {
 	let file : File = try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
-		print(e);
-		return;
+		try File.open_read(__file__.replace("main.cal", "custom_input.txt")) => {
+			print(e);
+			return;
+		};
 	};
 	
-	let lines = file.read_lines(100000);
+	let lines = try file.read_lines(100000) => panic("Failed to read file.");
 	
 	let part1, part2 = count_zeros_part1(lines), count_zeros_part2(lines);
 	

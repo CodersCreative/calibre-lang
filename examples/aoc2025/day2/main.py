@@ -29,8 +29,13 @@ def handle_range(cur: str) -> int:
     return total
 
 async def main() -> None:
-    input_path = Path(__file__).with_name("input.txt")
-    text = input_path.read_text()
+    text = ""
+    
+    try: 
+        text = Path(__file__).with_name("input.txt").read_text()
+    except:
+        text = Path(__file__).with_name("custom_input.txt").read_text()
+
     ranges = [r.strip() for r in text.split(",") if r.strip() != ""]
 
     worker_count = 4
