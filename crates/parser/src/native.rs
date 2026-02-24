@@ -65,14 +65,28 @@ impl ParserDataType {
             ("str.contains", ParserInnerType::Bool),
             ("str.starts_with", ParserInnerType::Bool),
             ("str.ends_with", ParserInnerType::Bool),
-            ("args.len", ParserInnerType::Int),
             (
-                "args.get",
+                "env.get",
                 ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),
             ),
             (
-                "args.all",
+                "env.var",
+                ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),
+            ),
+            ("env.set_var", ParserInnerType::Null),
+            ("env.remove_var", ParserInnerType::Null),
+            (
+                "env.vars",
                 ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Str))),
+            ),
+            (
+                "fs.read_dir",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::List(Box::new(
+                        Self::native_type(ParserInnerType::Str),
+                    )))),
+                },
             ),
             ("discriminant", ParserInnerType::Int),
             ("async.channel_new", ParserInnerType::Dynamic),
@@ -114,6 +128,15 @@ impl ParserDataType {
                 ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),
             ),
             ("regex.replace", ParserInnerType::Str),
+            (
+                "process.raw_exec",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Struct(String::from(
+                        "ProcessResult",
+                    )))),
+                },
+            ),
             (
                 "collections.hashmap_new",
                 ParserInnerType::StructWithGenerics {

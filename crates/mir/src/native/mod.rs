@@ -135,7 +135,7 @@ impl MiddleEnvironment {
             ],
         );
         self.setup_std_module(scope, "random", &[]);
-        self.setup_std_module(scope, "file", &[]);
+        self.setup_std_module(scope, "fs", &["read_dir"]);
         self.setup_std_module(
             scope,
             "list",
@@ -169,11 +169,16 @@ impl MiddleEnvironment {
             "str",
             &["split", "contains", "starts_with", "ends_with"],
         );
-        self.setup_std_module(scope, "args", &["len", "get", "all"]);
+        self.setup_std_module(
+            scope,
+            "env",
+            &["get", "var", "set_var", "remove_var", "vars"],
+        );
         self.setup_std_module(scope, "range", &[]);
         self.setup_std_module(scope, "generators", &[]);
         self.setup_std_module(scope, "crypto", &["sha256", "sha512", "blake3"]);
         self.setup_std_module(scope, "regex", &["is_match", "find", "replace"]);
+        self.setup_std_module(scope, "process", &["raw_exec"]);
         self.setup_std_module(scope, "math", &[]);
         self.setup_std_module(
             scope,

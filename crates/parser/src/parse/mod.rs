@@ -1581,14 +1581,18 @@ pub fn parse_program_with_source(
                         })
                     })
                     .then(lex(pad.clone(), just('[')))
-                    .then(
+                    .then(choice((
+                        expr.clone()
+                            .then_ignore(lex(pad.clone(), just(';')))
+                            .then(int_lit.clone())
+                            .map(|(value, count)| (Some((value, count)), Vec::new())),
                         expr.clone()
                             .separated_by(lex(pad.clone(), just(',')))
                             .allow_trailing()
                             .collect::<Vec<_>>()
                             .or_not()
-                            .map(|x| x.unwrap_or_default()),
-                    )
+                            .map(|x| (None, x.unwrap_or_default())),
+                    )))
                     .then_ignore(lex(pad.clone(), just(']')))
                     .then(
                         choice((
@@ -1639,8 +1643,18 @@ pub fn parse_program_with_source(
                         .collect::<Vec<_>>(),
                     )
                     .map(|(((_open_ty, _open_br), values), tails)| {
-                        let list =
-                            Node::new(Span::default(), NodeType::ListLiteral(_open_ty, values));
+                        let list = if let Some((value, count)) = values.0 {
+                            Node::new(
+                                Span::default(),
+                                NodeType::ListRepeatLiteral {
+                                    data_type: _open_ty,
+                                    value: Box::new(value),
+                                    count: Box::new(count),
+                                },
+                            )
+                        } else {
+                            Node::new(Span::default(), NodeType::ListLiteral(_open_ty, values.1))
+                        };
                         if tails.is_empty() {
                             list
                         } else {
@@ -2016,19 +2030,34 @@ pub fn parse_program_with_source(
             let list_lit = list_prefix_type
                 .clone()
                 .then(lex(pad.clone(), just('[')))
-                .then(
+                .then(choice((
+                    expr.clone()
+                        .then_ignore(lex(pad.clone(), just(';')))
+                        .then(int_lit.clone())
+                        .map(|(value, count)| (Some((value, count)), Vec::new())),
                     expr.clone()
                         .separated_by(lex(pad.clone(), just(',')))
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
-                        .map(|x| x.unwrap_or_default()),
-                )
+                        .map(|x| (None, x.unwrap_or_default())),
+                )))
                 .then_ignore(lex(pad.clone(), just(']')))
                 .then(member.clone().repeated().collect::<Vec<_>>())
                 .map(|(((_open_ty, _open_br), values), tails)| {
                     let data_type = _open_ty;
-                    let list = Node::new(Span::default(), NodeType::ListLiteral(data_type, values));
+                    let list = if let Some((value, count)) = values.0 {
+                        Node::new(
+                            Span::default(),
+                            NodeType::ListRepeatLiteral {
+                                data_type,
+                                value: Box::new(value),
+                                count: Box::new(count),
+                            },
+                        )
+                    } else {
+                        Node::new(Span::default(), NodeType::ListLiteral(data_type, values.1))
+                    };
                     if tails.is_empty() {
                         list
                     } else {
@@ -3280,6 +3309,7 @@ pub fn parse_program_with_source(
                     .then_ignore(lex(pad.clone(), just('}'))),
             )
             .then_ignore(lex(pad.clone(), just('=')))
+            .then_ignore(delim.clone().repeated())
             .then(expr.clone())
             .map(|(fields, value)| {
                 Node::new(
@@ -3316,6 +3346,7 @@ pub fn parse_program_with_source(
                 .collect::<Vec<_>>(),
             )
             .then_ignore(lex(pad.clone(), just('=')))
+            .then_ignore(delim.clone().repeated())
             .then(
                 expr.clone().then(
                     lex(pad.clone(), just(','))
@@ -3355,6 +3386,7 @@ pub fn parse_program_with_source(
                 .or_not(),
         )
         .then_ignore(lex(pad.clone(), just('=')))
+        .then_ignore(delim.clone().repeated())
         .then(
             expr.clone().then(
                 lex(pad.clone(), just(','))

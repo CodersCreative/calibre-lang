@@ -229,6 +229,10 @@ fn visit(
                 elem_ty.unwrap_or(tg.fresh()),
             )))
         }
+        NodeType::ListRepeatLiteral { value, .. } => {
+            let elem = visit(value, env, scope, tg, tenv, subst)?;
+            Ok(Type::TList(std::sync::Arc::new(elem)))
+        }
         NodeType::RangeDeclaration { from, to, .. } => {
             let from_t = visit(from, env, scope, tg, tenv, subst)?;
             let to_t = visit(to, env, scope, tg, tenv, subst)?;

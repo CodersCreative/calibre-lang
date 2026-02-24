@@ -2799,12 +2799,14 @@ impl MiddleEnvironment {
                     Some(list_type)
                 }
             }
-            NodeType::ListLiteral(data_type, _) => Some(ParserDataType {
-                data_type: ParserInnerType::List(Box::new(
-                    self.resolve_potential_new_type(scope, data_type.clone()),
-                )),
-                span: node.span,
-            }),
+            NodeType::ListLiteral(data_type, _) | NodeType::ListRepeatLiteral { data_type, .. } => {
+                Some(ParserDataType {
+                    data_type: ParserInnerType::List(Box::new(
+                        self.resolve_potential_new_type(scope, data_type.clone()),
+                    )),
+                    span: node.span,
+                })
+            }
             NodeType::NegExpression { value }
             | NodeType::DebugExpression { value }
             | NodeType::Ternary { then: value, .. } => self.resolve_type_from_node(scope, value),

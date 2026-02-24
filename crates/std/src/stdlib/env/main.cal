@@ -1,0 +1,56 @@
+type Args = struct { };
+type Vars = struct { };
+
+impl Args {
+	const nth = fn (idx : int) -> str? => get(idx);
+
+	const all = fn -> list:<str> => {
+		let mut out : list:<str> = list:<str>[];
+		
+		let mut idx = 0;
+		
+		for  => {
+			match Args.nth(idx) {
+				.Some : x => {
+					out <<= x;
+					idx += 1;
+				},
+				.None => break
+			};
+		};
+		
+		return out;
+	};
+
+	const count = fn -> int => {
+		let mut idx = 0;
+		
+		for  => {
+			match Args.nth(idx) {
+				.Some : _ => idx += 1,
+				.None => break
+			};
+		};
+		
+		return idx;
+	};
+
+	const first = fn -> str? => get(0);
+
+	const is_empty = fn -> bool => Args.count() == 0;
+};
+
+impl Vars {
+	const get = fn (name : str) -> str? => var(name);
+
+	const has = fn (name : str) -> bool => match var(name) {
+		.Some : _ => true,
+		.None => false
+	};
+
+	const set = fn (name : str, value : str) => set_var(name, value);
+
+	const remove = fn (name : str) => remove_var(name);
+
+	const vars = fn -> list:<str> => vars();
+};

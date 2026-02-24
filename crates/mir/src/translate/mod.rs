@@ -1739,6 +1739,42 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
+            NodeType::ListRepeatLiteral {
+                data_type,
+                value,
+                count,
+            } => {
+                let count = self.evaluate(scope, *count);
+                let count = match count.node_type {
+                    MiddleNodeType::IntLiteral { value, .. } => value as usize,
+                    _ => {
+                        return Err(MiddleErr::At(
+                            count.span,
+                            Box::new(MiddleErr::Internal(
+                                "list repeat count must be an int literal".to_string(),
+                            )),
+                        ));
+                    }
+                };
+
+                let data_type = if data_type.is_auto() && count > 0 {
+                    self.resolve_type_from_node(scope, &value)
+                        .unwrap_or(self.resolve_potential_new_type(scope, data_type))
+                } else {
+                    self.resolve_potential_new_type(scope, data_type)
+                };
+
+                let item = self.evaluate(scope, *value);
+                let mut lst = Vec::with_capacity(count);
+                for _ in 0..count {
+                    lst.push(item.clone());
+                }
+
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::ListLiteral(data_type, lst),
+                    span: node.span,
+                })
+            }
             NodeType::Try { value, catch } => {
                 let resolved_type = self.resolve_type_from_node(scope, &value);
                 let is_option_try = matches!(

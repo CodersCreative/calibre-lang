@@ -1,0 +1,135 @@
+extern "c" const c_fopen = fn(str, str) -> ptr:<@u8> from "libc" as "fopen";
+extern "c" const c_fclose = fn(ptr:<@u8>) -> @int from "libc" as "fclose";
+extern "c" const c_fflush = fn(ptr:<@u8>) -> @int from "libc" as "fflush";
+extern "c" const c_fgets = fn(ptr:<@u8>, @int, ptr:<@u8>) -> str from "libc" as "fgets";
+extern "c" const c_fwrite = fn(str, @usize, @usize, ptr:<@u8>) -> @usize from "libc" as "fwrite";
+extern "c" const c_strlen = fn(str) -> @usize from "libc" as "strlen";
+extern "c" const c_malloc = fn(@usize) -> ptr:<@u8> from "libc" as "malloc";
+extern "c" const c_free = fn(ptr:<@u8>) from "libc" as "free";
+extern "c" const c_access = fn(str, @int) -> @int from "libc" as "access";
+extern "c" const c_remove = fn(str) -> @int from "libc" as "remove";
+extern "c" const c_mkdir = fn(str, @int) -> @int from "libc" as "mkdir";
+extern "c" const c_rmdir = fn(str) -> @int from "libc" as "rmdir";
+
+type File = struct { handle : ptr:<byte> };
+type Dir = struct { path : str };
+
+impl File {
+	const is_null_handle = fn (handle : ptr:<byte>) -> bool => (try handle as int => 0) == 0;
+
+	const open = fn (path : str, mode : str) -> str!File => {
+		let handle = c_fopen(path, mode);
+		if File.is_null_handle(handle) => return err("failed to open file: " & path & " (mode=" & mode & ")");
+		ok(File { handle });
+	};
+
+	const open_read = fn (path : str) -> str!File => File.open(path, "r");
+
+	const open_write = fn (path : str) -> str!File => File.open(path, "w");
+
+	const open_append = fn (path : str) -> str!File => File.open(path, "a");
+
+	const close = fn (self : &File) -> str!null => {
+		if File.is_null_handle(self.handle) => return err("close on null file handle");
+		if c_fclose(self.handle) != 0 => return err("fclose failed");
+		ok(null);
+	};
+
+	const flush = fn (self : &File) -> str!null => {
+		if File.is_null_handle(self.handle) => return err("flush on null file handle");
+		if c_fflush(self.handle) != 0 => return err("fflush failed");
+		ok(null);
+	};
+
+	const write = fn (self : &File, content) -> str!null => {
+		if File.is_null_handle(self.handle) => return err("write on null file handle");
+		let txt = "" & content;
+		let len = c_strlen(txt);
+		let written = c_fwrite(txt, 1, len, self.handle);
+		if written != len => return err("short write");
+		ok(null);
+	};
+
+	const write_line = fn (self : &File, content) -> str!null => self.write(("" & content) & "\n");
+
+	const read_line = fn (self : &File, max : int) -> str!str => {
+		if File.is_null_handle(self.handle) => return err("read_line on null file handle");
+		let size = if max <= 0 => 1 else => max + 1;
+		let buf = c_malloc(size);
+		if (try buf as int => 0) == 0 => return err("malloc failed while reading file");
+		let line = c_fgets(buf, size, self.handle);
+		c_free(buf);
+		if len(line) == 0 => err("eof") else => ok(line);
+	};
+
+	const read_lines = fn (self : &File, max : int) -> str!list:<str> => {
+		let mut out = list:<str>[];
+		
+		for  => {
+			match self.read_line(max) {
+				.Ok : line => out <<= line,
+				.Err : e => {
+					if e == "eof" => break;
+					
+					return err(e);
+				}
+			};
+		};
+		
+		ok(out);
+	};
+
+	const read_all = fn (self : &File, max : int) -> str!str => {
+		let mut out = "";
+		
+		for  => {
+			match self.read_line(max) {
+				.Ok : line => out &= line,
+				.Err : e => {
+					if e == "eof" => break;
+					
+					return err(e);
+				}
+			};
+		};
+		
+		ok(out);
+	};
+
+	const read_to_string = fn (path : str, max : int) -> str!str => {
+		let file = try File.open_read(path) => return err("failed to read: " & path);
+		let txt = file.read_all(max);
+		let _ = file.close();
+		txt;
+	};
+
+	const read_lines_path = fn (path : str, max : int) -> str!list:<str> => {
+		let file = try File.open_read(path) => return err("failed to read lines: " & path);
+		let lines = file.read_lines(max);
+		let _ = file.close();
+		lines;
+	};
+
+	const exists = fn (path : str) -> bool => c_access(path, 0) == 0;
+
+	const remove = fn (path : str) -> bool => c_remove(path) == 0;
+};
+
+impl Dir {
+	const new = fn (path : str) -> Dir => Dir { path };
+
+	const exists = fn (self : &Dir) -> bool => c_access(self.path, 0) == 0;
+
+	const create = fn (self : &Dir) -> str!null => {
+		if c_mkdir(self.path, 493) == 0 => return ok(null);
+		if self.exists() => ok(null) else => err("failed to create directory: " & self.path);
+	};
+
+	const remove = fn (self : &Dir) -> str!null => {
+		if c_rmdir(self.path) == 0 => ok(null) else => err("failed to remove directory: " & self.path);
+	};
+
+	const ensure = fn (self : &Dir) -> str!null => if self.exists() => ok(null) else => self.create();
+
+	const scan = fn (self : &Dir) -> str!list:<str> => read_dir(self.path);
+};

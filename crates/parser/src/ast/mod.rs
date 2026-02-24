@@ -1285,6 +1285,11 @@ pub enum NodeType {
     },
     StringLiteral(ParserText),
     ListLiteral(PotentialNewType, Vec<Node>),
+    ListRepeatLiteral {
+        data_type: PotentialNewType,
+        value: Box<Node>,
+        count: Box<Node>,
+    },
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(String),

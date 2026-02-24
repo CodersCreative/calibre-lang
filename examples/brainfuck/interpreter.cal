@@ -1,5 +1,5 @@
-import File from std::file;
-import Args from std::args;
+import File from std::fs;
+import Args from std::env;
 
 type BrainFuck = struct { pointer : uint, memory : list:<byte>, capacity : uint };
 

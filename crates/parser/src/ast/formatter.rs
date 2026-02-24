@@ -1295,6 +1295,18 @@ impl Formatter {
                 );
                 self.wrap_if_wide(single, &multi)
             }
+            NodeType::ListRepeatLiteral {
+                data_type,
+                value,
+                count,
+            } => {
+                let prefix = if !data_type.is_auto() {
+                    format!("list:<{}>[", self.fmt_potential_new_type(&data_type))
+                } else {
+                    "[".to_string()
+                };
+                format!("{}{}; {}]", prefix, self.format(value), self.format(count))
+            }
             NodeType::DataType { data_type } => {
                 format!("type : {}", self.fmt_potential_new_type(data_type))
             }
