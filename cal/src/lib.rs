@@ -575,7 +575,7 @@ fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
     map_opt(node, mode).unwrap_or_else(|| Node::new(Default::default(), NodeType::EmptyLine))
 }
 
-const CACHE_FORMAT_VERSION: &str = "cal-engine-cache-v3";
+const CACHE_FORMAT_VERSION: &str = "v5";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CachedProgramBlob {

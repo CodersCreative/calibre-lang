@@ -2,9 +2,9 @@ use crate::{
     Parser, Span,
     ast::{
         CallArg, DestructurePattern, GenericTypes, IfComparisonType, LoopType, MatchArmType,
-        MatchStructFieldPattern, MatchTupleItem, Node, NodeType, ObjectType, Overload,
-        ParserDataType, ParserInnerType, PipeSegment, PotentialDollarIdentifier, PotentialNewType,
-        SelectArmKind, TypeDefType, VarType,
+        MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem, Node, NodeType,
+        ObjectType, Overload, ParserDataType, ParserInnerType, PipeSegment,
+        PotentialDollarIdentifier, PotentialNewType, SelectArmKind, TypeDefType, VarType,
     },
 };
 use rustc_hash::FxHashMap;
@@ -65,6 +65,14 @@ impl Default for Formatter {
 }
 
 impl Formatter {
+    fn fmt_match_tuple_items(&mut self, items: &[MatchTupleItem]) -> String {
+        items
+            .iter()
+            .map(|item| self.fmt_match_tuple_item(item))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
     pub fn start_format(
         &mut self,
         text: &str,
@@ -2193,8 +2201,103 @@ impl Formatter {
             }
         }
     }
+    fn fmt_match_string_parts(&self, parts: &[MatchStringPatternPart]) -> String {
+        parts
+            .iter()
+            .map(|part| match part {
+                MatchStringPatternPart::Literal(text) => format!("{:?}", text.text),
+                MatchStringPatternPart::Binding { var_type, name } => {
+                    if *var_type == VarType::Immutable {
+                        name.to_string()
+                    } else {
+                        format!("{} {}", var_type.print_only_ends(), name)
+                    }
+                }
+                MatchStringPatternPart::Wildcard(_) => "_".to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join(" & ")
+    }
+
+    fn fmt_match_tuple_item(&mut self, item: &MatchTupleItem) -> String {
+        match item {
+            MatchTupleItem::Rest(_) => "..".to_string(),
+            MatchTupleItem::Wildcard(_) => "_".to_string(),
+            MatchTupleItem::Value(node) => self.format(node),
+            MatchTupleItem::IsType(data_type) => {
+                format!("is {}", self.fmt_parser_data_type(data_type))
+            }
+            MatchTupleItem::In(node) => format!("in {}", self.format(node)),
+            MatchTupleItem::At {
+                var_type,
+                name,
+                pattern,
+            } => {
+                let left = if *var_type == VarType::Immutable {
+                    name.to_string()
+                } else {
+                    format!("{} {}", var_type.print_only_ends(), name)
+                };
+                format!("{left} @ {}", self.fmt_match_tuple_item(pattern))
+            }
+            MatchTupleItem::StringPattern(parts) => self.fmt_match_string_parts(parts),
+            MatchTupleItem::Enum {
+                value,
+                var_type,
+                name,
+                destructure,
+                pattern,
+            } => {
+                if let Some(pattern) = pattern {
+                    let payload = self.fmt_match_arm(pattern, false);
+                    let payload = if matches!(pattern.as_ref(), MatchArmType::TuplePattern(_)) {
+                        format!("({})", payload)
+                    } else {
+                        payload
+                    };
+                    format!(".{} : {}", value, payload)
+                } else if let Some(pattern) = destructure {
+                    format!(
+                        ".{} : {}",
+                        value,
+                        self.fmt_destructure_pattern(pattern, false)
+                    )
+                } else if let Some(name) = name {
+                    if *var_type == VarType::Immutable {
+                        format!(".{} : {}", value, name)
+                    } else {
+                        format!(".{} : {} {}", value, var_type.print_only_ends(), name)
+                    }
+                } else {
+                    format!(".{}", value)
+                }
+            }
+            MatchTupleItem::Binding { var_type, name } => {
+                if *var_type == VarType::Immutable {
+                    name.to_string()
+                } else {
+                    format!("{} {}", var_type.print_only_ends(), name)
+                }
+            }
+        }
+    }
+
     pub fn fmt_match_arm(&mut self, arm: &MatchArmType, write_name: bool) -> String {
         match arm {
+            MatchArmType::At {
+                var_type,
+                name,
+                pattern,
+            } => {
+                let left = if *var_type == VarType::Immutable {
+                    name.to_string()
+                } else {
+                    format!("{} {}", var_type.print_only_ends(), name)
+                };
+                format!("{left} @ {}", self.fmt_match_arm(pattern, write_name))
+            }
+            MatchArmType::In(node) => format!("in {}", self.format(node)),
+            MatchArmType::StringPattern(parts) => self.fmt_match_string_parts(parts),
             MatchArmType::Enum {
                 value,
                 pattern: Some(pattern),
@@ -2212,13 +2315,11 @@ impl Formatter {
                 value,
                 destructure: Some(pattern),
                 ..
-            } => {
-                format!(
-                    ".{} : {}",
-                    value,
-                    self.fmt_destructure_pattern(pattern, false)
-                )
-            }
+            } => format!(
+                ".{} : {}",
+                value,
+                self.fmt_destructure_pattern(pattern, false)
+            ),
             MatchArmType::Enum {
                 value,
                 var_type: VarType::Immutable,
@@ -2233,59 +2334,8 @@ impl Formatter {
             } if write_name => format!(".{} : {} {}", value, var_type.print_only_ends(), name),
             MatchArmType::Let { var_type, name } => format!("{} {}", var_type, name),
             MatchArmType::Enum { value, .. } => format!(".{}", value),
-            MatchArmType::TuplePattern(items) => {
-                let mut out = Vec::new();
-                for item in items {
-                    out.push(match item {
-                        MatchTupleItem::Rest(_) => "..".to_string(),
-                        MatchTupleItem::Wildcard(_) => "_".to_string(),
-                        MatchTupleItem::Value(node) => self.format(node),
-                        MatchTupleItem::IsType(data_type) => {
-                            format!("is {}", self.fmt_parser_data_type(data_type))
-                        }
-                        MatchTupleItem::Enum {
-                            value,
-                            var_type,
-                            name,
-                            destructure,
-                            pattern,
-                        } => {
-                            if let Some(pattern) = pattern {
-                                let payload = self.fmt_match_arm(pattern, false);
-                                let payload =
-                                    if matches!(pattern.as_ref(), MatchArmType::TuplePattern(_)) {
-                                        format!("({})", payload)
-                                    } else {
-                                        payload
-                                    };
-                                format!(".{} : {}", value, payload)
-                            } else if let Some(pattern) = destructure {
-                                format!(
-                                    ".{} : {}",
-                                    value,
-                                    self.fmt_destructure_pattern(pattern, false)
-                                )
-                            } else if let Some(name) = name {
-                                if *var_type == VarType::Immutable {
-                                    format!(".{} : {}", value, name)
-                                } else {
-                                    format!(".{} : {} {}", value, var_type.print_only_ends(), name)
-                                }
-                            } else {
-                                format!(".{}", value)
-                            }
-                        }
-                        MatchTupleItem::Binding { var_type, name } => {
-                            if *var_type == VarType::Immutable {
-                                name.to_string()
-                            } else {
-                                format!("{} {}", var_type.print_only_ends(), name)
-                            }
-                        }
-                    });
-                }
-                out.join(", ")
-            }
+            MatchArmType::TuplePattern(items) => self.fmt_match_tuple_items(items),
+            MatchArmType::ListPattern(items) => format!("[{}]", self.fmt_match_tuple_items(items)),
             MatchArmType::StructPattern(fields) => {
                 let mut out = Vec::new();
                 for field in fields {

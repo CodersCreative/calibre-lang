@@ -10,9 +10,9 @@ use crate::{
     ParserError, Span,
     ast::{
         AsFailureMode, CallArg, DestructurePattern, FunctionHeader, GenericType, GenericTypes,
-        IfComparisonType, LoopType, MatchArmType, MatchStructFieldPattern, MatchTupleItem,
-        NamedScope, Node, NodeType, ObjectType, Overload, ParserDataType, ParserFfiInnerType,
-        ParserInnerType, ParserText, PipeSegment, PotentialDollarIdentifier,
+        IfComparisonType, LoopType, MatchArmType, MatchStringPatternPart, MatchStructFieldPattern,
+        MatchTupleItem, NamedScope, Node, NodeType, ObjectType, Overload, ParserDataType,
+        ParserFfiInnerType, ParserInnerType, ParserText, PipeSegment, PotentialDollarIdentifier,
         PotentialGenericTypeIdentifier, PotentialNewType, RefMutability, SelectArm, SelectArmKind,
         TraitMember, TraitMemberKind, TryCatch, TypeDefType, VarType,
         binary::BinaryOperator,
@@ -59,6 +59,55 @@ where
 
 pub fn parse_program(source: &str) -> Result<Node, Vec<ParserError>> {
     parse_program_with_source(source, None)
+}
+
+fn match_arm_to_tuple_item(arm: MatchArmType) -> Option<MatchTupleItem> {
+    match arm {
+        MatchArmType::At {
+            var_type,
+            name,
+            pattern,
+        } => Some(MatchTupleItem::At {
+            var_type,
+            name,
+            pattern: Box::new(match_arm_to_tuple_item(*pattern)?),
+        }),
+        MatchArmType::Wildcard(sp) => Some(MatchTupleItem::Wildcard(sp)),
+        MatchArmType::Let { var_type, name } => Some(MatchTupleItem::Binding { var_type, name }),
+        MatchArmType::Enum {
+            value,
+            var_type,
+            name,
+            destructure,
+            pattern,
+        } => Some(MatchTupleItem::Enum {
+            value,
+            var_type,
+            name,
+            destructure,
+            pattern,
+        }),
+        MatchArmType::Value(node) => Some(MatchTupleItem::Value(node)),
+        MatchArmType::IsType(data_type) => Some(MatchTupleItem::IsType(data_type)),
+        MatchArmType::In(node) => Some(MatchTupleItem::In(node)),
+        MatchArmType::StringPattern(parts) => Some(MatchTupleItem::StringPattern(parts)),
+        MatchArmType::TuplePattern(mut inner) => {
+            if inner.len() == 1 {
+                Some(inner.remove(0))
+            } else {
+                None
+            }
+        }
+        MatchArmType::ListPattern(_) => None,
+        MatchArmType::StructPattern(_) => None,
+    }
+}
+
+fn match_arm_to_tuple_items(arm: MatchArmType) -> Option<Vec<MatchTupleItem>> {
+    match arm {
+        MatchArmType::TuplePattern(inner) => Some(inner),
+        other => Some(vec![match_arm_to_tuple_item(other)?]),
+    }
 }
 
 pub fn parse_program_with_source(
@@ -958,6 +1007,51 @@ pub fn parse_program_with_source(
                     _ => ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
                 })
                 .boxed();
+            let match_in_pattern = lex(pad.clone(), just("in"))
+                .ignore_then(expr.clone())
+                .boxed();
+            let match_string_literal_part = string_lit
+                .clone()
+                .map(|node| match node.node_type {
+                    NodeType::StringLiteral(text) => MatchStringPatternPart::Literal(text),
+                    _ => unreachable!("string literal parser only produces string literals"),
+                })
+                .boxed();
+            let match_string_binding_part = optional_match_var_type
+                .clone()
+                .then(ident.clone())
+                .map(|(var_type, (name, sp))| MatchStringPatternPart::Binding {
+                    var_type,
+                    name: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
+                })
+                .boxed();
+            let match_string_wildcard_part = lex(pad.clone(), just('_'))
+                .map_with_span({
+                    let ls = line_starts.clone();
+                    move |_, r| MatchStringPatternPart::Wildcard(span(ls.as_ref(), r))
+                })
+                .boxed();
+            let match_string_part = choice((
+                match_string_literal_part.clone(),
+                match_string_wildcard_part.clone(),
+                match_string_binding_part.clone(),
+            ))
+            .boxed();
+            let match_string_pattern = match_string_literal_part
+                .clone()
+                .then(
+                    lex(pad.clone(), just('&'))
+                        .ignore_then(match_string_part.clone())
+                        .repeated()
+                        .at_least(1)
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(head, mut tail)| {
+                    let mut parts = vec![head];
+                    parts.append(&mut tail);
+                    parts
+                })
+                .boxed();
 
             let match_struct_destructure = lex(pad.clone(), just('{'))
                 .ignore_then(
@@ -1026,75 +1120,93 @@ pub fn parse_program_with_source(
                 .map(DestructurePattern::Tuple)
                 .boxed();
 
+            let match_tuple_item_atom = choice((
+                lex(pad.clone(), just(".."))
+                    .map_with_span({
+                        let ls = line_starts.clone();
+                        move |_, r| MatchTupleItem::Rest(span(ls.as_ref(), r))
+                    })
+                    .boxed(),
+                lex(pad.clone(), just('_'))
+                    .map_with_span({
+                        let ls = line_starts.clone();
+                        move |_, r| MatchTupleItem::Wildcard(span(ls.as_ref(), r))
+                    })
+                    .boxed(),
+                match_is_type.clone().map(MatchTupleItem::IsType).boxed(),
+                match_in_pattern.clone().map(MatchTupleItem::In).boxed(),
+                match_string_pattern
+                    .clone()
+                    .map(MatchTupleItem::StringPattern)
+                    .boxed(),
+                match_var_type
+                    .clone()
+                    .then(ident.clone())
+                    .map(|(var_type, (name, sp))| MatchTupleItem::Binding {
+                        var_type,
+                        name: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
+                    })
+                    .boxed(),
+                lex(pad.clone(), just('.'))
+                    .ignore_then(ident.clone())
+                    .then(
+                        lex(pad.clone(), just(':'))
+                            .ignore_then(optional_match_var_type.clone())
+                            .then(choice((
+                                match_struct_destructure
+                                    .clone()
+                                    .map(|d| (None, Some(d), None)),
+                                match_tuple_destructure
+                                    .clone()
+                                    .map(|d| (None, Some(d), None)),
+                                ident.clone().map(|(name, sp)| {
+                                    (
+                                        Some(PotentialDollarIdentifier::Identifier(
+                                            ParserText::new(sp, name),
+                                        )),
+                                        None,
+                                        None,
+                                    )
+                                }),
+                            )))
+                            .or_not(),
+                    )
+                    .map(|((name, sp), bind)| {
+                        let (var_type, name_bind, destructure, pattern) =
+                            if let Some((vt, (name_bind, destructure, pattern))) = bind {
+                                (vt, name_bind, destructure, pattern)
+                            } else {
+                                (VarType::Immutable, None, None, None)
+                            };
+                        MatchTupleItem::Enum {
+                            value: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
+                            var_type,
+                            name: name_bind,
+                            destructure,
+                            pattern,
+                        }
+                    })
+                    .boxed(),
+                expr.clone().map(MatchTupleItem::Value),
+            ))
+            .boxed();
+            let match_tuple_at_pattern = optional_match_var_type
+                .clone()
+                .then(ident.clone())
+                .then_ignore(lex(pad.clone(), just('@')))
+                .then(match_tuple_item_atom.clone())
+                .map(|((var_type, (name, sp)), pattern)| MatchTupleItem::At {
+                    var_type,
+                    name: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
+                    pattern: Box::new(pattern),
+                })
+                .boxed();
+
             let match_enum_tuple_pattern = lex(pad.clone(), just('('))
                 .ignore_then(
                     choice((
-                        lex(pad.clone(), just(".."))
-                            .map_with_span({
-                                let ls = line_starts.clone();
-                                move |_, r| MatchTupleItem::Rest(span(ls.as_ref(), r))
-                            })
-                            .boxed(),
-                        lex(pad.clone(), just('_'))
-                            .map_with_span({
-                                let ls = line_starts.clone();
-                                move |_, r| MatchTupleItem::Wildcard(span(ls.as_ref(), r))
-                            })
-                            .boxed(),
-                        match_is_type.clone().map(MatchTupleItem::IsType).boxed(),
-                        match_var_type
-                            .clone()
-                            .then(ident.clone())
-                            .map(|(var_type, (name, sp))| MatchTupleItem::Binding {
-                                var_type,
-                                name: PotentialDollarIdentifier::Identifier(ParserText::new(
-                                    sp, name,
-                                )),
-                            })
-                            .boxed(),
-                        lex(pad.clone(), just('.'))
-                            .ignore_then(ident.clone())
-                            .then(
-                                lex(pad.clone(), just(':'))
-                                    .ignore_then(optional_match_var_type.clone())
-                                    .then(choice((
-                                        match_struct_destructure
-                                            .clone()
-                                            .map(|d| (None, Some(d), None)),
-                                        match_tuple_destructure
-                                            .clone()
-                                            .map(|d| (None, Some(d), None)),
-                                        ident.clone().map(|(name, sp)| {
-                                            (
-                                                Some(PotentialDollarIdentifier::Identifier(
-                                                    ParserText::new(sp, name),
-                                                )),
-                                                None,
-                                                None,
-                                            )
-                                        }),
-                                    )))
-                                    .or_not(),
-                            )
-                            .map(|((name, sp), bind)| {
-                                let (var_type, name_bind, destructure, pattern) =
-                                    if let Some((vt, (name_bind, destructure, pattern))) = bind {
-                                        (vt, name_bind, destructure, pattern)
-                                    } else {
-                                        (VarType::Immutable, None, None, None)
-                                    };
-                                MatchTupleItem::Enum {
-                                    value: PotentialDollarIdentifier::Identifier(ParserText::new(
-                                        sp, name,
-                                    )),
-                                    var_type,
-                                    name: name_bind,
-                                    destructure,
-                                    pattern,
-                                }
-                            })
-                            .boxed(),
-                        expr.clone().map(MatchTupleItem::Value),
+                        match_tuple_at_pattern.clone(),
+                        match_tuple_item_atom.clone(),
                     ))
                     .separated_by(lex(pad.clone(), just(',')))
                     .allow_trailing()
@@ -1104,6 +1216,21 @@ pub fn parse_program_with_source(
                 )
                 .then_ignore(lex(pad.clone(), just(')')))
                 .map(MatchArmType::TuplePattern)
+                .boxed();
+            let match_list_pattern = lex(pad.clone(), just('['))
+                .ignore_then(
+                    choice((
+                        match_tuple_at_pattern.clone(),
+                        match_tuple_item_atom.clone(),
+                    ))
+                    .separated_by(lex(pad.clone(), just(',')))
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .or_not()
+                    .map(|x| x.unwrap_or_default()),
+                )
+                .then_ignore(lex(pad.clone(), just(']')))
+                .map(MatchArmType::ListPattern)
                 .boxed();
 
             let match_enum_struct_pattern = lex(pad.clone(), just('{'))
@@ -1216,7 +1343,7 @@ pub fn parse_program_with_source(
                 .or_not()
                 .boxed();
 
-            let match_arm_start = choice((
+            let match_arm_atom = choice((
                 lex(pad.clone(), just('.'))
                     .ignore_then(ident.clone())
                     .then(match_enum_bind.clone())
@@ -1253,9 +1380,26 @@ pub fn parse_program_with_source(
                     move |_, r| MatchArmType::Wildcard(span(ls.as_ref(), r))
                 }),
                 match_is_type.clone().map(MatchArmType::IsType),
+                match_in_pattern.clone().map(MatchArmType::In),
+                match_string_pattern
+                    .clone()
+                    .map(MatchArmType::StringPattern),
+                match_list_pattern.clone(),
                 expr.clone().map(MatchArmType::Value),
             ))
             .boxed();
+            let match_at_pattern = optional_match_var_type
+                .clone()
+                .then(ident.clone())
+                .then_ignore(lex(pad.clone(), just('@')))
+                .then(match_arm_atom.clone())
+                .map(|((var_type, (name, sp)), pattern)| MatchArmType::At {
+                    var_type,
+                    name: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
+                    pattern: Box::new(pattern),
+                })
+                .boxed();
+            let match_arm_start = choice((match_at_pattern, match_arm_atom)).boxed();
 
             let match_arm_body = fat_arrow
                 .clone()
@@ -1361,34 +1505,10 @@ pub fn parse_program_with_source(
                             let mut variants = Vec::new();
                             for arm in slot {
                                 let mut items = Vec::new();
-                                match arm {
-                                    MatchArmType::Wildcard(sp) => {
-                                        items.push(MatchTupleItem::Wildcard(sp))
-                                    }
-                                    MatchArmType::Let { var_type, name } => {
-                                        items.push(MatchTupleItem::Binding { var_type, name })
-                                    }
-                                    MatchArmType::Enum {
-                                        value,
-                                        var_type,
-                                        name,
-                                        destructure,
-                                        pattern,
-                                    } => items.push(MatchTupleItem::Enum {
-                                        value,
-                                        var_type,
-                                        name,
-                                        destructure,
-                                        pattern,
-                                    }),
-                                    MatchArmType::Value(node) => {
-                                        items.push(MatchTupleItem::Value(node))
-                                    }
-                                    MatchArmType::IsType(data_type) => {
-                                        items.push(MatchTupleItem::IsType(data_type))
-                                    }
-                                    MatchArmType::TuplePattern(inner) => items.extend(inner),
-                                    MatchArmType::StructPattern(_) => {}
+                                if let Some(mapped) = match_arm_to_tuple_items(arm) {
+                                    items.extend(mapped);
+                                } else {
+                                    continue;
                                 }
                                 variants.push(items);
                             }
@@ -2242,7 +2362,7 @@ pub fn parse_program_with_source(
                 lex(pad.clone(), just(">=")).to(ComparisonOperator::GreaterEqual),
                 lex(pad.clone(), just("<=")).to(ComparisonOperator::LesserEqual),
                 lex(pad.clone(), just('>')).to(ComparisonOperator::Greater),
-                lex(pad.clone(), just('<')).to(ComparisonOperator::Lesser),
+                lex(pad.clone(), just('<').then(just('-').not())).to(ComparisonOperator::Lesser),
             ))
             .boxed();
 

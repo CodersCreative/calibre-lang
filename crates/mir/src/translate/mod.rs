@@ -1671,6 +1671,71 @@ impl MiddleEnvironment {
                     return Ok(x);
                 }
 
+                if let NodeType::RangeDeclaration {
+                    from,
+                    to,
+                    inclusive,
+                } = value.node_type.clone()
+                {
+                    let lower = Node::new(
+                        self.current_span(),
+                        NodeType::ComparisonExpression {
+                            left: Box::new(*identifier.clone()),
+                            right: from,
+                            operator: ComparisonOperator::GreaterEqual,
+                        },
+                    );
+                    let upper = Node::new(
+                        self.current_span(),
+                        NodeType::ComparisonExpression {
+                            left: Box::new(*identifier.clone()),
+                            right: to,
+                            operator: if inclusive {
+                                ComparisonOperator::LesserEqual
+                            } else {
+                                ComparisonOperator::Lesser
+                            },
+                        },
+                    );
+                    return self.evaluate_inner(
+                        scope,
+                        Node::new(
+                            self.current_span(),
+                            NodeType::BooleanExpression {
+                                left: Box::new(lower),
+                                right: Box::new(upper),
+                                operator: BooleanOperator::And,
+                            },
+                        ),
+                    );
+                }
+
+                if let NodeType::ListLiteral(_, values) = value.node_type.clone() {
+                    let mut comparisons = values.into_iter().map(|item| {
+                        Node::new(
+                            self.current_span(),
+                            NodeType::ComparisonExpression {
+                                left: Box::new(*identifier.clone()),
+                                right: Box::new(item),
+                                operator: ComparisonOperator::Equal,
+                            },
+                        )
+                    });
+                    if let Some(first) = comparisons.next() {
+                        let cond = comparisons.fold(first, |acc, cmp| {
+                            Node::new(
+                                self.current_span(),
+                                NodeType::BooleanExpression {
+                                    left: Box::new(acc),
+                                    right: Box::new(cmp),
+                                    operator: BooleanOperator::Or,
+                                },
+                            )
+                        });
+                        return self.evaluate_inner(scope, cond);
+                    }
+                }
+
                 if let Some(data_type) = self.resolve_type_from_node(scope, &value)
                     && matches!(
                         data_type.data_type.unwrap_all_refs(),

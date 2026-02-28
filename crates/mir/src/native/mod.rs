@@ -168,7 +168,13 @@ impl MiddleEnvironment {
         self.setup_std_module(
             scope,
             "str",
-            &["split", "contains", "starts_with", "ends_with"],
+            &[
+                "split",
+                "contains",
+                "starts_with",
+                "ends_with",
+                "strip_prefix",
+            ],
         );
         self.setup_std_module(
             scope,

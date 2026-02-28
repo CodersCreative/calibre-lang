@@ -90,3 +90,25 @@ impl NativeFunction for StrEndsWith {
         Ok(RuntimeValue::Bool(text.as_str().ends_with(suffix.as_str())))
     }
 }
+
+pub struct StrStripPrefix();
+
+impl NativeFunction for StrStripPrefix {
+    fn name(&self) -> String {
+        String::from("str.strip_prefix")
+    }
+
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let text = expect_str_arg(&args, 0)?;
+        let prefix = expect_str_arg(&args, 1)?;
+
+        if let Some(rest) = text.as_str().strip_prefix(prefix.as_str()) {
+            return Ok(RuntimeValue::Str(std::sync::Arc::new(rest.to_string())));
+        }
+
+        Ok(match prefix.as_str().strip_prefix(text.as_str()) {
+            Some(rest) => RuntimeValue::Str(std::sync::Arc::new(rest.to_string())),
+            None => RuntimeValue::Null,
+        })
+    }
+}

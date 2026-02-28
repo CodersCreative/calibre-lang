@@ -1027,6 +1027,43 @@ impl MiddleEnvironment {
             }
 
             LoopType::Let { value, pattern } => {
+                if matches!(value.node_type, NodeType::ListLiteral(_, _))
+                    || self
+                        .resolve_type_from_node(&scope, &value)
+                        .is_some_and(|dt| {
+                            matches!(dt.unwrap_all_refs().data_type, ParserInnerType::List(_))
+                        })
+                {
+                    let item_ident = self.temp_ident("__for_let_item");
+                    let item_node = Node::new(
+                        self.current_span(),
+                        NodeType::Identifier(item_ident.clone().into()),
+                    );
+                    let filtered_body = Node::new(
+                        self.current_span(),
+                        NodeType::IfStatement {
+                            comparison: Box::new(IfComparisonType::IfLet {
+                                value: item_node,
+                                pattern,
+                            }),
+                            then: Box::new(body),
+                            otherwise: Some(Box::new(Node::new(
+                                self.current_span(),
+                                NodeType::EmptyLine,
+                            ))),
+                        },
+                    );
+                    return self.evaluate_loop_statement(
+                        &scope,
+                        span,
+                        LoopType::For(item_ident, value),
+                        filtered_body,
+                        None,
+                        label,
+                        else_body,
+                    );
+                }
+
                 let body = self.eval_loop_body_with_ctx(
                     &scope,
                     label_text.clone(),

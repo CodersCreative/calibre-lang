@@ -66,6 +66,7 @@ impl ParserDataType {
             ("str.contains", ParserInnerType::Bool),
             ("str.starts_with", ParserInnerType::Bool),
             ("str.ends_with", ParserInnerType::Bool),
+            ("str.strip_prefix", ParserInnerType::Dynamic),
             (
                 "env.get",
                 ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),

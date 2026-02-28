@@ -17,6 +17,27 @@ const sum_pair = fn ((a, b)) => a + b;
 const sum_pair_struct = fn ({left: a, right: b} : Pair) => a + b;
 const sum_pair_struct_basic = fn ({left, right} : Pair) => left + right;
 
+const classify = fn match int -> str {
+	in 0..20 => "in-range",
+	in [30, 40, 50] => "in-list",
+	v @ is int if v > 100 => "large-int",
+	_ => "other",
+};
+
+const classify_list = fn match list:<int> -> str {
+	[] => "Empty list",
+	[1] => "List of just 1",
+	[4, ..] => "List starting with 4",
+	[_, _] => "List of 2 elements",
+	_ => "Some other list",
+};
+
+const parse_command = fn match str -> str {
+	"go:" & direction => "move " & direction,
+	head @ "noop" & _ => "saw " & head,
+	_ => "unknown",
+};
+
 const main = fn => {
 	let pair = Pair { left : 10, right : 20 };
 	let {left, right} = pair;
@@ -94,4 +115,30 @@ const main = fn => {
 	print(sum_pair((7, 8)));
 	print(sum_pair_struct(Pair { left : 2, right : 20 }));
 	print(sum_pair_struct_basic(Pair { left : 2, right : 2 }));
+
+	print(classify(10));
+	print(classify(40));
+	print(parse_command("go:north"));
+
+	if let token @ "go:" & payload <- "go:east" => {
+		print("if let => " & token & " / " & payload);
+	};
+
+	for let item @ in 0..4 <- [1, 5, 3, 7] => {
+		print("for let matched => " & item);
+	};
+
+	print(classify_list([]));
+	print(classify_list([1]));
+	print(classify_list([4, 9, 11]));
+	print(classify_list([8, 3]));
+	print(classify_list([8, 3, 2]));
+
+	if let [4, ..] <- [4, 10, 12] => {
+		print("if let list matched");
+	};
+
+	for let [4, ..] <- [[4], [2, 3], [4, 8, 9]] => {
+		print("for let list matched");
+	};
 };

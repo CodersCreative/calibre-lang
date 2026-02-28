@@ -463,6 +463,7 @@ impl RuntimeValue {
             ("str.contains", Arc::new(stdlib::str::StrContains())),
             ("str.starts_with", Arc::new(stdlib::str::StrStartsWith())),
             ("str.ends_with", Arc::new(stdlib::str::StrEndsWith())),
+            ("str.strip_prefix", Arc::new(stdlib::str::StrStripPrefix())),
             ("env.get", Arc::new(stdlib::env::EnvGet)),
             ("env.var", Arc::new(stdlib::env::EnvVar)),
             ("env.set_var", Arc::new(stdlib::env::EnvSetVar)),

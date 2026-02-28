@@ -983,6 +983,13 @@ pub enum MatchTupleItem {
     Wildcard(Span),
     Value(Node),
     IsType(ParserDataType),
+    In(Node),
+    At {
+        var_type: VarType,
+        name: PotentialDollarIdentifier,
+        pattern: Box<MatchTupleItem>,
+    },
+    StringPattern(Vec<MatchStringPatternPart>),
     Enum {
         value: PotentialDollarIdentifier,
         var_type: VarType,
@@ -1009,9 +1016,26 @@ pub enum MatchStructFieldPattern {
     },
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum MatchStringPatternPart {
+    Literal(ParserText),
+    Binding {
+        var_type: VarType,
+        name: PotentialDollarIdentifier,
+    },
+    Wildcard(Span),
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MatchArmType {
+    At {
+        var_type: VarType,
+        name: PotentialDollarIdentifier,
+        pattern: Box<MatchArmType>,
+    },
+    In(Node),
+    StringPattern(Vec<MatchStringPatternPart>),
     Enum {
         value: PotentialDollarIdentifier,
         var_type: VarType,
@@ -1020,6 +1044,7 @@ pub enum MatchArmType {
         pattern: Option<Box<MatchArmType>>,
     },
     TuplePattern(Vec<MatchTupleItem>),
+    ListPattern(Vec<MatchTupleItem>),
     StructPattern(Vec<MatchStructFieldPattern>),
     Let {
         var_type: VarType,
@@ -1031,24 +1056,63 @@ pub enum MatchArmType {
 }
 
 impl MatchArmType {
+    fn first_span_from_string_parts(parts: &[MatchStringPatternPart]) -> Option<&Span> {
+        for part in parts {
+            match part {
+                MatchStringPatternPart::Literal(text) => return Some(&text.span),
+                MatchStringPatternPart::Binding { name, .. } => return Some(name.span()),
+                MatchStringPatternPart::Wildcard(span) => return Some(span),
+            }
+        }
+        None
+    }
+
+    fn first_span_from_tuple_items(items: &[MatchTupleItem]) -> Option<&Span> {
+        for item in items {
+            match item {
+                MatchTupleItem::Rest(sp) | MatchTupleItem::Wildcard(sp) => return Some(sp),
+                MatchTupleItem::Value(node) => return Some(&node.span),
+                MatchTupleItem::IsType(data_type) => return Some(&data_type.span),
+                MatchTupleItem::In(node) => return Some(&node.span),
+                MatchTupleItem::At { name, .. } => return Some(name.span()),
+                MatchTupleItem::StringPattern(parts) => {
+                    if let Some(span) = Self::first_span_from_string_parts(parts) {
+                        return Some(span);
+                    }
+                }
+                MatchTupleItem::Enum { value, .. } => return Some(value.span()),
+                MatchTupleItem::Binding { name, .. } => return Some(name.span()),
+            }
+        }
+        None
+    }
+
+    fn default_span() -> &'static Span {
+        static DEFAULT: Span = Span {
+            from: crate::Position { line: 0, col: 0 },
+            to: crate::Position { line: 0, col: 0 },
+        };
+        &DEFAULT
+    }
+
     pub fn span(&self) -> &Span {
         match self {
             Self::Enum { value, .. } => value.span(),
-            Self::TuplePattern(items) => {
-                for item in items {
-                    match item {
-                        MatchTupleItem::Rest(sp) | MatchTupleItem::Wildcard(sp) => return sp,
-                        MatchTupleItem::Value(node) => return &node.span,
-                        MatchTupleItem::IsType(data_type) => return &data_type.span,
-                        MatchTupleItem::Enum { value, .. } => return value.span(),
-                        MatchTupleItem::Binding { name, .. } => return name.span(),
-                    }
+            Self::TuplePattern(items) | Self::ListPattern(items) => {
+                if let Some(span) = Self::first_span_from_tuple_items(items) {
+                    span
+                } else {
+                    Self::default_span()
                 }
-                static DEFAULT: Span = Span {
-                    from: crate::Position { line: 0, col: 0 },
-                    to: crate::Position { line: 0, col: 0 },
-                };
-                &DEFAULT
+            }
+            Self::At { name, .. } => name.span(),
+            Self::In(x) => &x.span,
+            Self::StringPattern(parts) => {
+                if let Some(span) = Self::first_span_from_string_parts(parts) {
+                    span
+                } else {
+                    Self::default_span()
+                }
             }
             Self::StructPattern(fields) => {
                 for field in fields {
@@ -1057,11 +1121,7 @@ impl MatchArmType {
                         MatchStructFieldPattern::Binding { name, .. } => return name.span(),
                     }
                 }
-                static DEFAULT: Span = Span {
-                    from: crate::Position { line: 0, col: 0 },
-                    to: crate::Position { line: 0, col: 0 },
-                };
-                &DEFAULT
+                Self::default_span()
             }
             Self::Let { var_type: _, name } => name.span(),
             Self::Value(x) => &x.span,
