@@ -3,7 +3,7 @@ name = "the-first-project"
 description = "The fist ever project "
 version = "0.0.1"
 authors = ["Creative Coders <officialccoders@gmail.com>"]
-cal = ">= 0.0.1"
+calibre = ">= 0.0.1"
 readme = "README.md"
 homepage = ""
 # source path to the projet defaults to src/

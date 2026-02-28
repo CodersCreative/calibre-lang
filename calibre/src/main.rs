@@ -1,4 +1,4 @@
-use cal::{CalEngine, CalError, CompileMode};
+use calibre::{CalibreEngine, CalibreError, CompileMode};
 use calibre_diagnostics;
 use calibre_lir::LirEnvironment;
 use calibre_mir::{
@@ -57,7 +57,7 @@ async fn run_source(
     module_only: bool,
 ) -> Result<(), Box<dyn Error>> {
     let start = std::time::Instant::now();
-    let mut engine = CalEngine::new()
+    let mut engine = CalibreEngine::new()
         .with_vm_config(vm_config.clone())
         .with_source_path(path.to_path_buf())
         .with_compile_mode(CompileMode::Run)
@@ -80,15 +80,15 @@ async fn run_source(
         engine.compile_cached_program_source(contents.clone())
     } {
         Ok(artifacts) => artifacts,
-        Err(CalError::Parse { errors, .. }) => {
+        Err(CalibreError::Parse { errors, .. }) => {
             calibre_diagnostics::emit_parser_errors(path, &contents, &errors);
             return Err("parse failed".into());
         }
-        Err(CalError::Middle { error, .. }) => {
+        Err(CalibreError::Middle { error, .. }) => {
             emit_middle_error(path, &contents, &error);
             return Err("compile failed".into());
         }
-        Err(CalError::MissingEntryPoint(name)) => {
+        Err(CalibreError::MissingEntryPoint(name)) => {
             calibre_diagnostics::emit_error(
                 path,
                 &contents,
@@ -329,7 +329,7 @@ async fn run_suite(
                 continue;
             }
         }
-        let mut engine = CalEngine::new()
+        let mut engine = CalibreEngine::new()
             .with_vm_config(vm_config.clone())
             .with_source_path(path.clone())
             .with_compile_mode(suite_mode)
@@ -343,11 +343,11 @@ async fn run_suite(
 
         let artifacts = match engine.compile_cached_program_source(contents.clone()) {
             Ok(artifacts) => artifacts,
-            Err(CalError::Parse { errors, .. }) => {
+            Err(CalibreError::Parse { errors, .. }) => {
                 calibre_diagnostics::emit_parser_errors(&path, &contents, &errors);
                 continue;
             }
-            Err(CalError::Middle { error, .. }) => {
+            Err(CalibreError::Middle { error, .. }) => {
                 emit_middle_error(&path, &contents, &error);
                 continue;
             }
@@ -852,7 +852,7 @@ fn resolve_run_target(
 
     if let Some(example) = example {
         let Some(project) = project else {
-            return Err("`--example` requires a cal.toml project".into());
+            return Err("`--example` requires a calibre.toml project".into());
         };
         if let Some(path) = resolve_example_by_name(&project, &example) {
             return Ok(Some(path));
@@ -891,7 +891,7 @@ fn run_external_subcommand(cmd: &[String]) -> Result<(), Box<dyn Error>> {
     }
     let sub = &cmd[0];
     let forward = &cmd[1..];
-    let bin_name = format!("cal-{sub}");
+    let bin_name = format!("calibre-{sub}");
 
     let mut candidates = vec![PathBuf::from(&bin_name)];
     if let Ok(exe) = std::env::current_exe()
@@ -919,7 +919,7 @@ fn run_external_subcommand(cmd: &[String]) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    Err(format!("unable to find `{bin_name}` in PATH or next to cal binary").into())
+    Err(format!("unable to find `{bin_name}` in PATH or next to calibre binary").into())
 }
 
 async fn repl(initial_session: Vec<String>) -> Result<(), Box<dyn Error>> {
@@ -1078,12 +1078,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         F: FnOnce() -> Result<(), String> + Send + 'static,
     {
         let handle = std::thread::Builder::new()
-            .name("cal-main".to_string())
+            .name("calibre-main".to_string())
             .stack_size(64 * 1024 * 1024)
             .spawn(f)?;
         match handle.join() {
             Ok(res) => res.map_err(|e| e.into()),
-            Err(_) => Err("cal runtime thread panicked".into()),
+            Err(_) => Err("calibre runtime thread panicked".into()),
         }
     }
 

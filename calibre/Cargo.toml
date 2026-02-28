@@ -1,5 +1,5 @@
 [package]
-name = "cal"
+name = "calibre"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

@@ -1,12 +1,14 @@
 trait State {
 	const name : fn (&Self) -> str;
+
 	const on_input : fn (&Self, str) -> dyn:<State>;
+
 	const done : fn (&Self) -> bool;
 };
 
 type Locked = struct { attempts : int };
-type Unlocked = struct {};
-type Alarm = struct {};
+type Unlocked = struct { };
+type Alarm = struct { };
 
 impl Display for Locked {
 	const display = fn (self : &Locked) -> str => "Locked[" & self.attempts & "]";
@@ -22,12 +24,14 @@ impl Display for Alarm {
 
 impl State for Locked {
 	const name = fn (self : &Locked) -> str => "Locked(" & self.attempts & ")";
+
 	const done = fn (_self : &Locked) -> bool => false;
+
 	const on_input = fn (self : &Locked, input : str) -> dyn:<State> => {
 		if input == "1234" => {
-			Unlocked {} as! dyn:<State>;
+			Unlocked { } as! dyn:<State>;
 		} else if self.attempts >= 2 => {
-			Alarm {} as! dyn:<State>;
+			Alarm { } as! dyn:<State>;
 		} else => {
 			Locked { attempts : self.attempts + 1 } as! dyn:<State>;
 		};
@@ -36,48 +40,52 @@ impl State for Locked {
 
 impl State for Unlocked {
 	const name = fn (_self : &Unlocked) -> str => "Unlocked";
+
 	const done = fn (_self : &Unlocked) -> bool => true;
+
 	const on_input = fn (_self : &Unlocked, input : str) -> dyn:<State> => {
 		if input == "lock" => {
 			Locked { attempts : 0 } as! dyn:<State>;
 		} else => {
-			Unlocked {} as! dyn:<State>;
+			Unlocked { } as! dyn:<State>;
 		};
 	};
 };
 
 impl State for Alarm {
 	const name = fn (_self : &Alarm) -> str => "Alarm";
+
 	const done = fn (_self : &Alarm) -> bool => true;
+
 	const on_input = fn (_self : &Alarm, input : str) -> dyn:<State> => {
 		if input == "reset" => {
 			Locked { attempts : 0 } as! dyn:<State>;
 		} else => {
-			Alarm {} as! dyn:<State>;
+			Alarm { } as! dyn:<State>;
 		};
 	};
 };
 
 const main = fn => {
 	print(Locked { attempts : 2 });
-	print(Unlocked {});
-	print(Alarm {});
-
+	print(Unlocked { });
+	print(Alarm { });
+	
 	print(Locked { attempts : 7 }.name());
-	print(Unlocked {}.name());
-	print(Alarm {}.name());
-
+	print(Unlocked { }.name());
+	print(Alarm { }.name());
+	
 	let mut state : dyn:<State> = Locked { attempts : 0 };
 	let inputs = list:<str>["0000", "1111", "0000", "reset", "1234"];
-
+	
 	for input in inputs => {
 		print("state=" & state.name() & " input=" & input);
 		state = state.on_input(input);
-
+		
 		match state {
 			is Locked => print("Locked"),
 			is Unlocked => print("Unlocked"),
-			is Alarm => print("Alarm"),
+			is Alarm => print("Alarm")
 		};
 	};
 };

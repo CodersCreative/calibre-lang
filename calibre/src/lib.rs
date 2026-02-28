@@ -42,7 +42,7 @@ impl NativeFunction for ClosureNative {
 }
 
 #[derive(Debug)]
-pub enum CalError {
+pub enum CalibreError {
     Io(std::io::Error),
     Parse {
         path: PathBuf,
@@ -62,7 +62,7 @@ pub enum CalError {
     MissingEntryPoint(String),
 }
 
-impl Display for CalError {
+impl Display for CalibreError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Io(e) => write!(f, "{e}"),
@@ -74,9 +74,9 @@ impl Display for CalError {
     }
 }
 
-impl std::error::Error for CalError {}
+impl std::error::Error for CalibreError {}
 
-impl From<std::io::Error> for CalError {
+impl From<std::io::Error> for CalibreError {
     fn from(value: std::io::Error) -> Self {
         Self::Io(value)
     }
@@ -89,7 +89,7 @@ struct NativeBinding {
 }
 
 #[derive(Clone, Debug)]
-pub struct CalArtifacts {
+pub struct CalibreArtifacts {
     pub ast: Option<Node>,
     pub mir: Option<MiddleNode>,
     pub registry: VMRegistry,
@@ -98,7 +98,7 @@ pub struct CalArtifacts {
 }
 
 pub struct RunResult {
-    pub artifacts: CalArtifacts,
+    pub artifacts: CalibreArtifacts,
     pub return_value: RuntimeValue,
     pub vm: VM,
 }
@@ -121,7 +121,7 @@ pub enum CompileMode {
 }
 
 #[derive(Clone)]
-pub struct CalEngine {
+pub struct CalibreEngine {
     vm_config: VMConfig,
     entry_name: String,
     source_path: Option<PathBuf>,
@@ -133,13 +133,13 @@ pub struct CalEngine {
     cache_dir: Option<PathBuf>,
 }
 
-impl Default for CalEngine {
+impl Default for CalibreEngine {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl CalEngine {
+impl CalibreEngine {
     pub fn new() -> Self {
         Self {
             vm_config: VMConfig::default(),
@@ -232,7 +232,10 @@ impl CalEngine {
         self
     }
 
-    pub fn compile_source(&self, source: impl Into<String>) -> Result<CalArtifacts, CalError> {
+    pub fn compile_source(
+        &self,
+        source: impl Into<String>,
+    ) -> Result<CalibreArtifacts, CalibreError> {
         let input = source.into();
         let full_source = self.compose_source(&input);
         let path = self
@@ -244,7 +247,7 @@ impl CalEngine {
         parser.set_source_path(Some(path.clone()));
         let ast = parser.produce_ast(&full_source);
         if !parser.errors.is_empty() {
-            return Err(CalError::Parse {
+            return Err(CalibreError::Parse {
                 path,
                 source: full_source,
                 errors: parser.errors,
@@ -265,7 +268,7 @@ impl CalEngine {
 
         let mir_errors = env.take_errors();
         if !mir_errors.is_empty() {
-            return Err(CalError::Middle {
+            return Err(CalibreError::Middle {
                 path,
                 source: full_source,
                 error: MiddleErr::Multiple(mir_errors),
@@ -284,7 +287,7 @@ impl CalEngine {
         let mappings: Vec<String> = env.variables.keys().cloned().collect();
         let registry = VMRegistry::from(lir);
 
-        Ok(CalArtifacts {
+        Ok(CalibreArtifacts {
             ast: Some(ast_for_artifacts),
             mir: Some(mir),
             registry,
@@ -296,13 +299,13 @@ impl CalEngine {
     pub fn compile_cached_program_source(
         &self,
         source: impl Into<String>,
-    ) -> Result<CalArtifacts, CalError> {
+    ) -> Result<CalibreArtifacts, CalibreError> {
         let input = source.into();
         let full_source = self.compose_source(&input);
         if self.cache_enabled
             && let Some(cached) = self.try_load_cached_program(&full_source)?
         {
-            return Ok(CalArtifacts {
+            return Ok(CalibreArtifacts {
                 ast: None,
                 mir: None,
                 registry: cached.registry,
@@ -318,7 +321,7 @@ impl CalEngine {
         Ok(artifacts)
     }
 
-    pub fn run_source(&self, source: impl Into<String>) -> Result<RunResult, CalError> {
+    pub fn run_source(&self, source: impl Into<String>) -> Result<RunResult, CalibreError> {
         let source = source.into();
         let full_source = self.compose_source(&source);
         let path = self
@@ -335,11 +338,13 @@ impl CalEngine {
         self.install_bindings(&mut vm);
 
         let Some(main) = vm.registry.functions.get(&artifacts.entry_name).cloned() else {
-            return Err(CalError::MissingEntryPoint(artifacts.entry_name.clone()));
+            return Err(CalibreError::MissingEntryPoint(
+                artifacts.entry_name.clone(),
+            ));
         };
         let return_value =
             vm.run(main.as_ref(), Vec::new())
-                .map_err(|error| CalError::Runtime {
+                .map_err(|error| CalibreError::Runtime {
                     path,
                     source: full_source,
                     error,
@@ -352,7 +357,7 @@ impl CalEngine {
         })
     }
 
-    pub fn compile_file(&self, path: impl AsRef<Path>) -> Result<CalArtifacts, CalError> {
+    pub fn compile_file(&self, path: impl AsRef<Path>) -> Result<CalibreArtifacts, CalibreError> {
         let path = path.as_ref();
         let source = std::fs::read_to_string(path)?;
         self.clone()
@@ -360,7 +365,7 @@ impl CalEngine {
             .compile_source(source)
     }
 
-    pub fn run_file(&self, path: impl AsRef<Path>) -> Result<RunResult, CalError> {
+    pub fn run_file(&self, path: impl AsRef<Path>) -> Result<RunResult, CalibreError> {
         let path = path.as_ref();
         let source = std::fs::read_to_string(path)?;
         self.clone()
@@ -442,7 +447,7 @@ impl CalEngine {
     fn try_load_cached_program(
         &self,
         full_source: &str,
-    ) -> Result<Option<CachedProgramBlob>, CalError> {
+    ) -> Result<Option<CachedProgramBlob>, CalibreError> {
         let Some(root) = self.cache_root() else {
             return Ok(None);
         };
@@ -453,7 +458,7 @@ impl CalEngine {
         let file = match std::fs::File::open(&path) {
             Ok(file) => file,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(err) => return Err(CalError::Io(err)),
+            Err(err) => return Err(CalibreError::Io(err)),
         };
         let mut reader = std::io::BufReader::new(file);
         match bincode::deserialize_from::<_, CachedProgramBlob>(&mut reader) {
@@ -468,8 +473,8 @@ impl CalEngine {
     fn store_cached_program(
         &self,
         full_source: &str,
-        artifacts: &CalArtifacts,
-    ) -> Result<(), CalError> {
+        artifacts: &CalibreArtifacts,
+    ) -> Result<(), CalibreError> {
         let Some(root) = self.cache_root() else {
             return Ok(());
         };
@@ -486,7 +491,7 @@ impl CalEngine {
         };
         bincode::serialize_into(&mut writer, &cache)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-            .map_err(CalError::Io)?;
+            .map_err(CalibreError::Io)?;
         Ok(())
     }
 }

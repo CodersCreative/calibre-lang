@@ -1,5 +1,5 @@
-use cal_fmt::{FormatError, format_all, format_file, format_recursive};
 use calibre_diagnostics::{emit_error, emit_parser_errors};
+use calibre_fmt::{FormatError, format_all, format_file, format_recursive};
 use calibre_parser::ast::formatter::Formatter;
 use clap::Parser;
 use std::{env, error::Error, path::PathBuf, str::FromStr};

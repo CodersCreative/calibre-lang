@@ -337,7 +337,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
-name = "cal"
+name = "calibre"
 version = "0.0.1"
 dependencies = [
  "bincode",
@@ -354,29 +354,6 @@ dependencies = [
  "serde",
  "smol",
  "toml",
-]
-
-[[package]]
-name = "cal-fmt"
-version = "0.0.1"
-dependencies = [
- "calibre-diagnostics",
- "calibre-parser",
- "clap",
-]
-
-[[package]]
-name = "cal-lsp"
-version = "0.0.1"
-dependencies = [
- "async-lsp",
- "calibre-mir",
- "calibre-parser",
- "futures",
- "smol",
- "tower",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -404,6 +381,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "calibre-fmt"
+version = "0.0.1"
+dependencies = [
+ "calibre-diagnostics",
+ "calibre-parser",
+ "clap",
+]
+
+[[package]]
 name = "calibre-lir"
 version = "0.0.1"
 dependencies = [
@@ -411,6 +397,20 @@ dependencies = [
  "calibre-parser",
  "rustc-hash",
  "serde",
+]
+
+[[package]]
+name = "calibre-lsp"
+version = "0.0.1"
+dependencies = [
+ "async-lsp",
+ "calibre-mir",
+ "calibre-parser",
+ "futures",
+ "smol",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 [package]
-name = "cal-lsp"
+name = "calibre-lsp"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

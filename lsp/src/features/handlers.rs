@@ -39,7 +39,7 @@ impl LanguageServer for CalibreLanguageServer {
                 ..ServerCapabilities::default()
             },
             server_info: Some(ServerInfo {
-                name: "cal-lsp".to_string(),
+                name: "calibre-lsp".to_string(),
                 version: Some(env!("CARGO_PKG_VERSION").to_string()),
             }),
         })))
@@ -57,7 +57,7 @@ impl LanguageServer for CalibreLanguageServer {
         let _ = self.client.notify::<notification::ShowMessage>(
             async_lsp::lsp_types::ShowMessageParams {
                 typ: MessageType::INFO,
-                message: "cal-lsp rewrite bootstrap initialized".to_string(),
+                message: "calibre-lsp rewrite bootstrap initialized".to_string(),
             },
         );
         ControlFlow::Continue(())

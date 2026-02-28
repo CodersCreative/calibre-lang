@@ -34,7 +34,7 @@ pub struct Package {
     #[serde(default)]
     pub authors: Vec<String>,
     #[serde(default)]
-    pub cal: String,
+    pub calibre: String,
     #[serde(default)]
     pub readme: String,
     #[serde(default)]
@@ -101,9 +101,9 @@ pub fn find_manifest_from(start: &Path) -> Option<PathBuf> {
         start.parent()?.to_path_buf()
     };
     loop {
-        let candidate = cur.join("cal.toml");
-        if candidate.exists() {
-            return Some(candidate);
+        let calibre_candidate = cur.join("calibre.toml");
+        if calibre_candidate.exists() {
+            return Some(calibre_candidate);
         }
         if !cur.pop() {
             return None;

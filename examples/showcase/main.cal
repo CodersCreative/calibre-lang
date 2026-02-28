@@ -60,7 +60,7 @@ impl Describe for Pair {
 	const describe = fn (self : &Pair) -> str => "Pair(" & self.left & ", " & self.right & ")";
 };
 
-// Test showcase: run with "cal test".
+// Test showcase: run with "calibre test".
 test showcase_core_math => {
 	assert(factorial(6) == 720, "factorial(6) should equal 720");
 	assert(int.gcd(84, 18) == 6, "int.gcd(84, 18) should equal 6");
@@ -73,7 +73,7 @@ test showcase_conversions => {
 	assert(("oops" as? int).is_none(), "as? should return none on conversion failure");
 };
 
-// Benchmark showcase: run with "cal bench".
+// Benchmark showcase: run with "calibre bench".
 bench showcase_generator_throughput => {
 	let gen = even_numbers(0, 20000);
 	let mut count = 0;

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "cal",
+    "calibre",
     "lsp",
     "crates/parser",
     "crates/cranelift", "fmt", "crates/mir", "crates/std", "crates/lir", "crates/vm",
@@ -30,7 +30,7 @@ calibre-cranelift = {path="./crates/cranelift"}
 calibre-diagnostics = {path="./crates/diagnostics"}
 calibre-parser = {path="./crates/parser"}
 calibre-std = {path="./crates/std"}
-cal-fmt = {path = "./fmt"}
+calibre-fmt = {path = "./fmt"}
 
 # Other common packages
 rand = "0.10"

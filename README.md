@@ -137,44 +137,44 @@ extern "c" const c_strlen = fn(str) -> @usize from "libc" as "strlen";
 ### Build
 
 ```sh
-cargo build -p cal
+cargo build -p calibre
 ```
 
 ### REPL
 
 ```sh
-cargo run -p cal
+cargo run -p calibre
 ```
 
 ### Run a file
 
 ```sh
-cargo run -p cal -- run examples/examples.cal
+cargo run -p calibre -- run examples/examples.cal
 ```
 
-### Run project example by name (inside a `cal.toml` project)
+### Run project example by name (inside a `calibre.toml` project)
 
 ```sh
-cargo run -p cal -- run --example my_example
+cargo run -p calibre -- run --example my_example
 ```
 
 ### Run tests / benchmarks
 
 ```sh
-cargo run -p cal -- test
-cargo run -p cal -- bench
+cargo run -p calibre -- test
+cargo run -p calibre -- bench
 ```
 
 ### Formatter
 
 ```sh
-cargo run -p cal-fmt -- --max-width 100 --path examples/examples.cal
+cargo run -p calibre-fmt -- --max-width 100 --path examples/examples.cal
 ```
 
 ### LSP
 
 ```sh
-cargo run -p cal-lsp
+cargo run -p calibre-lsp
 ```
 
 ---
@@ -194,7 +194,7 @@ The `examples/` directory contains practical programs for current language/runti
 
 ## Repository Structure
 
-- `cal/`: CLI frontend and REPL
+- `calibre/`: CLI frontend and REPL (package `calibre`)
 - `lsp/`: language server
 - `fmt/`: source formatter
 - `crates/parser/`: parser + AST + parser diagnostics

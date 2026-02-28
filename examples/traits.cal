@@ -16,12 +16,14 @@ impl Person for User {
 
 trait Human {
 	const name : str;
+
 	const age = 10;
+
 	const country = "Zimbabwe";
 };
 
-type Ty = struct {};
-type Tadiwa = struct {};
+type Ty = struct { };
+type Tadiwa = struct { };
 
 impl Human for Ty {
 	const name = "Ty";
@@ -29,7 +31,9 @@ impl Human for Ty {
 
 impl Human for Tadiwa {
 	const name = "Tadiwa";
+
 	const age = 21;
+
 	const country = "US";
 };
 
@@ -46,18 +50,18 @@ const main = fn => {
 	print("calibre".starts_with("cal"));
 	let file = File.open_read("./destructure.cal");
 	print(file.read_all(10000));
-
-	let ty = Ty {};
-	let tadiwa = Tadiwa {};
-
+	
+	let ty = Ty { };
+	let tadiwa = Tadiwa { };
+	
 	print(ty.name);
 	print(ty.age);
 	print(ty.country);
-
+	
 	print(tadiwa.name);
 	print(tadiwa.age);
 	print(tadiwa.country);
-
+	
 	show("ty", ty);
 	show("tadiwa", tadiwa);
 };
