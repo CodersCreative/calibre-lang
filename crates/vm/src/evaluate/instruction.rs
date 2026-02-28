@@ -1,6 +1,196 @@
 use super::*;
 
 impl VM {
+    #[inline]
+    fn member_parts(name: &str) -> (Option<&str>, Option<usize>) {
+        let short_name = name.rsplit_once("::").map(|(_, short)| short);
+        let tuple_index = name.parse::<usize>().ok();
+        (short_name, tuple_index)
+    }
+
+    #[inline]
+    fn bind_receiver_if_callable(callee: RuntimeValue, receiver: RuntimeValue) -> RuntimeValue {
+        match callee {
+            RuntimeValue::Function { .. }
+            | RuntimeValue::NativeFunction(_)
+            | RuntimeValue::ExternFunction(_) => RuntimeValue::BoundMethod {
+                callee: Box::new(callee),
+                receiver: Gc::new(receiver),
+            },
+            other => other,
+        }
+    }
+
+    #[inline]
+    fn resolve_index(len: usize, idx: i64) -> Option<usize> {
+        if len == 0 {
+            return None;
+        }
+        let resolved = if idx < 0 { len as i64 + idx } else { idx };
+        if resolved < 0 || resolved as usize >= len {
+            None
+        } else {
+            Some(resolved as usize)
+        }
+    }
+
+    #[inline]
+    fn resolve_index_or_err(len: usize, idx: i64) -> Result<usize, RuntimeError> {
+        Self::resolve_index(len, idx).ok_or(RuntimeError::StackUnderflow)
+    }
+
+    #[inline]
+    fn resolve_slice_range(len: usize, start: i64, end: i64) -> (usize, usize) {
+        let mut s = start;
+        let mut e = end;
+        if s < 0 {
+            s = len as i64 + s;
+        }
+        if e < 0 {
+            e = len as i64 + e;
+        }
+        if s < 0 {
+            s = 0;
+        }
+        if e < 0 {
+            e = 0;
+        }
+        let s = s.min(len as i64) as usize;
+        let e = e.min(len as i64) as usize;
+        if e < s { (s, s) } else { (s, e) }
+    }
+
+    fn materialize_callable_for_reg(&self, value: &RuntimeValue) -> Option<RuntimeValue> {
+        match value {
+            RuntimeValue::Function { name, captures } => Some(RuntimeValue::Function {
+                name: name.clone(),
+                captures: captures.clone(),
+            }),
+            RuntimeValue::NativeFunction(func) => Some(RuntimeValue::NativeFunction(func.clone())),
+            RuntimeValue::ExternFunction(func) => Some(RuntimeValue::ExternFunction(func.clone())),
+            RuntimeValue::BoundMethod { callee, receiver } => Some(RuntimeValue::BoundMethod {
+                callee: callee.clone(),
+                receiver: receiver.clone(),
+            }),
+            _ => None,
+        }
+    }
+
+    fn run_bound_method_call(
+        &mut self,
+        callee: RuntimeValue,
+        receiver: RuntimeValue,
+        args: &[u16],
+        block: &VMBlock,
+        ip: u32,
+    ) -> Result<RuntimeValue, RuntimeError> {
+        let mut full_args = vec![receiver];
+        full_args.extend(self.collect_call_args_vec(args));
+        self.call_runtime_callable_at(callee, full_args, block.id.0 as usize, ip)
+    }
+
+    fn run_call_direct_instruction(
+        &mut self,
+        dst: u16,
+        name: u16,
+        args: &[u16],
+        block: &VMBlock,
+        ip: u32,
+    ) -> Result<(), RuntimeError> {
+        match self.resolve_direct_callsite_cached(block, ip, name)? {
+            Some(PreparedDirectCall::Vm(func)) => {
+                let value =
+                    self.run_function_from_regs(func.as_ref(), args, Self::empty_captures())?;
+                self.set_reg_value(dst, value);
+            }
+            Some(PreparedDirectCall::Native(func)) => {
+                let result = func.run(self, self.collect_call_args_vec(args))?;
+                self.set_reg_value(dst, result);
+            }
+            Some(PreparedDirectCall::Extern(func)) => {
+                let value = func.call(self, self.collect_call_args_vec(args))?;
+                self.set_reg_value(dst, value);
+            }
+            None => {
+                let func_name = self.local_string(block, name)?;
+                return Err(RuntimeError::FunctionNotFound(func_name.to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn run_call_instruction(
+        &mut self,
+        dst: u16,
+        callee: u16,
+        args: &[u16],
+        block: &VMBlock,
+        ip: u32,
+        prev_block: Option<BlockId>,
+    ) -> Result<Option<TerminateValue>, RuntimeError> {
+        let func = if let Some(callable) =
+            self.materialize_callable_for_reg(self.get_reg_value_ref(callee))
+        {
+            callable
+        } else {
+            self.resolve_value_for_op_ref(self.get_reg_value_ref(callee))?
+        };
+
+        match func {
+            RuntimeValue::BoundMethod { callee, receiver } => {
+                let value = self.run_bound_method_call(
+                    *callee,
+                    receiver.as_ref().clone(),
+                    args,
+                    block,
+                    ip,
+                )?;
+                self.set_reg_value(dst, value);
+            }
+            RuntimeValue::Function { name, captures } => {
+                let callsite = (self.current_frame().func_ptr, block.id.0 as usize, ip);
+                let Some(func) = self.resolve_callable_cached(name.as_str(), callsite) else {
+                    return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
+                };
+
+                if captures.as_ref().is_empty()
+                    && std::ptr::eq(
+                        func.as_ref() as *const VMFunction,
+                        self.current_frame().func_ptr as *const VMFunction,
+                    )
+                    && let Some(step) =
+                        self.try_trampoline_self_tail_call(block, ip, dst, args, func.as_ref())
+                {
+                    return Ok(Some(step));
+                }
+
+                let value = self.run_function_from_regs(func.as_ref(), args, captures.clone())?;
+                self.set_reg_value(dst, value);
+            }
+            RuntimeValue::NativeFunction(func) => {
+                let result = func.run(self, self.collect_call_args_vec(args))?;
+                if let RuntimeValue::GeneratorSuspend(value) = result {
+                    let yielded = *value;
+                    self.set_reg_value(dst, yielded.clone());
+                    return Ok(Some(TerminateValue::Yield {
+                        block: block.id,
+                        ip: ip as usize + 1,
+                        prev_block,
+                        yielded: Some(yielded),
+                    }));
+                }
+                self.set_reg_value(dst, result);
+            }
+            RuntimeValue::ExternFunction(func) => {
+                let value = func.call(self, self.collect_call_args_vec(args))?;
+                self.set_reg_value(dst, value);
+            }
+            _ => return Err(RuntimeError::InvalidFunctionCall),
+        }
+
+        Ok(None)
+    }
+
     pub(super) fn run_instruction(
         &mut self,
         instruction: &VMInstruction,
@@ -236,6 +426,16 @@ impl VM {
                 };
                 self.set_reg_value(*dst, converted);
             }
+            VMInstruction::Is {
+                dst,
+                src,
+                data_type,
+            } => {
+                let value = self.get_reg_value(*src);
+                let resolved = self.resolve_operand_value(value)?;
+                let out = self.runtime_matches_type(&resolved, &data_type.data_type);
+                self.set_reg_value(*dst, RuntimeValue::Bool(out));
+            }
             VMInstruction::Binary {
                 dst,
                 op,
@@ -248,7 +448,8 @@ impl VM {
                 }
                 let left = self.resolve_operand_value(self.get_reg_value(*left))?;
                 let right = self.resolve_operand_value(self.get_reg_value(*right))?;
-                self.set_reg_value(*dst, binary(self, op, left, right)?);
+                let value = binary(self, op, left, right)?;
+                self.set_reg_value(*dst, value);
             }
             VMInstruction::AccLoad { src } => {
                 let value = self.get_reg_value(*src);
@@ -309,7 +510,8 @@ impl VM {
                     std::mem::replace(&mut frame.acc, RuntimeValue::Null)
                 };
                 let left = self.resolve_operand_value(left_raw)?;
-                self.current_frame_mut().acc = binary(self, op, left, right)?;
+                let value = binary(self, op, left, right)?;
+                self.current_frame_mut().acc = value;
             }
             VMInstruction::Comparison {
                 dst,
@@ -451,28 +653,7 @@ impl VM {
                 );
             }
             VMInstruction::CallDirect { dst, name, args } => {
-                match self.resolve_direct_callsite_cached(block, ip, *name)? {
-                    Some(PreparedDirectCall::Vm(func)) => {
-                        let value = self.run_function_from_regs(
-                            func.as_ref(),
-                            args,
-                            Self::empty_captures(),
-                        )?;
-                        self.set_reg_value(*dst, value);
-                    }
-                    Some(PreparedDirectCall::Native(func)) => {
-                        let result = func.run(self, self.collect_call_args_vec(args))?;
-                        self.set_reg_value(*dst, result);
-                    }
-                    Some(PreparedDirectCall::Extern(func)) => {
-                        let value = func.call(self, self.collect_call_args_vec(args))?;
-                        self.set_reg_value(*dst, value);
-                    }
-                    None => {
-                        let func_name = self.local_string(block, *name)?;
-                        return Err(RuntimeError::FunctionNotFound(func_name.to_string()));
-                    }
-                }
+                self.run_call_direct_instruction(*dst, *name, args, block, ip)?;
             }
             VMInstruction::CallSelf { dst, args } => {
                 let func_ptr = self.current_frame().func_ptr as *const VMFunction;
@@ -490,65 +671,10 @@ impl VM {
                 self.set_reg_value(*dst, value);
             }
             VMInstruction::Call { dst, callee, args } => {
-                let func = match self.get_reg_value_ref(*callee) {
-                    RuntimeValue::Function { name, captures } => RuntimeValue::Function {
-                        name: name.clone(),
-                        captures: captures.clone(),
-                    },
-                    RuntimeValue::NativeFunction(func) => {
-                        RuntimeValue::NativeFunction(func.clone())
-                    }
-                    RuntimeValue::ExternFunction(func) => {
-                        RuntimeValue::ExternFunction(func.clone())
-                    }
-                    other => self.resolve_value_for_op_ref(other)?,
-                };
-                match func {
-                    RuntimeValue::Function { name, captures } => {
-                        let callsite = (self.current_frame().func_ptr, block.id.0 as usize, ip);
-                        let func_opt = self.resolve_callable_cached(name.as_str(), callsite);
-
-                        if let Some(func) = func_opt {
-                            if captures.as_ref().is_empty()
-                                && func.as_ref() as *const VMFunction
-                                    == self.current_frame().func_ptr as *const VMFunction
-                            {
-                                if let Some(step) = self.try_trampoline_self_tail_call(
-                                    block,
-                                    ip,
-                                    *dst,
-                                    args,
-                                    func.as_ref(),
-                                ) {
-                                    return Ok(step);
-                                }
-                            }
-                            let value =
-                                self.run_function_from_regs(func.as_ref(), args, captures.clone())?;
-                            self.set_reg_value(*dst, value);
-                        } else {
-                            return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
-                        }
-                    }
-                    RuntimeValue::NativeFunction(func) => {
-                        let result = func.run(self, self.collect_call_args_vec(args))?;
-                        if let RuntimeValue::GeneratorSuspend(value) = result {
-                            let yielded = *value;
-                            self.set_reg_value(*dst, yielded.clone());
-                            return Ok(TerminateValue::Yield {
-                                block: block.id,
-                                ip: ip as usize + 1,
-                                prev_block,
-                                yielded: Some(yielded),
-                            });
-                        }
-                        self.set_reg_value(*dst, result);
-                    }
-                    RuntimeValue::ExternFunction(func) => {
-                        let value = func.call(self, self.collect_call_args_vec(args))?;
-                        self.set_reg_value(*dst, value);
-                    }
-                    _other => return Err(RuntimeError::InvalidFunctionCall),
+                if let Some(step) =
+                    self.run_call_instruction(*dst, *callee, args, block, ip, prev_block)?
+                {
+                    return Ok(step);
                 }
             }
             VMInstruction::Spawn { dst, callee } => {
@@ -579,12 +705,7 @@ impl VM {
             }
             VMInstruction::LoadMember { dst, value, member } => {
                 let name = self.local_string(block, *member)?;
-                let short_name = if let Some(pos) = name.rfind("::") {
-                    Some(&name[pos + 2..])
-                } else {
-                    None
-                };
-                let tuple_index = name.parse::<usize>().ok();
+                let (short_name, tuple_index) = Self::member_parts(name);
                 let resolved = self.resolve_value_for_op_ref(self.get_reg_value_ref(*value))?;
                 let val = match resolved {
                     RuntimeValue::Generator { type_name, state } => {
@@ -607,51 +728,69 @@ impl VM {
                                 })?;
                                 RuntimeValue::Bool(guard.completed)
                             }
-                            _ => {
-                                let mut path =
-                                    String::with_capacity(type_name.len() + name.len() + 2);
-                                path.push_str(type_name.as_str());
-                                path.push_str("::");
-                                path.push_str(name);
-                                if let Some(func) = self.get_function_ref(&path) {
-                                    self.make_runtime_function(func)
-                                } else {
-                                    let found = if let Some(short) = short_name {
-                                        path.clear();
-                                        path.push_str(type_name.as_str());
-                                        path.push_str("::");
-                                        path.push_str(short);
-                                        self.get_function_ref(&path)
-                                    } else {
-                                        None
-                                    }
-                                    .or_else(|| {
-                                        let short_type =
-                                            type_name.rsplit_once(':').map(|(_, short)| short)?;
-                                        path.clear();
-                                        path.push_str(short_type);
-                                        path.push_str("::");
-                                        path.push_str(name);
-                                        self.get_function_ref(&path).or_else(|| {
-                                            let short = short_name?;
-                                            path.clear();
-                                            path.push_str(short_type);
-                                            path.push_str("::");
-                                            path.push_str(short);
-                                            self.get_function_ref(&path)
-                                        })
+                            _ => match self.resolve_associated_member_value(
+                                type_name.as_str(),
+                                name,
+                                short_name,
+                            ) {
+                                Some(value) => value,
+                                None => {
+                                    return Err(RuntimeError::MissingMember {
+                                        target: RuntimeValue::Generator { type_name, state },
+                                        member: name.to_string(),
                                     });
-
-                                    if let Some(func) = found {
-                                        self.make_runtime_function(func)
-                                    } else {
-                                        return Err(RuntimeError::MissingMember {
-                                            target: RuntimeValue::Generator { type_name, state },
-                                            member: name.to_string(),
-                                        });
-                                    }
                                 }
-                            }
+                            },
+                        }
+                    }
+                    RuntimeValue::DynObject {
+                        type_name,
+                        value,
+                        vtable,
+                        constraints,
+                    } => {
+                        let member_short = short_name.unwrap_or(name);
+                        if let Some(callee_name) =
+                            vtable.get(member_short).or_else(|| vtable.get(name))
+                        {
+                            let mapped = callee_name.rsplit_once("::").and_then(|(owner, _)| {
+                                if Self::name_matches(owner, type_name.as_str()) {
+                                    Some(callee_name.as_str())
+                                } else {
+                                    None
+                                }
+                            });
+                            let Some(callee) = self.resolve_dyn_method_callable(
+                                type_name.as_str(),
+                                member_short,
+                                mapped,
+                            ) else {
+                                return Err(RuntimeError::FunctionNotFound(callee_name.clone()));
+                            };
+                            Self::bind_receiver_if_callable(callee, value.as_ref().clone())
+                        } else if let Some(callee) =
+                            self.resolve_dyn_method_callable(type_name.as_str(), member_short, None)
+                        {
+                            Self::bind_receiver_if_callable(callee, value.as_ref().clone())
+                        } else if member_short == "type" {
+                            RuntimeValue::Str(type_name)
+                        } else if member_short == "traits" {
+                            RuntimeValue::List(Gc::new(crate::value::GcVec(
+                                constraints
+                                    .iter()
+                                    .map(|x| RuntimeValue::Str(Arc::new(x.clone())))
+                                    .collect(),
+                            )))
+                        } else {
+                            return Err(RuntimeError::MissingMember {
+                                target: RuntimeValue::DynObject {
+                                    type_name,
+                                    constraints,
+                                    value,
+                                    vtable,
+                                },
+                                member: name.to_string(),
+                            });
                         }
                     }
                     RuntimeValue::Aggregate(None, map) => {
@@ -672,41 +811,13 @@ impl VM {
                         {
                             map.0.0[idx].1.clone()
                         } else {
-                            let mut path = String::with_capacity(type_name.len() + name.len() + 2);
-                            path.push_str(&type_name);
-                            path.push_str("::");
-                            path.push_str(name);
-                            if let Some(func) = self.get_function_ref(&path) {
-                                self.make_runtime_function(func)
-                            } else {
-                                let found = if let Some(short) = short_name {
-                                    path.clear();
-                                    path.push_str(&type_name);
-                                    path.push_str("::");
-                                    path.push_str(short);
-                                    self.get_function_ref(&path)
-                                } else {
-                                    None
-                                }
-                                .or_else(|| {
-                                    let short_type =
-                                        type_name.rsplit_once(':').map(|(_, short)| short)?;
-                                    path.clear();
-                                    path.push_str(short_type);
-                                    path.push_str("::");
-                                    path.push_str(name);
-                                    self.get_function_ref(&path).or_else(|| {
-                                        let short = short_name?;
-                                        path.clear();
-                                        path.push_str(short_type);
-                                        path.push_str("::");
-                                        path.push_str(short);
-                                        self.get_function_ref(&path)
-                                    })
-                                });
-                                if let Some(func) = found {
-                                    self.make_runtime_function(func)
-                                } else {
+                            match self.resolve_associated_member_value(
+                                type_name.as_str(),
+                                name,
+                                short_name,
+                            ) {
+                                Some(value) => value,
+                                None => {
                                     return Err(RuntimeError::MissingMember {
                                         target: RuntimeValue::Aggregate(Some(type_name), map),
                                         member: name.to_string(),
@@ -750,12 +861,7 @@ impl VM {
             } => {
                 let name = self.local_string(block, *member)?;
                 let value = self.get_reg_value(*value);
-                let tuple_index = name.parse::<usize>().ok();
-                let short_name = if let Some(pos) = name.rfind("::") {
-                    Some(&name[pos + 2..])
-                } else {
-                    None
-                };
+                let (short_name, tuple_index) = Self::member_parts(name);
 
                 let update_aggregate =
                     |agg_name: &Option<String>, mut map: Gc<crate::value::GcMap>| {
@@ -906,45 +1012,12 @@ impl VM {
                     }
                 }
 
-                let resolve_idx = |len: usize, idx: i64| -> Option<usize> {
-                    if len == 0 {
-                        return None;
-                    }
-                    let mut i = idx;
-                    if i < 0 {
-                        i = len as i64 + i;
-                    }
-                    if i < 0 || i as usize >= len {
-                        None
-                    } else {
-                        Some(i as usize)
-                    }
-                };
-                let resolve_range = |len: usize, start: i64, end: i64| -> (usize, usize) {
-                    let mut s = start;
-                    let mut e = end;
-                    if s < 0 {
-                        s = len as i64 + s;
-                    }
-                    if e < 0 {
-                        e = len as i64 + e;
-                    }
-                    if s < 0 {
-                        s = 0;
-                    }
-                    if e < 0 {
-                        e = 0;
-                    }
-                    let s = s.min(len as i64) as usize;
-                    let e = e.min(len as i64) as usize;
-                    if e < s { (s, s) } else { (s, e) }
-                };
                 let index_val = self.get_reg_value(*index);
                 let index_list =
                     |list: &Gc<crate::value::GcVec>| -> Result<RuntimeValue, RuntimeError> {
                         match &index_val {
                             RuntimeValue::Int(index) => {
-                                Ok(resolve_idx(list.as_ref().0.len(), *index)
+                                Ok(Self::resolve_index(list.as_ref().0.len(), *index)
                                     .and_then(|i| list.as_ref().0.get(i).cloned())
                                     .unwrap_or(RuntimeValue::Null))
                             }
@@ -955,7 +1028,8 @@ impl VM {
                                 .cloned()
                                 .unwrap_or(RuntimeValue::Null)),
                             RuntimeValue::Range(start, end) => {
-                                let (s, e) = resolve_range(list.as_ref().0.len(), *start, *end);
+                                let (s, e) =
+                                    Self::resolve_slice_range(list.as_ref().0.len(), *start, *end);
                                 let slice = list.as_ref().0[s..e].to_vec();
                                 Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(slice))))
                             }
@@ -968,7 +1042,7 @@ impl VM {
                     RuntimeValue::Range(start, end) => match &index_val {
                         RuntimeValue::Int(index) => {
                             let len = (end - start).max(0) as usize;
-                            resolve_idx(len, *index)
+                            Self::resolve_index(len, *index)
                                 .map(|i| RuntimeValue::Int(start + i as i64))
                                 .unwrap_or(RuntimeValue::Null)
                         }
@@ -982,15 +1056,17 @@ impl VM {
                         }
                         RuntimeValue::Range(slice_start, slice_end) => {
                             let len = (end - start).max(0) as usize;
-                            let (s, e) = resolve_range(len, *slice_start, *slice_end);
+                            let (s, e) = Self::resolve_slice_range(len, *slice_start, *slice_end);
                             RuntimeValue::Range(start + s as i64, start + e as i64)
                         }
                         _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
                     },
                     RuntimeValue::Aggregate(None, tuple) => match &index_val {
-                        RuntimeValue::Int(index) => resolve_idx(tuple.as_ref().0.0.len(), *index)
-                            .and_then(|i| tuple.as_ref().0.0.get(i).map(|(_, v)| v.clone()))
-                            .unwrap_or(RuntimeValue::Null),
+                        RuntimeValue::Int(index) => {
+                            Self::resolve_index(tuple.as_ref().0.0.len(), *index)
+                                .and_then(|i| tuple.as_ref().0.0.get(i).map(|(_, v)| v.clone()))
+                                .unwrap_or(RuntimeValue::Null)
+                        }
                         RuntimeValue::UInt(index) => tuple
                             .as_ref()
                             .0
@@ -999,7 +1075,8 @@ impl VM {
                             .map(|(_, v)| v.clone())
                             .unwrap_or(RuntimeValue::Null),
                         RuntimeValue::Range(start, end) => {
-                            let (s, e) = resolve_range(tuple.as_ref().0.0.len(), *start, *end);
+                            let (s, e) =
+                                Self::resolve_slice_range(tuple.as_ref().0.0.len(), *start, *end);
                             let slice = tuple.as_ref().0.0[s..e].to_vec();
                             RuntimeValue::Aggregate(
                                 None,
@@ -1012,7 +1089,7 @@ impl VM {
                         RuntimeValue::Int(index) => {
                             let resolved = if *index < 0 {
                                 let len = s.chars().count();
-                                resolve_idx(len, *index)
+                                Self::resolve_index(len, *index)
                             } else {
                                 Some(*index as usize)
                             };
@@ -1028,7 +1105,7 @@ impl VM {
                             .unwrap_or(RuntimeValue::Null),
                         RuntimeValue::Range(start, end) => {
                             let v = s.chars().collect::<Vec<char>>();
-                            let (s, e) = resolve_range(v.len(), *start, *end);
+                            let (s, e) = Self::resolve_slice_range(v.len(), *start, *end);
                             let slice: String = v[s..e].iter().collect();
                             RuntimeValue::Str(Arc::new(slice))
                         }
@@ -1056,13 +1133,6 @@ impl VM {
                         return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
                     }
                 };
-                let resolve_idx = |len: usize, idx: i64| -> Result<usize, RuntimeError> {
-                    let resolved = if idx < 0 { len as i64 + idx } else { idx };
-                    if resolved < 0 || resolved as usize >= len {
-                        return Err(RuntimeError::StackUnderflow);
-                    }
-                    Ok(resolved as usize)
-                };
                 let target_val_ref = self.get_reg_value_ref(*target);
                 if index < 0 && !matches!(target_val_ref, RuntimeValue::List(_)) {
                     return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
@@ -1071,7 +1141,7 @@ impl VM {
                     RuntimeValue::List(list) => {
                         let mut list = list.clone();
                         let vec = &mut Gc::make_mut(&mut list).0;
-                        let idx = resolve_idx(vec.len(), index)?;
+                        let idx = Self::resolve_index_or_err(vec.len(), index)?;
                         vec[idx] = value;
                         self.set_reg_value(*target, RuntimeValue::List(list));
                     }
@@ -1081,7 +1151,7 @@ impl VM {
                         {
                             let mut list = list;
                             let vec = &mut Gc::make_mut(&mut list).0;
-                            let idx = resolve_idx(vec.len(), index)?;
+                            let idx = Self::resolve_index_or_err(vec.len(), index)?;
                             vec[idx] = value;
                             self.variables.insert(id.clone(), RuntimeValue::List(list));
                         }
@@ -1090,7 +1160,7 @@ impl VM {
                         if let Some(RuntimeValue::List(list)) = self.variables.get_by_id(*id) {
                             let mut list = list;
                             let vec = &mut Gc::make_mut(&mut list).0;
-                            let idx = resolve_idx(vec.len(), index)?;
+                            let idx = Self::resolve_index_or_err(vec.len(), index)?;
                             vec[idx] = value;
                             let _ = self.variables.set_by_id(*id, RuntimeValue::List(list));
                         }
@@ -1100,7 +1170,7 @@ impl VM {
                         {
                             let mut list = list;
                             let vec = &mut Gc::make_mut(&mut list).0;
-                            let idx = resolve_idx(vec.len(), index)?;
+                            let idx = Self::resolve_index_or_err(vec.len(), index)?;
                             vec[idx] = value;
                             self.set_reg_value_in_frame(*frame, *reg, RuntimeValue::List(list));
                         } else {

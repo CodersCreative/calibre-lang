@@ -1,9 +1,10 @@
 use calibre_lir::BlockId;
 use calibre_parser::ast::ObjectMap;
+use calibre_parser::ast::ParserInnerType;
 use calibre_parser::ast::binary::BinaryOperator;
 use calibre_parser::ast::comparison::ComparisonOperator;
 use dumpster::sync::Gc;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use std::sync::Arc;
 
@@ -20,6 +21,250 @@ use crate::{
 mod instruction;
 
 impl VM {
+    #[inline]
+    fn push_owner_member_candidates(
+        candidates: &mut Vec<String>,
+        owner: &str,
+        member: &str,
+        short_member: Option<&str>,
+    ) {
+        candidates.push(format!("{owner}::{member}"));
+        if let Some(short) = short_member {
+            candidates.push(format!("{owner}::{short}"));
+        }
+    }
+
+    #[inline]
+    fn push_short_owner_member_candidates(
+        candidates: &mut Vec<String>,
+        owner: &str,
+        member: &str,
+        short_member: Option<&str>,
+    ) {
+        let short_owner = calibre_parser::qualified_name_tail(owner);
+        if short_owner != owner {
+            Self::push_owner_member_candidates(candidates, short_owner, member, short_member);
+        }
+    }
+
+    fn resolve_first_candidate<I>(&mut self, candidates: I) -> Option<RuntimeValue>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        for candidate in candidates {
+            if let Some((resolved, _)) = self.try_resolve_global_runtime_value(&candidate) {
+                return Some(resolved);
+            }
+            if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&candidate) {
+                return Some(resolved);
+            }
+        }
+        None
+    }
+
+    #[inline]
+    pub(crate) fn is_runtime_callable(value: &RuntimeValue) -> bool {
+        matches!(
+            value,
+            RuntimeValue::Function { .. }
+                | RuntimeValue::NativeFunction(_)
+                | RuntimeValue::ExternFunction(_)
+                | RuntimeValue::BoundMethod { .. }
+        )
+    }
+
+    pub(crate) fn call_runtime_callable_at(
+        &mut self,
+        callable: RuntimeValue,
+        args: Vec<RuntimeValue>,
+        callsite_block: usize,
+        callsite_tag: u32,
+    ) -> Result<RuntimeValue, RuntimeError> {
+        match callable {
+            RuntimeValue::Function { name, captures } => {
+                let callsite = (self.current_frame().func_ptr, callsite_block, callsite_tag);
+                let Some(func) = self.resolve_callable_cached(name.as_str(), callsite) else {
+                    return Err(RuntimeError::FunctionNotFound(name.to_string()));
+                };
+                self.run_function(func.as_ref(), args, captures)
+            }
+            RuntimeValue::NativeFunction(func) => func.run(self, args),
+            RuntimeValue::ExternFunction(func) => func.call(self, args),
+            RuntimeValue::BoundMethod { callee, receiver } => {
+                let mut full_args = vec![receiver.as_ref().clone()];
+                full_args.extend(args);
+                self.call_runtime_callable_at(
+                    *callee,
+                    full_args,
+                    callsite_block,
+                    callsite_tag.saturating_sub(1),
+                )
+            }
+            _ => Err(RuntimeError::InvalidFunctionCall),
+        }
+    }
+
+    #[inline]
+    fn invoke_callable_value(
+        &mut self,
+        callable: RuntimeValue,
+        args: Vec<RuntimeValue>,
+        callsite_tag: u32,
+    ) -> Option<RuntimeValue> {
+        self.call_runtime_callable_at(callable, args, usize::MAX, callsite_tag)
+            .ok()
+    }
+
+    fn resolve_display_override(
+        &mut self,
+        value: &RuntimeValue,
+    ) -> Option<(RuntimeValue, RuntimeValue)> {
+        let resolved = self.resolve_value_for_op_ref(value).ok()?;
+        match resolved {
+            RuntimeValue::DynObject {
+                type_name,
+                value,
+                vtable,
+                ..
+            } => {
+                let mapped = vtable.get("display").map(|x| x.as_str());
+                let callable = self.resolve_dyn_method_callable(&type_name, "display", mapped)?;
+                Some((callable, value.as_ref().clone()))
+            }
+            RuntimeValue::Aggregate(Some(ref type_name), _)
+            | RuntimeValue::Enum(ref type_name, _, _) => {
+                let callable = self.resolve_dyn_method_callable(type_name, "display", None)?;
+                Some((callable, resolved))
+            }
+            RuntimeValue::Generator { ref type_name, .. } => {
+                let callable =
+                    self.resolve_dyn_method_callable(type_name.as_str(), "display", None)?;
+                Some((callable, resolved))
+            }
+            _ => None,
+        }
+    }
+
+    fn invoke_display_override(
+        &mut self,
+        callable: RuntimeValue,
+        receiver: RuntimeValue,
+    ) -> Option<String> {
+        let output =
+            self.invoke_callable_value(callable, vec![receiver], u32::MAX.saturating_sub(1))?;
+
+        match output {
+            RuntimeValue::Str(s) => Some(s.to_string()),
+            other => Some(other.display(self)),
+        }
+    }
+
+    pub(crate) fn display_value(&mut self, value: &RuntimeValue) -> String {
+        if let Some((callable, receiver)) = self.resolve_display_override(value)
+            && let Some(output) = self.invoke_display_override(callable, receiver)
+        {
+            return output;
+        }
+        value.display(self)
+    }
+
+    fn concrete_runtime_type_name(&self, value: &RuntimeValue) -> Option<String> {
+        match value {
+            RuntimeValue::Int(_) => Some("int".to_string()),
+            RuntimeValue::UInt(_) => Some("uint".to_string()),
+            RuntimeValue::Byte(_) => Some("byte".to_string()),
+            RuntimeValue::Float(_) => Some("float".to_string()),
+            RuntimeValue::Bool(_) => Some("bool".to_string()),
+            RuntimeValue::Str(_) => Some("str".to_string()),
+            RuntimeValue::Char(_) => Some("char".to_string()),
+            RuntimeValue::Range(_, _) => Some("range".to_string()),
+            RuntimeValue::Ptr(_) => Some("ptr".to_string()),
+            RuntimeValue::Aggregate(Some(name), _) | RuntimeValue::Enum(name, _, _) => {
+                Some(name.clone())
+            }
+            RuntimeValue::Generator { type_name, .. } => Some(type_name.to_string()),
+            RuntimeValue::DynObject { type_name, .. } => Some(type_name.to_string()),
+            _ => None,
+        }
+    }
+
+    fn name_matches(actual: &str, target: &str) -> bool {
+        calibre_parser::qualified_name_matches(actual, target)
+    }
+
+    fn lookup_dyn_trait_table(
+        &self,
+        concrete: &str,
+        trait_name: &str,
+    ) -> Option<&FxHashMap<String, String>> {
+        for (imp_ty, traits) in self.registry.dyn_vtables.iter() {
+            if !Self::name_matches(imp_ty, concrete) {
+                continue;
+            }
+            for (imp_trait, table) in traits {
+                if Self::name_matches(imp_trait, trait_name) {
+                    return Some(table);
+                }
+            }
+        }
+        None
+    }
+
+    pub(crate) fn build_dyn_vtable_for_value(
+        &self,
+        value: &RuntimeValue,
+        constraints: &[String],
+    ) -> Option<(String, FxHashMap<String, String>)> {
+        let concrete = self.concrete_runtime_type_name(value)?;
+        if constraints.is_empty() {
+            return Some((concrete, FxHashMap::default()));
+        }
+
+        let mut merged = FxHashMap::default();
+        for tr in constraints {
+            let table = self.lookup_dyn_trait_table(&concrete, tr)?;
+            for (member, callee) in table {
+                merged
+                    .entry(member.clone())
+                    .or_insert_with(|| callee.clone());
+            }
+        }
+        Some((concrete, merged))
+    }
+
+    pub(crate) fn resolve_dyn_method_callable(
+        &mut self,
+        type_name: &str,
+        member: &str,
+        mapped: Option<&str>,
+    ) -> Option<RuntimeValue> {
+        let mut candidates = Vec::with_capacity(4);
+        if let Some(m) = mapped {
+            candidates.push(m.to_string());
+        }
+        Self::push_owner_member_candidates(&mut candidates, type_name, member, None);
+        Self::push_short_owner_member_candidates(&mut candidates, type_name, member, None);
+        self.resolve_first_candidate(candidates)
+    }
+
+    pub(crate) fn resolve_associated_member_value(
+        &mut self,
+        owner: &str,
+        member: &str,
+        short_member: Option<&str>,
+    ) -> Option<RuntimeValue> {
+        let mut candidates = Vec::with_capacity(5);
+
+        if member.contains("::") {
+            candidates.push(member.to_string());
+        }
+
+        Self::push_owner_member_candidates(&mut candidates, owner, member, short_member);
+        Self::push_short_owner_member_candidates(&mut candidates, owner, member, short_member);
+
+        self.resolve_first_candidate(candidates)
+    }
+
     #[inline]
     fn install_captures(
         &mut self,
@@ -76,13 +321,125 @@ impl VM {
     }
 
     #[inline]
-    fn resolve_operand_value(&mut self, value: RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
+    pub(crate) fn resolve_operand_value(
+        &mut self,
+        value: RuntimeValue,
+    ) -> Result<RuntimeValue, RuntimeError> {
         match value {
             RuntimeValue::Ref(_)
             | RuntimeValue::VarRef(_)
             | RuntimeValue::RegRef { .. }
             | RuntimeValue::MutexGuard(_) => self.resolve_value_for_op_ref(&value),
             other => Ok(other),
+        }
+    }
+
+    fn runtime_matches_type(&self, value: &RuntimeValue, target: &ParserInnerType) -> bool {
+        if let RuntimeValue::DynObject {
+            value: inner,
+            constraints,
+            ..
+        } = value
+        {
+            return match target {
+                ParserInnerType::Dynamic => true,
+                ParserInnerType::DynamicTraits(traits) => traits
+                    .iter()
+                    .all(|tr| constraints.iter().any(|x| Self::name_matches(x, tr))),
+                _ => self.runtime_matches_type(inner.as_ref(), target),
+            };
+        }
+
+        match target {
+            ParserInnerType::Dynamic => true,
+            ParserInnerType::DynamicTraits(traits) => match value {
+                RuntimeValue::DynObject { constraints, .. } => traits
+                    .iter()
+                    .all(|tr| constraints.iter().any(|x| Self::name_matches(x, tr))),
+                other => self
+                    .build_dyn_vtable_for_value(other, traits.as_slice())
+                    .is_some(),
+            },
+            ParserInnerType::Auto(_) => true,
+            ParserInnerType::Ref(inner, _) => self.runtime_matches_type(value, &inner.data_type),
+            ParserInnerType::Float => matches!(value, RuntimeValue::Float(_)),
+            ParserInnerType::Int => matches!(value, RuntimeValue::Int(_)),
+            ParserInnerType::UInt => matches!(value, RuntimeValue::UInt(_)),
+            ParserInnerType::Byte => matches!(value, RuntimeValue::Byte(_)),
+            ParserInnerType::Null => matches!(value, RuntimeValue::Null),
+            ParserInnerType::Bool => matches!(value, RuntimeValue::Bool(_)),
+            ParserInnerType::Str => matches!(value, RuntimeValue::Str(_)),
+            ParserInnerType::Char => matches!(value, RuntimeValue::Char(_)),
+            ParserInnerType::Range => matches!(value, RuntimeValue::Range(_, _)),
+            ParserInnerType::Ptr(_) => matches!(value, RuntimeValue::Ptr(_)),
+            ParserInnerType::List(inner) => {
+                if let RuntimeValue::List(items) = value {
+                    items
+                        .as_ref()
+                        .0
+                        .iter()
+                        .all(|item| self.runtime_matches_type(item, &inner.data_type))
+                } else {
+                    false
+                }
+            }
+            ParserInnerType::Tuple(types) => {
+                if let RuntimeValue::Aggregate(None, fields) = value {
+                    if fields.as_ref().0.len() != types.len() {
+                        return false;
+                    }
+                    types.iter().enumerate().all(|(i, t)| {
+                        fields
+                            .as_ref()
+                            .0
+                            .iter()
+                            .find(|(name, _)| name == &i.to_string())
+                            .map(|(_, v)| self.runtime_matches_type(v, &t.data_type))
+                            .unwrap_or(false)
+                    })
+                } else {
+                    false
+                }
+            }
+            ParserInnerType::Option(inner) => match value {
+                RuntimeValue::Option(Some(v)) => {
+                    self.runtime_matches_type(v.as_ref(), &inner.data_type)
+                }
+                RuntimeValue::Option(None) => true,
+                _ => false,
+            },
+            ParserInnerType::Result { ok, err } => match value {
+                RuntimeValue::Result(Ok(v)) => self.runtime_matches_type(v.as_ref(), &ok.data_type),
+                RuntimeValue::Result(Err(v)) => {
+                    self.runtime_matches_type(v.as_ref(), &err.data_type)
+                }
+                _ => false,
+            },
+            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_) => matches!(
+                value,
+                RuntimeValue::Function { .. }
+                    | RuntimeValue::NativeFunction(_)
+                    | RuntimeValue::ExternFunction(_)
+            ),
+            ParserInnerType::Struct(name) => match value {
+                RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
+                    Self::name_matches(actual, name)
+                }
+                RuntimeValue::Generator { type_name, .. } => Self::name_matches(type_name, name),
+                _ => false,
+            },
+            ParserInnerType::StructWithGenerics { identifier, .. } => match value {
+                RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
+                    Self::name_matches(actual, identifier)
+                }
+                RuntimeValue::Generator { type_name, .. } => {
+                    Self::name_matches(type_name, identifier)
+                }
+                _ => false,
+            },
+            ParserInnerType::Scope(_)
+            | ParserInnerType::DollarIdentifier(_)
+            | ParserInnerType::FfiType(_) => false,
         }
     }
 
@@ -161,11 +518,15 @@ impl VM {
             return None;
         }
 
-        let (_, short_name) = name.rsplit_once(':')?;
+        let short_name = calibre_parser::qualified_name_tail(name);
+        if short_name == name {
+            return None;
+        }
         if let Some(found) = self.resolve_named_global_runtime_value(short_name) {
             return Some(found);
         }
-        if let Some((base, _)) = short_name.split_once("->")
+        let base = calibre_parser::qualified_name_base(short_name);
+        if base != short_name
             && let Some(found) = self.resolve_suffix_global_runtime_value(base)
         {
             return Some(found);
@@ -179,7 +540,9 @@ impl VM {
         callsite: (usize, usize, u32),
     ) -> Option<Arc<VMFunction>> {
         if let Some(cached) = self.caches.callsite.get(&callsite) {
-            return Some(Arc::clone(cached));
+            if cached.name == name {
+                return Some(Arc::clone(cached));
+            }
         }
         if let Some(cached) = self.caches.call.get(name) {
             let resolved = Arc::clone(cached);
@@ -206,7 +569,10 @@ impl VM {
         if name.contains("::") {
             return None;
         }
-        let (_, short_name) = name.rsplit_once(':')?;
+        let short_name = calibre_parser::qualified_name_tail(name);
+        if short_name == name {
+            return None;
+        }
         if let Some(found) = self.move_named_global_runtime_value(short_name) {
             return Some(found);
         }

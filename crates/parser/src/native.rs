@@ -54,6 +54,7 @@ impl ParserDataType {
             ("min_or_zero", ParserInnerType::Int),
             ("len", ParserInnerType::Int),
             ("panic", ParserInnerType::Null),
+            ("repr", ParserInnerType::Null),
             ("assert", ParserInnerType::Null),
             ("gen_suspend", ParserInnerType::Dynamic),
             ("tuple", ParserInnerType::Dynamic),

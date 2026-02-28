@@ -1,6 +1,11 @@
 use std::sync::Arc;
 
-use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
+use crate::{
+    VM,
+    error::RuntimeError,
+    native::{NativeFunction, expect_str_ref, first_arg},
+    value::RuntimeValue,
+};
 use dumpster::sync::Gc;
 
 pub struct FsReadDir;
@@ -11,12 +16,7 @@ impl NativeFunction for FsReadDir {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let Some(path) = args.first() else {
-            return Err(RuntimeError::InvalidFunctionCall);
-        };
-        let RuntimeValue::Str(path) = path else {
-            return Err(RuntimeError::UnexpectedType(path.clone()));
-        };
+        let path = expect_str_ref(first_arg(&args)?)?;
 
         match std::fs::read_dir(path.as_str()) {
             Ok(entries) => {

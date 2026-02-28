@@ -18,6 +18,8 @@ pub struct VMRegistry {
     pub functions: FxHashMap<String, Arc<VMFunction>>,
     #[serde(with = "crate::serialization::serde_fxhashmap")]
     pub globals: FxHashMap<String, VMGlobal>,
+    #[serde(default)]
+    pub dyn_vtables: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>>,
 }
 
 impl Display for VMRegistry {
@@ -50,7 +52,11 @@ impl From<LirRegistry> for VMRegistry {
             globals.insert(k, v.into());
         }
 
-        Self { functions, globals }
+        Self {
+            functions,
+            globals,
+            dyn_vtables: value.dyn_vtables,
+        }
     }
 }
 
@@ -335,6 +341,11 @@ pub enum VMInstruction {
         data_type: ParserDataType,
         failure_mode: AsFailureMode,
     },
+    Is {
+        dst: Reg,
+        src: Reg,
+        data_type: ParserDataType,
+    },
     Binary {
         dst: Reg,
         op: BinaryOperator,
@@ -471,6 +482,11 @@ impl Display for VMInstruction {
                 };
                 write!(f, "%r{dst} = %r{src} AS{} {data_type}", suffix)
             }
+            VMInstruction::Is {
+                dst,
+                src,
+                data_type,
+            } => write!(f, "%r{dst} = %r{src} IS {data_type}"),
             VMInstruction::Binary {
                 dst,
                 op,

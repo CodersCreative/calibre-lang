@@ -33,6 +33,10 @@ const fmt = fn (splits : list:<str>, inputs : list:<str>) -> str => {
 	txt;
 };
 
+trait Display {
+	const display : fn (&Self) -> str;
+};
+
 type ListIter:<T> = struct { data : list:<T>, index : int };
 
 type gen:<T> = struct { data : fn() -> T?, index : int, done : bool };

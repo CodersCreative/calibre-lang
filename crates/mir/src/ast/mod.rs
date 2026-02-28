@@ -102,6 +102,10 @@ pub enum MiddleNodeType {
         data_type: ParserDataType,
         failure_mode: AsFailureMode,
     },
+    IsExpression {
+        value: Box<MiddleNode>,
+        data_type: ParserDataType,
+    },
     RangeDeclaration {
         from: Box<MiddleNode>,
         to: Box<MiddleNode>,
@@ -306,6 +310,10 @@ impl Into<NodeType> for MiddleNodeType {
                 value: Box::new((*value).into()),
                 data_type: data_type.into(),
                 failure_mode,
+            },
+            Self::IsExpression { value, data_type } => NodeType::IsExpression {
+                value: Box::new((*value).into()),
+                data_type: data_type.into(),
             },
             Self::Conditional {
                 comparison,

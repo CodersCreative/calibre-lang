@@ -793,6 +793,13 @@ impl Formatter {
                     self.fmt_potential_new_type(data_type)
                 )
             }
+            NodeType::IsExpression { value, data_type } => {
+                format!(
+                    "{} is {}",
+                    self.format(value),
+                    self.fmt_parser_data_type(data_type)
+                )
+            }
             NodeType::InDeclaration { identifier, value } => {
                 format!("{} in {}", self.format(identifier), self.format(value))
             }
@@ -2233,6 +2240,9 @@ impl Formatter {
                         MatchTupleItem::Rest(_) => "..".to_string(),
                         MatchTupleItem::Wildcard(_) => "_".to_string(),
                         MatchTupleItem::Value(node) => self.format(node),
+                        MatchTupleItem::IsType(data_type) => {
+                            format!("is {}", self.fmt_parser_data_type(data_type))
+                        }
                         MatchTupleItem::Enum {
                             value,
                             var_type,
@@ -2301,6 +2311,9 @@ impl Formatter {
                 format!("{{{}}}", out.join(", "))
             }
             MatchArmType::Value(x) => self.format(x),
+            MatchArmType::IsType(data_type) => {
+                format!("is {}", self.fmt_parser_data_type(data_type))
+            }
             MatchArmType::Wildcard(_) => String::from("_"),
         }
     }

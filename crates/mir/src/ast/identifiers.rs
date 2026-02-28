@@ -41,6 +41,10 @@ impl MiddleNode {
                 data_type: _,
                 failure_mode: _,
             }
+            | MiddleNodeType::IsExpression {
+                value,
+                data_type: _,
+            }
             | MiddleNodeType::DebugExpression {
                 pretty_printed_str: _,
                 value,
@@ -186,6 +190,10 @@ impl MiddleNode {
                 value,
                 data_type: _,
                 failure_mode: _,
+            }
+            | MiddleNodeType::IsExpression {
+                value,
+                data_type: _,
             }
             | MiddleNodeType::DebugExpression {
                 pretty_printed_str: _,

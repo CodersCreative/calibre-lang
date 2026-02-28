@@ -11,6 +11,32 @@ pub mod ast;
 pub mod native;
 pub mod parse;
 
+#[inline]
+pub fn qualified_name_tail(name: &str) -> &str {
+    name.rsplit(':').next().unwrap_or(name)
+}
+
+#[inline]
+pub fn qualified_name_base(name: &str) -> &str {
+    let tail = qualified_name_tail(name);
+    tail.split_once("->").map(|(base, _)| base).unwrap_or(tail)
+}
+
+#[inline]
+pub fn qualified_name_matches(actual: &str, target: &str) -> bool {
+    if actual == target {
+        return true;
+    }
+    let actual_short = qualified_name_tail(actual);
+    let target_short = qualified_name_tail(target);
+    let actual_base = qualified_name_base(actual);
+    let target_base = qualified_name_base(target);
+    actual_short == target_short
+        || actual_base == target_short
+        || actual_short == target_base
+        || actual_base == target_base
+}
+
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
 )]

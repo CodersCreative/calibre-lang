@@ -2,7 +2,7 @@ use super::*;
 
 impl<'a> BlockLoweringCtx<'a> {
     pub(super) fn symbol_tail(name: &str) -> &str {
-        name.rsplit(':').next().unwrap_or(name)
+        calibre_parser::qualified_name_tail(name)
     }
 
     pub(super) fn resolve_local_key(&self, name: &str) -> Option<String> {
@@ -524,6 +524,19 @@ impl<'a> BlockLoweringCtx<'a> {
                         src,
                         data_type,
                         failure_mode,
+                    },
+                    span,
+                );
+                dst
+            }
+            LirNodeType::Is(value, data_type) => {
+                let src = self.lower_node(*value, span);
+                let dst = self.alloc_reg();
+                self.emit(
+                    VMInstruction::Is {
+                        dst,
+                        src,
+                        data_type,
                     },
                     span,
                 );

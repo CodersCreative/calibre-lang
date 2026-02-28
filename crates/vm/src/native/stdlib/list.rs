@@ -4,24 +4,6 @@ use dumpster::sync::Gc;
 
 use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
 
-fn call_callable(
-    env: &mut VM,
-    callable: &RuntimeValue,
-    args: Vec<RuntimeValue>,
-) -> Result<RuntimeValue, RuntimeError> {
-    match callable {
-        RuntimeValue::Function { name, captures } => {
-            let Some(func_def) = env.resolve_function_by_name(name.as_str()) else {
-                return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
-            };
-            env.run_function(func_def.as_ref(), args, captures.clone())
-        }
-        RuntimeValue::NativeFunction(func) => func.run(env, args),
-        RuntimeValue::ExternFunction(func) => func.call(env, args),
-        _ => Err(RuntimeError::InvalidFunctionCall),
-    }
-}
-
 fn compare_callback_result(result: RuntimeValue) -> Result<Ordering, RuntimeError> {
     match result {
         RuntimeValue::Int(v) => Ok(v.cmp(&0)),
@@ -31,66 +13,29 @@ fn compare_callback_result(result: RuntimeValue) -> Result<Ordering, RuntimeErro
     }
 }
 
-fn is_callable(value: &RuntimeValue) -> bool {
-    matches!(
-        value,
-        RuntimeValue::Function { .. }
-            | RuntimeValue::NativeFunction(_)
-            | RuntimeValue::ExternFunction(_)
-    )
-}
-
-fn parse_sort_args(
+#[inline]
+fn parse_list_callable_needle_args(
     env: &mut VM,
     args: Vec<RuntimeValue>,
-) -> Result<(Vec<RuntimeValue>, RuntimeValue), RuntimeError> {
-    let mut list_value = None;
-    let mut callable = None;
-
-    for arg in args {
-        let resolved = env.resolve_value_for_op_ref(&arg)?;
-        if list_value.is_none()
-            && let RuntimeValue::List(values) = resolved
-        {
-            list_value = Some(values.as_ref().0.clone());
-            continue;
-        }
-        if callable.is_none() && is_callable(&resolved) {
-            callable = Some(resolved);
-            continue;
-        }
-    }
-
-    let Some(list) = list_value else {
-        return Err(RuntimeError::InvalidFunctionCall);
-    };
-    let Some(callable) = callable else {
-        return Err(RuntimeError::InvalidFunctionCall);
-    };
-    Ok((list, callable))
-}
-
-fn parse_binary_search_args(
-    env: &mut VM,
-    args: Vec<RuntimeValue>,
-) -> Result<(Vec<RuntimeValue>, RuntimeValue, RuntimeValue), RuntimeError> {
+    need_needle: bool,
+) -> Result<(Vec<RuntimeValue>, RuntimeValue, Option<RuntimeValue>), RuntimeError> {
     let mut list_value = None;
     let mut callable = None;
     let mut needle = None;
 
     for arg in args {
         let resolved = env.resolve_value_for_op_ref(&arg)?;
-        if let RuntimeValue::List(values) = &resolved {
-            if list_value.is_none() {
-                list_value = Some(values.as_ref().0.clone());
-            }
+        if list_value.is_none()
+            && let RuntimeValue::List(values) = &resolved
+        {
+            list_value = Some(values.as_ref().0.clone());
             continue;
         }
-        if callable.is_none() && is_callable(&resolved) {
+        if callable.is_none() && VM::is_runtime_callable(&resolved) {
             callable = Some(resolved);
             continue;
         }
-        if needle.is_none() {
+        if need_needle && needle.is_none() {
             needle = Some(resolved);
         }
     }
@@ -98,10 +43,29 @@ fn parse_binary_search_args(
     let Some(list) = list_value else {
         return Err(RuntimeError::InvalidFunctionCall);
     };
-    let Some(needle) = needle else {
+    let Some(callable) = callable else {
         return Err(RuntimeError::InvalidFunctionCall);
     };
-    let Some(callable) = callable else {
+    if need_needle && needle.is_none() {
+        return Err(RuntimeError::InvalidFunctionCall);
+    }
+    Ok((list, callable, needle))
+}
+
+fn parse_sort_args(
+    env: &mut VM,
+    args: Vec<RuntimeValue>,
+) -> Result<(Vec<RuntimeValue>, RuntimeValue), RuntimeError> {
+    let (list, callable, _) = parse_list_callable_needle_args(env, args, false)?;
+    Ok((list, callable))
+}
+
+fn parse_binary_search_args(
+    env: &mut VM,
+    args: Vec<RuntimeValue>,
+) -> Result<(Vec<RuntimeValue>, RuntimeValue, RuntimeValue), RuntimeError> {
+    let (list, callable, needle) = parse_list_callable_needle_args(env, args, true)?;
+    let Some(needle) = needle else {
         return Err(RuntimeError::InvalidFunctionCall);
     };
     Ok((list, needle, callable))
@@ -121,7 +85,13 @@ impl NativeFunction for ListSortBy {
             if compare_error.is_some() {
                 return Ordering::Equal;
             }
-            match call_callable(env, &comparator, vec![a.clone(), b.clone()])
+            match env
+                .call_runtime_callable_at(
+                    comparator.clone(),
+                    vec![a.clone(), b.clone()],
+                    usize::MAX,
+                    u32::MAX.saturating_sub(2),
+                )
                 .and_then(compare_callback_result)
             {
                 Ok(ordering) => ordering,
@@ -158,7 +128,13 @@ impl NativeFunction for ListBinarySearchBy {
         while low <= high {
             let mid = low + ((high - low) / 2);
             let probe = items[mid as usize].clone();
-            let ordering = call_callable(env, &comparator, vec![probe, needle.clone()])
+            let ordering = env
+                .call_runtime_callable_at(
+                    comparator.clone(),
+                    vec![probe, needle.clone()],
+                    usize::MAX,
+                    u32::MAX.saturating_sub(3),
+                )
                 .and_then(compare_callback_result)?;
             match ordering {
                 Ordering::Less => low = mid + 1,

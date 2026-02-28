@@ -56,6 +56,7 @@ impl MiddleEnvironment {
             "err",
             "some",
             "trim",
+            "repr",
             "print",
             "len",
             "panic",

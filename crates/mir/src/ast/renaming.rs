@@ -149,6 +149,10 @@ impl MiddleNodeType {
                 data_type,
                 failure_mode,
             },
+            MiddleNodeType::IsExpression { value, data_type } => MiddleNodeType::IsExpression {
+                value: Box::new(value.rename(state)),
+                data_type,
+            },
             MiddleNodeType::RangeDeclaration {
                 from,
                 to,

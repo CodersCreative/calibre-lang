@@ -1,6 +1,9 @@
 use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
 use dumpster::sync::Gc;
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    sync::Arc,
+};
 
 pub struct ConsoleOutput();
 
@@ -58,6 +61,32 @@ fn unescape_string(input: &str) -> String {
     out
 }
 
+fn panic_message_arg(value: &RuntimeValue) -> String {
+    match value {
+        RuntimeValue::Str(s) => s.to_string(),
+        other => format!("{other:?}"),
+    }
+}
+
+#[inline]
+fn resolve_first_arg(
+    env: &mut VM,
+    args: Vec<RuntimeValue>,
+    include_reg_ref: bool,
+) -> Result<Option<RuntimeValue>, RuntimeError> {
+    args.into_iter()
+        .next()
+        .map(|value| resolve_native_input(env, value, include_reg_ref).map(Some))
+        .unwrap_or(Ok(None))
+}
+
+#[inline]
+fn missing_parameter_result() -> RuntimeValue {
+    RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Arc::new(String::from(
+        "Add parameter",
+    ))))))
+}
+
 impl NativeFunction for ConsoleOutput {
     fn name(&self) -> String {
         String::from("console_output")
@@ -79,7 +108,7 @@ impl NativeFunction for ConsoleOutput {
             .skip(1)
             .map(|arg| match arg {
                 RuntimeValue::Str(value) => unescape_string(value.as_str()),
-                other => other.display(env),
+                other => env.display_value(&other),
             })
             .collect::<String>();
 
@@ -117,14 +146,22 @@ impl NativeFunction for ErrFn {
     }
 
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Ok(if let Some(x) = args.into_iter().next() {
-            let x = resolve_native_input(env, x, true)?;
-            RuntimeValue::Result(Err(Gc::new(x)))
-        } else {
-            RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(std::sync::Arc::new(
-                String::from("Add parameter"),
-            )))))
+        Ok(match resolve_first_arg(env, args, true)? {
+            Some(value) => RuntimeValue::Result(Err(Gc::new(value))),
+            None => missing_parameter_result(),
         })
+    }
+}
+
+pub struct Repr();
+
+impl NativeFunction for Repr {
+    fn name(&self) -> String {
+        String::from("repr")
+    }
+
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        Ok(RuntimeValue::Str(Arc::new(args[0].display(env))))
     }
 }
 
@@ -135,13 +172,9 @@ impl NativeFunction for OkFn {
         String::from("ok")
     }
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Ok(if let Some(x) = args.into_iter().next() {
-            let x = resolve_native_input(env, x, true)?;
-            RuntimeValue::Result(Ok(Gc::new(x)))
-        } else {
-            RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(std::sync::Arc::new(
-                String::from("Add parameter"),
-            )))))
+        Ok(match resolve_first_arg(env, args, true)? {
+            Some(value) => RuntimeValue::Result(Ok(Gc::new(value))),
+            None => missing_parameter_result(),
         })
     }
 }
@@ -167,11 +200,9 @@ impl NativeFunction for SomeFn {
         String::from("some")
     }
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Ok(if let Some(x) = args.into_iter().next() {
-            let x = resolve_native_input(env, x, true)?;
-            RuntimeValue::Option(Some(Gc::new(x)))
-        } else {
-            RuntimeValue::Option(None)
+        Ok(match resolve_first_arg(env, args, true)? {
+            Some(value) => RuntimeValue::Option(Some(Gc::new(value))),
+            None => RuntimeValue::Option(None),
         })
     }
 }
@@ -183,10 +214,7 @@ impl NativeFunction for PanicFn {
         String::from("panic")
     }
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let msg = args.first().map(|value| match value {
-            RuntimeValue::Str(s) => s.to_string(),
-            other => format!("{other:?}"),
-        });
+        let msg = args.first().map(panic_message_arg);
         Err(RuntimeError::Panic(msg))
     }
 }
@@ -203,10 +231,7 @@ impl NativeFunction for AssertFn {
         match condition {
             RuntimeValue::Bool(true) => Ok(RuntimeValue::Null),
             RuntimeValue::Bool(false) => {
-                let msg = args.get(1).map(|value| match value {
-                    RuntimeValue::Str(s) => s.to_string(),
-                    other => format!("{other:?}"),
-                });
+                let msg = args.get(1).map(panic_message_arg);
                 Err(RuntimeError::Panic(msg))
             }
             other => Err(RuntimeError::UnexpectedType(other.clone())),
@@ -235,8 +260,7 @@ impl NativeFunction for Len {
     }
 
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        if let Some(x) = args.into_iter().next() {
-            let current = resolve_native_input(env, x, true)?;
+        if let Some(current) = resolve_first_arg(env, args, true)? {
             Ok(RuntimeValue::Int(match current {
                 RuntimeValue::List(data) => data.as_ref().0.len() as i64,
                 RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as i64,
@@ -263,8 +287,7 @@ impl NativeFunction for MinOrZero {
     }
 
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        if let Some(x) = args.into_iter().next() {
-            let current = resolve_native_input(env, x, true)?;
+        if let Some(current) = resolve_first_arg(env, args, true)? {
             Ok(RuntimeValue::Int(match current {
                 RuntimeValue::Range(from, _) => from,
                 _ => 0,
@@ -282,8 +305,7 @@ impl NativeFunction for Trim {
         String::from("trim")
     }
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        if let Some(x) = args.into_iter().next() {
-            let current = resolve_native_input(env, x, false)?;
+        if let Some(current) = resolve_first_arg(env, args, false)? {
             match current {
                 RuntimeValue::Str(s) => {
                     Ok(RuntimeValue::Str(std::sync::Arc::new(s.trim().to_string())))
@@ -303,9 +325,7 @@ impl NativeFunction for DiscriminantFn {
         String::from("discriminant")
     }
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        if let Some(x) = args.into_iter().next() {
-            let current = resolve_native_input(env, x, true)?;
-
+        if let Some(current) = resolve_first_arg(env, args, true)? {
             Ok(RuntimeValue::Int(match current {
                 RuntimeValue::Enum(_, index, _) => index as i64,
                 RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0 as i64,

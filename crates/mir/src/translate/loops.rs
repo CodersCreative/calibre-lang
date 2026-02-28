@@ -207,26 +207,14 @@ impl MiddleEnvironment {
     }
 
     fn wrap_loop_body(&mut self, target_body: Node, injection: Node, at_start: bool) -> Node {
-        let mut instructions = match target_body.node_type {
-            NodeType::ScopeDeclaration { body: Some(b), .. } => b,
-            _ => vec![target_body],
-        };
+        let mut instructions = Self::scope_body_items(target_body);
         if at_start {
             instructions.insert(0, injection);
         } else {
             instructions.push(injection);
         }
 
-        Node::new(
-            self.current_span(),
-            NodeType::ScopeDeclaration {
-                body: Some(instructions),
-                is_temp: true,
-                create_new_scope: Some(true),
-                define: false,
-                named: None,
-            },
-        )
+        Self::temp_scope(self.current_span(), instructions, true)
     }
 
     fn eval_loop_body_with_ctx(
@@ -434,75 +422,30 @@ impl MiddleEnvironment {
                     value: Box::new(*map),
                 },
             ));
-            spawned_loop_items.push(Node::new(
+            spawned_loop_items.push(Self::call_member_expr(
                 self.current_span(),
-                NodeType::CallExpression {
-                    string_fn: None,
-                    caller: Box::new(Node::new(
-                        self.current_span(),
-                        NodeType::MemberExpression {
-                            path: vec![
-                                (chan_ident_node.clone(), false),
-                                (
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::Identifier(
-                                            ParserText::from(String::from("send")).into(),
-                                        ),
-                                    ),
-                                    false,
-                                ),
-                            ],
-                        },
-                    )),
-                    generic_types: Vec::new(),
-                    args: vec![CallArg::Value(Node::new(
-                        self.current_span(),
-                        NodeType::Identifier(value_ident.into()),
-                    ))],
-                    reverse_args: Vec::new(),
-                },
+                chan_ident_node.clone(),
+                "send",
+                vec![CallArg::Value(Node::new(
+                    self.current_span(),
+                    NodeType::Identifier(value_ident.into()),
+                ))],
             ));
 
-            let join_spawn_call = Node::new(
+            let join_spawn_call = Self::call_member_expr(
                 self.current_span(),
-                NodeType::CallExpression {
-                    string_fn: None,
-                    caller: Box::new(Node::new(
-                        self.current_span(),
-                        NodeType::MemberExpression {
-                            path: vec![
-                                (wg_ident_node.clone(), false),
-                                (
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::Identifier(
-                                            ParserText::from(String::from("join")).into(),
-                                        ),
-                                    ),
-                                    false,
-                                ),
-                            ],
-                        },
-                    )),
-                    generic_types: Vec::new(),
-                    args: vec![CallArg::Value(Node::new(
-                        self.current_span(),
-                        NodeType::Spawn {
-                            items: vec![Node::new(
-                                self.current_span(),
-                                NodeType::ScopeDeclaration {
-                                    body: Some(spawned_loop_items),
-                                    create_new_scope: Some(true),
-                                    define: false,
-                                    named: None,
-                                    is_temp: true,
-                                },
-                            )],
-                        },
-                    ))],
-                    reverse_args: Vec::new(),
-                },
+                wg_ident_node.clone(),
+                "join",
+                vec![CallArg::Value(Node::new(
+                    self.current_span(),
+                    NodeType::Spawn {
+                        items: vec![Self::temp_scope(
+                            self.current_span(),
+                            spawned_loop_items,
+                            true,
+                        )],
+                    },
+                ))],
             );
             let dispatch_loop = Node::new(
                 self.current_span(),
@@ -511,15 +454,10 @@ impl MiddleEnvironment {
                     until,
                     label: None,
                     else_body: None,
-                    body: Box::new(Node::new(
+                    body: Box::new(Self::temp_scope(
                         self.current_span(),
-                        NodeType::ScopeDeclaration {
-                            body: Some(vec![join_spawn_call]),
-                            create_new_scope: Some(true),
-                            define: false,
-                            named: None,
-                            is_temp: true,
-                        },
+                        vec![join_spawn_call],
+                        true,
                     )),
                 },
             );
@@ -537,34 +475,11 @@ impl MiddleEnvironment {
                             body: Some(vec![Node::new(
                                 self.current_span(),
                                 NodeType::MatchStatement {
-                                    value: Some(Box::new(Node::new(
+                                    value: Some(Box::new(Self::call_member_expr(
                                         self.current_span(),
-                                        NodeType::CallExpression {
-                                            string_fn: None,
-                                            caller: Box::new(Node::new(
-                                                self.current_span(),
-                                                NodeType::MemberExpression {
-                                                    path: vec![
-                                                        (chan_ident_node.clone(), false),
-                                                        (
-                                                            Node::new(
-                                                                self.current_span(),
-                                                                NodeType::Identifier(
-                                                                    ParserText::from(String::from(
-                                                                        "get",
-                                                                    ))
-                                                                    .into(),
-                                                                ),
-                                                            ),
-                                                            false,
-                                                        ),
-                                                    ],
-                                                },
-                                            )),
-                                            generic_types: Vec::new(),
-                                            args: Vec::new(),
-                                            reverse_args: Vec::new(),
-                                        },
+                                        chan_ident_node.clone(),
+                                        "get",
+                                        Vec::new(),
                                     ))),
                                     body: vec![
                                         (
@@ -622,8 +537,9 @@ impl MiddleEnvironment {
 
             let full = Node::new(
                 span,
-                NodeType::ScopeDeclaration {
-                    body: Some(vec![
+                Self::temp_scope(
+                    span,
+                    vec![
                         Node::new(
                             self.current_span(),
                             NodeType::VariableDeclaration {
@@ -633,45 +549,12 @@ impl MiddleEnvironment {
                                     self.current_span(),
                                     ParserInnerType::Auto(None),
                                 )),
-                                value: Box::new(Node::new(
+                                value: Box::new(Self::call_member_expr_with_generics(
                                     self.current_span(),
-                                    NodeType::CallExpression {
-                                        string_fn: None,
-                                        caller: Box::new(Node::new(
-                                            self.current_span(),
-                                            NodeType::MemberExpression {
-                                                path: vec![
-                                                    (
-                                                        Node::new(
-                                                            self.current_span(),
-                                                            NodeType::Identifier(
-                                                                ParserText::from(String::from(
-                                                                    "Channel",
-                                                                ))
-                                                                .into(),
-                                                            ),
-                                                        ),
-                                                        false,
-                                                    ),
-                                                    (
-                                                        Node::new(
-                                                            self.current_span(),
-                                                            NodeType::Identifier(
-                                                                ParserText::from(String::from(
-                                                                    "new",
-                                                                ))
-                                                                .into(),
-                                                            ),
-                                                        ),
-                                                        false,
-                                                    ),
-                                                ],
-                                            },
-                                        )),
-                                        generic_types: vec![resolved_data_type.clone().into()],
-                                        args: Vec::new(),
-                                        reverse_args: Vec::new(),
-                                    },
+                                    Self::ident_expr(self.current_span(), "Channel"),
+                                    "new",
+                                    vec![resolved_data_type.clone().into()],
+                                    Vec::new(),
                                 )),
                             },
                         ),
@@ -684,102 +567,26 @@ impl MiddleEnvironment {
                                     self.current_span(),
                                     ParserInnerType::Auto(None),
                                 )),
-                                value: Box::new(Node::new(
+                                value: Box::new(Self::call_member_expr(
                                     self.current_span(),
-                                    NodeType::CallExpression {
-                                        string_fn: None,
-                                        caller: Box::new(Node::new(
-                                            self.current_span(),
-                                            NodeType::MemberExpression {
-                                                path: vec![
-                                                    (
-                                                        Node::new(
-                                                            self.current_span(),
-                                                            NodeType::Identifier(
-                                                                ParserText::from(String::from(
-                                                                    "WaitGroup",
-                                                                ))
-                                                                .into(),
-                                                            ),
-                                                        ),
-                                                        false,
-                                                    ),
-                                                    (
-                                                        Node::new(
-                                                            self.current_span(),
-                                                            NodeType::Identifier(
-                                                                ParserText::from(String::from(
-                                                                    "new",
-                                                                ))
-                                                                .into(),
-                                                            ),
-                                                        ),
-                                                        false,
-                                                    ),
-                                                ],
-                                            },
-                                        )),
-                                        generic_types: Vec::new(),
-                                        args: Vec::new(),
-                                        reverse_args: Vec::new(),
-                                    },
+                                    Self::ident_expr(self.current_span(), "WaitGroup"),
+                                    "new",
+                                    Vec::new(),
                                 )),
                             },
                         ),
                         dispatch_loop,
-                        Node::new(
+                        Self::call_member_expr(
                             self.current_span(),
-                            NodeType::CallExpression {
-                                string_fn: None,
-                                caller: Box::new(Node::new(
-                                    self.current_span(),
-                                    NodeType::MemberExpression {
-                                        path: vec![
-                                            (wg_ident_node, false),
-                                            (
-                                                Node::new(
-                                                    self.current_span(),
-                                                    NodeType::Identifier(
-                                                        ParserText::from(String::from("wait"))
-                                                            .into(),
-                                                    ),
-                                                ),
-                                                false,
-                                            ),
-                                        ],
-                                    },
-                                )),
-                                generic_types: Vec::new(),
-                                args: Vec::new(),
-                                reverse_args: Vec::new(),
-                            },
+                            wg_ident_node,
+                            "wait",
+                            Vec::new(),
                         ),
-                        Node::new(
+                        Self::call_member_expr(
                             self.current_span(),
-                            NodeType::CallExpression {
-                                string_fn: None,
-                                caller: Box::new(Node::new(
-                                    self.current_span(),
-                                    NodeType::MemberExpression {
-                                        path: vec![
-                                            (chan_ident_node.clone(), false),
-                                            (
-                                                Node::new(
-                                                    self.current_span(),
-                                                    NodeType::Identifier(
-                                                        ParserText::from(String::from("close"))
-                                                            .into(),
-                                                    ),
-                                                ),
-                                                false,
-                                            ),
-                                        ],
-                                    },
-                                )),
-                                generic_types: Vec::new(),
-                                args: Vec::new(),
-                                reverse_args: Vec::new(),
-                            },
+                            chan_ident_node.clone(),
+                            "close",
+                            Vec::new(),
                         ),
                         Node::new(
                             self.current_span(),
@@ -795,12 +602,10 @@ impl MiddleEnvironment {
                         ),
                         collect_loop,
                         list_ident_node,
-                    ]),
-                    create_new_scope: Some(true),
-                    define: false,
-                    named: None,
-                    is_temp: true,
-                },
+                    ],
+                    true,
+                )
+                .node_type,
             );
             return self.evaluate_inner(scope, full);
         }
@@ -840,31 +645,11 @@ impl MiddleEnvironment {
             let item_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("anon_iter_item")).into();
 
-            loop_items.push(Node::new(
+            loop_items.push(Self::call_member_expr(
                 self.current_span(),
-                NodeType::CallExpression {
-                    string_fn: None,
-                    caller: Box::new(Node::new(
-                        self.current_span(),
-                        NodeType::MemberExpression {
-                            path: vec![
-                                (chan_ident_node.clone(), false),
-                                (
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::Identifier(
-                                            ParserText::from(String::from("send")).into(),
-                                        ),
-                                    ),
-                                    false,
-                                ),
-                            ],
-                        },
-                    )),
-                    generic_types: Vec::new(),
-                    args: vec![CallArg::Value(*map.clone())],
-                    reverse_args: Vec::new(),
-                },
+                chan_ident_node.clone(),
+                "send",
+                vec![CallArg::Value(*map.clone())],
             ));
 
             let loop_node = Node::new(
@@ -874,16 +659,7 @@ impl MiddleEnvironment {
                     until,
                     label: None,
                     else_body: None,
-                    body: Box::new(Node::new(
-                        self.current_span(),
-                        NodeType::ScopeDeclaration {
-                            body: Some(loop_items),
-                            create_new_scope: Some(true),
-                            define: false,
-                            named: None,
-                            is_temp: true,
-                        },
-                    )),
+                    body: Box::new(Self::temp_scope(self.current_span(), loop_items, true)),
                 },
             );
 
@@ -898,40 +674,12 @@ impl MiddleEnvironment {
                         ParserInnerType::Auto(None),
                     )
                     .into(),
-                    value: Box::new(Node::new(
+                    value: Box::new(Self::call_member_expr_with_generics(
                         self.current_span(),
-                        NodeType::CallExpression {
-                            string_fn: None,
-                            caller: Box::new(Node::new(
-                                self.current_span(),
-                                NodeType::MemberExpression {
-                                    path: vec![
-                                        (
-                                            Node::new(
-                                                self.current_span(),
-                                                NodeType::Identifier(
-                                                    ParserText::from(String::from("Channel"))
-                                                        .into(),
-                                                ),
-                                            ),
-                                            false,
-                                        ),
-                                        (
-                                            Node::new(
-                                                self.current_span(),
-                                                NodeType::Identifier(
-                                                    ParserText::from(String::from("new")).into(),
-                                                ),
-                                            ),
-                                            false,
-                                        ),
-                                    ],
-                                },
-                            )),
-                            generic_types: vec![resolved_data_type.clone().into()],
-                            args: Vec::new(),
-                            reverse_args: Vec::new(),
-                        },
+                        Self::ident_expr(self.current_span(), "Channel"),
+                        "new",
+                        vec![resolved_data_type.clone().into()],
+                        Vec::new(),
                     )),
                 },
             ));
@@ -971,57 +719,17 @@ impl MiddleEnvironment {
                     )),
                 },
             ));
-            body.push(Node::new(
+            body.push(Self::call_member_expr(
                 self.current_span(),
-                NodeType::CallExpression {
-                    string_fn: None,
-                    caller: Box::new(Node::new(
-                        self.current_span(),
-                        NodeType::MemberExpression {
-                            path: vec![
-                                (wg_ident_node, false),
-                                (
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::Identifier(
-                                            ParserText::from(String::from("wait")).into(),
-                                        ),
-                                    ),
-                                    false,
-                                ),
-                            ],
-                        },
-                    )),
-                    generic_types: Vec::new(),
-                    args: Vec::new(),
-                    reverse_args: Vec::new(),
-                },
+                wg_ident_node,
+                "wait",
+                Vec::new(),
             ));
-            body.push(Node::new(
+            body.push(Self::call_member_expr(
                 self.current_span(),
-                NodeType::CallExpression {
-                    string_fn: None,
-                    caller: Box::new(Node::new(
-                        self.current_span(),
-                        NodeType::MemberExpression {
-                            path: vec![
-                                (chan_ident_node.clone(), false),
-                                (
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::Identifier(
-                                            ParserText::from(String::from("close")).into(),
-                                        ),
-                                    ),
-                                    false,
-                                ),
-                            ],
-                        },
-                    )),
-                    generic_types: Vec::new(),
-                    args: Vec::new(),
-                    reverse_args: Vec::new(),
-                },
+                chan_ident_node.clone(),
+                "close",
+                Vec::new(),
             ));
             body.push(Node::new(
                 self.current_span(),
@@ -1030,154 +738,87 @@ impl MiddleEnvironment {
                     until: None,
                     label: None,
                     else_body: None,
-                    body: Box::new(Node::new(
+                    body: Box::new(Self::temp_scope(
                         self.current_span(),
-                        NodeType::ScopeDeclaration {
-                            body: Some(vec![Node::new(
-                                self.current_span(),
-                                NodeType::MatchStatement {
-                                    value: Some(Box::new(Node::new(
-                                        self.current_span(),
-                                        NodeType::CallExpression {
-                                            string_fn: None,
-                                            caller: Box::new(Node::new(
-                                                self.current_span(),
-                                                NodeType::MemberExpression {
-                                                    path: vec![
-                                                        (chan_ident_node.clone(), false),
-                                                        (
-                                                            Node::new(
-                                                                self.current_span(),
-                                                                NodeType::Identifier(
-                                                                    ParserText::from(String::from(
-                                                                        "get",
-                                                                    ))
-                                                                    .into(),
-                                                                ),
-                                                            ),
-                                                            false,
-                                                        ),
-                                                    ],
-                                                },
-                                            )),
-                                            generic_types: Vec::new(),
-                                            args: Vec::new(),
-                                            reverse_args: Vec::new(),
+                        vec![Node::new(
+                            self.current_span(),
+                            NodeType::MatchStatement {
+                                value: Some(Box::new(Self::call_member_expr(
+                                    self.current_span(),
+                                    chan_ident_node.clone(),
+                                    "get",
+                                    Vec::new(),
+                                ))),
+                                body: vec![
+                                    (
+                                        MatchArmType::Enum {
+                                            value: ParserText::from(String::from("Some")).into(),
+                                            var_type: VarType::Immutable,
+                                            name: Some(item_ident.clone()),
+                                            destructure: None,
+                                            pattern: None,
                                         },
-                                    ))),
-                                    body: vec![
-                                        (
-                                            MatchArmType::Enum {
-                                                value: ParserText::from(String::from("Some"))
-                                                    .into(),
-                                                var_type: VarType::Immutable,
-                                                name: Some(item_ident.clone()),
-                                                destructure: None,
-                                                pattern: None,
-                                            },
-                                            Vec::new(),
-                                            Box::new(Node::new(
-                                                self.current_span(),
-                                                NodeType::ScopeDeclaration {
-                                                    body: Some(vec![Node::new(
-                                                        self.current_span(),
-                                                        NodeType::AssignmentExpression {
-                                                            identifier: Box::new(
-                                                                list_ident_node.clone(),
-                                                            ),
-                                                            value: Box::new(Node::new(
-                                                                self.current_span(),
-                                                                NodeType::BinaryExpression {
-                                                                    left: Box::new(
-                                                                        list_ident_node.clone(),
+                                        Vec::new(),
+                                        Box::new(Node::new(
+                                            self.current_span(),
+                                            NodeType::ScopeDeclaration {
+                                                body: Some(vec![Node::new(
+                                                    self.current_span(),
+                                                    NodeType::AssignmentExpression {
+                                                        identifier: Box::new(
+                                                            list_ident_node.clone(),
+                                                        ),
+                                                        value: Box::new(Node::new(
+                                                            self.current_span(),
+                                                            NodeType::BinaryExpression {
+                                                                left: Box::new(
+                                                                    list_ident_node.clone(),
+                                                                ),
+                                                                right: Box::new(Node::new(
+                                                                    self.current_span(),
+                                                                    NodeType::Identifier(
+                                                                        item_ident.clone().into(),
                                                                     ),
-                                                                    right: Box::new(Node::new(
-                                                                        self.current_span(),
-                                                                        NodeType::Identifier(
-                                                                            item_ident
-                                                                                .clone()
-                                                                                .into(),
-                                                                        ),
-                                                                    )),
-                                                                    operator: BinaryOperator::Shl,
-                                                                },
-                                                            )),
-                                                        },
-                                                    )]),
-                                                    create_new_scope: Some(true),
-                                                    define: false,
-                                                    named: None,
-                                                    is_temp: true,
-                                                },
-                                            )),
-                                        ),
-                                        (
-                                            MatchArmType::Wildcard(self.current_span()),
-                                            Vec::new(),
-                                            Box::new(Node::new(
-                                                self.current_span(),
-                                                NodeType::Break {
-                                                    label: None,
-                                                    value: None,
-                                                },
-                                            )),
-                                        ),
-                                    ],
-                                },
-                            )]),
-                            create_new_scope: Some(true),
-                            define: false,
-                            named: None,
-                            is_temp: true,
-                        },
+                                                                )),
+                                                                operator: BinaryOperator::Shl,
+                                                            },
+                                                        )),
+                                                    },
+                                                )]),
+                                                create_new_scope: Some(true),
+                                                define: false,
+                                                named: None,
+                                                is_temp: true,
+                                            },
+                                        )),
+                                    ),
+                                    (
+                                        MatchArmType::Wildcard(self.current_span()),
+                                        Vec::new(),
+                                        Box::new(Node::new(
+                                            self.current_span(),
+                                            NodeType::Break {
+                                                label: None,
+                                                value: None,
+                                            },
+                                        )),
+                                    ),
+                                ],
+                            },
+                        )],
+                        true,
                     )),
                 },
             ));
-            body.push(Node::new(
+            body.push(Self::call_member_expr_with_generics(
                 self.current_span(),
-                NodeType::CallExpression {
-                    string_fn: None,
-                    caller: Box::new(Node::new(
-                        self.current_span(),
-                        NodeType::MemberExpression {
-                            path: vec![
-                                (
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::Identifier(
-                                            ParserText::from(String::from("Mutex")).into(),
-                                        ),
-                                    ),
-                                    false,
-                                ),
-                                (
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::Identifier(
-                                            ParserText::from(String::from("new")).into(),
-                                        ),
-                                    ),
-                                    false,
-                                ),
-                            ],
-                        },
-                    )),
-                    generic_types: vec![list_type.clone().into()],
-                    args: vec![CallArg::Value(list_ident_node.clone())],
-                    reverse_args: Vec::new(),
-                },
+                Self::ident_expr(self.current_span(), "Mutex"),
+                "new",
+                vec![list_type.clone().into()],
+                vec![CallArg::Value(list_ident_node.clone())],
             ));
 
-            let node = Node {
-                node_type: NodeType::ScopeDeclaration {
-                    body: Some(body),
-                    create_new_scope: Some(true),
-                    define: false,
-                    named: None,
-                    is_temp: true,
-                },
-                span,
-            };
+            let node = Self::temp_scope(span, body, true);
             return self.evaluate_inner(scope, node);
         } else {
             let map_tmp_ident: PotentialDollarIdentifier =
@@ -1212,16 +853,8 @@ impl MiddleEnvironment {
                     )),
                 },
             );
-            let filtered_block = Node::new(
-                self.current_span(),
-                NodeType::ScopeDeclaration {
-                    body: Some(vec![map_tmp_decl, append_node]),
-                    create_new_scope: Some(true),
-                    define: false,
-                    named: None,
-                    is_temp: true,
-                },
-            );
+            let filtered_block =
+                Self::temp_scope(self.current_span(), vec![map_tmp_decl, append_node], true);
 
             if let Some(cond) = guard {
                 loop_items.push(Node::new(
@@ -1244,16 +877,7 @@ impl MiddleEnvironment {
                 until,
                 label: None,
                 else_body: None,
-                body: Box::new(Node::new(
-                    self.current_span(),
-                    NodeType::ScopeDeclaration {
-                        body: Some(loop_items),
-                        create_new_scope: Some(true),
-                        define: false,
-                        named: None,
-                        is_temp: true,
-                    },
-                )),
+                body: Box::new(Self::temp_scope(self.current_span(), loop_items, true)),
             },
         );
 
@@ -1277,16 +901,7 @@ impl MiddleEnvironment {
             NodeType::Identifier(list_ident.into()),
         ));
 
-        let node = Node {
-            node_type: NodeType::ScopeDeclaration {
-                body: Some(body),
-                create_new_scope: Some(true),
-                define: false,
-                named: None,
-                is_temp: true,
-            },
-            span,
-        };
+        let node = Self::temp_scope(span, body, true);
 
         self.evaluate_inner(scope, node)
     }
@@ -1556,13 +1171,16 @@ impl MiddleEnvironment {
                                     right: Box::new(if is_count_loop {
                                         iter_node.clone()
                                     } else {
-                                        Node::new(self.current_span(), NodeType::CallExpression {
-                                            string_fn: None,
-                                            caller: Box::new(Node::new(self.current_span(), NodeType::Identifier(ParserText::from("raw_len".to_string()).into()))),
-                                            generic_types: vec![],
-                                            args: vec![CallArg::Value(iter_node.clone())],
-                                            reverse_args: vec![],
-                                        })
+                                        Self::call_expr(
+                                            self.current_span(),
+                                            Node::new(
+                                                self.current_span(),
+                                                NodeType::Identifier(
+                                                    ParserText::from("raw_len".to_string()).into(),
+                                                ),
+                                            ),
+                                            vec![CallArg::Value(iter_node.clone())],
+                                        )
                                     }),
                                     operator: calibre_parser::ast::comparison::ComparisonOperator::GreaterEqual,
                                 }
@@ -1645,25 +1263,13 @@ impl MiddleEnvironment {
                 } else {
                     body
                 };
-                let mut instructions = match body.node_type {
-                    NodeType::ScopeDeclaration { body: Some(b), .. } => b,
-                    _ => vec![body],
-                };
+                let mut instructions = Self::scope_body_items(body);
 
                 instructions.insert(0, var_name_node);
                 instructions.insert(0, break_node);
                 instructions.push(increment_node.clone());
 
-                let final_body = Node::new(
-                    self.current_span(),
-                    NodeType::ScopeDeclaration {
-                        body: Some(instructions),
-                        is_temp: true,
-                        create_new_scope: Some(true),
-                        define: false,
-                        named: None,
-                    },
-                );
+                let final_body = Self::temp_scope(self.current_span(), instructions, true);
 
                 let body = self.eval_loop_body_with_ctx(
                     &scope,

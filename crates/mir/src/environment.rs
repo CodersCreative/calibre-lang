@@ -13,7 +13,7 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
     },
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::{fs, path::PathBuf, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -258,11 +258,53 @@ impl MiddleEnvironment {
     }
 
     #[inline]
-    fn is_callable_parser_type(ty: &ParserDataType) -> bool {
+    pub(crate) fn is_callable_parser_type(ty: &ParserDataType) -> bool {
         matches!(
             Self::normalized_inner_type(ty),
             ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
         )
+    }
+
+    #[inline]
+    fn resolve_operator_or_bool(
+        &mut self,
+        scope: &u64,
+        left: &Node,
+        right: &Node,
+        operator: Operator,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        self.get_operator_overload(scope, left, right, &operator)
+            .map(|x| x.return_type.clone())
+            .or_else(|| Some(ParserDataType::new(span, ParserInnerType::Bool)))
+    }
+
+    #[inline]
+    fn apply_callable_type(
+        &self,
+        callable: ParserInnerType,
+        args_len: usize,
+        implicit_params: usize,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        match callable {
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+            } if parameters.len() > args_len + implicit_params => Some(ParserDataType {
+                data_type: ParserInnerType::Function {
+                    return_type,
+                    parameters: parameters
+                        .into_iter()
+                        .skip(args_len + implicit_params)
+                        .collect(),
+                },
+                span,
+            }),
+            ParserInnerType::Function { return_type, .. } => Some(*return_type),
+            ParserInnerType::NativeFunction(ret) => Some(*ret),
+            _ => None,
+        }
     }
 
     pub fn scope_ref_or_err(&self, scope: &u64) -> Result<&MiddleScope, MiddleErr> {
@@ -301,7 +343,8 @@ impl MiddleEnvironment {
         if let Some(obj) = self.objects.get(struct_name) {
             return Some(obj);
         }
-        if let Some((base, _)) = struct_name.split_once("->") {
+        let base = calibre_parser::qualified_name_base(struct_name);
+        if base != struct_name {
             return self.objects.get(base);
         }
         None
@@ -339,7 +382,7 @@ impl MiddleEnvironment {
     ) -> bool {
         fn struct_base(name: &str) -> &str {
             let short = name.rsplit_once("::").map(|(lhs, _)| lhs).unwrap_or(name);
-            short.split("->").next().unwrap_or(short)
+            calibre_parser::qualified_name_base(short)
         }
 
         match (impl_ty, target) {
@@ -447,9 +490,8 @@ impl MiddleEnvironment {
 
         match &base.data_type {
             ParserInnerType::Struct(name) => {
-                if let Some((_, de_prefixed)) = name.rsplit_once(':')
-                    && de_prefixed != name
-                {
+                let de_prefixed = calibre_parser::qualified_name_tail(name);
+                if de_prefixed != name {
                     names.push(de_prefixed.to_string());
                 }
                 let short = name.rsplit_once("::").map(|(_, rhs)| rhs).unwrap_or(name);
@@ -459,9 +501,8 @@ impl MiddleEnvironment {
             }
             ParserInnerType::StructWithGenerics { identifier, .. } => {
                 names.push(identifier.clone());
-                if let Some((_, de_prefixed)) = identifier.rsplit_once(':')
-                    && de_prefixed != identifier
-                {
+                let de_prefixed = calibre_parser::qualified_name_tail(identifier);
+                if de_prefixed != identifier {
                     names.push(de_prefixed.to_string());
                 }
                 let short = identifier
@@ -535,10 +576,47 @@ impl MiddleEnvironment {
         member: &str,
         span: Span,
     ) -> Option<ParserDataType> {
+        fn trait_member_type(
+            defs: &FxHashMap<String, MiddleTrait>,
+            trait_name: &str,
+            member: &str,
+        ) -> Option<ParserDataType> {
+            let root = defs
+                .iter()
+                .find(|(name, _)| calibre_parser::qualified_name_matches(name, trait_name))
+                .map(|(name, _)| name.clone())?;
+            let mut stack = vec![root];
+            let mut visited = FxHashSet::default();
+
+            while let Some(current) = stack.pop() {
+                if !visited.insert(current.clone()) {
+                    continue;
+                }
+                let Some(def) = defs.get(&current) else {
+                    continue;
+                };
+                if let Some(m) = def.members.get(member) {
+                    return Some(m.data_type.clone());
+                }
+                for implied in &def.implied_traits {
+                    if let Some((resolved, _)) = defs
+                        .iter()
+                        .find(|(name, _)| calibre_parser::qualified_name_matches(name, implied))
+                    {
+                        stack.push(resolved.clone());
+                    } else {
+                        stack.push(implied.clone());
+                    }
+                }
+            }
+
+            None
+        }
+
         let resolved = self
             .resolve_data_type(scope, base.clone())
             .unwrap_all_refs();
-        match &resolved.data_type {
+        let out = match &resolved.data_type {
             ParserInnerType::Struct(struct_name) => self
                 .lookup_object_for_struct_name(struct_name)
                 .and_then(|obj| match &obj.object_type {
@@ -575,8 +653,31 @@ impl MiddleEnvironment {
                     None
                 }
             }
+            ParserInnerType::DynamicTraits(traits) => {
+                for tr in traits {
+                    if let Some(found) = trait_member_type(&self.trait_defs, tr, member) {
+                        return Some(found);
+                    }
+                }
+                None
+            }
             _ => None,
+        };
+
+        if out.is_some() {
+            return out;
         }
+
+        if let Some(imp) = self.find_impl_for_type(&resolved)
+            && let Some((mapped_name, _)) = imp.variables.get(member)
+        {
+            return self
+                .variables
+                .get(mapped_name)
+                .map(|var| var.data_type.clone());
+        }
+
+        None
     }
 
     pub fn resolve_associated_type(
@@ -1300,7 +1401,9 @@ impl MiddleEnvironment {
                         .or_else(|| {
                             self.hm_env
                                 .iter()
-                                .find(|(k, _)| k.rsplit(':').next() == Some(base.as_str()))
+                                .find(|(k, _)| {
+                                    calibre_parser::qualified_name_tail(k) == base.as_str()
+                                })
                                 .map(|(_, v)| v.clone())
                         });
 
@@ -1400,7 +1503,8 @@ impl MiddleEnvironment {
             | MiddleNodeType::DerefStatement { value }
             | MiddleNodeType::NegExpression { value }
             | MiddleNodeType::DebugExpression { value, .. }
-            | MiddleNodeType::AsExpression { value, .. } => {
+            | MiddleNodeType::AsExpression { value, .. }
+            | MiddleNodeType::IsExpression { value, .. } => {
                 self.apply_inferred_types_to_middlenode_inner(scope, value, cache);
             }
             _ => {}
@@ -1841,6 +1945,15 @@ impl MiddleEnvironment {
                     data_type
                 }
             }
+            ParserInnerType::DynamicTraits(traits) => ParserDataType {
+                data_type: ParserInnerType::DynamicTraits(
+                    traits
+                        .into_iter()
+                        .map(|t| self.resolve_str(scope, &t).unwrap_or(t))
+                        .collect(),
+                ),
+                span: data_type.span,
+            },
             _ => data_type,
         }
         .verify()
@@ -2714,54 +2827,30 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             NodeType::InDeclaration { identifier, value } => {
-                if let Some(x) = self.get_operator_overload(scope, identifier, value, &Operator::In)
-                {
-                    Some(x.return_type.clone())
-                } else {
-                    Some(ParserDataType {
-                        data_type: ParserInnerType::Bool,
-                        span: node.span,
-                    })
-                }
+                self.resolve_operator_or_bool(scope, identifier, value, Operator::In, node.span)
             }
             NodeType::ComparisonExpression {
                 left,
                 right,
                 operator,
-            } => {
-                if let Some(x) = self.get_operator_overload(
-                    scope,
-                    left,
-                    right,
-                    &Operator::Comparison(operator.clone()),
-                ) {
-                    Some(x.return_type.clone())
-                } else {
-                    Some(ParserDataType {
-                        data_type: ParserInnerType::Bool,
-                        span: node.span,
-                    })
-                }
-            }
+            } => self.resolve_operator_or_bool(
+                scope,
+                left,
+                right,
+                Operator::Comparison(operator.clone()),
+                node.span,
+            ),
             NodeType::BooleanExpression {
                 left,
                 right,
                 operator,
-            } => {
-                if let Some(x) = self.get_operator_overload(
-                    scope,
-                    left,
-                    right,
-                    &Operator::Boolean(operator.clone()),
-                ) {
-                    Some(x.return_type.clone())
-                } else {
-                    Some(ParserDataType {
-                        data_type: ParserInnerType::Bool,
-                        span: node.span,
-                    })
-                }
-            }
+            } => self.resolve_operator_or_bool(
+                scope,
+                left,
+                right,
+                Operator::Boolean(operator.clone()),
+                node.span,
+            ),
             NodeType::BinaryExpression {
                 left,
                 right,
@@ -2831,6 +2920,10 @@ impl MiddleEnvironment {
                     }),
                 }
             }
+            NodeType::IsExpression { value: _, .. } => Some(ParserDataType {
+                data_type: ParserInnerType::Bool,
+                span: node.span,
+            }),
             NodeType::RangeDeclaration { .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Range,
                 span: node.span,
@@ -2999,29 +3092,7 @@ impl MiddleEnvironment {
 
                 let caller_type = caller_type?;
 
-                match caller_type.data_type {
-                    ParserInnerType::Function {
-                        return_type,
-                        parameters,
-                    } if parameters.len() > args.len() => Some(ParserDataType {
-                        data_type: ParserInnerType::Function {
-                            return_type,
-                            parameters: parameters
-                                .iter()
-                                .enumerate()
-                                .filter(|(i, _)| i >= &args.len())
-                                .map(|x| x.1.clone())
-                                .collect(),
-                        },
-                        span: node.span,
-                    }),
-                    ParserInnerType::Function {
-                        return_type,
-                        parameters: _,
-                    } => Some(*return_type.clone()),
-                    ParserInnerType::NativeFunction(x) => Some(*x),
-                    _ => return None,
-                }
+                self.apply_callable_type(caller_type.data_type, args.len(), 0, node.span)
             }
             NodeType::Identifier(x) => {
                 if let Some(iden) = self.resolve_potential_generic_ident(scope, x) {
@@ -3124,24 +3195,18 @@ impl MiddleEnvironment {
                             let method_ty =
                                 self.resolve_member_fn_type(&current, method_name.as_str());
 
-                            current = match method_ty.map(|t| t.unwrap_all_refs().data_type) {
-                                Some(ParserInnerType::Function {
-                                    return_type,
-                                    parameters,
-                                }) if parameters.len() > args.len() + 1 => ParserDataType {
-                                    data_type: ParserInnerType::Function {
-                                        return_type,
-                                        parameters: parameters
-                                            .into_iter()
-                                            .skip(args.len() + 1)
-                                            .collect(),
-                                    },
-                                    span: node.span,
-                                },
-                                Some(ParserInnerType::Function { return_type, .. }) => *return_type,
-                                Some(ParserInnerType::NativeFunction(ret)) => *ret,
-                                _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
-                            };
+                            current = method_ty
+                                .and_then(|t| {
+                                    self.apply_callable_type(
+                                        t.unwrap_all_refs().data_type,
+                                        args.len(),
+                                        1,
+                                        node.span,
+                                    )
+                                })
+                                .unwrap_or_else(|| {
+                                    ParserDataType::new(node.span, ParserInnerType::Auto(None))
+                                });
                         }
                         _ => {
                             current = ParserDataType::new(node.span, ParserInnerType::Auto(None));

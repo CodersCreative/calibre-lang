@@ -243,7 +243,7 @@ impl_bitwise!(Shl, shl, <<);
 impl_bitwise!(Shr, shr, >>);
 
 pub fn binary(
-    vm: &VM,
+    vm: &mut VM,
     op: &BinaryOperator,
     left: RuntimeValue,
     right: RuntimeValue,
@@ -357,27 +357,31 @@ impl RuntimeValue {
         handle_binop_numeric!(Mul, %, rhs, self)
     }
 
-    fn special_and(self, vm: &VM, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
+    fn special_and(
+        self,
+        vm: &mut VM,
+        rhs: Self,
+    ) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match self {
             Self::Char(x) => {
                 let mut s = x.to_string();
-                s.push_str(&rhs.display(vm));
+                s.push_str(&vm.display_value(&rhs));
                 Ok(Self::Str(std::sync::Arc::new(s)))
             }
             Self::Str(x) => {
                 let mut s = x.as_str().to_string();
-                s.push_str(&rhs.display(vm));
+                s.push_str(&vm.display_value(&rhs));
                 Ok(Self::Str(std::sync::Arc::new(s)))
             }
             lhs => match rhs {
                 Self::Char(x) => {
                     let mut s = x.to_string();
-                    s.push_str(&lhs.display(vm));
+                    s.push_str(&vm.display_value(&lhs));
                     Ok(Self::Str(std::sync::Arc::new(s)))
                 }
                 Self::Str(x) => {
                     let mut s = x.as_str().to_string();
-                    s.push_str(&lhs.display(vm));
+                    s.push_str(&vm.display_value(&lhs));
                     Ok(Self::Str(std::sync::Arc::new(s)))
                 }
                 _ => Err((lhs, rhs)),

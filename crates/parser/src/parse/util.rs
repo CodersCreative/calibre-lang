@@ -1,7 +1,7 @@
 use crate::{
     Position, Span,
     ast::{
-        NamedScope, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
+        CallArg, NamedScope, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
     },
 };
@@ -43,6 +43,52 @@ pub(super) fn ident_node(sp: Span, txt: &str) -> Node {
             PotentialDollarIdentifier::Identifier(ParserText::new(sp, txt.to_string())),
         )),
     )
+}
+
+pub(super) fn call_node(
+    sp: Span,
+    caller: Node,
+    string_fn: Option<ParserText>,
+    args: Vec<CallArg>,
+    reverse_args: Vec<Node>,
+    generic_types: Vec<PotentialNewType>,
+) -> Node {
+    Node::new(
+        sp,
+        NodeType::CallExpression {
+            string_fn,
+            caller: Box::new(caller),
+            generic_types,
+            args,
+            reverse_args,
+        },
+    )
+}
+
+#[inline]
+pub(super) fn null_node(sp: Span) -> Node {
+    Node::new(sp, NodeType::Null)
+}
+
+pub(super) fn member_path_span(path: &[(Node, bool)]) -> Span {
+    match (path.first(), path.last()) {
+        (Some(first), Some(last)) => Span::new_from_spans(first.0.span, last.0.span),
+        _ => Span::default(),
+    }
+}
+
+pub(super) fn member_node_from_path(path: Vec<(Node, bool)>) -> Node {
+    Node::new(member_path_span(&path), NodeType::MemberExpression { path })
+}
+
+pub(super) fn member_node_from_head_and_tail(head: Node, mut tail: Vec<(Node, bool)>) -> Node {
+    if tail.is_empty() {
+        return head;
+    }
+    let mut path = Vec::with_capacity(tail.len() + 1);
+    path.push((head, false));
+    path.append(&mut tail);
+    member_node_from_path(path)
 }
 
 pub(super) fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
@@ -97,9 +143,9 @@ pub(super) fn parse_embedded_expr(txt: &str) -> Node {
                 body: Some(mut body),
                 ..
             } if !body.is_empty() => body.remove(0),
-            _ => Node::new(Span::default(), NodeType::Null),
+            _ => null_node(Span::default()),
         },
-        Err(_) => Node::new(Span::default(), NodeType::Null),
+        Err(_) => null_node(Span::default()),
     }
 }
 
@@ -233,15 +279,13 @@ pub(super) fn normalize_scope_member_chain(
                     NodeType::ScopeMemberExpression { path: new_path },
                 );
                 (
-                    Node::new(
+                    call_node(
                         first.span,
-                        NodeType::CallExpression {
-                            string_fn: string_fn.clone(),
-                            caller: Box::new(scoped_caller),
-                            generic_types: generic_types.clone(),
-                            args: args.clone(),
-                            reverse_args: reverse_args.clone(),
-                        },
+                        scoped_caller,
+                        string_fn.clone(),
+                        args.clone(),
+                        reverse_args.clone(),
+                        generic_types.clone(),
                     ),
                     remaining,
                 )
@@ -265,6 +309,7 @@ pub(super) fn is_keyword(ident: &str) -> bool {
             | "for"
             | "in"
             | "as"
+            | "is"
             | "try"
             | "if"
             | "else"

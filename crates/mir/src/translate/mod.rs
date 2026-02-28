@@ -27,6 +27,26 @@ pub mod scopes;
 pub mod statements;
 
 impl MiddleEnvironment {
+    fn call_expr_full(
+        span: Span,
+        caller: Node,
+        generic_types: Vec<PotentialNewType>,
+        args: Vec<CallArg>,
+        reverse_args: Vec<Node>,
+        string_fn: Option<ParserText>,
+    ) -> Node {
+        Node::new(
+            span,
+            NodeType::CallExpression {
+                caller: Box::new(caller),
+                generic_types,
+                args,
+                reverse_args,
+                string_fn,
+            },
+        )
+    }
+
     fn ident_expr(span: Span, name: &str) -> Node {
         Node::new(
             span,
@@ -46,20 +66,50 @@ impl MiddleEnvironment {
     }
 
     fn call_expr(span: Span, caller: Node, args: Vec<CallArg>) -> Node {
-        Node::new(
-            span,
-            NodeType::CallExpression {
-                caller: Box::new(caller),
-                generic_types: Vec::new(),
-                args,
-                reverse_args: Vec::new(),
-                string_fn: None,
-            },
-        )
+        Self::call_expr_full(span, caller, Vec::new(), args, Vec::new(), None)
     }
 
     fn call_member_expr(span: Span, base: Node, member: &str, args: Vec<CallArg>) -> Node {
         Self::call_expr(span, Self::member_expr(span, base, member), args)
+    }
+
+    fn call_member_expr_with_generics(
+        span: Span,
+        base: Node,
+        member: &str,
+        generic_types: Vec<PotentialNewType>,
+        args: Vec<CallArg>,
+    ) -> Node {
+        Self::call_expr_full(
+            span,
+            Self::member_expr(span, base, member),
+            generic_types,
+            args,
+            Vec::new(),
+            None,
+        )
+    }
+
+    fn scope_body_items(node: Node) -> Vec<Node> {
+        match node.node_type {
+            NodeType::ScopeDeclaration {
+                body: Some(items), ..
+            } => items,
+            _ => vec![node],
+        }
+    }
+
+    fn temp_scope(span: Span, body: Vec<Node>, create_new_scope: bool) -> Node {
+        Node::new(
+            span,
+            NodeType::ScopeDeclaration {
+                body: Some(body),
+                named: None,
+                is_temp: true,
+                create_new_scope: Some(create_new_scope),
+                define: false,
+            },
+        )
     }
 
     fn waitgroup_static_call(span: Span, member: &str) -> Node {
@@ -80,18 +130,13 @@ impl MiddleEnvironment {
             ));
         }
 
-        Node::new(
+        Self::call_expr_full(
             span,
-            NodeType::CallExpression {
-                string_fn: None,
-                caller: Box::new(Node::new(
-                    span,
-                    NodeType::ScopeMemberExpression { path: items },
-                )),
-                generic_types: vec![],
-                args,
-                reverse_args: vec![],
-            },
+            Node::new(span, NodeType::ScopeMemberExpression { path: items }),
+            vec![],
+            args,
+            vec![],
+            None,
         )
     }
 
@@ -339,15 +384,13 @@ impl MiddleEnvironment {
                                     .into(),
                                     param_destructures: Vec::new(),
                                 },
-                                body: Box::new(Node::new(
+                                body: Box::new(Self::call_expr_full(
                                     self.current_span(),
-                                    NodeType::CallExpression {
-                                        string_fn: None,
-                                        caller,
-                                        generic_types,
-                                        args: captured_args,
-                                        reverse_args: Vec::new(),
-                                    },
+                                    *caller,
+                                    generic_types,
+                                    captured_args,
+                                    Vec::new(),
+                                    None,
                                 )),
                             },
                         );
@@ -468,10 +511,7 @@ impl MiddleEnvironment {
                                 );
 
                                 let body_node = (*body).clone();
-                                let mut body_nodes = match body_node.node_type {
-                                    NodeType::ScopeDeclaration { body: Some(b), .. } => b,
-                                    other => vec![Node::new(body_node.span, other)],
-                                };
+                                let mut body_nodes = Self::scope_body_items(body_node);
                                 body_nodes.insert(
                                     0,
                                     Self::call_member_expr(
@@ -500,16 +540,7 @@ impl MiddleEnvironment {
                                     ),
                                 );
 
-                                let scope_body = Node::new(
-                                    node.span,
-                                    NodeType::ScopeDeclaration {
-                                        body: Some(body_nodes),
-                                        named: None,
-                                        is_temp: true,
-                                        create_new_scope: Some(true),
-                                        define: false,
-                                    },
-                                );
+                                let scope_body = Self::temp_scope(node.span, body_nodes, true);
                                 Node::new(
                                     node.span,
                                     NodeType::Spawn {
@@ -527,16 +558,7 @@ impl MiddleEnvironment {
                             vec![CallArg::Value(spawn_inner)],
                         );
 
-                        let loop_body = Node::new(
-                            node.span,
-                            NodeType::ScopeDeclaration {
-                                body: Some(vec![join_call]),
-                                named: None,
-                                is_temp: true,
-                                create_new_scope: Some(false),
-                                define: false,
-                            },
-                        );
+                        let loop_body = Self::temp_scope(node.span, vec![join_call], false);
 
                         let loop_node = Node::new(
                             node.span,
@@ -549,22 +571,17 @@ impl MiddleEnvironment {
                             },
                         );
 
-                        let scope_node = Node::new(
+                        let scope_node = Self::temp_scope(
                             node.span,
-                            NodeType::ScopeDeclaration {
-                                body: Some(vec![
-                                    wg_decl,
-                                    start_decl,
-                                    start_add,
-                                    loop_node,
-                                    start_done,
-                                    wg_ident_node,
-                                ]),
-                                named: None,
-                                is_temp: true,
-                                create_new_scope: Some(true),
-                                define: false,
-                            },
+                            vec![
+                                wg_decl,
+                                start_decl,
+                                start_add,
+                                loop_node,
+                                start_done,
+                                wg_ident_node,
+                            ],
+                            true,
                         );
 
                         return Ok(self.evaluate(scope, scope_node));
@@ -773,20 +790,15 @@ impl MiddleEnvironment {
             },
             NodeType::TupleLiteral { values } => {
                 let span = node.span;
-                let tuple_call = Node::new(
+                let tuple_call = Self::call_expr(
                     span,
-                    NodeType::CallExpression {
-                        string_fn: None,
-                        generic_types: Vec::new(),
-                        caller: Box::new(Node::new(
-                            span,
-                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                ParserText::from(String::from("tuple")).into(),
-                            )),
+                    Node::new(
+                        span,
+                        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                            ParserText::from(String::from("tuple")).into(),
                         )),
-                        args: values.into_iter().map(CallArg::Value).collect(),
-                        reverse_args: Vec::new(),
-                    },
+                    ),
+                    values.into_iter().map(CallArg::Value).collect(),
                 );
                 self.evaluate_inner(scope, tuple_call)
             }
@@ -1306,6 +1318,7 @@ impl MiddleEnvironment {
                                 | ParserInnerType::Char
                                 | ParserInnerType::Range
                                 | ParserInnerType::Dynamic
+                                | ParserInnerType::DynamicTraits(_)
                                 | ParserInnerType::Null
                                 | ParserInnerType::Auto(_)
                         );
@@ -1640,6 +1653,13 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
+            NodeType::IsExpression { value, data_type } => Ok(MiddleNode {
+                node_type: MiddleNodeType::IsExpression {
+                    value: Box::new(self.evaluate_inner(scope, *value)?),
+                    data_type: self.resolve_data_type(scope, data_type),
+                },
+                span: node.span,
+            }),
             NodeType::InDeclaration { identifier, value } => {
                 if let Some(x) = self.handle_operator_overloads(
                     scope,
@@ -1677,35 +1697,23 @@ impl MiddleEnvironment {
 
                     return self.evaluate_inner(
                         scope,
-                        Node::new(
+                        Self::call_expr(
                             self.current_span(),
-                            NodeType::CallExpression {
-                                string_fn: None,
-                                caller: Box::new(member),
-                                generic_types: Vec::new(),
-                                args: vec![CallArg::Value(*identifier)],
-                                reverse_args: Vec::new(),
-                            },
+                            member,
+                            vec![CallArg::Value(*identifier)],
                         ),
                     );
                 }
 
                 self.evaluate_inner(
                     scope,
-                    Node::new(
+                    Self::call_expr(
                         self.current_span(),
-                        NodeType::CallExpression {
-                            string_fn: None,
-                            caller: Box::new(Node::new(
-                                self.current_span(),
-                                NodeType::Identifier(
-                                    ParserText::from("contains".to_string()).into(),
-                                ),
-                            )),
-                            generic_types: Vec::new(),
-                            args: vec![CallArg::Value(*value), CallArg::Value(*identifier)],
-                            reverse_args: Vec::new(),
-                        },
+                        Node::new(
+                            self.current_span(),
+                            NodeType::Identifier(ParserText::from("contains".to_string()).into()),
+                        ),
+                        vec![CallArg::Value(*value), CallArg::Value(*identifier)],
                     ),
                 )
             }
@@ -1783,6 +1791,37 @@ impl MiddleEnvironment {
                         .map(|t| t.clone().unwrap_all_refs().data_type),
                     Some(ParserInnerType::Option(_))
                 );
+                let enum_arm = |variant: &str, name: Option<PotentialDollarIdentifier>, body| {
+                    (
+                        MatchArmType::Enum {
+                            var_type: VarType::Immutable,
+                            value: ParserText::from(variant.to_string()).into(),
+                            name,
+                            destructure: None,
+                            pattern: None,
+                        },
+                        Vec::new(),
+                        Box::new(body),
+                    )
+                };
+                let ident_node = |name: &str| {
+                    Node::new(
+                        Span::default(),
+                        NodeType::Identifier(ParserText::from(name.to_string()).into()),
+                    )
+                };
+                let return_call = |name: &str, args: Vec<CallArg>| {
+                    Node::new(
+                        Span::default(),
+                        NodeType::Return {
+                            value: Some(Box::new(Self::call_expr(
+                                self.current_span(),
+                                Self::ident_expr(self.current_span(), name),
+                                args,
+                            ))),
+                        },
+                    )
+                };
 
                 self.evaluate_inner(
                     scope,
@@ -1790,160 +1829,42 @@ impl MiddleEnvironment {
                         node_type: NodeType::MatchStatement {
                             value: Some(value),
                             body: if is_option_try {
-                                vec![
-                                    (
-                                        MatchArmType::Enum {
-                                            var_type: VarType::Immutable,
-                                            value: ParserText::from(String::from("Some")).into(),
-                                            name: Some(
-                                                ParserText::from(String::from("anon_ok_value"))
-                                                    .into(),
-                                            ),
-                                            destructure: None,
-                                            pattern: None,
-                                        },
-                                        Vec::new(),
-                                        Box::new(Node {
-                                            node_type: NodeType::Identifier(
-                                                ParserText::from(String::from("anon_ok_value"))
-                                                    .into(),
-                                            ),
-                                            span: Span::default(),
-                                        }),
-                                    ),
-                                    if let Some(catch) = catch {
-                                        (
-                                            MatchArmType::Enum {
-                                                var_type: VarType::Immutable,
-                                                value: ParserText::from(String::from("None"))
-                                                    .into(),
-                                                name: catch.name,
-                                                destructure: None,
-                                                pattern: None,
-                                            },
-                                            Vec::new(),
-                                            catch.body,
-                                        )
-                                    } else {
-                                        (
-                                            MatchArmType::Enum {
-                                                var_type: VarType::Immutable,
-                                                value: ParserText::from(String::from("None"))
-                                                    .into(),
-                                                name: None,
-                                                destructure: None,
-                                                pattern: None,
-                                            },
-                                            Vec::new(),
-                                            Box::new(Node {
-                                                node_type: NodeType::Return {
-                                                    value: Some(Box::new(Node::new(
-                                                        self.current_span(),
-                                                        NodeType::CallExpression {
-                                                            string_fn: None,
-                                                            generic_types: Vec::new(),
-                                                            caller: Box::new(Node::new(
-                                                                self.current_span(),
-                                                                NodeType::Identifier(
-                                                                    ParserText::from(String::from(
-                                                                        "none",
-                                                                    ))
-                                                                    .into(),
-                                                                ),
-                                                            )),
-                                                            args: Vec::new(),
-                                                            reverse_args: Vec::new(),
-                                                        },
-                                                    ))),
-                                                },
-                                                span: Span::default(),
-                                            }),
-                                        )
-                                    },
-                                ]
+                                let ok_name = "anon_ok_value";
+                                let ok_arm = enum_arm(
+                                    "Some",
+                                    Some(ParserText::from(ok_name.to_string()).into()),
+                                    ident_node(ok_name),
+                                );
+                                let err_arm = if let Some(catch) = catch {
+                                    enum_arm("None", catch.name, *catch.body)
+                                } else {
+                                    enum_arm("None", None, return_call("none", Vec::new()))
+                                };
+                                vec![ok_arm, err_arm]
                             } else {
-                                vec![
-                                    (
-                                        MatchArmType::Enum {
-                                            var_type: VarType::Immutable,
-                                            value: ParserText::from(String::from("Ok")).into(),
-                                            name: Some(
-                                                ParserText::from(String::from("anon_ok_value"))
-                                                    .into(),
-                                            ),
-                                            destructure: None,
-                                            pattern: None,
-                                        },
-                                        Vec::new(),
-                                        Box::new(Node {
-                                            node_type: NodeType::Identifier(
-                                                ParserText::from(String::from("anon_ok_value"))
-                                                    .into(),
-                                            ),
-                                            span: Span::default(),
-                                        }),
-                                    ),
-                                    if let Some(catch) = catch {
-                                        (
-                                            MatchArmType::Enum {
-                                                var_type: VarType::Immutable,
-                                                value: ParserText::from(String::from("Err")).into(),
-                                                name: catch.name,
-                                                destructure: None,
-                                                pattern: None,
-                                            },
-                                            Vec::new(),
-                                            catch.body,
-                                        )
-                                    } else {
-                                        (
-                                            MatchArmType::Enum {
-                                                var_type: VarType::Immutable,
-                                                value: ParserText::from(String::from("Err")).into(),
-                                                name: Some(
-                                                    ParserText::from(String::from(
-                                                        "anon_err_value",
-                                                    ))
-                                                    .into(),
-                                                ),
-                                                destructure: None,
-                                                pattern: None,
-                                            },
-                                            Vec::new(),
-                                            Box::new(Node {
-                                                node_type: NodeType::Return {
-                                                    value: Some(Box::new(Node::new(
-                                                        self.current_span(),
-                                                        NodeType::CallExpression {
-                                                            string_fn: None,
-                                                            generic_types: Vec::new(),
-                                                            caller: Box::new(Node::new(
-                                                                self.current_span(),
-                                                                NodeType::Identifier(
-                                                                    ParserText::from(String::from(
-                                                                        "err",
-                                                                    ))
-                                                                    .into(),
-                                                                ),
-                                                            )),
-                                                            args: vec![CallArg::Value(Node::new(
-                                                                self.current_span(),
-                                                                NodeType::Identifier(
-                                                                    ParserText::from(String::from(
-                                                                        "anon_err_value",
-                                                                    ))
-                                                                    .into(),
-                                                                ),
-                                                            ))],
-                                                            reverse_args: Vec::new(),
-                                                        },
-                                                    ))),
-                                                },
-                                                span: Span::default(),
-                                            }),
-                                        )
-                                    },
-                                ]
+                                let ok_name = "anon_ok_value";
+                                let ok_arm = enum_arm(
+                                    "Ok",
+                                    Some(ParserText::from(ok_name.to_string()).into()),
+                                    ident_node(ok_name),
+                                );
+                                let err_arm = if let Some(catch) = catch {
+                                    enum_arm("Err", catch.name, *catch.body)
+                                } else {
+                                    let err_name = "anon_err_value";
+                                    enum_arm(
+                                        "Err",
+                                        Some(ParserText::from(err_name.to_string()).into()),
+                                        return_call(
+                                            "err",
+                                            vec![CallArg::Value(Self::ident_expr(
+                                                self.current_span(),
+                                                err_name,
+                                            ))],
+                                        ),
+                                    )
+                                };
+                                vec![ok_arm, err_arm]
                             },
                         },
                         span: node.span,

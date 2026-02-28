@@ -565,6 +565,10 @@ fn visit(
                 }
             }
         }
+        NodeType::IsExpression { value, .. } => {
+            let _ = visit(value, env, scope, tg, tenv, subst)?;
+            Ok(Type::TCon(TypeCon::Bool))
+        }
         NodeType::VariableDeclaration {
             identifier,
             value,

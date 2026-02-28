@@ -1,5 +1,5 @@
 use rustc_hash::FxHashMap;
-use std::{cmp::Ordering, fmt::Debug};
+use std::{cmp::Ordering, fmt::Debug, sync::Arc};
 
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
 
@@ -21,6 +21,43 @@ pub trait NativeFunction: Send + Sync {
             .unwrap_or(name);
 
         name
+    }
+}
+
+#[inline]
+pub(crate) fn first_arg(args: &[RuntimeValue]) -> Result<&RuntimeValue, RuntimeError> {
+    args.first().ok_or(RuntimeError::InvalidFunctionCall)
+}
+
+#[inline]
+pub(crate) fn pop_or_null(args: &mut Vec<RuntimeValue>) -> RuntimeValue {
+    args.pop().unwrap_or(RuntimeValue::Null)
+}
+
+#[inline]
+pub(crate) fn expect_str_ref(value: &RuntimeValue) -> Result<&Arc<String>, RuntimeError> {
+    if let RuntimeValue::Str(s) = value {
+        Ok(s)
+    } else {
+        Err(RuntimeError::UnexpectedType(value.clone()))
+    }
+}
+
+#[inline]
+pub(crate) fn expect_str_owned(value: RuntimeValue) -> Result<Arc<String>, RuntimeError> {
+    if let RuntimeValue::Str(s) = value {
+        Ok(s)
+    } else {
+        Err(RuntimeError::UnexpectedType(value))
+    }
+}
+
+#[inline]
+pub(crate) fn expect_int(value: RuntimeValue) -> Result<i64, RuntimeError> {
+    if let RuntimeValue::Int(v) = value {
+        Ok(v)
+    } else {
+        Err(RuntimeError::UnexpectedType(value))
     }
 }
 
@@ -62,7 +99,10 @@ impl PartialOrd for dyn NativeFunction {
 }
 
 impl VM {
-    pub fn setup_global(&mut self) {
+    pub(crate) fn build_mapping_index(
+        mappings: &[String],
+        prefer_nonzero_scope: bool,
+    ) -> FxHashMap<String, Option<String>> {
         fn scope_id(name: &str) -> Option<u64> {
             let mut parts = name.splitn(3, '-');
             let _prefix = parts.next()?;
@@ -71,8 +111,8 @@ impl VM {
         }
 
         let mut buckets: FxHashMap<String, Vec<String>> =
-            FxHashMap::with_capacity_and_hasher(self.mappings.len(), Default::default());
-        for full in self.mappings.iter() {
+            FxHashMap::with_capacity_and_hasher(mappings.len(), Default::default());
+        for full in mappings {
             if let Some((_, short)) = full.split_once(':') {
                 buckets
                     .entry(short.to_string())
@@ -80,56 +120,55 @@ impl VM {
                     .push(full.clone());
             }
         }
-        let mut mapping_index: FxHashMap<String, Option<String>> =
+
+        let mut index: FxHashMap<String, Option<String>> =
             FxHashMap::with_capacity_and_hasher(buckets.len(), Default::default());
         for (short, mut matches) in buckets {
             matches.sort();
-            let chosen =
-                if let Some(found) = matches.iter().find(|x| scope_id(x.as_str()) == Some(0)) {
-                    Some(found.clone())
-                } else if matches.len() == 1 {
+            let chosen = if prefer_nonzero_scope {
+                matches
+                    .iter()
+                    .find(|x| scope_id(x.as_str()).is_some_and(|id| id != 0))
+                    .cloned()
+            } else {
+                matches
+                    .iter()
+                    .find(|x| scope_id(x.as_str()) == Some(0))
+                    .cloned()
+            };
+            let chosen = chosen.or_else(|| {
+                if matches.len() == 1 {
                     Some(matches[0].clone())
                 } else {
                     None
-                };
-            mapping_index.insert(short, chosen);
+                }
+            });
+            index.insert(short, chosen);
         }
 
-        let funcs: Vec<&str> = vec![
-            "console_output",
-            "ok",
-            "err",
-            "some",
-            "trim",
-            "len",
-            "panic",
-            "assert",
-            "gen_suspend",
-            "tuple",
-            "discriminant",
-            "min_or_zero",
-            "http_request_raw",
-            "http_request_try",
-        ];
+        index
+    }
 
-        let map = RuntimeValue::natives();
+    pub(crate) fn mapped_name(
+        mapping_index: &FxHashMap<String, Option<String>>,
+        key: &str,
+    ) -> String {
+        mapping_index
+            .get(key)
+            .and_then(|x| x.clone())
+            .unwrap_or_else(|| key.to_string())
+    }
 
-        let mut funcs: Vec<(String, RuntimeValue)> = funcs
-            .into_iter()
-            .filter_map(|x| map.get(x).cloned().map(|v| (String::from(x), v)))
-            .collect();
+    pub fn setup_global(&mut self) {
+        let mapping_index = Self::build_mapping_index(self.mappings.as_ref(), false);
 
-        let mut vars: Vec<(String, RuntimeValue)> =
-            RuntimeValue::constants().into_iter().map(|x| x).collect();
-        vars.append(&mut funcs);
-
-        for var in vars {
-            let name = mapping_index
-                .get(&var.0)
-                .and_then(|x| x.clone())
-                .unwrap_or(var.0);
-
-            let _ = self.variables.insert(name, var.1);
+        for (short_name, value) in RuntimeValue::constants().into_iter().chain(
+            RuntimeValue::natives()
+                .into_iter()
+                .filter(|(name, _)| !name.contains('.')),
+        ) {
+            let name = Self::mapped_name(&mapping_index, short_name.as_str());
+            let _ = self.variables.insert(name, value);
         }
     }
 }

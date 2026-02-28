@@ -7,7 +7,7 @@ use calibre_parser::{
     Span,
     ast::{
         CallArg, FunctionHeader, LoopType, NamedScope, Node, NodeType, ParserDataType,
-        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+        ParserInnerType, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
         PotentialNewType,
     },
 };
@@ -61,34 +61,7 @@ impl MiddleEnvironment {
                 )),
             );
 
-            let wait_call = Node::new(
-                span,
-                NodeType::CallExpression {
-                    caller: Box::new(Node::new(
-                        span,
-                        NodeType::MemberExpression {
-                            path: vec![
-                                (wg_ident_node.clone(), false),
-                                (
-                                    Node::new(
-                                        span,
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(
-                                                ParserText::from(String::from("wait")).into(),
-                                            ),
-                                        ),
-                                    ),
-                                    false,
-                                ),
-                            ],
-                        },
-                    )),
-                    generic_types: Vec::new(),
-                    args: Vec::new(),
-                    reverse_args: Vec::new(),
-                    string_fn: None,
-                },
-            );
+            let wait_call = Self::call_member_expr(span, wg_ident_node.clone(), "wait", Vec::new());
 
             prefix.push(wg_decl);
             prefix.push(wait_call);
@@ -102,16 +75,7 @@ impl MiddleEnvironment {
             self.desugar_use_chain(rest)
         };
 
-        let body = Node::new(
-            use_node.span,
-            NodeType::ScopeDeclaration {
-                body: Some(rest),
-                named: None,
-                is_temp: true,
-                create_new_scope: Some(true),
-                define: false,
-            },
-        );
+        let body = Self::temp_scope(use_node.span, rest, true);
 
         let params = identifiers
             .iter()
@@ -153,26 +117,19 @@ impl MiddleEnvironment {
                 generic_types,
             } => {
                 args.push(CallArg::Value(callback));
-                Node::new(
+                Self::call_expr_full(
                     use_node.span,
-                    NodeType::CallExpression {
-                        caller,
-                        args,
-                        reverse_args,
-                        string_fn,
-                        generic_types,
-                    },
+                    *caller,
+                    generic_types,
+                    args,
+                    reverse_args,
+                    string_fn,
                 )
             }
-            other => Node::new(
+            other => Self::call_expr(
                 use_node.span,
-                NodeType::CallExpression {
-                    caller: Box::new(Node::new(use_node.span, other)),
-                    args: vec![CallArg::Value(callback)],
-                    reverse_args: Vec::new(),
-                    string_fn: None,
-                    generic_types: Vec::new(),
-                },
+                Node::new(use_node.span, other),
+                vec![CallArg::Value(callback)],
             ),
         };
 
@@ -316,16 +273,7 @@ impl MiddleEnvironment {
                     },
                 ));
 
-                let loop_body = Node::new(
-                    self.current_span(),
-                    NodeType::ScopeDeclaration {
-                        body: Some(body_nodes),
-                        is_temp: true,
-                        create_new_scope: Some(create_new_scope),
-                        define: false,
-                        named: None,
-                    },
-                );
+                let loop_body = Self::temp_scope(self.current_span(), body_nodes, create_new_scope);
 
                 return self.evaluate_loop_statement(
                     scope,

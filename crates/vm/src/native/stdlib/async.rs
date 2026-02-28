@@ -7,6 +7,57 @@ use crate::{
     value::{ChannelInner, MutexInner, RuntimeValue, WaitGroupInner},
 };
 
+#[inline]
+fn first_arg(args: &mut Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    if args.is_empty() {
+        Err(RuntimeError::InvalidFunctionCall)
+    } else {
+        Ok(args.remove(0))
+    }
+}
+
+#[inline]
+fn resolve_channel(
+    env: &mut VM,
+    args: &mut Vec<RuntimeValue>,
+) -> Result<Arc<ChannelInner>, RuntimeError> {
+    let raw = first_arg(args)?;
+    let resolved = env.resolve_value_for_op_ref(&raw)?;
+    if let RuntimeValue::Channel(ch) = resolved {
+        Ok(ch)
+    } else {
+        Err(RuntimeError::UnexpectedType(resolved))
+    }
+}
+
+#[inline]
+fn resolve_waitgroup(
+    env: &mut VM,
+    args: &mut Vec<RuntimeValue>,
+) -> Result<Arc<WaitGroupInner>, RuntimeError> {
+    let raw = first_arg(args)?;
+    let resolved = env.resolve_value_for_op_ref(&raw)?;
+    if let RuntimeValue::WaitGroup(wg) = resolved {
+        Ok(wg)
+    } else {
+        Err(RuntimeError::UnexpectedType(resolved))
+    }
+}
+
+#[inline]
+fn resolve_mutex(
+    env: &mut VM,
+    args: &mut Vec<RuntimeValue>,
+) -> Result<Arc<MutexInner>, RuntimeError> {
+    let raw = first_arg(args)?;
+    let resolved = env.resolve_value_for_op_ref(&raw)?;
+    if let RuntimeValue::Mutex(mutex) = resolved {
+        Ok(mutex)
+    } else {
+        Err(RuntimeError::UnexpectedType(resolved))
+    }
+}
+
 pub struct ChannelNew();
 
 impl NativeFunction for ChannelNew {
@@ -29,11 +80,7 @@ impl NativeFunction for ChannelSend {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let value = args.pop().unwrap_or(RuntimeValue::Null);
         let value = env.convert_runtime_var_into_saveable(value);
-        let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&channel)?;
-        let RuntimeValue::Channel(ch) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let ch = resolve_channel(env, &mut args)?;
 
         if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(RuntimeValue::Null);
@@ -56,11 +103,7 @@ impl NativeFunction for ChannelGet {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&channel)?;
-        let RuntimeValue::Channel(ch) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let ch = resolve_channel(env, &mut args)?;
 
         let mut guard = ch
             .queue
@@ -92,11 +135,7 @@ impl NativeFunction for ChannelTryGet {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&channel)?;
-        let RuntimeValue::Channel(ch) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let ch = resolve_channel(env, &mut args)?;
 
         let mut guard = ch
             .queue
@@ -121,11 +160,7 @@ impl NativeFunction for ChannelTrySend {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let value = args.pop().unwrap_or(RuntimeValue::Null);
         let value = env.convert_runtime_var_into_saveable(value);
-        let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&channel)?;
-        let RuntimeValue::Channel(ch) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let ch = resolve_channel(env, &mut args)?;
 
         if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(RuntimeValue::Bool(false));
@@ -148,11 +183,7 @@ impl NativeFunction for ChannelClose {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&channel)?;
-        let RuntimeValue::Channel(ch) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let ch = resolve_channel(env, &mut args)?;
 
         ch.closed.store(true, std::sync::atomic::Ordering::Release);
         ch.cvar.notify_all();
@@ -168,11 +199,7 @@ impl NativeFunction for ChannelClosed {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let channel = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&channel)?;
-        let RuntimeValue::Channel(ch) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let ch = resolve_channel(env, &mut args)?;
 
         if !ch.closed.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(RuntimeValue::Bool(false));
@@ -210,11 +237,7 @@ impl NativeFunction for WaitGroupRawAdd {
             None => 1,
         };
 
-        let wg_val = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&wg_val)?;
-        let RuntimeValue::WaitGroup(wg) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let wg = resolve_waitgroup(env, &mut args)?;
 
         wg.count
             .fetch_add(value as isize, std::sync::atomic::Ordering::AcqRel);
@@ -230,11 +253,7 @@ impl NativeFunction for WaitGroupRawDone {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let wg_val = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&wg_val)?;
-        let RuntimeValue::WaitGroup(wg) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let wg = resolve_waitgroup(env, &mut args)?;
 
         wg.done();
 
@@ -286,11 +305,7 @@ impl NativeFunction for WaitGroupWait {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let wg_val = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&wg_val)?;
-        let RuntimeValue::WaitGroup(wg) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let wg = resolve_waitgroup(env, &mut args)?;
 
         wg.wait()?;
         Ok(RuntimeValue::Null)
@@ -305,11 +320,7 @@ impl NativeFunction for WaitGroupCount {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let wg_val = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&wg_val)?;
-        let RuntimeValue::WaitGroup(wg) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let wg = resolve_waitgroup(env, &mut args)?;
 
         let count = wg.count.load(std::sync::atomic::Ordering::Acquire);
         Ok(RuntimeValue::Int(count as i64))
@@ -341,11 +352,7 @@ impl NativeFunction for MutexGet {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let mutex = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&mutex)?;
-        let RuntimeValue::Mutex(m) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let m = resolve_mutex(env, &mut args)?;
         let guard = m.lock();
         Ok(guard.get_clone())
     }
@@ -360,11 +367,7 @@ impl NativeFunction for MutexSet {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let value = args.pop().unwrap_or(RuntimeValue::Null);
-        let mutex = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&mutex)?;
-        let RuntimeValue::Mutex(m) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let m = resolve_mutex(env, &mut args)?;
         let guard = m.lock();
         guard.set_value(value);
         Ok(RuntimeValue::Null)
@@ -383,25 +386,16 @@ impl NativeFunction for MutexWith {
             return Err(RuntimeError::InvalidFunctionCall);
         }
         let func = args.pop().unwrap_or(RuntimeValue::Null);
-        let mutex = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&mutex)?;
-        let RuntimeValue::Mutex(m) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let m = resolve_mutex(env, &mut args)?;
         let guard = m.lock();
         let current = guard.get_clone();
 
-        let result = match func {
-            RuntimeValue::Function { name, captures } => {
-                let Some(func_def) = env.resolve_function_by_name(name.as_str()) else {
-                    return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
-                };
-                env.run_function(func_def.as_ref(), vec![current], captures)?
-            }
-            RuntimeValue::NativeFunction(func) => func.run(env, vec![current])?,
-            RuntimeValue::ExternFunction(func) => func.call(env, vec![current])?,
-            _other => return Err(RuntimeError::InvalidFunctionCall),
-        };
+        let result = env.call_runtime_callable_at(
+            func,
+            vec![current],
+            usize::MAX,
+            u32::MAX.saturating_sub(4),
+        )?;
 
         guard.set_value(result.clone());
         Ok(result)
@@ -416,11 +410,7 @@ impl NativeFunction for MutexWrite {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let mutex = args.remove(0);
-        let resolved = env.resolve_value_for_op_ref(&mutex)?;
-        let RuntimeValue::Mutex(m) = resolved else {
-            return Err(RuntimeError::UnexpectedType(resolved));
-        };
+        let m = resolve_mutex(env, &mut args)?;
         let guard = m.lock();
         Ok(RuntimeValue::MutexGuard(Arc::new(guard)))
     }

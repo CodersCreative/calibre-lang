@@ -3,7 +3,12 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
+use crate::{
+    VM,
+    error::RuntimeError,
+    native::{NativeFunction, expect_int, expect_str_owned, pop_or_null},
+    value::RuntimeValue,
+};
 use dumpster::sync::Gc;
 
 fn port_redirects() -> &'static Mutex<HashMap<String, i64>> {
@@ -13,6 +18,24 @@ fn port_redirects() -> &'static Mutex<HashMap<String, i64>> {
 
 fn key_for(host: &str, port: i64) -> String {
     format!("{host}:{port}")
+}
+
+#[inline]
+fn expect_stream(value: RuntimeValue) -> Result<Arc<Mutex<TcpStream>>, RuntimeError> {
+    if let RuntimeValue::TcpStream(v) = value {
+        Ok(v)
+    } else {
+        Err(RuntimeError::UnexpectedType(value))
+    }
+}
+
+#[inline]
+fn expect_listener(value: RuntimeValue) -> Result<Arc<TcpListener>, RuntimeError> {
+    if let RuntimeValue::TcpListener(v) = value {
+        Ok(v)
+    } else {
+        Err(RuntimeError::UnexpectedType(value))
+    }
 }
 
 pub struct HttpRequest;
@@ -129,14 +152,8 @@ impl NativeFunction for TcpConnect {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let port = args.pop().unwrap_or(RuntimeValue::Null);
-        let host = args.pop().unwrap_or(RuntimeValue::Null);
-        let RuntimeValue::Int(port) = port else {
-            return Err(RuntimeError::UnexpectedType(port));
-        };
-        let RuntimeValue::Str(host) = host else {
-            return Err(RuntimeError::UnexpectedType(host));
-        };
+        let port = expect_int(pop_or_null(&mut args))?;
+        let host = expect_str_owned(pop_or_null(&mut args))?;
         let remapped_port = {
             let key = key_for(host.as_str(), port);
             port_redirects()
@@ -168,14 +185,8 @@ impl NativeFunction for TcpListen {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let port = args.pop().unwrap_or(RuntimeValue::Null);
-        let host = args.pop().unwrap_or(RuntimeValue::Null);
-        let RuntimeValue::Int(port) = port else {
-            return Err(RuntimeError::UnexpectedType(port));
-        };
-        let RuntimeValue::Str(host) = host else {
-            return Err(RuntimeError::UnexpectedType(host));
-        };
+        let port = expect_int(pop_or_null(&mut args))?;
+        let host = expect_str_owned(pop_or_null(&mut args))?;
         let addr = format!("{}:{}", host, port);
         let socket_addr = addr
             .to_socket_addrs()
@@ -242,10 +253,7 @@ impl NativeFunction for TcpAccept {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let listener = args.pop().unwrap_or(RuntimeValue::Null);
-        let RuntimeValue::TcpListener(listener) = listener else {
-            return Err(RuntimeError::UnexpectedType(listener));
-        };
+        let listener = expect_listener(pop_or_null(&mut args))?;
         let (stream, _) = listener
             .accept()
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
@@ -267,14 +275,8 @@ impl NativeFunction for TcpRead {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let len = args.pop().unwrap_or(RuntimeValue::Null);
-        let stream = args.pop().unwrap_or(RuntimeValue::Null);
-        let RuntimeValue::Int(len) = len else {
-            return Err(RuntimeError::UnexpectedType(len));
-        };
-        let RuntimeValue::TcpStream(stream) = stream else {
-            return Err(RuntimeError::UnexpectedType(stream));
-        };
+        let len = expect_int(pop_or_null(&mut args))?;
+        let stream = expect_stream(pop_or_null(&mut args))?;
         let mut buf = vec![0u8; len.max(0) as usize];
         let mut guard = stream
             .lock()
@@ -309,14 +311,8 @@ impl NativeFunction for TcpWrite {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let data = args.pop().unwrap_or(RuntimeValue::Null);
-        let stream = args.pop().unwrap_or(RuntimeValue::Null);
-        let RuntimeValue::Str(data) = data else {
-            return Err(RuntimeError::UnexpectedType(data));
-        };
-        let RuntimeValue::TcpStream(stream) = stream else {
-            return Err(RuntimeError::UnexpectedType(stream));
-        };
+        let data = expect_str_owned(pop_or_null(&mut args))?;
+        let stream = expect_stream(pop_or_null(&mut args))?;
         let mut guard = stream
             .lock()
             .map_err(|_| RuntimeError::Io("lock".to_string()))?;

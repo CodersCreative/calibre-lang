@@ -67,16 +67,8 @@ impl RuntimeValue {
             Self::TcpStream(_) => String::from("TcpStream"),
             Self::TcpListener(_) => String::from("TcpListener"),
             Self::List(x) => {
-                let mut txt = String::new();
-                txt.push('[');
-                for (i, item) in x.0.iter().enumerate() {
-                    if i > 0 {
-                        txt.push_str(", ");
-                    }
-                    txt.push_str(&item.display(vm));
-                }
-                txt.push(']');
-                txt
+                let iter = x.0.iter().map(|item| item.display(vm));
+                print_list_from_iter(iter, '[', ']')
             }
             Self::Generator { type_name, .. } => format!("{} {{ ... }}", pretty_name(type_name)),
             Self::GeneratorSuspend(value) => format!("<gen-suspend {}>", value.display(vm)),
@@ -158,16 +150,8 @@ impl Display for RuntimeValue {
                 }
             }
             Self::List(x) => {
-                let mut txt = String::new();
-                txt.push('[');
-                for (i, val) in x.as_ref().0.iter().enumerate() {
-                    if i > 0 {
-                        txt.push_str(", ");
-                    }
-                    let _ = write!(txt, "{}", val);
-                }
-                txt.push(']');
-                write!(f, "{}", txt)
+                let iter = x.as_ref().0.iter().map(|x| x.to_string());
+                write!(f, "{}", print_list_from_iter(iter, '[', ']'))
             }
             Self::NativeFunction(x) => write!(f, "fn {} ...", x.name()),
             Self::ExternFunction(x) => write!(f, "extern fn {} ...", x.symbol),
@@ -187,6 +171,12 @@ impl Display for RuntimeValue {
             Self::Char(x) => write!(f, "{}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
             Self::Generator { type_name, .. } => write!(f, "{}{{ ... }}", type_name),
+            Self::DynObject {
+                type_name,
+                constraints,
+                ..
+            } => write!(f, "dyn:<{}>({})", constraints.join(", "), type_name),
+            Self::BoundMethod { .. } => write!(f, "<bound-method>"),
             Self::GeneratorSuspend(value) => write!(f, "<gen-suspend {}>", value),
         }
     }

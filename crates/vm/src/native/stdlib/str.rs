@@ -1,6 +1,23 @@
 use dumpster::sync::Gc;
 
-use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
+use crate::{
+    VM,
+    error::RuntimeError,
+    native::{NativeFunction, expect_str_ref},
+    value::RuntimeValue,
+};
+
+#[inline]
+fn expect_str_arg(
+    args: &[RuntimeValue],
+    index: usize,
+) -> Result<&std::sync::Arc<String>, RuntimeError> {
+    if let Some(value) = args.get(index) {
+        expect_str_ref(value)
+    } else {
+        Err(RuntimeError::UnexpectedType(RuntimeValue::Null))
+    }
+}
 
 pub struct StrSplit();
 
@@ -10,16 +27,8 @@ impl NativeFunction for StrSplit {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let Some(RuntimeValue::Str(text)) = args.get(0) else {
-            return Err(RuntimeError::UnexpectedType(
-                args.get(0).cloned().unwrap_or(RuntimeValue::Null),
-            ));
-        };
-        let Some(RuntimeValue::Str(delim)) = args.get(1) else {
-            return Err(RuntimeError::UnexpectedType(
-                args.get(1).cloned().unwrap_or(RuntimeValue::Null),
-            ));
-        };
+        let text = expect_str_arg(&args, 0)?;
+        let delim = expect_str_arg(&args, 1)?;
 
         let parts = if delim.is_empty() {
             text.chars()
@@ -43,16 +52,8 @@ impl NativeFunction for StrContains {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let Some(RuntimeValue::Str(text)) = args.get(0) else {
-            return Err(RuntimeError::UnexpectedType(
-                args.get(0).cloned().unwrap_or(RuntimeValue::Null),
-            ));
-        };
-        let Some(RuntimeValue::Str(needle)) = args.get(1) else {
-            return Err(RuntimeError::UnexpectedType(
-                args.get(1).cloned().unwrap_or(RuntimeValue::Null),
-            ));
-        };
+        let text = expect_str_arg(&args, 0)?;
+        let needle = expect_str_arg(&args, 1)?;
 
         Ok(RuntimeValue::Bool(text.as_str().contains(needle.as_str())))
     }
@@ -66,16 +67,8 @@ impl NativeFunction for StrStartsWith {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let Some(RuntimeValue::Str(text)) = args.get(0) else {
-            return Err(RuntimeError::UnexpectedType(
-                args.get(0).cloned().unwrap_or(RuntimeValue::Null),
-            ));
-        };
-        let Some(RuntimeValue::Str(prefix)) = args.get(1) else {
-            return Err(RuntimeError::UnexpectedType(
-                args.get(1).cloned().unwrap_or(RuntimeValue::Null),
-            ));
-        };
+        let text = expect_str_arg(&args, 0)?;
+        let prefix = expect_str_arg(&args, 1)?;
 
         Ok(RuntimeValue::Bool(
             text.as_str().starts_with(prefix.as_str()),
@@ -91,16 +84,8 @@ impl NativeFunction for StrEndsWith {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let Some(RuntimeValue::Str(text)) = args.get(0) else {
-            return Err(RuntimeError::UnexpectedType(
-                args.get(0).cloned().unwrap_or(RuntimeValue::Null),
-            ));
-        };
-        let Some(RuntimeValue::Str(suffix)) = args.get(1) else {
-            return Err(RuntimeError::UnexpectedType(
-                args.get(1).cloned().unwrap_or(RuntimeValue::Null),
-            ));
-        };
+        let text = expect_str_arg(&args, 0)?;
+        let suffix = expect_str_arg(&args, 1)?;
 
         Ok(RuntimeValue::Bool(text.as_str().ends_with(suffix.as_str())))
     }

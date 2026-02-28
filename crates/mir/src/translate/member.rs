@@ -14,6 +14,33 @@ use crate::{
 };
 
 impl MiddleEnvironment {
+    #[inline]
+    fn lower_call_args(
+        &mut self,
+        scope: &u64,
+        args: Vec<CallArg>,
+        reverse_args: Vec<Node>,
+    ) -> Vec<MiddleNode> {
+        let mut lowered = Vec::with_capacity(args.len() + reverse_args.len());
+        for arg in args {
+            lowered.push(self.evaluate(scope, arg.into()));
+        }
+        for arg in reverse_args {
+            lowered.push(self.evaluate(scope, arg));
+        }
+        lowered
+    }
+
+    #[inline]
+    fn unresolved_ident_text(ident: &PotentialGenericTypeIdentifier) -> ParserText {
+        match ident {
+            PotentialGenericTypeIdentifier::Identifier(id) => ParserText::from(id.to_string()),
+            PotentialGenericTypeIdentifier::Generic { identifier, .. } => {
+                ParserText::from(identifier.to_string())
+            }
+        }
+    }
+
     fn evaluate_explicit_member_call(
         &mut self,
         scope: &u64,
@@ -121,12 +148,7 @@ impl MiddleEnvironment {
                 lowered_args.push(self_arg);
             }
 
-            for arg in args {
-                lowered_args.push(self.evaluate(scope, arg.into()));
-            }
-            for arg in reverse_args {
-                lowered_args.push(self.evaluate(scope, arg));
-            }
+            lowered_args.extend(self.lower_call_args(scope, args, reverse_args));
             if lowered_args.len() >= 2 && lowered_args[0].to_string() == lowered_args[1].to_string()
             {
                 lowered_args.remove(1);
@@ -152,13 +174,7 @@ impl MiddleEnvironment {
                 },
             );
 
-            let mut lowered_args = Vec::new();
-            for arg in args {
-                lowered_args.push(self.evaluate(scope, arg.into()));
-            }
-            for arg in reverse_args {
-                lowered_args.push(self.evaluate(scope, arg));
-            }
+            let lowered_args = self.lower_call_args(scope, args, reverse_args);
 
             Ok(MiddleNode::new(
                 MiddleNodeType::CallExpression {
@@ -341,7 +357,7 @@ impl MiddleEnvironment {
             return Some(found);
         }
         if let Some(found) = self.variables.iter().find_map(|(name, var)| {
-            let tail = name.rsplit(':').next().unwrap_or(name.as_str());
+            let tail = calibre_parser::qualified_name_tail(name);
             if tail != member {
                 return None;
             }
@@ -386,25 +402,17 @@ impl MiddleEnvironment {
             ParserInnerType::Float => Some("float".to_string()),
             ParserInnerType::Bool => Some("bool".to_string()),
             ParserInnerType::Char => Some("char".to_string()),
-            ParserInnerType::Dynamic => Some("dyn".to_string()),
+            ParserInnerType::Dynamic | ParserInnerType::DynamicTraits(_) => Some("dyn".to_string()),
             ParserInnerType::Null => Some("null".to_string()),
             ParserInnerType::List(_) => Some("list".to_string()),
             ParserInnerType::Range => Some("range".to_string()),
             ParserInnerType::Str => Some("str".to_string()),
-            ParserInnerType::Struct(name) => Some(
-                normalize_owner(name)
-                    .split("->")
-                    .next()
-                    .unwrap_or(name.as_str())
-                    .to_string(),
-            ),
-            ParserInnerType::StructWithGenerics { identifier, .. } => Some(
-                normalize_owner(identifier)
-                    .split("->")
-                    .next()
-                    .unwrap_or(identifier.as_str())
-                    .to_string(),
-            ),
+            ParserInnerType::Struct(name) => {
+                Some(calibre_parser::qualified_name_base(&normalize_owner(name)).to_string())
+            }
+            ParserInnerType::StructWithGenerics { identifier, .. } => {
+                Some(calibre_parser::qualified_name_base(&normalize_owner(identifier)).to_string())
+            }
             _ => None,
         };
         if let Some(target_family) = target_family
@@ -416,13 +424,11 @@ impl MiddleEnvironment {
                     return false;
                 }
                 let owner = normalize_owner(owner);
-                let owner_family = owner
-                    .split("->")
-                    .next()
-                    .unwrap_or(owner.as_str())
+                let owner_base = calibre_parser::qualified_name_base(&owner);
+                let owner_family = owner_base
                     .rsplit_once("::")
                     .map(|(_, rhs)| rhs)
-                    .unwrap_or_else(|| owner.split("->").next().unwrap_or(owner.as_str()));
+                    .unwrap_or(owner_base);
                 if target_family == "list" {
                     return owner_family.starts_with("list:<") || owner.starts_with("list:<");
                 }
@@ -447,28 +453,20 @@ impl MiddleEnvironment {
         }
         let target = resolved.clone();
         let target_name = match &target.data_type {
-            ParserInnerType::Struct(name) => Some(
-                name.rsplit_once(':')
-                    .map(|(_, rhs)| rhs.to_string())
-                    .unwrap_or_else(|| name.clone()),
-            ),
+            ParserInnerType::Struct(name) => {
+                Some(calibre_parser::qualified_name_tail(name).to_string())
+            }
             _ => None,
         }?;
-        let target_family = target_name
-            .split("->")
-            .next()
-            .unwrap_or(target_name.as_str())
-            .to_string();
+        let target_family = calibre_parser::qualified_name_base(&target_name).to_string();
 
         let template = self.impls.values().find_map(|imp| {
             let imp_name = match &imp.data_type.data_type {
-                ParserInnerType::Struct(name) => {
-                    name.rsplit_once(':').map(|(_, rhs)| rhs).unwrap_or(name)
-                }
+                ParserInnerType::Struct(name) => calibre_parser::qualified_name_tail(name),
                 ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
                 _ => return None,
             };
-            let imp_family = imp_name.split("->").next().unwrap_or(imp_name);
+            let imp_family = calibre_parser::qualified_name_base(imp_name);
             if imp_family == target_family && imp.variables.contains_key(member) {
                 Some(imp.clone())
             } else {
@@ -685,14 +683,7 @@ impl MiddleEnvironment {
                         })?;
                         let x = self
                             .resolve_dollar_ident_potential_generic_only(scope, &x)
-                            .unwrap_or_else(|| match &x {
-                                PotentialGenericTypeIdentifier::Identifier(id) => {
-                                    ParserText::from(id.to_string())
-                                }
-                                PotentialGenericTypeIdentifier::Generic { identifier, .. } => {
-                                    ParserText::from(identifier.to_string())
-                                }
-                            });
+                            .unwrap_or_else(|| Self::unresolved_ident_text(&x));
 
                         if let Some(ty) = self.member_base_type(scope, &first.0)
                             && let Some(static_var) = self.resolve_impl_member(scope, &ty, &x.text)
@@ -718,14 +709,7 @@ impl MiddleEnvironment {
                     NodeType::Identifier(x) => {
                         let resolved = self
                             .resolve_dollar_ident_potential_generic_only(scope, &x)
-                            .unwrap_or_else(|| match &x {
-                                PotentialGenericTypeIdentifier::Identifier(id) => {
-                                    ParserText::from(id.to_string())
-                                }
-                                PotentialGenericTypeIdentifier::Generic { identifier, .. } => {
-                                    ParserText::from(identifier.to_string())
-                                }
-                            });
+                            .unwrap_or_else(|| Self::unresolved_ident_text(&x));
                         MiddleNode {
                             node_type: MiddleNodeType::Identifier(resolved),
                             span,

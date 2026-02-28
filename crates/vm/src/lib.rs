@@ -644,9 +644,10 @@ fn build_function_suffix_index(
     let mut out: FxHashMap<String, Option<Arc<VMFunction>>> =
         FxHashMap::with_capacity_and_hasher(registry.functions.len(), Default::default());
     for (name, func) in registry.functions.iter() {
-        let Some((_, short)) = name.rsplit_once(':') else {
+        let short = calibre_parser::qualified_name_tail(name);
+        if short == name {
             continue;
-        };
+        }
         match out.get(short) {
             None => {
                 out.insert(short.to_string(), Some(func.clone()));

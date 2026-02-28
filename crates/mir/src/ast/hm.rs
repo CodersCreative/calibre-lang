@@ -277,7 +277,7 @@ pub fn from_parser_data_type(pd: &ParserDataType, tg: &mut TypeGenerator) -> Typ
         ParserInnerType::Bool => Type::TCon(TypeCon::Bool),
         ParserInnerType::Str => Type::TCon(TypeCon::Str),
         ParserInnerType::Char => Type::TCon(TypeCon::Char),
-        ParserInnerType::Dynamic => Type::TCon(TypeCon::Dyn),
+        ParserInnerType::Dynamic | ParserInnerType::DynamicTraits(_) => Type::TCon(TypeCon::Dyn),
         ParserInnerType::List(x) => Type::TList(Arc::new(from_parser_data_type(x, tg))),
         ParserInnerType::Ptr(x) => {
             Type::TApp(TypeApp::Ptr, vec![Arc::new(from_parser_data_type(x, tg))])

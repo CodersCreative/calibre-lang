@@ -1,6 +1,11 @@
 use std::sync::Arc;
 
-use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
+use crate::{
+    VM,
+    error::RuntimeError,
+    native::{NativeFunction, expect_str_ref, first_arg},
+    value::RuntimeValue,
+};
 use dumpster::sync::Gc;
 
 pub struct EnvGet;
@@ -11,11 +16,7 @@ impl NativeFunction for EnvGet {
     }
 
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let Some(idx) = args.first() else {
-            return Err(RuntimeError::InvalidFunctionCall);
-        };
-
-        let idx = match idx {
+        let idx = match first_arg(&args)? {
             RuntimeValue::Int(value) if *value >= 0 => *value as usize,
             RuntimeValue::UInt(value) => *value as usize,
             RuntimeValue::Byte(value) => *value as usize,
@@ -40,13 +41,7 @@ impl NativeFunction for EnvVar {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let Some(name) = args.first() else {
-            return Err(RuntimeError::InvalidFunctionCall);
-        };
-
-        let RuntimeValue::Str(name) = name else {
-            return Err(RuntimeError::UnexpectedType(name.clone()));
-        };
+        let name = expect_str_ref(first_arg(&args)?)?;
 
         match std::env::var(name.as_str()) {
             Ok(value) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
@@ -70,12 +65,8 @@ impl NativeFunction for EnvSetVar {
             return Err(RuntimeError::InvalidFunctionCall);
         }
 
-        let RuntimeValue::Str(name) = &args[0] else {
-            return Err(RuntimeError::UnexpectedType(args[0].clone()));
-        };
-        let RuntimeValue::Str(value) = &args[1] else {
-            return Err(RuntimeError::UnexpectedType(args[1].clone()));
-        };
+        let name = expect_str_ref(&args[0])?;
+        let value = expect_str_ref(&args[1])?;
 
         unsafe { std::env::set_var(name.as_str(), value.as_str()) };
 
@@ -91,13 +82,7 @@ impl NativeFunction for EnvRemoveVar {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let Some(name) = args.first() else {
-            return Err(RuntimeError::InvalidFunctionCall);
-        };
-
-        let RuntimeValue::Str(name) = name else {
-            return Err(RuntimeError::UnexpectedType(name.clone()));
-        };
+        let name = expect_str_ref(first_arg(&args)?)?;
 
         unsafe { std::env::remove_var(name.as_str()) };
 

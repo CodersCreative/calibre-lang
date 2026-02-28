@@ -15,6 +15,20 @@ use crate::{
 };
 
 impl MiddleEnvironment {
+    fn function_data_type(
+        span: Span,
+        parameters: Vec<ParserDataType>,
+        return_type: ParserDataType,
+    ) -> ParserDataType {
+        ParserDataType::new(
+            span,
+            ParserInnerType::Function {
+                return_type: Box::new(return_type),
+                parameters,
+            },
+        )
+    }
+
     fn span_suffix(span: Span) -> String {
         format!("{}_{}", span.from.line, span.from.col)
     }
@@ -53,43 +67,33 @@ impl MiddleEnvironment {
         let span = node.span;
         match node.node_type {
             NodeType::Return { value: Some(value) } => {
-                let suspend_call = Node::new(
+                let suspend_call = Self::call_expr(
                     span,
-                    NodeType::CallExpression {
-                        string_fn: None,
-                        caller: Box::new(Self::gen_ident(span, "gen_suspend")),
-                        generic_types: Vec::new(),
-                        args: vec![CallArg::Value(*value)],
-                        reverse_args: Vec::new(),
-                    },
+                    Self::gen_ident(span, "gen_suspend"),
+                    vec![CallArg::Value(*value)],
                 );
                 let tmp_ident = PotentialDollarIdentifier::Identifier(ParserText::new(
                     span,
                     format!("gen_yield_tmp_{}", Self::span_suffix(span)),
                 ));
-                Node::new(
+                Self::temp_scope(
                     span,
-                    NodeType::ScopeDeclaration {
-                        body: Some(vec![
-                            Node::new(
-                                span,
-                                NodeType::VariableDeclaration {
-                                    var_type: VarType::Immutable,
-                                    identifier: tmp_ident,
-                                    value: Box::new(suspend_call),
-                                    data_type: PotentialNewType::DataType(ParserDataType::new(
-                                        span,
-                                        ParserInnerType::Auto(None),
-                                    )),
-                                },
-                            ),
-                            Node::new(span, NodeType::EmptyLine),
-                        ]),
-                        named: None,
-                        is_temp: true,
-                        create_new_scope: Some(true),
-                        define: false,
-                    },
+                    vec![
+                        Node::new(
+                            span,
+                            NodeType::VariableDeclaration {
+                                var_type: VarType::Immutable,
+                                identifier: tmp_ident,
+                                value: Box::new(suspend_call),
+                                data_type: PotentialNewType::DataType(ParserDataType::new(
+                                    span,
+                                    ParserInnerType::Auto(None),
+                                )),
+                            },
+                        ),
+                        Node::new(span, NodeType::EmptyLine),
+                    ],
+                    true,
                 )
             }
             NodeType::Return { value: None } => Node::new(
@@ -189,26 +193,12 @@ impl MiddleEnvironment {
                 let mut out = Vec::with_capacity(items.len() + 1);
                 out.append(&mut items);
                 out.push(Self::gen_ident(span, "none"));
-                Node::new(
-                    span,
-                    NodeType::ScopeDeclaration {
-                        body: Some(out),
-                        named: None,
-                        is_temp: true,
-                        create_new_scope: Some(true),
-                        define: false,
-                    },
-                )
+                Self::temp_scope(span, out, true)
             }
-            other => Node::new(
+            other => Self::temp_scope(
                 span,
-                NodeType::ScopeDeclaration {
-                    body: Some(vec![Node::new(span, other), Self::gen_ident(span, "none")]),
-                    named: None,
-                    is_temp: true,
-                    create_new_scope: Some(true),
-                    define: false,
-                },
+                vec![Node::new(span, other), Self::gen_ident(span, "none")],
+                true,
             ),
         };
 
@@ -220,15 +210,10 @@ impl MiddleEnvironment {
                     span,
                     next_name.clone(),
                 )),
-                data_type: PotentialNewType::DataType(ParserDataType::new(
+                data_type: PotentialNewType::DataType(Self::function_data_type(
                     span,
-                    ParserInnerType::Function {
-                        return_type: Box::new(ParserDataType::new(
-                            span,
-                            ParserInnerType::Option(Box::new(elem_type.clone())),
-                        )),
-                        parameters: vec![],
-                    },
+                    vec![],
+                    ParserDataType::new(span, ParserInnerType::Option(Box::new(elem_type.clone()))),
                 )),
                 value: Box::new(Node::new(
                     span,
@@ -269,16 +254,7 @@ impl MiddleEnvironment {
             },
         );
 
-        Node::new(
-            span,
-            NodeType::ScopeDeclaration {
-                body: Some(vec![next_decl, gen_value]),
-                named: None,
-                is_temp: true,
-                create_new_scope: Some(false),
-                define: false,
-            },
-        )
+        Self::temp_scope(span, vec![next_decl, gen_value], false)
     }
 
     pub(crate) fn wrap_inline_generator(
@@ -328,16 +304,7 @@ impl MiddleEnvironment {
             span,
             NodeType::LoopDeclaration {
                 loop_type: Box::new(loop_type),
-                body: Box::new(Node::new(
-                    span,
-                    NodeType::ScopeDeclaration {
-                        body: Some(loop_body_items),
-                        named: None,
-                        is_temp: true,
-                        create_new_scope: Some(true),
-                        define: false,
-                    },
-                )),
+                body: Box::new(Self::temp_scope(span, loop_body_items, true)),
                 until,
                 label: None,
                 else_body: None,
@@ -345,26 +312,9 @@ impl MiddleEnvironment {
         );
 
         Self::wrap_generator_body(
-            Node::new(
-                span,
-                NodeType::ScopeDeclaration {
-                    body: Some(vec![loop_node]),
-                    named: None,
-                    is_temp: true,
-                    create_new_scope: Some(false),
-                    define: false,
-                },
-            ),
+            Self::temp_scope(span, vec![loop_node], false),
             elem_type,
             span,
-        )
-    }
-
-    #[inline]
-    fn is_callable_type(data_type: &ParserDataType) -> bool {
-        matches!(
-            data_type.data_type,
-            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
         )
     }
 
@@ -377,7 +327,7 @@ impl MiddleEnvironment {
         let resolved = self.resolve_potential_generic_ident(scope, ident)?;
         self.variables
             .get(&resolved.text)
-            .and_then(|var| Self::is_callable_type(&var.data_type).then_some(resolved.text))
+            .and_then(|var| Self::is_callable_parser_type(&var.data_type).then_some(resolved.text))
     }
 
     #[inline]
@@ -430,13 +380,8 @@ impl MiddleEnvironment {
 
         let return_type = self.resolve_ffi_data_type(scope, return_type);
 
-        let fn_type = ParserDataType::new(
-            self.current_span(),
-            ParserInnerType::Function {
-                return_type: Box::new(return_type.clone()),
-                parameters: params.clone(),
-            },
-        );
+        let fn_type =
+            Self::function_data_type(self.current_span(), params.clone(), return_type.clone());
 
         self.variables.insert(
             new_name.clone(),
@@ -544,20 +489,12 @@ impl MiddleEnvironment {
                         },
                     )
                 }
-                _ => Node::new(
-                    body_node.span,
-                    NodeType::ScopeDeclaration {
-                        body: Some({
-                            let mut new_body = destructures;
-                            new_body.push(body_node);
-                            new_body
-                        }),
-                        named: None,
-                        is_temp: true,
-                        create_new_scope: Some(false),
-                        define: false,
-                    },
-                ),
+                _ => {
+                    let body_span = body_node.span;
+                    let mut new_body = destructures;
+                    new_body.push(body_node);
+                    Self::temp_scope(body_span, new_body, false)
+                }
             };
         }
 
@@ -744,15 +681,13 @@ impl MiddleEnvironment {
                 && !*is_dynamic
                 && matches!(last_node.node_type, NodeType::Identifier(_))
             {
-                let call = Node::new(
+                let call = Self::call_expr_full(
                     last_node.span,
-                    NodeType::CallExpression {
-                        string_fn: None,
-                        caller: Box::new(last_node.clone()),
-                        generic_types,
-                        args,
-                        reverse_args,
-                    },
+                    last_node.clone(),
+                    generic_types,
+                    args,
+                    reverse_args,
+                    None,
                 );
                 *last_node = call;
                 return self.evaluate_member_expression(scope, span, path);
@@ -772,7 +707,7 @@ impl MiddleEnvironment {
                 && self
                     .variables
                     .get(global_name)
-                    .is_some_and(|var| Self::is_callable_type(&var.data_type))
+                    .is_some_and(|var| Self::is_callable_parser_type(&var.data_type))
             {
                 caller = Node::new(
                     span,
@@ -787,7 +722,7 @@ impl MiddleEnvironment {
                     if !name.ends_with(&caller_name) {
                         return None;
                     }
-                    if Self::is_callable_type(&var.data_type) {
+                    if Self::is_callable_parser_type(&var.data_type) {
                         Some(name.clone())
                     } else {
                         None
@@ -846,7 +781,7 @@ impl MiddleEnvironment {
                         .or(mapped_from_param)
                         && mapped_name != caller_ident.to_string()
                         && let Some(var) = self.variables.get(&mapped_name)
-                        && Self::is_callable_type(&var.data_type)
+                        && Self::is_callable_parser_type(&var.data_type)
                     {
                         caller = Node::new(
                             span,
@@ -996,7 +931,7 @@ impl MiddleEnvironment {
             && let Some(mapped_name) =
                 self.resolve_member_fn_name(&first_ty.unwrap_all_refs(), &caller_ident.to_string())
             && let Some(var) = self.variables.get(&mapped_name)
-            && Self::is_callable_type(&var.data_type)
+            && Self::is_callable_parser_type(&var.data_type)
         {
             caller = Node::new(
                 span,
@@ -1164,15 +1099,13 @@ impl MiddleEnvironment {
                                     return_type: (*return_type).into(),
                                     param_destructures: Vec::new(),
                                 },
-                                body: Box::new(Node::new(
+                                body: Box::new(Self::call_expr_full(
                                     self.current_span(),
-                                    NodeType::CallExpression {
-                                        string_fn: None,
-                                        caller: Box::new(caller.clone()),
-                                        generic_types,
-                                        args: captured_args,
-                                        reverse_args: Vec::new(),
-                                    },
+                                    caller.clone(),
+                                    generic_types,
+                                    captured_args,
+                                    Vec::new(),
+                                    None,
                                 )),
                             },
                             span,
@@ -1205,16 +1138,7 @@ impl MiddleEnvironment {
 
                         return self.evaluate_inner(
                             scope,
-                            Node::new(
-                                self.current_span(),
-                                NodeType::ScopeDeclaration {
-                                    body: Some(body),
-                                    named: None,
-                                    is_temp: true,
-                                    create_new_scope: Some(true),
-                                    define: false,
-                                },
-                            ),
+                            Self::temp_scope(self.current_span(), body, true),
                         );
                     }
                     _ => {

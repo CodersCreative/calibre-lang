@@ -1,0 +1,141 @@
+import File from std::fs;
+
+const CELL_KEY = 1000000;
+
+const main = fn => {
+	let file : File = try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
+		try File.open_read(__file__.replace("main.cal", "custom_input.txt")) => {
+			print(e);
+			return;
+		};
+	};
+
+	let lines : list:<str> = try file.read_lines(100000) => panic("Failed to read file.");
+	let part1 = solve_part1(lines);
+	let part2 = solve_part2(lines);
+
+	print("Part 1 - Number of accessible rolls of paper: " & part1);
+	print("Part 2 - Total rolls of paper removed: " & part2);
+};
+
+const build_grid = fn (lines : list:<str>) -> list:<list:<char>> => {
+	let mut grid : list:<list:<char>> = [];
+	for i in 0..len(lines) => grid <<= trim(lines[i]).to_chars();
+	grid;
+};
+
+const count_neighbors = fn (grid : list:<list:<char>>, row : int, col : int) -> int => {
+	let rows = len(grid);
+	if row < 0 || row >= rows => return 0;
+
+	let mut count = 0;
+	let mut dr = -1;
+
+	for dr <= 1 => {
+		let mut dc = -1;
+
+		for dc <= 1 => {
+			if dr == 0 && dc == 0 => {
+				dc += 1;
+				continue;
+			};
+
+			let nr = row + dr;
+			let nc = col + dc;
+
+			if nr >= 0 && nr < rows && nc >= 0 && nc < len(grid[nr]) && grid[nr][nc] == '@' => count += 1;
+
+			dc += 1;
+		};
+
+		dr += 1;
+	};
+
+	count;
+};
+
+const solve_part1 = fn (lines : list:<str>) -> int => {
+	let grid = build_grid(lines);
+	let mut accessible = 0;
+
+	for r in 0..len(grid) => {
+		for c in 0..len(grid[r]) => {
+			if grid[r][c] == '@' && count_neighbors(grid, r, c) < 4 => accessible += 1;
+		};
+	};
+
+	accessible;
+};
+
+const build_degrees = fn (grid : list:<list:<char>>) -> list:<list:<int>> => {
+	let mut degree : list:<list:<int>> = [];
+
+	for r in 0..len(grid) => {
+		let mut row_deg : list:<int> = [];
+		for c in 0..len(grid[r]) => row_deg <<= count_neighbors(grid, r, c);
+		degree <<= move row_deg;
+	};
+
+	degree;
+};
+
+const solve_part2 = fn (lines : list:<str>) -> int => {
+	let mut grid = build_grid(lines);
+	let mut degree = build_degrees(grid);
+	let mut queue : list:<int> = [];
+
+	for r in 0..len(grid) => {
+		for c in 0..len(grid[r]) => {
+			if grid[r][c] == '@' && degree[r][c] < 4 => queue <<= (r * CELL_KEY + c);
+		};
+	};
+
+	let mut head = 0;
+	let mut total_removed = 0;
+
+	for head < len(queue) => {
+		let key = queue[head];
+		head += 1;
+
+		let r = key / CELL_KEY;
+		let c = key % CELL_KEY;
+
+		if degree[r][c] >= 4 || grid[r][c] != '@' || (r < 0 || r >= len(grid)) || (c < 0 || c >= len(grid[r])) => 
+			continue;
+
+		let mut row = grid[r];
+		row[c] = '.';
+		grid[r] = move row;
+		total_removed += 1;
+
+		let mut dr = -1;
+
+		for dr <= 1 => {
+			let mut dc = -1;
+
+			for dc <= 1 => {
+				if dr == 0 && dc == 0 => {
+					dc += 1;
+					continue;
+				};
+
+				let nr = r + dr;
+				let nc = c + dc;
+
+				if nr >= 0 && nr < len(grid) && nc >= 0 && nc < len(grid[nr]) && grid[nr][nc] == '@' => {
+					let mut drow = degree[nr];
+					drow[nc] -= 1;
+					let new_deg = drow[nc];
+					degree[nr] = move drow;
+					if new_deg < 4 => queue <<= (nr * CELL_KEY + nc);
+				};
+
+				dc += 1;
+			};
+
+			dr += 1;
+		};
+	};
+
+	total_removed;
+};

@@ -14,6 +14,29 @@ impl Person for User {
 	const name = fn (self : &User) -> str => self.name;
 };
 
+trait Human {
+	const name : str;
+	const age = 10;
+	const country = "Zimbabwe";
+};
+
+type Ty = struct {};
+type Tadiwa = struct {};
+
+impl Human for Ty {
+	const name = "Ty";
+};
+
+impl Human for Tadiwa {
+	const name = "Tadiwa";
+	const age = 21;
+	const country = "US";
+};
+
+const show = fn (label : str, p : dyn:<Human>) => {
+	print(label & " -> name=" & p.name & ", age=" & p.age & ", country=" & p.country);
+};
+
 const main = fn => {
 	let user = User { name : "Ty" };
 	print(user.greeting());
@@ -23,4 +46,18 @@ const main = fn => {
 	print("calibre".starts_with("cal"));
 	let file = File.open_read("./destructure.cal");
 	print(file.read_all(10000));
+
+	let ty = Ty {};
+	let tadiwa = Tadiwa {};
+
+	print(ty.name);
+	print(ty.age);
+	print(ty.country);
+
+	print(tadiwa.name);
+	print(tadiwa.age);
+	print(tadiwa.country);
+
+	show("ty", ty);
+	show("tadiwa", tadiwa);
 };

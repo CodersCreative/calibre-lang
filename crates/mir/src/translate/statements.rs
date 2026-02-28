@@ -268,6 +268,17 @@ impl MiddleEnvironment {
             self.evaluate(scope, value)
         };
 
+        if matches!(data_type.data_type, ParserInnerType::DynamicTraits(_)) {
+            value = MiddleNode::new(
+                MiddleNodeType::AsExpression {
+                    value: Box::new(value),
+                    data_type: data_type.clone(),
+                    failure_mode: calibre_parser::ast::AsFailureMode::Panic,
+                },
+                span,
+            );
+        }
+
         if !matches!(
             original_value_node.node_type,
             NodeType::FunctionDeclaration { .. }

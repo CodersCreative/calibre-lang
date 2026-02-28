@@ -251,6 +251,7 @@ pub enum ParserInnerType {
     Str,
     Char,
     Dynamic,
+    DynamicTraits(Vec<String>),
     Tuple(Vec<ParserDataType>),
     List(Box<ParserDataType>),
     Scope(Vec<ParserDataType>),
@@ -347,6 +348,20 @@ impl ParserInnerType {
             Self::Option(x) => Self::Option(Box::new(x.verify())),
             Self::List(x) => Self::List(Box::new(x.verify())),
             Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.verify()).collect()),
+            Self::DynamicTraits(traits) => {
+                let mut normalized = traits
+                    .into_iter()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>();
+                normalized.sort();
+                normalized.dedup();
+                if normalized.is_empty() {
+                    Self::Dynamic
+                } else {
+                    Self::DynamicTraits(normalized)
+                }
+            }
             Self::Struct(x) => Self::from_str(&x).unwrap_or(Self::Struct(x)),
             ty => ty,
         }
@@ -370,6 +385,7 @@ impl ParserInnerType {
                 generic_types.iter().any(|x| x.contains_auto())
             }
             ParserInnerType::Scope(x) => x.iter().any(|x| x.contains_auto()),
+            ParserInnerType::DynamicTraits(_) => false,
             _ => false,
         }
     }
@@ -401,6 +417,7 @@ impl ParserInnerType {
                 generic_types: generic_types.into_iter().map(|x| x.resolve_ffi()).collect(),
             },
             Self::Scope(x) => Self::Scope(x.into_iter().map(|x| x.resolve_ffi()).collect()),
+            Self::DynamicTraits(x) => Self::DynamicTraits(x),
             x => x,
         }
     }
@@ -503,6 +520,20 @@ impl Display for ParserInnerType {
             Self::Byte => write!(f, "byte"),
             Self::Null => write!(f, "null"),
             Self::Dynamic => write!(f, "dyn"),
+            Self::DynamicTraits(traits) => {
+                if traits.is_empty() {
+                    write!(f, "dyn")
+                } else {
+                    let mut txt = String::new();
+                    for (i, tr) in traits.iter().enumerate() {
+                        if i > 0 {
+                            txt.push_str(", ");
+                        }
+                        txt.push_str(tr);
+                    }
+                    write!(f, "dyn:<{}>", txt)
+                }
+            }
             Self::Bool => write!(f, "bool"),
             Self::Str => write!(f, "str"),
             Self::Char => write!(f, "char"),
@@ -951,6 +982,7 @@ pub enum MatchTupleItem {
     Rest(Span),
     Wildcard(Span),
     Value(Node),
+    IsType(ParserDataType),
     Enum {
         value: PotentialDollarIdentifier,
         var_type: VarType,
@@ -994,6 +1026,7 @@ pub enum MatchArmType {
         name: PotentialDollarIdentifier,
     },
     Value(Node),
+    IsType(ParserDataType),
     Wildcard(Span),
 }
 
@@ -1006,6 +1039,7 @@ impl MatchArmType {
                     match item {
                         MatchTupleItem::Rest(sp) | MatchTupleItem::Wildcard(sp) => return sp,
                         MatchTupleItem::Value(node) => return &node.span,
+                        MatchTupleItem::IsType(data_type) => return &data_type.span,
                         MatchTupleItem::Enum { value, .. } => return value.span(),
                         MatchTupleItem::Binding { name, .. } => return name.span(),
                     }
@@ -1031,6 +1065,7 @@ impl MatchArmType {
             }
             Self::Let { var_type: _, name } => name.span(),
             Self::Value(x) => &x.span,
+            Self::IsType(x) => &x.span,
             Self::Wildcard(x) => &x,
         }
     }
@@ -1233,6 +1268,10 @@ pub enum NodeType {
         value: Box<Node>,
         data_type: PotentialNewType,
         failure_mode: AsFailureMode,
+    },
+    IsExpression {
+        value: Box<Node>,
+        data_type: ParserDataType,
     },
     InDeclaration {
         identifier: Box<Node>,

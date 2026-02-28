@@ -291,6 +291,16 @@ pub enum RuntimeValue {
         type_name: Arc<String>,
         state: Arc<Mutex<GeneratorState>>,
     },
+    DynObject {
+        type_name: Arc<String>,
+        constraints: Arc<Vec<String>>,
+        value: Gc<RuntimeValue>,
+        vtable: Arc<FxHashMap<String, String>>,
+    },
+    BoundMethod {
+        callee: Box<RuntimeValue>,
+        receiver: Gc<RuntimeValue>,
+    },
     GeneratorSuspend(Box<RuntimeValue>),
 }
 
@@ -335,6 +345,11 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
                 Ok(())
             }
             RuntimeValue::Generator { .. } => Ok(()),
+            RuntimeValue::DynObject { value, .. } => value.accept(visitor),
+            RuntimeValue::BoundMethod { callee, receiver } => {
+                callee.accept(visitor)?;
+                receiver.accept(visitor)
+            }
             RuntimeValue::GeneratorSuspend(value) => value.accept(visitor),
             RuntimeValue::ExternFunction(_) => Ok(()),
             RuntimeValue::Ptr(_) => Ok(()),
@@ -423,29 +438,25 @@ impl NativeFunction for GeneratorResumeFn {
 
 impl RuntimeValue {
     pub fn constants() -> FxHashMap<String, Self> {
-        let lst = [
+        [
             ("true", RuntimeValue::Bool(true)),
             ("false", RuntimeValue::Bool(false)),
             ("none", RuntimeValue::Option(None)),
             ("INT_MIN", RuntimeValue::Int(i64::MIN)),
             ("INT_MAX", RuntimeValue::Int(i64::MAX)),
-        ];
-
-        let mut map = FxHashMap::default();
-
-        for val in lst {
-            map.insert(val.0.to_string(), val.1);
-        }
-
-        map
+        ]
+        .into_iter()
+        .map(|(name, value)| (name.to_string(), value))
+        .collect()
     }
 
     pub fn natives() -> FxHashMap<String, Self> {
-        let lst: Vec<(&'static str, Arc<dyn NativeFunction>)> = vec![
+        let lst: Vec<(&str, Arc<dyn NativeFunction>)> = vec![
             ("console_output", Arc::new(native::global::ConsoleOutput())),
             ("ok", Arc::new(native::global::OkFn())),
             ("err", Arc::new(native::global::ErrFn())),
             ("some", Arc::new(native::global::SomeFn())),
+            ("repr", Arc::new(native::global::Repr())),
             ("len", Arc::new(native::global::Len())),
             ("trim", Arc::new(native::global::Trim())),
             ("str.split", Arc::new(stdlib::str::StrSplit())),
@@ -614,13 +625,9 @@ impl RuntimeValue {
             ("async.mutex_write", Arc::new(stdlib::r#async::MutexWrite())),
         ];
 
-        let mut map = FxHashMap::default();
-
-        for val in lst {
-            map.insert(val.0.to_string(), RuntimeValue::NativeFunction(val.1));
-        }
-
-        map
+        lst.into_iter()
+            .map(|(name, func)| (name.to_string(), RuntimeValue::NativeFunction(func)))
+            .collect()
     }
 }
 

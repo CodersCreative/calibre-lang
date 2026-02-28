@@ -34,14 +34,20 @@ impl VM {
         if name.contains("::") {
             return None;
         }
-        let (_, short_name) = name.rsplit_once(':')?;
+        let short_name = calibre_parser::qualified_name_tail(name);
+        if short_name == name {
+            return None;
+        }
         let func = self.func_suffix.get(short_name)?.as_ref()?;
         (!self.moved_functions.contains(&func.name)).then(|| func.clone())
     }
 
     pub(crate) fn find_unique_var_by_suffix(&self, short_name: &str) -> Option<String> {
         self.variables.keys().find_map(|name| {
-            let (_, suffix) = name.rsplit_once(':')?;
+            let suffix = calibre_parser::qualified_name_tail(name);
+            if suffix == name {
+                return None;
+            }
             (suffix == short_name).then(|| name.to_string())
         })
     }
@@ -72,7 +78,10 @@ impl VM {
             .flat_map(|base| base.iter())
             .chain(frame.local_map.iter())
             .find_map(|(name, reg)| {
-                let (_, suffix) = name.as_ref().rsplit_once(':')?;
+                let suffix = calibre_parser::qualified_name_tail(name.as_ref());
+                if suffix == name.as_ref() {
+                    return None;
+                }
                 (suffix == short_name).then_some(*reg)
             })
     }
@@ -144,7 +153,8 @@ impl VM {
         {
             return self.get_reg_value(reg);
         }
-        if let Some((_, short)) = name.rsplit_once(':')
+        let short = calibre_parser::qualified_name_tail(name);
+        if short != name
             && let Some(reg) = self.find_unique_local_by_suffix(short)
         {
             return self.get_reg_value(reg);
@@ -163,7 +173,8 @@ impl VM {
                 .map(|f| self.make_runtime_function_inner(f, seen))
                 .unwrap_or(RuntimeValue::Null),
             VarName::Global => {
-                if let Some((_, short_name)) = name.rsplit_once(':')
+                let short_name = calibre_parser::qualified_name_tail(name);
+                if short_name != name
                     && let Some(func) = self.find_unique_function_by_suffix_ref(short_name)
                 {
                     return self.make_runtime_function_inner(func, seen);
@@ -209,7 +220,7 @@ impl VM {
 
     #[inline]
     pub(crate) fn is_gen_type_name(type_name: &str) -> bool {
-        let short = type_name.rsplit(':').next().unwrap_or(type_name);
+        let short = calibre_parser::qualified_name_tail(type_name);
         short == "gen" || short.starts_with("gen->")
     }
 
@@ -280,7 +291,8 @@ impl VM {
         if name.contains("::") {
             return VarName::Global;
         }
-        if let Some((_, short_name)) = name.rsplit_once(':') {
+        let short_name = calibre_parser::qualified_name_tail(name);
+        if short_name != name {
             if let Some(resolved) = resolve_by_suffix(short_name) {
                 return resolved;
             };

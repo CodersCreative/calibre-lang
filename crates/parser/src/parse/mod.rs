@@ -21,9 +21,10 @@ use crate::{
 };
 use diagnostics::to_parser_errors;
 use util::{
-    auto_type, ensure_scope_node, ident_node, is_keyword, lex, normalize_scope_member_chain,
-    parse_embedded_expr, parse_splits, scope_body_or_single, scope_node_parser, span,
-    strip_block_comments_keep_layout, unescape_char, unescape_string, with_named_scope,
+    auto_type, call_node, ensure_scope_node, ident_node, is_keyword, lex,
+    member_node_from_head_and_tail, normalize_scope_member_chain, null_node, parse_embedded_expr,
+    parse_splits, scope_body_or_single, scope_node_parser, span, strip_block_comments_keep_layout,
+    unescape_char, unescape_string, with_named_scope,
 };
 
 trait LegacySpanMapExt<'a, O>: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Sized {
@@ -321,7 +322,7 @@ pub fn parse_program_with_source(
     let null_lit = lex(pad.clone(), just("null"))
         .map_with_span({
             let ls = line_starts.clone();
-            move |_, r| Node::new(span(ls.as_ref(), r), NodeType::Null)
+            move |_, r| null_node(span(ls.as_ref(), r))
         })
         .boxed();
 
@@ -365,20 +366,41 @@ pub fn parse_program_with_source(
             )
             .map(|((name, sp), generic_types)| {
                 if let Some(generic_types) = generic_types {
-                    let generic_types = generic_types
-                        .into_iter()
-                        .map(|x| match x {
-                            PotentialNewType::DataType(y) => y,
-                            _ => ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
-                        })
-                        .collect::<Vec<_>>();
-                    PotentialNewType::DataType(ParserDataType::new(
-                        sp,
-                        ParserInnerType::StructWithGenerics {
-                            identifier: name,
-                            generic_types,
-                        },
-                    ))
+                    if name == "dyn" {
+                        let mut traits = Vec::new();
+                        for ty in generic_types {
+                            let txt = match ty {
+                                PotentialNewType::DataType(dt) => dt.to_string(),
+                                _ => String::new(),
+                            };
+                            let txt = txt.trim().to_string();
+                            if !txt.is_empty() {
+                                traits.push(txt);
+                            }
+                        }
+                        PotentialNewType::DataType(ParserDataType::new(
+                            sp,
+                            ParserInnerType::DynamicTraits(traits),
+                        ))
+                    } else {
+                        let generic_types = generic_types
+                            .into_iter()
+                            .map(|x| match x {
+                                PotentialNewType::DataType(y) => y,
+                                _ => ParserDataType::new(
+                                    Span::default(),
+                                    ParserInnerType::Auto(None),
+                                ),
+                            })
+                            .collect::<Vec<_>>();
+                        PotentialNewType::DataType(ParserDataType::new(
+                            sp,
+                            ParserInnerType::StructWithGenerics {
+                                identifier: name,
+                                generic_types,
+                            },
+                        ))
+                    }
                 } else {
                     PotentialNewType::DataType(ParserDataType::new(
                         sp,
@@ -929,6 +951,14 @@ pub fn parse_program_with_source(
                 .map(|v| v.unwrap_or(VarType::Immutable))
                 .boxed();
 
+            let match_is_type = lex(pad.clone(), just("is"))
+                .ignore_then(type_name.clone())
+                .map(|ty| match ty {
+                    PotentialNewType::DataType(dt) => dt,
+                    _ => ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
+                })
+                .boxed();
+
             let match_struct_destructure = lex(pad.clone(), just('{'))
                 .ignore_then(
                     ident
@@ -1011,6 +1041,7 @@ pub fn parse_program_with_source(
                                 move |_, r| MatchTupleItem::Wildcard(span(ls.as_ref(), r))
                             })
                             .boxed(),
+                        match_is_type.clone().map(MatchTupleItem::IsType).boxed(),
                         match_var_type
                             .clone()
                             .then(ident.clone())
@@ -1221,6 +1252,7 @@ pub fn parse_program_with_source(
                     let ls = line_starts.clone();
                     move |_, r| MatchArmType::Wildcard(span(ls.as_ref(), r))
                 }),
+                match_is_type.clone().map(MatchArmType::IsType),
                 expr.clone().map(MatchArmType::Value),
             ))
             .boxed();
@@ -1351,6 +1383,9 @@ pub fn parse_program_with_source(
                                     }),
                                     MatchArmType::Value(node) => {
                                         items.push(MatchTupleItem::Value(node))
+                                    }
+                                    MatchArmType::IsType(data_type) => {
+                                        items.push(MatchTupleItem::IsType(data_type))
                                     }
                                     MatchArmType::TuplePattern(inner) => items.extend(inner),
                                     MatchArmType::StructPattern(_) => {}
@@ -1615,18 +1650,13 @@ pub fn parse_program_with_source(
                                     let member = ident_node(sp, &name);
                                     if let Some(args) = args {
                                         (
-                                            Node::new(
+                                            call_node(
                                                 member.span,
-                                                NodeType::CallExpression {
-                                                    string_fn: None,
-                                                    caller: Box::new(member),
-                                                    generic_types: Vec::new(),
-                                                    args: args
-                                                        .into_iter()
-                                                        .map(CallArg::Value)
-                                                        .collect(),
-                                                    reverse_args: Vec::new(),
-                                                },
+                                                member,
+                                                None,
+                                                args.into_iter().map(CallArg::Value).collect(),
+                                                Vec::new(),
+                                                Vec::new(),
                                             ),
                                             false,
                                         )
@@ -1655,21 +1685,7 @@ pub fn parse_program_with_source(
                         } else {
                             Node::new(Span::default(), NodeType::ListLiteral(_open_ty, values.1))
                         };
-                        if tails.is_empty() {
-                            list
-                        } else {
-                            let mut path = vec![(list, false)];
-                            for tail in tails {
-                                path.push(tail);
-                            }
-                            let sp = match (path.first(), path.last()) {
-                                (Some(first), Some(last)) => {
-                                    Span::new_from_spans(first.0.span, last.0.span)
-                                }
-                                _ => Span::default(),
-                            };
-                            Node::new(sp, NodeType::MemberExpression { path })
-                        }
+                        member_node_from_head_and_tail(list, tails)
                     }),
                 float_lit.clone(),
                 float_suffix_lit.clone(),
@@ -1698,24 +1714,23 @@ pub fn parse_program_with_source(
                         let ls = line_starts.clone();
                         move |args, r| {
                             let sp = span(ls.as_ref(), r);
-                            Node::new(
+                            call_node(
                                 sp,
-                                NodeType::CallExpression {
-                                    string_fn: None,
-                                    caller: Box::new(Node::new(
-                                        sp,
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(
-                                                PotentialDollarIdentifier::Identifier(
-                                                    ParserText::new(sp, "$".to_string()),
-                                                ),
-                                            ),
+                                Node::new(
+                                    sp,
+                                    NodeType::Identifier(
+                                        PotentialGenericTypeIdentifier::Identifier(
+                                            PotentialDollarIdentifier::Identifier(ParserText::new(
+                                                sp,
+                                                "$".to_string(),
+                                            )),
                                         ),
-                                    )),
-                                    generic_types: Vec::new(),
-                                    args: args.into_iter().map(CallArg::Value).collect(),
-                                    reverse_args: Vec::new(),
-                                },
+                                    ),
+                                ),
+                                None,
+                                args.into_iter().map(CallArg::Value).collect(),
+                                Vec::new(),
+                                Vec::new(),
                             )
                         }
                     }),
@@ -1833,21 +1848,8 @@ pub fn parse_program_with_source(
                                 .collect::<Vec<_>>(),
                         )
                         .map(|(head, indexes)| {
-                            if indexes.is_empty() {
-                                head
-                            } else {
-                                let mut path = vec![(head, false)];
-                                for idx in indexes {
-                                    path.push((idx, true));
-                                }
-                                let sp = match (path.first(), path.last()) {
-                                    (Some(first), Some(last)) => {
-                                        Span::new_from_spans(first.0.span, last.0.span)
-                                    }
-                                    _ => Span::default(),
-                                };
-                                Node::new(sp, NodeType::MemberExpression { path })
-                            }
+                            let tails = indexes.into_iter().map(|idx| (idx, true)).collect();
+                            member_node_from_head_and_tail(head, tails)
                         })
                         .separated_by(lex(pad.clone(), just(',')))
                         .allow_trailing()
@@ -1870,21 +1872,8 @@ pub fn parse_program_with_source(
                                 .collect::<Vec<_>>(),
                         )
                         .map(|(head, indexes)| {
-                            if indexes.is_empty() {
-                                head
-                            } else {
-                                let mut path = vec![(head, false)];
-                                for idx in indexes {
-                                    path.push((idx, true));
-                                }
-                                let sp = match (path.first(), path.last()) {
-                                    (Some(first), Some(last)) => {
-                                        Span::new_from_spans(first.0.span, last.0.span)
-                                    }
-                                    _ => Span::default(),
-                                };
-                                Node::new(sp, NodeType::MemberExpression { path })
-                            }
+                            let tails = indexes.into_iter().map(|idx| (idx, true)).collect();
+                            member_node_from_head_and_tail(head, tails)
                         })
                         .separated_by(lex(pad.clone(), just(',')))
                         .allow_trailing()
@@ -1904,16 +1893,7 @@ pub fn parse_program_with_source(
                     .then(call_args.clone().repeated().collect::<Vec<_>>())
                     .map(|(m, calls)| {
                         let node = calls.into_iter().fold(m, |c, args| {
-                            Node::new(
-                                c.span,
-                                NodeType::CallExpression {
-                                    string_fn: None,
-                                    caller: Box::new(c),
-                                    generic_types: Vec::new(),
-                                    args,
-                                    reverse_args: Vec::new(),
-                                },
-                            )
+                            call_node(c.span, c, None, args, Vec::new(), Vec::new())
                         });
                         (node, false)
                     }),
@@ -1943,16 +1923,7 @@ pub fn parse_program_with_source(
                     calls
                         .into_iter()
                         .fold(head, |c, (string_fn, args, reverse_args)| {
-                            Node::new(
-                                c.span,
-                                NodeType::CallExpression {
-                                    string_fn,
-                                    caller: Box::new(c),
-                                    generic_types: Vec::new(),
-                                    args,
-                                    reverse_args,
-                                },
-                            )
+                            call_node(c.span, c, string_fn, args, reverse_args, Vec::new())
                         })
                 };
 
@@ -1968,15 +1939,7 @@ pub fn parse_program_with_source(
                         if rest.is_empty() {
                             return head;
                         }
-                        let mut path = vec![(head, false)];
-                        path.extend(rest);
-                        let sp = match (path.first(), path.last()) {
-                            (Some(first), Some(last)) => {
-                                Span::new_from_spans(first.0.span, last.0.span)
-                            }
-                            _ => Span::default(),
-                        };
-                        Node::new(sp, NodeType::MemberExpression { path })
+                        member_node_from_head_and_tail(head, rest)
                     }
                 })
                 .boxed();
@@ -2058,19 +2021,7 @@ pub fn parse_program_with_source(
                     } else {
                         Node::new(Span::default(), NodeType::ListLiteral(data_type, values.1))
                     };
-                    if tails.is_empty() {
-                        list
-                    } else {
-                        let mut path = vec![(list, false)];
-                        path.extend(tails);
-                        let sp = match (path.first(), path.last()) {
-                            (Some(first), Some(last)) => {
-                                Span::new_from_spans(first.0.span, last.0.span)
-                            }
-                            _ => Span::default(),
-                        };
-                        Node::new(sp, NodeType::MemberExpression { path })
-                    }
+                    member_node_from_head_and_tail(list, tails)
                 })
                 .boxed();
 
@@ -2394,11 +2345,36 @@ pub fn parse_program_with_source(
                 })
                 .boxed();
 
-            let in_expr = as_expr
+            let is_expr = as_expr
+                .clone()
+                .then(
+                    lex(pad.clone(), just("is"))
+                        .ignore_then(type_name.clone())
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(head, checks)| {
+                    checks.into_iter().fold(head, |value, target| {
+                        let data_type = match target {
+                            PotentialNewType::DataType(dt) => dt,
+                            _ => ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
+                        };
+                        Node::new(
+                            value.span,
+                            NodeType::IsExpression {
+                                value: Box::new(value),
+                                data_type,
+                            },
+                        )
+                    })
+                })
+                .boxed();
+
+            let in_expr = is_expr
                 .clone()
                 .then(
                     lex(pad.clone(), just("in"))
-                        .ignore_then(as_expr.clone())
+                        .ignore_then(is_expr.clone())
                         .repeated()
                         .collect::<Vec<_>>(),
                 )
@@ -2588,21 +2564,7 @@ pub fn parse_program_with_source(
             let fn_inline_postfix = fn_inline_gen_expr
                 .clone()
                 .then(member.clone().repeated().collect::<Vec<_>>())
-                .map(|(head, rest)| {
-                    if rest.is_empty() {
-                        head
-                    } else {
-                        let mut path = vec![(head, false)];
-                        path.extend(rest);
-                        let sp = match (path.first(), path.last()) {
-                            (Some(first), Some(last)) => {
-                                Span::new_from_spans(first.0.span, last.0.span)
-                            }
-                            _ => Span::default(),
-                        };
-                        Node::new(sp, NodeType::MemberExpression { path })
-                    }
-                })
+                .map(|(head, rest)| member_node_from_head_and_tail(head, rest))
                 .boxed();
 
             let try_expr = lex(pad.clone(), just("try"))
@@ -3868,21 +3830,7 @@ pub fn parse_program_with_source(
                 .repeated()
                 .collect::<Vec<_>>(),
             )
-            .map(|(head, rest)| {
-                if rest.is_empty() {
-                    head
-                } else {
-                    let mut path = vec![(head, false)];
-                    path.extend(rest);
-                    let sp = match (path.first(), path.last()) {
-                        (Some(first), Some(last)) => {
-                            Span::new_from_spans(first.0.span, last.0.span)
-                        }
-                        _ => Span::default(),
-                    };
-                    Node::new(sp, NodeType::MemberExpression { path })
-                }
-            })
+            .map(|(head, rest)| member_node_from_head_and_tail(head, rest))
             .boxed();
 
         let assign_lhs = lex(pad.clone(), just('*'))

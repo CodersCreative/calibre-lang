@@ -54,6 +54,25 @@ fn field(map: &Gc<GcMap>, key: &str) -> Option<RuntimeValue> {
     map.as_ref().0.get(key).cloned()
 }
 
+#[inline]
+fn resolve_field(
+    env: &VM,
+    map: &Gc<GcMap>,
+    key: &str,
+) -> Result<Option<RuntimeValue>, RuntimeError> {
+    field(map, key)
+        .map(|value| env.resolve_value_for_op_ref(&value).map(Some))
+        .unwrap_or(Ok(None))
+}
+
+#[inline]
+fn required_str_field(env: &VM, map: &Gc<GcMap>, key: &str) -> Result<String, RuntimeError> {
+    let Some(value) = resolve_field(env, map, key)? else {
+        return Err(RuntimeError::InvalidFunctionCall);
+    };
+    to_str(value)
+}
+
 fn parse_optional_string(value: RuntimeValue) -> Result<Option<String>, RuntimeError> {
     match value {
         RuntimeValue::Option(None) => Ok(None),
@@ -68,29 +87,25 @@ fn parse_options(env: &VM, options: RuntimeValue) -> Result<RawExecOptions, Runt
         return Err(RuntimeError::InvalidFunctionCall);
     };
 
-    let Some(command) = field(&map, "command") else {
-        return Err(RuntimeError::InvalidFunctionCall);
-    };
-
-    let command = to_str(env.resolve_value_for_op_ref(&command)?)?;
-    let args = match field(&map, "args") {
-        Some(value) => to_str_list(env, env.resolve_value_for_op_ref(&value)?)?,
+    let command = required_str_field(env, &map, "command")?;
+    let args = match resolve_field(env, &map, "args")? {
+        Some(value) => to_str_list(env, value)?,
         None => Vec::new(),
     };
-    let cwd = match field(&map, "cwd") {
-        Some(value) => parse_optional_string(env.resolve_value_for_op_ref(&value)?)?,
+    let cwd = match resolve_field(env, &map, "cwd")? {
+        Some(value) => parse_optional_string(value)?,
         None => None,
     };
-    let shell = match field(&map, "shell") {
-        Some(value) => to_bool(env.resolve_value_for_op_ref(&value)?)?,
+    let shell = match resolve_field(env, &map, "shell")? {
+        Some(value) => to_bool(value)?,
         None => false,
     };
-    let stdin = match field(&map, "stdin") {
-        Some(value) => parse_optional_string(env.resolve_value_for_op_ref(&value)?)?,
+    let stdin = match resolve_field(env, &map, "stdin")? {
+        Some(value) => parse_optional_string(value)?,
         None => None,
     };
-    let check = match field(&map, "check") {
-        Some(value) => to_bool(env.resolve_value_for_op_ref(&value)?)?,
+    let check = match resolve_field(env, &map, "check")? {
+        Some(value) => to_bool(value)?,
         None => false,
     };
 

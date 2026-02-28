@@ -11,8 +11,11 @@ impl RuntimeValue {
         env: &mut VM,
         data_type: &ParserInnerType,
     ) -> Result<RuntimeValue, RuntimeError> {
-        if data_type == &ParserInnerType::Dynamic {
+        if matches!(data_type, ParserInnerType::Dynamic) {
             return Ok(self);
+        }
+        if let ParserInnerType::DynamicTraits(traits) = data_type {
+            return env.wrap_dyn_object(self, traits.clone());
         }
 
         if let RuntimeValue::Ref(name) = &self {
@@ -32,9 +35,7 @@ impl RuntimeValue {
 
         match (self, data_type) {
             (RuntimeValue::UInt(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
-            (RuntimeValue::UInt(x), ParserInnerType::Bool) => {
-                Ok(RuntimeValue::Bool(if x > 0 { true } else { false }))
-            }
+            (RuntimeValue::UInt(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
             (RuntimeValue::UInt(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x)),
             (RuntimeValue::UInt(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::UInt(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x as f64)),
@@ -46,9 +47,7 @@ impl RuntimeValue {
             }
 
             (RuntimeValue::Int(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x)),
-            (RuntimeValue::Int(x), ParserInnerType::Bool) => {
-                Ok(RuntimeValue::Bool(if x > 0 { true } else { false }))
-            }
+            (RuntimeValue::Int(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
             (RuntimeValue::Int(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
             (RuntimeValue::Int(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::Int(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x as f64)),
@@ -60,9 +59,7 @@ impl RuntimeValue {
             }
             (RuntimeValue::Float(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x)),
             (RuntimeValue::Float(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
-            (RuntimeValue::Float(x), ParserInnerType::Bool) => {
-                Ok(RuntimeValue::Bool(if x > 0.0 { true } else { false }))
-            }
+            (RuntimeValue::Float(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0.0)),
             (RuntimeValue::Float(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
             (RuntimeValue::Float(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::Float(x), ParserInnerType::Char) => {
@@ -75,9 +72,7 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Range(from, to))
             }
             (RuntimeValue::Range(_, x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x)),
-            (RuntimeValue::Range(_, x), ParserInnerType::Bool) => {
-                Ok(RuntimeValue::Bool(if x > 0 { true } else { false }))
-            }
+            (RuntimeValue::Range(_, x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
             (RuntimeValue::Range(_, x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
             (RuntimeValue::Range(_, x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::Range(_, x), ParserInnerType::Float) => {
@@ -101,7 +96,7 @@ impl RuntimeValue {
             }
             (RuntimeValue::Char(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(x)),
             (RuntimeValue::Char(x), ParserInnerType::Bool) => {
-                Ok(RuntimeValue::Bool(if x as u16 > 0 { true } else { false }))
+                Ok(RuntimeValue::Bool((x as u16) > 0))
             }
             (RuntimeValue::Char(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
             (RuntimeValue::Char(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
@@ -126,9 +121,7 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Int(x.as_str().trim().parse()?))
             }
             (RuntimeValue::Byte(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x)),
-            (RuntimeValue::Byte(x), ParserInnerType::Bool) => {
-                Ok(RuntimeValue::Bool(if x > 0 { true } else { false }))
-            }
+            (RuntimeValue::Byte(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
             (RuntimeValue::Byte(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
             (RuntimeValue::Byte(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
             (RuntimeValue::Byte(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x as f64)),
@@ -161,9 +154,7 @@ impl RuntimeValue {
                 ))))
             }
             (RuntimeValue::Ptr(id), ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Ptr(id)),
-            (RuntimeValue::Ptr(x), ParserInnerType::Bool) => {
-                Ok(RuntimeValue::Bool(if x > 0 { true } else { false }))
-            }
+            (RuntimeValue::Ptr(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
             (RuntimeValue::Null, ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Ptr(0)),
             (value, ParserInnerType::Ptr(inner)) => {
                 let converted = if inner.data_type == ParserInnerType::Null {
@@ -232,5 +223,39 @@ impl RuntimeValue {
             }
             (x, t) => Err(RuntimeError::CantConvert(x, t.clone())),
         }
+    }
+}
+
+impl VM {
+    pub fn wrap_dyn_object(
+        &mut self,
+        value: RuntimeValue,
+        constraints: Vec<String>,
+    ) -> Result<RuntimeValue, RuntimeError> {
+        if constraints.is_empty() {
+            return Ok(value);
+        }
+        let (stored_value, probe_value) = match value {
+            RuntimeValue::DynObject { value, .. } => {
+                let inner = value.as_ref().clone();
+                (inner.clone(), inner)
+            }
+            other => {
+                let probe = self.resolve_operand_value(other.clone())?;
+                (other, probe)
+            }
+        };
+        let (type_name, vtable) = self
+            .build_dyn_vtable_for_value(&probe_value, constraints.as_slice())
+            .ok_or_else(|| {
+                RuntimeError::InvalidBytecode("failed to build dyn vtable".to_string())
+            })?;
+
+        Ok(RuntimeValue::DynObject {
+            type_name: Arc::new(type_name),
+            constraints: Arc::new(constraints),
+            value: Gc::new(stored_value),
+            vtable: Arc::new(vtable),
+        })
     }
 }

@@ -81,6 +81,7 @@ fn contains_self_call(node: &MiddleNode, name: &str) -> bool {
             contains_self_call(left, name) || contains_self_call(right, name)
         }
         MiddleNodeType::AsExpression { value, .. }
+        | MiddleNodeType::IsExpression { value, .. }
         | MiddleNodeType::NegExpression { value }
         | MiddleNodeType::RefStatement { value, .. }
         | MiddleNodeType::DerefStatement { value }
@@ -138,6 +139,7 @@ fn count_nodes(node: &MiddleNode) -> usize {
             count += count_nodes(right);
         }
         MiddleNodeType::AsExpression { value, .. }
+        | MiddleNodeType::IsExpression { value, .. }
         | MiddleNodeType::NegExpression { value }
         | MiddleNodeType::RefStatement { value, .. }
         | MiddleNodeType::DerefStatement { value }
@@ -215,6 +217,7 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
             inline_in_node(right, map);
         }
         MiddleNodeType::AsExpression { value, .. }
+        | MiddleNodeType::IsExpression { value, .. }
         | MiddleNodeType::NegExpression { value }
         | MiddleNodeType::RefStatement { value, .. }
         | MiddleNodeType::DerefStatement { value }
@@ -284,6 +287,7 @@ fn substitute_idents(node: &mut MiddleNode, repl: &FxHashMap<String, MiddleNode>
             substitute_idents(right, repl);
         }
         MiddleNodeType::AsExpression { value, .. }
+        | MiddleNodeType::IsExpression { value, .. }
         | MiddleNodeType::NegExpression { value }
         | MiddleNodeType::RefStatement { value, .. }
         | MiddleNodeType::DerefStatement { value }
