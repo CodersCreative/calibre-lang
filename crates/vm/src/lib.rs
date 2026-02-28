@@ -216,10 +216,8 @@ impl VM {
     }
 
     #[inline]
-    pub(crate) fn empty_captures() -> std::sync::Arc<Vec<(String, RuntimeValue)>> {
-        EMPTY_CAPTURES
-            .get_or_init(|| std::sync::Arc::new(Vec::new()))
-            .clone()
+    pub(crate) fn empty_captures() -> Arc<Vec<(String, RuntimeValue)>> {
+        EMPTY_CAPTURES.get_or_init(|| Arc::new(Vec::new())).clone()
     }
 
     #[inline]
@@ -331,18 +329,7 @@ impl VM {
     }
 
     #[inline(always)]
-    pub(crate) fn get_reg_value(&self, reg: Reg) -> RuntimeValue {
-        let frame = self.current_frame();
-        let idx = reg as usize;
-        if idx < frame.reg_count {
-            unsafe { self.reg_arena.get_unchecked(frame.reg_start + idx).clone() }
-        } else {
-            RuntimeValue::Null
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn get_reg_value_ref(&self, reg: Reg) -> &RuntimeValue {
+    pub(crate) fn get_reg_value(&self, reg: Reg) -> &RuntimeValue {
         let frame = self.current_frame();
         let idx = reg as usize;
         if idx < frame.reg_count {
@@ -353,18 +340,7 @@ impl VM {
     }
 
     #[inline(always)]
-    pub(crate) fn get_reg_value_in_frame(&self, frame_idx: usize, reg: Reg) -> RuntimeValue {
-        if let Some(frame) = self.frames.get(frame_idx) {
-            let idx = reg as usize;
-            if idx < frame.reg_count {
-                return self.reg_arena[frame.reg_start + idx].clone();
-            }
-        }
-        RuntimeValue::Null
-    }
-
-    #[inline(always)]
-    pub(crate) fn get_reg_value_in_frame_ref(&self, frame_idx: usize, reg: Reg) -> &RuntimeValue {
+    pub(crate) fn get_reg_value_in_frame(&self, frame_idx: usize, reg: Reg) -> &RuntimeValue {
         if let Some(frame) = self.frames.get(frame_idx) {
             let idx = reg as usize;
             if idx < frame.reg_count {
@@ -527,16 +503,15 @@ impl VM {
                     let v = self
                         .variables
                         .get_by_id(*id)
+                        .cloned()
                         .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?;
                     owned = Some(v);
                 }
                 RuntimeValue::RegRef { frame, reg } => {
-                    let v = self.get_reg_value_in_frame(*frame, *reg);
-                    owned = Some(v);
+                    owned = Some(self.get_reg_value_in_frame(*frame, *reg).clone());
                 }
                 RuntimeValue::MutexGuard(guard) => {
-                    let v = guard.get_clone();
-                    owned = Some(v);
+                    owned = Some(guard.get_clone());
                 }
                 _ => {
                     if from_owned {
@@ -556,7 +531,6 @@ impl VM {
     fn drop_runtime_value(&mut self, value: RuntimeValue) {
         let mut seen = FxHashSet::default();
         let mut seen_regs = FxHashSet::default();
-        // start from the owned value but traverse by reference when possible
         self.drop_runtime_value_inner_ref(&value, &mut seen, &mut seen_regs);
     }
 
@@ -589,7 +563,7 @@ impl VM {
                 if !seen_regs.insert(key) {
                     return;
                 }
-                let inner = self.get_reg_value_in_frame(*frame, *reg);
+                let inner = self.get_reg_value_in_frame(*frame, *reg).clone();
                 self.set_reg_value_in_frame(*frame, *reg, RuntimeValue::Null);
                 self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
             }

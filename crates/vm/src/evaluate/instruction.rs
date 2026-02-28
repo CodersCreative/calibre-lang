@@ -128,13 +128,12 @@ impl VM {
         ip: u32,
         prev_block: Option<BlockId>,
     ) -> Result<Option<TerminateValue>, RuntimeError> {
-        let func = if let Some(callable) =
-            self.materialize_callable_for_reg(self.get_reg_value_ref(callee))
-        {
-            callable
-        } else {
-            self.resolve_value_for_op_ref(self.get_reg_value_ref(callee))?
-        };
+        let func =
+            if let Some(callable) = self.materialize_callable_for_reg(self.get_reg_value(callee)) {
+                callable
+            } else {
+                self.resolve_value_for_op_ref(self.get_reg_value(callee))?
+            };
 
         match func {
             RuntimeValue::BoundMethod { callee, receiver } => {
@@ -280,8 +279,7 @@ impl VM {
                     resolved_name = Some(n);
                     v
                 } else {
-                    let resolved = self.resolve_var_name(name);
-                    match resolved {
+                    match self.resolve_var_name(name) {
                         VarName::Func(func) => {
                             if let Some(f) = self.get_function_ref(&func) {
                                 resolved_name = Some(func);
@@ -352,12 +350,12 @@ impl VM {
             }
             VMInstruction::StoreGlobal { name, src } => {
                 let name = self.local_string(block, *name)?;
-                let value = self.get_reg_value(*src);
+                let value = self.get_reg_value(*src).clone();
                 let existed = self.variables.contains_key(name);
                 if let Some(id) = self.global_id_cached(name) {
                     let _ = self.variables.set_by_id(id, value);
                 } else {
-                    let id = self.variables.insert_str_with_id(name, value);
+                    let id = self.variables.insert_with_id(name, value);
                     self.caches.globals_id.insert(name.to_string(), id);
                 }
                 if !existed {
@@ -377,7 +375,7 @@ impl VM {
                 }
             }
             VMInstruction::LoadRegRef { dst, src } => {
-                let value = match self.get_reg_value(*src) {
+                let value = match self.get_reg_value(*src).clone() {
                     RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef { frame, reg },
                     RuntimeValue::Ref(name) => RuntimeValue::Ref(name),
                     RuntimeValue::VarRef(id) => RuntimeValue::VarRef(id),
@@ -392,7 +390,7 @@ impl VM {
                 if dst == src {
                     return Ok(TerminateValue::None);
                 }
-                let value = self.get_reg_value(*src);
+                let value = self.get_reg_value(*src).clone();
                 self.set_reg_value(*dst, value);
             }
             VMInstruction::As {
@@ -401,7 +399,7 @@ impl VM {
                 data_type,
                 failure_mode,
             } => {
-                let value = self.get_reg_value(*src);
+                let value = self.get_reg_value(*src).clone();
                 let conversion = value.convert(self, &data_type.data_type);
                 let converted = match failure_mode {
                     calibre_parser::ast::AsFailureMode::Panic => match conversion {
@@ -431,7 +429,7 @@ impl VM {
                 src,
                 data_type,
             } => {
-                let value = self.get_reg_value(*src);
+                let value = self.get_reg_value(*src).clone();
                 let resolved = self.resolve_operand_value(value)?;
                 let out = self.runtime_matches_type(&resolved, &data_type.data_type);
                 self.set_reg_value(*dst, RuntimeValue::Bool(out));
@@ -446,13 +444,13 @@ impl VM {
                     self.set_reg_value(*dst, value);
                     return Ok(TerminateValue::None);
                 }
-                let left = self.resolve_operand_value(self.get_reg_value(*left))?;
-                let right = self.resolve_operand_value(self.get_reg_value(*right))?;
+                let left = self.resolve_operand_value(self.get_reg_value(*left).clone())?;
+                let right = self.resolve_operand_value(self.get_reg_value(*right).clone())?;
                 let value = binary(self, op, left, right)?;
                 self.set_reg_value(*dst, value);
             }
             VMInstruction::AccLoad { src } => {
-                let value = self.get_reg_value(*src);
+                let value = self.get_reg_value(*src).clone();
                 self.current_frame_mut().acc = value;
             }
             VMInstruction::AccStore { dst } => {
@@ -461,7 +459,7 @@ impl VM {
             }
             VMInstruction::AccBinary { op, right } => {
                 if let RuntimeValue::Int(left) = self.current_frame().acc.clone()
-                    && let RuntimeValue::Int(right) = self.get_reg_value(*right)
+                    && let RuntimeValue::Int(right) = self.get_reg_value(*right).clone()
                     && let Some(value) = {
                         let out = match op {
                             BinaryOperator::Add => {
@@ -504,7 +502,7 @@ impl VM {
                     self.current_frame_mut().acc = value;
                     return Ok(TerminateValue::None);
                 }
-                let right = self.resolve_operand_value(self.get_reg_value(*right))?;
+                let right = self.resolve_operand_value(self.get_reg_value(*right).clone())?;
                 let left_raw = {
                     let frame = self.current_frame_mut();
                     std::mem::replace(&mut frame.acc, RuntimeValue::Null)
@@ -523,8 +521,8 @@ impl VM {
                     self.set_reg_value(*dst, cmp_val);
                     return Ok(TerminateValue::None);
                 }
-                let right = self.resolve_operand_value(self.get_reg_value(*right))?;
-                let left = self.resolve_operand_value(self.get_reg_value(*left))?;
+                let right = self.resolve_operand_value(self.get_reg_value(*right).clone())?;
+                let left = self.resolve_operand_value(self.get_reg_value(*left).clone())?;
                 let cmp_val = comparison(op, left, right)?;
                 self.set_reg_value(*dst, cmp_val);
             }
@@ -534,8 +532,8 @@ impl VM {
                 left,
                 right,
             } => {
-                let right = self.resolve_operand_value(self.get_reg_value(*right))?;
-                let left = self.resolve_operand_value(self.get_reg_value(*left))?;
+                let right = self.resolve_operand_value(self.get_reg_value(*right).clone())?;
+                let left = self.resolve_operand_value(self.get_reg_value(*left).clone())?;
                 self.set_reg_value(*dst, boolean(op, left, right)?);
             }
             VMInstruction::Range {
@@ -544,8 +542,8 @@ impl VM {
                 to,
                 inclusive,
             } => {
-                let from = self.resolve_value_for_op_ref(self.get_reg_value_ref(*from))?;
-                let to = self.resolve_value_for_op_ref(self.get_reg_value_ref(*to))?;
+                let from = self.resolve_value_for_op_ref(self.get_reg_value(*from))?;
+                let to = self.resolve_value_for_op_ref(self.get_reg_value(*to))?;
                 let as_range_bound = |value: RuntimeValue| -> Result<i64, RuntimeError> {
                     match value {
                         RuntimeValue::Int(v) => Ok(v),
@@ -568,7 +566,7 @@ impl VM {
             VMInstruction::List { dst, items } => {
                 let mut values = Vec::with_capacity(items.len());
                 for item in items {
-                    values.push(self.get_reg_value(*item));
+                    values.push(self.get_reg_value(*item).clone());
                 }
                 self.set_reg_value(
                     *dst,
@@ -588,7 +586,7 @@ impl VM {
                     })?;
                 let mut entries = Vec::with_capacity(layout.members.len());
                 for (name, reg) in layout.members.iter().zip(fields.iter()) {
-                    entries.push((name.clone(), self.get_reg_value(*reg)));
+                    entries.push((name.clone(), self.get_reg_value(*reg).clone()));
                 }
                 if let Some(type_name) = layout.name.clone()
                     && Self::is_gen_type_name(&type_name)
@@ -646,7 +644,7 @@ impl VM {
                 payload,
             } => {
                 let name = self.local_string(block, *name)?;
-                let payload = payload.map(|reg| Gc::new(self.get_reg_value(reg)));
+                let payload = payload.map(|reg| Gc::new(self.get_reg_value(reg).clone()));
                 self.set_reg_value(
                     *dst,
                     RuntimeValue::Enum(name.to_string(), *variant as usize, payload),
@@ -678,7 +676,7 @@ impl VM {
                 }
             }
             VMInstruction::Spawn { dst, callee } => {
-                let resolved = self.resolve_value_for_op_ref(self.get_reg_value_ref(*callee))?;
+                let resolved = self.resolve_value_for_op_ref(self.get_reg_value(*callee))?;
                 let to_spawn = match resolved {
                     RuntimeValue::Function { name, captures } => {
                         let resolved_caps: Vec<(String, RuntimeValue)> = captures
@@ -706,7 +704,7 @@ impl VM {
             VMInstruction::LoadMember { dst, value, member } => {
                 let name = self.local_string(block, *member)?;
                 let (short_name, tuple_index) = Self::member_parts(name);
-                let resolved = self.resolve_value_for_op_ref(self.get_reg_value_ref(*value))?;
+                let resolved = self.resolve_value_for_op_ref(self.get_reg_value(*value))?;
                 let val = match resolved {
                     RuntimeValue::Generator { type_name, state } => {
                         let member_short = short_name.unwrap_or(name);
@@ -860,7 +858,7 @@ impl VM {
                 value,
             } => {
                 let name = self.local_string(block, *member)?;
-                let value = self.get_reg_value(*value);
+                let value = self.get_reg_value(*value).clone();
                 let (short_name, tuple_index) = Self::member_parts(name);
 
                 let update_aggregate =
@@ -907,11 +905,15 @@ impl VM {
                             "index" => match &value {
                                 RuntimeValue::Int(x) => guard.index = (*x).max(0),
                                 RuntimeValue::UInt(x) => guard.index = *x as i64,
-                                other => return Err(RuntimeError::UnexpectedType(other.clone())),
+                                other => {
+                                    return Err(RuntimeError::UnexpectedType((*other).clone()));
+                                }
                             },
                             "done" => match &value {
                                 RuntimeValue::Bool(x) => guard.completed = *x,
-                                other => return Err(RuntimeError::UnexpectedType(other.clone())),
+                                other => {
+                                    return Err(RuntimeError::UnexpectedType((*other).clone()));
+                                }
                             },
                             _ => {}
                         }
@@ -920,7 +922,7 @@ impl VM {
                         Ok(RuntimeValue::Generator { type_name, state })
                     };
 
-                match self.get_reg_value(*target) {
+                match self.get_reg_value(*target).clone() {
                     RuntimeValue::Ref(ref_name) => {
                         let current = self
                             .variables
@@ -929,7 +931,7 @@ impl VM {
                             .ok_or(RuntimeError::DanglingRef(ref_name.clone()))?;
 
                         self.variables.insert(
-                            ref_name,
+                            &ref_name,
                             match current {
                                 RuntimeValue::Aggregate(name, map) => {
                                     let updated = update_aggregate(&name, map)?;
@@ -944,6 +946,7 @@ impl VM {
                         let current = self
                             .variables
                             .get_by_id(id)
+                            .cloned()
                             .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?;
                         let updated = match current {
                             RuntimeValue::Aggregate(name, map) => {
@@ -984,8 +987,8 @@ impl VM {
                 }
             }
             VMInstruction::Index { dst, value, index } => {
-                let value_ref = self.get_reg_value_ref(*value);
-                let index_ref = self.get_reg_value_ref(*index);
+                let value_ref = self.get_reg_value(*value);
+                let index_ref = self.get_reg_value(*index);
                 if let RuntimeValue::List(list) = value_ref {
                     match index_ref {
                         RuntimeValue::UInt(i) => {
@@ -1036,7 +1039,7 @@ impl VM {
                             _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
                         }
                     };
-                let resolved = self.resolve_value_for_op_ref(self.get_reg_value_ref(*value))?;
+                let resolved = self.resolve_value_for_op_ref(self.get_reg_value(*value))?;
                 let val = match resolved {
                     RuntimeValue::List(list) => index_list(&list)?,
                     RuntimeValue::Range(start, end) => match &index_val {
@@ -1124,8 +1127,8 @@ impl VM {
                 index,
                 value,
             } => {
-                let index_val = self.get_reg_value(*index);
-                let value = self.get_reg_value(*value);
+                let index_val = self.get_reg_value(*index).clone();
+                let value = self.get_reg_value(*value).clone();
                 let index = match index_val {
                     RuntimeValue::Int(index) => index,
                     RuntimeValue::UInt(index) => index as i64,
@@ -1133,7 +1136,7 @@ impl VM {
                         return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
                     }
                 };
-                let target_val_ref = self.get_reg_value_ref(*target);
+                let target_val_ref = self.get_reg_value(*target);
                 if index < 0 && !matches!(target_val_ref, RuntimeValue::List(_)) {
                     return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
                 }
@@ -1153,11 +1156,13 @@ impl VM {
                             let vec = &mut Gc::make_mut(&mut list).0;
                             let idx = Self::resolve_index_or_err(vec.len(), index)?;
                             vec[idx] = value;
-                            self.variables.insert(id.clone(), RuntimeValue::List(list));
+                            self.variables.insert(&id.clone(), RuntimeValue::List(list));
                         }
                     }
                     RuntimeValue::VarRef(id) => {
-                        if let Some(RuntimeValue::List(list)) = self.variables.get_by_id(*id) {
+                        if let Some(RuntimeValue::List(list)) =
+                            self.variables.get_by_id(*id).cloned()
+                        {
                             let mut list = list;
                             let vec = &mut Gc::make_mut(&mut list).0;
                             let idx = Self::resolve_index_or_err(vec.len(), index)?;
@@ -1166,7 +1171,8 @@ impl VM {
                         }
                     }
                     RuntimeValue::RegRef { frame, reg } => {
-                        if let RuntimeValue::List(list) = self.get_reg_value_in_frame(*frame, *reg)
+                        if let RuntimeValue::List(list) =
+                            self.get_reg_value_in_frame(*frame, *reg).clone()
                         {
                             let mut list = list;
                             let vec = &mut Gc::make_mut(&mut list).0;
@@ -1181,20 +1187,20 @@ impl VM {
                 }
             }
             VMInstruction::Ref { dst, value } => {
-                let out = match self.get_reg_value(*value) {
+                let out = match self.get_reg_value(*value).clone() {
                     RuntimeValue::Ref(name) => RuntimeValue::Ref(name),
                     RuntimeValue::VarRef(id) => RuntimeValue::VarRef(id),
                     RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef { frame, reg },
                     other => {
                         let name = self.get_ref_id().to_string();
-                        let id = self.variables.insert_str_with_id(&name, other);
+                        let id = self.variables.insert_with_id(&name, other);
                         RuntimeValue::VarRef(id)
                     }
                 };
                 self.set_reg_value(*dst, out);
             }
             VMInstruction::Deref { dst, value } => {
-                let out = match self.get_reg_value(*value) {
+                let out = match self.get_reg_value(*value).clone() {
                     RuntimeValue::Ref(x) => self
                         .variables
                         .get(&x)
@@ -1203,20 +1209,23 @@ impl VM {
                     RuntimeValue::VarRef(id) => self
                         .variables
                         .get_by_id(id)
+                        .cloned()
                         .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?,
-                    RuntimeValue::RegRef { frame, reg } => self.get_reg_value_in_frame(frame, reg),
+                    RuntimeValue::RegRef { frame, reg } => {
+                        self.get_reg_value_in_frame(frame, reg).clone()
+                    }
                     RuntimeValue::MutexGuard(guard) => guard.get_clone(),
                     other => other,
                 };
                 self.set_reg_value(*dst, out);
             }
             VMInstruction::SetRef { target, value } => {
-                let target = self.get_reg_value(*target);
-                let value = self.get_reg_value(*value);
+                let target = self.get_reg_value(*target).clone();
+                let value = self.get_reg_value(*value).clone();
                 match target {
                     RuntimeValue::Ref(name) => {
                         let existed = self.variables.contains_key(&name);
-                        self.variables.insert(name, value);
+                        self.variables.insert(&name, value);
                         if !existed {
                             self.invalidate_name_resolution_caches();
                         }
@@ -1239,14 +1248,14 @@ impl VM {
                 then_block,
                 else_block,
             } => {
-                if let RuntimeValue::Bool(v) = self.get_reg_value_ref(*cond) {
+                if let RuntimeValue::Bool(v) = self.get_reg_value(*cond) {
                     return if *v {
                         Ok(TerminateValue::Jump(*then_block))
                     } else {
                         Ok(TerminateValue::Jump(*else_block))
                     };
                 }
-                let cond_val = self.resolve_value_for_op_ref(self.get_reg_value_ref(*cond))?;
+                let cond_val = self.resolve_value_for_op_ref(self.get_reg_value(*cond))?;
                 match cond_val {
                     RuntimeValue::Bool(true) => return Ok(TerminateValue::Jump(*then_block)),
                     RuntimeValue::Bool(false) => return Ok(TerminateValue::Jump(*else_block)),
@@ -1255,7 +1264,7 @@ impl VM {
             }
             VMInstruction::Return { value } => {
                 return if let Some(reg) = value {
-                    Ok(TerminateValue::Return(self.get_reg_value(*reg)))
+                    Ok(TerminateValue::Return(self.get_reg_value(*reg).clone()))
                 } else {
                     Ok(TerminateValue::Return(RuntimeValue::Null))
                 };

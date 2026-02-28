@@ -386,7 +386,7 @@ impl CalEngine {
     fn install_bindings(&self, vm: &mut VM) {
         for binding in &self.bindings {
             let resolved = resolve_binding_name(vm, &binding.name);
-            vm.variables.insert(resolved, binding.value.clone());
+            vm.variables.insert(&resolved, binding.value.clone());
         }
     }
 

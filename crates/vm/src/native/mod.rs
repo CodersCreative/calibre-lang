@@ -168,7 +168,7 @@ impl VM {
                 .filter(|(name, _)| !name.contains('.')),
         ) {
             let name = Self::mapped_name(&mapping_index, short_name.as_str());
-            let _ = self.variables.insert(name, value);
+            let _ = self.variables.insert(&name, value);
         }
     }
 }

@@ -21,8 +21,7 @@ impl VM {
             && !self.moved_functions.contains(name)
         {
             return Some(found.clone());
-        }
-        if let Some((prefix, _)) = name.split_once("->") {
+        } else if let Some((prefix, _)) = name.split_once("->") {
             return self
                 .registry
                 .functions
@@ -146,18 +145,18 @@ impl VM {
 
     fn capture_value(&self, name: &str, seen: &mut FxHashSet<String>) -> RuntimeValue {
         if let Some(reg) = self.current_frame().local_map.get(name).copied() {
-            return self.get_reg_value(reg);
-        }
-        if let Some(base) = self.current_frame().local_map_base.as_ref()
+            return self.get_reg_value(reg).clone();
+        } else if let Some(base) = self.current_frame().local_map_base.as_ref()
             && let Some(reg) = base.get(name).copied()
         {
-            return self.get_reg_value(reg);
+            return self.get_reg_value(reg).clone();
         }
+
         let short = calibre_parser::qualified_name_tail(name);
         if short != name
             && let Some(reg) = self.find_unique_local_by_suffix(short)
         {
-            return self.get_reg_value(reg);
+            return self.get_reg_value(reg).clone();
         }
 
         match self.resolve_var_name(name) {
@@ -284,13 +283,12 @@ impl VM {
 
         if self.get_function_ref(name).is_some() {
             return VarName::Func(name.to_string());
-        }
-        if self.variables.contains_key(name) {
+        } else if self.variables.contains_key(name) {
             return VarName::Var(name.to_string());
-        }
-        if name.contains("::") {
+        } else if name.contains("::") {
             return VarName::Global;
         }
+
         let short_name = calibre_parser::qualified_name_tail(name);
         if short_name != name {
             if let Some(resolved) = resolve_by_suffix(short_name) {

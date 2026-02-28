@@ -11,8 +11,9 @@ impl ExternFunction {
             RuntimeValue::VarRef(id) => env
                 .variables
                 .get_by_id(id)
+                .cloned()
                 .unwrap_or(RuntimeValue::VarRef(id)),
-            RuntimeValue::RegRef { frame, reg } => env.get_reg_value_in_frame(frame, reg),
+            RuntimeValue::RegRef { frame, reg } => env.get_reg_value_in_frame(frame, reg).clone(),
             RuntimeValue::Ptr(id) => env
                 .ptr_heap
                 .get(&id)

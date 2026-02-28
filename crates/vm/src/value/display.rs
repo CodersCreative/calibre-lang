@@ -28,11 +28,7 @@ impl RuntimeValue {
                 Some(value) => value.display(vm),
                 None => RuntimeValue::Null.display(vm),
             },
-            Self::VarRef(id) => vm
-                .variables
-                .get_by_id(*id)
-                .unwrap_or(RuntimeValue::Null)
-                .display(vm),
+            Self::VarRef(id) => vm.variables.get_by_id(*id).unwrap().display(vm),
             Self::RegRef { frame, reg } => vm.get_reg_value_in_frame(*frame, *reg).display(vm),
             Self::Channel(_) => String::from("Channel"),
             Self::WaitGroup(_) => String::from("WaitGroup"),

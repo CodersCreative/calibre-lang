@@ -27,7 +27,7 @@ impl VM {
         }
 
         for (name, value) in prepared {
-            let _ = self.variables.insert(name, value);
+            let _ = self.variables.insert(&name, value);
         }
     }
 }

@@ -24,8 +24,11 @@ impl VM {
             RuntimeValue::VarRef(id) => self
                 .variables
                 .get_by_id(*id)
+                .cloned()
                 .unwrap_or(RuntimeValue::VarRef(*id)),
-            RuntimeValue::RegRef { frame, reg } => self.get_reg_value_in_frame(*frame, *reg),
+            RuntimeValue::RegRef { frame, reg } => {
+                self.get_reg_value_in_frame(*frame, *reg).clone()
+            }
             other => other.clone(),
         }
     }
@@ -41,14 +44,14 @@ impl VM {
                     }
                 }
                 RuntimeValue::VarRef(id) => {
-                    if let Some(inner) = env.variables.get_by_id(id) {
+                    if let Some(inner) = env.variables.get_by_id(id).cloned() {
                         transform(env, inner)
                     } else {
                         RuntimeValue::Null
                     }
                 }
                 RuntimeValue::RegRef { frame, reg } => {
-                    transform(env, env.get_reg_value_in_frame(frame, reg))
+                    transform(env, env.get_reg_value_in_frame(frame, reg).clone())
                 }
                 RuntimeValue::Aggregate(x, map) => {
                     let mut new_map = Vec::new();

@@ -275,7 +275,7 @@ impl VM {
         }
         let mut prev_vars = Vec::with_capacity(captures.len());
         for (name, value) in captures {
-            let old = self.variables.insert(name.clone(), value.clone());
+            let old = self.variables.insert(name, value.clone());
             prev_vars.push((name.clone(), old));
         }
         prev_vars
@@ -285,7 +285,7 @@ impl VM {
     fn restore_captures(&mut self, prev_vars: Vec<(String, Option<RuntimeValue>)>) {
         for (name, old) in prev_vars {
             if let Some(value) = old {
-                self.variables.insert(name, value);
+                self.variables.insert(&name, value);
             } else {
                 self.variables.remove(&name);
             }
@@ -300,7 +300,7 @@ impl VM {
 
     #[inline(always)]
     fn call_arg_from_frame_reg(&self, frame: usize, reg: u16) -> RuntimeValue {
-        match self.get_reg_value_in_frame_ref(frame, reg) {
+        match self.get_reg_value_in_frame(frame, reg) {
             RuntimeValue::Aggregate(_, _)
             | RuntimeValue::List(_)
             | RuntimeValue::Enum(_, _, _)
@@ -450,11 +450,11 @@ impl VM {
         left_reg: u16,
         right_reg: u16,
     ) -> Option<RuntimeValue> {
-        let left = match self.get_reg_value_ref(left_reg) {
+        let left = match self.get_reg_value(left_reg) {
             RuntimeValue::Int(v) => *v,
             _ => return None,
         };
-        let right = match self.get_reg_value_ref(right_reg) {
+        let right = match self.get_reg_value(right_reg) {
             RuntimeValue::Int(v) => *v,
             _ => return None,
         };
@@ -491,11 +491,11 @@ impl VM {
         left_reg: u16,
         right_reg: u16,
     ) -> Option<RuntimeValue> {
-        let left = match self.get_reg_value_ref(left_reg) {
+        let left = match self.get_reg_value(left_reg) {
             RuntimeValue::Int(v) => *v,
             _ => return None,
         };
-        let right = match self.get_reg_value_ref(right_reg) {
+        let right = match self.get_reg_value(right_reg) {
             RuntimeValue::Int(v) => *v,
             _ => return None,
         };
@@ -752,11 +752,11 @@ impl VM {
         }
 
         if function.returns_value && !returned {
-            result = self.get_reg_value(function.ret_reg);
+            result = self.get_reg_value(function.ret_reg).clone();
         }
 
         if let RuntimeValue::RegRef { frame, reg } = result {
-            result = self.get_reg_value_in_frame(frame, reg);
+            result = self.get_reg_value_in_frame(frame, reg).clone();
         }
 
         self.pop_frame();
@@ -939,11 +939,11 @@ impl VM {
         }
 
         if function.returns_value && !returned {
-            result = self.get_reg_value(function.ret_reg);
+            result = self.get_reg_value(function.ret_reg).clone();
         }
 
         if let RuntimeValue::RegRef { frame, reg } = result {
-            result = self.get_reg_value_in_frame(frame, reg);
+            result = self.get_reg_value_in_frame(frame, reg).clone();
         }
 
         self.pop_frame();
@@ -968,7 +968,7 @@ impl VM {
                 }
             }
             let reg = selected.unwrap_or_else(|| phi.sources.first().map(|x| x.1).unwrap_or(0));
-            let value = self.get_reg_value(reg);
+            let value = self.get_reg_value(reg).clone();
             self.set_reg_value(phi.dest, value);
         }
         Ok(())

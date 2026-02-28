@@ -25,10 +25,11 @@ fn resolve_native_input(
                 current = env
                     .variables
                     .get_by_id(id)
+                    .cloned()
                     .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?;
             }
             RuntimeValue::RegRef { frame, reg } if include_reg_ref => {
-                current = env.get_reg_value_in_frame(frame, reg);
+                current = env.get_reg_value_in_frame(frame, reg).clone();
             }
             _ => break,
         }

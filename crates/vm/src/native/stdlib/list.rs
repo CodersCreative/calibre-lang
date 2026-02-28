@@ -175,11 +175,11 @@ fn remove_from_target(
                 return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
             };
             let removed = remove_from_list_value(&mut list, idx);
-            env.variables.insert(name, RuntimeValue::List(list));
+            env.variables.insert(&name, RuntimeValue::List(list));
             Ok(removed)
         }
         RuntimeValue::VarRef(id) => {
-            let Some(RuntimeValue::List(mut list)) = env.variables.get_by_id(id) else {
+            let Some(RuntimeValue::List(mut list)) = env.variables.get_by_id(id).cloned() else {
                 return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
             };
             let removed = remove_from_list_value(&mut list, idx);
@@ -187,7 +187,8 @@ fn remove_from_target(
             Ok(removed)
         }
         RuntimeValue::RegRef { frame, reg } => {
-            let RuntimeValue::List(mut list) = env.get_reg_value_in_frame(frame, reg) else {
+            let RuntimeValue::List(mut list) = env.get_reg_value_in_frame(frame, reg).clone()
+            else {
                 return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
             };
             let removed = remove_from_list_value(&mut list, idx);

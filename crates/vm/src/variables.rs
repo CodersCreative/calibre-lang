@@ -1,7 +1,6 @@
+use crate::value::RuntimeValue;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
-
-use crate::value::RuntimeValue;
 
 #[derive(Debug, Clone, Default)]
 pub struct VariableStore {
@@ -26,8 +25,8 @@ impl VariableStore {
         self.values.get(idx)?.as_ref()
     }
 
-    pub fn get_by_id(&self, id: usize) -> Option<RuntimeValue> {
-        self.values.get(id)?.as_ref().cloned()
+    pub fn get_by_id(&self, id: usize) -> Option<&RuntimeValue> {
+        self.values.get(id)?.as_ref()
     }
 
     pub fn get_mut(&mut self, name: &str) -> Option<&mut RuntimeValue> {
@@ -44,8 +43,8 @@ impl VariableStore {
         slot.replace(value)
     }
 
-    pub fn insert(&mut self, name: String, value: RuntimeValue) -> Option<RuntimeValue> {
-        let name = self.intern(&name);
+    pub fn insert(&mut self, name: &str, value: RuntimeValue) -> Option<RuntimeValue> {
+        let name = self.intern(name);
         if let Some(&idx) = self.map.get(name.as_ref()) {
             let slot = self.values.get_mut(idx)?;
             return slot.replace(value);
@@ -62,31 +61,15 @@ impl VariableStore {
         None
     }
 
-    pub fn insert_str(&mut self, name: &str, value: RuntimeValue) -> Option<RuntimeValue> {
-        if let Some(&idx) = self.map.get(name) {
-            let slot = self.values.get_mut(idx)?;
-            return slot.replace(value);
-        }
+    pub fn insert_with_id(&mut self, name: &str, value: RuntimeValue) -> usize {
         let name = self.intern(name);
-        let idx = if let Some(free_idx) = self.free.pop() {
-            self.values[free_idx] = Some(value);
-            free_idx
-        } else {
-            self.values.push(Some(value));
-            self.values.len() - 1
-        };
-        self.map.insert(name, idx);
-        None
-    }
-
-    pub fn insert_str_with_id(&mut self, name: &str, value: RuntimeValue) -> usize {
-        if let Some(&idx) = self.map.get(name) {
+        if let Some(&idx) = self.map.get(name.as_ref()) {
             if let Some(slot) = self.values.get_mut(idx) {
                 let _ = slot.replace(value);
             }
             return idx;
         }
-        let name = self.intern(name);
+
         let idx = if let Some(free_idx) = self.free.pop() {
             self.values[free_idx] = Some(value);
             free_idx
@@ -104,8 +87,7 @@ impl VariableStore {
 
     pub fn remove(&mut self, name: &str) -> Option<RuntimeValue> {
         let idx = self.map.remove(name)?;
-        let slot = self.values.get_mut(idx)?;
-        let out = slot.take();
+        let out = self.values.get_mut(idx)?.take();
         if out.is_some() {
             self.free.push(idx);
         }

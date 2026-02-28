@@ -24,12 +24,12 @@ impl RuntimeValue {
             }
         }
         if let RuntimeValue::VarRef(id) = &self {
-            if let Some(value) = env.variables.get_by_id(*id) {
+            if let Some(value) = env.variables.get_by_id(*id).cloned() {
                 return value.convert(env, data_type);
             }
         }
         if let RuntimeValue::RegRef { frame, reg } = &self {
-            let value = env.get_reg_value_in_frame(*frame, *reg);
+            let value = env.get_reg_value_in_frame(*frame, *reg).clone();
             return value.convert(env, data_type);
         }
 
