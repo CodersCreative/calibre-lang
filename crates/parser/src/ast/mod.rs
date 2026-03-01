@@ -1057,14 +1057,12 @@ pub enum MatchArmType {
 
 impl MatchArmType {
     fn first_span_from_string_parts(parts: &[MatchStringPatternPart]) -> Option<&Span> {
-        for part in parts {
-            match part {
-                MatchStringPatternPart::Literal(text) => return Some(&text.span),
-                MatchStringPatternPart::Binding { name, .. } => return Some(name.span()),
-                MatchStringPatternPart::Wildcard(span) => return Some(span),
-            }
+        let part = parts.first()?;
+        match part {
+            MatchStringPatternPart::Literal(text) => Some(&text.span),
+            MatchStringPatternPart::Binding { name, .. } => Some(name.span()),
+            MatchStringPatternPart::Wildcard(span) => Some(span),
         }
-        None
     }
 
     fn first_span_from_tuple_items(items: &[MatchTupleItem]) -> Option<&Span> {
@@ -1115,18 +1113,19 @@ impl MatchArmType {
                 }
             }
             Self::StructPattern(fields) => {
-                for field in fields {
+                if let Some(field) = fields.first() {
                     match field {
-                        MatchStructFieldPattern::Value { value, .. } => return &value.span,
-                        MatchStructFieldPattern::Binding { name, .. } => return name.span(),
+                        MatchStructFieldPattern::Value { value, .. } => &value.span,
+                        MatchStructFieldPattern::Binding { name, .. } => name.span(),
                     }
+                } else {
+                    Self::default_span()
                 }
-                Self::default_span()
             }
             Self::Let { var_type: _, name } => name.span(),
             Self::Value(x) => &x.span,
             Self::IsType(x) => &x.span,
-            Self::Wildcard(x) => &x,
+            Self::Wildcard(x) => x,
         }
     }
 }

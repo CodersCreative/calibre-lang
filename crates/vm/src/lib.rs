@@ -74,6 +74,7 @@ pub struct VM {
     pub counter: u64,
     pub ptr_heap: FxHashMap<u64, RuntimeValue>,
     pub config: VMConfig,
+    source_file_override: Option<Arc<String>>,
     reg_arena: Vec<RuntimeValue>,
     reg_top: usize,
     name_arena: FxHashMap<Arc<str>, Arc<str>>,
@@ -156,6 +157,16 @@ impl From<VMRegistry> for VM {
 }
 
 impl VM {
+    #[inline]
+    pub(crate) fn is_magic_binding_name(name: &str, binding: &str) -> bool {
+        name == binding || name.ends_with(&format!(":{binding}"))
+    }
+
+    #[inline]
+    pub(crate) fn is_magic_file_binding(name: &str) -> bool {
+        Self::is_magic_binding_name(name, "__file__")
+    }
+
     fn from_shared_parts(
         registry: Arc<VMRegistry>,
         mappings: Arc<Vec<String>>,
@@ -173,6 +184,7 @@ impl VM {
             counter: 0,
             ptr_heap: FxHashMap::default(),
             config,
+            source_file_override: None,
             reg_arena: Vec::new(),
             reg_top: 0,
             name_arena: FxHashMap::default(),
@@ -263,6 +275,23 @@ impl VM {
         self.program_args.as_ref()
     }
 
+    pub fn normalize_magic_file_bindings(&mut self, path: &std::path::Path) {
+        let value = RuntimeValue::Str(Arc::new(path.to_string_lossy().to_string()));
+        let keys: Vec<String> = self
+            .variables
+            .keys()
+            .filter(|name| Self::is_magic_file_binding(name))
+            .map(ToString::to_string)
+            .collect();
+        for key in keys {
+            let _ = self.variables.insert(&key, value.clone());
+        }
+    }
+
+    pub fn set_source_file_override(&mut self, path: &std::path::Path) {
+        self.source_file_override = Some(Arc::new(path.to_string_lossy().to_string()));
+    }
+
     pub fn take_task_state(&mut self) -> TaskState {
         std::mem::take(&mut self.task_state)
     }
@@ -348,21 +377,6 @@ impl VM {
             }
         }
         &NULL_RUNTIME_VALUE
-    }
-
-    #[inline(always)]
-    pub(crate) fn get_reg_value_in_frame_mut(
-        &mut self,
-        frame_idx: usize,
-        reg: Reg,
-    ) -> Option<&mut RuntimeValue> {
-        let frame = self.frames.get(frame_idx)?;
-        let idx = reg as usize;
-        if idx >= frame.reg_count {
-            return None;
-        }
-        let pos = frame.reg_start + idx;
-        self.reg_arena.get_mut(pos)
     }
 
     #[inline(always)]
@@ -482,6 +496,78 @@ impl VM {
         &self,
         value: &RuntimeValue,
     ) -> Result<RuntimeValue, RuntimeError> {
+        let resolve_local_ref = |pointer: &str| -> Option<RuntimeValue> {
+            let pointer_tail = {
+                let colon_tail = pointer
+                    .rsplit_once(':')
+                    .map(|(_, tail)| tail)
+                    .unwrap_or(pointer);
+                calibre_parser::qualified_name_tail(colon_tail)
+            };
+            for (frame_idx, frame) in self.frames.iter().enumerate().rev() {
+                if let Some(reg) = frame.local_map.get(pointer_tail) {
+                    let value = self.get_reg_value_in_frame(frame_idx, *reg).clone();
+                    if !matches!(&value, RuntimeValue::Ref(next) if next == pointer) {
+                        return Some(value);
+                    }
+                }
+                if let Some(reg) = frame.local_map.get(pointer) {
+                    let value = self.get_reg_value_in_frame(frame_idx, *reg).clone();
+                    if !matches!(&value, RuntimeValue::Ref(next) if next == pointer) {
+                        return Some(value);
+                    }
+                }
+                if let Some(base) = frame.local_map_base.as_ref()
+                    && let Some(reg) = base.get(pointer_tail)
+                {
+                    let value = self.get_reg_value_in_frame(frame_idx, *reg).clone();
+                    if !matches!(&value, RuntimeValue::Ref(next) if next == pointer) {
+                        return Some(value);
+                    }
+                }
+                if let Some(base) = frame.local_map_base.as_ref()
+                    && let Some(reg) = base.get(pointer)
+                {
+                    let value = self.get_reg_value_in_frame(frame_idx, *reg).clone();
+                    if !matches!(&value, RuntimeValue::Ref(next) if next == pointer) {
+                        return Some(value);
+                    }
+                }
+
+                let mut suffix_match = None;
+                for (name, reg) in frame
+                    .local_map_base
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|base| base.iter())
+                    .chain(frame.local_map.iter())
+                {
+                    let name_tail = {
+                        let local = name.as_ref();
+                        let colon_tail = local
+                            .rsplit_once(':')
+                            .map(|(_, tail)| tail)
+                            .unwrap_or(local);
+                        calibre_parser::qualified_name_tail(colon_tail)
+                    };
+                    if name_tail == pointer_tail {
+                        if suffix_match.is_some() {
+                            suffix_match = None;
+                            break;
+                        }
+                        suffix_match = Some(*reg);
+                    }
+                }
+                if let Some(reg) = suffix_match {
+                    let value = self.get_reg_value_in_frame(frame_idx, reg).clone();
+                    if !matches!(&value, RuntimeValue::Ref(next) if next == pointer) {
+                        return Some(value);
+                    }
+                }
+            }
+            None
+        };
+
         let mut owned: Option<RuntimeValue> = None;
 
         for _ in 0..64 {
@@ -492,11 +578,33 @@ impl VM {
 
             match current {
                 RuntimeValue::Ref(pointer) => {
-                    let v = self
-                        .variables
-                        .get(pointer)
-                        .cloned()
-                        .ok_or(RuntimeError::DanglingRef(pointer.clone()))?;
+                    let local_style = pointer.contains(':') || pointer.contains("->");
+                    let v = if local_style {
+                        if let Some(local) = resolve_local_ref(pointer) {
+                            local
+                        } else if let Some(v) = self.variables.get(pointer).cloned() {
+                            if matches!(&v, RuntimeValue::Ref(next) if next == pointer) {
+                                return Err(RuntimeError::DanglingRef(pointer.clone()));
+                            }
+                            v
+                        } else {
+                            return Err(RuntimeError::DanglingRef(pointer.clone()));
+                        }
+                    } else if let Some(v) = self.variables.get(pointer).cloned() {
+                        if matches!(&v, RuntimeValue::Ref(next) if next == pointer) {
+                            if let Some(local) = resolve_local_ref(pointer) {
+                                local
+                            } else {
+                                return Err(RuntimeError::DanglingRef(pointer.clone()));
+                            }
+                        } else {
+                            v
+                        }
+                    } else if let Some(v) = resolve_local_ref(pointer) {
+                        v
+                    } else {
+                        return Err(RuntimeError::DanglingRef(pointer.clone()));
+                    };
                     owned = Some(v);
                 }
                 RuntimeValue::VarRef(id) => {
@@ -505,6 +613,9 @@ impl VM {
                         .get_by_id(*id)
                         .cloned()
                         .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?;
+                    if matches!(&v, RuntimeValue::VarRef(next) if next == id) {
+                        return Err(RuntimeError::DanglingRef(format!("#{}", id)));
+                    }
                     owned = Some(v);
                 }
                 RuntimeValue::RegRef { frame, reg } => {

@@ -2936,6 +2936,7 @@ impl MiddleEnvironment {
                     .map(|val| ParserText::new(*val.span(), val.to_string()))
                     .collect();
                 let module_path: Vec<String> = module.iter().map(|x| x.to_string()).collect();
+                let preserved_magic = self.preserve_scope_magic_mappings(*scope);
 
                 let alias = if let Some(alias) = alias {
                     self.resolve_potential_dollar_ident(scope, &alias)
@@ -2982,7 +2983,7 @@ impl MiddleEnvironment {
                         }
                     });
                 };
-                let imported_map: FxHashMap<String, String> = self
+                let mut imported_map: FxHashMap<String, String> = self
                     .scopes
                     .get(&new_scope)
                     .ok_or_else(|| {
@@ -2994,20 +2995,36 @@ impl MiddleEnvironment {
                     .mappings
                     .clone();
 
+                let mut normalized_map = FxHashMap::default();
+                for (key, value) in &imported_map {
+                    let public = key
+                        .rsplit_once(':')
+                        .map(|(_, short)| short)
+                        .unwrap_or(key.as_str());
+                    normalized_map
+                        .entry(public.to_string())
+                        .or_insert_with(|| value.clone());
+                }
+                imported_map.extend(normalized_map);
+
+                let scope_marker = format!("-{}-", new_scope);
+                for object_name in self.objects.keys() {
+                    if object_name.contains(&scope_marker)
+                        && let Some((_, short)) = object_name.split_once(':')
+                    {
+                        imported_map
+                            .entry(short.to_string())
+                            .or_insert_with(|| object_name.clone());
+                    }
+                }
+
                 if &values[0].text == "*" {
                     for (key, value) in &imported_map {
-                        let key = key.as_str();
+                        let key = key
+                            .rsplit_once(':')
+                            .map(|(_, short)| short)
+                            .unwrap_or(key.as_str());
                         if key.starts_with("__") {
-                            continue;
-                        }
-
-                        let global_scope = self.get_global_scope();
-
-                        if self.variables.contains_key(key)
-                            || self.objects.contains_key(key)
-                            || global_scope.mappings.contains_key(key)
-                            || self.resolve_str(scope, key).is_some()
-                        {
                             continue;
                         }
 
@@ -3043,6 +3060,8 @@ impl MiddleEnvironment {
                         }
                     }
                 }
+
+                self.restore_scope_magic_mappings(*scope, preserved_magic);
 
                 Ok(build_node.unwrap_or(MiddleNode {
                     node_type: MiddleNodeType::EmptyLine,

@@ -15,6 +15,67 @@ use crate::{
 };
 
 impl MiddleEnvironment {
+    #[inline]
+    fn collect_call_nodes(args: Vec<CallArg>, mut reverse_args: Vec<Node>) -> Vec<Node> {
+        let mut nodes: Vec<Node> = args.into_iter().map(Into::into).collect();
+        nodes.append(&mut reverse_args);
+        nodes
+    }
+
+    #[inline]
+    fn aggregate_from_call_nodes(
+        &mut self,
+        scope: &u64,
+        span: Span,
+        identifier: Option<ParserText>,
+        args: Vec<CallArg>,
+        reverse_args: Vec<Node>,
+    ) -> MiddleNode {
+        let value = Self::collect_call_nodes(args, reverse_args)
+            .into_iter()
+            .enumerate()
+            .map(|(i, arg)| (i.to_string(), self.evaluate(scope, arg)))
+            .collect::<Vec<_>>()
+            .into();
+
+        MiddleNode {
+            node_type: MiddleNodeType::AggregateExpression { identifier, value },
+            span,
+        }
+    }
+
+    #[inline]
+    fn same_call_arg_text(a: &CallArg, b: &CallArg) -> bool {
+        let left: Node = a.clone().into();
+        let right: Node = b.clone().into();
+        left.to_string() == right.to_string()
+    }
+
+    #[inline]
+    fn dedupe_receiver_call_args(
+        args: &mut Vec<CallArg>,
+        caller: &Node,
+        data_type: &Option<ParserInnerType>,
+    ) {
+        if args.len() < 2 {
+            return;
+        }
+        let duplicate_receiver = Self::same_call_arg_text(&args[0], &args[1]);
+        let looks_like_member_rewrite = matches!(
+            &caller.node_type,
+            NodeType::Identifier(id) if id.to_string().contains("::")
+        );
+        if duplicate_receiver
+            && (looks_like_member_rewrite
+                || matches!(
+                    data_type,
+                    Some(ParserInnerType::Function { parameters, .. }) if args.len() > parameters.len()
+                ))
+        {
+            args.remove(1);
+        }
+    }
+
     fn function_data_type(
         span: Span,
         parameters: Vec<ParserDataType>,
@@ -430,6 +491,7 @@ impl MiddleEnvironment {
         let mut old_func_defers = Vec::new();
         old_func_defers.append(&mut self.func_defers);
         let new_scope = self.new_scope_from_parent_shallow(*scope);
+        self.copy_scope_magic_mappings(*scope, new_scope);
         for param in header.parameters {
             param_idents.push(param.0.clone());
             let og_name = self
@@ -515,7 +577,7 @@ impl MiddleEnvironment {
         {
             let mut last = scope_body.pop();
             for defer in func_defers {
-                scope_body.push(self.evaluate(scope, defer));
+                scope_body.push(self.evaluate(&scope_id, defer));
             }
 
             if return_type.data_type != ParserInnerType::Null {
@@ -860,16 +922,9 @@ impl MiddleEnvironment {
             }
 
             if let Some(native_name) = forced_native_constructor {
-                let mut lowered_args = Vec::with_capacity(args.len() + reverse_args.len());
-                for arg in args {
-                    lowered_args.push(self.evaluate(scope, arg.into()));
-                }
-                for arg in reverse_args {
-                    lowered_args.push(self.evaluate(scope, arg));
-                }
                 return Ok(MiddleNode {
                     node_type: MiddleNodeType::CallExpression {
-                        args: lowered_args,
+                        args: self.lower_call_args(scope, args, reverse_args),
                         caller: Box::new(MiddleNode::new(
                             MiddleNodeType::Identifier(ParserText::from(native_name)),
                             span,
@@ -882,44 +937,18 @@ impl MiddleEnvironment {
 
         if let NodeType::Identifier(caller) = &caller.node_type {
             if "tuple" == &caller.to_string() {
-                let mut args: Vec<Node> = args.into_iter().map(|x| x.into()).collect();
-                args.append(&mut reverse_args);
-
-                let mut map = Vec::new();
-
-                for (i, arg) in args.into_iter().enumerate() {
-                    map.push((i.to_string(), self.evaluate(scope, arg)));
-                }
-
-                return Ok(MiddleNode {
-                    node_type: MiddleNodeType::AggregateExpression {
-                        identifier: None,
-                        value: map.into(),
-                    },
-                    span,
-                });
+                return Ok(self.aggregate_from_call_nodes(scope, span, None, args, reverse_args));
             }
 
-            if let Some(caller) = self
-                .resolve_potential_generic_ident(scope, &caller)
-                .map(|x| x.clone())
-            {
+            if let Some(caller) = self.resolve_potential_generic_ident(scope, &caller) {
                 if self.objects.contains_key(&caller.text) {
-                    let mut map = Vec::new();
-                    let mut args: Vec<Node> = args.into_iter().map(|x| x.into()).collect();
-                    args.append(&mut reverse_args);
-
-                    for (i, arg) in args.into_iter().enumerate() {
-                        map.push((i.to_string(), self.evaluate(scope, arg)));
-                    }
-
-                    return Ok(MiddleNode {
-                        node_type: MiddleNodeType::AggregateExpression {
-                            identifier: Some(ParserText::from(caller)),
-                            value: map.into(),
-                        },
+                    return Ok(self.aggregate_from_call_nodes(
+                        scope,
                         span,
-                    });
+                        Some(ParserText::from(caller)),
+                        args,
+                        reverse_args,
+                    ));
                 }
             }
         }
@@ -945,30 +974,13 @@ impl MiddleEnvironment {
             .resolve_type_from_node(scope, &caller)
             .map(|x| x.unwrap_all_refs().data_type);
 
-        if args.len() >= 2 {
-            let first: Node = args[0].clone().into();
-            let second: Node = args[1].clone().into();
-            let duplicate_receiver = first.to_string() == second.to_string();
-            let looks_like_member_rewrite = matches!(
-                &caller.node_type,
-                NodeType::Identifier(id) if id.to_string().contains("::")
-            );
-            if duplicate_receiver
-                && (looks_like_member_rewrite
-                    || matches!(
-                        &data_type,
-                        Some(ParserInnerType::Function { parameters, .. }) if args.len() > parameters.len()
-                    ))
-            {
-                args.remove(1);
-            }
-        }
+        Self::dedupe_receiver_call_args(&mut args, &caller, &data_type);
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::CallExpression {
                 args: match data_type {
                     Some(ParserInnerType::Function {
-                        return_type,
+                        return_type: _,
                         parameters,
                     }) if {
                         let total_args = args.len() + reverse_args.len();
@@ -1050,9 +1062,7 @@ impl MiddleEnvironment {
                                     captured_args.push(CallArg::Value(Node::new(
                                         self.current_span(),
                                         NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(
-                                                ident.into(),
-                                            ),
+                                            PotentialGenericTypeIdentifier::Identifier(ident),
                                         ),
                                     )));
                                 }
@@ -1117,7 +1127,7 @@ impl MiddleEnvironment {
                         let tmp_ident_node = Node::new(
                             self.current_span(),
                             NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                tmp_ident.clone().into(),
+                                tmp_ident.clone(),
                             )),
                         );
 
@@ -1141,19 +1151,7 @@ impl MiddleEnvironment {
                             Self::temp_scope(self.current_span(), body, true),
                         );
                     }
-                    _ => {
-                        let mut lst = Vec::new();
-
-                        for arg in args {
-                            lst.push(self.evaluate(scope, arg.into()));
-                        }
-
-                        for _ in 0..reverse_args.len() {
-                            lst.push(self.evaluate(scope, reverse_args.remove(0)));
-                        }
-
-                        lst
-                    }
+                    _ => self.lower_call_args(scope, args, reverse_args),
                 },
                 caller: Box::new(self.evaluate_inner(scope, caller)?),
             },

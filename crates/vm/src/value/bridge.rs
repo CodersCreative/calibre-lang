@@ -26,9 +26,10 @@ impl VM {
                 .get_by_id(*id)
                 .cloned()
                 .unwrap_or(RuntimeValue::VarRef(*id)),
-            RuntimeValue::RegRef { frame, reg } => {
-                self.get_reg_value_in_frame(*frame, *reg).clone()
-            }
+            RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef {
+                frame: *frame,
+                reg: *reg,
+            },
             other => other.clone(),
         }
     }

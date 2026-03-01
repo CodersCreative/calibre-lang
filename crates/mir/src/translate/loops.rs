@@ -327,18 +327,19 @@ impl MiddleEnvironment {
             },
         );
 
-        let mut stmts = Vec::new();
-        stmts.push(self.evaluate(scope, result_decl));
-        stmts.push(self.evaluate(scope, broke_decl));
-        stmts.push(loop_node);
-        stmts.push(self.evaluate(scope, if_assign));
-        stmts.push(self.evaluate(
-            scope,
-            Node::new(
-                self.current_span(),
-                NodeType::Identifier(result_ident.into()),
+        let stmts = vec![
+            self.evaluate(scope, result_decl),
+            self.evaluate(scope, broke_decl),
+            loop_node,
+            self.evaluate(scope, if_assign),
+            self.evaluate(
+                scope,
+                Node::new(
+                    self.current_span(),
+                    NodeType::Identifier(result_ident.into()),
+                ),
             ),
-        ));
+        ];
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration {

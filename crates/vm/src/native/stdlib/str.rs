@@ -3,21 +3,9 @@ use dumpster::sync::Gc;
 use crate::{
     VM,
     error::RuntimeError,
-    native::{NativeFunction, expect_str_ref},
+    native::{NativeFunction, expect_str_arg_or_empty},
     value::RuntimeValue,
 };
-
-#[inline]
-fn expect_str_arg(
-    args: &[RuntimeValue],
-    index: usize,
-) -> Result<&std::sync::Arc<String>, RuntimeError> {
-    if let Some(value) = args.get(index) {
-        expect_str_ref(value)
-    } else {
-        Err(RuntimeError::UnexpectedType(RuntimeValue::Null))
-    }
-}
 
 pub struct StrSplit();
 
@@ -27,8 +15,8 @@ impl NativeFunction for StrSplit {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let text = expect_str_arg(&args, 0)?;
-        let delim = expect_str_arg(&args, 1)?;
+        let text = expect_str_arg_or_empty(&args, 0)?;
+        let delim = expect_str_arg_or_empty(&args, 1)?;
 
         let parts = if delim.is_empty() {
             text.chars()
@@ -52,8 +40,8 @@ impl NativeFunction for StrContains {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let text = expect_str_arg(&args, 0)?;
-        let needle = expect_str_arg(&args, 1)?;
+        let text = expect_str_arg_or_empty(&args, 0)?;
+        let needle = expect_str_arg_or_empty(&args, 1)?;
 
         Ok(RuntimeValue::Bool(text.as_str().contains(needle.as_str())))
     }
@@ -67,8 +55,8 @@ impl NativeFunction for StrStartsWith {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let text = expect_str_arg(&args, 0)?;
-        let prefix = expect_str_arg(&args, 1)?;
+        let text = expect_str_arg_or_empty(&args, 0)?;
+        let prefix = expect_str_arg_or_empty(&args, 1)?;
 
         Ok(RuntimeValue::Bool(
             text.as_str().starts_with(prefix.as_str()),
@@ -84,31 +72,9 @@ impl NativeFunction for StrEndsWith {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let text = expect_str_arg(&args, 0)?;
-        let suffix = expect_str_arg(&args, 1)?;
+        let text = expect_str_arg_or_empty(&args, 0)?;
+        let suffix = expect_str_arg_or_empty(&args, 1)?;
 
         Ok(RuntimeValue::Bool(text.as_str().ends_with(suffix.as_str())))
-    }
-}
-
-pub struct StrStripPrefix();
-
-impl NativeFunction for StrStripPrefix {
-    fn name(&self) -> String {
-        String::from("str.strip_prefix")
-    }
-
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let text = expect_str_arg(&args, 0)?;
-        let prefix = expect_str_arg(&args, 1)?;
-
-        if let Some(rest) = text.as_str().strip_prefix(prefix.as_str()) {
-            return Ok(RuntimeValue::Str(std::sync::Arc::new(rest.to_string())));
-        }
-
-        Ok(match prefix.as_str().strip_prefix(text.as_str()) {
-            Some(rest) => RuntimeValue::Str(std::sync::Arc::new(rest.to_string())),
-            None => RuntimeValue::Null,
-        })
     }
 }

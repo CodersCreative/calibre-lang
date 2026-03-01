@@ -1,6 +1,7 @@
 use crate::{VM, value::RuntimeValue};
 
 pub mod r#async;
+pub mod char;
 pub mod collections;
 pub mod crypto;
 pub mod env;

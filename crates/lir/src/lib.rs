@@ -495,6 +495,64 @@ impl<'a> LirEnvironment<'a> {
         }
     }
 
+    #[inline]
+    fn assign_temp_if_non_null(&mut self, span: Span, temp: &str, value: LirNodeType) {
+        if !Self::is_null_node(&value) {
+            self.assign_var(span, temp, value);
+        }
+    }
+
+    #[inline]
+    fn jump_to_loop_target_if_present(&mut self, span: Span, label: Option<&str>, use_exit: bool) {
+        if let Some(target) = self.find_loop_target(label, use_exit) {
+            self.set_terminator(LirTerminator::Jump { span, target });
+        }
+    }
+
+    #[inline]
+    fn emit_return_value(&mut self, span: Span, value: Option<LirNodeType>) {
+        self.set_terminator(LirTerminator::Return { span, value });
+    }
+
+    #[inline]
+    fn lower_scope_items(&mut self, body: Vec<MiddleNode>) {
+        for stmt in body {
+            self.lower_and_add_node(stmt);
+        }
+    }
+
+    #[inline]
+    fn loop_label(label: &Option<calibre_parser::ast::ParserText>) -> Option<&str> {
+        label.as_ref().map(|x| x.text.as_str())
+    }
+
+    #[inline]
+    fn next_function_label(&mut self) -> String {
+        if let Some(name) = self.last_ident.take()
+            && !name.contains("__curry_capture_")
+        {
+            return name;
+        }
+        self.get_temp()
+    }
+
+    #[inline]
+    fn is_simple_function_fallback(node: &MiddleNodeType) -> bool {
+        matches!(
+            node,
+            MiddleNodeType::Identifier(_)
+                | MiddleNodeType::IntLiteral { .. }
+                | MiddleNodeType::FloatLiteral(_)
+                | MiddleNodeType::StringLiteral(_)
+                | MiddleNodeType::CharLiteral(_)
+                | MiddleNodeType::Null
+                | MiddleNodeType::MemberExpression { .. }
+                | MiddleNodeType::AggregateExpression { .. }
+                | MiddleNodeType::ListLiteral(_, _)
+                | MiddleNodeType::RangeDeclaration { .. }
+        )
+    }
+
     fn collect_trait_methods(
         imp: &calibre_mir::environment::MiddleImpl,
         trait_def: Option<&calibre_mir::environment::MiddleTrait>,
@@ -795,15 +853,7 @@ impl<'a> LirEnvironment<'a> {
                     captures.push((cap.clone(), cap_type));
                 }
 
-                let internal_name = if let Some(x) = self.last_ident.take() {
-                    if x.contains("__curry_capture_") {
-                        self.get_temp()
-                    } else {
-                        x
-                    }
-                } else {
-                    self.get_temp()
-                };
+                let internal_name = self.next_function_label();
                 let mut sub_lowerer = LirEnvironment::new_with_hoist(self.env, false);
 
                 let body_span = body.span;
@@ -838,20 +888,7 @@ impl<'a> LirEnvironment<'a> {
 
                 if !has_body_value {
                     if let Some(expr) = fallback_expr {
-                        let simple_fallback = matches!(
-                            expr.node_type,
-                            MiddleNodeType::Identifier(_)
-                                | MiddleNodeType::IntLiteral { .. }
-                                | MiddleNodeType::FloatLiteral(_)
-                                | MiddleNodeType::StringLiteral(_)
-                                | MiddleNodeType::CharLiteral(_)
-                                | MiddleNodeType::Null
-                                | MiddleNodeType::MemberExpression { .. }
-                                | MiddleNodeType::AggregateExpression { .. }
-                                | MiddleNodeType::ListLiteral(_, _)
-                                | MiddleNodeType::RangeDeclaration { .. }
-                        );
-                        if simple_fallback {
+                        if Self::is_simple_function_fallback(&expr.node_type) {
                             body_val = sub_lowerer.lower_node(expr);
                             has_body_value = true;
                         } else if is_temp_body {
@@ -867,10 +904,7 @@ impl<'a> LirEnvironment<'a> {
                     .unwrap_or(false)
                     && has_body_value
                 {
-                    sub_lowerer.set_terminator(LirTerminator::Return {
-                        span: body_span,
-                        value: Some(body_val),
-                    });
+                    sub_lowerer.emit_return_value(body_span, Some(body_val));
                 }
 
                 self.registry.append(sub_lowerer.registry);
@@ -936,9 +970,7 @@ impl<'a> LirEnvironment<'a> {
                 ..
             } => {
                 if !self.allow_global_hoist {
-                    for stmt in body {
-                        self.lower_and_add_node(stmt);
-                    }
+                    self.lower_scope_items(body);
                     return Self::null_node();
                 }
                 for stmt in body {
@@ -975,9 +1007,7 @@ impl<'a> LirEnvironment<'a> {
                 mut body, is_temp, ..
             } => {
                 let last = body.pop();
-                for stmt in body {
-                    self.lower_and_add_node(stmt);
-                }
+                self.lower_scope_items(body);
                 let Some(last) = last else {
                     return Self::null_node();
                 };
@@ -1023,9 +1053,7 @@ impl<'a> LirEnvironment<'a> {
                 self.switch_to(then_id);
                 let then_val = self.lower_node(*then);
                 if self.current_block_open() {
-                    if !Self::is_null_node(&then_val) {
-                        self.assign_var(span, temp.as_str(), then_val);
-                    }
+                    self.assign_temp_if_non_null(span, temp.as_str(), then_val);
                     self.jump_if_open(span, merge_id);
                 }
 
@@ -1036,9 +1064,7 @@ impl<'a> LirEnvironment<'a> {
                     Self::null_node()
                 };
                 if self.current_block_open() {
-                    if !Self::is_null_node(&else_val) {
-                        self.assign_var(span, temp.as_str(), else_val);
-                    }
+                    self.assign_temp_if_non_null(span, temp.as_str(), else_val);
                     self.jump_if_open(span, merge_id);
                 }
 
@@ -1119,28 +1145,19 @@ impl<'a> LirEnvironment<'a> {
 
                     let value_span = v.span;
                     let val = self.lower_node(*v);
-                    self.set_terminator(LirTerminator::Return {
-                        span: value_span,
-                        value: Some(val),
-                    });
+                    self.emit_return_value(value_span, Some(val));
                     Self::null_node()
                 } else {
-                    self.set_terminator(LirTerminator::Return { span, value: None });
+                    self.emit_return_value(span, None);
                     Self::null_node()
                 }
             }
             MiddleNodeType::Break { label, .. } => {
-                let target = self.find_loop_target(label.as_ref().map(|x| x.text.as_str()), true);
-                if let Some(target) = target {
-                    self.set_terminator(LirTerminator::Jump { span, target });
-                }
+                self.jump_to_loop_target_if_present(span, Self::loop_label(&label), true);
                 Self::null_node()
             }
             MiddleNodeType::Continue { label } => {
-                let target = self.find_loop_target(label.as_ref().map(|x| x.text.as_str()), false);
-                if let Some(target) = target {
-                    self.set_terminator(LirTerminator::Jump { span, target });
-                }
+                self.jump_to_loop_target_if_present(span, Self::loop_label(&label), false);
                 Self::null_node()
             }
             MiddleNodeType::MemberExpression { path } => self.lower_member_path(path, false),

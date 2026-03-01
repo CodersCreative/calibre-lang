@@ -234,7 +234,7 @@ impl MiddleEnvironment {
         for (var_type, name) in aliases {
             body_nodes.push(Self::auto_var_decl(
                 self.current_span(),
-                var_type.clone(),
+                *var_type,
                 name.clone(),
                 value.clone(),
             ));
@@ -289,7 +289,7 @@ impl MiddleEnvironment {
         for (var_type, name) in aliases {
             body_nodes.push(Self::typed_var_decl(
                 self.current_span(),
-                var_type.clone(),
+                *var_type,
                 name.clone(),
                 value.clone(),
                 data_type.clone().unwrap_or_else(|| {
@@ -352,7 +352,7 @@ impl MiddleEnvironment {
                 MatchStringPatternPart::Binding { var_type, name } => {
                     body_nodes.push(Self::auto_var_decl(
                         self.current_span(),
-                        var_type.clone(),
+                        *var_type,
                         name.clone(),
                         current.clone(),
                     ));
@@ -564,14 +564,9 @@ impl MiddleEnvironment {
                 for (idx, item) in items.iter().enumerate() {
                     let cur = self.match_member_access(payload_value.clone(), idx.to_string());
                     match item {
-                        MatchTupleItem::Binding { var_type, name } => {
-                            body_nodes.push(Self::auto_var_decl(
-                                self.current_span(),
-                                var_type.clone(),
-                                name.clone(),
-                                cur,
-                            ))
-                        }
+                        MatchTupleItem::Binding { var_type, name } => body_nodes.push(
+                            Self::auto_var_decl(self.current_span(), *var_type, name.clone(), cur),
+                        ),
                         MatchTupleItem::Value(Node {
                             node_type: NodeType::Identifier(id),
                             ..
@@ -597,7 +592,7 @@ impl MiddleEnvironment {
                                 });
                                 body_nodes.push(Self::auto_var_decl(
                                     self.current_span(),
-                                    var_type.clone(),
+                                    *var_type,
                                     bind_name.clone(),
                                     nested_payload.clone(),
                                 ));
@@ -632,7 +627,7 @@ impl MiddleEnvironment {
                         let cur = self.match_member_access(payload_value.clone(), field.clone());
                         body_nodes.push(Self::auto_var_decl(
                             self.current_span(),
-                            var_type.clone(),
+                            *var_type,
                             name.clone(),
                             cur,
                         ));
@@ -881,7 +876,7 @@ impl MiddleEnvironment {
         let enum_object: Option<Vec<(ParserText, Option<ParserDataType>)>> =
             if let Some(resolved_data_type) = &resolved_data_type {
                 reference = Some(match &resolved_data_type.data_type {
-                    ParserInnerType::Ref(_, mutability) => mutability.clone(),
+                    ParserInnerType::Ref(_, mutability) => *mutability,
                     _ => RefMutability::Value,
                 });
                 let enum_key = match &resolved_unwrapped
@@ -1202,7 +1197,7 @@ impl MiddleEnvironment {
                                                             body_nodes.push(Node::new(
                                                                 self.current_span(),
                                                                 NodeType::VariableDeclaration {
-                                                                    var_type: var_type.clone(),
+                                                                    var_type: *var_type,
                                                                     identifier: name.clone(),
                                                                     value: Box::new(pcur.clone()),
                                                                     data_type: PotentialNewType::DataType(
@@ -1278,7 +1273,7 @@ impl MiddleEnvironment {
                                                                 body_nodes.push(Node::new(
                                                                     self.current_span(),
                                                                     NodeType::VariableDeclaration {
-                                                                        var_type: var_type.clone(),
+                                                                        var_type: *var_type,
                                                                         identifier: bind_name.clone(),
                                                                         value: Box::new(
                                                                             nested_payload.clone(),
@@ -1346,7 +1341,7 @@ impl MiddleEnvironment {
                                                             body_nodes.push(Node::new(
                                                                 self.current_span(),
                                                                 NodeType::VariableDeclaration {
-                                                                    var_type: var_type.clone(),
+                                                                    var_type: *var_type,
                                                                     identifier: name.clone(),
                                                                     value: Box::new(cur.clone()),
                                                                     data_type: PotentialNewType::DataType(
@@ -1618,7 +1613,7 @@ impl MiddleEnvironment {
                                         self.match_member_access(value_node.clone(), field.clone());
                                     body_nodes.push(Self::auto_var_decl(
                                         self.current_span(),
-                                        var_type.clone(),
+                                        *var_type,
                                         name.clone(),
                                         current.clone(),
                                     ));
@@ -2057,7 +2052,7 @@ impl MiddleEnvironment {
                                 value: if reference.is_some()
                                     && reference != Some(RefMutability::Value)
                                 {
-                                    let mutability = reference.clone().ok_or_else(|| {
+                                    let mutability = reference.ok_or_else(|| {
                                         MiddleErr::At(
                                             value.span,
                                             Box::new(MiddleErr::Internal(

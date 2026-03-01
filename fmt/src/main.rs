@@ -1,5 +1,5 @@
 use calibre_diagnostics::{emit_error, emit_parser_errors};
-use calibre_fmt::{FormatError, format_all, format_file, format_recursive};
+use calibre_fmt::{FormatError, default_all_entry_path, format_all, format_file, format_recursive};
 use calibre_parser::ast::formatter::Formatter;
 use clap::Parser;
 use std::{env, error::Error, path::PathBuf, str::FromStr};
@@ -22,10 +22,13 @@ struct Args {
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
+    let cwd = env::current_dir()?;
     let path = if let Some(p) = args.path {
         PathBuf::from_str(&p)?
     } else if args.recursive {
-        env::current_dir()?
+        cwd.clone()
+    } else if args.all {
+        default_all_entry_path(&cwd)
     } else {
         PathBuf::from_str("./main.cal")?
     };

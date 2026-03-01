@@ -24,7 +24,7 @@ use util::{
     auto_type, call_node, ensure_scope_node, ident_node, is_keyword, lex,
     member_node_from_head_and_tail, normalize_scope_member_chain, null_node, parse_embedded_expr,
     parse_splits, scope_body_or_single, scope_node_parser, span, strip_block_comments_keep_layout,
-    unescape_char, unescape_string, with_named_scope,
+    unescape_char_literal, unescape_string, with_named_scope,
 };
 
 trait LegacySpanMapExt<'a, O>: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Sized {
@@ -256,17 +256,28 @@ pub fn parse_program_with_source(
     let char_lit = lex(
         pad.clone(),
         just('\'')
-            .ignore_then(choice((
-                just('\\').ignore_then(any()).map(|c| (true, c)),
-                filter(|c: &char| *c != '\'' && *c != '\n').map(|c| (false, c)),
-            )))
+            .ignore_then(
+                choice((
+                    just('\\').ignore_then(any()).map(|c| format!("\\{c}")),
+                    filter(|c: &char| *c != '\'' && *c != '\n').map(|c| c.to_string()),
+                ))
+                .repeated()
+                .at_least(1)
+                .collect::<Vec<_>>(),
+            )
             .then_ignore(just('\'')),
     )
-    .map_with_span({
+    .try_map({
         let ls = line_starts.clone();
-        move |(escaped, c): (bool, char), r| {
-            let ch = if escaped { unescape_char(c) } else { c };
-            Node::new(span(ls.as_ref(), r), NodeType::CharLiteral(ch))
+        move |parts: Vec<String>, parser_sp| {
+            let sp = span(ls.as_ref(), parser_sp.into_range());
+            match unescape_char_literal(&parts.concat()) {
+                Some(ch) => Ok(Node::new(sp, NodeType::CharLiteral(ch))),
+                None => Err(Rich::custom(
+                    parser_sp,
+                    "invalid char literal escape sequence",
+                )),
+            }
         }
     })
     .boxed();
@@ -939,13 +950,6 @@ pub fn parse_program_with_source(
                 pad_with_newline.clone(),
                 text::ident().map(|s: &str| s.to_string()),
             )
-            .try_map(|s: String, span| {
-                if is_keyword(&s) {
-                    Err(Rich::custom(span, "keyword cannot be identifier"))
-                } else {
-                    Ok(s)
-                }
-            })
             .map_with_span({
                 let ls = line_starts.clone();
                 move |s: String, r| (s, span(ls.as_ref(), r))
@@ -1621,10 +1625,11 @@ pub fn parse_program_with_source(
                 .then(
                     match_arm
                         .clone()
-                        .separated_by(
+                        .separated_by(choice((
                             lex(pad.clone(), just(','))
                                 .then_ignore(delim.clone().repeated().collect::<Vec<_>>()),
-                        )
+                            delim.clone().to(','),
+                        )))
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -1694,10 +1699,11 @@ pub fn parse_program_with_source(
                 .then(
                     match_arm
                         .clone()
-                        .separated_by(
+                        .separated_by(choice((
                             lex(pad.clone(), just(','))
                                 .then_ignore(delim.clone().repeated().collect::<Vec<_>>()),
-                        )
+                            delim.clone().to(','),
+                        )))
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -2393,7 +2399,7 @@ pub fn parse_program_with_source(
                 .clone()
                 .then(
                     bool_op
-                        .then(compared.clone())
+                        .then(compared.clone().padded_by(pad_with_newline.clone()))
                         .repeated()
                         .collect::<Vec<_>>(),
                 )
@@ -2511,7 +2517,7 @@ pub fn parse_program_with_source(
                 })
                 .boxed();
 
-            let assign_expr = postfix
+            let _assign_expr = postfix
                 .clone()
                 .then_ignore(lex(pad.clone(), just('=')))
                 .then(expr.clone())
@@ -2526,22 +2532,14 @@ pub fn parse_program_with_source(
                 })
                 .boxed();
 
-            let ternary_expr = recursive(|ternary_expr| {
+            let ternary_expr = recursive(|_ternary_expr| {
                 in_expr
                     .clone()
                     .then(
                         lex(pad.clone(), just('?'))
-                            .ignore_then(choice((
-                                assign_expr.clone(),
-                                ternary_expr.clone(),
-                                in_expr.clone(),
-                            )))
+                            .ignore_then(statement.clone())
                             .then_ignore(lex(pad.clone(), just(':')))
-                            .then(choice((
-                                assign_expr.clone(),
-                                ternary_expr.clone(),
-                                in_expr.clone(),
-                            )))
+                            .then(statement.clone())
                             .or_not(),
                     )
                     .map(|(comparison, then_otherwise)| {
@@ -2623,7 +2621,8 @@ pub fn parse_program_with_source(
             let fn_inline_gen_expr = lex(pad.clone(), just("fn"))
                 .ignore_then(lex(pad.clone(), just('(')))
                 .ignore_then(
-                    expr.clone()
+                    statement
+                        .clone()
                         .then_ignore(lex(pad.clone(), text::keyword("for")))
                         .then(iter_loop_type.clone())
                         .then(
@@ -2688,7 +2687,7 @@ pub fn parse_program_with_source(
                 .boxed();
 
             let try_expr = lex(pad.clone(), just("try"))
-                .ignore_then(expr.clone())
+                .ignore_then(statement.clone())
                 .then(
                     choice((
                         lex(pad.clone(), just(':'))
@@ -2725,7 +2724,7 @@ pub fn parse_program_with_source(
                         .or_not()
                         .map(|x| x.unwrap_or(false)),
                 )
-                .then(expr.clone())
+                .then(statement.clone())
                 .map(|(function, value)| {
                     Node::new(
                         value.span,
@@ -3062,7 +3061,7 @@ pub fn parse_program_with_source(
                     lex(pad.clone(), just('{'))
                         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                         .ignore_then(
-                            ident
+                            raw_ident
                                 .clone()
                                 .repeated()
                                 .at_least(1)

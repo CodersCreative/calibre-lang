@@ -1,4 +1,9 @@
-use std::{error::Error, fmt, fs, io::Write, path::PathBuf};
+use std::{
+    error::Error,
+    fmt, fs,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use calibre_parser::{
     Parser, ParserError,
@@ -177,4 +182,57 @@ pub fn format_recursive(formatter: &mut Formatter, root: &PathBuf) -> Result<(),
     };
 
     walk(formatter, &root)
+}
+
+fn parse_manifest_src(manifest: &str) -> Option<String> {
+    let mut in_package = false;
+    for raw in manifest.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            in_package = line == "[package]";
+            continue;
+        }
+        if !in_package || !line.starts_with("src") {
+            continue;
+        }
+        let (_, rhs) = line.split_once('=')?;
+        let value = rhs.trim();
+        if let Some(rest) = value.strip_prefix('"') {
+            let end = rest.find('"')?;
+            return Some(rest[..end].to_string());
+        }
+    }
+    None
+}
+
+pub fn default_all_entry_path(cwd: &Path) -> PathBuf {
+    let main = cwd.join("main.cal");
+    if main.exists() {
+        return main;
+    }
+
+    let src_main = cwd.join("src/main.cal");
+    if src_main.exists() {
+        return src_main;
+    }
+
+    let manifest = cwd.join("calibre.toml");
+    if let Ok(text) = fs::read_to_string(&manifest)
+        && let Some(src) = parse_manifest_src(&text)
+    {
+        let base = cwd.join(src);
+        let candidate = if base.is_dir() {
+            base.join("main.cal")
+        } else {
+            base
+        };
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+
+    main
 }

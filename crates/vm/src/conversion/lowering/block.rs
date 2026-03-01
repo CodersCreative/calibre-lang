@@ -370,7 +370,14 @@ impl<'a> BlockLoweringCtx<'a> {
             LirNodeType::Load(name) => {
                 if self.resolve_local_key(name.as_ref()).is_some() {
                     if let Some(reg) = self.resolve_mapped_reg(name.as_ref()) {
-                        reg
+                        if reg != self.null_reg {
+                            reg
+                        } else {
+                            let idx = self.add_string(name.to_string());
+                            let dst = self.alloc_reg();
+                            self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
+                            dst
+                        }
                     } else {
                         let idx = self.add_string(name.to_string());
                         let dst = self.alloc_reg();

@@ -6,6 +6,8 @@ use crate::{VM, error::RuntimeError, value::RuntimeValue};
 pub mod global;
 pub mod stdlib;
 
+static NULL_ARG: RuntimeValue = RuntimeValue::Null;
+
 pub trait NativeFunction: Send + Sync {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError>;
 
@@ -26,7 +28,7 @@ pub trait NativeFunction: Send + Sync {
 
 #[inline]
 pub(crate) fn first_arg(args: &[RuntimeValue]) -> Result<&RuntimeValue, RuntimeError> {
-    args.first().ok_or(RuntimeError::InvalidFunctionCall)
+    Ok(args.first().unwrap_or(&NULL_ARG))
 }
 
 #[inline]
@@ -41,6 +43,19 @@ pub(crate) fn expect_str_ref(value: &RuntimeValue) -> Result<&Arc<String>, Runti
     } else {
         Err(RuntimeError::UnexpectedType(value.clone()))
     }
+}
+
+#[inline]
+pub(crate) fn expect_str_arg_or_empty(
+    args: &[RuntimeValue],
+    index: usize,
+) -> Result<&Arc<String>, RuntimeError> {
+    if let Some(value) = args.get(index) {
+        return expect_str_ref(value);
+    }
+
+    static EMPTY: std::sync::OnceLock<Arc<String>> = std::sync::OnceLock::new();
+    Ok(EMPTY.get_or_init(|| Arc::new(String::new())))
 }
 
 #[inline]
@@ -59,6 +74,25 @@ pub(crate) fn expect_int(value: RuntimeValue) -> Result<i64, RuntimeError> {
     } else {
         Err(RuntimeError::UnexpectedType(value))
     }
+}
+
+#[inline]
+pub(crate) fn expect_char(value: RuntimeValue) -> Result<char, RuntimeError> {
+    if let RuntimeValue::Char(v) = value {
+        Ok(v)
+    } else {
+        Err(RuntimeError::UnexpectedType(value))
+    }
+}
+
+#[inline]
+pub(crate) fn char_lower(c: char) -> char {
+    c.to_lowercase().next().unwrap_or(c)
+}
+
+#[inline]
+pub(crate) fn char_upper(c: char) -> char {
+    c.to_uppercase().next().unwrap_or(c)
 }
 
 impl Debug for dyn NativeFunction {

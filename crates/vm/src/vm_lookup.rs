@@ -8,6 +8,12 @@ pub(crate) enum VarName {
 }
 
 impl VM {
+    #[inline]
+    fn name_tail(name: &str) -> &str {
+        let colon_tail = name.rsplit_once(':').map(|(_, tail)| tail).unwrap_or(name);
+        calibre_parser::qualified_name_tail(colon_tail)
+    }
+
     pub(crate) fn find_unique_function_by_suffix_ref(
         &self,
         short_name: &str,
@@ -44,9 +50,6 @@ impl VM {
     pub(crate) fn find_unique_var_by_suffix(&self, short_name: &str) -> Option<String> {
         self.variables.keys().find_map(|name| {
             let suffix = calibre_parser::qualified_name_tail(name);
-            if suffix == name {
-                return None;
-            }
             (suffix == short_name).then(|| name.to_string())
         })
     }
@@ -71,16 +74,17 @@ impl VM {
     fn find_unique_local_by_suffix(&self, short_name: &str) -> Option<Reg> {
         let frame = self.current_frame();
         frame
-            .local_map_base
-            .as_ref()
-            .into_iter()
-            .flat_map(|base| base.iter())
-            .chain(frame.local_map.iter())
+            .local_map
+            .iter()
+            .chain(
+                frame
+                    .local_map_base
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|base| base.iter()),
+            )
             .find_map(|(name, reg)| {
-                let suffix = calibre_parser::qualified_name_tail(name.as_ref());
-                if suffix == name.as_ref() {
-                    return None;
-                }
+                let suffix = Self::name_tail(name.as_ref());
                 (suffix == short_name).then_some(*reg)
             })
     }
@@ -143,34 +147,114 @@ impl VM {
         out.into_iter().filter(|c| !c.is_empty()).collect()
     }
 
-    fn capture_value(&self, name: &str, seen: &mut FxHashSet<String>) -> RuntimeValue {
-        if let Some(reg) = self.current_frame().local_map.get(name).copied() {
-            return self.get_reg_value(reg).clone();
-        } else if let Some(base) = self.current_frame().local_map_base.as_ref()
-            && let Some(reg) = base.get(name).copied()
-        {
-            return self.get_reg_value(reg).clone();
+    pub(crate) fn capture_value(&self, name: &str, seen: &mut FxHashSet<String>) -> RuntimeValue {
+        let is_local_style = name.contains(':') || name.contains("->");
+        let local_tail: Option<&str> = if is_local_style {
+            let colon_tail = name.rsplit_once(':').map(|(_, tail)| tail).unwrap_or(name);
+            Some(calibre_parser::qualified_name_tail(colon_tail))
+        } else {
+            None
+        };
+
+        if is_local_style {
+            let current_frame = self.frames.len().saturating_sub(1);
+            for candidate in [Some(name), local_tail].into_iter().flatten() {
+                if let Some(id) = self.variables.id_of(candidate)
+                    && let Some(RuntimeValue::RegRef { frame, .. }) = self.variables.get_by_id(id)
+                    && *frame != current_frame
+                {
+                    return RuntimeValue::VarRef(id);
+                }
+            }
         }
 
-        let short = calibre_parser::qualified_name_tail(name);
-        if short != name
-            && let Some(reg) = self.find_unique_local_by_suffix(short)
+        if is_local_style {
+            for (frame_idx, frame) in self.frames.iter().enumerate().rev() {
+                if let Some(tail) = local_tail
+                    && let Some(reg) = frame.local_map.get(tail).copied()
+                {
+                    return RuntimeValue::RegRef {
+                        frame: frame_idx,
+                        reg,
+                    };
+                }
+                if let Some(reg) = frame.local_map.get(name).copied() {
+                    return RuntimeValue::RegRef {
+                        frame: frame_idx,
+                        reg,
+                    };
+                }
+                if let Some(base) = frame.local_map_base.as_ref() {
+                    if let Some(tail) = local_tail
+                        && let Some(reg) = base.get(tail).copied()
+                    {
+                        return RuntimeValue::RegRef {
+                            frame: frame_idx,
+                            reg,
+                        };
+                    }
+                    if let Some(reg) = base.get(name).copied() {
+                        return RuntimeValue::RegRef {
+                            frame: frame_idx,
+                            reg,
+                        };
+                    }
+                }
+            }
+        }
+
+        if let Some(id) = self.variables.id_of(name) {
+            return RuntimeValue::VarRef(id);
+        }
+        if let Some(tail) = local_tail
+            && let Some(id) = self.variables.id_of(tail)
         {
-            return self.get_reg_value(reg).clone();
+            return RuntimeValue::VarRef(id);
+        }
+
+        let short = Self::name_tail(name);
+        let frame = self.frames.len().saturating_sub(1);
+        if let Some(reg) = self.find_unique_local_by_suffix(short) {
+            return RuntimeValue::RegRef { frame, reg };
+        }
+        if let Some(value) = self.variables.get(name) {
+            return match value {
+                RuntimeValue::RegRef { .. } | RuntimeValue::Ref(_) | RuntimeValue::VarRef(_) => {
+                    self.resolve_saveable_runtime_value_ref(value)
+                }
+                _ if is_local_style => RuntimeValue::Ref(name.to_string()),
+                _ => self.resolve_saveable_runtime_value_ref(value),
+            };
+        }
+
+        if is_local_style
+            && let Ok(value) = self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.to_string()))
+            && !matches!(value, RuntimeValue::Null)
+        {
+            return self.resolve_saveable_runtime_value_ref(&value);
         }
 
         match self.resolve_var_name(name) {
-            VarName::Var(var) => self
-                .variables
-                .get(&var)
-                .map(|v| self.resolve_saveable_runtime_value_ref(v))
-                .unwrap_or(RuntimeValue::Null),
+            VarName::Var(var) => {
+                if let Some(value) = self.variables.get(&var) {
+                    let is_local_style = var.contains(':') || var.contains("->");
+                    match value {
+                        RuntimeValue::RegRef { .. }
+                        | RuntimeValue::Ref(_)
+                        | RuntimeValue::VarRef(_) => self.resolve_saveable_runtime_value_ref(value),
+                        _ if is_local_style => RuntimeValue::Ref(var.clone()),
+                        _ => self.resolve_saveable_runtime_value_ref(value),
+                    }
+                } else {
+                    RuntimeValue::Null
+                }
+            }
             VarName::Func(func) => self
                 .registry
                 .functions
                 .get(&func)
                 .map(|f| self.make_runtime_function_inner(f, seen))
-                .unwrap_or(RuntimeValue::Null),
+                .unwrap_or_else(|| RuntimeValue::Null),
             VarName::Global => {
                 let short_name = calibre_parser::qualified_name_tail(name);
                 if short_name != name
@@ -188,10 +272,15 @@ impl VM {
         captures: &[String],
         seen: &mut FxHashSet<String>,
     ) -> Vec<(String, RuntimeValue)> {
-        captures
-            .iter()
-            .map(|name| (name.clone(), self.capture_value(name, seen)))
-            .collect()
+        let mut out = Vec::with_capacity(captures.len());
+        let mut seen_names = FxHashSet::default();
+        for name in captures {
+            if !seen_names.insert(name.clone()) {
+                continue;
+            }
+            out.push((name.clone(), self.capture_value(name, seen)));
+        }
+        out
     }
 
     pub(crate) fn make_runtime_function(&self, func: &VMFunction) -> RuntimeValue {

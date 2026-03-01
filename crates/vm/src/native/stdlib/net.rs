@@ -47,16 +47,11 @@ fn parse_http_args(args: Vec<RuntimeValue>) -> Result<(String, String, String), 
     let [a, b, c]: [RuntimeValue; 3] = args
         .try_into()
         .map_err(|_| RuntimeError::InvalidFunctionCall)?;
-    let RuntimeValue::Str(a) = a else {
-        return Err(RuntimeError::UnexpectedType(a));
-    };
-    let RuntimeValue::Str(b) = b else {
-        return Err(RuntimeError::UnexpectedType(b));
-    };
-    let RuntimeValue::Str(c) = c else {
-        return Err(RuntimeError::UnexpectedType(c));
-    };
-    let parts = [a.to_string(), b.to_string(), c.to_string()];
+    let parts = [
+        expect_str_owned(a)?.to_string(),
+        expect_str_owned(b)?.to_string(),
+        expect_str_owned(c)?.to_string(),
+    ];
 
     let looks_like_method = |s: &str| {
         matches!(
@@ -335,7 +330,7 @@ impl NativeFunction for TcpClose {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let _stream = args.pop().unwrap_or(RuntimeValue::Null);
+        let _stream = pop_or_null(&mut args);
         Ok(RuntimeValue::Null)
     }
 }

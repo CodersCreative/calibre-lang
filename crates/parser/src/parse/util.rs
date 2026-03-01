@@ -406,17 +406,14 @@ pub(super) fn unescape_string(input: &str) -> String {
     out
 }
 
-pub(super) fn unescape_char(input: char) -> char {
-    match input {
-        'n' => '\n',
-        'r' => '\r',
-        't' => '\t',
-        '0' => '\0',
-        '\\' => '\\',
-        '"' => '"',
-        '\'' => '\'',
-        x => x,
+pub(super) fn unescape_char_literal(input: &str) -> Option<char> {
+    let unescaped = unescape_string(input);
+    let mut chars = unescaped.chars();
+    let first = chars.next()?;
+    if chars.next().is_some() {
+        return None;
     }
+    Some(first)
 }
 
 pub(super) fn scope_node_parser<'a, P>(

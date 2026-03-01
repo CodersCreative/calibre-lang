@@ -164,6 +164,11 @@ fn remove_from_list_value(list: &mut Gc<crate::value::GcVec>, idx: i64) -> Optio
     Some(vec.remove(idx))
 }
 
+#[inline]
+fn same_list_identity(a: &Gc<crate::value::GcVec>, b: &Gc<crate::value::GcVec>) -> bool {
+    std::ptr::eq(a.as_ref(), b.as_ref())
+}
+
 fn remove_from_target(
     env: &mut VM,
     target: RuntimeValue,
@@ -171,29 +176,75 @@ fn remove_from_target(
 ) -> Result<Option<RuntimeValue>, RuntimeError> {
     match target {
         RuntimeValue::Ref(name) => {
-            let Some(RuntimeValue::List(mut list)) = env.variables.get(&name).cloned() else {
+            let Some(current) = env.variables.get(&name).cloned() else {
                 return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
             };
-            let removed = remove_from_list_value(&mut list, idx);
-            env.variables.insert(&name, RuntimeValue::List(list));
-            Ok(removed)
+            match current {
+                RuntimeValue::List(mut list) => {
+                    let removed = remove_from_list_value(&mut list, idx);
+                    env.variables.insert(&name, RuntimeValue::List(list));
+                    Ok(removed)
+                }
+                alias @ (RuntimeValue::Ref(_)
+                | RuntimeValue::VarRef(_)
+                | RuntimeValue::RegRef { .. }) => remove_from_target(env, alias, idx),
+                other => Err(RuntimeError::UnexpectedType(other)),
+            }
         }
         RuntimeValue::VarRef(id) => {
-            let Some(RuntimeValue::List(mut list)) = env.variables.get_by_id(id).cloned() else {
+            let Some(current) = env.variables.get_by_id(id).cloned() else {
                 return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
             };
-            let removed = remove_from_list_value(&mut list, idx);
-            let _ = env.variables.set_by_id(id, RuntimeValue::List(list));
-            Ok(removed)
+            match current {
+                RuntimeValue::List(mut list) => {
+                    let removed = remove_from_list_value(&mut list, idx);
+                    let _ = env.variables.set_by_id(id, RuntimeValue::List(list));
+                    Ok(removed)
+                }
+                alias @ (RuntimeValue::Ref(_)
+                | RuntimeValue::VarRef(_)
+                | RuntimeValue::RegRef { .. }) => remove_from_target(env, alias, idx),
+                other => Err(RuntimeError::UnexpectedType(other)),
+            }
         }
         RuntimeValue::RegRef { frame, reg } => {
-            let RuntimeValue::List(mut list) = env.get_reg_value_in_frame(frame, reg).clone()
-            else {
-                return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
-            };
-            let removed = remove_from_list_value(&mut list, idx);
-            env.set_reg_value_in_frame(frame, reg, RuntimeValue::List(list));
-            Ok(removed)
+            let current = env.get_reg_value_in_frame(frame, reg).clone();
+            match current {
+                RuntimeValue::List(mut list) => {
+                    let old_list = list.clone();
+                    let removed = remove_from_list_value(&mut list, idx);
+                    env.set_reg_value_in_frame(frame, reg, RuntimeValue::List(list));
+                    let updated = match env.get_reg_value_in_frame(frame, reg).clone() {
+                        RuntimeValue::List(new_list) => new_list,
+                        _ => return Ok(removed),
+                    };
+                    let reg_count = env
+                        .frames
+                        .get(frame)
+                        .map(|f| f.reg_count as u16)
+                        .unwrap_or(0);
+                    for i in 0..reg_count {
+                        if i == reg {
+                            continue;
+                        }
+                        if let RuntimeValue::List(other) =
+                            env.get_reg_value_in_frame(frame, i).clone()
+                            && same_list_identity(&other, &old_list)
+                        {
+                            env.set_reg_value_in_frame(
+                                frame,
+                                i,
+                                RuntimeValue::List(updated.clone()),
+                            );
+                        }
+                    }
+                    Ok(removed)
+                }
+                alias @ (RuntimeValue::Ref(_)
+                | RuntimeValue::VarRef(_)
+                | RuntimeValue::RegRef { .. }) => remove_from_target(env, alias, idx),
+                other => Err(RuntimeError::UnexpectedType(other)),
+            }
         }
         other => {
             let resolved = env.resolve_value_for_op_ref(&other)?;

@@ -365,23 +365,23 @@ impl RuntimeValue {
         match self {
             Self::Char(x) => {
                 let mut s = x.to_string();
-                s.push_str(&vm.display_value(&rhs));
+                s.push_str(&rhs.display(vm));
                 Ok(Self::Str(std::sync::Arc::new(s)))
             }
             Self::Str(x) => {
                 let mut s = x.as_str().to_string();
-                s.push_str(&vm.display_value(&rhs));
+                s.push_str(&rhs.display(vm));
                 Ok(Self::Str(std::sync::Arc::new(s)))
             }
             lhs => match rhs {
                 Self::Char(x) => {
                     let mut s = x.to_string();
-                    s.push_str(&vm.display_value(&lhs));
+                    s.push_str(&lhs.display(vm));
                     Ok(Self::Str(std::sync::Arc::new(s)))
                 }
                 Self::Str(x) => {
                     let mut s = x.as_str().to_string();
-                    s.push_str(&vm.display_value(&lhs));
+                    s.push_str(&lhs.display(vm));
                     Ok(Self::Str(std::sync::Arc::new(s)))
                 }
                 _ => Err((lhs, rhs)),

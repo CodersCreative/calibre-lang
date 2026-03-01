@@ -1,0 +1,20 @@
+import * from std::json::lexer;
+import File from std::fs;
+import Args from std::env;
+
+const main = fn () => {
+  	let input_path = match Args.first() {
+		.Some : p => p,
+		.None => __file__.replace("parser.cal", "test.json")
+	};
+	
+	let mut file = try File.open_read(input_path) : e => {
+		print(e);
+		return;
+	};
+	
+	let text : str = try file.read_all(100000) => panic("Failed to read file.");
+	let mut tokenizer = Tokenizer.new();
+	let tokens : list:<Token> = try tokenizer.tokenize(text) : e => panic(e);
+	print(tokens);
+}

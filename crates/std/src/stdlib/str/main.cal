@@ -85,4 +85,58 @@ impl str {
 		
 		some(out);
 	};
+
+	const lowercase = fn (self : str) -> str => {
+		let chars = self.to_chars();
+		let mut out = "";
+		for i in 0..len(chars) => out &= chars[i].lowercase();
+		out;
+	};
+
+	const uppercase = fn (self : str) -> str => {
+		let chars = self.to_chars();
+		let mut out = "";
+		for i in 0..len(chars) => out &= chars[i].uppercase();
+		out;
+	};
+
+	const trim_start = fn (self : str) -> str => {
+		let chars = self.to_chars();
+		let mut start = 0;
+		for start < len(chars) && chars[start].is_whitespace() => start = start + 1;
+		let mut out = "";
+		for i in start..len(chars) => out &= chars[i];
+		out;
+	};
+
+	const trim_end = fn (self : str) -> str => {
+		let chars = self.to_chars();
+		let mut end = len(chars);
+		for end > 0 && chars[end - 1].is_whitespace() => end = end - 1;
+		let mut out = "";
+		for i in 0..end => out &= chars[i];
+		out;
+	};
+
+	const is_whitespace = fn (self : str) -> bool => {
+		let chars = self.to_chars();
+		for i in 0..len(chars) => if !chars[i].is_whitespace() => return false;
+		true;
+	};
+};
+
+impl char {
+	const lowercase = fn (self : char) -> char => char_lowercase(self);
+
+	const uppercase = fn (self : char) -> char => char_uppercase(self);
+
+	const is_whitespace = fn (self : char) -> bool => {
+		self == ' ' || self == '\n' || self == '\r' || self == '\t';
+	};
+
+	const is_digit = fn (self : char) -> bool => self >= '0' && self <= '9';
+
+	const is_alphabetic = fn (self : char) -> bool => self.lowercase() != self.uppercase();
+
+	const is_alphanumeric = fn (self : char) -> bool => self.is_digit() || self.is_alphabetic();
 };

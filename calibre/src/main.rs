@@ -143,6 +143,8 @@ async fn run_source(
 
     let entry_name = std::mem::take(&mut artifacts.entry_name);
     let mut vm: VM = VM::new(artifacts.registry, artifacts.mappings, vm_config);
+    vm.set_source_file_override(path);
+    vm.normalize_magic_file_bindings(path);
     vm.set_program_args(program_args);
 
     if verbosity.is_level(&Verbosity::Byte) {
@@ -806,7 +808,7 @@ async fn run_repl_source(
     match value {
         RuntimeValue::Null => Ok((None, String::new())),
         other => {
-            let txt = other.display(&vm);
+            let txt = other.display(&mut vm);
             Ok((Some(other), txt))
         }
     }

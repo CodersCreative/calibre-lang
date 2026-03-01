@@ -22,14 +22,22 @@ fn pretty_name(name: &str) -> &str {
 }
 
 impl RuntimeValue {
-    pub fn display(&self, vm: &VM) -> String {
+    pub fn display(&self, vm: &mut VM) -> String {
+        if let Some((callable, receiver)) = vm.resolve_display_override(self)
+            && let Some(output) = vm.invoke_display_override(callable, receiver)
+        {
+            return output;
+        }
+
         match self {
             Self::Ref(x) => match vm.variables.get(x) {
-                Some(value) => value.display(vm),
+                Some(value) => value.clone().display(vm),
                 None => RuntimeValue::Null.display(vm),
             },
-            Self::VarRef(id) => vm.variables.get_by_id(*id).unwrap().display(vm),
-            Self::RegRef { frame, reg } => vm.get_reg_value_in_frame(*frame, *reg).display(vm),
+            Self::VarRef(id) => vm.variables.get_by_id(*id).unwrap().clone().display(vm),
+            Self::RegRef { frame, reg } => {
+                vm.get_reg_value_in_frame(*frame, *reg).clone().display(vm)
+            }
             Self::Channel(_) => String::from("Channel"),
             Self::WaitGroup(_) => String::from("WaitGroup"),
             Self::Mutex(_) => String::from("Mutex"),

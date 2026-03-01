@@ -247,6 +247,108 @@ pub fn get_disamubiguous_name(
 }
 
 impl MiddleEnvironment {
+    const SCOPE_MAGIC_KEYS: [&'static str; 3] = ["__name__", "__file__", "__package__"];
+
+    #[inline]
+    pub(crate) fn is_scope_magic_key(key: &str) -> bool {
+        Self::SCOPE_MAGIC_KEYS.contains(&key)
+    }
+
+    #[inline]
+    fn collect_scope_magic_mappings(scope: &MiddleScope) -> Vec<(String, String)> {
+        Self::SCOPE_MAGIC_KEYS
+            .iter()
+            .filter_map(|key| {
+                scope
+                    .mappings
+                    .get(*key)
+                    .cloned()
+                    .map(|value| ((*key).to_string(), value))
+            })
+            .collect()
+    }
+
+    pub(crate) fn preserve_scope_magic_mappings(&self, scope: u64) -> Vec<(String, String)> {
+        self.scopes
+            .get(&scope)
+            .map(Self::collect_scope_magic_mappings)
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn restore_scope_magic_mappings(
+        &mut self,
+        scope: u64,
+        preserved: Vec<(String, String)>,
+    ) {
+        if let Some(scope_ref) = self.scopes.get_mut(&scope) {
+            for (key, value) in preserved {
+                scope_ref.mappings.insert(key, value);
+            }
+        }
+    }
+
+    pub(crate) fn copy_scope_magic_mappings(&mut self, parent: u64, child: u64) {
+        let preserved = self.preserve_scope_magic_mappings(parent);
+        self.restore_scope_magic_mappings(child, preserved);
+    }
+
+    #[inline]
+    fn scope_file_or_fallback(scope: &MiddleScope) -> String {
+        let file = scope.path.to_string_lossy().to_string();
+        if file.is_empty() {
+            String::from("__file__")
+        } else {
+            file
+        }
+    }
+
+    #[inline]
+    fn package_type_name() -> &'static str {
+        "Package"
+    }
+
+    fn package_metadata_for_scope(&self, scope: &MiddleScope) -> PackageMetadata {
+        if scope.namespace == "std" {
+            return PackageMetadata {
+                name: String::from("std"),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                description: String::from("Calibre standard library"),
+                license: String::from("MIT"),
+                repository: String::new(),
+                homepage: String::new(),
+                src: scope.path.to_string_lossy().to_string(),
+                root: scope.path.to_string_lossy().to_string(),
+            };
+        }
+
+        if scope.namespace == "root" {
+            return self
+                .package_metadata
+                .clone()
+                .unwrap_or_else(|| PackageMetadata {
+                    name: String::from("__package__"),
+                    version: String::from("0.0.0"),
+                    description: String::from("default package metadata"),
+                    license: String::new(),
+                    repository: String::new(),
+                    homepage: String::new(),
+                    src: Self::scope_file_or_fallback(scope),
+                    root: String::new(),
+                });
+        }
+
+        PackageMetadata {
+            name: scope.namespace.clone(),
+            version: String::from("0.0.0"),
+            description: String::from("default package metadata"),
+            license: String::new(),
+            repository: String::new(),
+            homepage: String::new(),
+            src: Self::scope_file_or_fallback(scope),
+            root: String::new(),
+        }
+    }
+
     #[inline]
     fn normalized_type(ty: &ParserDataType) -> ParserDataType {
         ty.clone().unwrap_all_refs()
@@ -1534,6 +1636,21 @@ impl MiddleEnvironment {
     }
 
     pub fn resolve_str(&self, scope: &u64, iden: &str) -> Option<String> {
+        if Self::is_scope_magic_key(iden)
+            && let Some(loc) = &self.current_location
+        {
+            let preferred = self
+                .scopes
+                .values()
+                .find(|s| s.path == loc.path && s.namespace == "root")
+                .or_else(|| self.scopes.values().find(|s| s.path == loc.path));
+            if let Some(preferred) = preferred
+                && let Some(mapped) = preferred.mappings.get(iden)
+            {
+                return Some(mapped.clone());
+            }
+        }
+
         if self.variables.contains_key(iden) || self.objects.contains_key(iden) {
             return Some(iden.to_string());
         }
@@ -2012,12 +2129,7 @@ impl MiddleEnvironment {
         let file_value = Node::new(
             sp,
             NodeType::StringLiteral(ParserText::new(sp, {
-                let file = scope_ref.path.to_string_lossy().to_string();
-                if file.is_empty() {
-                    "__file__".to_string()
-                } else {
-                    file
-                }
+                Self::scope_file_or_fallback(&scope_ref)
             })),
         );
 
@@ -2046,56 +2158,7 @@ impl MiddleEnvironment {
             },
         ));
 
-        let package_meta = if scope_ref.namespace == "std" {
-            PackageMetadata {
-                name: "std".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                description: "Calibre standard library".to_string(),
-                license: "MIT".to_string(),
-                repository: String::new(),
-                homepage: String::new(),
-                src: scope_ref.path.to_string_lossy().to_string(),
-                root: scope_ref.path.to_string_lossy().to_string(),
-            }
-        } else if scope_ref.namespace == "root" {
-            self.package_metadata
-                .clone()
-                .unwrap_or_else(|| PackageMetadata {
-                    name: "__package__".to_string(),
-                    version: "0.0.0".to_string(),
-                    description: "default package metadata".to_string(),
-                    license: String::new(),
-                    repository: String::new(),
-                    homepage: String::new(),
-                    src: {
-                        let src = scope_ref.path.to_string_lossy().to_string();
-                        if src.is_empty() {
-                            "__file__".to_string()
-                        } else {
-                            src
-                        }
-                    },
-                    root: String::new(),
-                })
-        } else {
-            PackageMetadata {
-                name: scope_ref.namespace.clone(),
-                version: "0.0.0".to_string(),
-                description: "default package metadata".to_string(),
-                license: String::new(),
-                repository: String::new(),
-                homepage: String::new(),
-                src: {
-                    let src = scope_ref.path.to_string_lossy().to_string();
-                    if src.is_empty() {
-                        "__file__".to_string()
-                    } else {
-                        src
-                    }
-                },
-                root: String::new(),
-            }
-        };
+        let package_meta = self.package_metadata_for_scope(&scope_ref);
 
         let meta = package_meta;
         let package_type = Node::new(
@@ -2104,7 +2167,7 @@ impl MiddleEnvironment {
                 identifier: PotentialGenericTypeIdentifier::Identifier(
                     PotentialDollarIdentifier::Identifier(ParserText::new(
                         sp,
-                        "__Package".to_string(),
+                        Self::package_type_name().to_string(),
                     )),
                 ),
                 object: TypeDefType::Struct(ObjectType::Map(vec![
@@ -2153,7 +2216,7 @@ impl MiddleEnvironment {
                 identifier: PotentialGenericTypeIdentifier::Identifier(
                     PotentialDollarIdentifier::Identifier(ParserText::new(
                         sp,
-                        "__Package".to_string(),
+                        Self::package_type_name().to_string(),
                     )),
                 ),
                 value: ObjectType::Map(vec![
@@ -2185,7 +2248,7 @@ impl MiddleEnvironment {
                 )),
                 data_type: PotentialNewType::DataType(ParserDataType::new(
                     sp,
-                    ParserInnerType::Struct("__Package".to_string()),
+                    ParserInnerType::Struct(Self::package_type_name().to_string()),
                 )),
                 value: Box::new(package_value),
             },
@@ -2607,10 +2670,11 @@ impl MiddleEnvironment {
 
     pub fn get_root_scope<'a>(&'a self) -> &'a MiddleScope {
         for i in 1..self.scope_counter {
-            if let Some(scope) = self.scopes.get(&i) {
-                if scope.namespace == "root" {
-                    return scope;
-                }
+            if let Some(scope) = self.scopes.get(&i)
+                && scope.namespace == "root"
+                && scope.parent == Some(0)
+            {
+                return scope;
             }
         }
 
@@ -2702,7 +2766,7 @@ impl MiddleEnvironment {
             NodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_type_from_node(scope, value)?),
-                    mutability.clone(),
+                    *mutability,
                 ),
                 span: node.span,
             }),

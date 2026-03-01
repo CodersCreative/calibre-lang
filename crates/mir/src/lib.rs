@@ -54,7 +54,7 @@ impl MiddleEnvironment {
                 out.push(Node::new(
                     span,
                     NodeType::VariableDeclaration {
-                        var_type: var_type.clone(),
+                        var_type: *var_type,
                         identifier: name.clone(),
                         data_type: auto_type.clone(),
                         value: Box::new(member),
@@ -67,7 +67,7 @@ impl MiddleEnvironment {
                         identifier: Box::new(Node::new(
                             span,
                             NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                name.clone().into(),
+                                name.clone(),
                             )),
                         )),
                         value: Box::new(member),
@@ -387,12 +387,7 @@ impl MiddleEnvironment {
                         &overload.generic_params,
                     )
             };
-            if let Some(overload) = self
-                .overloads
-                .iter()
-                .find(|x| matches_overload(x))
-                .map(|x| x.clone())
-            {
+            if let Some(overload) = self.overloads.iter().find(|x| matches_overload(x)).cloned() {
                 return Ok(Some(MiddleNode {
                     node_type: MiddleNodeType::CallExpression {
                         caller: Box::new(self.evaluate_inner(scope, overload.func.clone())?),

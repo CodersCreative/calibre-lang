@@ -20,7 +20,27 @@ use crate::{
 
 mod instruction;
 
+#[derive(Debug)]
+enum CaptureRestore {
+    Value(Option<RuntimeValue>),
+    AliasOnly,
+    Keep,
+}
+
 impl VM {
+    #[inline]
+    pub(crate) fn should_pass_by_reg_ref(value: &RuntimeValue) -> bool {
+        matches!(
+            value,
+            RuntimeValue::Aggregate(_, _)
+                | RuntimeValue::List(_)
+                | RuntimeValue::Enum(_, _, _)
+                | RuntimeValue::Option(_)
+                | RuntimeValue::Result(_)
+                | RuntimeValue::Ptr(_)
+        )
+    }
+
     #[inline]
     fn push_owner_member_candidates(
         candidates: &mut Vec<String>,
@@ -63,6 +83,26 @@ impl VM {
     }
 
     #[inline]
+    fn build_member_candidates(
+        owner: &str,
+        member: &str,
+        short_member: Option<&str>,
+        include_member_as_is: bool,
+        mapped: Option<&str>,
+    ) -> Vec<String> {
+        let mut candidates = Vec::with_capacity(6);
+        if let Some(mapped) = mapped {
+            candidates.push(mapped.to_string());
+        }
+        if include_member_as_is && member.contains("::") {
+            candidates.push(member.to_string());
+        }
+        Self::push_owner_member_candidates(&mut candidates, owner, member, short_member);
+        Self::push_short_owner_member_candidates(&mut candidates, owner, member, short_member);
+        candidates
+    }
+
+    #[inline]
     pub(crate) fn is_runtime_callable(value: &RuntimeValue) -> bool {
         matches!(
             value,
@@ -86,7 +126,25 @@ impl VM {
                 let Some(func) = self.resolve_callable_cached(name.as_str(), callsite) else {
                     return Err(RuntimeError::FunctionNotFound(name.to_string()));
                 };
-                self.run_function(func.as_ref(), args, captures)
+                let mut seen = FxHashSet::default();
+                let mut refreshed_caps = Vec::with_capacity(captures.len());
+                let mut seen_names = FxHashSet::default();
+                for (cap_name, old_value) in captures.iter() {
+                    if !seen_names.insert(cap_name.clone()) {
+                        continue;
+                    }
+                    let value = self.capture_value(cap_name, &mut seen);
+                    let value = if matches!(value, RuntimeValue::Null)
+                        && !matches!(old_value, RuntimeValue::Null)
+                    {
+                        old_value.clone()
+                    } else {
+                        value
+                    };
+                    refreshed_caps.push((cap_name.clone(), value));
+                }
+                let refreshed = std::sync::Arc::new(refreshed_caps);
+                self.run_function(func.as_ref(), args, refreshed)
             }
             RuntimeValue::NativeFunction(func) => func.run(self, args),
             RuntimeValue::ExternFunction(func) => func.call(self, args),
@@ -115,7 +173,7 @@ impl VM {
             .ok()
     }
 
-    fn resolve_display_override(
+    pub fn resolve_display_override(
         &mut self,
         value: &RuntimeValue,
     ) -> Option<(RuntimeValue, RuntimeValue)> {
@@ -145,7 +203,7 @@ impl VM {
         }
     }
 
-    fn invoke_display_override(
+    pub fn invoke_display_override(
         &mut self,
         callable: RuntimeValue,
         receiver: RuntimeValue,
@@ -157,15 +215,6 @@ impl VM {
             RuntimeValue::Str(s) => Some(s.to_string()),
             other => Some(other.display(self)),
         }
-    }
-
-    pub(crate) fn display_value(&mut self, value: &RuntimeValue) -> String {
-        if let Some((callable, receiver)) = self.resolve_display_override(value)
-            && let Some(output) = self.invoke_display_override(callable, receiver)
-        {
-            return output;
-        }
-        value.display(self)
     }
 
     fn concrete_runtime_type_name(&self, value: &RuntimeValue) -> Option<String> {
@@ -238,12 +287,7 @@ impl VM {
         member: &str,
         mapped: Option<&str>,
     ) -> Option<RuntimeValue> {
-        let mut candidates = Vec::with_capacity(4);
-        if let Some(m) = mapped {
-            candidates.push(m.to_string());
-        }
-        Self::push_owner_member_candidates(&mut candidates, type_name, member, None);
-        Self::push_short_owner_member_candidates(&mut candidates, type_name, member, None);
+        let candidates = Self::build_member_candidates(type_name, member, None, false, mapped);
         self.resolve_first_candidate(candidates)
     }
 
@@ -253,15 +297,7 @@ impl VM {
         member: &str,
         short_member: Option<&str>,
     ) -> Option<RuntimeValue> {
-        let mut candidates = Vec::with_capacity(5);
-
-        if member.contains("::") {
-            candidates.push(member.to_string());
-        }
-
-        Self::push_owner_member_candidates(&mut candidates, owner, member, short_member);
-        Self::push_short_owner_member_candidates(&mut candidates, owner, member, short_member);
-
+        let candidates = Self::build_member_candidates(owner, member, short_member, true, None);
         self.resolve_first_candidate(candidates)
     }
 
@@ -269,25 +305,68 @@ impl VM {
     fn install_captures(
         &mut self,
         captures: &[(String, RuntimeValue)],
-    ) -> Vec<(String, Option<RuntimeValue>)> {
+    ) -> Vec<(String, CaptureRestore)> {
         if captures.is_empty() {
             return Vec::new();
         }
-        let mut prev_vars = Vec::with_capacity(captures.len());
+        let mut prev_vars = Vec::with_capacity(captures.len() * 2);
+        let mut install_one =
+            |key: &str, value: &RuntimeValue, prev_vars: &mut Vec<(String, CaptureRestore)>| {
+                if let RuntimeValue::Ref(target) = value
+                    && target == key
+                {
+                    prev_vars.push((key.to_string(), CaptureRestore::Keep));
+                    return;
+                }
+                let old = self.variables.get(key).cloned();
+                if let RuntimeValue::VarRef(id) = value {
+                    self.variables.bind_alias(key, *id);
+                    if old.is_some() {
+                        prev_vars.push((key.to_string(), CaptureRestore::Value(old)));
+                    } else {
+                        prev_vars.push((key.to_string(), CaptureRestore::AliasOnly));
+                    }
+                } else {
+                    let old_insert = self.variables.insert(key, value.clone());
+                    prev_vars.push((key.to_string(), CaptureRestore::Value(old_insert)));
+                }
+            };
+
         for (name, value) in captures {
-            let old = self.variables.insert(name, value.clone());
-            prev_vars.push((name.clone(), old));
+            install_one(name, value, &mut prev_vars);
+            if name.contains(':') || name.contains("->") {
+                let colon_tail = name.rsplit_once(':').map(|(_, tail)| tail).unwrap_or(name);
+                let tail = calibre_parser::qualified_name_tail(colon_tail);
+                if tail != name {
+                    install_one(tail, value, &mut prev_vars);
+                }
+            }
         }
         prev_vars
     }
 
     #[inline]
-    fn restore_captures(&mut self, prev_vars: Vec<(String, Option<RuntimeValue>)>) {
+    fn should_install_capture(name: &str) -> bool {
+        if name == "true" || name == "false" || name == "null" {
+            return false;
+        }
+        !name.contains("__anon_loop_")
+    }
+
+    #[inline]
+    fn restore_captures(&mut self, prev_vars: Vec<(String, CaptureRestore)>) {
         for (name, old) in prev_vars {
-            if let Some(value) = old {
-                self.variables.insert(&name, value);
-            } else {
-                self.variables.remove(&name);
+            match old {
+                CaptureRestore::Value(Some(value)) => {
+                    self.variables.insert(&name, value);
+                }
+                CaptureRestore::Value(None) => {
+                    self.variables.remove(&name);
+                }
+                CaptureRestore::AliasOnly => {
+                    let _ = self.variables.remove_name(&name);
+                }
+                CaptureRestore::Keep => {}
             }
         }
     }
@@ -301,12 +380,25 @@ impl VM {
     #[inline(always)]
     fn call_arg_from_frame_reg(&self, frame: usize, reg: u16) -> RuntimeValue {
         match self.get_reg_value_in_frame(frame, reg) {
-            RuntimeValue::Aggregate(_, _)
-            | RuntimeValue::List(_)
-            | RuntimeValue::Enum(_, _, _)
-            | RuntimeValue::Option(_)
-            | RuntimeValue::Result(_)
-            | RuntimeValue::Ptr(_) => RuntimeValue::RegRef { frame, reg },
+            RuntimeValue::RegRef { frame, reg } => {
+                if let Ok(resolved) = self.resolve_value_for_op_ref(&RuntimeValue::RegRef {
+                    frame: *frame,
+                    reg: *reg,
+                }) {
+                    match resolved {
+                        value if Self::should_pass_by_reg_ref(&value) => RuntimeValue::RegRef {
+                            frame: *frame,
+                            reg: *reg,
+                        },
+                        other => other,
+                    }
+                } else {
+                    RuntimeValue::RegRef {
+                        frame: *frame,
+                        reg: *reg,
+                    }
+                }
+            }
             other => other.clone(),
         }
     }
@@ -706,7 +798,6 @@ impl VM {
         captures: std::sync::Arc<Vec<(String, RuntimeValue)>>,
     ) -> Result<RuntimeValue, RuntimeError> {
         let caller_frame = self.frames.len().saturating_sub(1);
-        let prev_vars = self.install_captures(captures.as_ref());
 
         let func_ptr = function as *const VMFunction as usize;
         self.push_frame(function.reg_count as usize, func_ptr);
@@ -715,6 +806,16 @@ impl VM {
             self.set_reg_value(*reg, arg);
         }
         let base = self.local_map_base_for(function);
+        let param_names: std::collections::HashSet<&str> =
+            function.params.iter().map(|x| x.as_str()).collect();
+        let filtered_captures: Vec<(String, RuntimeValue)> = captures
+            .iter()
+            .filter(|(name, _)| {
+                Self::should_install_capture(name) && !param_names.contains(name.as_str())
+            })
+            .cloned()
+            .collect();
+        let prev_vars = self.install_captures(filtered_captures.as_slice());
         let frame = self.current_frame_mut();
         frame.local_map_base = Some(base);
 
@@ -869,21 +970,31 @@ impl VM {
         I: IntoIterator<Item = RuntimeValue>,
     {
         state.yielded = None;
-        let prev_vars = self.install_captures(captures.as_ref());
-
-        if state.block.is_none() {
+        let prev_vars = if state.block.is_none() {
             let func_ptr = function as *const VMFunction as usize;
             self.push_frame(function.reg_count as usize, func_ptr);
             for (reg, arg) in function.param_regs.iter().zip(args) {
                 self.set_reg_value(*reg, arg);
             }
             let base = self.local_map_base_for(function);
+            let param_names: std::collections::HashSet<&str> =
+                function.params.iter().map(|x| x.as_str()).collect();
+            let filtered_captures: Vec<(String, RuntimeValue)> = captures
+                .iter()
+                .filter(|(name, _)| {
+                    Self::should_install_capture(name) && !param_names.contains(name.as_str())
+                })
+                .cloned()
+                .collect();
             let frame = self.current_frame_mut();
             frame.local_map_base = Some(base);
             state.block = Some(function.entry);
             state.ip = 0;
             state.prev_block = None;
-        }
+            self.install_captures(filtered_captures.as_slice())
+        } else {
+            self.install_captures(captures.as_ref())
+        };
 
         let mut block_id = state.block.unwrap_or(function.entry);
         let mut block = function
@@ -970,6 +1081,31 @@ impl VM {
             let reg = selected.unwrap_or_else(|| phi.sources.first().map(|x| x.1).unwrap_or(0));
             let value = self.get_reg_value(reg).clone();
             self.set_reg_value(phi.dest, value);
+            let frame = self.current_frame_mut();
+            let mut tails_to_sync: Vec<Arc<str>> = Vec::new();
+            for (name, mapped) in frame.local_map.iter_mut() {
+                let key = name.as_ref();
+                let is_local_style = key.starts_with("mut-")
+                    || key.starts_with("let-")
+                    || key.contains(':')
+                    || key.contains("->");
+                if !is_local_style || *mapped != reg {
+                    continue;
+                }
+                *mapped = phi.dest;
+                let colon_tail = key.rsplit_once(':').map(|(_, tail)| tail).unwrap_or(key);
+                let tail = calibre_parser::qualified_name_tail(colon_tail);
+                if tail != key {
+                    tails_to_sync.push(Arc::from(tail));
+                }
+            }
+            for tail in tails_to_sync {
+                if let Some(mapped) = frame.local_map.get_mut(tail.as_ref())
+                    && *mapped == reg
+                {
+                    *mapped = phi.dest;
+                }
+            }
         }
         Ok(())
     }

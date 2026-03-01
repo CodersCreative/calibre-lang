@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     VM,
     error::RuntimeError,
-    native::NativeFunction,
+    native::{NativeFunction, pop_or_null},
     value::{ChannelInner, MutexInner, RuntimeValue, WaitGroupInner},
 };
 
@@ -78,7 +78,7 @@ impl NativeFunction for ChannelSend {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let value = args.pop().unwrap_or(RuntimeValue::Null);
+        let value = pop_or_null(&mut args);
         let value = env.convert_runtime_var_into_saveable(value);
         let ch = resolve_channel(env, &mut args)?;
 
@@ -158,7 +158,7 @@ impl NativeFunction for ChannelTrySend {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let value = args.pop().unwrap_or(RuntimeValue::Null);
+        let value = pop_or_null(&mut args);
         let value = env.convert_runtime_var_into_saveable(value);
         let ch = resolve_channel(env, &mut args)?;
 
@@ -269,8 +269,8 @@ impl NativeFunction for WaitGroupJoin {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let inner = args.pop().unwrap_or(RuntimeValue::Null);
-        let outer = args.pop().unwrap_or(RuntimeValue::Null);
+        let inner = pop_or_null(&mut args);
+        let outer = pop_or_null(&mut args);
 
         let outer = env.resolve_value_for_op_ref(&outer)?;
         let inner = env.resolve_value_for_op_ref(&inner)?;
@@ -339,7 +339,7 @@ impl NativeFunction for MutexNew {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let value = args.pop().unwrap_or(RuntimeValue::Null);
+        let value = pop_or_null(&mut args);
         Ok(RuntimeValue::Mutex(Arc::new(MutexInner::new(value))))
     }
 }
@@ -366,7 +366,7 @@ impl NativeFunction for MutexSet {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let value = args.pop().unwrap_or(RuntimeValue::Null);
+        let value = pop_or_null(&mut args);
         let m = resolve_mutex(env, &mut args)?;
         let guard = m.lock();
         guard.set_value(value);
@@ -385,7 +385,7 @@ impl NativeFunction for MutexWith {
         if args.len() != 2 {
             return Err(RuntimeError::InvalidFunctionCall);
         }
-        let func = args.pop().unwrap_or(RuntimeValue::Null);
+        let func = pop_or_null(&mut args);
         let m = resolve_mutex(env, &mut args)?;
         let guard = m.lock();
         let current = guard.get_clone();

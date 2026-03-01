@@ -2,7 +2,7 @@ use calibre_parser::{
     Parser,
     ast::{ParserDataType, VarType},
 };
-use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
+use calibre_std::{get_globals_path, get_path, get_stdlib_module_path, get_stdlib_path};
 use rustc_hash::FxHashMap;
 use std::{fs, path::PathBuf};
 
@@ -56,6 +56,8 @@ impl MiddleEnvironment {
             "err",
             "some",
             "trim",
+            "char_lowercase",
+            "char_uppercase",
             "repr",
             "print",
             "len",
@@ -174,6 +176,23 @@ impl MiddleEnvironment {
                 "starts_with",
                 "ends_with",
                 "strip_prefix",
+                "lowercase",
+                "uppercase",
+                "trim_start",
+                "trim_end",
+                "is_whitespace",
+            ],
+        );
+        self.setup_std_module(
+            scope,
+            "char",
+            &[
+                "lowercase",
+                "uppercase",
+                "is_whitespace",
+                "is_digit",
+                "is_alphabetic",
+                "is_alphanumeric",
             ],
         );
         self.setup_std_module(
@@ -187,6 +206,11 @@ impl MiddleEnvironment {
         self.setup_std_module(scope, "regex", &["is_match", "find", "replace"]);
         self.setup_std_module(scope, "process", &["raw_exec"]);
         self.setup_std_module(scope, "math", &[]);
+        self.setup_std_module(scope, "json", &[]);
+        if let Ok(json_scope) = self.get_scope_from_parent(*scope, "json") {
+            self.setup_std_child_module(&json_scope, "lexer", "stdlib/json/lexer.cal");
+            self.setup_std_child_module(&json_scope, "parser", "stdlib/json/parser.cal");
+        }
         self.setup_std_module(
             scope,
             "net",
@@ -237,7 +261,37 @@ impl MiddleEnvironment {
 
         let mut parser = Parser::default();
         if let Ok(stdlib) = fs::read_to_string(scope_path) {
+            parser.set_source_path(Some(PathBuf::from(get_stdlib_module_path(name))));
             let program = parser.produce_ast(&stdlib);
+            if !parser.errors.is_empty() {
+                self.errors.push(crate::errors::MiddleErr::ParserErrors {
+                    path: PathBuf::from(get_stdlib_module_path(name)),
+                    contents: stdlib,
+                    errors: std::mem::take(&mut parser.errors),
+                });
+                return;
+            }
+            let middle = self.evaluate(&scope, program);
+            self.stdlib_nodes.push(middle);
+        }
+    }
+
+    fn setup_std_child_module(&mut self, parent: &u64, name: &str, path: &str) {
+        let scope_path = PathBuf::from(get_path(path));
+        let scope = self.new_scope(Some(*parent), scope_path.clone(), Some(name));
+
+        let mut parser = Parser::default();
+        if let Ok(stdlib) = fs::read_to_string(scope_path) {
+            parser.set_source_path(Some(PathBuf::from(get_path(path))));
+            let program = parser.produce_ast(&stdlib);
+            if !parser.errors.is_empty() {
+                self.errors.push(crate::errors::MiddleErr::ParserErrors {
+                    path: PathBuf::from(get_path(path)),
+                    contents: stdlib,
+                    errors: std::mem::take(&mut parser.errors),
+                });
+                return;
+            }
             let middle = self.evaluate(&scope, program);
             self.stdlib_nodes.push(middle);
         }

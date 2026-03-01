@@ -1,4 +1,9 @@
-use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
+use crate::{
+    VM,
+    error::RuntimeError,
+    native::{NativeFunction, pop_or_null},
+    value::RuntimeValue,
+};
 use blake3::Hasher as Blake3;
 use sha2::{Digest, Sha256, Sha512};
 
@@ -14,7 +19,7 @@ impl NativeFunction for Sha256Fn {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let input = args.pop().unwrap_or(RuntimeValue::Null);
+        let input = pop_or_null(&mut args);
         let RuntimeValue::Str(s) = input else {
             return Err(RuntimeError::UnexpectedType(input));
         };
@@ -37,7 +42,7 @@ impl NativeFunction for Sha512Fn {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let input = args.pop().unwrap_or(RuntimeValue::Null);
+        let input = pop_or_null(&mut args);
         let RuntimeValue::Str(s) = input else {
             return Err(RuntimeError::UnexpectedType(input));
         };
@@ -60,7 +65,7 @@ impl NativeFunction for Blake3Fn {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let input = args.pop().unwrap_or(RuntimeValue::Null);
+        let input = pop_or_null(&mut args);
         let RuntimeValue::Str(s) = input else {
             return Err(RuntimeError::UnexpectedType(input));
         };

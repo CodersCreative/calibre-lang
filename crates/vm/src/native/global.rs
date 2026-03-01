@@ -1,4 +1,9 @@
-use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
+use crate::{
+    VM,
+    error::RuntimeError,
+    native::{NativeFunction, char_lower, char_upper, pop_or_null},
+    value::RuntimeValue,
+};
 use dumpster::sync::Gc;
 use std::{
     io::{self, Write},
@@ -70,6 +75,31 @@ fn panic_message_arg(value: &RuntimeValue) -> String {
 }
 
 #[inline]
+fn write_console(rendered: &str, is_stderr: bool) -> Result<(), RuntimeError> {
+    if is_stderr {
+        let stderr = io::stderr();
+        let mut handle = stderr.lock();
+        handle
+            .write_all(rendered.as_bytes())
+            .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        handle
+            .flush()
+            .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        return Ok(());
+    }
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    handle
+        .write_all(rendered.as_bytes())
+        .map_err(|e| RuntimeError::Io(e.to_string()))?;
+    handle
+        .flush()
+        .map_err(|e| RuntimeError::Io(e.to_string()))?;
+    Ok(())
+}
+
+#[inline]
 fn resolve_first_arg(
     env: &mut VM,
     args: Vec<RuntimeValue>,
@@ -79,6 +109,19 @@ fn resolve_first_arg(
         .next()
         .map(|value| resolve_native_input(env, value, include_reg_ref).map(Some))
         .unwrap_or(Ok(None))
+}
+
+#[inline]
+fn with_first_arg(
+    env: &mut VM,
+    args: Vec<RuntimeValue>,
+    include_reg_ref: bool,
+    f: impl FnOnce(RuntimeValue) -> Result<RuntimeValue, RuntimeError>,
+) -> Result<RuntimeValue, RuntimeError> {
+    match resolve_first_arg(env, args, include_reg_ref)? {
+        Some(value) => f(value),
+        None => Ok(RuntimeValue::Null),
+    }
 }
 
 #[inline]
@@ -109,30 +152,14 @@ impl NativeFunction for ConsoleOutput {
             .skip(1)
             .map(|arg| match arg {
                 RuntimeValue::Str(value) => unescape_string(value.as_str()),
-                other => env.display_value(&other),
+                other => other.display(env),
             })
             .collect::<String>();
 
         if env.suppress_output {
             env.captured_output.push_str(&rendered);
-        } else if handle_type != 2 {
-            let stdout = io::stdout();
-            let mut handle = stdout.lock();
-            handle
-                .write_all(rendered.as_bytes())
-                .map_err(|e| RuntimeError::Io(e.to_string()))?;
-            handle
-                .flush()
-                .map_err(|e| RuntimeError::Io(e.to_string()))?;
         } else {
-            let stderr = io::stderr();
-            let mut handle = stderr.lock();
-            handle
-                .write_all(rendered.as_bytes())
-                .map_err(|e| RuntimeError::Io(e.to_string()))?;
-            handle
-                .flush()
-                .map_err(|e| RuntimeError::Io(e.to_string()))?;
+            write_console(&rendered, handle_type == 2)?;
         }
 
         Ok(RuntimeValue::Null)
@@ -247,8 +274,12 @@ impl NativeFunction for GenSuspendFn {
         String::from("gen_suspend")
     }
 
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let value = args.into_iter().next().unwrap_or(RuntimeValue::Null);
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
+        let value = pop_or_null(&mut args);
         Ok(RuntimeValue::GeneratorSuspend(Box::new(value)))
     }
 }
@@ -261,7 +292,7 @@ impl NativeFunction for Len {
     }
 
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        if let Some(current) = resolve_first_arg(env, args, true)? {
+        with_first_arg(env, args, true, |current| {
             Ok(RuntimeValue::Int(match current {
                 RuntimeValue::List(data) => data.as_ref().0.len() as i64,
                 RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as i64,
@@ -274,9 +305,7 @@ impl NativeFunction for Len {
                 RuntimeValue::Float(x) => x as i64,
                 other => return Err(RuntimeError::UnexpectedType(other)),
             }))
-        } else {
-            Ok(RuntimeValue::Null)
-        }
+        })
     }
 }
 
@@ -288,14 +317,12 @@ impl NativeFunction for MinOrZero {
     }
 
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        if let Some(current) = resolve_first_arg(env, args, true)? {
+        with_first_arg(env, args, true, |current| {
             Ok(RuntimeValue::Int(match current {
                 RuntimeValue::Range(from, _) => from,
                 _ => 0,
             }))
-        } else {
-            Ok(RuntimeValue::Null)
-        }
+        })
     }
 }
 
@@ -306,16 +333,85 @@ impl NativeFunction for Trim {
         String::from("trim")
     }
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        if let Some(current) = resolve_first_arg(env, args, false)? {
-            match current {
-                RuntimeValue::Str(s) => {
-                    Ok(RuntimeValue::Str(std::sync::Arc::new(s.trim().to_string())))
-                }
-                other => Err(RuntimeError::UnexpectedType(other)),
+        with_first_arg(env, args, false, |current| match current {
+            RuntimeValue::Str(s) => {
+                Ok(RuntimeValue::Str(std::sync::Arc::new(s.trim().to_string())))
             }
-        } else {
-            Ok(RuntimeValue::Null)
-        }
+            other => Err(RuntimeError::UnexpectedType(other)),
+        })
+    }
+}
+
+pub struct TrimStart();
+
+impl NativeFunction for TrimStart {
+    fn name(&self) -> String {
+        String::from("trim_start")
+    }
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        with_first_arg(env, args, false, |current| match current {
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(s.trim_start().to_string()))),
+            other => Err(RuntimeError::UnexpectedType(other)),
+        })
+    }
+}
+
+pub struct TrimEnd();
+
+impl NativeFunction for TrimEnd {
+    fn name(&self) -> String {
+        String::from("trim_end")
+    }
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        with_first_arg(env, args, false, |current| match current {
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(s.trim_end().to_string()))),
+            other => Err(RuntimeError::UnexpectedType(other)),
+        })
+    }
+}
+
+pub struct Lowercase();
+
+impl NativeFunction for Lowercase {
+    fn name(&self) -> String {
+        String::from("lowercase")
+    }
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        with_first_arg(env, args, false, |current| match current {
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(s.to_lowercase()))),
+            RuntimeValue::Char(c) => Ok(RuntimeValue::Char(char_lower(c))),
+            other => Err(RuntimeError::UnexpectedType(other)),
+        })
+    }
+}
+
+pub struct Uppercase();
+
+impl NativeFunction for Uppercase {
+    fn name(&self) -> String {
+        String::from("uppercase")
+    }
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        with_first_arg(env, args, false, |current| match current {
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(s.to_uppercase()))),
+            RuntimeValue::Char(c) => Ok(RuntimeValue::Char(char_upper(c))),
+            other => Err(RuntimeError::UnexpectedType(other)),
+        })
+    }
+}
+
+pub struct IsWhitespace();
+
+impl NativeFunction for IsWhitespace {
+    fn name(&self) -> String {
+        String::from("is_whitespace")
+    }
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        with_first_arg(env, args, false, |current| match current {
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Bool(s.chars().all(|c| c.is_whitespace()))),
+            RuntimeValue::Char(c) => Ok(RuntimeValue::Bool(c.is_whitespace())),
+            other => Err(RuntimeError::UnexpectedType(other)),
+        })
     }
 }
 
@@ -326,15 +422,13 @@ impl NativeFunction for DiscriminantFn {
         String::from("discriminant")
     }
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        if let Some(current) = resolve_first_arg(env, args, true)? {
+        with_first_arg(env, args, true, |current| {
             Ok(RuntimeValue::Int(match current {
                 RuntimeValue::Enum(_, index, _) => index as i64,
                 RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0 as i64,
                 RuntimeValue::Option(None) | RuntimeValue::Result(Err(_)) => 1,
                 _ => 0,
             }))
-        } else {
-            Ok(RuntimeValue::Null)
-        }
+        })
     }
 }

@@ -22,20 +22,6 @@ struct RawExecOptions {
     check: bool,
 }
 
-fn to_str(value: RuntimeValue) -> Result<String, RuntimeError> {
-    match value {
-        RuntimeValue::Str(v) => Ok(v.to_string()),
-        other => Err(RuntimeError::UnexpectedType(other)),
-    }
-}
-
-fn to_bool(value: RuntimeValue) -> Result<bool, RuntimeError> {
-    match value {
-        RuntimeValue::Bool(v) => Ok(v),
-        other => Err(RuntimeError::UnexpectedType(other)),
-    }
-}
-
 fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<String>, RuntimeError> {
     let RuntimeValue::List(values) = value else {
         return Err(RuntimeError::InvalidFunctionCall);
@@ -44,7 +30,10 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<String>, RuntimeErro
     let mut out = Vec::with_capacity(values.0.len());
     for value in values.0.iter().cloned() {
         let value = env.resolve_value_for_op_ref(&value)?;
-        out.push(to_str(value)?);
+        match value {
+            RuntimeValue::Str(v) => out.push(v.to_string()),
+            other => return Err(RuntimeError::UnexpectedType(other)),
+        }
     }
 
     Ok(out)
@@ -70,13 +59,19 @@ fn required_str_field(env: &VM, map: &Gc<GcMap>, key: &str) -> Result<String, Ru
     let Some(value) = resolve_field(env, map, key)? else {
         return Err(RuntimeError::InvalidFunctionCall);
     };
-    to_str(value)
+    match value {
+        RuntimeValue::Str(v) => Ok(v.to_string()),
+        other => Err(RuntimeError::UnexpectedType(other)),
+    }
 }
 
 fn parse_optional_string(value: RuntimeValue) -> Result<Option<String>, RuntimeError> {
     match value {
         RuntimeValue::Option(None) => Ok(None),
-        RuntimeValue::Option(Some(v)) => to_str(v.as_ref().clone()).map(Some),
+        RuntimeValue::Option(Some(v)) => match v.as_ref() {
+            RuntimeValue::Str(v) => Ok(Some(v.to_string())),
+            other => Err(RuntimeError::UnexpectedType(other.clone())),
+        },
         RuntimeValue::Str(v) => Ok(Some(v.to_string())),
         other => Err(RuntimeError::UnexpectedType(other)),
     }
@@ -97,7 +92,8 @@ fn parse_options(env: &VM, options: RuntimeValue) -> Result<RawExecOptions, Runt
         None => None,
     };
     let shell = match resolve_field(env, &map, "shell")? {
-        Some(value) => to_bool(value)?,
+        Some(RuntimeValue::Bool(v)) => v,
+        Some(other) => return Err(RuntimeError::UnexpectedType(other)),
         None => false,
     };
     let stdin = match resolve_field(env, &map, "stdin")? {
@@ -105,7 +101,8 @@ fn parse_options(env: &VM, options: RuntimeValue) -> Result<RawExecOptions, Runt
         None => None,
     };
     let check = match resolve_field(env, &map, "check")? {
-        Some(value) => to_bool(value)?,
+        Some(RuntimeValue::Bool(v)) => v,
+        Some(other) => return Err(RuntimeError::UnexpectedType(other)),
         None => false,
     };
 

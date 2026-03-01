@@ -1,4 +1,9 @@
-use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
+use crate::{
+    VM,
+    error::RuntimeError,
+    native::{NativeFunction, pop_or_null},
+    value::RuntimeValue,
+};
 use regex::Regex;
 
 pub struct IsMatchFn;
@@ -13,8 +18,8 @@ impl NativeFunction for IsMatchFn {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let text = args.pop().unwrap_or(RuntimeValue::Null);
-        let pattern = args.pop().unwrap_or(RuntimeValue::Null);
+        let text = pop_or_null(&mut args);
+        let pattern = pop_or_null(&mut args);
         let RuntimeValue::Str(text) = text else {
             return Err(RuntimeError::UnexpectedType(text));
         };
@@ -38,8 +43,8 @@ impl NativeFunction for FindFn {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let text = args.pop().unwrap_or(RuntimeValue::Null);
-        let pattern = args.pop().unwrap_or(RuntimeValue::Null);
+        let text = pop_or_null(&mut args);
+        let pattern = pop_or_null(&mut args);
         let RuntimeValue::Str(text) = text else {
             return Err(RuntimeError::UnexpectedType(text));
         };
@@ -66,9 +71,9 @@ impl NativeFunction for ReplaceFn {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let replacement = args.pop().unwrap_or(RuntimeValue::Null);
-        let text = args.pop().unwrap_or(RuntimeValue::Null);
-        let pattern = args.pop().unwrap_or(RuntimeValue::Null);
+        let replacement = pop_or_null(&mut args);
+        let text = pop_or_null(&mut args);
+        let pattern = pop_or_null(&mut args);
         let RuntimeValue::Str(replacement) = replacement else {
             return Err(RuntimeError::UnexpectedType(replacement));
         };

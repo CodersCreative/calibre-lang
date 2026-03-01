@@ -1,0 +1,22 @@
+[
+  {
+    "id": "fa89576c-6f07-4d3d-8165-b4c82daf11ce",
+    "userId": "a40e84c3-f697-426d-a0c9-62b8df4071eb",
+    "command": "code-expert",
+    "title": "Code Expert",
+    "content": "Please provide me with a coding query, and I'll do my best to assist you. Whether it's debugging, writing code snippets, or explaining concepts, I'm here to help. Be specific about your question, and I'll provide a clear and concise technical response.",
+    "downloads": 11905,
+    "upvotes": 0,
+    "downvotes": 0,
+    "createdAt": 1704994458,
+    "public": true,
+    "user": {
+      "id": "a40e84c3-f697-426d-a0c9-62b8df4071eb",
+      "username": "masterdee",
+      "name": "",
+      "createdAt": 1704993131,
+      "role": null,
+      "verified": false
+    }
+  }
+]
