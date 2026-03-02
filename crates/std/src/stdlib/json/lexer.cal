@@ -254,6 +254,8 @@ impl Tokenizer {
 			return err(self.get_unrecognized(first));
 		};
 		
+		tokens = tokens.iter().filter(fn(x) => x != TokenType.WhiteSpace).collect();
+
 		ok(tokens);
 	};
 };

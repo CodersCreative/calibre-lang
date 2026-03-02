@@ -1,0 +1,89 @@
+import (Tokenizer, Token, TokenType, Span) from super::lexer;
+
+type Parser = struct { tokens : list:<Token>, errors : list:<str> };
+
+type JsonValue = enum {
+    Number : float,
+    String : str,
+    Map : HashMap:<str, JsonValue>,
+    List : list:<JsonValue>,
+    Bool : bool,
+    Null,
+}
+
+impl Parser {
+    const new = fn () -> Parser => Parser { tokens : [], errors : [] };
+
+    const first = fn(self : &Self) -> Token => self.tokens[0];
+
+    const eat = fn(self : &mut Self) -> Token => self.tokens.remove(0).unwrap();
+
+    const nth = fn(self : &Self, n : int) -> Token => self.tokens[n];
+
+    const expect_eat = fn(self : &mut Self, t : TokenType) -> Token => {
+        let token = self.eat();
+
+        if token.token_type != t => self.errors <<= "Incorrect token found. Expected " & t & " found " & token.token_type;
+
+        token
+    }
+
+    const parse = fn(self: &mut Self) -> JsonValue => {
+        let first : TokenType = self.first().token_type;
+        match first {
+            .Number => {
+                let t = self.eat();
+                JsonValue.Number : try t.value as float : e => {
+                    self.errors <<= e;
+                    0;
+                };
+            },
+            .String => JsonValue.String : self.eat().value,
+            .True => {
+                let _ = self.eat();
+                JsonValue.Bool : true;
+            },
+            .False => {
+                let _ = self.eat();
+                JsonValue.Bool : false;
+            },
+            .SquareOpen => {
+                let _ = self.eat();
+                let mut values = [];
+
+                for self.first.token_type != TokenType.SquareClose => {
+                    values <<= self.parse();
+                    // For now I'm going to allow trailing commas                    
+                    if self.first.token_type == TokenType.Comma => self.expect_eat(TokenType.Comma);
+                }
+                
+                let _ = self.expect_eat(TokenType.SquareClose);
+                JsonValue.List : values;
+            },
+            .CurlyOpen => {
+                let _ = self.eat();
+                let mut values = HashMap:<str, JsonValue>.new();
+
+                for self.first.token_type != TokenType.CurlyClose => {
+                    let key = self.expect_eat(TokenType.String);
+                    let _ = self.expect_eat(TokenType.Colon);
+                    values[key.value] = self.parse();
+                    // For now I'm going to allow trailing commas
+                    if self.first.token_type == TokenType.Comma => self.expect_eat(TokenType.Comma);
+                }
+                
+                let _ = self.expect_eat(TokenType.CurlyClose);
+                JsonValue.Map : values;
+            },
+            .Null => {
+                let _ = self.eat();
+                JsonValue.Null;               
+            },
+            _ => {
+                let t = self.eat();
+                self.errors <<= "Unexpectedly found token : " & t;
+                JsonValue.Null;               
+            },
+        }
+    }
+}

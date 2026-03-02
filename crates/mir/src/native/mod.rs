@@ -207,9 +207,11 @@ impl MiddleEnvironment {
         self.setup_std_module(scope, "process", &["raw_exec"]);
         self.setup_std_module(scope, "math", &[]);
         self.setup_std_module(scope, "json", &[]);
+        // TODO Make std child modules import using the builtin import statement
         if let Ok(json_scope) = self.get_scope_from_parent(*scope, "json") {
             self.setup_std_child_module(&json_scope, "lexer", "stdlib/json/lexer.cal");
-            self.setup_std_child_module(&json_scope, "parser", "stdlib/json/parser.cal");
+            // TODO Currently the parser is unstable
+            // self.setup_std_child_module(&json_scope, "parser", "stdlib/json/parser.cal");
         }
         self.setup_std_module(
             scope,
