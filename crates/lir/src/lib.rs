@@ -190,6 +190,7 @@ pub enum LirNodeType {
     },
     Deref(Box<LirNodeType>),
     Ref(Box<LirNodeType>),
+    RefLoad(Box<str>),
     Index(Box<LirNodeType>, Box<LirNodeType>),
     Member(Box<LirNodeType>, Box<str>),
     Enum {
@@ -264,8 +265,8 @@ impl Display for LirNodeType {
                     format!("{} as{} {}", node, suffix, data_type)
                 }
                 Self::Is(node, data_type) => format!("{node} is {data_type}"),
-                Self::Declare { dest, value } => format!("let {} = {}", dest, value),
-                Self::Assign { dest, value } => format!("{} = {}", dest, value),
+                Self::Declare { dest, value } => format!("let {} := {}", dest, value),
+                Self::Assign { dest, value } => format!("{} := {}", dest, value),
                 Self::ExternFunction {
                     abi,
                     library,
@@ -316,6 +317,7 @@ impl Display for LirNodeType {
                     txt
                 }
                 Self::Ref(x) => format!("&{}", x),
+                Self::RefLoad(name) => format!("&{}", name),
                 Self::Deref(x) => format!("*{}", x),
                 Self::Drop(x) => format!("drop {}", x),
                 Self::Move(x) => format!("move {}", x),
@@ -446,6 +448,15 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
+    fn bool_node(value: bool) -> LirNodeType {
+        LirNodeType::Load(
+            if value { "true" } else { "false" }
+                .to_string()
+                .into_boxed_str(),
+        )
+    }
+
+    #[inline]
     fn is_null_node(node: &LirNodeType) -> bool {
         matches!(node, LirNodeType::Literal(LirLiteral::Null))
     }
@@ -467,6 +478,18 @@ impl<'a> LirEnvironment<'a> {
             .into_iter()
             .map(|node| self.lower_node(node))
             .collect()
+    }
+
+    #[inline]
+    fn is_invalid_member_placeholder(node: &LirNodeType) -> bool {
+        match node {
+            LirNodeType::Member(_, field) => field.as_ref() == "<invalid>",
+            LirNodeType::Ref(inner) | LirNodeType::Deref(inner) => {
+                Self::is_invalid_member_placeholder(inner)
+            }
+            LirNodeType::RefLoad(_) => false,
+            _ => false,
+        }
     }
 
     fn assign_var(&mut self, span: Span, name: &str, value: LirNodeType) {
@@ -815,15 +838,116 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::AssignmentExpression { identifier, value } => {
                 let rhs = self.lower_node(*value);
                 let ident_span = identifier.span;
-                let lhs = self.lower_lvalue(*identifier);
+                let ident_node = *identifier;
+
+                let (lhs, old_expr) = match ident_node.node_type {
+                    MiddleNodeType::Identifier(name) => {
+                        let name = name.to_string().into_boxed_str();
+                        (
+                            Some(LirLValue::Var(name.clone())),
+                            Some(LirNodeType::Load(name)),
+                        )
+                    }
+                    MiddleNodeType::DerefStatement { value } => {
+                        let ptr_expr = self.lower_node(*value);
+                        let ptr_tmp = self.get_temp();
+                        self.add_instr(LirInstr::new(
+                            ident_span,
+                            LirNodeType::Declare {
+                                dest: ptr_tmp.clone().into_boxed_str(),
+                                value: Box::new(ptr_expr),
+                            },
+                        ));
+                        let ptr_load = LirNodeType::Load(ptr_tmp.into_boxed_str());
+                        (
+                            Some(LirLValue::Ptr(Box::new(ptr_load.clone()))),
+                            Some(LirNodeType::Deref(Box::new(ptr_load))),
+                        )
+                    }
+                    MiddleNodeType::MemberExpression { path } => {
+                        if path.is_empty() {
+                            (
+                                Some(LirLValue::Var(Box::<str>::from("<invalid>"))),
+                                Some(Self::null_node()),
+                            )
+                        } else {
+                            let mut base_path = path.clone();
+                            let (last_node, last_is_index) = base_path.pop().unwrap_or_else(|| {
+                                (
+                                    MiddleNode::new(MiddleNodeType::EmptyLine, ident_span),
+                                    false,
+                                )
+                            });
+                            let base_expr = if base_path.is_empty() {
+                                self.lower_node(last_node.clone())
+                            } else {
+                                self.lower_member_path(base_path, true)
+                            };
+
+                            let base_tmp = self.get_temp();
+                            self.add_instr(LirInstr::new(
+                                ident_span,
+                                LirNodeType::Declare {
+                                    dest: base_tmp.clone().into_boxed_str(),
+                                    value: Box::new(base_expr),
+                                },
+                            ));
+                            let base_load = LirNodeType::Load(base_tmp.into_boxed_str());
+
+                            if last_is_index {
+                                let index_expr = self.lower_node(last_node);
+                                let index_tmp = self.get_temp();
+                                self.add_instr(LirInstr::new(
+                                    ident_span,
+                                    LirNodeType::Declare {
+                                        dest: index_tmp.clone().into_boxed_str(),
+                                        value: Box::new(index_expr),
+                                    },
+                                ));
+                                let index_load = LirNodeType::Load(index_tmp.into_boxed_str());
+                                let old = LirNodeType::Index(
+                                    Box::new(base_load.clone()),
+                                    Box::new(index_load.clone()),
+                                );
+                                let ptr =
+                                    LirNodeType::Index(Box::new(base_load), Box::new(index_load));
+                                (Some(LirLValue::Ptr(Box::new(ptr))), Some(old))
+                            } else {
+                                let field = Self::member_field(last_node);
+                                let old =
+                                    LirNodeType::Member(Box::new(base_load.clone()), field.clone());
+                                let ptr = LirNodeType::Member(Box::new(base_load), field);
+                                (Some(LirLValue::Ptr(Box::new(ptr))), Some(old))
+                            }
+                        }
+                    }
+                    other => (
+                        Some(self.lower_lvalue(MiddleNode::new(other, ident_span))),
+                        Some(Self::null_node()),
+                    ),
+                };
+
+                let old_expr = old_expr.unwrap_or_else(Self::null_node);
+                let temp = self.get_temp();
                 self.add_instr(LirInstr::new(
                     ident_span,
-                    LirNodeType::Assign {
-                        dest: lhs,
-                        value: Box::new(rhs),
+                    LirNodeType::Declare {
+                        dest: temp.clone().into_boxed_str(),
+                        value: Box::new(old_expr),
                     },
                 ));
-                Self::null_node()
+
+                if let Some(lhs) = lhs {
+                    self.add_instr(LirInstr::new(
+                        ident_span,
+                        LirNodeType::Assign {
+                            dest: lhs,
+                            value: Box::new(rhs),
+                        },
+                    ));
+                }
+
+                LirNodeType::Load(temp.into_boxed_str())
             }
             MiddleNodeType::FunctionDeclaration {
                 parameters,
@@ -1013,8 +1137,9 @@ impl<'a> LirEnvironment<'a> {
                 };
                 if is_temp {
                     let temp = self.get_temp();
-                    let lowered = self.lower_node(last);
+                    let lowered = self.lower_node(last.clone());
                     if Self::is_null_node(&lowered) {
+                        self.lower_and_add_node(last);
                         return Self::null_node();
                     }
                     self.add_instr(LirInstr::new(
@@ -1165,7 +1290,11 @@ impl<'a> LirEnvironment<'a> {
                 LirNodeType::Deref(Box::new(self.lower_node(*value)))
             }
             MiddleNodeType::RefStatement { value, .. } => {
-                LirNodeType::Ref(Box::new(self.lower_node(*value)))
+                if let MiddleNodeType::Identifier(name) = value.node_type {
+                    LirNodeType::RefLoad(name.text.into_boxed_str())
+                } else {
+                    LirNodeType::Ref(Box::new(self.lower_node(*value)))
+                }
             }
             MiddleNodeType::BinaryExpression {
                 left,
@@ -1180,11 +1309,66 @@ impl<'a> LirEnvironment<'a> {
                 left,
                 right,
                 operator,
-            } => LirNodeType::Boolean {
-                left: Box::new(self.lower_node(*left)),
-                right: Box::new(self.lower_node(*right)),
-                operator,
-            },
+            } => {
+                let then_id = self.create_block();
+                let else_id = self.create_block();
+                let merge_id = self.create_block();
+
+                let temp = self.get_temp();
+                self.declare_temp_null(span, temp.as_str());
+
+                let cond = self.lower_node(*left);
+                self.set_terminator(LirTerminator::Branch {
+                    span,
+                    condition: cond,
+                    then_block: then_id,
+                    else_block: else_id,
+                });
+
+                match operator {
+                    BooleanOperator::And => {
+                        self.switch_to(then_id);
+                        let right_val = self.lower_node(*right);
+                        let checked = LirNodeType::Boolean {
+                            left: Box::new(right_val),
+                            right: Box::new(Self::bool_node(true)),
+                            operator,
+                        };
+                        if self.current_block_open() {
+                            self.assign_var(span, temp.as_str(), checked);
+                            self.jump_if_open(span, merge_id);
+                        }
+
+                        self.switch_to(else_id);
+                        if self.current_block_open() {
+                            self.assign_var(span, temp.as_str(), Self::bool_node(false));
+                            self.jump_if_open(span, merge_id);
+                        }
+                    }
+                    BooleanOperator::Or => {
+                        self.switch_to(then_id);
+                        if self.current_block_open() {
+                            self.assign_var(span, temp.as_str(), Self::bool_node(true));
+                            self.jump_if_open(span, merge_id);
+                        }
+
+                        self.switch_to(else_id);
+                        let right_val = self.lower_node(*right);
+                        let checked = LirNodeType::Boolean {
+                            left: Box::new(right_val),
+                            right: Box::new(Self::bool_node(false)),
+                            operator,
+                        };
+                        if self.current_block_open() {
+                            self.assign_var(span, temp.as_str(), checked);
+                            self.jump_if_open(span, merge_id);
+                        }
+                    }
+                }
+
+                self.switch_to(merge_id);
+                LirNodeType::Load(temp.into_boxed_str())
+            }
             MiddleNodeType::ComparisonExpression {
                 left,
                 right,
@@ -1208,6 +1392,21 @@ impl<'a> LirEnvironment<'a> {
                 };
                 let l_caller = self.lower_node(caller_node);
                 let mut l_args = self.lower_nodes(args);
+                if let LirNodeType::Load(name) | LirNodeType::Move(name) = &l_caller
+                    && let Some(var) = self.env.variables.get(name.as_ref())
+                    && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
+                {
+                    let expected = parameters.len();
+                    while l_args.len() > expected {
+                        if let Some(pos) =
+                            l_args.iter().position(Self::is_invalid_member_placeholder)
+                        {
+                            l_args.remove(pos);
+                        } else {
+                            l_args.remove(0);
+                        }
+                    }
+                }
 
                 if needs_ref_first_arg
                     && let Some(first_arg) = l_args.get_mut(0)

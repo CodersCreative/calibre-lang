@@ -1,7 +1,6 @@
-// Enums declaration
-type FrenchData = struct { data code : int };
+type FrenchData := struct { data code : int };
 
-type Language = enum {
+type Language := enum {
 	// Enums can have hasmap type data structuress.
 	FRENCH : FrenchData,
 	// Enums can have tuple type data structuress.
@@ -11,20 +10,20 @@ type Language = enum {
 };
 
 // Struct declaration
-type CountryBase = struct 	{
+type CountryBase := struct 	{
 	// Fields in a struct must be explicitly typed.
 	language : Language
 };
 
 // Structs can also be declaratied using a tuole structures.
-type Country = struct (Language);
+type Country := struct (Language);
 
 // To add static functions to an object (struct or enum) the impl keyword is used.
 impl CountryBase {
 	// Methods in the impl block can also be invoked by Object.function()
-	const get_language = fn (self : &CountryBase) -> Language => {
+	const get_language := fn (self : &CountryBase) -> Language => {
 		self.language;
 	};
 };
 
-const main = fn => print("This is just a script to help main.cal and to showcase importing");
+const main := fn => print("This is just a script to help main.cal and to showcase importing");

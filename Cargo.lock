@@ -346,6 +346,7 @@ dependencies = [
  "calibre-lir",
  "calibre-mir",
  "calibre-parser",
+ "calibre-std",
  "calibre-vm",
  "clap",
  "glob",

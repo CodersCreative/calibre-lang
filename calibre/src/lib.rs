@@ -14,11 +14,14 @@ use calibre_parser::{
     Parser, ParserError,
     ast::{Node, NodeType, PotentialDollarIdentifier},
 };
+use calibre_std::{get_globals_path, get_stdlib_path};
 use calibre_vm::{
     VM, config::VMConfig, conversion::VMRegistry, error::RuntimeError, native::NativeFunction,
     value::RuntimeValue,
 };
+use glob::glob;
 use serde::{Deserialize, Serialize};
+use std::fs;
 
 pub mod config;
 
@@ -344,6 +347,7 @@ impl CalibreEngine {
                 artifacts.entry_name.clone(),
             ));
         };
+
         let return_value =
             vm.run(main.as_ref(), Vec::new())
                 .map_err(|error| CalibreError::Runtime {
@@ -397,6 +401,35 @@ impl CalibreEngine {
         }
     }
 
+    fn stdlib_cache_tag() -> String {
+        let mut hasher = blake3::Hasher::new();
+        let stdlib_main = get_stdlib_path();
+        let stdlib_root = stdlib_main
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or(stdlib_main.clone());
+        let globals = get_globals_path();
+        let mut files: Vec<PathBuf> = Vec::new();
+        files.push(stdlib_main);
+        files.push(globals);
+
+        let pattern = format!("{}/**/*.cal", stdlib_root.to_string_lossy());
+        if let Ok(paths) = glob(&pattern) {
+            for entry in paths.flatten() {
+                files.push(entry);
+            }
+        }
+        files.sort();
+
+        for path in files {
+            hasher.update(path.to_string_lossy().as_bytes());
+            if let Ok(contents) = fs::read_to_string(&path) {
+                hasher.update(contents.as_bytes());
+            }
+        }
+        hasher.finalize().to_string()
+    }
+
     fn cache_key(&self, full_source: &str) -> blake3::Hash {
         let path = self
             .source_path
@@ -420,14 +453,16 @@ impl CalibreEngine {
                 )
             })
             .unwrap_or_default();
+        let stdlib = Self::stdlib_cache_tag();
         let material = format!(
-            "{}:{}:{}:{}:{}:{}:{}",
+            "{}:{}:{}:{}:{}:{}:{}:{}",
             CACHE_FORMAT_VERSION,
             env!("CARGO_PKG_VERSION"),
             self.compile_mode.cache_tag(),
             self.entry_name,
             path,
             package,
+            stdlib,
             full_source
         );
         blake3::hash(material.as_bytes())
@@ -582,7 +617,7 @@ fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
     map_opt(node, mode).unwrap_or_else(|| Node::new(Default::default(), NodeType::EmptyLine))
 }
 
-const CACHE_FORMAT_VERSION: &str = "v5";
+const CACHE_FORMAT_VERSION: &str = "v6";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CachedProgramBlob {

@@ -7,6 +7,7 @@ use crate::{
     variables::VariableStore,
 };
 use calibre_lir::BlockId;
+use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::OnceLock;
 use std::{
@@ -40,6 +41,7 @@ struct VMFrame {
     reg_count: usize,
     local_map_base: Option<Arc<FxHashMap<Arc<str>, Reg>>>,
     local_map: FxHashMap<Arc<str>, Reg>,
+    member_sources: FxHashMap<Reg, (Reg, String)>,
     func_ptr: usize,
     acc: RuntimeValue,
 }
@@ -59,6 +61,7 @@ impl Default for VMFrame {
             reg_count: 0,
             local_map_base: None,
             local_map: FxHashMap::default(),
+            member_sources: FxHashMap::default(),
             func_ptr: 0,
             acc: RuntimeValue::Null,
         }
@@ -83,7 +86,7 @@ pub struct VM {
     caches: VMCaches,
     func_suffix: FxHashMap<String, Option<Arc<VMFunction>>>,
     gc: VMGC,
-    scheduler: scheduler::SchedulerHandle,
+    scheduler: Option<scheduler::SchedulerHandle>,
     task_state: TaskState,
     pub(crate) moved_functions: FxHashSet<String>,
     pub suppress_output: bool,
@@ -99,7 +102,6 @@ pub struct VMCaches {
     locals: FxHashMap<usize, Arc<FxHashMap<Arc<str>, Reg>>>,
     globals_id: FxHashMap<String, usize>,
     local_str: FxHashMap<(u32, u16), Arc<str>>,
-    aggregate_member_slots: FxHashMap<String, FxHashMap<String, usize>>,
     prepared_direct_calls: FxHashMap<(usize, usize, u32), PreparedDirectCall>,
     unique_var_suffix: FxHashMap<String, Option<String>>,
 }
@@ -114,7 +116,6 @@ impl Default for VMCaches {
             locals: FxHashMap::default(),
             globals_id: FxHashMap::default(),
             local_str: FxHashMap::default(),
-            aggregate_member_slots: FxHashMap::default(),
             prepared_direct_calls: FxHashMap::default(),
             unique_var_suffix: FxHashMap::default(),
         }
@@ -158,6 +159,75 @@ impl From<VMRegistry> for VM {
 
 impl VM {
     #[inline]
+    fn list_identity_eq(a: &Gc<crate::value::GcVec>, b: &Gc<crate::value::GcVec>) -> bool {
+        std::ptr::eq(a.as_ref(), b.as_ref())
+    }
+
+    fn replace_list_aliases_in_runtime_value(
+        value: &mut RuntimeValue,
+        old_list: &Gc<crate::value::GcVec>,
+        new_list: &Gc<crate::value::GcVec>,
+    ) {
+        match value {
+            RuntimeValue::List(list) => {
+                if Self::list_identity_eq(list, old_list) {
+                    *list = new_list.clone();
+                }
+            }
+            RuntimeValue::Aggregate(_, map) => {
+                let entries = &mut Gc::make_mut(map).0.0;
+                for (_, field) in entries.iter_mut() {
+                    Self::replace_list_aliases_in_runtime_value(field, old_list, new_list);
+                }
+            }
+            RuntimeValue::Option(Some(inner))
+            | RuntimeValue::Result(Ok(inner))
+            | RuntimeValue::Result(Err(inner))
+            | RuntimeValue::Enum(_, _, Some(inner)) => {
+                Self::replace_list_aliases_in_runtime_value(
+                    Gc::make_mut(inner),
+                    old_list,
+                    new_list,
+                );
+            }
+            RuntimeValue::DynObject { value: inner, .. } => {
+                Self::replace_list_aliases_in_runtime_value(
+                    Gc::make_mut(inner),
+                    old_list,
+                    new_list,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    pub(crate) fn propagate_list_aliases(
+        &mut self,
+        old_list: &Gc<crate::value::GcVec>,
+        new_list: &Gc<crate::value::GcVec>,
+    ) {
+        let frame_count = self.frames.len();
+        for frame_idx in 0..frame_count {
+            let reg_count = self.frames[frame_idx].reg_count as u16;
+            for reg in 0..reg_count {
+                let mut value = self.get_reg_value_in_frame(frame_idx, reg).clone();
+                Self::replace_list_aliases_in_runtime_value(&mut value, old_list, new_list);
+                self.set_reg_value_in_frame(frame_idx, reg, value);
+            }
+        }
+
+        let slot_len = self.variables.slot_len();
+        for id in 0..slot_len {
+            let Some(current) = self.variables.get_by_id(id).cloned() else {
+                continue;
+            };
+            let mut value = current;
+            Self::replace_list_aliases_in_runtime_value(&mut value, old_list, new_list);
+            let _ = self.variables.set_by_id(id, value);
+        }
+    }
+
+    #[inline]
     pub(crate) fn is_magic_binding_name(name: &str, binding: &str) -> bool {
         name == binding || name.ends_with(&format!(":{binding}"))
     }
@@ -173,7 +243,6 @@ impl VM {
         config: VMConfig,
         install_builtins: bool,
     ) -> Self {
-        let scheduler = scheduler::SchedulerHandle::new(&config);
         let func_suffix = build_function_suffix_index(registry.as_ref());
         let globals_direct = build_globals_direct_cache(registry.as_ref());
         let mut vm = Self {
@@ -196,7 +265,7 @@ impl VM {
             },
             func_suffix,
             gc: VMGC::default(),
-            scheduler,
+            scheduler: None,
             task_state: TaskState::default(),
             moved_functions: FxHashSet::default(),
             suppress_output: false,
@@ -263,8 +332,17 @@ impl VM {
         Self::from_shared_parts(registry, mappings, config, true)
     }
 
-    pub fn spawn_async_task(&self, func: RuntimeValue, wait_group: Option<Arc<WaitGroupInner>>) {
-        self.scheduler.spawn(self, func, wait_group);
+    pub fn spawn_async_task(
+        &mut self,
+        func: RuntimeValue,
+        wait_group: Option<Arc<WaitGroupInner>>,
+    ) {
+        if self.scheduler.is_none() {
+            self.scheduler = Some(scheduler::SchedulerHandle::new(&self.config));
+        }
+        if let Some(scheduler) = &self.scheduler {
+            scheduler.spawn(self, func, wait_group);
+        }
     }
 
     pub fn set_program_args(&mut self, args: Vec<String>) {
@@ -276,6 +354,7 @@ impl VM {
     }
 
     pub fn normalize_magic_file_bindings(&mut self, path: &std::path::Path) {
+        let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let value = RuntimeValue::Str(Arc::new(path.to_string_lossy().to_string()));
         let keys: Vec<String> = self
             .variables
@@ -289,6 +368,7 @@ impl VM {
     }
 
     pub fn set_source_file_override(&mut self, path: &std::path::Path) {
+        let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         self.source_file_override = Some(Arc::new(path.to_string_lossy().to_string()));
     }
 
@@ -321,6 +401,7 @@ impl VM {
             frame.reg_count = reg_count;
             frame.local_map_base = None;
             frame.local_map.clear();
+            frame.member_sources.clear();
             frame.func_ptr = func_ptr;
             frame.acc = RuntimeValue::Null;
             self.frames.push(frame);
@@ -330,6 +411,7 @@ impl VM {
                 reg_count,
                 local_map_base: None,
                 local_map: FxHashMap::default(),
+                member_sources: FxHashMap::default(),
                 func_ptr,
                 acc: RuntimeValue::Null,
             });
@@ -391,6 +473,7 @@ impl VM {
             }
         }
         let _ = self.replace_reg_value(reg, value);
+        self.current_frame_mut().member_sources.remove(&reg);
     }
 
     pub(crate) fn intern_name(&mut self, name: &str) -> Arc<str> {
@@ -446,6 +529,7 @@ impl VM {
             if idx < frame.reg_count {
                 let pos = frame.reg_start + idx;
                 self.reg_arena[pos] = value;
+                frame.member_sources.remove(&reg);
             }
         }
     }
@@ -497,29 +581,8 @@ impl VM {
         value: &RuntimeValue,
     ) -> Result<RuntimeValue, RuntimeError> {
         let resolve_local_ref = |pointer: &str| -> Option<RuntimeValue> {
-            let pointer_tail = {
-                let colon_tail = pointer
-                    .rsplit_once(':')
-                    .map(|(_, tail)| tail)
-                    .unwrap_or(pointer);
-                calibre_parser::qualified_name_tail(colon_tail)
-            };
             for (frame_idx, frame) in self.frames.iter().enumerate().rev() {
-                if let Some(reg) = frame.local_map.get(pointer_tail) {
-                    let value = self.get_reg_value_in_frame(frame_idx, *reg).clone();
-                    if !matches!(&value, RuntimeValue::Ref(next) if next == pointer) {
-                        return Some(value);
-                    }
-                }
                 if let Some(reg) = frame.local_map.get(pointer) {
-                    let value = self.get_reg_value_in_frame(frame_idx, *reg).clone();
-                    if !matches!(&value, RuntimeValue::Ref(next) if next == pointer) {
-                        return Some(value);
-                    }
-                }
-                if let Some(base) = frame.local_map_base.as_ref()
-                    && let Some(reg) = base.get(pointer_tail)
-                {
                     let value = self.get_reg_value_in_frame(frame_idx, *reg).clone();
                     if !matches!(&value, RuntimeValue::Ref(next) if next == pointer) {
                         return Some(value);
@@ -533,42 +596,14 @@ impl VM {
                         return Some(value);
                     }
                 }
-
-                let mut suffix_match = None;
-                for (name, reg) in frame
-                    .local_map_base
-                    .as_ref()
-                    .into_iter()
-                    .flat_map(|base| base.iter())
-                    .chain(frame.local_map.iter())
-                {
-                    let name_tail = {
-                        let local = name.as_ref();
-                        let colon_tail = local
-                            .rsplit_once(':')
-                            .map(|(_, tail)| tail)
-                            .unwrap_or(local);
-                        calibre_parser::qualified_name_tail(colon_tail)
-                    };
-                    if name_tail == pointer_tail {
-                        if suffix_match.is_some() {
-                            suffix_match = None;
-                            break;
-                        }
-                        suffix_match = Some(*reg);
-                    }
-                }
-                if let Some(reg) = suffix_match {
-                    let value = self.get_reg_value_in_frame(frame_idx, reg).clone();
-                    if !matches!(&value, RuntimeValue::Ref(next) if next == pointer) {
-                        return Some(value);
-                    }
-                }
             }
             None
         };
 
         let mut owned: Option<RuntimeValue> = None;
+        let mut seen_refs: FxHashSet<String> = FxHashSet::default();
+        let mut seen_var_refs: FxHashSet<usize> = FxHashSet::default();
+        let mut seen_reg_refs: FxHashSet<(usize, u16)> = FxHashSet::default();
 
         for _ in 0..64 {
             let (current, from_owned) = match &owned {
@@ -578,24 +613,27 @@ impl VM {
 
             match current {
                 RuntimeValue::Ref(pointer) => {
+                    if !seen_refs.insert(pointer.clone()) {
+                        return Err(RuntimeError::DanglingRef(format!("ref-cycle({})", pointer)));
+                    }
                     let local_style = pointer.contains(':') || pointer.contains("->");
                     let v = if local_style {
                         if let Some(local) = resolve_local_ref(pointer) {
                             local
                         } else if let Some(v) = self.variables.get(pointer).cloned() {
                             if matches!(&v, RuntimeValue::Ref(next) if next == pointer) {
-                                return Err(RuntimeError::DanglingRef(pointer.clone()));
+                                return Err(RuntimeError::DanglingRef(pointer.to_string()));
                             }
                             v
                         } else {
-                            return Err(RuntimeError::DanglingRef(pointer.clone()));
+                            return Err(RuntimeError::DanglingRef(pointer.to_string()));
                         }
                     } else if let Some(v) = self.variables.get(pointer).cloned() {
                         if matches!(&v, RuntimeValue::Ref(next) if next == pointer) {
                             if let Some(local) = resolve_local_ref(pointer) {
                                 local
                             } else {
-                                return Err(RuntimeError::DanglingRef(pointer.clone()));
+                                return Err(RuntimeError::DanglingRef(pointer.to_string()));
                             }
                         } else {
                             v
@@ -603,11 +641,14 @@ impl VM {
                     } else if let Some(v) = resolve_local_ref(pointer) {
                         v
                     } else {
-                        return Err(RuntimeError::DanglingRef(pointer.clone()));
+                        return Err(RuntimeError::DanglingRef(pointer.to_string()));
                     };
                     owned = Some(v);
                 }
                 RuntimeValue::VarRef(id) => {
+                    if !seen_var_refs.insert(*id) {
+                        return Err(RuntimeError::DanglingRef(format!("varref-cycle(#{} )", id)));
+                    }
                     let v = self
                         .variables
                         .get_by_id(*id)
@@ -619,6 +660,12 @@ impl VM {
                     owned = Some(v);
                 }
                 RuntimeValue::RegRef { frame, reg } => {
+                    if !seen_reg_refs.insert((*frame, *reg)) {
+                        return Err(RuntimeError::DanglingRef(format!(
+                            "regref-cycle({}:{})",
+                            frame, reg
+                        )));
+                    }
                     owned = Some(self.get_reg_value_in_frame(*frame, *reg).clone());
                 }
                 RuntimeValue::MutexGuard(guard) => {
@@ -629,14 +676,14 @@ impl VM {
                         if let Some(value) = owned.take() {
                             return Ok(value);
                         }
-                        return Err(RuntimeError::DanglingRef("<owned-missing>".to_string()));
+                        return Err(RuntimeError::DanglingRef(String::from("<owned-missing>")));
                     }
                     return Ok(current.clone());
                 }
             }
         }
 
-        Err(RuntimeError::DanglingRef("<ref-depth-limit>".to_string()))
+        Err(RuntimeError::DanglingRef(String::from("<ref-depth-limit>")))
     }
 
     fn drop_runtime_value(&mut self, value: RuntimeValue) {

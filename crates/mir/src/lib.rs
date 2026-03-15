@@ -212,33 +212,18 @@ impl MiddleEnvironment {
         out
     }
 
-    fn collect_defers_chain(&self, scope: &u64) -> Vec<Node> {
+    fn collect_defers_until(&self, scope: &u64, stop_scope: Option<u64>) -> Vec<Node> {
         let mut out = Vec::new();
         let mut current = Some(*scope);
         while let Some(id) = current {
-            if let Some(s) = self.scopes.get(&id) {
-                out.extend(s.defers.clone());
-                current = s.parent;
-            } else {
+            let Some(s) = self.scopes.get(&id) else {
+                break;
+            };
+            out.extend(s.defers.clone());
+            if stop_scope.is_some_and(|stop| stop == id) {
                 break;
             }
-        }
-        out
-    }
-
-    fn collect_defers_until(&self, scope: &u64, stop_scope: u64) -> Vec<Node> {
-        let mut out = Vec::new();
-        let mut current = Some(*scope);
-        while let Some(id) = current {
-            if let Some(s) = self.scopes.get(&id) {
-                out.extend(s.defers.clone());
-                if id == stop_scope {
-                    break;
-                }
-                current = s.parent;
-            } else {
-                break;
-            }
+            current = s.parent;
         }
         out
     }

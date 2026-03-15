@@ -90,6 +90,13 @@ impl MiddleEnvironment {
         )
     }
 
+    #[inline]
+    fn text_matches(left: &str, right: &str) -> bool {
+        left == right
+            || left.ends_with(&format!(".{right}"))
+            || right.ends_with(&format!(".{left}"))
+    }
+
     fn scope_body_items(node: Node) -> Vec<Node> {
         match node.node_type {
             NodeType::ScopeDeclaration {
@@ -511,34 +518,26 @@ impl MiddleEnvironment {
                                 );
 
                                 let body_node = (*body).clone();
-                                let mut body_nodes = Self::scope_body_items(body_node);
-                                body_nodes.insert(
-                                    0,
-                                    Self::call_member_expr(
-                                        node.span,
-                                        start_ident_node.clone(),
-                                        "wait",
-                                        Vec::new(),
-                                    ),
-                                );
-
-                                body_nodes.insert(
-                                    0,
-                                    Node::new(
-                                        node.span,
-                                        NodeType::VariableDeclaration {
-                                            var_type: VarType::Mutable,
-                                            identifier: name.clone(),
-                                            data_type: PotentialNewType::DataType(
-                                                ParserDataType::new(
-                                                    node.span,
-                                                    ParserInnerType::Auto(None),
-                                                ),
-                                            ),
-                                            value: Box::new(loop_ident_node),
-                                        },
-                                    ),
-                                );
+                                let mut body_nodes = Vec::new();
+                                body_nodes.push(Self::call_member_expr(
+                                    node.span,
+                                    start_ident_node.clone(),
+                                    "wait",
+                                    Vec::new(),
+                                ));
+                                body_nodes.push(Node::new(
+                                    node.span,
+                                    NodeType::VariableDeclaration {
+                                        var_type: VarType::Mutable,
+                                        identifier: name.clone(),
+                                        data_type: PotentialNewType::DataType(ParserDataType::new(
+                                            node.span,
+                                            ParserInnerType::Auto(None),
+                                        )),
+                                        value: Box::new(loop_ident_node),
+                                    },
+                                ));
+                                body_nodes.extend(Self::scope_body_items(body_node));
 
                                 let scope_body = Self::temp_scope(node.span, body_nodes, true);
                                 Node::new(
@@ -947,7 +946,7 @@ impl MiddleEnvironment {
                     }
 
                     if let Some(target_scope) = target_scope {
-                        let chain_defers = self.collect_defers_until(scope, target_scope);
+                        let chain_defers = self.collect_defers_until(scope, Some(target_scope));
                         for x in chain_defers {
                             lst.push(self.evaluate(scope, x));
                         }
@@ -1026,7 +1025,7 @@ impl MiddleEnvironment {
                     };
 
                     if let Some(ctx) = continue_ctx.clone() {
-                        let chain_defers = self.collect_defers_until(scope, ctx.scope_id);
+                        let chain_defers = self.collect_defers_until(scope, Some(ctx.scope_id));
                         for x in chain_defers {
                             lst.push(self.evaluate(scope, x));
                         }
@@ -1102,7 +1101,7 @@ impl MiddleEnvironment {
                             None
                         };
 
-                        let chain_defers = self.collect_defers_chain(scope);
+                        let chain_defers = self.collect_defers_until(scope, None);
                         for x in chain_defers {
                             lst.push(self.evaluate(scope, x));
                         }
@@ -2212,75 +2211,71 @@ impl MiddleEnvironment {
                 let mut statements = Vec::new();
 
                 for var in variables {
-                    #[allow(unused_assignments)]
-                    let (mut iden, mut dependant) = (String::new(), false);
+                    let (dec, iden, dependant) = match var.node_type {
+                        NodeType::VariableDeclaration {
+                            var_type,
+                            identifier,
+                            value,
+                            data_type,
+                        } => {
+                            let iden = identifier.to_string();
+                            let resolved_iden = format!("{}::{}", target_key, identifier);
 
-                    let dec = Node {
-                        span: var.span,
-                        node_type: match var.node_type {
-                            NodeType::VariableDeclaration {
-                                var_type,
-                                identifier,
-                                value,
-                                data_type,
-                            } => {
-                                iden = identifier.to_string();
-                                let resolved_iden = format!("{}::{}", target_key, identifier);
-
-                                dependant = match &value.node_type {
-                                    NodeType::FunctionDeclaration {
-                                        header, body: _, ..
-                                    } => {
-                                        if let Some(PotentialNewType::DataType(param)) =
-                                            header.parameters.first().map(|x| x.1.clone())
-                                        {
-                                            let param_type = self
-                                                .resolve_data_type(scope, param)
-                                                .unwrap_all_refs();
-                                            {
-                                                let impl_ref =
-                                                    self.impls.get(&impl_key).ok_or_else(|| {
-                                                        MiddleErr::At(
-                                                            node.span,
-                                                            Box::new(MiddleErr::Internal(format!(
-                                                                "missing impl {impl_key:?}"
-                                                            ))),
-                                                        )
-                                                    })?;
-                                                self.impl_type_matches(
-                                                    &resolved.data_type,
-                                                    &param_type.data_type,
-                                                    &impl_ref.generic_params,
+                            let dependant = match &value.node_type {
+                                NodeType::FunctionDeclaration { header, .. } => {
+                                    if let Some(PotentialNewType::DataType(param)) =
+                                        header.parameters.first().map(|x| x.1.clone())
+                                    {
+                                        let param_type =
+                                            self.resolve_data_type(scope, param).unwrap_all_refs();
+                                        let impl_ref =
+                                            self.impls.get(&impl_key).ok_or_else(|| {
+                                                MiddleErr::At(
+                                                    node.span,
+                                                    Box::new(MiddleErr::Internal(format!(
+                                                        "missing impl {impl_key:?}"
+                                                    ))),
                                                 )
-                                            }
-                                        } else {
-                                            false
-                                        }
+                                            })?;
+                                        self.impl_type_matches(
+                                            &resolved.data_type,
+                                            &param_type.data_type,
+                                            &impl_ref.generic_params,
+                                        )
+                                    } else {
+                                        false
                                     }
-                                    _ => false,
-                                };
-
-                                NodeType::VariableDeclaration {
-                                    var_type,
-                                    identifier: PotentialDollarIdentifier::Identifier(
-                                        ParserText::from(resolved_iden),
-                                    ),
-                                    value,
-                                    data_type,
                                 }
-                            }
-                            NodeType::TypeDeclaration { .. } => {
-                                continue;
-                            }
-                            _ => {
-                                return Err(MiddleErr::At(
-                                    var.span,
-                                    Box::new(MiddleErr::Internal(
-                                        "expected variable declaration in impl".to_string(),
-                                    )),
-                                ));
-                            }
-                        },
+                                _ => false,
+                            };
+
+                            (
+                                Node {
+                                    span: var.span,
+                                    node_type: NodeType::VariableDeclaration {
+                                        var_type,
+                                        identifier: PotentialDollarIdentifier::Identifier(
+                                            ParserText::from(resolved_iden),
+                                        ),
+                                        value,
+                                        data_type,
+                                    },
+                                },
+                                iden,
+                                dependant,
+                            )
+                        }
+                        NodeType::TypeDeclaration { .. } => {
+                            continue;
+                        }
+                        _ => {
+                            return Err(MiddleErr::At(
+                                var.span,
+                                Box::new(MiddleErr::Internal(
+                                    "expected variable declaration in impl".to_string(),
+                                )),
+                            ));
+                        }
                     };
 
                     let dec = self.evaluate(scope, dec);
@@ -2476,75 +2471,71 @@ impl MiddleEnvironment {
                 let mut statements = Vec::new();
 
                 for var in all_vars {
-                    #[allow(unused_assignments)]
-                    let (mut iden, mut dependant) = (String::new(), false);
+                    let (dec, iden, dependant) = match var.node_type {
+                        NodeType::VariableDeclaration {
+                            var_type,
+                            identifier,
+                            value,
+                            data_type,
+                        } => {
+                            let iden = identifier.to_string();
+                            let resolved_iden = format!("{}::{}", target_key, identifier);
 
-                    let dec = Node {
-                        span: var.span,
-                        node_type: match var.node_type {
-                            NodeType::VariableDeclaration {
-                                var_type,
-                                identifier,
-                                value,
-                                data_type,
-                            } => {
-                                iden = identifier.to_string();
-                                let resolved_iden = format!("{}::{}", target_key, identifier);
-
-                                dependant = match &value.node_type {
-                                    NodeType::FunctionDeclaration {
-                                        header, body: _, ..
-                                    } => {
-                                        if let Some(PotentialNewType::DataType(param)) =
-                                            header.parameters.first().map(|x| x.1.clone())
-                                        {
-                                            let param_type = self
-                                                .resolve_data_type(scope, param)
-                                                .unwrap_all_refs();
-                                            {
-                                                let impl_ref =
-                                                    self.impls.get(&impl_key).ok_or_else(|| {
-                                                        MiddleErr::At(
-                                                            node.span,
-                                                            Box::new(MiddleErr::Internal(format!(
-                                                                "missing impl {impl_key:?}"
-                                                            ))),
-                                                        )
-                                                    })?;
-                                                self.impl_type_matches(
-                                                    &resolved_target.data_type,
-                                                    &param_type.data_type,
-                                                    &impl_ref.generic_params,
+                            let dependant = match &value.node_type {
+                                NodeType::FunctionDeclaration { header, .. } => {
+                                    if let Some(PotentialNewType::DataType(param)) =
+                                        header.parameters.first().map(|x| x.1.clone())
+                                    {
+                                        let param_type =
+                                            self.resolve_data_type(scope, param).unwrap_all_refs();
+                                        let impl_ref =
+                                            self.impls.get(&impl_key).ok_or_else(|| {
+                                                MiddleErr::At(
+                                                    node.span,
+                                                    Box::new(MiddleErr::Internal(format!(
+                                                        "missing impl {impl_key:?}"
+                                                    ))),
                                                 )
-                                            }
-                                        } else {
-                                            false
-                                        }
+                                            })?;
+                                        self.impl_type_matches(
+                                            &resolved_target.data_type,
+                                            &param_type.data_type,
+                                            &impl_ref.generic_params,
+                                        )
+                                    } else {
+                                        false
                                     }
-                                    _ => false,
-                                };
-
-                                NodeType::VariableDeclaration {
-                                    var_type,
-                                    identifier: PotentialDollarIdentifier::Identifier(
-                                        ParserText::from(resolved_iden),
-                                    ),
-                                    value,
-                                    data_type,
                                 }
-                            }
-                            NodeType::TypeDeclaration { .. } => {
-                                continue;
-                            }
-                            _ => {
-                                return Err(MiddleErr::At(
-                                    var.span,
-                                    Box::new(MiddleErr::Internal(
-                                        "expected variable declaration in impl trait".to_string(),
-                                    )),
-                                ));
-                            }
-                        },
+                                _ => false,
+                            };
+
+                            (
+                                Node {
+                                    span: var.span,
+                                    node_type: NodeType::VariableDeclaration {
+                                        var_type,
+                                        identifier: PotentialDollarIdentifier::Identifier(
+                                            ParserText::from(resolved_iden),
+                                        ),
+                                        value,
+                                        data_type,
+                                    },
+                                },
+                                iden,
+                                dependant,
+                            )
+                        }
+                        NodeType::TypeDeclaration { .. } => {
+                            continue;
+                        }
+                        _ => {
+                            return Err(MiddleErr::At(
+                                var.span,
+                                Box::new(MiddleErr::Internal(
+                                    "expected variable declaration in impl trait".to_string(),
+                                )),
+                            ));
+                        }
                     };
 
                     let dec = self.evaluate(scope, dec);

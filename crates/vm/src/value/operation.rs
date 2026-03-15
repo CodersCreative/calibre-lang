@@ -51,11 +51,34 @@ pub fn comparison(
                 (Some(_), None) | (None, Some(_)) => Some(false),
                 (Some(a), Some(b)) => eq_value(a, b),
             },
+            (RuntimeValue::List(a), RuntimeValue::List(b)) => {
+                if a.0.len() != b.0.len() {
+                    return Some(false);
+                }
+                for (left, right) in a.0.iter().zip(b.0.iter()) {
+                    if !eq_value(left, right).unwrap_or(false) {
+                        return Some(false);
+                    }
+                }
+                Some(true)
+            }
             _ => None,
         }
     }
 
     match (left, right, op) {
+        (RuntimeValue::Null, right, op) | (right, RuntimeValue::Null, op) => match op {
+            ComparisonOperator::Equal => {
+                Ok(RuntimeValue::Bool(matches!(right, RuntimeValue::Null)))
+            }
+            ComparisonOperator::NotEqual => {
+                Ok(RuntimeValue::Bool(!matches!(right, RuntimeValue::Null)))
+            }
+            ComparisonOperator::Lesser
+            | ComparisonOperator::LesserEqual
+            | ComparisonOperator::Greater
+            | ComparisonOperator::GreaterEqual => Ok(RuntimeValue::Bool(false)),
+        },
         (RuntimeValue::Option(a), RuntimeValue::Option(b), op) => match op {
             ComparisonOperator::Equal | ComparisonOperator::NotEqual => {
                 let eq = match (a, b) {
@@ -92,6 +115,40 @@ pub fn comparison(
                 )),
             }
         }
+        (RuntimeValue::List(a), RuntimeValue::List(b), op) => match op {
+            ComparisonOperator::Equal => Ok(RuntimeValue::Bool(
+                a.0.len() == b.0.len()
+                    && a.0
+                        .iter()
+                        .zip(b.0.iter())
+                        .all(|(left, right)| eq_value(left, right).unwrap_or(false)),
+            )),
+            ComparisonOperator::NotEqual => Ok(RuntimeValue::Bool(
+                a.0.len() != b.0.len()
+                    || a.0
+                        .iter()
+                        .zip(b.0.iter())
+                        .any(|(left, right)| !eq_value(left, right).unwrap_or(false)),
+            )),
+            _ => Err(RuntimeError::Comparison(
+                RuntimeValue::List(a),
+                RuntimeValue::List(b),
+                op.clone(),
+            )),
+        },
+        (RuntimeValue::List(a), other, op) | (other, RuntimeValue::List(a), op) => match op {
+            ComparisonOperator::Equal => {
+                Ok(RuntimeValue::Bool(matches!(other, RuntimeValue::List(_))))
+            }
+            ComparisonOperator::NotEqual => {
+                Ok(RuntimeValue::Bool(!matches!(other, RuntimeValue::List(_))))
+            }
+            _ => Err(RuntimeError::Comparison(
+                RuntimeValue::List(a),
+                other,
+                op.clone(),
+            )),
+        },
         (RuntimeValue::Int(x), RuntimeValue::Int(y), op) => {
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
@@ -169,6 +226,14 @@ pub fn comparison(
         (RuntimeValue::Str(x), RuntimeValue::Str(y), op) => {
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
+        (left, right, ComparisonOperator::Equal) => Ok(RuntimeValue::Bool(matches!(
+            eq_value(&left, &right),
+            Some(true)
+        ))),
+        (left, right, ComparisonOperator::NotEqual) => Ok(RuntimeValue::Bool(!matches!(
+            eq_value(&left, &right),
+            Some(true)
+        ))),
         (left, right, op) => Err(RuntimeError::Comparison(left, right, op.clone())),
     }
 }

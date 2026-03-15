@@ -412,7 +412,7 @@ impl NativeFunction for GeneratorResumeFn {
         let mut task_state = std::mem::take(&mut state.task_state);
         let status = state.vm.run_function_with_budget(
             func.as_ref(),
-            Vec::<RuntimeValue>::new(),
+            Vec::new(),
             captures,
             usize::MAX,
             &mut task_state,
@@ -463,10 +463,8 @@ impl RuntimeValue {
             ("str.contains", Arc::new(stdlib::str::StrContains())),
             ("str.starts_with", Arc::new(stdlib::str::StrStartsWith())),
             ("str.ends_with", Arc::new(stdlib::str::StrEndsWith())),
-            ("char.lowercase", Arc::new(stdlib::char::CharLowercase)),
-            ("char.uppercase", Arc::new(stdlib::char::CharUppercase)),
-            ("char_lowercase", Arc::new(stdlib::char::CharLowercase)),
-            ("char_uppercase", Arc::new(stdlib::char::CharUppercase)),
+            ("str.char_lowercase", Arc::new(stdlib::str::CharLowercase)),
+            ("str.char_uppercase", Arc::new(stdlib::str::CharUppercase)),
             ("env.get", Arc::new(stdlib::env::EnvGet)),
             ("env.var", Arc::new(stdlib::env::EnvVar)),
             ("env.set_var", Arc::new(stdlib::env::EnvSetVar)),

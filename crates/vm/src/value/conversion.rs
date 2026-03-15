@@ -22,6 +22,19 @@ impl RuntimeValue {
             if let Some(value) = env.variables.get(name).cloned() {
                 return value.convert(env, data_type);
             }
+            let name = name.as_str();
+            for (frame_idx, frame) in env.frames.iter().enumerate().rev() {
+                if let Some(reg) = frame.local_map.get(name) {
+                    let value = env.get_reg_value_in_frame(frame_idx, *reg).clone();
+                    return value.convert(env, data_type);
+                }
+                if let Some(base) = frame.local_map_base.as_ref()
+                    && let Some(reg) = base.get(name)
+                {
+                    let value = env.get_reg_value_in_frame(frame_idx, *reg).clone();
+                    return value.convert(env, data_type);
+                }
+            }
         }
         if let RuntimeValue::VarRef(id) = &self {
             if let Some(value) = env.variables.get_by_id(*id).cloned() {

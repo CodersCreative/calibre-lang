@@ -137,7 +137,58 @@ pub(super) fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
 }
 
 pub(super) fn parse_embedded_expr(txt: &str) -> Node {
-    match super::parse_program(txt) {
+    let trimmed = txt.trim();
+    if trimmed.is_empty() {
+        return null_node(Span::default());
+    }
+
+    let is_ident = |s: &str| {
+        let mut chars = s.chars();
+        let Some(first) = chars.next() else {
+            return false;
+        };
+        if !(first.is_ascii_alphabetic() || first == '_') {
+            return false;
+        }
+        chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    };
+
+    if is_ident(trimmed) {
+        return Node::new(
+            Span::default(),
+            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                ParserText::from(trimmed.to_string()).into(),
+            )),
+        );
+    }
+
+    if trimmed
+        .split('.')
+        .all(|part| !part.is_empty() && is_ident(part))
+    {
+        let sp = Span::default();
+        let path = trimmed
+            .split('.')
+            .map(|part| {
+                (
+                    Node::new(
+                        sp,
+                        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                            ParserText::from(part.to_string()).into(),
+                        )),
+                    ),
+                    false,
+                )
+            })
+            .collect();
+        return Node::new(sp, NodeType::MemberExpression { path });
+    }
+
+    if trimmed.parse::<i64>().is_ok() {
+        return Node::new(Span::default(), NodeType::IntLiteral(trimmed.to_string()));
+    }
+
+    match super::parse_program(trimmed) {
         Ok(node) => match node.node_type {
             NodeType::ScopeDeclaration {
                 body: Some(mut body),

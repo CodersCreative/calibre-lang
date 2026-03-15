@@ -2,7 +2,7 @@ use calibre_parser::{
     Parser,
     ast::{ParserDataType, VarType},
 };
-use calibre_std::{get_globals_path, get_path, get_stdlib_module_path, get_stdlib_path};
+use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
 use rustc_hash::FxHashMap;
 use std::{fs, path::PathBuf};
 
@@ -50,14 +50,12 @@ impl MiddleEnvironment {
     }
 
     pub fn setup_global(&mut self, scope: &u64) {
-        let funcs: Vec<&str> = vec![
+        let funcs = [
             "console_output",
             "ok",
             "err",
             "some",
             "trim",
-            "char_lowercase",
-            "char_uppercase",
             "repr",
             "print",
             "len",
@@ -74,8 +72,8 @@ impl MiddleEnvironment {
         let map = ParserDataType::natives();
 
         let mut funcs = funcs
-            .into_iter()
-            .filter_map(|x| map.get(x).cloned().map(|t| (String::from(x), t)))
+            .iter()
+            .filter_map(|x| map.get(*x).cloned().map(|t| (String::from(*x), t)))
             .collect();
 
         let mut vars: Vec<(String, ParserDataType)> =
@@ -108,13 +106,15 @@ impl MiddleEnvironment {
                 let program = parser.produce_ast(&stdlib);
                 let middle = self.evaluate(scope, program);
                 self.stdlib_nodes.push(middle);
+                self.loaded_scopes.insert(*scope);
             }
         }
 
-        self.setup_std_module(scope, "thread", &[]);
-        self.setup_std_module(scope, "console", &[]);
-        self.setup_std_module(
-            scope,
+        let mut add = |name, funcs, load| self.setup_std_module(scope, name, funcs, load);
+
+        add("thread", &[], true);
+        add("console", &[], false);
+        add(
             "async",
             &[
                 "channel_new",
@@ -136,16 +136,12 @@ impl MiddleEnvironment {
                 "mutex_with",
                 "mutex_write",
             ],
+            true,
         );
-        self.setup_std_module(scope, "random", &[]);
-        self.setup_std_module(scope, "fs", &["read_dir"]);
-        self.setup_std_module(
-            scope,
-            "list",
-            &["sort_by", "binary_search_by", "raw_remove"],
-        );
-        self.setup_std_module(
-            scope,
+        add("random", &[], false);
+        add("fs", &["read_dir"], true);
+        add("list", &["sort_by", "binary_search_by", "raw_remove"], true);
+        add(
             "collections",
             &[
                 "hashmap_new",
@@ -166,55 +162,32 @@ impl MiddleEnvironment {
                 "hashset_values",
                 "hashset_clear",
             ],
+            true,
         );
-        self.setup_std_module(
-            scope,
+        add(
             "str",
             &[
                 "split",
                 "contains",
                 "starts_with",
                 "ends_with",
-                "strip_prefix",
-                "lowercase",
-                "uppercase",
-                "trim_start",
-                "trim_end",
-                "is_whitespace",
+                "char_lowercase",
+                "char_uppercase",
             ],
+            true,
         );
-        self.setup_std_module(
-            scope,
-            "char",
-            &[
-                "lowercase",
-                "uppercase",
-                "is_whitespace",
-                "is_digit",
-                "is_alphabetic",
-                "is_alphanumeric",
-            ],
-        );
-        self.setup_std_module(
-            scope,
+        add(
             "env",
             &["get", "var", "set_var", "remove_var", "vars"],
+            true,
         );
-        self.setup_std_module(scope, "range", &[]);
-        self.setup_std_module(scope, "generators", &[]);
-        self.setup_std_module(scope, "crypto", &["sha256", "sha512", "blake3"]);
-        self.setup_std_module(scope, "regex", &["is_match", "find", "replace"]);
-        self.setup_std_module(scope, "process", &["raw_exec"]);
-        self.setup_std_module(scope, "math", &[]);
-        self.setup_std_module(scope, "json", &[]);
-        // TODO Make std child modules import using the builtin import statement
-        if let Ok(json_scope) = self.get_scope_from_parent(*scope, "json") {
-            self.setup_std_child_module(&json_scope, "lexer", "stdlib/json/lexer.cal");
-            // TODO Currently the parser is unstable
-            // self.setup_std_child_module(&json_scope, "parser", "stdlib/json/parser.cal");
-        }
-        self.setup_std_module(
-            scope,
+        add("range", &[], true);
+        add("generators", &[], false);
+        add("crypto", &["sha256", "sha512", "blake3"], false);
+        add("regex", &["is_match", "find", "replace"], false);
+        add("process", &["raw_exec"], false);
+        add("math", &[], false);
+        add(
             "net",
             &[
                 "tcp_connect",
@@ -226,12 +199,20 @@ impl MiddleEnvironment {
                 "http_request_raw",
                 "http_request_try",
             ],
+            false,
         );
-        self.setup_std_module(scope, "option", &[]);
-        self.setup_std_module(scope, "result", &[]);
+        add("option", &[], true);
+        add("result", &[], true);
+        add("json", &[], true);
     }
 
-    pub fn setup_std_module(&mut self, parent: &u64, name: &str, funcs: &[&'static str]) {
+    pub fn setup_std_module(
+        &mut self,
+        parent: &u64,
+        name: &str,
+        funcs: &[&'static str],
+        load_source: bool,
+    ) {
         let scope_path = get_stdlib_module_path(name);
         let scope = self.new_scope(Some(*parent), scope_path.clone(), Some(name));
 
@@ -261,41 +242,23 @@ impl MiddleEnvironment {
             }
         }
 
-        let mut parser = Parser::default();
-        if let Ok(stdlib) = fs::read_to_string(scope_path) {
-            parser.set_source_path(Some(PathBuf::from(get_stdlib_module_path(name))));
-            let program = parser.produce_ast(&stdlib);
-            if !parser.errors.is_empty() {
-                self.errors.push(crate::errors::MiddleErr::ParserErrors {
-                    path: PathBuf::from(get_stdlib_module_path(name)),
-                    contents: stdlib,
-                    errors: std::mem::take(&mut parser.errors),
-                });
-                return;
+        if load_source {
+            let mut parser = Parser::default();
+            if let Ok(stdlib) = fs::read_to_string(&scope_path) {
+                parser.set_source_path(Some(scope_path.clone()));
+                let program = parser.produce_ast(&stdlib);
+                if !parser.errors.is_empty() {
+                    self.errors.push(crate::errors::MiddleErr::ParserErrors {
+                        path: scope_path.clone(),
+                        contents: stdlib,
+                        errors: std::mem::take(&mut parser.errors),
+                    });
+                    return;
+                }
+                let middle = self.evaluate(&scope, program);
+                self.stdlib_nodes.push(middle);
+                self.loaded_scopes.insert(scope);
             }
-            let middle = self.evaluate(&scope, program);
-            self.stdlib_nodes.push(middle);
-        }
-    }
-
-    fn setup_std_child_module(&mut self, parent: &u64, name: &str, path: &str) {
-        let scope_path = PathBuf::from(get_path(path));
-        let scope = self.new_scope(Some(*parent), scope_path.clone(), Some(name));
-
-        let mut parser = Parser::default();
-        if let Ok(stdlib) = fs::read_to_string(scope_path) {
-            parser.set_source_path(Some(PathBuf::from(get_path(path))));
-            let program = parser.produce_ast(&stdlib);
-            if !parser.errors.is_empty() {
-                self.errors.push(crate::errors::MiddleErr::ParserErrors {
-                    path: PathBuf::from(get_path(path)),
-                    contents: stdlib,
-                    errors: std::mem::take(&mut parser.errors),
-                });
-                return;
-            }
-            let middle = self.evaluate(&scope, program);
-            self.stdlib_nodes.push(middle);
         }
     }
 }

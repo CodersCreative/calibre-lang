@@ -220,6 +220,7 @@ impl Display for VMBlock {
 pub struct PhiNode {
     pub dest: Reg,
     pub sources: Vec<(BlockId, Reg)>,
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -532,8 +533,12 @@ impl Display for VMInstruction {
             } => {
                 write!(f, "%r{dst} = ENUM {name}:{variant}")
             }
-            VMInstruction::Call { dst, callee, .. } => write!(f, "%r{dst} = CALL %r{callee}"),
-            VMInstruction::CallDirect { dst, name, .. } => write!(f, "%r{dst} = CALL @{name}"),
+            VMInstruction::Call { dst, callee, args } => {
+                write!(f, "%r{dst} = CALL %r{callee} {:?}", args)
+            }
+            VMInstruction::CallDirect { dst, name, args } => {
+                write!(f, "%r{dst} = CALL @{name} {:?}", args)
+            }
             VMInstruction::CallSelf { dst, .. } => write!(f, "%r{dst} = CALL_SELF"),
             VMInstruction::Spawn { dst, callee } => write!(f, "SPAWN %r{dst}, %r{callee}"),
             VMInstruction::LoadMember { dst, value, member } => {

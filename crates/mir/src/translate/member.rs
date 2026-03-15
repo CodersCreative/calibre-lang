@@ -2,7 +2,7 @@ use calibre_parser::{
     Span,
     ast::{
         CallArg, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, RefMutability,
     },
 };
 use std::str::FromStr;
@@ -14,9 +14,46 @@ use crate::{
 };
 
 impl MiddleEnvironment {
+    fn first_param_ref_mutability(&self, function_name: &str) -> Option<RefMutability> {
+        let from_var = |var: &crate::environment::MiddleVariable| -> Option<RefMutability> {
+            let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type else {
+                return None;
+            };
+            let first = parameters.first()?;
+            match &first.data_type {
+                ParserInnerType::Ref(_, mutability) => Some(*mutability),
+                _ => None,
+            }
+        };
+
+        if let Some(var) = self.variables.get(function_name)
+            && let Some(m) = from_var(var)
+        {
+            return Some(m);
+        }
+
+        let short = function_name.rsplit("::").next().unwrap_or(function_name);
+        let mut found: Option<RefMutability> = None;
+        for (name, var) in &self.variables {
+            if !name.ends_with(&format!("::{short}")) {
+                continue;
+            }
+            if let Some(m) = from_var(var) {
+                if let Some(prev) = found {
+                    if prev != m {
+                        return None;
+                    }
+                } else {
+                    found = Some(m);
+                }
+            }
+        }
+        found
+    }
+
     #[inline]
     fn same_node_text(a: &MiddleNode, b: &MiddleNode) -> bool {
-        a.to_string() == b.to_string()
+        Self::text_matches(&a.to_string(), &b.to_string())
     }
 
     #[inline]
@@ -24,27 +61,32 @@ impl MiddleEnvironment {
         if args.len() < 2 {
             return;
         }
-        if Self::same_node_text(&args[0], &args[1]) {
-            args.remove(1);
-            return;
-        }
-        if let MiddleNodeType::RefStatement { value, .. } = &args[1].node_type
-            && value.to_string() == args[0].to_string()
-        {
-            args.remove(0);
-            return;
-        }
-        if let MiddleNodeType::RefStatement { value, .. } = &args[0].node_type
-            && value.to_string() == args[1].to_string()
-        {
-            args.remove(1);
+        let receiver = args[0].clone();
+        let receiver_txt = receiver.to_string();
+        let mut i = 1usize;
+        while i < args.len() {
+            let same = Self::same_node_text(&receiver, &args[i]);
+            let same_as_receiver_ref = matches!(
+                &args[i].node_type,
+                MiddleNodeType::RefStatement { value, .. } if value.to_string() == receiver_txt
+            );
+            let receiver_is_ref_of_current = matches!(
+                &receiver.node_type,
+                MiddleNodeType::RefStatement { value, .. } if value.to_string() == args[i].to_string()
+            );
+            if same || same_as_receiver_ref || receiver_is_ref_of_current {
+                args.remove(i);
+            } else {
+                i += 1;
+            }
         }
     }
 
     #[inline]
     fn normalize_member_path_name(name: &str) -> String {
         let mut parts: Vec<&str> = name.split("::").collect();
-        let mut i = 1usize;
+        let mut i = 1;
+
         while i < parts.len() {
             if parts[i] == parts[i - 1] {
                 parts.remove(i);
@@ -52,12 +94,21 @@ impl MiddleEnvironment {
                 i += 1;
             }
         }
+
         let mut out = parts.join("::");
+
         if let Some((lhs, rhs)) = out.split_once("::")
             && rhs.starts_with(&format!("{lhs}:<"))
         {
             out = rhs.to_string();
         }
+
+        if let Some((_, rhs)) = out.rsplit_once('.')
+            && rhs.contains("::")
+        {
+            out = rhs.to_string();
+        }
+
         out
     }
 
@@ -69,12 +120,15 @@ impl MiddleEnvironment {
         reverse_args: Vec<Node>,
     ) -> Vec<MiddleNode> {
         let mut lowered = Vec::with_capacity(args.len() + reverse_args.len());
+
         for arg in args {
             lowered.push(self.evaluate(scope, arg.into()));
         }
+
         for arg in reverse_args {
             lowered.push(self.evaluate(scope, arg));
         }
+
         lowered
     }
 
@@ -86,7 +140,8 @@ impl MiddleEnvironment {
         args: Vec<CallArg>,
         reverse_args: Vec<Node>,
     ) -> Vec<MiddleNode> {
-        let mut lowered = vec![receiver];
+        let mut lowered = Vec::with_capacity(args.len() + reverse_args.len() + 1);
+        lowered.push(receiver);
         lowered.extend(self.lower_call_args(scope, args, reverse_args));
         lowered
     }
@@ -126,35 +181,57 @@ impl MiddleEnvironment {
         };
         let receiver_node: Node = receiver_middle.clone().into();
 
-        let mut resolved_caller = if let NodeType::Identifier(member_ident) = &caller.node_type {
-            let name = member_ident.to_string();
-            target_type
-                .as_ref()
-                .and_then(|ty| self.resolve_impl_member(scope, ty, &name))
-                .or_else(|| {
-                    target_type
-                        .as_ref()
-                        .and_then(|ty| self.resolve_member_fn_name(ty, &name))
-                })
-                .or_else(|| {
-                    list.last()
-                        .and_then(|(base, _)| self.resolve_member_from_chain_family(base, &name))
-                })
-                .or_else(|| {
-                    list.last()
-                        .and_then(|(base, _)| self.resolve_chain_member_name(base, &name))
-                        .and_then(|candidate| {
-                            if self.variables.contains_key(&candidate) {
-                                Some(candidate)
-                            } else {
-                                self.resolve_str(scope, &candidate)
-                            }
-                        })
-                })
-                .or_else(|| self.resolve_str(scope, &name))
+        let type_style_member = if !receiver_is_value {
+            if let (NodeType::Identifier(receiver_ident), NodeType::Identifier(member_ident)) =
+                (&receiver_node.node_type, &caller.node_type)
+            {
+                let receiver_name = receiver_ident.to_string();
+                let member_name = member_ident.to_string();
+                let candidate = format!("{receiver_name}::{member_name}");
+                if self.variables.contains_key(&candidate) {
+                    Some(candidate)
+                } else {
+                    self.resolve_str(scope, &candidate)
+                }
+            } else {
+                None
+            }
         } else {
             None
         };
+
+        let mut resolved_caller = type_style_member.or_else(|| {
+            if let NodeType::Identifier(member_ident) = &caller.node_type {
+                let name = member_ident.to_string();
+                target_type
+                    .as_ref()
+                    .and_then(|ty| self.resolve_impl_member(scope, ty, &name))
+                    .or_else(|| {
+                        target_type
+                            .as_ref()
+                            .and_then(|ty| self.resolve_member_fn_name(ty, &name))
+                    })
+                    .or_else(|| {
+                        list.last().and_then(|(base, _)| {
+                            self.resolve_member_from_chain_family(base, &name)
+                        })
+                    })
+                    .or_else(|| {
+                        list.last()
+                            .and_then(|(base, _)| self.resolve_chain_member_name(base, &name))
+                            .and_then(|candidate| {
+                                if self.variables.contains_key(&candidate) {
+                                    Some(candidate)
+                                } else {
+                                    self.resolve_str(scope, &candidate)
+                                }
+                            })
+                    })
+                    .or_else(|| self.resolve_str(scope, &name))
+            } else {
+                None
+            }
+        });
 
         if resolved_caller.is_none()
             && let NodeType::Identifier(member_ident) = &caller.node_type
@@ -167,60 +244,31 @@ impl MiddleEnvironment {
 
         let resolved_caller = resolved_caller.map(|name| Self::normalize_member_path_name(&name));
 
-        let mut receiver_is_bound_value = receiver_is_value;
-        if !receiver_is_bound_value && let NodeType::Identifier(ident) = &receiver_node.node_type {
-            let receiver_name = ident.to_string();
-            let resolved_name = self.resolve_str(scope, &receiver_name);
-            let resolved_ident = self.resolve_potential_generic_ident(scope, ident);
-            receiver_is_bound_value = self.variables.contains_key(&receiver_name)
-                || resolved_name
-                    .as_ref()
-                    .is_some_and(|name| self.variables.contains_key(name))
-                || resolved_ident
-                    .as_ref()
-                    .is_some_and(|id| self.variables.contains_key(&id.text));
-        }
-
         if let Some(function_name) = resolved_caller {
-            let mut should_prepend_receiver = false;
-            if let Some(var) = self.variables.get(&function_name)
-                && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
-                && let Some(first) = parameters.first()
-            {
-                if let Some(target) = target_type.as_ref() {
-                    let target_inner = target.clone().unwrap_all_refs().data_type;
-                    let first_inner = match &first.data_type {
-                        ParserInnerType::Ref(inner, _) => &inner.data_type,
-                        other => other,
-                    };
-                    if self.impl_type_matches(first_inner, &target_inner, &Vec::new())
-                        || receiver_is_bound_value
-                    {
-                        should_prepend_receiver = true;
-                    }
-                } else if receiver_is_bound_value {
-                    should_prepend_receiver = true;
-                }
-            } else {
-                should_prepend_receiver = receiver_is_bound_value;
-            }
-
-            let mut lowered_args = if should_prepend_receiver {
+            let mut lowered_args = if receiver_is_value {
                 let mut self_arg = receiver_middle;
-                if let Some(var) = self.variables.get(&function_name)
-                    && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
-                    && let Some(first) = parameters.first()
-                    && let ParserInnerType::Ref(_, mutability) = &first.data_type
-                {
+
+                let inferred_mutability =
+                    self.first_param_ref_mutability(&function_name).or_else(|| {
+                        let is_self_ident = matches!(
+                            &self_arg.node_type,
+                            MiddleNodeType::Identifier(name)
+                                if name.text == "self" || name.text.ends_with(":self")
+                        );
+                        is_self_ident.then_some(RefMutability::MutRef)
+                    });
+
+                if let Some(mutability) = inferred_mutability {
                     self_arg = MiddleNode::new(
                         MiddleNodeType::RefStatement {
-                            mutability: *mutability,
+                            mutability,
                             value: Box::new(self_arg),
                         },
                         self.current_span(),
                     );
                 }
-                self.lower_call_args_with_receiver(scope, self_arg, args, reverse_args)
+
+                self.lower_call_args_with_receiver(scope, self_arg, args, Vec::new())
             } else {
                 self.lower_call_args(scope, args, reverse_args)
             };
@@ -266,7 +314,7 @@ impl MiddleEnvironment {
                 },
             );
 
-            let lowered_args = self.lower_call_args(scope, args, reverse_args);
+            let mut lowered_args = self.lower_call_args(scope, args, reverse_args);
             let lowered_caller = self.evaluate(scope, member_call_caller);
 
             if let MiddleNodeType::MemberExpression { path } = &lowered_caller.node_type
@@ -274,8 +322,17 @@ impl MiddleEnvironment {
                 && let MiddleNodeType::Identifier(qualified) = &path[1].0.node_type
                 && qualified.text.contains("::")
             {
-                let mut call_args = vec![path[0].0.clone()];
+                let receiver = path[0].0.clone();
+
+                if let Some(first_arg) = lowered_args.first()
+                    && Self::same_node_text(&receiver, first_arg)
+                {
+                    lowered_args.remove(0);
+                }
+
+                let mut call_args = vec![receiver];
                 call_args.extend(lowered_args);
+
                 return Ok(MiddleNode::new(
                     MiddleNodeType::CallExpression {
                         caller: Box::new(MiddleNode::new(
@@ -353,17 +410,15 @@ impl MiddleEnvironment {
                     scope,
                     &PotentialDollarIdentifier::Identifier(ident.clone()),
                 );
-                if let Some(resolved) = resolved_ident
-                    && let Some(var) = self.variables.get(&resolved.text)
+                if let Some(var) = resolved_ident
+                    .as_ref()
+                    .and_then(|resolved| self.variables.get(&resolved.text))
+                    .or_else(|| {
+                        self.resolve_str(scope, &ident.text)
+                            .and_then(|resolved| self.variables.get(&resolved))
+                    })
+                    .or_else(|| self.variables.get(&ident.text))
                 {
-                    return Some(var.data_type.clone().unwrap_all_refs());
-                }
-                if let Some(resolved_name) = self.resolve_str(scope, &ident.text)
-                    && let Some(var) = self.variables.get(&resolved_name)
-                {
-                    return Some(var.data_type.clone().unwrap_all_refs());
-                }
-                if let Some(var) = self.variables.get(&ident.text) {
                     return Some(var.data_type.clone().unwrap_all_refs());
                 }
                 let generic_ident = PotentialGenericTypeIdentifier::Identifier(
@@ -389,19 +444,18 @@ impl MiddleEnvironment {
 
     fn member_base_is_value(&mut self, scope: &u64, base: &MiddleNode) -> bool {
         if let MiddleNodeType::Identifier(ident) = &base.node_type {
-            if let Some(resolved) = self.resolve_dollar_ident_only(
-                scope,
-                &PotentialDollarIdentifier::Identifier(ident.clone()),
-            ) && self.variables.contains_key(&resolved.text)
+            if self
+                .resolve_dollar_ident_only(
+                    scope,
+                    &PotentialDollarIdentifier::Identifier(ident.clone()),
+                )
+                .as_ref()
+                .is_some_and(|resolved| self.variables.contains_key(&resolved.text))
+                || self
+                    .resolve_str(scope, &ident.text)
+                    .is_some_and(|resolved| self.variables.contains_key(&resolved))
+                || self.variables.contains_key(&ident.text)
             {
-                return true;
-            }
-            if let Some(resolved_name) = self.resolve_str(scope, &ident.text)
-                && self.variables.contains_key(&resolved_name)
-            {
-                return true;
-            }
-            if self.variables.contains_key(&ident.text) {
                 return true;
             }
             let generic_ident = PotentialGenericTypeIdentifier::Identifier(
@@ -423,21 +477,52 @@ impl MiddleEnvironment {
         let resolve_from = |env: &MiddleEnvironment, ty: &ParserDataType, m: &str| {
             env.resolve_member_fn_name(ty, m)
         };
+        let impl_var = |env: &MiddleEnvironment, key: &ParserDataType, m: &str| {
+            let key = env.impl_key(key);
+            env.impls
+                .get(&key)
+                .and_then(|imp| imp.variables.get(m))
+                .map(|(mapped, _)| mapped.clone())
+        };
+        let first_param_inner = |ty: &ParserDataType| {
+            let ParserInnerType::Function { parameters, .. } = &ty.data_type else {
+                return None;
+            };
+            let first = parameters.first()?;
+            Some(match &first.data_type {
+                ParserInnerType::Ref(inner, _) => inner.data_type.clone(),
+                other => other.clone(),
+            })
+        };
+        let find_impl_var_by_param = |env: &MiddleEnvironment,
+                                      target_inner: &ParserInnerType,
+                                      member: &str,
+                                      match_tail: bool| {
+            env.variables.iter().find_map(|(name, var)| {
+                if match_tail {
+                    if calibre_parser::qualified_name_tail(name) != member {
+                        return None;
+                    }
+                } else if !name.ends_with(&format!("::{member}")) {
+                    return None;
+                }
+                let param_inner = first_param_inner(&var.data_type)?;
+                if env.impl_type_matches(&param_inner, target_inner, &Vec::new()) {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+        };
 
         let resolved = self
             .resolve_data_type(scope, data_type.clone())
             .unwrap_all_refs();
-        let resolved_impl_key = self.impl_key(&resolved);
-        if let Some(imp) = self.impls.get(&resolved_impl_key)
-            && let Some((mapped, _)) = imp.variables.get(member)
-        {
-            return Some(mapped.clone());
+        if let Some(mapped) = impl_var(self, &resolved, member) {
+            return Some(mapped);
         }
-        let input_impl_key = self.impl_key(data_type);
-        if let Some(imp) = self.impls.get(&input_impl_key)
-            && let Some((mapped, _)) = imp.variables.get(member)
-        {
-            return Some(mapped.clone());
+        if let Some(mapped) = impl_var(self, data_type, member) {
+            return Some(mapped);
         }
         if let Some(found) =
             resolve_from(self, &resolved, member).or_else(|| resolve_from(self, data_type, member))
@@ -446,45 +531,10 @@ impl MiddleEnvironment {
         }
 
         let target_inner = resolved.clone().unwrap_all_refs().data_type;
-        if let Some(found) = self.variables.iter().find_map(|(name, var)| {
-            if !name.ends_with(&format!("::{member}")) {
-                return None;
-            }
-            let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type else {
-                return None;
-            };
-            let first = parameters.first()?;
-            let param_inner = match &first.data_type {
-                ParserInnerType::Ref(inner, _) => &inner.data_type,
-                other => other,
-            };
-            if self.impl_type_matches(param_inner, &target_inner, &Vec::new()) {
-                Some(name.clone())
-            } else {
-                None
-            }
-        }) {
+        if let Some(found) = find_impl_var_by_param(self, &target_inner, member, false) {
             return Some(found);
         }
-        if let Some(found) = self.variables.iter().find_map(|(name, var)| {
-            let tail = calibre_parser::qualified_name_tail(name);
-            if tail != member {
-                return None;
-            }
-            let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type else {
-                return None;
-            };
-            let first = parameters.first()?;
-            let param_inner = match &first.data_type {
-                ParserInnerType::Ref(inner, _) => &inner.data_type,
-                other => other,
-            };
-            if self.impl_type_matches(param_inner, &target_inner, &Vec::new()) {
-                Some(name.clone())
-            } else {
-                None
-            }
-        }) {
+        if let Some(found) = find_impl_var_by_param(self, &target_inner, member, true) {
             return Some(found);
         }
 
@@ -504,17 +554,18 @@ impl MiddleEnvironment {
             cur
         }
         let target_family: Option<String> = match &target_inner {
-            ParserInnerType::Int => Some("int".to_string()),
-            ParserInnerType::UInt => Some("uint".to_string()),
-            ParserInnerType::Byte => Some("byte".to_string()),
-            ParserInnerType::Float => Some("float".to_string()),
-            ParserInnerType::Bool => Some("bool".to_string()),
-            ParserInnerType::Char => Some("char".to_string()),
-            ParserInnerType::Dynamic | ParserInnerType::DynamicTraits(_) => Some("dyn".to_string()),
-            ParserInnerType::Null => Some("null".to_string()),
+            ParserInnerType::Int
+            | ParserInnerType::UInt
+            | ParserInnerType::Byte
+            | ParserInnerType::Float
+            | ParserInnerType::Bool
+            | ParserInnerType::Char
+            | ParserInnerType::Dynamic
+            | ParserInnerType::Null
+            | ParserInnerType::Range
+            | ParserInnerType::Str => Some(target_inner.to_string()),
             ParserInnerType::List(_) => Some("list".to_string()),
-            ParserInnerType::Range => Some("range".to_string()),
-            ParserInnerType::Str => Some("str".to_string()),
+            ParserInnerType::DynamicTraits(_) => Some("dyn".to_string()),
             ParserInnerType::Struct(name) => {
                 Some(calibre_parser::qualified_name_base(&normalize_owner(name)).to_string())
             }
@@ -523,7 +574,7 @@ impl MiddleEnvironment {
             }
             _ => None,
         };
-        if let Some(target_family) = target_family
+        if let Some(target_family) = &target_family
             && let Some(found) = self.variables.keys().find(|name| {
                 let Some((owner, meth)) = name.rsplit_once("::") else {
                     return false;
@@ -545,20 +596,24 @@ impl MiddleEnvironment {
         {
             return Some(found.clone());
         }
-        if let Some(target_family) = match &target_inner {
-            ParserInnerType::Int => Some("int"),
-            ParserInnerType::UInt => Some("uint"),
-            ParserInnerType::Byte => Some("byte"),
-            ParserInnerType::Float => Some("float"),
-            ParserInnerType::Bool => Some("bool"),
-            ParserInnerType::Char => Some("char"),
-            ParserInnerType::Str => Some("str"),
-            ParserInnerType::Range => Some("range"),
-            ParserInnerType::List(_) => Some("list"),
-            _ => None,
-        } {
+
+        if let Some(target_family) = target_family.as_ref()
+            && matches!(
+                &target_inner,
+                ParserInnerType::Int
+                    | ParserInnerType::UInt
+                    | ParserInnerType::Byte
+                    | ParserInnerType::Float
+                    | ParserInnerType::Bool
+                    | ParserInnerType::Char
+                    | ParserInnerType::Str
+                    | ParserInnerType::Range
+                    | ParserInnerType::List(_)
+            )
+        {
             return Some(format!("{target_family}::{member}"));
         }
+
         let target = resolved.clone();
         let target_name = match &target.data_type {
             ParserInnerType::Struct(name) => {
@@ -761,6 +816,75 @@ impl MiddleEnvironment {
 
         let path_len = path.len();
         for (i, item) in path.into_iter().enumerate() {
+            if let NodeType::CallExpression {
+                string_fn: _,
+                caller,
+                generic_types,
+                args,
+                reverse_args,
+            } = item.0.node_type.clone()
+                && !item.1
+            {
+                let receiver_expr = if list.len() <= 1 {
+                    list.first().map(|(n, _)| n.clone()).unwrap_or_else(|| {
+                        MiddleNode::new(MiddleNodeType::EmptyLine, self.current_span())
+                    })
+                } else {
+                    MiddleNode::new(
+                        MiddleNodeType::MemberExpression { path: list.clone() },
+                        self.current_span(),
+                    )
+                };
+
+                let target_type = self
+                    .resolve_type_from_node(scope, &receiver_expr.clone().into())
+                    .map(|x| x.unwrap_all_refs())
+                    .or_else(|| self.member_base_type(scope, &receiver_expr));
+
+                let receiver_is_value = self.member_base_is_value(scope, &receiver_expr);
+
+                let receiver_txt = receiver_expr.to_string();
+                let mut args = args;
+                let mut reverse_args = reverse_args;
+                if let Some(first_arg) = args.first() {
+                    let first_txt: Node = first_arg.clone().into();
+                    let first_txt = first_txt.to_string();
+                    if first_txt == receiver_txt
+                        || first_txt.ends_with(&format!(".{receiver_txt}"))
+                        || receiver_txt.ends_with(&format!(".{first_txt}"))
+                    {
+                        args.remove(0);
+                    }
+                }
+                if let Some(first_reverse) = reverse_args.first() {
+                    let rev_txt = first_reverse.to_string();
+                    if rev_txt == receiver_txt
+                        || rev_txt.ends_with(&format!(".{receiver_txt}"))
+                        || receiver_txt.ends_with(&format!(".{rev_txt}"))
+                    {
+                        reverse_args.remove(0);
+                    }
+                }
+
+                let call_node = self.evaluate_explicit_member_call(
+                    scope,
+                    &list,
+                    caller,
+                    generic_types,
+                    args,
+                    reverse_args,
+                    receiver_is_value,
+                    target_type,
+                )?;
+
+                if i + 1 == path_len {
+                    return Ok(call_node);
+                }
+
+                list = vec![(call_node, false)];
+                continue;
+            }
+
             if item.1 {
                 let base_node = MiddleNode::new(
                     MiddleNodeType::MemberExpression { path: list.clone() },
@@ -822,48 +946,6 @@ impl MiddleEnvironment {
                             node_type: MiddleNodeType::Identifier(resolved),
                             span,
                         }
-                    }
-                    NodeType::CallExpression {
-                        string_fn: _,
-                        caller,
-                        generic_types,
-                        args,
-                        reverse_args,
-                    } if !item.1 => {
-                        let receiver_expr = if list.len() <= 1 {
-                            list.first().map(|(n, _)| n.clone()).unwrap_or_else(|| {
-                                MiddleNode::new(MiddleNodeType::EmptyLine, self.current_span())
-                            })
-                        } else {
-                            MiddleNode::new(
-                                MiddleNodeType::MemberExpression { path: list.clone() },
-                                self.current_span(),
-                            )
-                        };
-
-                        let target_type = self
-                            .resolve_type_from_node(scope, &receiver_expr.clone().into())
-                            .map(|x| x.unwrap_all_refs())
-                            .or_else(|| self.member_base_type(scope, &receiver_expr));
-
-                        let receiver_is_value = self.member_base_is_value(scope, &receiver_expr);
-
-                        let call_node = self.evaluate_explicit_member_call(
-                            scope,
-                            &list,
-                            caller,
-                            generic_types,
-                            args,
-                            reverse_args,
-                            receiver_is_value,
-                            target_type,
-                        )?;
-
-                        if i + 1 == path_len {
-                            return Ok(call_node);
-                        }
-
-                        call_node
                     }
                     _ => self.evaluate(scope, item.0),
                 },

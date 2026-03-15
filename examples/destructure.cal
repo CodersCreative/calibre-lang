@@ -1,9 +1,9 @@
-type Pair = struct { left right : int };
+type Pair := struct { left right : int };
 
-type PairEnum = enum { Normal : Pair, Tuple : <int, int> };
+type PairEnum := enum { Normal : Pair, Tuple : <int, int> };
 
 impl PairEnum {
-	const display = fn match &Self {
+	const display := fn match &Self {
 		.Tuple : left, right => {
 			print(left + right);
 		},
@@ -13,18 +13,18 @@ impl PairEnum {
 	};
 };
 
-const sum_pair = fn ((a, b)) => a + b;
-const sum_pair_struct = fn ({left: a, right: b} : Pair) => a + b;
-const sum_pair_struct_basic = fn ({left, right} : Pair) => left + right;
+const sum_pair := fn ((a, b)) => a + b;
+const sum_pair_struct := fn ({left: a, right: b} : Pair) => a + b;
+const sum_pair_struct_basic := fn ({left, right} : Pair) => left + right;
 
-const classify = fn match int -> str {
+const classify := fn match int -> str {
 	in 0..20 => "in-range",
 	in [30, 40, 50] => "in-list",
 	v @ is int if v > 100 => "large-int",
 	_ => "other"
 };
 
-const classify_list = fn match list:<int> -> str {
+const classify_list := fn match list:<int> -> str {
 	[] => "Empty list",
 	[1] => "List of just 1",
 	[4, ..] => "List starting with 4",
@@ -32,32 +32,32 @@ const classify_list = fn match list:<int> -> str {
 	_ => "Some other list"
 };
 
-const parse_command = fn match str -> str {
+const parse_command := fn match str -> str {
 	"go:" & direction => "move " & direction,
 	head @ "noop" & _ => "saw " & head,
 	_ => "unknown"
 };
 
-const main = fn => {
-	let pair = Pair { left : 10, right : 20 };
-	let {left, right} = pair;
-	let mut first, mut second = tuple(1, 2);
+const main := fn => {
+	let pair := Pair { left : 10, right : 20 };
+	let {left, right} := pair;
+	let mut first, mut second := tuple(1, 2);
 	print(first + second);
-	let t = 10, 20, 30, 40;
+	let t := 10, 20, 30, 40;
 	
-	let start, .., end = t;
+	let start, .., end := t;
 	print(start + end);
 	
-	let mut x = 0;
-	let mut y = 0;
-	x, y = tuple(5, 6);
+	let mut x := 0;
+	let mut y := 0;
+	x, y := tuple(5, 6);
 	print(x + y);
 	
-	let mut pair_enum = PairEnum.Tuple : (14, 25);
+	let mut pair_enum := PairEnum.Tuple : (14, 25);
 	print(pair_enum);
 	pair_enum.display();
 	
-	pair_enum = PairEnum.Normal : pair;
+	pair_enum := PairEnum.Normal : pair;
 	print(pair_enum);
 	pair_enum.display();
 	

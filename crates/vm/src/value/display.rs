@@ -34,7 +34,10 @@ impl RuntimeValue {
                 Some(value) => value.clone().display(vm),
                 None => RuntimeValue::Null.display(vm),
             },
-            Self::VarRef(id) => vm.variables.get_by_id(*id).unwrap().clone().display(vm),
+            Self::VarRef(id) => match vm.variables.get_by_id(*id) {
+                Some(value) => value.clone().display(vm),
+                None => RuntimeValue::Null.display(vm),
+            },
             Self::RegRef { frame, reg } => {
                 vm.get_reg_value_in_frame(*frame, *reg).clone().display(vm)
             }

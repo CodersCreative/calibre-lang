@@ -1,11 +1,11 @@
-type Position = struct { line col : int };
+type Position := struct { line col : int };
 
-type Span = struct { start end : Position };
+type Span := struct { start end : Position };
 
-type TokenType = enum { Number, String, CurlyOpen, CurlyClose, SquareOpen, SquareClose, Comma, Colon, True, False, Null, WhiteSpace, EOF };
+type TokenType := enum { Number, String, CurlyOpen, CurlyClose, SquareOpen, SquareClose, Comma, Colon, True, False, Null, WhiteSpace, EOF };
 
 impl Display for TokenType {
-	const display = fn match &Self -> str {
+	const display := fn match &Self -> str {
 		.Number => "Number",
 		.String => "String",
 		.CurlyOpen => "{",
@@ -23,27 +23,27 @@ impl Display for TokenType {
 	};
 };
 
-type Token = struct { value : str, token_type : TokenType, span : Span };
+type Token := struct { value : str, token_type : TokenType, span : Span };
 
 impl Display for Token {
-	const display = fn (self : &Self) -> str => self.value;
+	const display := fn (self : &Self) -> str => self.value;
 };
 
-type Tokenizer = struct { lines : list:<str>, line col : int };
+type Tokenizer := struct { lines : list:<str>, line col : int };
 
 impl Tokenizer {
-	const new = fn -> Self => Tokenizer { lines : [], line : 1, col : 1 };
+	const new := fn -> Self => Tokenizer { lines : [], line : 1, col : 1 };
 
-	const default = fn -> Self => Tokenizer.new(false);
+	const default := fn -> Self => Tokenizer.new(false);
 
-	const new_token = fn (self : &Self, token_type : TokenType, value : str) -> Token => {
-		let mut start = self.col - len(value);
+	const new_token := fn (self : &Self, token_type : TokenType, value : str) -> Token => {
+		let mut start := self.col - len(value);
 		if start < 1 => start = 1;
 		Token { value, token_type, span : Span { start : Position { line : self.line, col : start }, end : Position { line : self.line, col : self.col } } };
 	};
 
-	const increment_line_col = fn (self : &mut Self, c : char) => {
-		if c == '\n' => {
+	const increment_line_col := fn (self : &mut Self, c : char) => {
+		if c = '\n' => {
 			self.line = self.line + 1;
 			self.col = 1;
 		} else => {
@@ -51,22 +51,22 @@ impl Tokenizer {
 		};
 	};
 
-	const get_unrecognized = fn (self : &Self, ch : char) -> str => {
-		let line_txt = if self.line - 1 < len(self.lines) => self.lines[self.line - 1] else => "";
+	const get_unrecognized := fn (self : &Self, ch : char) -> str => {
+		let line_txt := if self.line - 1 < len(self.lines) => self.lines[self.line - 1] else => "";
 		"unrecognized character \'" & ch & "\' at " & self.line & ":" & self.col & " in \"" & line_txt & "\"";
 	};
 
-	const tokenize = fn (self : &mut Self, txt : str) -> str!list:<Token> => {
-		let mut tokens : list:<Token> = [];
+	const tokenize := fn (self : &mut Self, txt : str) -> str!list:<Token> => {
+		let mut tokens : list:<Token> := [];
 		
 		defer return tokens <<= self.new_token(TokenType.EOF, "EndOfFile");
-		let mut buffer : list:<char> = txt.to_chars();
+		let mut buffer : list:<char> := txt.to_chars();
 		
-		self.line = 1;
-		self.col = 1;
-		self.lines = txt.split("\n");
+		self.line := 1;
+		self.col := 1;
+		self.lines := txt.split("\n");
 		
-		let get_token = fn match char -> TokenType? {
+		let get_token := fn match char -> TokenType? {
 			'[' => some(TokenType.SquareOpen),
 			']' => some(TokenType.SquareClose),
 			'{' => some(TokenType.CurlyOpen),
@@ -76,33 +76,14 @@ impl Tokenizer {
 			_ => none
 		};
 		
-		let is_hex = fn (c : char) -> bool => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-		
-		let consume_word_token = fn (word : str, token_type : TokenType) -> bool => {
-			let w = word.to_chars();
-			if len(buffer) < len(w) => return false;
-			
-			for i in 0..len(w) => {
-				if buffer[i] != w[i] => return false;
-			};
-			
-			let mut i = 0;
-			
-			for i < len(w) => {
-				self.increment_line_col(buffer.remove(0).unwrap());
-				i = i + 1;
-			};
-			
-			tokens <<= self.new_token(token_type, word);
-			true;
-		};
+		let is_hex := fn (c : char) -> bool => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 		
 		for len(buffer) > 0 => {
-			let first = buffer[0];
+			let first := buffer[0];
 			
 			if first.is_whitespace => {
 				self.increment_line_col(first);
-				let _ = buffer.remove(0).unwrap();
+				let _ := buffer.remove(0).unwrap();
 				
 				continue;
 			};
@@ -110,7 +91,7 @@ impl Tokenizer {
 			match get_token(first) {
 				.Some : t => {
 					self.increment_line_col(first);
-					let val = "" & buffer.remove(0).unwrap();
+					let val := "" & buffer.remove(0).unwrap();
 					tokens <<= self.new_token(t, val);
 					
 					continue;
@@ -118,30 +99,50 @@ impl Tokenizer {
 				_ => {}
 			};
 			
-			if consume_word_token("true", TokenType.True) => continue;
+			if first.is_alphabetic() || first = '_' => {
+				let mut word := "";
+				for len(buffer) > 0 && (buffer[0].is_alphanumeric() || buffer[0] = '_') => {
+					let c := buffer.remove(0).unwrap();
+					self.increment_line_col(c);
+					word &= c;
+				};
+				
+				if word = "true" => {
+					tokens <<= self.new_token(TokenType.True, word);
+					continue;
+				};
+				
+				if word = "false" => {
+					tokens <<= self.new_token(TokenType.False, word);
+					continue;
+				};
+				
+				if word = "null" => {
+					tokens <<= self.new_token(TokenType.Null, word);
+					continue;
+				};
+				
+				return err("unrecognized identifier \"" & word & "\"");
+			};
 			
-			if consume_word_token("false", TokenType.False) => continue;
-			
-			if consume_word_token("null", TokenType.Null) => continue;
-			
-			if first == '\"' => {
+			if first = '\"' => {
 				self.increment_line_col(buffer.remove(0).unwrap());
-				let mut out = "";
-				let mut closed = false;
+				let mut out := "";
+				let mut closed := false;
 				
 				for len(buffer) > 0 => {
-					let c = buffer[0];
-					if c == '\"' => {
+					let c := buffer[0];
+					if c = '\"' => {
 						self.increment_line_col(buffer.remove(0).unwrap());
-						closed = true;
+						closed := true;
 						
 						break;
 					};
 					
-					if c == '\\' => {
+					if c = '\\' => {
 						if len(buffer) < 2 => return err("unterminated string escape");
 						self.increment_line_col(buffer.remove(0).unwrap());
-						let esc = buffer.remove(0).unwrap();
+						let esc := buffer.remove(0).unwrap();
 						self.increment_line_col(esc);
 						match esc {
 							'\"' => out &= '\"',
@@ -154,10 +155,10 @@ impl Tokenizer {
 							't' => out &= '\t',
 							'u' => {
 								if len(buffer) < 4 => return err("short unicode escape");
-								let h0 = buffer[0];
-								let h1 = buffer[1];
-								let h2 = buffer[2];
-								let h3 = buffer[3];
+								let h0 := buffer[0];
+								let h1 := buffer[1];
+								let h2 := buffer[2];
+								let h3 := buffer[3];
 								if !is_hex(h0) || !is_hex(h1) || !is_hex(h2) || !is_hex(h3) => {
 									return err("invalid unicode escape");
 								};
@@ -188,59 +189,59 @@ impl Tokenizer {
 				continue;
 			};
 			
-			if first == '-' || first.is_digit() => {
-				let mut number = "";
+			if first = '-' || first.is_digit() => {
+				let mut number := "";
 				
-				if buffer[0] == '-' => {
-					let c = buffer.remove(0).unwrap();
+				if buffer[0] = '-' => {
+					let c := buffer.remove(0).unwrap();
 					self.increment_line_col(c);
 					number &= c;
-					if len(buffer) == 0 || !buffer[0].is_digit() => return err("invalid number");
+					if len(buffer) = 0 || !buffer[0].is_digit() => return err("invalid number");
 				};
 				
-				if buffer[0] == '0' => {
-					let c = buffer.remove(0).unwrap();
+				if buffer[0] = '0' => {
+					let c := buffer.remove(0).unwrap();
 					self.increment_line_col(c);
 					number &= c;
 				} else => {
 					for len(buffer) > 0 && buffer[0].is_digit() => {
-						let c = buffer.remove(0).unwrap();
+						let c := buffer.remove(0).unwrap();
 						self.increment_line_col(c);
 						number &= c;
 					};
 				};
 				
-				if len(buffer) > 0 && buffer[0] == '.' => {
-					let c = buffer.remove(0).unwrap();
+				if len(buffer) > 0 && buffer[0] = '.' => {
+					let c := buffer.remove(0).unwrap();
 					self.increment_line_col(c);
 					number &= c;
 					
-					if len(buffer) == 0 || !buffer[0].is_digit() => {
+					if len(buffer) = 0 || !buffer[0].is_digit() => {
 						return err("invalid fractional number");
 					};
 					
 					for len(buffer) > 0 && buffer[0].is_digit() => {
-						let d = buffer.remove(0).unwrap();
+						let d := buffer.remove(0).unwrap();
 						self.increment_line_col(d);
 						number &= d;
 					};
 				};
 				
-				if len(buffer) > 0 && (buffer[0] == 'e' || buffer[0] == 'E') => {
-					let c = buffer.remove(0).unwrap();
+				if len(buffer) > 0 && (buffer[0] = 'e' || buffer[0] = 'E') => {
+					let c := buffer.remove(0).unwrap();
 					self.increment_line_col(c);
 					number &= c;
 					
-					if len(buffer) > 0 && (buffer[0] == '+' || buffer[0] == '-') => {
-						let s = buffer.remove(0).unwrap();
+					if len(buffer) > 0 && (buffer[0] = '+' || buffer[0] = '-') => {
+						let s := buffer.remove(0).unwrap();
 						self.increment_line_col(s);
 						number &= s;
 					};
 					
-					if len(buffer) == 0 || !buffer[0].is_digit() => return err("invalid exponent");
+					if len(buffer) = 0 || !buffer[0].is_digit() => return err("invalid exponent");
 					
 					for len(buffer) > 0 && buffer[0].is_digit() => {
-						let d = buffer.remove(0).unwrap();
+						let d := buffer.remove(0).unwrap();
 						self.increment_line_col(d);
 						number &= d;
 					};
@@ -254,8 +255,6 @@ impl Tokenizer {
 			return err(self.get_unrecognized(first));
 		};
 		
-		tokens = tokens.iter().filter(fn(x) => x != TokenType.WhiteSpace).collect();
-
 		ok(tokens);
 	};
 };

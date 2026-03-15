@@ -532,7 +532,7 @@ impl ExternFunction {
                     };
                     Self::push_arg(&mut ffi_args, &mut libffi_args, arg);
                 }
-                _ => unreachable!(),
+                _ => return Err(RuntimeError::InvalidFunctionCall),
             }
         }
 
@@ -620,7 +620,7 @@ impl ExternFunction {
                         Ok(RuntimeValue::Int(res))
                     }
                 },
-                _ => unreachable!(),
+                _ => return Err(RuntimeError::InvalidFunctionCall),
             }
         }
     }

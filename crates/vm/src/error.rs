@@ -24,6 +24,7 @@ pub enum RuntimeError {
     StackUnderflow,
     FunctionNotFound(String),
     InvalidFunctionCall,
+    InvalidFunctionCallValue(RuntimeValue),
     Ffi(String),
     DanglingRef(String),
     InvalidBytecode(String),
@@ -66,6 +67,9 @@ impl std::fmt::Display for RuntimeError {
             RuntimeError::StackUnderflow => write!(f, "Internal runtime error: stack underflow"),
             RuntimeError::FunctionNotFound(name) => write!(f, "Function not found: {name}"),
             RuntimeError::InvalidFunctionCall => write!(f, "Invalid function call"),
+            RuntimeError::InvalidFunctionCallValue(value) => {
+                write!(f, "Invalid function call: {value:?}")
+            }
             RuntimeError::Ffi(msg) => write!(f, "FFI error: {msg}"),
             RuntimeError::DanglingRef(name) => write!(f, "Dangling reference: {name}"),
             RuntimeError::InvalidBytecode(msg) => write!(f, "Invalid bytecode: {msg}"),
@@ -132,6 +136,9 @@ impl RuntimeError {
             RuntimeError::InvalidFunctionCall => Some(
                 "Check that you are calling a function value and passing the right arguments."
                     .to_string(),
+            ),
+            RuntimeError::InvalidFunctionCallValue(_) => Some(
+                "Ensure the callee is a function, native function, or bound method.".to_string(),
             ),
             RuntimeError::ParseFloat(x) => Some(x.to_string()),
             RuntimeError::ParseInt(x) => Some(x.to_string()),

@@ -3,9 +3,35 @@ use dumpster::sync::Gc;
 use crate::{
     VM,
     error::RuntimeError,
-    native::{NativeFunction, expect_str_arg_or_empty},
+    native::{NativeFunction, expect_char_arg, expect_str_arg_or_empty},
     value::RuntimeValue,
 };
+
+pub struct CharLowercase;
+
+impl NativeFunction for CharLowercase {
+    fn name(&self) -> String {
+        String::from("str.char_lowercase")
+    }
+
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let c = expect_char_arg(&args, 0)?;
+        Ok(RuntimeValue::Char(c.to_lowercase().next().unwrap_or(c)))
+    }
+}
+
+pub struct CharUppercase;
+
+impl NativeFunction for CharUppercase {
+    fn name(&self) -> String {
+        String::from("str.char_uppercase")
+    }
+
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let c = expect_char_arg(&args, 0)?;
+        Ok(RuntimeValue::Char(c.to_uppercase().next().unwrap_or(c)))
+    }
+}
 
 pub struct StrSplit();
 

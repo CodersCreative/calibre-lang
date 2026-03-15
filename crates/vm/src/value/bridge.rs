@@ -15,11 +15,37 @@ pub enum TerminateValue {
 impl VM {
     #[inline]
     pub(crate) fn resolve_saveable_runtime_value_ref(&self, value: &RuntimeValue) -> RuntimeValue {
+        let resolve_local_ref = |pointer: &str| -> Option<RuntimeValue> {
+            for (frame_idx, frame) in self.frames.iter().enumerate().rev() {
+                if let Some(reg) = frame.local_map.get(pointer) {
+                    return Some(self.get_reg_value_in_frame(frame_idx, *reg).clone());
+                }
+                if let Some(base) = frame.local_map_base.as_ref()
+                    && let Some(reg) = base.get(pointer)
+                {
+                    return Some(self.get_reg_value_in_frame(frame_idx, *reg).clone());
+                }
+            }
+            None
+        };
         match value {
             RuntimeValue::Ref(pointer) => self
                 .variables
                 .get(pointer)
                 .cloned()
+                .or_else(|| resolve_local_ref(pointer))
+                .map(|resolved| match resolved {
+                    RuntimeValue::Ref(next) if next == *pointer => RuntimeValue::Ref(next),
+                    RuntimeValue::VarRef(id) => self
+                        .variables
+                        .get_by_id(id)
+                        .cloned()
+                        .unwrap_or(RuntimeValue::VarRef(id)),
+                    RuntimeValue::RegRef { frame, reg } => {
+                        self.get_reg_value_in_frame(frame, reg).clone()
+                    }
+                    other => other,
+                })
                 .unwrap_or_else(|| RuntimeValue::Ref(pointer.clone())),
             RuntimeValue::VarRef(id) => self
                 .variables
@@ -34,8 +60,8 @@ impl VM {
         }
     }
 
-    pub fn convert_runtime_var_into_saveable(&mut self, value: RuntimeValue) -> RuntimeValue {
-        fn transform(env: &mut VM, val: RuntimeValue) -> RuntimeValue {
+    pub fn convert_runtime_var_into_saveable(&self, value: RuntimeValue) -> RuntimeValue {
+        fn transform(env: &VM, val: RuntimeValue) -> RuntimeValue {
             match val {
                 RuntimeValue::Ref(name) => {
                     if let Some(inner) = env.variables.get(&name).cloned() {

@@ -1,7 +1,7 @@
 use crate::{
     VM,
     error::RuntimeError,
-    native::{NativeFunction, char_lower, char_upper, pop_or_null},
+    native::{NativeFunction, pop_or_null},
     value::RuntimeValue,
 };
 use dumpster::sync::Gc;
@@ -214,9 +214,13 @@ impl NativeFunction for TupleFn {
         String::from("tuple")
     }
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let mut resolved = Vec::with_capacity(args.len());
+        for arg in args {
+            resolved.push(resolve_native_input(_env, arg, true)?);
+        }
         Ok(RuntimeValue::Aggregate(
             None,
-            Gc::new(crate::value::GcMap(args.into())),
+            Gc::new(crate::value::GcMap(resolved.into())),
         ))
     }
 }
@@ -365,36 +369,6 @@ impl NativeFunction for TrimEnd {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         with_first_arg(env, args, false, |current| match current {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(s.trim_end().to_string()))),
-            other => Err(RuntimeError::UnexpectedType(other)),
-        })
-    }
-}
-
-pub struct Lowercase();
-
-impl NativeFunction for Lowercase {
-    fn name(&self) -> String {
-        String::from("lowercase")
-    }
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        with_first_arg(env, args, false, |current| match current {
-            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(s.to_lowercase()))),
-            RuntimeValue::Char(c) => Ok(RuntimeValue::Char(char_lower(c))),
-            other => Err(RuntimeError::UnexpectedType(other)),
-        })
-    }
-}
-
-pub struct Uppercase();
-
-impl NativeFunction for Uppercase {
-    fn name(&self) -> String {
-        String::from("uppercase")
-    }
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        with_first_arg(env, args, false, |current| match current {
-            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(s.to_uppercase()))),
-            RuntimeValue::Char(c) => Ok(RuntimeValue::Char(char_upper(c))),
             other => Err(RuntimeError::UnexpectedType(other)),
         })
     }

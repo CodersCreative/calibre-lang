@@ -164,11 +164,6 @@ fn remove_from_list_value(list: &mut Gc<crate::value::GcVec>, idx: i64) -> Optio
     Some(vec.remove(idx))
 }
 
-#[inline]
-fn same_list_identity(a: &Gc<crate::value::GcVec>, b: &Gc<crate::value::GcVec>) -> bool {
-    std::ptr::eq(a.as_ref(), b.as_ref())
-}
-
 fn remove_from_target(
     env: &mut VM,
     target: RuntimeValue,
@@ -181,7 +176,9 @@ fn remove_from_target(
             };
             match current {
                 RuntimeValue::List(mut list) => {
+                    let old_list = list.clone();
                     let removed = remove_from_list_value(&mut list, idx);
+                    env.propagate_list_aliases(&old_list, &list);
                     env.variables.insert(&name, RuntimeValue::List(list));
                     Ok(removed)
                 }
@@ -197,7 +194,9 @@ fn remove_from_target(
             };
             match current {
                 RuntimeValue::List(mut list) => {
+                    let old_list = list.clone();
                     let removed = remove_from_list_value(&mut list, idx);
+                    env.propagate_list_aliases(&old_list, &list);
                     let _ = env.variables.set_by_id(id, RuntimeValue::List(list));
                     Ok(removed)
                 }
@@ -218,26 +217,7 @@ fn remove_from_target(
                         RuntimeValue::List(new_list) => new_list,
                         _ => return Ok(removed),
                     };
-                    let reg_count = env
-                        .frames
-                        .get(frame)
-                        .map(|f| f.reg_count as u16)
-                        .unwrap_or(0);
-                    for i in 0..reg_count {
-                        if i == reg {
-                            continue;
-                        }
-                        if let RuntimeValue::List(other) =
-                            env.get_reg_value_in_frame(frame, i).clone()
-                            && same_list_identity(&other, &old_list)
-                        {
-                            env.set_reg_value_in_frame(
-                                frame,
-                                i,
-                                RuntimeValue::List(updated.clone()),
-                            );
-                        }
-                    }
+                    env.propagate_list_aliases(&old_list, &updated);
                     Ok(removed)
                 }
                 alias @ (RuntimeValue::Ref(_)

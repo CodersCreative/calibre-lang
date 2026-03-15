@@ -48,31 +48,54 @@ impl MiddleEnvironment {
     fn same_call_arg_text(a: &CallArg, b: &CallArg) -> bool {
         let left: Node = a.clone().into();
         let right: Node = b.clone().into();
-        left.to_string() == right.to_string()
+        Self::text_matches(&left.to_string(), &right.to_string())
     }
 
     #[inline]
     fn dedupe_receiver_call_args(
         args: &mut Vec<CallArg>,
+        reverse_args: &mut Vec<Node>,
         caller: &Node,
         data_type: &Option<ParserInnerType>,
     ) {
-        if args.len() < 2 {
-            return;
-        }
-        let duplicate_receiver = Self::same_call_arg_text(&args[0], &args[1]);
         let looks_like_member_rewrite = matches!(
             &caller.node_type,
             NodeType::Identifier(id) if id.to_string().contains("::")
         );
-        if duplicate_receiver
-            && (looks_like_member_rewrite
-                || matches!(
-                    data_type,
-                    Some(ParserInnerType::Function { parameters, .. }) if args.len() > parameters.len()
-                ))
-        {
-            args.remove(1);
+        if !looks_like_member_rewrite || args.is_empty() {
+            return;
+        }
+
+        let expected_len = match data_type {
+            Some(ParserInnerType::Function { parameters, .. }) => parameters.len(),
+            _ => return,
+        };
+        let mut total = args.len() + reverse_args.len();
+        if total <= expected_len {
+            return;
+        }
+
+        let receiver = args[0].clone();
+
+        let mut i = 1;
+        while i < args.len() && total > expected_len {
+            if Self::same_call_arg_text(&receiver, &args[i]) {
+                args.remove(i);
+                total -= 1;
+            } else {
+                i += 1;
+            }
+        }
+
+        let mut j = 0;
+        while j < reverse_args.len() && total > expected_len {
+            let right = CallArg::Value(reverse_args[j].clone());
+            if Self::same_call_arg_text(&receiver, &right) {
+                reverse_args.remove(j);
+                total -= 1;
+            } else {
+                j += 1;
+            }
         }
     }
 
@@ -974,7 +997,7 @@ impl MiddleEnvironment {
             .resolve_type_from_node(scope, &caller)
             .map(|x| x.unwrap_all_refs().data_type);
 
-        Self::dedupe_receiver_call_args(&mut args, &caller, &data_type);
+        Self::dedupe_receiver_call_args(&mut args, &mut reverse_args, &caller, &data_type);
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::CallExpression {

@@ -1,11 +1,11 @@
-const fib = fn (n : int) -> int => (n < 2) ? n : (fib(n - 1) + fib(n - 2));
+const fib := fn (n : int) -> int => (n < 2) ? n : (fib(n - 1) + fib(n - 2));
 
-const main = fn => {
-	let n = 30;
-	let result = fib(n);
+const main := fn => {
+	let n := 30;
+	let result := fib(n);
 	print(result);
 };
 
 bench fib => main();
 
-test fib_10 => assert(fib(10) == 55, "Fib 10 did not equal 55 as expected");
+test fib_10 => assert(fib(10) = 55, "Fib 10 did not equal 55 as expected");

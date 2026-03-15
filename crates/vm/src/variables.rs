@@ -116,6 +116,10 @@ impl VariableStore {
         self.map.contains_key(name)
     }
 
+    pub fn slot_len(&self) -> usize {
+        self.values.len()
+    }
+
     pub fn keys(&self) -> impl Iterator<Item = &str> {
         self.map.keys().map(|k| k.as_ref())
     }

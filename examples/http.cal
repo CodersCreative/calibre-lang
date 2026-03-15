@@ -2,27 +2,27 @@ import * from std::net;
 import * from std::thread;
 import * from std::console;
 
-const main = fn => {
-	let listener = Tcp.listen("127.0.0.1", 41001);
+const main := fn => {
+	let listener := Tcp.listen("127.0.0.1", 41001);
 	
 	spawn => {
-		let sock = Tcp.connect("127.0.0.1", 41001);
-		let req = "GET / HTTP/1.1\nHost: 127.0.0.1\nConnection: close\n\n";
-		let _ = sock.write(req);
-		let raw = sock.read(4096);
+		let sock := Tcp.connect("127.0.0.1", 41001);
+		let req := "GET / HTTP/1.1\nHost: 127.0.0.1\nConnection: close\n\n";
+		let _ := sock.write(req);
+		let raw := sock.read(4096);
 		print("local raw response => " & raw);
 		sock.close();
 	};
 	
-	let stream = Tcp.accept(listener);
+	let stream := Tcp.accept(listener);
 	print("server accepted connection");
-	let body = "hello from calibre http server";
-	let resp = "HTTP/1.1 200 OK\nContent-Type: text/plain\nConnection: close\n\n" & body;
-	let _ = stream.write(resp);
+	let body := "hello from calibre http server";
+	let resp := "HTTP/1.1 200 OK\nContent-Type: text/plain\nConnection: close\n\n" & body;
+	let _ := stream.write(resp);
 	print("server sent => " & body);
 	
-	let real = Http.client("api.namefake.com", 443);
-	let resp : HttpResponse = real.get("/");
+	let real := Http.client("api.namefake.com", 443);
+	let resp : HttpResponse := real.get("/");
 	print("namefake real => " & resp.body);
 	
 	wait(10);

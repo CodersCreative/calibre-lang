@@ -1,32 +1,32 @@
 import File from std::fs;
 import Channel from std::async;
 
-const main = fn => {
-	let file : File = try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
+const main := fn => {
+	let file : File := try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
 		try File.open_read(__file__.replace("main.cal", "custom_input.txt")) => {
 			print(e);
 			return;
 		};
 	};
 	
-	let text = try file.read_all(100000) => panic("Failed to read file.");
-	let ranges : list:<str> = text.split(",");
-	let worker_count = 4;
+	let text := try file.read_all(100000) => panic("Failed to read file.");
+	let ranges : list:<str> := text.split(",");
+	let worker_count := 4;
 	
-	let part1, part2 = solve_part1(ranges, worker_count), solve_part2(ranges, worker_count);
+	let part1, part2 := solve_part1(ranges, worker_count), solve_part2(ranges, worker_count);
 	
 	print("Part 1: " & part1);
 	print("Part 2: " & part2);
 };
 
-const solve_part1 = fn (ranges : list:<str>, worker_count : int) -> int => {
-	let mut out : Channel:<int> = Channel:<int>.new();
+const solve_part1 := fn (ranges : list:<str>, worker_count : int) -> int => {
+	let mut out : Channel:<int> := Channel:<int>.new();
 	use spawn for i in 0..worker_count => worker_sum_part1(ranges, i, worker_count, out);
 	
-	let mut sum = 0;
+	let mut sum := 0;
 	
 	for _ in 0..worker_count => {
-		let part = match out.get() {
+		let part := match out.get() {
 			.Some : v => v,
 			.None => 0
 		};
@@ -36,14 +36,14 @@ const solve_part1 = fn (ranges : list:<str>, worker_count : int) -> int => {
 	sum;
 };
 
-const solve_part2 = fn (ranges : list:<str>, worker_count : int) -> int => {
-	let mut out : Channel:<int> = Channel:<int>.new();
+const solve_part2 := fn (ranges : list:<str>, worker_count : int) -> int => {
+	let mut out : Channel:<int> := Channel:<int>.new();
 	use spawn for i in 0..worker_count => worker_sum_part2(ranges, i, worker_count, out);
 	
-	let mut sum = 0;
+	let mut sum := 0;
 	
 	for _ in 0..worker_count => {
-		let part = match out.get() {
+		let part := match out.get() {
 			.Some : v => v,
 			.None => 0
 		};
@@ -53,9 +53,9 @@ const solve_part2 = fn (ranges : list:<str>, worker_count : int) -> int => {
 	sum;
 };
 
-const worker_sum_part1 = fn (ranges : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
-	let mut idx = start_idx;
-	let mut local = 0;
+const worker_sum_part1 := fn (ranges : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
+	let mut idx := start_idx;
+	let mut local := 0;
 	
 	for idx < len(ranges) => {
 		local += handle_range_part1(ranges[idx]);
@@ -65,9 +65,9 @@ const worker_sum_part1 = fn (ranges : list:<str>, start_idx : int, step : int, o
 	out.send(local);
 };
 
-const worker_sum_part2 = fn (ranges : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
-	let mut idx = start_idx;
-	let mut local = 0;
+const worker_sum_part2 := fn (ranges : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
+	let mut idx := start_idx;
+	let mut local := 0;
 	
 	for idx < len(ranges) => {
 		local += handle_range_part2(ranges[idx]);
@@ -77,33 +77,33 @@ const worker_sum_part2 = fn (ranges : list:<str>, start_idx : int, step : int, o
 	out.send(local);
 };
 
-const parse_range = fn (cur : str) -> <int, int> => {
-	let cur : list:<str> = cur.split("-");
-	let start = cur[0] as! int;
-	let end = cur[1] as! int;
+const parse_range := fn (cur : str) -> <int, int> => {
+	let cur : list:<str> := cur.split("-");
+	let start := cur[0] as! int;
+	let end := cur[1] as! int;
 	(start, end);
 };
 
-const sum_interval = fn (low : int, high : int) -> int => {
+const sum_interval := fn (low : int, high : int) -> int => {
 	if high < low => return 0;
 	((low + high) * (high - low + 1)) / 2;
 };
 
-const handle_range_part1 = fn (cur : str) -> int => {
-	let start, end = parse_range(cur);
+const handle_range_part1 := fn (cur : str) -> int => {
+	let start, end := parse_range(cur);
 	if end < start => return 0;
-	let mut sum = 0;
-	let mut k = 1;
+	let mut sum := 0;
+	let mut k := 1;
 	
 	for k <= 10 => {
-		let p = int.pow(10, k);
-		let mul = p + 1;
-		let min_x = if k == 1 => 1 else => (p / 10);
-		let max_x = p - 1;
-		let low = start.ceil_div(mul);
-		let high = end.floor_div(mul);
-		let x_low = if low < min_x => min_x else => low;
-		let x_high = if high > max_x => max_x else => high;
+		let p := int.pow(10, k);
+		let mul := p + 1;
+		let min_x := if k = 1 => 1 else => (p / 10);
+		let max_x := p - 1;
+		let low := start.ceil_div(mul);
+		let high := end.floor_div(mul);
+		let x_low := if low < min_x => min_x else => low;
+		let x_high := if high > max_x => max_x else => high;
 		
 		if x_low <= x_high => sum += mul * sum_interval(x_low, x_high);
 		k += 1;
@@ -112,10 +112,10 @@ const handle_range_part1 = fn (cur : str) -> int => {
 	sum;
 };
 
-const repeat_multiplier = fn (block_len : int, times : int) -> int => {
-	let base = 10.pow(block_len);
-	let mut mul = 0;
-	let mut factor = 1;
+const repeat_multiplier := fn (block_len : int, times : int) -> int => {
+	let base := 10.pow(block_len);
+	let mut mul := 0;
+	let mut factor := 1;
 	
 	for _ in 0..times => {
 		mul += factor;
@@ -125,22 +125,22 @@ const repeat_multiplier = fn (block_len : int, times : int) -> int => {
 	mul;
 };
 
-const primitive_pattern_sum = fn (block_len : int, low : int, high : int) -> int => {
+const primitive_pattern_sum := fn (block_len : int, low : int, high : int) -> int => {
 	if high < low => return 0;
-	let min_value = if block_len == 1 => 1 else => int.pow(10, block_len - 1);
-	let max_value = 10.pow(block_len) - 1;
-	let left = low.max(min_value);
-	let right = high.min(max_value);
+	let min_value := if block_len = 1 => 1 else => int.pow(10, block_len - 1);
+	let max_value := 10.pow(block_len) - 1;
+	let left := low.max(min_value);
+	let right := high.min(max_value);
 	if right < left => return 0;
 	
-	let mut total = sum_interval(left, right);
-	let mut d = 1;
+	let mut total := sum_interval(left, right);
+	let mut d := 1;
 	
 	for d < block_len => {
-		if block_len % d == 0 => {
-			let factor = repeat_multiplier(d, block_len / d);
-			let sub_low = left.ceil_div(factor);
-			let sub_high = right.floor_div(factor);
+		if block_len % d = 0 => {
+			let factor := repeat_multiplier(d, block_len / d);
+			let sub_low := left.ceil_div(factor);
+			let sub_high := right.floor_div(factor);
 			if sub_low <= sub_high => total -= factor * primitive_pattern_sum(d, sub_low, sub_high);
 		};
 		
@@ -150,17 +150,17 @@ const primitive_pattern_sum = fn (block_len : int, low : int, high : int) -> int
 	total;
 };
 
-const handle_range_part2 = fn (cur : str) -> int => {
-	let start, end = parse_range(cur);
+const handle_range_part2 := fn (cur : str) -> int => {
+	let start, end := parse_range(cur);
 	if end < start => return 0;
 	
-	let mut sum = 0;
-	let min_len = 2.max(len(start as! str));
-	let max_len = len(end as! str);
-	let mut total_len = min_len;
+	let mut sum := 0;
+	let min_len := 2.max(len(start as! str));
+	let max_len := len(end as! str);
+	let mut total_len := min_len;
 	
 	for total_len <= max_len => {
-		let mut block = 1;
+		let mut block := 1;
 		
 		for block <= (total_len / 2) => {
 			if total_len % block != 0 => {
@@ -169,18 +169,18 @@ const handle_range_part2 = fn (cur : str) -> int => {
 				continue;
 			};
 			
-			let times = total_len / block;
+			let times := total_len / block;
 			if times < 2 => {
 				block += 1;
 				
 				continue;
 			};
 			
-			let unit = repeat_multiplier(block, times);
-			let min_pattern = 10.pow(block - 1);
-			let max_pattern = 10.pow(block) - 1;
-			let low = min_pattern.max(start.ceil_div(unit));
-			let high = max_pattern.min(end.floor_div(unit));
+			let unit := repeat_multiplier(block, times);
+			let min_pattern := 10.pow(block - 1);
+			let max_pattern := 10.pow(block) - 1;
+			let low := min_pattern.max(start.ceil_div(unit));
+			let high := max_pattern.min(end.floor_div(unit));
 			
 			if low <= high => sum += unit * primitive_pattern_sum(block, low, high);
 			block += 1;

@@ -386,6 +386,12 @@ impl MiddleEnvironment {
                 self.current_span(),
                 NodeType::Identifier(wg_ident.clone().into()),
             );
+            let start_ident: PotentialDollarIdentifier =
+                ParserText::from(String::from("anon_iter_start")).into();
+            let start_ident_node = Node::new(
+                self.current_span(),
+                NodeType::Identifier(start_ident.clone().into()),
+            );
             let list_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("anon_iter_list")).into();
             let list_ident_node = Node::new(
@@ -398,6 +404,12 @@ impl MiddleEnvironment {
                 ParserText::from(String::from("anon_iter_value")).into();
 
             let mut spawned_loop_items = Vec::new();
+            spawned_loop_items.push(Self::call_member_expr(
+                self.current_span(),
+                start_ident_node.clone(),
+                "wait",
+                Vec::new(),
+            ));
             for condition in conditionals {
                 spawned_loop_items.push(Node::new(
                     self.current_span(),
@@ -576,7 +588,39 @@ impl MiddleEnvironment {
                                 )),
                             },
                         ),
+                        Node::new(
+                            self.current_span(),
+                            NodeType::VariableDeclaration {
+                                var_type: VarType::Mutable,
+                                identifier: start_ident.clone(),
+                                data_type: PotentialNewType::DataType(ParserDataType::new(
+                                    self.current_span(),
+                                    ParserInnerType::Auto(None),
+                                )),
+                                value: Box::new(Self::call_member_expr(
+                                    self.current_span(),
+                                    Self::ident_expr(self.current_span(), "WaitGroup"),
+                                    "new",
+                                    Vec::new(),
+                                )),
+                            },
+                        ),
+                        Self::call_member_expr(
+                            self.current_span(),
+                            start_ident_node.clone(),
+                            "raw_add",
+                            vec![CallArg::Value(Node::new(
+                                self.current_span(),
+                                NodeType::IntLiteral(String::from("1")),
+                            ))],
+                        ),
                         dispatch_loop,
+                        Self::call_member_expr(
+                            self.current_span(),
+                            start_ident_node.clone(),
+                            "raw_done",
+                            Vec::new(),
+                        ),
                         Self::call_member_expr(
                             self.current_span(),
                             wg_ident_node,
@@ -1109,6 +1153,14 @@ impl MiddleEnvironment {
                         ..
                     }
                 );
+                let iter_target = if let NodeType::RefStatement { value, .. } = &range.node_type {
+                    match value.node_type {
+                        NodeType::Identifier(_) => Some(*value.clone()),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
                 let range_dt = self.resolve_type_from_node(&scope, &range);
                 let explicit_range = match &range.node_type {
                     NodeType::RangeDeclaration {
@@ -1126,10 +1178,20 @@ impl MiddleEnvironment {
                 );
                 let idx_id_name = self.temp_name("__anon_loop_index");
                 let idx_id: PotentialDollarIdentifier = ParserText::from(idx_id_name).into();
+                let next_id_name = self.temp_name("__anon_loop_next");
+                let next_id: PotentialDollarIdentifier = ParserText::from(next_id_name).into();
                 let is_count_loop = explicit_range.is_some()
                     || matches!(
                         range_dt.as_ref().map(|x| &x.data_type),
                         Some(ParserInnerType::Int) | Some(ParserInnerType::UInt)
+                    );
+                let is_indexable_loop = is_count_loop
+                    || iter_by_mut_ref
+                    || matches!(
+                        range_dt.as_ref().map(|x| &x.data_type),
+                        Some(ParserInnerType::List(_))
+                            | Some(ParserInnerType::Str)
+                            | Some(ParserInnerType::Range)
                     );
                 let (iter_value, idx_initial) = if let Some((from, to, inclusive)) = explicit_range
                 {
@@ -1151,7 +1213,20 @@ impl MiddleEnvironment {
                     (end, from)
                 } else {
                     (
-                        range.clone(),
+                        if is_indexable_loop {
+                            if let NodeType::RefStatement { value, .. } = &range.node_type {
+                                *value.clone()
+                            } else {
+                                range.clone()
+                            }
+                        } else {
+                            Self::call_member_expr(
+                                self.current_span(),
+                                range.clone(),
+                                "into_iter",
+                                vec![],
+                            )
+                        },
                         Node::new(self.current_span(), NodeType::IntLiteral(String::from("0"))),
                     )
                 };
@@ -1162,7 +1237,11 @@ impl MiddleEnvironment {
                         Node::new(
                             self.current_span(),
                             NodeType::VariableDeclaration {
-                                var_type: VarType::Immutable,
+                                var_type: if is_indexable_loop {
+                                    VarType::Immutable
+                                } else {
+                                    VarType::Mutable
+                                },
                                 identifier: iter_id.clone(),
                                 value: Box::new(iter_value),
                                 data_type: ParserDataType::new(
@@ -1174,24 +1253,50 @@ impl MiddleEnvironment {
                         ),
                     ),
                 );
-                state_nodes.push(
-                    self.evaluate(
-                        &scope,
-                        Node::new(
-                            self.current_span(),
-                            NodeType::VariableDeclaration {
-                                var_type: VarType::Mutable,
-                                identifier: idx_id.clone(),
-                                value: Box::new(idx_initial),
-                                data_type: ParserDataType::new(
-                                    self.current_span(),
-                                    ParserInnerType::Int,
-                                )
-                                .into(),
-                            },
+                if is_indexable_loop {
+                    state_nodes.push(
+                        self.evaluate(
+                            &scope,
+                            Node::new(
+                                self.current_span(),
+                                NodeType::VariableDeclaration {
+                                    var_type: VarType::Mutable,
+                                    identifier: idx_id.clone(),
+                                    value: Box::new(idx_initial),
+                                    data_type: ParserDataType::new(
+                                        self.current_span(),
+                                        ParserInnerType::Int,
+                                    )
+                                    .into(),
+                                },
+                            ),
                         ),
-                    ),
-                );
+                    );
+                } else {
+                    state_nodes.push(
+                        self.evaluate(
+                            &scope,
+                            Node::new(
+                                self.current_span(),
+                                NodeType::VariableDeclaration {
+                                    var_type: VarType::Mutable,
+                                    identifier: next_id.clone(),
+                                    value: Box::new(Node::new(
+                                        self.current_span(),
+                                        NodeType::Identifier(
+                                            ParserText::from(String::from("none")).into(),
+                                        ),
+                                    )),
+                                    data_type: ParserDataType::new(
+                                        self.current_span(),
+                                        ParserInnerType::Auto(None),
+                                    )
+                                    .into(),
+                                },
+                            ),
+                        ),
+                    );
+                }
                 let state = Some(Box::new(MiddleNode {
                     node_type: MiddleNodeType::ScopeDeclaration {
                         body: state_nodes,
@@ -1202,30 +1307,77 @@ impl MiddleEnvironment {
                     span: self.current_span(),
                 }));
 
-                let break_node = Node::new(self.current_span(), NodeType::IfStatement {
-                            comparison: Box::new(IfComparisonType::If(Node::new(self.current_span(),
+                let break_node = Node::new(
+                    self.current_span(),
+                    NodeType::IfStatement {
+                        comparison: Box::new(IfComparisonType::If(Node::new(
+                            self.current_span(),
+                            if is_indexable_loop {
                                 NodeType::ComparisonExpression {
-                                    left: Box::new(Node::new(self.current_span(), NodeType::Identifier(idx_id.clone().into()))),
-                                    right: Box::new(if is_count_loop {
-                                        iter_node.clone()
-                                    } else {
-                                        Self::call_expr(
-                                            self.current_span(),
-                                            Node::new(
+                                        left: Box::new(Node::new(self.current_span(), NodeType::Identifier(idx_id.clone().into()))),
+                                        right: Box::new(if is_count_loop {
+                                            iter_node.clone()
+                                        } else {
+                                            Self::call_expr(
                                                 self.current_span(),
-                                                NodeType::Identifier(
-                                                    ParserText::from("raw_len".to_string()).into(),
+                                                Node::new(
+                                                    self.current_span(),
+                                                    NodeType::Identifier(
+                                                        ParserText::from("raw_len".to_string()).into(),
+                                                    ),
                                                 ),
-                                            ),
-                                            vec![CallArg::Value(iter_node.clone())],
-                                        )
-                                    }),
-                                    operator: calibre_parser::ast::comparison::ComparisonOperator::GreaterEqual,
+                                                vec![CallArg::Value(iter_node.clone())],
+                                            )
+                                        }),
+                                        operator: calibre_parser::ast::comparison::ComparisonOperator::GreaterEqual,
+                                    }
+                            } else {
+                                NodeType::ComparisonExpression {
+                                    left: Box::new(Node::new(
+                                        self.current_span(),
+                                        NodeType::Identifier(next_id.clone().into()),
+                                    )),
+                                    right: Box::new(Node::new(
+                                        self.current_span(),
+                                        NodeType::Identifier(
+                                            ParserText::from(String::from("none")).into(),
+                                        ),
+                                    )),
+                                    operator:
+                                        calibre_parser::ast::comparison::ComparisonOperator::Equal,
                                 }
-                            ))),
-                            then: Box::new(Node::new(self.current_span(), NodeType::Break { label: None, value: None })),
-                            otherwise: None,
-                        });
+                            },
+                        ))),
+                        then: Box::new(Node::new(
+                            self.current_span(),
+                            NodeType::Break {
+                                label: None,
+                                value: None,
+                            },
+                        )),
+                        otherwise: None,
+                    },
+                );
+
+                let next_assign_node = if is_indexable_loop {
+                    None
+                } else {
+                    Some(Node::new(
+                        self.current_span(),
+                        NodeType::AssignmentExpression {
+                            identifier: Box::new(Node::new(
+                                self.current_span(),
+                                NodeType::Identifier(next_id.clone().into()),
+                            )),
+                            value: Box::new(Self::call_member_expr(
+                                self.current_span(),
+                                iter_node.clone(),
+                                "next",
+                                vec![],
+                            )),
+                        },
+                    ))
+                };
 
                 let indexed_value_node = Node::new(
                     self.current_span(),
@@ -1242,21 +1394,48 @@ impl MiddleEnvironment {
                         ],
                     },
                 );
+                let next_value_node = Node::new(
+                    self.current_span(),
+                    NodeType::MemberExpression {
+                        path: vec![
+                            (
+                                Node::new(
+                                    self.current_span(),
+                                    NodeType::Identifier(next_id.clone().into()),
+                                ),
+                                false,
+                            ),
+                            (
+                                Node::new(
+                                    self.current_span(),
+                                    NodeType::Identifier(
+                                        ParserText::from(String::from("next")).into(),
+                                    ),
+                                ),
+                                false,
+                            ),
+                        ],
+                    },
+                );
                 let loop_item_value = if is_count_loop {
                     Node::new(
                         self.current_span(),
                         NodeType::Identifier(idx_id.clone().into()),
                     )
-                } else if iter_by_mut_ref {
-                    Node::new(
-                        self.current_span(),
-                        NodeType::RefStatement {
-                            mutability: RefMutability::MutRef,
-                            value: Box::new(indexed_value_node),
-                        },
-                    )
+                } else if is_indexable_loop {
+                    if iter_by_mut_ref {
+                        Node::new(
+                            self.current_span(),
+                            NodeType::RefStatement {
+                                mutability: RefMutability::MutRef,
+                                value: Box::new(indexed_value_node),
+                            },
+                        )
+                    } else {
+                        indexed_value_node
+                    }
                 } else {
-                    indexed_value_node
+                    next_value_node
                 };
 
                 let var_name_node = Node::new(
@@ -1303,9 +1482,23 @@ impl MiddleEnvironment {
                 };
                 let mut instructions = Self::scope_body_items(body);
 
+                if let Some(next_assign) = next_assign_node {
+                    instructions.insert(0, next_assign);
+                }
                 instructions.insert(0, var_name_node);
                 instructions.insert(0, break_node);
-                instructions.push(increment_node.clone());
+                if is_indexable_loop {
+                    instructions.push(increment_node.clone());
+                }
+                if let Some(target) = iter_target {
+                    instructions.push(Node::new(
+                        self.current_span(),
+                        NodeType::AssignmentExpression {
+                            identifier: Box::new(target),
+                            value: Box::new(iter_node.clone()),
+                        },
+                    ));
+                }
 
                 let final_body = Self::temp_scope(self.current_span(), instructions, true);
 
@@ -1314,7 +1507,11 @@ impl MiddleEnvironment {
                     label_text.clone(),
                     result_ident.clone(),
                     broke_ident.clone(),
-                    Some(increment_node.clone()),
+                    if is_indexable_loop {
+                        Some(increment_node.clone())
+                    } else {
+                        None
+                    },
                     final_body,
                 )?;
                 let loop_node = MiddleNode {

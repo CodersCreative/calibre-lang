@@ -128,6 +128,7 @@ pub struct MiddleEnvironment {
     pub errors: Vec<MiddleErr>,
     pub type_cache: FxHashMap<hm::Type, ParserDataType>,
     pub stdlib_nodes: Vec<MiddleNode>,
+    pub loaded_scopes: FxHashSet<u64>,
     pub suppress_curry: bool,
     pub loop_stack: Vec<LoopContext>,
     pub package_metadata: Option<PackageMetadata>,
@@ -164,6 +165,7 @@ impl Default for MiddleEnvironment {
             current_location: None,
             errors: Vec::new(),
             stdlib_nodes: Vec::new(),
+            loaded_scopes: FxHashSet::default(),
             type_cache: FxHashMap::default(),
             suppress_curry: false,
             loop_stack: Vec::new(),
@@ -1655,11 +1657,49 @@ impl MiddleEnvironment {
             return Some(iden.to_string());
         }
 
-        let scope = self.scopes.get(scope)?;
+        let scope_ref = self.scopes.get(scope)?;
 
-        if let Some(x) = scope.mappings.get(iden) {
-            Some(x.to_string())
-        } else if let Some(parent) = scope.parent.as_ref() {
+        let current_mapping = scope_ref.mappings.get(iden).cloned();
+        if current_mapping.is_none() {
+            let mut parent_id = scope_ref.parent;
+            while let Some(parent) = parent_id {
+                let Some(parent_scope) = self.scopes.get(&parent) else {
+                    break;
+                };
+                if let Some(mapped) = parent_scope.mappings.get(iden) {
+                    return Some(mapped.clone());
+                }
+                parent_id = parent_scope.parent;
+            }
+        }
+        if let Some(current) = current_mapping {
+            let mut parent_id = scope_ref.parent;
+            let mut root_mapping: Option<String> = None;
+            while let Some(parent) = parent_id {
+                let Some(parent_scope) = self.scopes.get(&parent) else {
+                    break;
+                };
+                if parent_scope.parent.is_none() {
+                    root_mapping = parent_scope.mappings.get(iden).cloned();
+                    break;
+                }
+                parent_id = parent_scope.parent;
+            }
+
+            if let Some(root) = root_mapping {
+                let in_impl_scope = scope_ref.mappings.contains_key("Self");
+                let collides_with_impl_member = current != root
+                    && current.contains("::")
+                    && calibre_parser::qualified_name_tail(&current) == iden;
+                if in_impl_scope && collides_with_impl_member {
+                    return Some(root);
+                }
+            }
+
+            return Some(current);
+        }
+
+        if let Some(parent) = scope_ref.parent.as_ref() {
             self.resolve_str(parent, iden)
         } else {
             None
@@ -2389,26 +2429,29 @@ impl MiddleEnvironment {
             format!("{base}/")
         };
 
-        let mut path1 = folder.to_path_buf();
-        path1 = path1.join(format!("{extra}{namespace}.cal"));
+        let path_ends = [".cal", "/main.cal", "/mod.cal"];
+        let path_starts = [format!("{extra}{namespace}"), format!("{namespace}")];
+        let paths: Vec<PathBuf> = path_starts
+            .into_iter()
+            .map(|x| {
+                let folder = folder.to_path_buf();
+                path_ends
+                    .iter()
+                    .map(|y| folder.join(format!("{}{}", x, y)))
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect();
 
-        let mut path2 = folder.to_path_buf();
-        path2 = path2.join(format!("{extra}{namespace}/main.cal"));
-
-        let mut path3 = folder.to_path_buf();
-        path3 = path3.join(format!("{extra}{namespace}/mod.cal"));
-
-        if path1.exists() {
-            Ok(self.new_scope(Some(parent), path1, Some(namespace)))
-        } else if path2.exists() {
-            Ok(self.new_scope(Some(parent), path2, Some(namespace)))
-        } else if path3.exists() {
-            Ok(self.new_scope(Some(parent), path3, Some(namespace)))
-        } else {
-            Err(self.err_at_current(MiddleErr::Scope(format!(
-                "could not resolve module {namespace}; tried {path1:?}, {path2:?}, {path3:?}"
-            ))))
+        for path in paths.clone() {
+            if path.exists() {
+                return Ok(self.new_scope(Some(parent), path, Some(namespace)));
+            }
         }
+
+        Err(self.err_at_current(MiddleErr::Scope(format!(
+            "could not resolve module {namespace}; tried {paths:?}"
+        ))))
     }
 
     pub fn new_scope(
@@ -2417,6 +2460,30 @@ impl MiddleEnvironment {
         path: PathBuf,
         namespace: Option<&str>,
     ) -> u64 {
+        if let (Some(parent_id), Some(ns)) = (parent, namespace) {
+            let existing = self.scopes.values().find_map(|scope| {
+                if scope.namespace != ns {
+                    return None;
+                }
+                if scope.path == path {
+                    return Some(scope.id);
+                }
+                let left = std::fs::canonicalize(&scope.path).ok();
+                let right = std::fs::canonicalize(&path).ok();
+                if left.is_some() && left == right {
+                    Some(scope.id)
+                } else {
+                    None
+                }
+            });
+            if let Some(existing_id) = existing {
+                if let Some(parent_scope) = self.scopes.get_mut(&parent_id) {
+                    parent_scope.children.insert(ns.to_string(), existing_id);
+                }
+                return existing_id;
+            }
+        }
+
         if let Some(parent) = parent {
             let scope = MiddleScope {
                 macros: FxHashMap::default(),
@@ -2508,123 +2575,142 @@ impl MiddleEnvironment {
                     .get(&scope)
                     .cloned()
                     .ok_or_else(|| self.err_at_current(MiddleErr::Scope(scope.to_string())))?;
-                if let Some(x) = current.children.get(key) {
-                    (x.clone(), None)
-                } else if let Some(s) = self.get_global_scope().children.get(key) {
-                    (s.clone(), None)
+                let parent_id = current.id;
+
+                let scope = if let Some(scope) = current.children.get(key) {
+                    *scope
+                } else if let Some(scope) = self.get_global_scope().children.get(key) {
+                    *scope
                 } else {
-                    let mut parser = Parser::default();
+                    self.new_scope_from_parent(parent_id, key)?
+                };
 
-                    let build_node =
-                        if let Some(scope) = self.new_build_scope_from_parent(current.id, key) {
-                            let path = self
-                                .scopes
-                                .get(&scope)
-                                .ok_or_else(|| {
-                                    self.err_at_current(MiddleErr::Internal(format!(
-                                        "missing build scope {scope}"
-                                    )))
-                                })?
-                                .path
-                                .clone();
-                            let source = fs::read_to_string(&path).map_err(|err| {
-                                self.err_at_current(MiddleErr::Internal(format!(
-                                    "failed to read {path:?}: {err}"
-                                )))
-                            })?;
-                            parser.set_source_path(Some(path.clone()));
-                            let program = parser.produce_ast(&source);
-
-                            if !parser.errors.is_empty() {
-                                let errors = std::mem::take(&mut parser.errors);
-                                return Err(MiddleErr::ParserErrors {
-                                    path,
-                                    contents: source,
-                                    errors,
-                                });
-                            }
-
-                            let program = match program.node_type {
-                                NodeType::ScopeDeclaration { body, .. } => Node {
-                                    node_type: NodeType::ScopeDeclaration {
-                                        body,
-                                        named: None,
-                                        is_temp: false,
-                                        create_new_scope: Some(false),
-                                        define: false,
-                                    },
-                                    ..program
-                                },
-                                _ => program,
-                            };
-                            let program = self.inject_scope_magic_bindings(scope, program);
-                            Some(self.evaluate(&scope, program))
-                        } else {
-                            None
-                        };
-
-                    let scope = self.new_scope_from_parent(current.id, key)?;
-                    let path = self
-                        .scopes
-                        .get(&scope)
-                        .ok_or_else(|| {
-                            self.err_at_current(MiddleErr::Internal(format!(
-                                "missing scope {scope} for import"
-                            )))
-                        })?
-                        .path
-                        .clone();
-                    let source = fs::read_to_string(&path).map_err(|err| {
-                        self.err_at_current(MiddleErr::Internal(format!(
-                            "failed to read {path:?}: {err}"
-                        )))
-                    })?;
-                    parser.set_source_path(Some(path.clone()));
-                    let program = parser.produce_ast(&source);
-
-                    if !parser.errors.is_empty() {
-                        let errors = std::mem::take(&mut parser.errors);
-                        return Err(MiddleErr::ParserErrors {
-                            path,
-                            contents: source,
-                            errors,
-                        });
-                    }
-
-                    let program = self.inject_scope_magic_bindings(scope, program);
-                    let node = self.evaluate(&scope, program);
-
-                    let node = match (node.node_type.clone(), build_node) {
-                        (MiddleNodeType::ScopeDeclaration { mut body, .. }, Some(build_node)) => {
-                            MiddleNode {
-                                node_type: MiddleNodeType::ScopeDeclaration {
-                                    body: {
-                                        body.insert(0, build_node);
-                                        body
-                                    },
-                                    create_new_scope: true,
-                                    is_temp: false,
-                                    scope_id: scope,
-                                },
-                                ..node
-                            }
-                        }
-                        (_, Some(build_node)) => MiddleNode::new(
-                            MiddleNodeType::ScopeDeclaration {
-                                body: vec![node, build_node],
-                                create_new_scope: false,
-                                is_temp: false,
-                                scope_id: scope,
-                            },
-                            self.current_span(),
-                        ),
-                        _ => node,
-                    };
-
-                    (scope, Some(node))
-                }
+                self.load_import_scope(scope, parent_id, key)?
             }
         })
+    }
+
+    fn load_import_scope(
+        &mut self,
+        scope: u64,
+        parent: u64,
+        key: &str,
+    ) -> Result<(u64, Option<MiddleNode>), MiddleErr> {
+        let mut parser = Parser::default();
+        let build_node = if let Some(scope) = self.new_build_scope_from_parent(parent, key) {
+            if self.loaded_scopes.contains(&scope) {
+                None
+            } else {
+                let path = self
+                    .scopes
+                    .get(&scope)
+                    .ok_or_else(|| {
+                        self.err_at_current(MiddleErr::Internal(format!(
+                            "missing build scope {scope}"
+                        )))
+                    })?
+                    .path
+                    .clone();
+                let source = fs::read_to_string(&path).map_err(|err| {
+                    self.err_at_current(MiddleErr::Internal(format!(
+                        "failed to read {path:?}: {err}"
+                    )))
+                })?;
+                parser.set_source_path(Some(path.clone()));
+                let program = parser.produce_ast(&source);
+
+                if !parser.errors.is_empty() {
+                    let errors = std::mem::take(&mut parser.errors);
+                    return Err(MiddleErr::ParserErrors {
+                        path,
+                        contents: source,
+                        errors,
+                    });
+                }
+
+                let program = match program.node_type {
+                    NodeType::ScopeDeclaration { body, .. } => Node {
+                        node_type: NodeType::ScopeDeclaration {
+                            body,
+                            named: None,
+                            is_temp: false,
+                            create_new_scope: Some(false),
+                            define: false,
+                        },
+                        ..program
+                    },
+                    _ => program,
+                };
+                let program = self.inject_scope_magic_bindings(scope, program);
+                let node = self.evaluate(&scope, program);
+                self.loaded_scopes.insert(scope);
+                Some(node)
+            }
+        } else {
+            None
+        };
+
+        if self.loaded_scopes.contains(&scope) {
+            return Ok((scope, None));
+        }
+
+        let path = self
+            .scopes
+            .get(&scope)
+            .ok_or_else(|| {
+                self.err_at_current(MiddleErr::Internal(format!(
+                    "missing scope {scope} for import"
+                )))
+            })?
+            .path
+            .clone();
+        let source = fs::read_to_string(&path).map_err(|err| {
+            self.err_at_current(MiddleErr::Internal(format!(
+                "failed to read {path:?}: {err}"
+            )))
+        })?;
+        parser.set_source_path(Some(path.clone()));
+        let program = parser.produce_ast(&source);
+
+        if !parser.errors.is_empty() {
+            let errors = std::mem::take(&mut parser.errors);
+            return Err(MiddleErr::ParserErrors {
+                path,
+                contents: source,
+                errors,
+            });
+        }
+
+        let program = self.inject_scope_magic_bindings(scope, program);
+        let node = self.evaluate(&scope, program);
+        self.loaded_scopes.insert(scope);
+
+        let node = match (node.node_type.clone(), build_node) {
+            (MiddleNodeType::ScopeDeclaration { mut body, .. }, Some(build_node)) => MiddleNode {
+                node_type: MiddleNodeType::ScopeDeclaration {
+                    body: {
+                        body.insert(0, build_node);
+                        body
+                    },
+                    create_new_scope: true,
+                    is_temp: false,
+                    scope_id: scope,
+                },
+                ..node
+            },
+            (_, Some(build_node)) => MiddleNode::new(
+                MiddleNodeType::ScopeDeclaration {
+                    body: vec![node, build_node],
+                    create_new_scope: false,
+                    is_temp: false,
+                    scope_id: scope,
+                },
+                self.current_span(),
+            ),
+            _ => node,
+        };
+
+        Ok((scope, Some(node)))
     }
 
     pub fn get_next_scope(&self, scope: u64, key: &str) -> Result<u64, MiddleErr> {
@@ -2823,7 +2909,7 @@ impl MiddleEnvironment {
                                 break;
                             }
                         } else {
-                            return_type = Some(arm_ty.clone());
+                            return_type = Some(arm_ty);
                         }
                     }
                 }

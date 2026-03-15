@@ -1,23 +1,25 @@
-const suspend = fn <T> (value : T) -> T => try gen_suspend(value) as T => value;
+const suspend := fn <T> (value : T) -> T => try gen_suspend(value) as T => value;
 
 impl<T> Iter for gen:<T> {
-	type Item = T;
+	type Item := T;
 
-	const next = fn (self : &mut gen:<T>) -> T? => {
+	const next := fn (self : &mut gen:<T>) -> T? => {
 		if self.done => return none;
-		let value = (self.data)();
-		if value == none => {
-			self.done = true;
+		let value := (self.data)();
+		if value = none => {
+			self.done := true;
 			return none;
 		};
 		
-		self.index = self.index + 1;
+		self.index += 1;
 		value;
 	};
 };
 
 impl<T> gen:<T> {
-	const iter = fn (self : gen:<T>) -> gen:<T> => self;
+	const iter := fn (self : gen:<T>) -> gen:<T> => self;
 
-	const into_iter = fn (self : gen:<T>) -> gen:<T> => self;
+	const iter_mut := fn (self : &mut gen:<T>) -> gen:<T> => self;
+
+	const into_iter := fn (self : gen:<T>) -> gen:<T> => self;
 };

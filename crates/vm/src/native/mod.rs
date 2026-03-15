@@ -59,6 +59,14 @@ pub(crate) fn expect_str_arg_or_empty(
 }
 
 #[inline]
+fn expect_char_arg(args: &[RuntimeValue], index: usize) -> Result<char, RuntimeError> {
+    match args.get(index) {
+        Some(value) => expect_char(value.clone()),
+        None => Ok('\0'),
+    }
+}
+
+#[inline]
 pub(crate) fn expect_str_owned(value: RuntimeValue) -> Result<Arc<String>, RuntimeError> {
     if let RuntimeValue::Str(s) = value {
         Ok(s)
@@ -83,16 +91,6 @@ pub(crate) fn expect_char(value: RuntimeValue) -> Result<char, RuntimeError> {
     } else {
         Err(RuntimeError::UnexpectedType(value))
     }
-}
-
-#[inline]
-pub(crate) fn char_lower(c: char) -> char {
-    c.to_lowercase().next().unwrap_or(c)
-}
-
-#[inline]
-pub(crate) fn char_upper(c: char) -> char {
-    c.to_uppercase().next().unwrap_or(c)
 }
 
 impl Debug for dyn NativeFunction {
@@ -194,15 +192,12 @@ impl VM {
     }
 
     pub fn setup_global(&mut self) {
-        let mapping_index = Self::build_mapping_index(self.mappings.as_ref(), false);
-
         for (short_name, value) in RuntimeValue::constants().into_iter().chain(
             RuntimeValue::natives()
                 .into_iter()
                 .filter(|(name, _)| !name.contains('.')),
         ) {
-            let name = Self::mapped_name(&mapping_index, short_name.as_str());
-            let _ = self.variables.insert(&name, value);
+            let _ = self.variables.insert(short_name.as_str(), value);
         }
     }
 }

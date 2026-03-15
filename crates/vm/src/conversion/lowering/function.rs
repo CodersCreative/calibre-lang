@@ -324,6 +324,7 @@ impl FunctionLowering {
                 let phi = PhiNode {
                     dest: phi_reg,
                     sources: sources.clone(),
+                    name: Some(var.clone()),
                 };
                 let pos = phis.iter().position(|p| p.dest == phi_reg);
                 if let Some(i) = pos {

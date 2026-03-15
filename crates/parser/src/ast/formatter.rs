@@ -699,7 +699,7 @@ impl Formatter {
                                 }
 
                                 if let Some(value) = &member.value {
-                                    line.push_str(&format!(" = {}", self.format(value)));
+                                    line.push_str(&format!(" := {}", self.format(value)));
                                 }
                             }
                         }
@@ -763,8 +763,8 @@ impl Formatter {
                 _ => {
                     let lhs = self.format(identifier);
                     let rhs = self.fmt_value_preserving_bare_tuple(value);
-                    let single = format!("{} = {}", lhs, rhs);
-                    let multi = format!("{} =\n{}", lhs, self.fmt_txt_with_tab(&rhs, 1, true));
+                    let single = format!("{} := {}", lhs, rhs);
+                    let multi = format!("{} :=\n{}", lhs, self.fmt_txt_with_tab(&rhs, 1, true));
                     self.wrap_if_wide(single, &multi)
                 }
             },
@@ -781,8 +781,8 @@ impl Formatter {
                 }
 
                 let rhs = self.fmt_value_preserving_bare_tuple(value);
-                let single = format!("{} = {}", txt, rhs);
-                let multi = format!("{} =\n{}", txt, self.fmt_txt_with_tab(&rhs, 1, true));
+                let single = format!("{} := {}", txt, rhs);
+                let multi = format!("{} :=\n{}", txt, self.fmt_txt_with_tab(&rhs, 1, true));
                 self.wrap_if_wide(single, &multi)
             }
             NodeType::AsExpression {
@@ -1079,7 +1079,7 @@ impl Formatter {
                 library,
                 symbol,
             } => {
-                let mut txt = format!("extern \"{}\" const {} = fn(", abi, identifier);
+                let mut txt = format!("extern \"{}\" const {} := fn(", abi, identifier);
                 let params: Vec<String> = parameters.iter().map(|p| self.fmt_ffi_type(p)).collect();
                 let single = format!("{}{})", txt, params.join(", "));
                 let multi = format!(
@@ -1106,13 +1106,13 @@ impl Formatter {
                 let mut txt = format!("{}", var_type);
                 txt.push(' ');
                 txt.push_str(&self.fmt_destructure_pattern(pattern, false));
-                txt.push_str(" = ");
+                txt.push_str(" := ");
                 txt.push_str(&self.fmt_value_preserving_bare_tuple(value));
                 txt
             }
             NodeType::DestructureAssignment { pattern, value } => {
                 let mut txt = self.fmt_destructure_pattern(pattern, false);
-                txt.push_str(" = ");
+                txt.push_str(" := ");
                 txt.push_str(&self.fmt_value_preserving_bare_tuple(value));
                 txt
             }
@@ -1676,7 +1676,7 @@ impl Formatter {
 
             for func in overloads {
                 let func_txt = {
-                    let mut txt = format!("const \"{}\" = fn (", func.operator);
+                    let mut txt = format!("const \"{}\" := fn (", func.operator);
 
                     let mut adjusted_params = func
                         .header

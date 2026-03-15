@@ -8,12 +8,6 @@ pub(crate) enum VarName {
 }
 
 impl VM {
-    #[inline]
-    fn name_tail(name: &str) -> &str {
-        let colon_tail = name.rsplit_once(':').map(|(_, tail)| tail).unwrap_or(name);
-        calibre_parser::qualified_name_tail(colon_tail)
-    }
-
     pub(crate) fn find_unique_function_by_suffix_ref(
         &self,
         short_name: &str,
@@ -69,24 +63,6 @@ impl VM {
     #[inline]
     pub(crate) fn invalidate_name_resolution_caches(&mut self) {
         self.caches.unique_var_suffix.clear();
-    }
-
-    fn find_unique_local_by_suffix(&self, short_name: &str) -> Option<Reg> {
-        let frame = self.current_frame();
-        frame
-            .local_map
-            .iter()
-            .chain(
-                frame
-                    .local_map_base
-                    .as_ref()
-                    .into_iter()
-                    .flat_map(|base| base.iter()),
-            )
-            .find_map(|(name, reg)| {
-                let suffix = Self::name_tail(name.as_ref());
-                (suffix == short_name).then_some(*reg)
-            })
     }
 
     pub(crate) fn resolve_library_candidates(name: &str) -> Vec<String> {
@@ -149,35 +125,19 @@ impl VM {
 
     pub(crate) fn capture_value(&self, name: &str, seen: &mut FxHashSet<String>) -> RuntimeValue {
         let is_local_style = name.contains(':') || name.contains("->");
-        let local_tail: Option<&str> = if is_local_style {
-            let colon_tail = name.rsplit_once(':').map(|(_, tail)| tail).unwrap_or(name);
-            Some(calibre_parser::qualified_name_tail(colon_tail))
-        } else {
-            None
-        };
 
         if is_local_style {
             let current_frame = self.frames.len().saturating_sub(1);
-            for candidate in [Some(name), local_tail].into_iter().flatten() {
-                if let Some(id) = self.variables.id_of(candidate)
-                    && let Some(RuntimeValue::RegRef { frame, .. }) = self.variables.get_by_id(id)
-                    && *frame != current_frame
-                {
-                    return RuntimeValue::VarRef(id);
-                }
+            if let Some(id) = self.variables.id_of(name)
+                && let Some(RuntimeValue::RegRef { frame, .. }) = self.variables.get_by_id(id)
+                && *frame != current_frame
+            {
+                return RuntimeValue::VarRef(id);
             }
         }
 
         if is_local_style {
             for (frame_idx, frame) in self.frames.iter().enumerate().rev() {
-                if let Some(tail) = local_tail
-                    && let Some(reg) = frame.local_map.get(tail).copied()
-                {
-                    return RuntimeValue::RegRef {
-                        frame: frame_idx,
-                        reg,
-                    };
-                }
                 if let Some(reg) = frame.local_map.get(name).copied() {
                     return RuntimeValue::RegRef {
                         frame: frame_idx,
@@ -185,14 +145,6 @@ impl VM {
                     };
                 }
                 if let Some(base) = frame.local_map_base.as_ref() {
-                    if let Some(tail) = local_tail
-                        && let Some(reg) = base.get(tail).copied()
-                    {
-                        return RuntimeValue::RegRef {
-                            frame: frame_idx,
-                            reg,
-                        };
-                    }
                     if let Some(reg) = base.get(name).copied() {
                         return RuntimeValue::RegRef {
                             frame: frame_idx,
@@ -203,28 +155,61 @@ impl VM {
             }
         }
 
+        if !is_local_style {
+            let frame = self.current_frame();
+            let target_tail = calibre_parser::qualified_name_tail(name);
+            let mut found: Option<Reg> = None;
+            let mut ambiguous = false;
+            let tail_matches = |key: &Arc<str>, target: &str| {
+                let local = key.as_ref();
+                let colon_tail = local
+                    .rsplit_once(':')
+                    .map(|(_, tail)| tail)
+                    .unwrap_or(local);
+                calibre_parser::qualified_name_tail(colon_tail) == target
+            };
+            for (key, reg) in frame.local_map.iter() {
+                if tail_matches(key, target_tail) {
+                    if found.is_some() {
+                        ambiguous = true;
+                        break;
+                    }
+                    found = Some(*reg);
+                }
+            }
+            if !ambiguous {
+                for (key, reg) in frame
+                    .local_map_base
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|base| base.iter())
+                {
+                    if tail_matches(key, target_tail) {
+                        if found.is_some() {
+                            ambiguous = true;
+                            break;
+                        }
+                        found = Some(*reg);
+                    }
+                }
+            }
+            if !ambiguous {
+                if let Some(reg) = found {
+                    let frame_idx = self.frames.len().saturating_sub(1);
+                    return RuntimeValue::RegRef {
+                        frame: frame_idx,
+                        reg,
+                    };
+                }
+            }
+        }
+
         if let Some(id) = self.variables.id_of(name) {
             return RuntimeValue::VarRef(id);
         }
-        if let Some(tail) = local_tail
-            && let Some(id) = self.variables.id_of(tail)
-        {
-            return RuntimeValue::VarRef(id);
-        }
 
-        let short = Self::name_tail(name);
-        let frame = self.frames.len().saturating_sub(1);
-        if let Some(reg) = self.find_unique_local_by_suffix(short) {
-            return RuntimeValue::RegRef { frame, reg };
-        }
         if let Some(value) = self.variables.get(name) {
-            return match value {
-                RuntimeValue::RegRef { .. } | RuntimeValue::Ref(_) | RuntimeValue::VarRef(_) => {
-                    self.resolve_saveable_runtime_value_ref(value)
-                }
-                _ if is_local_style => RuntimeValue::Ref(name.to_string()),
-                _ => self.resolve_saveable_runtime_value_ref(value),
-            };
+            return self.resolve_saveable_runtime_value_ref(value);
         }
 
         if is_local_style
@@ -237,14 +222,7 @@ impl VM {
         match self.resolve_var_name(name) {
             VarName::Var(var) => {
                 if let Some(value) = self.variables.get(&var) {
-                    let is_local_style = var.contains(':') || var.contains("->");
-                    match value {
-                        RuntimeValue::RegRef { .. }
-                        | RuntimeValue::Ref(_)
-                        | RuntimeValue::VarRef(_) => self.resolve_saveable_runtime_value_ref(value),
-                        _ if is_local_style => RuntimeValue::Ref(var.clone()),
-                        _ => self.resolve_saveable_runtime_value_ref(value),
-                    }
+                    self.resolve_saveable_runtime_value_ref(value)
                 } else {
                     RuntimeValue::Null
                 }
@@ -319,45 +297,14 @@ impl VM {
         name: &str,
         short_name: Option<&str>,
     ) -> Option<usize> {
-        if map.0.0.len() <= 3 {
-            return map.0.0.iter().enumerate().find_map(|(idx, (field, _))| {
-                if field == name || short_name.is_some_and(|short| field == short) {
-                    Some(idx)
-                } else {
-                    None
-                }
-            });
-        }
-
-        if let Some(slots) = self.caches.aggregate_member_slots.get(type_name) {
-            if let Some(idx) = slots.get(name).copied() {
-                return Some(idx);
-            }
-            if let Some(short) = short_name
-                && let Some(idx) = slots.get(short).copied()
-            {
-                return Some(idx);
-            }
-        }
-
-        let idx = map.0.0.iter().enumerate().find_map(|(idx, (field, _))| {
+        let _ = type_name;
+        map.0.0.iter().enumerate().find_map(|(idx, (field, _))| {
             if field == name || short_name.is_some_and(|short| field == short) {
                 Some(idx)
             } else {
                 None
             }
-        })?;
-
-        let slots = self
-            .caches
-            .aggregate_member_slots
-            .entry(type_name.to_string())
-            .or_default();
-        slots.insert(name.to_string(), idx);
-        if let Some(short) = short_name {
-            let _ = slots.entry(short.to_string()).or_insert(idx);
-        }
-        Some(idx)
+        })
     }
 
     pub(crate) fn resolve_var_name(&self, name: &str) -> VarName {
@@ -374,6 +321,14 @@ impl VM {
             return VarName::Func(name.to_string());
         } else if self.variables.contains_key(name) {
             return VarName::Var(name.to_string());
+        } else if name.contains('.') && !name.contains("::") {
+            let normalized = name.replace('.', "::");
+            if self.get_function_ref(&normalized).is_some() {
+                return VarName::Func(normalized);
+            }
+            if self.variables.contains_key(&normalized) {
+                return VarName::Var(normalized);
+            }
         } else if name.contains("::") {
             return VarName::Global;
         }

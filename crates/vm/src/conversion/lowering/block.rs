@@ -9,30 +9,45 @@ impl<'a> BlockLoweringCtx<'a> {
         if self.locals.contains(name) {
             return Some(name.to_string());
         }
-        if !name.contains(':') || name.contains("::") {
+        if self.map.contains_key(name) {
+            return Some(name.to_string());
+        }
+        if name.contains(':') || name.contains("::") {
             return None;
         }
 
         let tail = Self::symbol_tail(name);
-        self.locals
-            .iter()
-            .find(|candidate| Self::symbol_tail(candidate.as_str()) == tail)
-            .cloned()
+        let mut found: Option<String> = None;
+        for candidate in &self.locals {
+            if Self::symbol_tail(candidate.as_str()) == tail {
+                if found.is_some() {
+                    return None;
+                }
+                found = Some(candidate.clone());
+            }
+        }
+        found
     }
 
     pub(super) fn resolve_mapped_reg(&self, name: &str) -> Option<Reg> {
         if let Some(reg) = self.map.get(name).copied() {
             return Some(reg);
         }
-        if !name.contains(':') || name.contains("::") {
+        if name.contains(':') || name.contains("::") {
             return None;
         }
 
         let tail = Self::symbol_tail(name);
-        self.map
-            .iter()
-            .find(|(candidate, _)| Self::symbol_tail(candidate.as_str()) == tail)
-            .map(|(_, reg)| *reg)
+        let mut found: Option<Reg> = None;
+        for (candidate, reg) in &self.map {
+            if Self::symbol_tail(candidate.as_str()) == tail {
+                if found.is_some() {
+                    return None;
+                }
+                found = Some(*reg);
+            }
+        }
+        found
     }
 
     pub(super) fn alloc_reg(&mut self) -> Reg {
@@ -146,6 +161,7 @@ impl<'a> BlockLoweringCtx<'a> {
             LirNodeType::Assign { dest, value } => match dest {
                 LirLValue::Var(dest) => {
                     let reg = self.lower_node(*value, node.span);
+                    let name_idx = self.add_string(dest.to_string());
                     if !self.is_global && self.locals.contains(dest.as_ref()) {
                         let target = assigned.unwrap_or(reg);
                         if target != reg {
@@ -157,7 +173,6 @@ impl<'a> BlockLoweringCtx<'a> {
                                 node.span,
                             );
                         }
-                        let name_idx = self.add_string(dest.to_string());
                         self.map.insert(dest.to_string(), target);
                         self.emit(
                             VMInstruction::SetLocalName {
@@ -166,11 +181,21 @@ impl<'a> BlockLoweringCtx<'a> {
                             },
                             node.span,
                         );
-                        let name = self.add_string(dest.to_string());
-                        self.emit(VMInstruction::StoreGlobal { name, src: target }, node.span);
+                        self.emit(
+                            VMInstruction::StoreGlobal {
+                                name: name_idx,
+                                src: target,
+                            },
+                            node.span,
+                        );
                     } else {
-                        let name = self.add_string(dest.to_string());
-                        self.emit(VMInstruction::StoreGlobal { name, src: reg }, node.span);
+                        self.emit(
+                            VMInstruction::StoreGlobal {
+                                name: name_idx,
+                                src: reg,
+                            },
+                            node.span,
+                        );
                     }
                 }
                 LirLValue::Ptr(ptr) => {
@@ -291,7 +316,9 @@ impl<'a> BlockLoweringCtx<'a> {
                     LirNodeType::Load(name) | LirNodeType::Move(name) if !name.contains(':') => {
                         let current_name = self.current_fn_name.as_str();
                         let current_short = self.current_fn_short.as_str();
-                        if name.as_ref() == current_name || name.as_ref() == current_short {
+                        let is_unambiguous_self_call = name.as_ref() == current_name
+                            || (!current_name.contains(':') && name.as_ref() == current_short);
+                        if is_unambiguous_self_call {
                             self.emit(
                                 VMInstruction::CallSelf {
                                     dst,
@@ -498,22 +525,10 @@ impl<'a> BlockLoweringCtx<'a> {
             }
             LirNodeType::Ref(x) => match *x {
                 LirNodeType::Load(name) => {
-                    if !self.captures.contains(name.as_ref())
-                        && (self.resolve_local_key(name.as_ref()).is_some()
-                            || self.resolve_mapped_reg(name.as_ref()).is_some())
-                    {
-                        let src = self
-                            .resolve_mapped_reg(name.as_ref())
-                            .unwrap_or(self.null_reg);
-                        let dst = self.alloc_reg();
-                        self.emit(VMInstruction::LoadRegRef { dst, src }, span);
-                        dst
-                    } else {
-                        let idx = self.add_string(name.to_string());
-                        let dst = self.alloc_reg();
-                        self.emit(VMInstruction::LoadGlobalRef { dst, name: idx }, span);
-                        dst
-                    }
+                    let idx = self.add_string(name.to_string());
+                    let dst = self.alloc_reg();
+                    self.emit(VMInstruction::LoadGlobalRef { dst, name: idx }, span);
+                    dst
                 }
                 other => {
                     let value = self.lower_node(other, span);
@@ -522,6 +537,12 @@ impl<'a> BlockLoweringCtx<'a> {
                     dst
                 }
             },
+            LirNodeType::RefLoad(name) => {
+                let idx = self.add_string(name.to_string());
+                let dst = self.alloc_reg();
+                self.emit(VMInstruction::LoadGlobalRef { dst, name: idx }, span);
+                dst
+            }
             LirNodeType::As(value, data_type, failure_mode) => {
                 let src = self.lower_node(*value, span);
                 let dst = self.alloc_reg();

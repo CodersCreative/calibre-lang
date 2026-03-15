@@ -1,7 +1,7 @@
-const pi_terms_gen = fn (n_terms : int) -> gen:<float> => {
-	let mut i = 0;
-	let mut denominator = 1f;
-	let mut operation = 1f;
+const pi_terms_gen := fn (n_terms : int) -> gen:<float> => {
+	let mut i := 0;
+	let mut denominator := 1f;
+	let mut operation := 1f;
 	
 	for i < n_terms => {
 		return operation * (4f / denominator);
@@ -12,9 +12,9 @@ const pi_terms_gen = fn (n_terms : int) -> gen:<float> => {
 	};
 };
 
-const calculate_pi_gen = fn (n_terms : int) -> float => {
-	let mut pi = 0f;
-	let mut it = pi_terms_gen(n_terms);
+const calculate_pi_gen := fn (n_terms : int) -> float => {
+	let mut pi := 0f;
+	let mut it := pi_terms_gen(n_terms);
 	
 	for let .Some : term <- it.next() => {
 		pi += term;
@@ -23,15 +23,15 @@ const calculate_pi_gen = fn (n_terms : int) -> float => {
 	pi;
 };
 
-const main = fn => {
-	let n = 100_000;
-	let result = calculate_pi_gen(n);
+const main := fn => {
+	let n := 100_000;
+	let result := calculate_pi_gen(n);
 	print(result);
 };
 
 bench pi_gen => main();
 
 test pi_gen_small => {
-	let pi = calculate_pi_gen(1000);
+	let pi := calculate_pi_gen(1000);
 	assert(pi > 3f && pi < 3.2, "pi approximation out of expected range");
 };

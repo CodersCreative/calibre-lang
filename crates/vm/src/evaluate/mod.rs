@@ -28,6 +28,64 @@ enum CaptureRestore {
 }
 
 impl VM {
+    fn propagate_member_source_args(
+        &mut self,
+        args: &[u16],
+        caller_frame: usize,
+    ) -> Result<(), RuntimeError> {
+        let propagated_args: Vec<(usize, u16, u16, String)> = args
+            .iter()
+            .filter_map(|arg_reg| {
+                let arg_val = self.get_reg_value_in_frame(caller_frame, *arg_reg).clone();
+                let RuntimeValue::RegRef { frame, reg } = arg_val else {
+                    return None;
+                };
+                if frame != caller_frame {
+                    return None;
+                }
+                let (parent_reg, field) = self
+                    .frames
+                    .get(caller_frame)?
+                    .member_sources
+                    .get(&reg)
+                    .cloned()?;
+                Some((caller_frame, reg, parent_reg, field))
+            })
+            .collect();
+
+        for (frame_idx, field_reg, parent_reg, field_name) in propagated_args {
+            let updated_field = self.get_reg_value_in_frame(frame_idx, field_reg).clone();
+            let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg).clone();
+            let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
+            if let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved
+                && let Some(entry) = Gc::make_mut(&mut map)
+                    .0
+                    .0
+                    .iter_mut()
+                    .find(|(field, _)| field == &field_name)
+            {
+                entry.1 = updated_field;
+                let updated_parent = RuntimeValue::Aggregate(type_name, map);
+                match parent_raw {
+                    RuntimeValue::RegRef { frame, reg } => {
+                        self.set_reg_value_in_frame(frame, reg, updated_parent);
+                    }
+                    RuntimeValue::Ref(name) => {
+                        self.variables.insert(&name, updated_parent);
+                    }
+                    RuntimeValue::VarRef(id) => {
+                        let _ = self.variables.set_by_id(id, updated_parent);
+                    }
+                    _ => {
+                        self.set_reg_value_in_frame(frame_idx, parent_reg, updated_parent);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     #[inline]
     pub(crate) fn should_pass_by_reg_ref(value: &RuntimeValue) -> bool {
         matches!(
@@ -73,13 +131,35 @@ impl VM {
     {
         for candidate in candidates {
             if let Some((resolved, _)) = self.try_resolve_global_runtime_value(&candidate) {
+                if matches!(resolved, RuntimeValue::Null) {
+                    continue;
+                }
                 return Some(resolved);
             }
             if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&candidate) {
+                if matches!(resolved, RuntimeValue::Null) {
+                    continue;
+                }
                 return Some(resolved);
             }
         }
         None
+    }
+
+    fn normalize_generic_owner(owner: &str) -> &str {
+        let tail = calibre_parser::qualified_name_tail(owner);
+        let base = tail.split("->").next().unwrap_or(tail);
+        base.split('<').next().unwrap_or(base)
+    }
+
+    fn resolve_native_member(&self, owner: &str, member: &str) -> Option<RuntimeValue> {
+        let owner_base = Self::normalize_generic_owner(owner);
+        if owner_base.is_empty() {
+            return None;
+        }
+        let owner_lower = owner_base.to_ascii_lowercase();
+        let candidate = format!("async.{owner_lower}_{member}");
+        RuntimeValue::natives().get(candidate.as_str()).cloned()
     }
 
     #[inline]
@@ -90,7 +170,7 @@ impl VM {
         include_member_as_is: bool,
         mapped: Option<&str>,
     ) -> Vec<String> {
-        let mut candidates = Vec::with_capacity(6);
+        let mut candidates = Vec::with_capacity(10);
         if let Some(mapped) = mapped {
             candidates.push(mapped.to_string());
         }
@@ -99,6 +179,16 @@ impl VM {
         }
         Self::push_owner_member_candidates(&mut candidates, owner, member, short_member);
         Self::push_short_owner_member_candidates(&mut candidates, owner, member, short_member);
+        if owner.contains("Self::Item") {
+            let normalized = owner.replace("Self::Item", "T");
+            Self::push_owner_member_candidates(&mut candidates, &normalized, member, short_member);
+            Self::push_short_owner_member_candidates(
+                &mut candidates,
+                &normalized,
+                member,
+                short_member,
+            );
+        }
         candidates
     }
 
@@ -151,6 +241,28 @@ impl VM {
             RuntimeValue::BoundMethod { callee, receiver } => {
                 let mut full_args = vec![receiver.as_ref().clone()];
                 full_args.extend(args);
+                if full_args.len() >= 2 {
+                    let same_identity = match (&full_args[0], &full_args[1]) {
+                        (RuntimeValue::List(a), RuntimeValue::List(b)) => {
+                            std::ptr::eq(a.as_ref(), b.as_ref())
+                        }
+                        (RuntimeValue::Aggregate(_, a), RuntimeValue::Aggregate(_, b)) => {
+                            std::ptr::eq(a.as_ref(), b.as_ref())
+                        }
+                        _ => false,
+                    };
+                    let same_value = matches!(
+                        comparison(
+                            &ComparisonOperator::Equal,
+                            full_args[0].clone(),
+                            full_args[1].clone()
+                        ),
+                        Ok(RuntimeValue::Bool(true))
+                    );
+                    if same_identity || same_value {
+                        full_args.remove(1);
+                    }
+                }
                 self.call_runtime_callable_at(
                     *callee,
                     full_args,
@@ -158,7 +270,7 @@ impl VM {
                     callsite_tag.saturating_sub(1),
                 )
             }
-            _ => Err(RuntimeError::InvalidFunctionCall),
+            other => Err(RuntimeError::InvalidFunctionCallValue(other)),
         }
     }
 
@@ -231,6 +343,13 @@ impl VM {
             RuntimeValue::Aggregate(Some(name), _) | RuntimeValue::Enum(name, _, _) => {
                 Some(name.clone())
             }
+            RuntimeValue::Channel(_) => Some("Channel".to_string()),
+            RuntimeValue::WaitGroup(_) => Some("WaitGroup".to_string()),
+            RuntimeValue::Mutex(_) | RuntimeValue::MutexGuard(_) => Some("Mutex".to_string()),
+            RuntimeValue::HashMap(_) => Some("HashMap".to_string()),
+            RuntimeValue::HashSet(_) => Some("HashSet".to_string()),
+            RuntimeValue::TcpStream(_) => Some("TcpStream".to_string()),
+            RuntimeValue::TcpListener(_) => Some("TcpListener".to_string()),
             RuntimeValue::Generator { type_name, .. } => Some(type_name.to_string()),
             RuntimeValue::DynObject { type_name, .. } => Some(type_name.to_string()),
             _ => None,
@@ -298,7 +417,96 @@ impl VM {
         short_member: Option<&str>,
     ) -> Option<RuntimeValue> {
         let candidates = Self::build_member_candidates(owner, member, short_member, true, None);
-        self.resolve_first_candidate(candidates)
+        for candidate in candidates {
+            if let Some((resolved, _)) = self.resolve_named_global_runtime_value(&candidate) {
+                if matches!(resolved, RuntimeValue::Null) {
+                    continue;
+                }
+                return Some(resolved);
+            }
+        }
+        if !owner.contains("->") {
+            if let Some(found) = self.resolve_struct_like_member(owner, member, short_member) {
+                return Some(found);
+            }
+        }
+        let owner_tail = calibre_parser::qualified_name_tail(owner);
+        let owner_base = owner_tail
+            .split_once("->")
+            .map(|(base, _)| base)
+            .unwrap_or(owner_tail);
+        let member_name = short_member.unwrap_or(member);
+        let suffix = format!("{}_{}", owner_base.to_ascii_lowercase(), member_name);
+        if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&suffix) {
+            return Some(resolved);
+        }
+        if let Some(resolved) = Self::resolve_native_member(self, owner, member_name) {
+            return Some(resolved);
+        }
+        let mut matched: Option<String> = None;
+        for name in self.variables.keys() {
+            let tail = calibre_parser::qualified_name_tail(name);
+            if tail != suffix
+                && !name.ends_with(&format!(".{suffix}"))
+                && !name.ends_with(&format!("::{suffix}"))
+            {
+                continue;
+            }
+            if matched.is_some() {
+                matched = None;
+                break;
+            }
+            matched = Some(name.to_string());
+        }
+        if let Some(name) = matched {
+            if let Some((resolved, _)) = self.resolve_named_global_runtime_value(&name) {
+                return Some(resolved);
+            }
+        }
+        if !owner.contains("::") {
+            let std_owner = format!("std::{owner}");
+            let candidates =
+                Self::build_member_candidates(&std_owner, member, short_member, true, None);
+            for candidate in candidates {
+                if let Some((resolved, _)) = self.resolve_named_global_runtime_value(&candidate) {
+                    return Some(resolved);
+                }
+            }
+            let std_owner_tail = calibre_parser::qualified_name_tail(&std_owner);
+            let std_owner_base = std_owner_tail
+                .split_once("->")
+                .map(|(base, _)| base)
+                .unwrap_or(std_owner_tail);
+            let std_suffix = format!("{}_{}", std_owner_base.to_ascii_lowercase(), member_name);
+            if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&std_suffix) {
+                return Some(resolved);
+            }
+        }
+        None
+    }
+
+    fn resolve_struct_like_member(
+        &mut self,
+        owner: &str,
+        member: &str,
+        short_member: Option<&str>,
+    ) -> Option<RuntimeValue> {
+        let mut resolved: Option<Arc<VMFunction>> = None;
+        for func in self.registry.functions.values() {
+            if !func.name.contains(owner) || !func.name.contains("->") {
+                continue;
+            }
+            let matches_member = func.name.ends_with(&format!("::{member}"))
+                || short_member.is_some_and(|short| func.name.ends_with(&format!("::{short}")));
+            if !matches_member {
+                continue;
+            }
+            if resolved.is_some() {
+                return None;
+            }
+            resolved = Some(Arc::clone(func));
+        }
+        resolved.map(|func| self.make_runtime_function(&func))
     }
 
     #[inline]
@@ -334,13 +542,6 @@ impl VM {
 
         for (name, value) in captures {
             install_one(name, value, &mut prev_vars);
-            if name.contains(':') || name.contains("->") {
-                let colon_tail = name.rsplit_once(':').map(|(_, tail)| tail).unwrap_or(name);
-                let tail = calibre_parser::qualified_name_tail(colon_tail);
-                if tail != name {
-                    install_one(tail, value, &mut prev_vars);
-                }
-            }
         }
         prev_vars
     }
@@ -397,6 +598,30 @@ impl VM {
                         frame: *frame,
                         reg: *reg,
                     }
+                }
+            }
+            RuntimeValue::Ref(name) => {
+                if let Ok(resolved) =
+                    self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.clone()))
+                {
+                    if Self::should_pass_by_reg_ref(&resolved) {
+                        RuntimeValue::Ref(name.clone())
+                    } else {
+                        resolved
+                    }
+                } else {
+                    RuntimeValue::Ref(name.clone())
+                }
+            }
+            RuntimeValue::VarRef(id) => {
+                if let Ok(resolved) = self.resolve_value_for_op_ref(&RuntimeValue::VarRef(*id)) {
+                    if Self::should_pass_by_reg_ref(&resolved) {
+                        RuntimeValue::VarRef(*id)
+                    } else {
+                        resolved
+                    }
+                } else {
+                    RuntimeValue::VarRef(*id)
                 }
             }
             other => other.clone(),
@@ -606,12 +831,34 @@ impl VM {
         if let Some(found) = self.resolve_named_global_runtime_value(name) {
             return Some(found);
         }
-        if name.contains("::") {
-            return None;
+        if name.contains('.') && !name.contains("::") {
+            let normalized = name.replace('.', "::");
+            if let Some(found) = self.resolve_named_global_runtime_value(&normalized) {
+                return Some(found);
+            }
         }
-
         let short_name = calibre_parser::qualified_name_tail(name);
         if short_name == name {
+            if name.contains("::") {
+                if let Some((owner, member)) = name.rsplit_once("::") {
+                    if let Some(resolved) =
+                        self.resolve_associated_member_value(owner, member, Some(member))
+                    {
+                        if !matches!(resolved, RuntimeValue::Null) {
+                            return Some((resolved, name.to_string()));
+                        }
+                    }
+                }
+                if let Some(found) = self.resolve_suffix_global_runtime_value(name) {
+                    return Some(found);
+                }
+                let base = calibre_parser::qualified_name_base(name);
+                if base != name
+                    && let Some(found) = self.resolve_suffix_global_runtime_value(base)
+                {
+                    return Some(found);
+                }
+            }
             return None;
         }
         if let Some(found) = self.resolve_named_global_runtime_value(short_name) {
@@ -623,7 +870,14 @@ impl VM {
         {
             return Some(found);
         }
-        self.resolve_suffix_global_runtime_value(short_name)
+        let direct = self.resolve_suffix_global_runtime_value(short_name);
+        if direct.is_some() {
+            return direct;
+        }
+        if let Some((_, member)) = short_name.rsplit_once("::") {
+            return self.resolve_suffix_global_runtime_value(member);
+        }
+        None
     }
 
     fn resolve_callable_cached(
@@ -735,16 +989,24 @@ impl VM {
             return Ok(());
         }
         let registry = Arc::clone(&self.registry);
-        for global in registry.globals.values() {
+        for (name, global) in registry.globals.iter() {
+            if registry.functions.contains_key(name) {
+                continue;
+            }
             self.run_global(global)?;
         }
         Ok(())
     }
 
     pub fn run_global(&mut self, global: &VMGlobal) -> Result<RuntimeValue, RuntimeError> {
+        let entry = global
+            .block_map
+            .get(&global.entry)
+            .copied()
+            .ok_or_else(|| RuntimeError::InvalidBytecode("global has no blocks".to_string()))?;
         let mut block = global
             .blocks
-            .get(*global.block_map.get(&global.entry).unwrap_or(&0))
+            .get(entry)
             .ok_or_else(|| RuntimeError::InvalidBytecode("global has no blocks".to_string()))?;
 
         let mut prev_block: Option<BlockId> = None;
@@ -820,9 +1082,13 @@ impl VM {
         frame.local_map_base = Some(base);
 
         let mut block_id = function.entry;
+        let entry =
+            function.block_map.get(&block_id).copied().ok_or_else(|| {
+                RuntimeError::InvalidBytecode("function has no blocks".to_string())
+            })?;
         let mut block = function
             .blocks
-            .get(*function.block_map.get(&block_id).unwrap_or(&0))
+            .get(entry)
             .ok_or_else(|| RuntimeError::InvalidBytecode("function has no blocks".to_string()))?;
         let mut prev_block: Option<BlockId> = None;
         let mut result = RuntimeValue::Null;
@@ -859,6 +1125,8 @@ impl VM {
         if let RuntimeValue::RegRef { frame, reg } = result {
             result = self.get_reg_value_in_frame(frame, reg).clone();
         }
+
+        self.propagate_member_source_args(args, caller_frame)?;
 
         self.pop_frame();
         self.restore_captures(prev_vars);
@@ -935,6 +1203,29 @@ impl VM {
                 .prepared_direct_calls
                 .insert(callsite, prepared.clone());
             return Ok(Some(prepared));
+        }
+
+        if let Some((owner, member)) = func_name.rsplit_once("::") {
+            if let Some(resolved) =
+                self.resolve_associated_member_value(owner, member, Some(member))
+            {
+                let prepared = match resolved {
+                    RuntimeValue::NativeFunction(func) => PreparedDirectCall::Native(func),
+                    RuntimeValue::ExternFunction(func) => PreparedDirectCall::Extern(func),
+                    RuntimeValue::Function { name, captures } if captures.as_ref().is_empty() => {
+                        let Some(func) = self.resolve_callable_cached(name.as_ref(), callsite)
+                        else {
+                            return Ok(None);
+                        };
+                        PreparedDirectCall::Vm(func)
+                    }
+                    _ => return Ok(None),
+                };
+                self.caches
+                    .prepared_direct_calls
+                    .insert(callsite, prepared.clone());
+                return Ok(Some(prepared));
+            }
         }
 
         let Some((value, _)) = self.try_resolve_global_runtime_value(func_name) else {
@@ -1079,30 +1370,33 @@ impl VM {
                 }
             }
             let reg = selected.unwrap_or_else(|| phi.sources.first().map(|x| x.1).unwrap_or(0));
-            let value = self.get_reg_value(reg).clone();
+            let raw_value = self.get_reg_value(reg).clone();
+            let value = if Self::should_pass_by_reg_ref(&raw_value) {
+                RuntimeValue::RegRef {
+                    frame: self.frames.len().saturating_sub(1),
+                    reg,
+                }
+            } else {
+                raw_value
+            };
             self.set_reg_value(phi.dest, value);
-            let frame = self.current_frame_mut();
-            let mut tails_to_sync: Vec<Arc<str>> = Vec::new();
-            for (name, mapped) in frame.local_map.iter_mut() {
-                let key = name.as_ref();
-                let is_local_style = key.starts_with("mut-")
-                    || key.starts_with("let-")
-                    || key.contains(':')
-                    || key.contains("->");
-                if !is_local_style || *mapped != reg {
-                    continue;
+            if let Some(name) = phi.name.as_ref() {
+                let interned = self.intern_name(name);
+                let frame = self.current_frame_mut();
+                if let Some(mapped) = frame.local_map.get_mut(&interned) {
+                    *mapped = phi.dest;
                 }
-                *mapped = phi.dest;
-                let colon_tail = key.rsplit_once(':').map(|(_, tail)| tail).unwrap_or(key);
-                let tail = calibre_parser::qualified_name_tail(colon_tail);
-                if tail != key {
-                    tails_to_sync.push(Arc::from(tail));
-                }
-            }
-            for tail in tails_to_sync {
-                if let Some(mapped) = frame.local_map.get_mut(tail.as_ref())
-                    && *mapped == reg
-                {
+            } else {
+                let frame = self.current_frame_mut();
+                for (name, mapped) in frame.local_map.iter_mut() {
+                    let key = name.as_ref();
+                    let is_local_style = key.starts_with("mut-")
+                        || key.starts_with("let-")
+                        || key.contains(':')
+                        || key.contains("->");
+                    if !is_local_style || *mapped != reg {
+                        continue;
+                    }
                     *mapped = phi.dest;
                 }
             }

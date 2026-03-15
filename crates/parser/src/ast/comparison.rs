@@ -56,7 +56,7 @@ impl ComparisonOperator {
             ">" => Some(Self::Greater),
             "<=" => Some(Self::LesserEqual),
             "<" => Some(Self::Lesser),
-            "==" => Some(Self::Equal),
+            "=" => Some(Self::Equal),
             "!=" => Some(Self::NotEqual),
             _ => None,
         }
@@ -68,7 +68,7 @@ impl ComparisonOperator {
             Self::Greater => ">",
             Self::LesserEqual => "<=",
             Self::Lesser => "<",
-            Self::Equal => "==",
+            Self::Equal => "=",
             Self::NotEqual => "!=",
         }
     }

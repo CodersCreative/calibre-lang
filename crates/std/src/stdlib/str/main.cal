@@ -1,142 +1,144 @@
 impl str {
-	const len = fn (self : str) -> int => len(self);
+	const len := fn (self : str) -> int => len(self);
 
-	const trim = fn (self : str) -> str => trim(self);
+	const trim := fn (self : str) -> str => trim(self);
 
-	const split = fn (self : str, delim : str) -> list:<str> => split(self, delim);
+	const split := fn (self : str, delim : str) -> list:<str> => split(self, delim);
 
-	const contains = fn (self : str, needle : str) -> bool => contains(self, needle);
+	const contains := fn (self : str, needle : str) -> bool => contains(self, needle);
 
-	const starts_with = fn (self : str, prefix : str) -> bool => starts_with(self, prefix);
+	const starts_with := fn (self : str, prefix : str) -> bool => starts_with(self, prefix);
 
-	const ends_with = fn (self : str, suffix : str) -> bool => ends_with(self, suffix);
+	const ends_with := fn (self : str, suffix : str) -> bool => ends_with(self, suffix);
 
-	const iter = fn (self : str) -> StrIter => iter_str(self);
+	const iter := fn (self : &str) -> StrIter => iter_str(self);
 
-	const into_iter = fn (self : str) -> StrIter => iter_str(self);
+	const iter_mut := fn (self : &mut str) -> StrIter => iter_str(self);
 
-	const is_empty = fn (self : str) -> bool => len(self) == 0;
+	const into_iter := fn (self : str) -> StrIter => iter_str(self);
 
-	const to_chars = fn (self : str) -> list:<char> => self.iter().collect();
+	const is_empty := fn (self : str) -> bool => len(self) = 0;
 
-	const split_lines = fn (self : str) -> list:<str> => split(self, "\n");
+	const to_chars := fn (self : str) -> list:<char> => self.iter().collect();
 
-	const lines = fn (self : str) -> list:<str> => self.split_lines();
+	const split_lines := fn (self : str) -> list:<str> => split(self, "\n");
 
-	const split_at = fn (self : str, idx : int) -> <str, str> => {
-		let chars = self.to_chars();
-		let l = len(chars);
-		let cut = if idx < 0 => 0 else => if idx > l => l else => idx;
-		let mut left = "";
-		let mut right = "";
+	const lines := fn (self : str) -> list:<str> => self.split_lines();
+
+	const split_at := fn (self : str, idx : int) -> <str, str> => {
+		let chars := self.to_chars();
+		let l := len(chars);
+		let cut := if idx < 0 => 0 else => if idx > l => l else => idx;
+		let mut left := "";
+		let mut right := "";
 		for i in 0..cut => left &= chars[i];
 		for i in cut..l => right &= chars[i];
 		tuple(left, right);
 	};
 
-	const repeat = fn (self : str, n : int) -> str => {
+	const repeat := fn (self : str, n : int) -> str => {
 		if n <= 0 => "";
-		let mut out = "";
+		let mut out := "";
 		for _ in 0..n => out &= self;
 		out;
 	};
 
-	const replace = fn (self : str, needle : str, to : str) -> str => {
-		let parts = self.split(needle);
-		if len(parts) == 0 => self;
-		let mut out = "";
-		let mut idx = 0;
+	const replace := fn (self : str, needle : str, to : str) -> str => {
+		let parts := self.split(needle);
+		if len(parts) = 0 => self;
+		let mut out := "";
+		let mut idx := 0;
 		
 		for _ in parts => {
 			if idx > 0 => out &= to;
 			out &= parts[idx];
-			idx = idx + 1;
+			idx += 1;
 		};
 		
 		out;
 	};
 
-	const strip_prefix = fn (self : str, prefix : str) -> str? => {
+	const strip_prefix := fn (self : str, prefix : str) -> str? => {
 		if !self.starts_with(prefix) => none;
-		let rest = self.split(prefix);
+		let rest := self.split(prefix);
 		if len(rest) <= 1 => some("");
-		let mut out = "";
-		let mut idx = 1;
+		let mut out := "";
+		let mut idx := 1;
 		
 		for _ in rest => {
 			if idx > 0 && idx < len(rest) => out &= rest[idx];
-			idx = idx + 1;
+			idx += 1;
 		};
 		
 		some(out);
 	};
 
-	const strip_suffix = fn (self : str, suffix : str) -> str? => {
+	const strip_suffix := fn (self : str, suffix : str) -> str? => {
 		if !self.ends_with(suffix) => none;
-		let parts = self.split(suffix);
+		let parts := self.split(suffix);
 		if len(parts) <= 1 => return some("");
-		let mut out = "";
-		let mut idx = 0;
+		let mut out := "";
+		let mut idx := 0;
 		
 		for _ in parts => {
 			if idx < len(parts) - 1 => out &= parts[idx];
-			idx = idx + 1;
+			idx += 1;
 		};
 		
 		some(out);
 	};
 
-	const lowercase = fn (self : str) -> str => {
-		let chars = self.to_chars();
-		let mut out = "";
+	const lowercase := fn (self : str) -> str => {
+		let chars := self.to_chars();
+		let mut out := "";
 		for i in 0..len(chars) => out &= chars[i].lowercase();
 		out;
 	};
 
-	const uppercase = fn (self : str) -> str => {
-		let chars = self.to_chars();
-		let mut out = "";
+	const uppercase := fn (self : str) -> str => {
+		let chars := self.to_chars();
+		let mut out := "";
 		for i in 0..len(chars) => out &= chars[i].uppercase();
 		out;
 	};
 
-	const trim_start = fn (self : str) -> str => {
-		let chars = self.to_chars();
-		let mut start = 0;
-		for start < len(chars) && chars[start].is_whitespace() => start = start + 1;
-		let mut out = "";
+	const trim_start := fn (self : str) -> str => {
+		let chars := self.to_chars();
+		let mut start := 0;
+		for start < len(chars) && chars[start].is_whitespace() => start += 1;
+		let mut out := "";
 		for i in start..len(chars) => out &= chars[i];
 		out;
 	};
 
-	const trim_end = fn (self : str) -> str => {
-		let chars = self.to_chars();
-		let mut end = len(chars);
-		for end > 0 && chars[end - 1].is_whitespace() => end = end - 1;
-		let mut out = "";
+	const trim_end := fn (self : str) -> str => {
+		let chars := self.to_chars();
+		let mut end := len(chars);
+		for end > 0 && chars[end - 1].is_whitespace() => end -= 1;
+		let mut out := "";
 		for i in 0..end => out &= chars[i];
 		out;
 	};
 
-	const is_whitespace = fn (self : str) -> bool => {
-		let chars = self.to_chars();
+	const is_whitespace := fn (self : str) -> bool => {
+		let chars := self.to_chars();
 		for i in 0..len(chars) => if !chars[i].is_whitespace() => return false;
 		true;
 	};
 };
 
 impl char {
-	const lowercase = fn (self : char) -> char => char_lowercase(self);
+	const lowercase := fn (self : char) -> char => char_lowercase(self);
 
-	const uppercase = fn (self : char) -> char => char_uppercase(self);
+	const uppercase := fn (self : char) -> char => char_uppercase(self);
 
-	const is_whitespace = fn (self : char) -> bool => {
-		self == ' ' || self == '\n' || self == '\r' || self == '\t';
+	const is_whitespace := fn (self : char) -> bool => {
+		self = ' ' || self = '\n' || self = '\r' || self = '\t';
 	};
 
-	const is_digit = fn (self : char) -> bool => self >= '0' && self <= '9';
+	const is_digit := fn (self : char) -> bool => self >= '0' && self <= '9';
 
-	const is_alphabetic = fn (self : char) -> bool => self.lowercase() != self.uppercase();
+	const is_alphabetic := fn (self : char) -> bool => self.lowercase() != self.uppercase();
 
-	const is_alphanumeric = fn (self : char) -> bool => self.is_digit() || self.is_alphabetic();
+	const is_alphanumeric := fn (self : char) -> bool => self.is_digit() || self.is_alphabetic();
 };

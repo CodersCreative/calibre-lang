@@ -145,6 +145,10 @@ pub fn parse_program_with_source(
         .at_least(1)
         .ignored()
         .boxed();
+    let comma = lex(pad.clone(), just(','))
+        .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
+        .ignored()
+        .boxed();
 
     let arrow = lex(pad.clone(), just('-').then_ignore(just('>')))
         .ignored()
@@ -191,7 +195,7 @@ pub fn parse_program_with_source(
         .ignore_then(
             ident
                 .clone()
-                .separated_by(lex(pad.clone(), just(',')))
+                .separated_by(comma.clone())
                 .allow_trailing()
                 .collect::<Vec<_>>()
                 .or_not()
@@ -415,7 +419,7 @@ pub fn parse_program_with_source(
                 lex(pad.clone(), just(":<"))
                     .ignore_then(
                         ty.clone()
-                            .separated_by(lex(pad.clone(), just(',')))
+                            .separated_by(comma.clone())
                             .allow_trailing()
                             .collect::<Vec<_>>()
                             .or_not()
@@ -486,7 +490,7 @@ pub fn parse_program_with_source(
             lex(pad.clone(), just('<'))
                 .ignore_then(
                     ty.clone()
-                        .separated_by(lex(pad.clone(), just(',')))
+                        .separated_by(comma.clone())
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -548,7 +552,7 @@ pub fn parse_program_with_source(
                 .ignore_then(lex(pad.clone(), just('(')))
                 .ignore_then(
                     ty.clone()
-                        .separated_by(lex(pad.clone(), just(',')))
+                        .separated_by(comma.clone())
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -714,7 +718,7 @@ pub fn parse_program_with_source(
                                 ))
                             }),
                     ))
-                    .separated_by(lex(pad.clone(), just(',')))
+                    .separated_by(comma.clone())
                     .at_least(2)
                     .collect::<Vec<_>>(),
                 )
@@ -766,7 +770,7 @@ pub fn parse_program_with_source(
                                 )
                             }
                         })
-                        .separated_by(lex(pad.clone(), just(',')))
+                        .separated_by(comma.clone())
                         .allow_trailing()
                         .collect::<Vec<_>>(),
                 )
@@ -785,14 +789,37 @@ pub fn parse_program_with_source(
                     }
                 });
 
-            let plain_param = ident
-                .clone()
+            let impl_trait_param_type = lex(pad.clone(), just("impl"))
+                .ignore_then(raw_ident.clone())
+                .then(
+                    lex(pad.clone(), just(":<"))
+                        .ignore_then(any().and_is(just('>').not()).repeated().collect::<String>())
+                        .then_ignore(lex(pad.clone(), just('>')))
+                        .or_not(),
+                )
+                .map(|((name, sp), generic_text)| {
+                    let trait_text = if let Some(generic_text) = generic_text {
+                        let inner = generic_text.trim().to_string();
+                        format!("{name}:<{inner}>")
+                    } else {
+                        name
+                    };
+                    PotentialNewType::DataType(ParserDataType::new(
+                        sp,
+                        ParserInnerType::DynamicTraits(vec![trait_text]),
+                    ))
+                })
+                .boxed();
+
+            let plain_param = lex(pad.clone(), just("mut"))
+                .or_not()
+                .ignore_then(ident.clone())
                 .repeated()
                 .at_least(1)
                 .collect::<Vec<_>>()
                 .then(
                     lex(pad.clone(), just(':'))
-                        .ignore_then(type_name.clone())
+                        .ignore_then(choice((impl_trait_param_type.clone(), type_name.clone())))
                         .or_not(),
                 )
                 .map(|(names, ty)| {
@@ -815,7 +842,7 @@ pub fn parse_program_with_source(
                 struct_destructure_param,
                 plain_param,
             ))
-            .separated_by(lex(pad.clone(), just(',')))
+            .separated_by(comma.clone())
             .allow_trailing()
             .collect::<Vec<_>>()
             .or_not()
@@ -847,6 +874,7 @@ pub fn parse_program_with_source(
                 .boxed();
 
             let fn_standard_expr = lex(pad.clone(), just("fn"))
+                .then_ignore(lex(pad.clone(), just("match")).not())
                 .ignore_then(generic_params.clone())
                 .then(fn_params)
                 .then(arrow.clone().ignore_then(type_name.clone()).or_not())
@@ -921,7 +949,7 @@ pub fn parse_program_with_source(
                         .ignore_then(
                             type_name
                                 .clone()
-                                .separated_by(lex(pad.clone(), just(',')))
+                                .separated_by(comma.clone())
                                 .allow_trailing()
                                 .collect::<Vec<_>>()
                                 .or_not()
@@ -1083,7 +1111,7 @@ pub fn parse_program_with_source(
                                 PotentialDollarIdentifier::Identifier(ParserText::new(fsp, field)),
                             ),
                         })
-                        .separated_by(lex(pad.clone(), just(',')))
+                        .separated_by(comma.clone())
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -1114,7 +1142,7 @@ pub fn parse_program_with_source(
                             ))
                         }),
                     ))
-                    .separated_by(lex(pad.clone(), just(',')))
+                    .separated_by(comma.clone())
                     .allow_trailing()
                     .collect::<Vec<_>>()
                     .or_not()
@@ -1212,7 +1240,7 @@ pub fn parse_program_with_source(
                         match_tuple_at_pattern.clone(),
                         match_tuple_item_atom.clone(),
                     ))
-                    .separated_by(lex(pad.clone(), just(',')))
+                    .separated_by(comma.clone())
                     .allow_trailing()
                     .collect::<Vec<_>>()
                     .or_not()
@@ -1227,7 +1255,7 @@ pub fn parse_program_with_source(
                         match_tuple_at_pattern.clone(),
                         match_tuple_item_atom.clone(),
                     ))
-                    .separated_by(lex(pad.clone(), just(',')))
+                    .separated_by(comma.clone())
                     .allow_trailing()
                     .collect::<Vec<_>>()
                     .or_not()
@@ -1284,7 +1312,7 @@ pub fn parse_program_with_source(
                                 )),
                             },
                         })
-                        .separated_by(lex(pad.clone(), just(',')))
+                        .separated_by(comma.clone())
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -1300,7 +1328,8 @@ pub fn parse_program_with_source(
                     ident
                         .clone()
                         .then(
-                            lex(pad.clone(), just(','))
+                            comma
+                                .clone()
                                 .ignore_then(ident.clone())
                                 .repeated()
                                 .at_least(1)
@@ -1462,7 +1491,7 @@ pub fn parse_program_with_source(
                                 )),
                             },
                         }),))
-                    .separated_by(lex(pad.clone(), just(',')))
+                    .separated_by(comma.clone())
                     .allow_trailing()
                     .collect::<Vec<_>>()
                     .or_not()
@@ -1625,11 +1654,7 @@ pub fn parse_program_with_source(
                 .then(
                     match_arm
                         .clone()
-                        .separated_by(choice((
-                            lex(pad.clone(), just(','))
-                                .then_ignore(delim.clone().repeated().collect::<Vec<_>>()),
-                            delim.clone().to(','),
-                        )))
+                        .separated_by(choice((comma.clone().to(','), delim.clone().to(','))))
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -1668,7 +1693,8 @@ pub fn parse_program_with_source(
             let match_value = expr
                 .clone()
                 .then(
-                    lex(pad.clone(), just(','))
+                    comma
+                        .clone()
                         .ignore_then(expr.clone())
                         .repeated()
                         .collect::<Vec<_>>(),
@@ -1699,11 +1725,7 @@ pub fn parse_program_with_source(
                 .then(
                     match_arm
                         .clone()
-                        .separated_by(choice((
-                            lex(pad.clone(), just(','))
-                                .then_ignore(delim.clone().repeated().collect::<Vec<_>>()),
-                            delim.clone().to(','),
-                        )))
+                        .separated_by(choice((comma.clone().to(','), delim.clone().to(','))))
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -1748,7 +1770,7 @@ pub fn parse_program_with_source(
                             .then(int_lit.clone())
                             .map(|(value, count)| (Some((value, count)), Vec::new())),
                         expr.clone()
-                            .separated_by(lex(pad.clone(), just(',')))
+                            .separated_by(comma.clone())
                             .allow_trailing()
                             .collect::<Vec<_>>()
                             .or_not()
@@ -1763,7 +1785,7 @@ pub fn parse_program_with_source(
                                     lex(pad.clone(), just('('))
                                         .ignore_then(
                                             expr.clone()
-                                                .separated_by(lex(pad.clone(), just(',')))
+                                                .separated_by(comma.clone())
                                                 .allow_trailing()
                                                 .collect::<Vec<_>>()
                                                 .or_not()
@@ -1829,7 +1851,7 @@ pub fn parse_program_with_source(
                 lex(pad.clone(), just("$("))
                     .ignore_then(
                         expr.clone()
-                            .separated_by(lex(pad.clone(), just(',')))
+                            .separated_by(comma.clone())
                             .allow_trailing()
                             .collect::<Vec<_>>()
                             .or_not()
@@ -1888,7 +1910,7 @@ pub fn parse_program_with_source(
                 lex(pad.clone(), just('('))
                     .ignore_then(
                         expr.clone()
-                            .separated_by(lex(pad.clone(), just(',')))
+                            .separated_by(comma.clone())
                             .allow_trailing()
                             .collect::<Vec<_>>()
                             .or_not()
@@ -1977,7 +1999,7 @@ pub fn parse_program_with_source(
                             let tails = indexes.into_iter().map(|idx| (idx, true)).collect();
                             member_node_from_head_and_tail(head, tails)
                         })
-                        .separated_by(lex(pad.clone(), just(',')))
+                        .separated_by(comma.clone())
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -2001,7 +2023,7 @@ pub fn parse_program_with_source(
                             let tails = indexes.into_iter().map(|idx| (idx, true)).collect();
                             member_node_from_head_and_tail(head, tails)
                         })
-                        .separated_by(lex(pad.clone(), just(',')))
+                        .separated_by(comma.clone())
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -2125,7 +2147,7 @@ pub fn parse_program_with_source(
                         .then(int_lit.clone())
                         .map(|(value, count)| (Some((value, count)), Vec::new())),
                     expr.clone()
-                        .separated_by(lex(pad.clone(), just(',')))
+                        .separated_by(comma.clone())
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -2363,7 +2385,7 @@ pub fn parse_program_with_source(
                 .boxed();
 
             let cmp_op = choice((
-                lex(pad.clone(), just("==")).to(ComparisonOperator::Equal),
+                lex(pad.clone(), just('=')).to(ComparisonOperator::Equal),
                 lex(pad.clone(), just("!=")).to(ComparisonOperator::NotEqual),
                 lex(pad.clone(), just(">=")).to(ComparisonOperator::GreaterEqual),
                 lex(pad.clone(), just("<=")).to(ComparisonOperator::LesserEqual),
@@ -2517,21 +2539,6 @@ pub fn parse_program_with_source(
                 })
                 .boxed();
 
-            let _assign_expr = postfix
-                .clone()
-                .then_ignore(lex(pad.clone(), just('=')))
-                .then(expr.clone())
-                .map(|(identifier, value)| {
-                    Node::new(
-                        Span::new_from_spans(identifier.span, value.span),
-                        NodeType::AssignmentExpression {
-                            identifier: Box::new(identifier),
-                            value: Box::new(value),
-                        },
-                    )
-                })
-                .boxed();
-
             let ternary_expr = recursive(|_ternary_expr| {
                 in_expr
                     .clone()
@@ -2562,20 +2569,12 @@ pub fn parse_program_with_source(
 
             let pipe_seg = choice((
                 lex(pad_with_newline.clone(), just("|>"))
-                    .ignore_then(choice((
-                        fn_standard_postfix.clone(),
-                        fn_match_postfix.clone(),
-                        ternary_expr.clone(),
-                    )))
+                    .ignore_then(ternary_expr.clone())
                     .map(PipeSegment::Unnamed),
                 lex(pad_with_newline.clone(), just("|:"))
                     .ignore_then(named_ident.clone())
                     .then_ignore(lex(pad_with_newline.clone(), just('>')))
-                    .then(choice((
-                        fn_standard_postfix.clone(),
-                        fn_match_postfix.clone(),
-                        ternary_expr.clone(),
-                    )))
+                    .then(ternary_expr.clone())
                     .map(|(identifier, node)| PipeSegment::Named { identifier, node }),
             ))
             .boxed();
@@ -2787,7 +2786,8 @@ pub fn parse_program_with_source(
                                 .clone()
                                 .or(expr.clone().map(|n| ensure_scope_node(n, true, false)))
                                 .separated_by(
-                                    lex(pad.clone(), just(','))
+                                    comma
+                                        .clone()
                                         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                                         .ignored(),
                                 )
@@ -2955,7 +2955,7 @@ pub fn parse_program_with_source(
             })
             .boxed();
 
-            choice((
+            let base_expr = choice((
                 fn_inline_postfix,
                 fn_standard_postfix,
                 fn_match_postfix,
@@ -2971,7 +2971,65 @@ pub fn parse_program_with_source(
                 if_expr,
                 pipe_expr,
             ))
-            .boxed()
+            .boxed();
+
+            let assign_target = lex(pad.clone(), just('*'))
+                .repeated()
+                .collect::<Vec<_>>()
+                .then(choice((ternary_expr, postfix.clone())))
+                .map(|(stars, node)| {
+                    stars.into_iter().rev().fold(node, |value, _| {
+                        Node::new(
+                            value.span,
+                            NodeType::DerefStatement {
+                                value: Box::new(value),
+                            },
+                        )
+                    })
+                })
+                .boxed();
+
+            let assign_expr = assign_target
+                .clone()
+                .then(choice((
+                    lex(pad.clone(), just(":=")).to(None),
+                    lex(pad.clone(), just("+=")).to(Some(BinaryOperator::Add)),
+                    lex(pad.clone(), just("-=")).to(Some(BinaryOperator::Sub)),
+                    lex(pad.clone(), just("*=")).to(Some(BinaryOperator::Mul)),
+                    lex(pad.clone(), just("/=")).to(Some(BinaryOperator::Div)),
+                    lex(pad.clone(), just("%=")).to(Some(BinaryOperator::Mod)),
+                    lex(pad.clone(), just("&=")).to(Some(BinaryOperator::BitAnd)),
+                    lex(pad.clone(), just("|=")).to(Some(BinaryOperator::BitOr)),
+                    lex(pad.clone(), just("^=")).to(Some(BinaryOperator::BitXor)),
+                    lex(pad.clone(), just("<<=")).to(Some(BinaryOperator::Shl)),
+                    lex(pad.clone(), just(">>=")).to(Some(BinaryOperator::Shr)),
+                )))
+                .then(expr.clone())
+                .map(|((identifier, op), value)| {
+                    let rhs = if let Some(op) = op {
+                        Node::new(
+                            Span::new_from_spans(identifier.span, value.span),
+                            NodeType::BinaryExpression {
+                                left: Box::new(identifier.clone()),
+                                right: Box::new(value),
+                                operator: op,
+                            },
+                        )
+                    } else {
+                        value
+                    };
+                    Node::new(
+                        Span::new_from_spans(identifier.span, rhs.span),
+                        NodeType::AssignmentExpression {
+                            identifier: Box::new(identifier),
+                            value: Box::new(rhs),
+                        },
+                    )
+                })
+                .or(base_expr)
+                .boxed();
+
+            assign_expr
         });
 
         let import_stmt = lex(pad.clone(), just("import"))
@@ -2984,7 +3042,7 @@ pub fn parse_program_with_source(
                                 .map(|(n, sp)| {
                                     PotentialDollarIdentifier::Identifier(ParserText::new(sp, n))
                                 })
-                                .separated_by(lex(pad.clone(), just(',')))
+                                .separated_by(comma.clone())
                                 .allow_trailing()
                                 .collect::<Vec<_>>(),
                         )
@@ -3046,7 +3104,7 @@ pub fn parse_program_with_source(
                     .ignore_then(
                         ident
                             .clone()
-                            .separated_by(lex(pad.clone(), just(',')))
+                            .separated_by(comma.clone())
                             .allow_trailing()
                             .collect::<Vec<_>>()
                             .or_not()
@@ -3055,7 +3113,7 @@ pub fn parse_program_with_source(
                     .then_ignore(lex(pad.clone(), just('>')))
                     .or_not(),
             )
-            .then_ignore(lex(pad.clone(), just('=')))
+            .then_ignore(lex(pad.clone(), just(":=")))
             .then(choice((
                 lex(pad.clone(), just("struct")).ignore_then(
                     lex(pad.clone(), just('{'))
@@ -3069,7 +3127,7 @@ pub fn parse_program_with_source(
                                 .then_ignore(lex(pad.clone(), just(':')))
                                 .then(type_name.clone())
                                 .separated_by(
-                                    choice((lex(pad.clone(), just(',')).ignored(), delim.clone()))
+                                    choice((comma.clone().ignored(), delim.clone()))
                                         .repeated()
                                         .at_least(1)
                                         .ignored(),
@@ -3093,13 +3151,10 @@ pub fn parse_program_with_source(
                                 type_name
                                     .clone()
                                     .separated_by(
-                                        choice((
-                                            lex(pad.clone(), just(',')).ignored(),
-                                            delim.clone(),
-                                        ))
-                                        .repeated()
-                                        .at_least(1)
-                                        .ignored(),
+                                        choice((comma.clone().ignored(), delim.clone()))
+                                            .repeated()
+                                            .at_least(1)
+                                            .ignored(),
                                     )
                                     .allow_trailing()
                                     .collect::<Vec<_>>()
@@ -3137,7 +3192,7 @@ pub fn parse_program_with_source(
                                     .collect::<Vec<_>>()
                             })
                             .separated_by(
-                                choice((lex(pad.clone(), just(',')).ignored(), delim.clone()))
+                                choice((comma.clone().ignored(), delim.clone()))
                                     .repeated()
                                     .at_least(1)
                                     .ignored(),
@@ -3163,7 +3218,7 @@ pub fn parse_program_with_source(
                                 let ls = line_starts.clone();
                                 move |op: String, r| ParserText::new(span(ls.as_ref(), r), op)
                             })
-                            .then_ignore(lex(pad.clone(), just('=')))
+                            .then_ignore(lex(pad.clone(), just(":=")))
                             .then(expr.clone())
                             .try_map(|(operator, value), sp| match value.node_type {
                                 NodeType::FunctionDeclaration { header, body } => Ok(Overload {
@@ -3224,7 +3279,7 @@ pub fn parse_program_with_source(
                         .or_not(),
                 )
                 .then(
-                    lex(pad.clone(), just('='))
+                    lex(pad.clone(), just(":="))
                         .ignore_then(statement.clone())
                         .or_not(),
                 )
@@ -3381,7 +3436,7 @@ pub fn parse_program_with_source(
                                     )),
                                 ),
                             })
-                            .separated_by(lex(pad.clone(), just(',')))
+                            .separated_by(comma.clone())
                             .allow_trailing()
                             .collect::<Vec<_>>()
                             .or_not()
@@ -3389,7 +3444,7 @@ pub fn parse_program_with_source(
                     )
                     .then_ignore(lex(pad.clone(), just('}'))),
             )
-            .then_ignore(lex(pad.clone(), just('=')))
+            .then_ignore(lex(pad.clone(), just(":=")))
             .then_ignore(delim.clone().repeated())
             .then(expr.clone())
             .map(|(fields, value)| {
@@ -3422,15 +3477,16 @@ pub fn parse_program_with_source(
                             ))
                         }),
                 ))
-                .separated_by(lex(pad.clone(), just(',')))
+                .separated_by(comma.clone())
                 .at_least(2)
                 .collect::<Vec<_>>(),
             )
-            .then_ignore(lex(pad.clone(), just('=')))
+            .then_ignore(lex(pad.clone(), just(":=")))
             .then_ignore(delim.clone().repeated())
             .then(
                 expr.clone().then(
-                    lex(pad.clone(), just(','))
+                    comma
+                        .clone()
                         .ignore_then(expr.clone())
                         .repeated()
                         .collect::<Vec<_>>(),
@@ -3466,11 +3522,12 @@ pub fn parse_program_with_source(
                 .ignore_then(type_name.clone())
                 .or_not(),
         )
-        .then_ignore(lex(pad.clone(), just('=')))
+        .then_ignore(lex(pad.clone(), just(":=")))
         .then_ignore(delim.clone().repeated())
         .then(
             expr.clone().then(
-                lex(pad.clone(), just(','))
+                comma
+                    .clone()
                     .ignore_then(expr.clone())
                     .repeated()
                     .collect::<Vec<_>>(),
@@ -3557,7 +3614,7 @@ pub fn parse_program_with_source(
                             })
                             .or(expr.clone()),
                     )
-                    .separated_by(lex(pad.clone(), just(',')))
+                    .separated_by(comma.clone())
                     .allow_trailing()
                     .collect::<Vec<_>>()
                     .or_not()
@@ -3778,13 +3835,13 @@ pub fn parse_program_with_source(
             .ignore_then(string_text.clone())
             .then_ignore(lex(pad.clone(), just("const")))
             .then(ident.clone())
-            .then_ignore(lex(pad.clone(), just('=')))
+            .then_ignore(lex(pad.clone(), just(":=")))
             .then_ignore(lex(pad.clone(), just("fn")))
             .then_ignore(lex(pad.clone(), just('(')))
             .then(
                 ffi_type
                     .clone()
-                    .separated_by(lex(pad.clone(), just(',')))
+                    .separated_by(comma.clone())
                     .allow_trailing()
                     .collect::<Vec<_>>()
                     .or_not()
@@ -3865,7 +3922,7 @@ pub fn parse_program_with_source(
                 select_arm
                     .clone()
                     .separated_by(
-                        choice((delim.clone(), lex(pad.clone(), just(',')).ignored()))
+                        choice((delim.clone(), comma.clone().ignored()))
                             .repeated()
                             .at_least(1),
                     )
@@ -3884,7 +3941,7 @@ pub fn parse_program_with_source(
                 ident
                     .clone()
                     .map(|(n, sp)| PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)))
-                    .separated_by(lex(pad.clone(), just(',')))
+                    .separated_by(comma.clone())
                     .at_least(1)
                     .collect::<Vec<_>>()
                     .then_ignore(left_arrow.clone())
@@ -3908,7 +3965,8 @@ pub fn parse_program_with_source(
                 arrow_body_expr
                     .clone()
                     .separated_by(
-                        lex(pad.clone(), just(','))
+                        comma
+                            .clone()
                             .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                             .ignored(),
                     )
@@ -3933,89 +3991,17 @@ pub fn parse_program_with_source(
             })
             .boxed();
 
-        let assign_lhs_base = ident
-            .clone()
-            .map(|(n, sp)| ident_node(sp, &n))
-            .then(
-                choice((
-                    lex(pad.clone(), just('.'))
-                        .ignore_then(ident.clone().map(|(n, sp)| ident_node(sp, &n)))
-                        .map(|n| (n, false)),
-                    lex(pad.clone(), just('['))
-                        .ignore_then(expr.clone())
-                        .then_ignore(lex(pad.clone(), just(']')))
-                        .map(|e| (e, true)),
-                ))
-                .repeated()
-                .collect::<Vec<_>>(),
-            )
-            .map(|(head, rest)| member_node_from_head_and_tail(head, rest))
-            .boxed();
-
-        let assign_lhs = lex(pad.clone(), just('*'))
-            .repeated()
-            .collect::<Vec<_>>()
-            .then(assign_lhs_base)
-            .map(|(stars, mut lhs)| {
-                for _ in stars {
-                    lhs = Node::new(
-                        lhs.span,
-                        NodeType::DerefStatement {
-                            value: Box::new(lhs),
-                        },
-                    );
-                }
-                lhs
-            })
-            .boxed();
-
-        let assign_stmt = assign_lhs
-            .then(choice((
-                lex(pad.clone(), just('=')).to(None),
-                lex(pad.clone(), just("+=")).to(Some(BinaryOperator::Add)),
-                lex(pad.clone(), just("-=")).to(Some(BinaryOperator::Sub)),
-                lex(pad.clone(), just("*=")).to(Some(BinaryOperator::Mul)),
-                lex(pad.clone(), just("/=")).to(Some(BinaryOperator::Div)),
-                lex(pad.clone(), just("%=")).to(Some(BinaryOperator::Mod)),
-                lex(pad.clone(), just("&=")).to(Some(BinaryOperator::BitAnd)),
-                lex(pad.clone(), just("|=")).to(Some(BinaryOperator::BitOr)),
-                lex(pad.clone(), just("^=")).to(Some(BinaryOperator::BitXor)),
-                lex(pad.clone(), just("<<=")).to(Some(BinaryOperator::Shl)),
-                lex(pad.clone(), just(">>=")).to(Some(BinaryOperator::Shr)),
-            )))
-            .then(expr.clone())
-            .map(|((lhs, op), value)| {
-                let rhs = if let Some(op) = op {
-                    Node::new(
-                        Span::new_from_spans(lhs.span, value.span),
-                        NodeType::BinaryExpression {
-                            left: Box::new(lhs.clone()),
-                            right: Box::new(value),
-                            operator: op,
-                        },
-                    )
-                } else {
-                    value
-                };
-                Node::new(
-                    Span::new_from_spans(lhs.span, rhs.span),
-                    NodeType::AssignmentExpression {
-                        identifier: Box::new(lhs),
-                        value: Box::new(rhs),
-                    },
-                )
-            });
-
         let destruct_assign_stmt = ident
             .clone()
             .then(
-                lex(pad.clone(), just(','))
+                comma
+                    .clone()
                     .ignore_then(ident.clone())
                     .repeated()
                     .at_least(1)
                     .collect::<Vec<_>>(),
             )
-            .then_ignore(lex(pad.clone(), just('=')))
+            .then_ignore(lex(pad.clone(), just(":=")))
             .then(expr.clone())
             .map(|(((first_n, first_sp), rest), value)| {
                 let mut names = vec![(first_n, first_sp)];
@@ -4060,7 +4046,6 @@ pub fn parse_program_with_source(
             let_stmt,
             return_stmt,
             destruct_assign_stmt,
-            assign_stmt,
             expr,
         ))
         .boxed()

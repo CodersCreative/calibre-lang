@@ -1,73 +1,106 @@
-type HashMap:<K, V> = struct { } @overload {
+type HashMap:<K, V> := struct { } @overload {
 
-	const "[]" = fn (self : HashMap:<K, V>, key : K) -> V? => self.get(key);
+	const "[]" := fn (self : &HashMap:<K, V>, key : K) -> V? => self.get(key);
 
-	const "[]=" = fn (self : HashMap:<K, V>, key : K, value : V) -> HashMap:<K, V> => {
-		let mut out = self;
-		out.set(key, value);
-		out;
+	const "[]=" := fn (self : &mut HashMap:<K, V>, key : K, value : V)=> {
+		self.set(key, value);
 	};
 
-	const "in" = fn (key : K, map : HashMap:<K, V>) -> bool => map.contains(key);
+	const "in" := fn (key : K, map : HashMap:<K, V>) -> bool => map.contains(key);
 };
 
-type HashSet:<T> = struct { } @overload {
-
-	const "in" = fn (value : T, set : HashSet:<T>) -> bool => set.contains(value);
+type HashSet:<T> := struct { } @overload {
+	const "in" := fn (value : T, set : HashSet:<T>) -> bool => set.contains(value);
 };
+
+type HashMapIter:<K, V> := struct { data : list:<<K, V>>, index : int };
+
+type HashSetIter:<T> := struct { data : list:<T>, index : int };
 
 impl<K, V> HashMap:<K, V> {
-	const new = fn (entries : list:<<K, V>>) -> HashMap:<K, V> => hashmap_new(entries);
+	const new := fn (entries : list:<<K, V>>) -> HashMap:<K, V> => hashmap_new(entries);
 
-	const set = fn (self : &mut HashMap:<K, V>, key : K, value : V) => hashmap_set(self, key, value);
+	const set := fn (self : &mut HashMap:<K, V>, key : K, value : V) => hashmap_set(self, key, value);
 
-	const get = fn (self : &HashMap:<K, V>, key : K) -> V? => hashmap_get(self, key);
+	const get := fn (self : &HashMap:<K, V>, key : K) -> V? => hashmap_get(self, key);
 
-	const remove = fn (self : &mut HashMap:<K, V>, key : K) -> V? => hashmap_remove(self, key);
+	const remove := fn (self : &mut HashMap:<K, V>, key : K) -> V? => hashmap_remove(self, key);
 
-	const contains = fn (self : &HashMap:<K, V>, key : K) -> bool => hashmap_contains(self, key);
+	const contains := fn (self : &HashMap:<K, V>, key : K) -> bool => hashmap_contains(self, key);
 
-	const len = fn (self : &HashMap:<K, V>) -> int => hashmap_len(self);
+	const len := fn (self : &HashMap:<K, V>) -> int => hashmap_len(self);
 
-	const is_empty = fn (self : &HashMap:<K, V>) -> bool => self.len() == 0;
+	const is_empty := fn (self : &HashMap:<K, V>) -> bool => self.len() = 0;
 
-	const keys = fn (self : &HashMap:<K, V>) -> list:<K> => hashmap_keys(self);
+	const keys := fn (self : &HashMap:<K, V>) -> list:<K> => hashmap_keys(self);
 
-	const values = fn (self : &HashMap:<K, V>) -> list:<V> => hashmap_values(self);
+	const values := fn (self : &HashMap:<K, V>) -> list:<V> => hashmap_values(self);
 
-	const entries = fn (self : &HashMap:<K, V>) -> list:<dyn> => hashmap_entries(self);
+	const entries := fn (self : &HashMap:<K, V>) -> list:<<K, V>> => hashmap_entries(self);
 
-	const clear = fn (self : &mut HashMap:<K, V>) => hashmap_clear(self);
+	const clear := fn (self : &mut HashMap:<K, V>) => hashmap_clear(self);
 
-	const set_all = fn (self : &mut HashMap:<K, V>, entries : list:<dyn>) => {
+	const set_all := fn (self : &mut HashMap:<K, V>, entries : list:<<K, V>>) => {
 		for i in 0..len(entries) => {
-			let pair = entries[i];
+			let pair := entries[i];
 			self.set(pair.0, pair.1);
 		};
 	};
 
-	const get_or = fn (self : &HashMap:<K, V>, key : K, default : V) -> V => {
+	const get_or := fn (self : &HashMap:<K, V>, key : K, default : V) -> V => {
 		match self.get(key) {
 			.Some : v => v,
 			.None => default
 		};
 	};
+
+	const iter := fn (self : &HashMap:<K, V>) -> HashMapIter:<K, V> => HashMapIter:<K, V> { data : self.entries(), index : 0 };
+
+	const iter_mut := fn (self : &mut HashMap:<K, V>) -> HashMapIter:<K, V> => HashMapIter:<K, V> { data : self.entries(), index : 0 };
+
+	const into_iter := fn (self : HashMap:<K, V>) -> HashMapIter:<K, V> => HashMapIter:<K, V> { data : self.entries(), index : 0 };
 };
 
 impl<T> HashSet:<T> {
-	const new = fn (entries : list:<T>) -> HashSet:<T> => hashset_new(entries);
+	const new := fn (entries : list:<T>) -> HashSet:<T> => hashset_new(entries);
 
-	const add = fn (self : &mut HashSet:<T>, value : T) -> bool => hashset_add(self, value);
+	const add := fn (self : &mut HashSet:<T>, value : T) -> bool => hashset_add(self, value);
 
-	const remove = fn (self : &mut HashSet:<T>, value : T) -> bool => hashset_remove(self, value);
+	const remove := fn (self : &mut HashSet:<T>, value : T) -> bool => hashset_remove(self, value);
 
-	const contains = fn (self : &HashSet:<T>, value : T) -> bool => hashset_contains(self, value);
+	const contains := fn (self : &HashSet:<T>, value : T) -> bool => hashset_contains(self, value);
 
-	const len = fn (self : &HashSet:<T>) -> int => hashset_len(self);
+	const len := fn (self : &HashSet:<T>) -> int => hashset_len(self);
 
-	const is_empty = fn (self : &HashSet:<T>) -> bool => self.len() == 0;
+	const is_empty := fn (self : &HashSet:<T>) -> bool => self.len() = 0;
 
-	const values = fn (self : &HashSet:<T>) -> list:<T> => hashset_values(self);
+	const values := fn (self : &HashSet:<T>) -> list:<T> => hashset_values(self);
 
-	const clear = fn (self : &mut HashSet:<T>) => hashset_clear(self);
+	const clear := fn (self : &mut HashSet:<T>) => hashset_clear(self);
+
+	const iter := fn (self : &HashSet:<T>) -> HashSetIter:<T> => HashSetIter:<T> { data : self.values(), index : 0 };
+
+	const iter_mut := fn (self : &mut HashSet:<T>) -> HashSetIter:<T> => HashSetIter:<T> { data : self.values(), index : 0 };
+
+	const into_iter := fn (self : HashSet:<T>) -> HashSetIter:<T> => HashSetIter:<T> { data : self.values(), index : 0 };
+};
+
+impl<K, V> Iter for HashMapIter:<K, V> {
+	type Item := <K, V>;
+
+	const next := fn (self : &mut Self) -> Self::Item? => {
+		if self.index >= len(self.data) => none else => {
+			some(self.data[self.index += 1]);
+		};
+	};
+};
+
+impl<T> Iter for HashSetIter:<T> {
+	type Item := T;
+
+	const next := fn (self : &mut Self) -> Self::Item? => {
+		if self.index >= len(self.data) => none else => {
+			some(self.data[self.index += 1]);
+		};
+	};
 };

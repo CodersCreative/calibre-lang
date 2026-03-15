@@ -66,10 +66,8 @@ impl ParserDataType {
             ("str.contains", ParserInnerType::Bool),
             ("str.starts_with", ParserInnerType::Bool),
             ("str.ends_with", ParserInnerType::Bool),
-            ("char.lowercase", ParserInnerType::Char),
-            ("char.uppercase", ParserInnerType::Char),
-            ("char_lowercase", ParserInnerType::Char),
-            ("char_uppercase", ParserInnerType::Char),
+            ("str.char_lowercase", ParserInnerType::Char),
+            ("str.char_uppercase", ParserInnerType::Char),
             (
                 "env.get",
                 ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),
