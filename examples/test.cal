@@ -31,7 +31,7 @@ const main := fn => {
 	let age := "10";
 	
 	// TODO Add defer keyword
-	let txt : str := fmt"Hello, my name is {name} and I'm {age} years old!";
+	let txt : str = fmt"Hello, my name is {name} and I'm {age} years old!";
 	print(txt);
 	
 	print(adder_float(90, 10.6));
@@ -62,7 +62,7 @@ const main := fn => {
 	
 	print(mtchfn("he"));
 	
-	let mut match_res : int := match "hello" {
+	let mut match_res : int = match "hello" {
 		"hello" => 0,
 		_ => 10
 	};
@@ -71,7 +71,7 @@ const main := fn => {
 	
 	let => @add_scope [$first := 9f, $second := 11f, $t := type : float] {
 		// match_res will be captured at the call_site
-		let sum : $t := $first + $second + match_res;
+		let sum : $t = $first + $second + match_res;
 		print("add_scope: ");
 		print(sum);
 	};

@@ -14,11 +14,11 @@ const main := fn () => {
 		return;
 	};
 	
-	let text : str := try file.read_all(100000) => panic("Failed to read file.");
+	let text : str = try file.read_all(100000) => panic("Failed to read file.");
 	let mut tokenizer := Tokenizer.new();
-	let tokens : list:<Token> := try tokenizer.tokenize(text) : e => panic(e);
+	let tokens : list:<Token> = try tokenizer.tokenize(text) : e => panic(e);
 	print(tokens);
 	let mut parser := Parser.new();
-	let value : JsonValue := parser.parse_tokens(tokens);
+	let value : JsonValue = parser.parse_tokens(tokens);
 	print(value);
 }

@@ -5,7 +5,7 @@ impl Args {
 	const nth := fn (idx : int) -> str? => get(idx);
 
 	const all := fn -> list:<str> => {
-		let mut out : list:<str> := list:<str>[];
+		let mut out : list:<str> = list:<str>[];
 		
 		let mut idx := 0;
 		

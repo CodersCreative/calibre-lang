@@ -6,7 +6,7 @@ import File from std::fs;
 import Channel from std::async;
 
 // Constants are immutable.
-const language_forced : Language := Language.ENGLISH : 6;
+const language_forced : Language = Language.ENGLISH : 6;
 
 // A typed generator function: fn(...) -> gen:<T>
 const even_numbers := fn (start stop : int) -> gen:<int> => {
@@ -101,7 +101,7 @@ const main := fn => {
 	
 	// Struct/enum literals.
 	let language := Language.FRENCH : FrenchData { data : 10, code : 5 };
-	let mut recursive_language : Language := Language.ARABIC : language, Language.SPANISH;
+	let mut recursive_language : Language = Language.ARABIC : language, Language.SPANISH;
 	
 	print("= Basic Values =");
 	print(language_forced);
@@ -131,7 +131,7 @@ const main := fn => {
 	};
 	
 	// Match with enum payload destructuring.
-	let nested_lang : Language := Language.ARABIC : Language.FRENCH : FrenchData { data : 1, code : 2 }, Language.SPANISH;
+	let nested_lang : Language = Language.ARABIC : Language.FRENCH : FrenchData { data : 1, code : 2 }, Language.SPANISH;
 	
 	/*match nested_lang {
 		.ARABIC : (.FRENCH : {data: l, code: r}, _) => print("nested enum/struct => " & (l + r)),
@@ -153,7 +153,7 @@ const main := fn => {
 	/* List comprehensions with loops.
 			Also an example of the until statement that can be used to create end tested loops.
 	*/
-	let mut lst : list:<int> := [n ** 2 for n in 0..20 if n % 2 = 0 if n % 4 != 0];
+	let mut lst : list:<int> = [n ** 2 for n in 0..20 if n % 2 = 0 if n % 4 != 0];
 	
 	for n in &mut lst => {
 		*n *= 2;
@@ -266,7 +266,7 @@ const main := fn => {
 	// String-template function call syntax.
 	let name := "Ty";
 	let intro := fn (splits : list:<str>, inputs : list:<str>) -> str => {
-		let mut txt : str := "";
+		let mut txt : str = "";
 		
 		for i in len(splits) => {
 			txt &= splits[i];
@@ -320,7 +320,7 @@ const main := fn => {
 	/* Small async + select showcase.
 			Unlike in golang my channels can store a small temporary stack of values.
 	*/
-	let mut channel : Channel:<int> := Channel.new();
+	let mut channel : Channel:<int> = Channel.new();
 	
 	use spawn {
 		=> channel.send(41),

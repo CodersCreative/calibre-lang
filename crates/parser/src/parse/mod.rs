@@ -1748,6 +1748,8 @@ pub fn parse_program_with_source(
                 .boxed();
 
             let atom = choice((
+                fn_match_expr.clone(),
+                fn_standard_expr.clone(),
                 arrow_body_expr.clone(),
                 match_expr,
                 lex(pad.clone(), just("list"))
@@ -2957,8 +2959,8 @@ pub fn parse_program_with_source(
 
             let base_expr = choice((
                 fn_inline_postfix,
-                fn_standard_postfix,
                 fn_match_postfix,
+                fn_standard_postfix,
                 iter_expr,
                 list_lit,
                 break_expr,
@@ -3511,6 +3513,12 @@ pub fn parse_program_with_source(
             })
             .boxed();
 
+        #[derive(Clone, Copy)]
+        enum DeclAssignOp {
+            Infer,
+            Typed,
+        }
+
         let let_stmt = choice((
             lex(pad.clone(), just("let")).to(VarType::Immutable),
             lex(pad.clone(), just("const")).to(VarType::Constant),
@@ -3522,7 +3530,10 @@ pub fn parse_program_with_source(
                 .ignore_then(type_name.clone())
                 .or_not(),
         )
-        .then_ignore(lex(pad.clone(), just(":=")))
+        .then(choice((
+            lex(pad.clone(), just(":=")).to(DeclAssignOp::Infer),
+            lex(pad.clone(), just("=")).to(DeclAssignOp::Typed),
+        )))
         .then_ignore(delim.clone().repeated())
         .then(
             expr.clone().then(
@@ -3533,66 +3544,83 @@ pub fn parse_program_with_source(
                     .collect::<Vec<_>>(),
             ),
         )
-        .map(|((((vt, m), name), ty), (first_value, rest_values))| {
-            let var_type = match (vt, m.is_some()) {
-                (VarType::Immutable, true) => VarType::Mutable,
-                (x, _) => x,
-            };
-            let value = if rest_values.is_empty() {
-                first_value
-            } else {
-                match first_value.node_type {
-                    NodeType::EnumExpression {
-                        identifier,
-                        value,
-                        data,
-                    } => {
-                        let mut payload_values = if let Some(existing) = data {
-                            match existing.node_type {
-                                NodeType::TupleLiteral { values } => values,
-                                other => vec![Node::new(Span::default(), other)],
-                            }
-                        } else {
-                            Vec::new()
-                        };
-                        payload_values.extend(rest_values);
-                        let payload = if payload_values.len() == 1 {
-                            payload_values.into_iter().next()
-                        } else {
-                            Some(Node::new(
-                                Span::default(),
-                                NodeType::TupleLiteral {
-                                    values: payload_values,
-                                },
-                            ))
-                        };
-                        Node::new(
-                            Span::default(),
-                            NodeType::EnumExpression {
-                                identifier,
-                                value,
-                                data: payload.map(Box::new),
-                            },
-                        )
+        .try_map(
+            |(((((vt, m), name), ty), op), (first_value, rest_values)), sp| {
+                match (ty.is_some(), op) {
+                    (true, DeclAssignOp::Infer) => {
+                        return Err(Rich::custom(
+                            sp,
+                            "use '=' when a variable type is specified",
+                        ));
                     }
-                    other => {
-                        let mut values = vec![Node::new(Span::default(), other)];
-                        values.extend(rest_values);
-                        Node::new(Span::default(), NodeType::TupleLiteral { values })
+                    (false, DeclAssignOp::Typed) => {
+                        return Err(Rich::custom(
+                            sp,
+                            "use ':=' when a variable type is not specified",
+                        ));
                     }
+                    _ => {}
                 }
-            };
-            let value_span = value.span;
-            Node::new(
-                Span::new_from_spans(*name.span(), value.span),
-                NodeType::VariableDeclaration {
-                    var_type,
-                    identifier: name,
-                    value: Box::new(value),
-                    data_type: ty.unwrap_or_else(|| auto_type(value_span)),
-                },
-            )
-        });
+                let var_type = match (vt, m.is_some()) {
+                    (VarType::Immutable, true) => VarType::Mutable,
+                    (x, _) => x,
+                };
+                let value = if rest_values.is_empty() {
+                    first_value
+                } else {
+                    match first_value.node_type {
+                        NodeType::EnumExpression {
+                            identifier,
+                            value,
+                            data,
+                        } => {
+                            let mut payload_values = if let Some(existing) = data {
+                                match existing.node_type {
+                                    NodeType::TupleLiteral { values } => values,
+                                    other => vec![Node::new(Span::default(), other)],
+                                }
+                            } else {
+                                Vec::new()
+                            };
+                            payload_values.extend(rest_values);
+                            let payload = if payload_values.len() == 1 {
+                                payload_values.into_iter().next()
+                            } else {
+                                Some(Node::new(
+                                    Span::default(),
+                                    NodeType::TupleLiteral {
+                                        values: payload_values,
+                                    },
+                                ))
+                            };
+                            Node::new(
+                                Span::default(),
+                                NodeType::EnumExpression {
+                                    identifier,
+                                    value,
+                                    data: payload.map(Box::new),
+                                },
+                            )
+                        }
+                        other => {
+                            let mut values = vec![Node::new(Span::default(), other)];
+                            values.extend(rest_values);
+                            Node::new(Span::default(), NodeType::TupleLiteral { values })
+                        }
+                    }
+                };
+                let value_span = value.span;
+                Ok(Node::new(
+                    Span::new_from_spans(*name.span(), value.span),
+                    NodeType::VariableDeclaration {
+                        var_type,
+                        identifier: name,
+                        value: Box::new(value),
+                        data_type: ty.unwrap_or_else(|| auto_type(value_span)),
+                    },
+                ))
+            },
+        );
 
         let scope_name = lex(pad.clone(), just('@'))
             .ignore_then(ident.clone())

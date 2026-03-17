@@ -22,7 +22,7 @@ const main := fn => {
 	print("server sent => " & body);
 	
 	let real := Http.client("api.namefake.com", 443);
-	let resp : HttpResponse := real.get("/");
+	let resp : HttpResponse = real.get("/");
 	print("namefake real => " & resp.body);
 	
 	wait(10);

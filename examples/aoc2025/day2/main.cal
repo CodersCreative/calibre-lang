@@ -2,7 +2,7 @@ import File from std::fs;
 import Channel from std::async;
 
 const main := fn => {
-	let file : File := try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
+	let file : File = try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
 		try File.open_read(__file__.replace("main.cal", "custom_input.txt")) => {
 			print(e);
 			return;
@@ -10,7 +10,7 @@ const main := fn => {
 	};
 	
 	let text := try file.read_all(100000) => panic("Failed to read file.");
-	let ranges : list:<str> := text.split(",");
+	let ranges : list:<str> = text.split(",");
 	let worker_count := 4;
 	
 	let part1, part2 := solve_part1(ranges, worker_count), solve_part2(ranges, worker_count);
@@ -20,7 +20,7 @@ const main := fn => {
 };
 
 const solve_part1 := fn (ranges : list:<str>, worker_count : int) -> int => {
-	let mut out : Channel:<int> := Channel:<int>.new();
+	let mut out : Channel:<int> = Channel:<int>.new();
 	use spawn for i in 0..worker_count => worker_sum_part1(ranges, i, worker_count, out);
 	
 	let mut sum := 0;
@@ -37,7 +37,7 @@ const solve_part1 := fn (ranges : list:<str>, worker_count : int) -> int => {
 };
 
 const solve_part2 := fn (ranges : list:<str>, worker_count : int) -> int => {
-	let mut out : Channel:<int> := Channel:<int>.new();
+	let mut out : Channel:<int> = Channel:<int>.new();
 	use spawn for i in 0..worker_count => worker_sum_part2(ranges, i, worker_count, out);
 	
 	let mut sum := 0;
@@ -78,7 +78,7 @@ const worker_sum_part2 := fn (ranges : list:<str>, start_idx : int, step : int, 
 };
 
 const parse_range := fn (cur : str) -> <int, int> => {
-	let cur : list:<str> := cur.split("-");
+	let cur : list:<str> = cur.split("-");
 	let start := cur[0] as! int;
 	let end := cur[1] as! int;
 	(start, end);

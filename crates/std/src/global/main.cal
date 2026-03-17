@@ -10,7 +10,7 @@ const range := fn (start end : mut int, step : int, inclusive : bool) -> list:<i
 	
 	let mut lst := list:<int>[];
 	
-	let mut index : int := start;
+	let mut index : int = start;
 	
 	for (index < end && step > 0) || (index > end && step < 0) => {
 		lst <<= index;
@@ -23,7 +23,7 @@ const range := fn (start end : mut int, step : int, inclusive : bool) -> list:<i
 const raw_len := len;
 
 const fmt := fn (splits : list:<str>, inputs : list:<str>) -> str => {
-	let mut txt : str := "";
+	let mut txt : str = "";
 	
 	for i in len(splits) => {
 		txt &= splits[i];

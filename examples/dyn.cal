@@ -75,7 +75,7 @@ const main := fn => {
 	print(Unlocked { }.name());
 	print(Alarm { }.name());
 	
-	let mut state : dyn:<State> := Locked { attempts : 0 };
+	let mut state : dyn:<State> = Locked { attempts : 0 };
 	let inputs := list:<str>["0000", "1111", "0000", "reset", "1234"];
 	
 	for input in inputs => {

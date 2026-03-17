@@ -63,7 +63,7 @@ impl Parser {
 
     const parse_text := fn (self : &mut Self, text : str) -> JsonValue? => {
         let mut tokenizer := Tokenizer.new();
-        let tokens : list:<Token> := try tokenizer.tokenize(text) : e => {
+        let tokens : list:<Token> = try tokenizer.tokenize(text) : e => {
             self.errors <<= e;
             return none;
         };
@@ -96,7 +96,7 @@ impl Parser {
     };
 
     const parse_array_items := fn(self : &mut Self) -> list:<JsonValue> => {
-        let mut out : list:<JsonValue> := [];
+        let mut out : list:<JsonValue> = [];
         out <<= self.parse();
         for self.peek_type() = TokenType.Comma => {
             let _ := self.expect_eat(TokenType.Comma);
@@ -121,7 +121,7 @@ impl Parser {
 
 
     const parse := fn(self: &mut Self) -> JsonValue => {
-        let first : TokenType := self.peek_type();
+        let first : TokenType = self.peek_type();
         if first = TokenType.Number => {
             let t := self.expect_eat(TokenType.Number);
             return JsonValue.Number : try t.value as float : e => {

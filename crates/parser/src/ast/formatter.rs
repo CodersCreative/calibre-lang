@@ -781,8 +781,14 @@ impl Formatter {
                 }
 
                 let rhs = self.fmt_value_preserving_bare_tuple(value);
-                let single = format!("{} := {}", txt, rhs);
-                let multi = format!("{} :=\n{}", txt, self.fmt_txt_with_tab(&rhs, 1, true));
+                let assign = if data_type.is_auto() { ":=" } else { "=" };
+                let single = format!("{} {} {}", txt, assign, rhs);
+                let multi = format!(
+                    "{} {}\n{}",
+                    txt,
+                    assign,
+                    self.fmt_txt_with_tab(&rhs, 1, true)
+                );
                 self.wrap_if_wide(single, &multi)
             }
             NodeType::AsExpression {

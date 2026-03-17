@@ -6,6 +6,6 @@ const id := fn <T> (x : T) -> T => {
 
 const main := fn => {
 	let smth := SmthType:<int> { value : 42 };
-	let v : int := id:<int>(smth.value);
+	let v : int = id:<int>(smth.value);
 	print(v);
 };

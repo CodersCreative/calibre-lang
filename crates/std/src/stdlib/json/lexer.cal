@@ -57,10 +57,10 @@ impl Tokenizer {
 	};
 
 	const tokenize := fn (self : &mut Self, txt : str) -> str!list:<Token> => {
-		let mut tokens : list:<Token> := [];
+		let mut tokens : list:<Token> = [];
 		
 		defer return tokens <<= self.new_token(TokenType.EOF, "EndOfFile");
-		let mut buffer : list:<char> := txt.to_chars();
+		let mut buffer : list:<char> = txt.to_chars();
 		
 		self.line := 1;
 		self.col := 1;

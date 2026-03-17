@@ -2,14 +2,14 @@ import File from std::fs;
 import Channel from std::async;
 
 const main := fn => {
-	let file : File := try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
+	let file : File = try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
 		try File.open_read(__file__.replace("main.cal", "custom_input.txt")) => {
 			print(e);
 			return;
 		};
 	};
 	
-	let lines : list:<str> := try file.read_lines(100000) => panic("Failed to read file.");
+	let lines : list:<str> = try file.read_lines(100000) => panic("Failed to read file.");
 	
 	let worker_count := 12;
 	let part1 := solve_part1(lines, worker_count);
@@ -78,7 +78,7 @@ const worker_part2 := fn (banks : list:<str>, start_idx : int, step : int, out :
 };
 
 const handle_part1 := fn (bank : str) -> int => {
-	let bank : list:<int> := bank.to_chars();
+	let bank : list:<int> = bank.to_chars();
 	
 	let mut current := bank[0] & bank[1];
 	
@@ -99,7 +99,7 @@ const handle_part1 := fn (bank : str) -> int => {
 };
 
 const max_joltage_for_count_part2 := fn (bank : str, count : int) -> int => {
-	let bank : list:<char> := trim(bank).to_chars();
+	let bank : list:<char> = trim(bank).to_chars();
 	let n := len(bank);
 	if count <= 0 => return 0;
 	if count >= n => return bank as! int;

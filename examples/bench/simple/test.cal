@@ -2,7 +2,7 @@ type Thing := struct { name : str };
 
 type ThingEnum := enum { Person Animal Object : Thing, Nothing };
 
-const global_thing : ThingEnum := ThingEnum.Nothing;
+const global_thing : ThingEnum = ThingEnum.Nothing;
 
 impl ThingEnum {
 	const age := 90;

@@ -7,7 +7,7 @@ const parse_direction := fn (line : str) -> char => {
 
 const parse_distance := fn (line : str) -> int => {
 	let chars := trim(line) as! list:<char>;
-	let mut num_text : str := "";
+	let mut num_text : str = "";
 	
 	for i in 0..(len(chars) - 1) => num_text &= chars[i + 1];
 	num_text as! int;
@@ -55,7 +55,7 @@ const count_zeros_part2 := fn (lines : list:<str>) -> int => {
 };
 
 const main := fn => {
-	let file : File := try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
+	let file : File = try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
 		try File.open_read(__file__.replace("main.cal", "custom_input.txt")) => {
 			print(e);
 			return;

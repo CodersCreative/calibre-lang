@@ -13,7 +13,7 @@ impl Iter for Counter {
 };
 
 const main := fn => {
-	let mut list_it : ListIter:<int> := list:<int>[1, 2, 3].iter();
+	let mut list_it : ListIter:<int> = list:<int>[1, 2, 3].iter();
 	
 	for  => {
 		let next := list_it.next();
@@ -23,7 +23,7 @@ const main := fn => {
 		};
 	};
 	
-	let mut range_it : RangeIter := (0..3).into_iter();
+	let mut range_it : RangeIter = (0..3).into_iter();
 	
 	for  => {
 		let next := range_it.next();
@@ -37,7 +37,7 @@ const main := fn => {
 	for let .Some : value <- counter.next() => print(value);
 
 	let mut mutable_list := list:<int>[10, 20, 30];
-	let mut mut_it : ListIter:<int> := mutable_list.iter_mut();
+	let mut mut_it : ListIter:<int> = mutable_list.iter_mut();
 	print(mut_it.next());
 	
 	let mapped := list:<int>[1, 2, 3].into_iter().map(fn (x : int) -> int => x * 2).collect();

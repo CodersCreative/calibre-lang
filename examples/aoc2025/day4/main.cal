@@ -3,14 +3,14 @@ import File from std::fs;
 const CELL_KEY := 1000000;
 
 const main := fn => {
-	let file : File := try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
+	let file : File = try File.open_read(__file__.replace("main.cal", "input.txt")) : e => {
 		try File.open_read(__file__.replace("main.cal", "custom_input.txt")) => {
 			print(e);
 			return;
 		};
 	};
 	
-	let lines : list:<str> := try file.read_lines(100000) => panic("Failed to read file.");
+	let lines : list:<str> = try file.read_lines(100000) => panic("Failed to read file.");
 	let part1 := solve_part1(lines);
 	let part2 := solve_part2(lines);
 	
@@ -19,7 +19,7 @@ const main := fn => {
 };
 
 const build_grid := fn (lines : list:<str>) -> list:<list:<char>> => {
-	let mut grid : list:<list:<char>> := [];
+	let mut grid : list:<list:<char>> = [];
 	
 	for i in 0..len(lines) => grid <<= trim(lines[i]).to_chars();
 	grid;
@@ -70,10 +70,10 @@ const solve_part1 := fn (lines : list:<str>) -> int => {
 };
 
 const build_degrees := fn (grid : list:<list:<char>>) -> list:<list:<int>> => {
-	let mut degree : list:<list:<int>> := [];
+	let mut degree : list:<list:<int>> = [];
 	
 	for r in 0..len(grid) => {
-		let mut row_deg : list:<int> := [];
+		let mut row_deg : list:<int> = [];
 		
 		for c in 0..len(grid[r]) => row_deg <<= count_neighbors(grid, r, c);
 		degree <<= move row_deg;
@@ -85,7 +85,7 @@ const build_degrees := fn (grid : list:<list:<char>>) -> list:<list:<int>> => {
 const solve_part2 := fn (lines : list:<str>) -> int => {
 	let mut grid := build_grid(lines);
 	let mut degree := build_degrees(grid);
-	let mut queue : list:<int> := [];
+	let mut queue : list:<int> = [];
 	
 	for r in 0..len(grid) => {
 		for c in 0..len(grid[r]) => {

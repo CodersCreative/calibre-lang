@@ -12,7 +12,7 @@ impl BrainFuck {
 
 	const interpret := fn (self : &mut Self, s : str) -> null => {
 		let mut c := 0;
-		let s : list:<char> := s.to_chars();
+		let s : list:<char> = s.to_chars();
 		let mut i := 0;
 		
 		for i < len(s) => {
@@ -45,8 +45,8 @@ impl BrainFuck {
 				},
 				',' => {
 					self.ensure_cell();
-					let inp : str := std::console::input();
-					let inp : char := inp.to_chars()[0];
+					let inp : str = std::console::input();
+					let inp : char = inp.to_chars()[0];
 					self.memory[self.pointer] = inp as! byte;
 				},
 				'[' => {
@@ -103,8 +103,8 @@ const main := fn => {
 		return;
 	};
 	
-	let text : str := try file.read_all(100000) => panic("Failed to read file.");
-	let text : str := text.replace("\n", "").replace("\r", "").replace(" ", "").replace("\t", "");
+	let text : str = try file.read_all(100000) => panic("Failed to read file.");
+	let text : str = text.replace("\n", "").replace("\r", "").replace(" ", "").replace("\t", "");
 	
 	let mut interpreter := BrainFuck.new();
 	interpreter.interpret(text);
