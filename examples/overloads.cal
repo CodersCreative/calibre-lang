@@ -21,7 +21,7 @@ type Vec2 := struct { x y : int } @overload {
 		0;
 	};
 
-	const "[]=" := fn (mut self : Vec2, idx : int, value : int) -> Vec2 => {
+	const "[]=" := fn (self : Vec2, idx : int, value : int) -> Vec2 => {
 		if idx = 0 => self.x := value;
 		if idx = 1 => self.y := value;
 		self;

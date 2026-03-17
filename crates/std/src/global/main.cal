@@ -50,8 +50,9 @@ trait Iter {
 
 	const next : fn (&mut Self) -> Self::Item?;
 
-	const collect := fn (mut self : Self) -> list:<Self::Item> => {
+	const collect := fn (self : Self) -> list:<Self::Item> => {
 		let mut out := list:<Self::Item>[];
+		
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -62,8 +63,9 @@ trait Iter {
 		out;
 	};
 
-	const map := fn <U> (mut self : Self, op : fn(Self::Item) -> U) -> ListIter:<U> => {
+	const map := fn <U> (self : Self, op : fn(Self::Item) -> U) -> ListIter:<U> => {
 		let mut out := list:<U>[];
+		
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -74,8 +76,9 @@ trait Iter {
 		ListIter:<U> { data : out, index : 0 };
 	};
 
-	const filter := fn (mut self : Self, pred : fn(Self::Item) -> bool) -> ListIter:<Self::Item> => {
+	const filter := fn (self : Self, pred : fn(Self::Item) -> bool) -> ListIter:<Self::Item> => {
 		let mut out := list:<Self::Item>[];
+		
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -87,7 +90,7 @@ trait Iter {
 		ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
-	const for_each := fn (mut self : Self, op : fn(Self::Item) -> null) => {
+	const for_each := fn (self : Self, op : fn(Self::Item) -> null) => {
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -96,8 +99,9 @@ trait Iter {
 		};
 	};
 
-	const fold := fn <U> (mut self : Self, init : U, op : fn(U, Self::Item) -> U) -> U => {
+	const fold := fn <U> (self : Self, init : U, op : fn(U, Self::Item) -> U) -> U => {
 		let mut acc := init;
+		
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -108,7 +112,7 @@ trait Iter {
 		acc;
 	};
 
-	const any := fn (mut self : Self, pred : fn(Self::Item) -> bool) -> bool => {
+	const any := fn (self : Self, pred : fn(Self::Item) -> bool) -> bool => {
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -119,7 +123,7 @@ trait Iter {
 		false;
 	};
 
-	const all := fn (mut self : Self, pred : fn(Self::Item) -> bool) -> bool => {
+	const all := fn (self : Self, pred : fn(Self::Item) -> bool) -> bool => {
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -130,7 +134,7 @@ trait Iter {
 		true;
 	};
 
-	const find := fn (mut self : Self, pred : fn(Self::Item) -> bool) -> Self::Item? => {
+	const find := fn (self : Self, pred : fn(Self::Item) -> bool) -> Self::Item? => {
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -142,7 +146,7 @@ trait Iter {
 		none;
 	};
 
-	const count := fn (mut self : Self) -> int => {
+	const count := fn (self : Self) -> int => {
 		let mut n := 0;
 		
 		for  => {
@@ -155,8 +159,9 @@ trait Iter {
 		n;
 	};
 
-	const take := fn (mut self : Self, n : int) -> ListIter:<Self::Item> => {
+	const take := fn (self : Self, n : int) -> ListIter:<Self::Item> => {
 		let mut out := list:<Self::Item>[];
+		
 		let mut i := 0;
 		
 		for i < n => {
@@ -170,7 +175,7 @@ trait Iter {
 		ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
-	const skip := fn (mut self : Self, n : int) -> ListIter:<Self::Item> => {
+	const skip := fn (self : Self, n : int) -> ListIter:<Self::Item> => {
 		let mut i := 0;
 		
 		for i < n => {
@@ -192,8 +197,9 @@ trait Iter {
 		ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
-	const enumerate := fn (mut self : Self) -> ListIter:<<int, Self::Item>> => {
+	const enumerate := fn (self : Self) -> ListIter:<<int, Self::Item>> => {
 		let mut out := list:<<int, Self::Item>>[];
+		
 		let mut i := 0;
 		
 		for  => {
@@ -206,10 +212,11 @@ trait Iter {
 		ListIter:<<int, Self::Item>> { data : out, index : 0 };
 	};
 
-	const step_by := fn (mut self : Self, step : int) -> ListIter:<Self::Item> => {
+	const step_by := fn (self : Self, step : int) -> ListIter:<Self::Item> => {
 		if step <= 1 => return self.collect().into_iter();
 		
 		let mut out := list:<Self::Item>[];
+		
 		let mut i := 0;
 		
 		for  => {
@@ -223,8 +230,9 @@ trait Iter {
 		ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
-	const partition := fn (mut self : Self, pred : fn(Self::Item) -> bool) -> <ListIter:<Self::Item>, ListIter:<Self::Item>> => {
+	const partition := fn (self : Self, pred : fn(Self::Item) -> bool) -> <ListIter:<Self::Item>, ListIter:<Self::Item>> => {
 		let mut left := list:<Self::Item>[];
+		
 		let mut right := list:<Self::Item>[];
 		
 		for  => {
@@ -237,18 +245,21 @@ trait Iter {
 		
 		tuple(ListIter:<Self::Item> { data : left, index : 0 }, ListIter:<Self::Item> { data : right, index : 0 });
 	};
-}
+};
 
 impl<T> Iter for ListIter:<T> {
 	type Item := T;
 
 	const partition := fn (self : ListIter:<T>, pred : fn(T) -> bool) -> <ListIter:<T>, ListIter:<T>> => {
 		let mut left := list:<T>[];
+		
 		let mut right := list:<T>[];
+		
 		let mut i := 0;
 		
 		for  => {
 			if i >= len(self.data) => break;
+			
 			let value := self.data[i += 1];
 			if pred(value) => left <<= value else => right <<= value;
 		};

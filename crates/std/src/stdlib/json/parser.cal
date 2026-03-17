@@ -2,172 +2,166 @@ import (Tokenizer, Token, TokenType) from lexer;
 
 type Parser := struct { tokens : list:<Token>, index : int, errors : list:<str> };
 
-type JsonValue := enum {
-    Number : float,
-    String : str,
-    Map : HashMap:<str, JsonValue>,
-    List : list:<JsonValue>,
-    Bool : bool,
-    Null,
-}
+type JsonValue := enum { Number : float, String : str, Map : HashMap:<str, JsonValue>, List : list:<JsonValue>, Bool : bool, Null };
 
 impl Display for JsonValue {
-    const display := fn (self : &Self) -> str => {
-        match self {
-            .Number : x => "" & x,
-            .String : x => x,
-            .Bool : x => x ? "true" : "false",
-            .Null => "null",
-            .List : lst => "" & lst,
-            .Map : map => "" & map
-        }
-    }
-}
+	const display := fn (self : &Self) -> str => {
+		match self {
+			.Number : x => "" & x,
+			.String : x => x,
+			.Bool : x => (x) ? "true" : "false",
+			.Null => "null",
+			.List : lst => "" & lst,
+			.Map : map => "" & map
+		};
+	};
+};
 
 impl Parser {
-    const new := fn () -> Parser => Parser { tokens : [], index : 0, errors : [] };
+	const new := fn -> Parser => Parser { tokens : [], index : 0, errors : [] };
 
-    const eof_token := fn () -> Token => Token {
-        value : "EndOfFile",
-        token_type : TokenType.EOF,
-        span : Span {
-            start : Position { line : 0, col : 0 },
-            end : Position { line : 0, col : 0 },
-        },
-    };
+	const eof_token := fn -> Token => Token { value : "EndOfFile", token_type : TokenType.EOF, span : Span { start : Position { line : 0, col : 0 }, end : Position { line : 0, col : 0 } } };
 
-    const first := fn(self : &Self) -> Token => {
-        if self.index < len(self.tokens) => self.tokens[self.index] else => Self.eof_token()
-    };
+	const first := fn (self : &Self) -> Token => {
+		if self.index < len(self.tokens) => self.tokens[self.index] else => Self.eof_token();
+	};
 
-    const peek_type := fn(self : &Self) -> TokenType => {
-        if self.index < len(self.tokens) => self.tokens[self.index].token_type else => TokenType.EOF
-    };
+	const peek_type := fn (self : &Self) -> TokenType => {
+		if self.index < len(self.tokens) => self.tokens[self.index].token_type else => TokenType.EOF;
+	};
 
-    const eat := fn(self : &mut Self) -> Token => {
-        if self.index < len(self.tokens) => {
-            self.tokens[self.index += 1]
-        } else => {
-            self.errors <<= "Unexpected end of tokens";
-            Self.eof_token()
-        };
-    };
+	const eat := fn (self : &mut Self) -> Token => {
+		if self.index < len(self.tokens) => {
+			self.tokens[self.index += 1];
+		} else => {
+			self.errors <<= "Unexpected end of tokens";
+			Self.eof_token();
+		};
+	};
 
-    const expect_eat := fn(self : &mut Self, t : TokenType) -> Token => {
-        let token := self.eat();
-        if token.token_type != t => {
-            self.errors <<= "Incorrect token found. Expected " & t & " found " & token.token_type;
-        };
-        token
-    };
+	const expect_eat := fn (self : &mut Self, t : TokenType) -> Token => {
+		let token := self.eat();
+		if token.token_type != t => {
+			self.errors <<= "Incorrect token found. Expected " & t & " found " & token.token_type;
+		};
+		
+		token;
+	};
 
-    const parse_text := fn (self : &mut Self, text : str) -> JsonValue? => {
-        let mut tokenizer := Tokenizer.new();
-        let tokens : list:<Token> = try tokenizer.tokenize(text) : e => {
-            self.errors <<= e;
-            return none;
-        };
-        self.tokens := tokens;
-        self.index := 0;
-        self.parse_root()
-    };
+	const parse_text := fn (self : &mut Self, text : str) -> JsonValue? => {
+		let mut tokenizer := Tokenizer.new();
+		let tokens : list:<Token> = try tokenizer.tokenize(text) : e => {
+			self.errors <<= e;
+			return none;
+		};
+		
+		self.tokens := tokens;
+		self.index := 0;
+		self.parse_root();
+	};
 
-    const parse_root := fn(self : &mut Self) -> JsonValue? => {
-        if len(self.tokens) = 0 => {
-            self.errors <<= "No tokens available";
-            return none;
-        };
-        let value := self.parse();
-        let next := self.first();
-        if next.token_type != TokenType.EOF => {
-            self.errors <<= "Trailing tokens after top-level JSON value: " & next;
-            return none;
-        };
-        some(value)
-    };
+	const parse_root := fn (self : &mut Self) -> JsonValue? => {
+		if len(self.tokens) = 0 => {
+			self.errors <<= "No tokens available";
+			return none;
+		};
+		
+		let value := self.parse();
+		let next := self.first();
+		if next.token_type != TokenType.EOF => {
+			self.errors <<= "Trailing tokens after top-level JSON value: " & next;
+			return none;
+		};
+		
+		some(value);
+	};
 
-    const parse_tokens := fn(self : &mut Self, tokens : list:<Token>) -> JsonValue => {
-        self.tokens := tokens;
-        self.index := 0;
-        match self.parse_root() {
-            .Some : value => value,
-            .None => JsonValue.Null,
-        }
-    };
+	const parse_tokens := fn (self : &mut Self, tokens : list:<Token>) -> JsonValue => {
+		self.tokens := tokens;
+		self.index := 0;
+		match self.parse_root() {
+			.Some : value => value,
+			.None => JsonValue.Null
+		};
+	};
 
-    const parse_array_items := fn(self : &mut Self) -> list:<JsonValue> => {
-        let mut out : list:<JsonValue> = [];
-        out <<= self.parse();
-        for self.peek_type() = TokenType.Comma => {
-            let _ := self.expect_eat(TokenType.Comma);
-            out <<= self.parse();
-        };
-        out
-    };
+	const parse_array_items := fn (self : &mut Self) -> list:<JsonValue> => {
+		let mut out : list:<JsonValue> = [];
+		
+		out <<= self.parse();
+		
+		for self.peek_type() = TokenType.Comma => {
+			let _ := self.expect_eat(TokenType.Comma);
+			out <<= self.parse();
+		};
+		
+		out;
+	};
 
-    const parse_object_items := fn(self : &mut Self) -> HashMap:<str, JsonValue> => {
-        let mut out := HashMap:<str, JsonValue>.new();
-        let key := self.expect_eat(TokenType.String);
-        let _ := self.expect_eat(TokenType.Colon);
-        out[key.value] := self.parse();
-        for self.peek_type() = TokenType.Comma => {
-            let _ := self.expect_eat(TokenType.Comma);
-            let next_key := self.expect_eat(TokenType.String);
-            let _ := self.expect_eat(TokenType.Colon);
-            out[next_key.value] := self.parse();
-        };
-        out
-    };
+	const parse_object_items := fn (self : &mut Self) -> HashMap:<str, JsonValue> => {
+		let mut out := HashMap:<str, JsonValue>.new();
+		let key := self.expect_eat(TokenType.String);
+		let _ := self.expect_eat(TokenType.Colon);
+		out[key.value] := self.parse();
+		
+		for self.peek_type() = TokenType.Comma => {
+			let _ := self.expect_eat(TokenType.Comma);
+			let next_key := self.expect_eat(TokenType.String);
+			let _ := self.expect_eat(TokenType.Colon);
+			out[next_key.value] := self.parse();
+		};
+		
+		out;
+	};
 
-
-    const parse := fn(self: &mut Self) -> JsonValue => {
-        let first : TokenType = self.peek_type();
-        if first = TokenType.Number => {
-            let t := self.expect_eat(TokenType.Number);
-            return JsonValue.Number : try t.value as float : e => {
-                self.errors <<= e;
-                0;
-            };
-        };
-
-        if first = TokenType.String => {
-            let tok := self.expect_eat(TokenType.String);
-            return JsonValue.String : tok.value;
-        };
-
-        if first = TokenType.True => {
-            let _ := self.expect_eat(TokenType.True);
-            return JsonValue.Bool : true;
-        };
-
-        if first = TokenType.False => {
-            let _ := self.expect_eat(TokenType.False);
-            return JsonValue.Bool : false;
-        };
-
-        if first = TokenType.SquareOpen => {
-            let _ := self.expect_eat(TokenType.SquareOpen);
-            let values := if self.peek_type() != TokenType.SquareClose => self.parse_array_items() else => [];
-
-            let _ := self.expect_eat(TokenType.SquareClose);
-            return JsonValue.List : values;
-        };
-
-        if first = TokenType.CurlyOpen => {
-            let _ := self.expect_eat(TokenType.CurlyOpen);
-            let values := if self.peek_type() != TokenType.CurlyClose => self.parse_object_items() else => HashMap:<str, JsonValue>.new();
-
-            let _ := self.expect_eat(TokenType.CurlyClose);
-            return JsonValue.Map : values;
-        };
-
-        if first = TokenType.Null => {
-            let _ := self.expect_eat(TokenType.Null);
-            return JsonValue.Null;
-        };
-
-        let t := self.eat();
-        self.errors <<= "Unexpectedly found token : " & t & " while parsing JSON value";
-        JsonValue.Null;
-    };
-}
+	const parse := fn (self : &mut Self) -> JsonValue => {
+		let first : TokenType = self.peek_type();
+		if first = TokenType.Number => {
+			let t := self.expect_eat(TokenType.Number);
+			return JsonValue.Number : try t.value as float : e => {
+				self.errors <<= e;
+				0;
+			};
+		};
+		
+		if first = TokenType.String => {
+			let tok := self.expect_eat(TokenType.String);
+			return JsonValue.String : tok.value;
+		};
+		
+		if first = TokenType.True => {
+			let _ := self.expect_eat(TokenType.True);
+			return JsonValue.Bool : true;
+		};
+		
+		if first = TokenType.False => {
+			let _ := self.expect_eat(TokenType.False);
+			return JsonValue.Bool : false;
+		};
+		
+		if first = TokenType.SquareOpen => {
+			let _ := self.expect_eat(TokenType.SquareOpen);
+			let values := if self.peek_type() != TokenType.SquareClose => self.parse_array_items() else => [];
+			
+			let _ := self.expect_eat(TokenType.SquareClose);
+			return JsonValue.List : values;
+		};
+		
+		if first = TokenType.CurlyOpen => {
+			let _ := self.expect_eat(TokenType.CurlyOpen);
+			let values := if self.peek_type() != TokenType.CurlyClose => self.parse_object_items() else => HashMap:<str, JsonValue>.new();
+			
+			let _ := self.expect_eat(TokenType.CurlyClose);
+			return JsonValue.Map : values;
+		};
+		
+		if first = TokenType.Null => {
+			let _ := self.expect_eat(TokenType.Null);
+			return JsonValue.Null;
+		};
+		
+		let t := self.eat();
+		self.errors <<= "Unexpectedly found token : " & t & " while parsing JSON value";
+		JsonValue.Null;
+	};
+};

@@ -1339,7 +1339,7 @@ impl Formatter {
                 let mut txt = format!("let @{} => @{} [", identifier, value.name);
 
                 for arg in &value.args {
-                    txt.push_str(&format!("${} = {}, ", &arg.0, self.format(&arg.1)));
+                    txt.push_str(&format!("${} := {}, ", &arg.0, self.format(&arg.1)));
                 }
                 txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(']');
@@ -1373,7 +1373,7 @@ impl Formatter {
                     if !named.args.is_empty() {
                         txt.push_str(" [");
                         for arg in &named.args {
-                            txt.push_str(&format!("${} = {}, ", &arg.0, self.format(&arg.1)));
+                            txt.push_str(&format!("${} := {}, ", &arg.0, self.format(&arg.1)));
                         }
                         txt = txt.trim_end().trim_end_matches(",").to_string();
                         txt.push_str("]");
@@ -1494,7 +1494,7 @@ impl Formatter {
                 overloads,
             } => {
                 format!(
-                    "type {} = {}{}",
+                    "type {} := {}{}",
                     identifier,
                     self.fmt_type_def_type(&object),
                     self.fmt_overloads(&overloads)
@@ -2037,7 +2037,7 @@ impl Formatter {
                 overloads,
             } => {
                 format!(
-                    "type {} = {}{}",
+                    "type {} := {}{}",
                     identifier,
                     self.fmt_type_def_type(&type_def),
                     self.fmt_overloads(&overloads)

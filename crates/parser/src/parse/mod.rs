@@ -3632,7 +3632,7 @@ pub fn parse_program_with_source(
                 lex(pad.clone(), just('$'))
                     .ignore_then(raw_ident.clone())
                     .map(|(n, sp)| PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)))
-                    .then_ignore(lex(pad.clone(), just('=')))
+                    .then_ignore(lex(pad.clone(), just(":=")).ignored())
                     .then(
                         lex(pad.clone(), just("type"))
                             .ignore_then(lex(pad.clone(), just(':')))

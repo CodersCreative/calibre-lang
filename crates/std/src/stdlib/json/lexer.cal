@@ -101,6 +101,7 @@ impl Tokenizer {
 			
 			if first.is_alphabetic() || first = '_' => {
 				let mut word := "";
+				
 				for len(buffer) > 0 && (buffer[0].is_alphanumeric() || buffer[0] = '_') => {
 					let c := buffer.remove(0).unwrap();
 					self.increment_line_col(c);
@@ -109,16 +110,19 @@ impl Tokenizer {
 				
 				if word = "true" => {
 					tokens <<= self.new_token(TokenType.True, word);
+					
 					continue;
 				};
 				
 				if word = "false" => {
 					tokens <<= self.new_token(TokenType.False, word);
+					
 					continue;
 				};
 				
 				if word = "null" => {
 					tokens <<= self.new_token(TokenType.Null, word);
+					
 					continue;
 				};
 				

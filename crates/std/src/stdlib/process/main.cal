@@ -13,7 +13,8 @@ impl Process {
 
 	const run := fn (program : str, args : list:<str>) -> str!ProcessResult => Process.raw(ExecOptions { command : program, args, cwd : none, shell : false, stdin : none, check : false });
 
-	const run_in := fn (program : str, args : list:<str>, cwd : str) -> str!ProcessResult => Process.raw(ExecOptions { command : program, args, cwd : some(cwd), shell : false, stdin : none, check : false });
+	const run_in :=
+		fn (program : str, args : list:<str>, cwd : str) -> str!ProcessResult => Process.raw(ExecOptions { command : program, args, cwd : some(cwd), shell : false, stdin : none, check : false });
 
 	const shell := fn (command : str) -> str!ProcessResult => Process.raw(ExecOptions { command, args : list:<str>[], cwd : none, shell : true, stdin : none, check : false });
 

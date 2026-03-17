@@ -3,8 +3,8 @@ import * from std::json::parser;
 import File from std::fs;
 import Args from std::env;
 
-const main := fn () => {
-  	let input_path := match Args.first() {
+const main := fn => {
+	let input_path := match Args.first() {
 		.Some : p => p,
 		.None => __file__.replace("parser.cal", "test.json")
 	};
@@ -21,4 +21,4 @@ const main := fn () => {
 	let mut parser := Parser.new();
 	let value : JsonValue = parser.parse_tokens(tokens);
 	print(value);
-}
+};

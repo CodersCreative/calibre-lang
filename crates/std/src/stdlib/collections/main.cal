@@ -2,7 +2,7 @@ type HashMap:<K, V> := struct { } @overload {
 
 	const "[]" := fn (self : &HashMap:<K, V>, key : K) -> V? => self.get(key);
 
-	const "[]=" := fn (self : &mut HashMap:<K, V>, key : K, value : V)=> {
+	const "[]=" := fn (self : &mut HashMap:<K, V>, key : K, value : V) -> auto => {
 		self.set(key, value);
 	};
 
@@ -10,6 +10,7 @@ type HashMap:<K, V> := struct { } @overload {
 };
 
 type HashSet:<T> := struct { } @overload {
+
 	const "in" := fn (value : T, set : HashSet:<T>) -> bool => set.contains(value);
 };
 

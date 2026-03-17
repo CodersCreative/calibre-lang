@@ -35,8 +35,9 @@ const main := fn => {
 	
 	let mut counter := Counter { current : 5, end : 8 };
 	for let .Some : value <- counter.next() => print(value);
-
+	
 	let mut mutable_list := list:<int>[10, 20, 30];
+	
 	let mut mut_it : ListIter:<int> = mutable_list.iter_mut();
 	print(mut_it.next());
 	
@@ -63,15 +64,15 @@ const main := fn => {
 	
 	let skipped := list:<int>[1, 2, 3, 4, 5].into_iter().skip(2).collect();
 	print(skipped);
-
+	
 	let mut enumerated := list:<int>[10, 20, 30].into_iter().enumerate();
 	print(enumerated.next());
 	print(enumerated.next());
-
+	
 	let mut stepped := list:<int>[1, 2, 3, 4, 5, 6].into_iter().step_by(2);
 	print(stepped.next());
 	print(stepped.next());
-
+	
 	let parts := list:<int>[1, 2, 3, 4, 5].into_iter().partition(fn (x : int) -> bool => x % 2 = 0);
 	let mut evens := parts.0;
 	let mut odds := parts.1;
