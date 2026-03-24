@@ -22,14 +22,17 @@ pub(super) fn to_parser_errors(
                     .collect();
                 expected.sort();
                 expected.dedup();
+
                 if expected.len() > 12 {
                     expected.truncate(12);
                     expected.push("...".to_string());
                 }
+
                 let found = e
                     .found()
                     .map(|c| format!("`{c}`"))
                     .unwrap_or_else(|| "EOF".to_string());
+
                 if expected.is_empty() {
                     SyntaxErr::ExpectedToken(format!("unexpected token {found}"))
                 } else {
@@ -42,7 +45,7 @@ pub(super) fn to_parser_errors(
             };
             ParserError::Syntax {
                 err,
-                span: span(line_starts, e.span().clone().into_range()),
+                span: span(line_starts, (*e.span()).into_range()),
             }
         })
         .collect()

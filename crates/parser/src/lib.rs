@@ -50,6 +50,7 @@ pub struct Location {
     pub path: PathBuf,
     pub span: Span,
 }
+
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
 )]

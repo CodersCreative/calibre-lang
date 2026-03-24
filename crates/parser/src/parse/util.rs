@@ -1,8 +1,9 @@
 use crate::{
     Position, Span,
     ast::{
-        CallArg, NamedScope, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
+        CallArg, MatchArmType, MatchTupleItem, NamedScope, Node, NodeType, ParserDataType,
+        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+        PotentialNewType,
     },
 };
 use chumsky::prelude::*;
@@ -63,6 +64,55 @@ pub(super) fn call_node(
             reverse_args,
         },
     )
+}
+
+fn match_arm_to_tuple_item(arm: MatchArmType) -> Option<MatchTupleItem> {
+    match arm {
+        MatchArmType::At {
+            var_type,
+            name,
+            pattern,
+        } => Some(MatchTupleItem::At {
+            var_type,
+            name,
+            pattern: Box::new(match_arm_to_tuple_item(*pattern)?),
+        }),
+        MatchArmType::Wildcard(sp) => Some(MatchTupleItem::Wildcard(sp)),
+        MatchArmType::Let { var_type, name } => Some(MatchTupleItem::Binding { var_type, name }),
+        MatchArmType::Enum {
+            value,
+            var_type,
+            name,
+            destructure,
+            pattern,
+        } => Some(MatchTupleItem::Enum {
+            value,
+            var_type,
+            name,
+            destructure,
+            pattern,
+        }),
+        MatchArmType::Value(node) => Some(MatchTupleItem::Value(node)),
+        MatchArmType::IsType(data_type) => Some(MatchTupleItem::IsType(data_type)),
+        MatchArmType::In(node) => Some(MatchTupleItem::In(node)),
+        MatchArmType::StringPattern(parts) => Some(MatchTupleItem::StringPattern(parts)),
+        MatchArmType::TuplePattern(mut inner) => {
+            if inner.len() == 1 {
+                Some(inner.remove(0))
+            } else {
+                None
+            }
+        }
+        MatchArmType::ListPattern(_) => None,
+        MatchArmType::StructPattern(_) => None,
+    }
+}
+
+pub(super) fn match_arm_to_tuple_items(arm: MatchArmType) -> Option<Vec<MatchTupleItem>> {
+    match arm {
+        MatchArmType::TuplePattern(inner) => Some(inner),
+        other => Some(vec![match_arm_to_tuple_item(other)?]),
+    }
 }
 
 #[inline]
@@ -188,7 +238,7 @@ pub(super) fn parse_embedded_expr(txt: &str) -> Node {
         return Node::new(Span::default(), NodeType::IntLiteral(trimmed.to_string()));
     }
 
-    match super::parse_program(trimmed) {
+    match super::parse_program_with_source(trimmed, None) {
         Ok(node) => match node.node_type {
             NodeType::ScopeDeclaration {
                 body: Some(mut body),

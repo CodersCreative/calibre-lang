@@ -21,7 +21,7 @@ use crate::{
 };
 use diagnostics::to_parser_errors;
 use util::{
-    auto_type, call_node, ensure_scope_node, ident_node, is_keyword, lex,
+    auto_type, call_node, ensure_scope_node, ident_node, is_keyword, lex, match_arm_to_tuple_items,
     member_node_from_head_and_tail, normalize_scope_member_chain, null_node, parse_embedded_expr,
     parse_splits, scope_body_or_single, scope_node_parser, span, strip_block_comments_keep_layout,
     unescape_char_literal, unescape_string, with_named_scope,
@@ -57,59 +57,6 @@ where
     any().and_is(end.not()).repeated().collect::<String>()
 }
 
-pub fn parse_program(source: &str) -> Result<Node, Vec<ParserError>> {
-    parse_program_with_source(source, None)
-}
-
-fn match_arm_to_tuple_item(arm: MatchArmType) -> Option<MatchTupleItem> {
-    match arm {
-        MatchArmType::At {
-            var_type,
-            name,
-            pattern,
-        } => Some(MatchTupleItem::At {
-            var_type,
-            name,
-            pattern: Box::new(match_arm_to_tuple_item(*pattern)?),
-        }),
-        MatchArmType::Wildcard(sp) => Some(MatchTupleItem::Wildcard(sp)),
-        MatchArmType::Let { var_type, name } => Some(MatchTupleItem::Binding { var_type, name }),
-        MatchArmType::Enum {
-            value,
-            var_type,
-            name,
-            destructure,
-            pattern,
-        } => Some(MatchTupleItem::Enum {
-            value,
-            var_type,
-            name,
-            destructure,
-            pattern,
-        }),
-        MatchArmType::Value(node) => Some(MatchTupleItem::Value(node)),
-        MatchArmType::IsType(data_type) => Some(MatchTupleItem::IsType(data_type)),
-        MatchArmType::In(node) => Some(MatchTupleItem::In(node)),
-        MatchArmType::StringPattern(parts) => Some(MatchTupleItem::StringPattern(parts)),
-        MatchArmType::TuplePattern(mut inner) => {
-            if inner.len() == 1 {
-                Some(inner.remove(0))
-            } else {
-                None
-            }
-        }
-        MatchArmType::ListPattern(_) => None,
-        MatchArmType::StructPattern(_) => None,
-    }
-}
-
-fn match_arm_to_tuple_items(arm: MatchArmType) -> Option<Vec<MatchTupleItem>> {
-    match arm {
-        MatchArmType::TuplePattern(inner) => Some(inner),
-        other => Some(vec![match_arm_to_tuple_item(other)?]),
-    }
-}
-
 pub fn parse_program_with_source(
     source: &str,
     source_path: Option<&std::path::Path>,
@@ -126,25 +73,32 @@ pub fn parse_program_with_source(
         .repeated()
         .at_least(1)
         .ignored();
-    let line_comment = just("//").then(take_until(just('\n'))).ignored();
-    let block_comment = just("/*")
-        .then(take_until(just("*/")))
-        .then_ignore(just("*/"))
-        .ignored();
-    let pad = choice((ws.clone(), line_comment.clone(), block_comment.clone()))
+
+    let comment = choice((
+        just("/*")
+            .then(take_until(just("*/")))
+            .then_ignore(just("*/")),
+        just("//").then(take_until(just('\n'))),
+    ))
+    .ignored();
+
+    let pad = choice((ws.clone(), comment.clone()))
         .repeated()
         .ignored()
         .boxed();
-    let pad_with_newline = choice((ws, line_comment, block_comment, just('\n').ignored()))
+
+    let pad_with_newline = choice((ws, comment, just('\n').ignored()))
         .repeated()
         .ignored()
         .boxed();
+
     let delim = choice((just('\n'), just(';')))
         .padded_by(pad.clone())
         .repeated()
         .at_least(1)
         .ignored()
         .boxed();
+
     let comma = lex(pad.clone(), just(','))
         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
         .ignored()
@@ -153,9 +107,11 @@ pub fn parse_program_with_source(
     let arrow = lex(pad.clone(), just('-').then_ignore(just('>')))
         .ignored()
         .boxed();
+
     let fat_arrow = lex(pad.clone(), just('=').then_ignore(just('>')))
         .ignored()
         .boxed();
+
     let left_arrow = lex(pad.clone(), just('<').then_ignore(just('-')))
         .ignored()
         .boxed();
@@ -180,10 +136,12 @@ pub fn parse_program_with_source(
             move |s: String, r| (s, span(ls.as_ref(), r))
         })
         .boxed();
+
     let dollar_ident = lex(pad.clone(), just('$'))
         .ignore_then(raw_ident.clone())
         .map(|(n, sp)| PotentialDollarIdentifier::DollarIdentifier(ParserText::new(sp, n)))
         .boxed();
+
     let named_ident = choice((
         ident
             .clone()
@@ -191,6 +149,7 @@ pub fn parse_program_with_source(
         dollar_ident.clone(),
     ))
     .boxed();
+
     let generic_params = lex(pad.clone(), just('<'))
         .ignore_then(
             ident
@@ -217,30 +176,6 @@ pub fn parse_program_with_source(
         })
         .boxed();
 
-    let string_lit = lex(
-        pad.clone(),
-        just('"')
-            .ignore_then(
-                choice((
-                    just('\\').ignore_then(any()).map(|c| format!("\\{c}")),
-                    filter(|c: &char| *c != '"' && *c != '\n').map(|c| c.to_string()),
-                ))
-                .repeated()
-                .collect::<Vec<_>>(),
-            )
-            .then_ignore(just('"')),
-    )
-    .map_with_span({
-        let ls = line_starts.clone();
-        move |parts: Vec<String>, r| {
-            let sp = span(ls.as_ref(), r);
-            Node::new(
-                sp,
-                NodeType::StringLiteral(ParserText::new(sp, unescape_string(&parts.concat()))),
-            )
-        }
-    })
-    .boxed();
     let string_text = lex(
         pad.clone(),
         just('"')
@@ -254,8 +189,22 @@ pub fn parse_program_with_source(
             )
             .then_ignore(just('"')),
     )
-    .map(|parts: Vec<String>| unescape_string(&parts.concat()))
+    .map(move |parts: Vec<String>| unescape_string(&parts.concat()))
     .boxed();
+
+    let string_lit = string_text
+        .clone()
+        .map_with_span({
+            let ls = line_starts.clone();
+            move |text: String, r| {
+                let sp = span(ls.as_ref(), r);
+                Node::new(
+                    sp,
+                    NodeType::StringLiteral(ParserText::new(sp, unescape_string(&text))),
+                )
+            }
+        })
+        .boxed();
 
     let char_lit = lex(
         pad.clone(),
@@ -308,19 +257,6 @@ pub fn parse_program_with_source(
             None => exp,
         })
         .boxed();
-
-    let float_suffix_lit = lex(
-        pad.clone(),
-        dec_digits.clone().then_ignore(just('f')).map(|n| n),
-    )
-    .map_with_span({
-        let ls = line_starts.clone();
-        move |n: String, r| {
-            let v = n.replace('_', "").parse::<f64>().unwrap_or_default();
-            Node::new(span(ls.as_ref(), r), NodeType::FloatLiteral(v))
-        }
-    })
-    .boxed();
 
     let int_lit = lex(
         pad.clone(),
@@ -856,7 +792,7 @@ pub fn parse_program_with_source(
                 .map(|x| x.unwrap_or_default())
                 .boxed();
 
-            let arrow_body_expr = fat_arrow
+            let scope_block = fat_arrow
                 .clone()
                 .ignore_then(choice((
                     labelled_scope.clone(),
@@ -868,7 +804,7 @@ pub fn parse_program_with_source(
                 )))
                 .boxed();
 
-            let spawn_item_expr = arrow_body_expr
+            let spawn_item_expr = scope_block
                 .clone()
                 .or(expr.clone().map(|n| ensure_scope_node(n, true, false)))
                 .boxed();
@@ -878,7 +814,7 @@ pub fn parse_program_with_source(
                 .ignore_then(generic_params.clone())
                 .then(fn_params)
                 .then(arrow.clone().ignore_then(type_name.clone()).or_not())
-                .then(arrow_body_expr.clone())
+                .then(scope_block.clone())
                 .map(|(((generics, params), ret), body)| {
                     let mut parameters = Vec::new();
                     let mut param_destructures = Vec::new();
@@ -993,7 +929,7 @@ pub fn parse_program_with_source(
                                 .clone()
                                 .then(
                                     lex(pad_with_newline.clone(), just(':'))
-                                        .ignore_then(expr.clone())
+                                        .ignore_then(statement.clone())
                                         .or_not(),
                                 )
                                 .map(|((k, sp), value)| {
@@ -1434,16 +1370,6 @@ pub fn parse_program_with_source(
                 .boxed();
             let match_arm_start = choice((match_at_pattern, match_arm_atom)).boxed();
 
-            let match_arm_body = fat_arrow
-                .clone()
-                .ignore_then(pad_with_newline.clone().ignore_then(choice((
-                    scope.clone(),
-                    statement.clone(),
-                    expr.clone(),
-                ))))
-                .map(|body| ensure_scope_node(body, true, false))
-                .boxed();
-
             let match_struct_pattern = lex(pad.clone(), just('{'))
                 .ignore_then(
                     choice((ident
@@ -1517,7 +1443,7 @@ pub fn parse_program_with_source(
                         .repeated()
                         .collect::<Vec<_>>(),
                 )
-                .then(match_arm_body.clone())
+                .then(scope_block.clone())
                 .map(|(((first, rest), conditions), body)| {
                     let mut values = vec![first.clone()];
                     values.extend(rest.iter().map(|(_, v)| v.clone()));
@@ -1750,7 +1676,7 @@ pub fn parse_program_with_source(
             let atom = choice((
                 fn_match_expr.clone(),
                 fn_standard_expr.clone(),
-                arrow_body_expr.clone(),
+                scope_block.clone(),
                 match_expr,
                 lex(pad.clone(), just("list"))
                     .ignore_then(lex(pad.clone(), just(":<")))
@@ -1838,7 +1764,6 @@ pub fn parse_program_with_source(
                         member_node_from_head_and_tail(list, tails)
                     }),
                 float_lit.clone(),
-                float_suffix_lit.clone(),
                 int_lit.clone(),
                 string_lit.clone(),
                 char_lit.clone(),
@@ -2693,14 +2618,14 @@ pub fn parse_program_with_source(
                     choice((
                         lex(pad.clone(), just(':'))
                             .ignore_then(ident.clone())
-                            .then(arrow_body_expr.clone())
+                            .then(scope_block.clone())
                             .map(|((name, sp), body)| TryCatch {
                                 name: Some(PotentialDollarIdentifier::Identifier(ParserText::new(
                                     sp, name,
                                 ))),
                                 body: Box::new(body),
                             }),
-                        arrow_body_expr.clone().map(|body| TryCatch {
+                        scope_block.clone().map(|body| TryCatch {
                             name: None,
                             body: Box::new(body),
                         }),
@@ -2817,7 +2742,7 @@ pub fn parse_program_with_source(
                                 })
                                 .or(expr.clone().map(LoopType::While)),
                         )
-                        .then(arrow_body_expr.clone())
+                        .then(scope_block.clone())
                         .map(|(lt, body)| {
                             let body = ensure_scope_node(body, true, false);
                             Node::new(
@@ -2881,10 +2806,10 @@ pub fn parse_program_with_source(
                                 .or_not(),
                         ),
                     )
-                    .then(arrow_body_expr.clone())
+                    .then(scope_block.clone())
                     .then(
                         lex(pad.clone(), just("else"))
-                            .ignore_then(arrow_body_expr.clone())
+                            .ignore_then(scope_block.clone())
                             .or_not(),
                     )
                     .then(
@@ -2926,10 +2851,10 @@ pub fn parse_program_with_source(
                         if_let_cond,
                         expr.clone().map(IfComparisonType::If),
                     )))
-                    .then(arrow_body_expr.clone())
+                    .then(scope_block.clone())
                     .then(
                         lex(pad.clone(), just("else"))
-                            .ignore_then(if_e.clone().or(arrow_body_expr.clone()))
+                            .ignore_then(if_e.clone().or(scope_block.clone()))
                             .or_not(),
                     )
                     .map(|((cond, then_b), otherwise)| {
