@@ -150,13 +150,11 @@ impl MiddleEnvironment {
     fn rewrite_generator_returns(node: Node) -> Node {
         let span = node.span;
         match node.node_type {
-            NodeType::Return { value: Some(value) } => {
-                Self::call_expr(
-                    span,
-                    Self::gen_ident(span, "gen_suspend"),
-                    vec![CallArg::Value(*value)],
-                )
-            }
+            NodeType::Return { value: Some(value) } => Self::call_expr(
+                span,
+                Self::gen_ident(span, "gen_suspend"),
+                vec![CallArg::Value(*value)],
+            ),
             NodeType::Return { value: None } => Node::new(
                 span,
                 NodeType::Return {

@@ -1370,15 +1370,7 @@ impl VM {
                 }
             }
             let reg = selected.unwrap_or_else(|| phi.sources.first().map(|x| x.1).unwrap_or(0));
-            let raw_value = self.get_reg_value(reg).clone();
-            let value = if Self::should_pass_by_reg_ref(&raw_value) {
-                RuntimeValue::RegRef {
-                    frame: self.frames.len().saturating_sub(1),
-                    reg,
-                }
-            } else {
-                raw_value
-            };
+            let value = self.get_reg_value(reg).clone();
             self.set_reg_value(phi.dest, value);
             if let Some(name) = phi.name.as_ref() {
                 let interned = self.intern_name(name);

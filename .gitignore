@@ -44,3 +44,4 @@ target/
 **.tar.gz
 **.tgz
 **.zip
+.codex
