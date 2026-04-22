@@ -52,14 +52,7 @@ trait Iter {
 
 	const collect := fn (self : Self) -> list:<Self::Item> => {
 		let mut out := list:<Self::Item>[];
-		
-		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			out <<= v.next;
-		};
-		
+		for let .Some : value <- self.next() => out <<= value;
 		out;
 	};
 

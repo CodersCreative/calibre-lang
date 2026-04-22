@@ -151,33 +151,10 @@ impl MiddleEnvironment {
         let span = node.span;
         match node.node_type {
             NodeType::Return { value: Some(value) } => {
-                let suspend_call = Self::call_expr(
+                Self::call_expr(
                     span,
                     Self::gen_ident(span, "gen_suspend"),
                     vec![CallArg::Value(*value)],
-                );
-                let tmp_ident = PotentialDollarIdentifier::Identifier(ParserText::new(
-                    span,
-                    format!("gen_yield_tmp_{}", Self::span_suffix(span)),
-                ));
-                Self::temp_scope(
-                    span,
-                    vec![
-                        Node::new(
-                            span,
-                            NodeType::VariableDeclaration {
-                                var_type: VarType::Immutable,
-                                identifier: tmp_ident,
-                                value: Box::new(suspend_call),
-                                data_type: PotentialNewType::DataType(ParserDataType::new(
-                                    span,
-                                    ParserInnerType::Auto(None),
-                                )),
-                            },
-                        ),
-                        Node::new(span, NodeType::EmptyLine),
-                    ],
-                    true,
                 )
             }
             NodeType::Return { value: None } => Node::new(
