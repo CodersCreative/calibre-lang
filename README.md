@@ -13,7 +13,6 @@ The project is actively evolving, but it already supports a broad set of languag
 - VM runtime/interpreter is implemented (`crates/vm`)
 - Formatter is implemented (`fmt`)
 - LSP server is implemented and actively improving (`lsp`)
-- Cranelift backend exists but is still in-progress (`crates/cranelift`)
 
 ---
 
@@ -203,14 +202,12 @@ The `examples/` directory contains practical programs for current language/runti
 - `crates/vm/`: runtime VM + native stdlib bindings
 - `crates/std/`: the standard library written in calibre
 - `crates/diagnostics/`: diagnostics emission helpers
-- `crates/cranelift/`: JIT/AOT compilation backend work-in-progress
 
 ---
 
 ## Roadmap
 
 - [x] Interpreter backend
-- [ ] Cranelift backend
 - [x] Formatter
 - [x] LSP support
 - [ ] Package manager

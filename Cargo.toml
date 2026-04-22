@@ -4,7 +4,7 @@ members = [
     "calibre",
     "lsp",
     "crates/parser",
-    "crates/cranelift", "fmt", "crates/mir", "crates/std", "crates/lir", "crates/vm",
+    "fmt", "crates/mir", "crates/std", "crates/lir", "crates/vm",
     "crates/diagnostics",
 ]
 
@@ -26,7 +26,6 @@ license = "MIT"
 calibre-mir = {path="./crates/mir"}
 calibre-lir = {path="./crates/lir"}
 calibre-vm = {path="./crates/vm"}
-calibre-cranelift = {path="./crates/cranelift"}
 calibre-diagnostics = {path="./crates/diagnostics"}
 calibre-parser = {path="./crates/parser"}
 calibre-std = {path="./crates/std"}
