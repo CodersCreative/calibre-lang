@@ -1,5 +1,5 @@
-const width := 200;
-const steps := 200;
+const width := 50;
+const steps := 50;
 
 const main := fn => {
 	const half_width := width / 2;

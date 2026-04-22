@@ -2,13 +2,11 @@ import * from std::console;
 import * from std::list;
 import * from std::str;
 
-type int := auto @overload {
-
+type int := int @overload {
 	const "as" := fn (self : int) -> str => "int";
 };
 
 type Vec2 := struct { x y : int } @overload {
-
 	const "+" := fn (a : Vec2, b : Vec2) -> Vec2 => Vec2 { x : a.x + b.x, y : a.y + b.y };
 
 	const "=" := fn (a : Vec2, b : Vec2) -> bool => a.x = b.x && a.y = b.y;

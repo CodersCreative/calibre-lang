@@ -1,9 +1,3 @@
-use std::{
-    fmt::{Display, Formatter},
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-
 use calibre_lir::LirEnvironment;
 use calibre_mir::{
     ast::MiddleNode,
@@ -22,6 +16,11 @@ use calibre_vm::{
 use glob::glob;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::{
+    fmt::{Display, Formatter},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 pub mod config;
 
@@ -259,7 +258,7 @@ impl CalibreEngine {
         let ast = filter_ast_for_mode(ast, self.compile_mode);
         let ast_for_artifacts = ast.clone();
 
-        let (mut env, scope, middle_node) = if let Some(metadata) = &self.package_metadata {
+        let (mut env, scope, mut mir) = if let Some(metadata) = &self.package_metadata {
             MiddleEnvironment::new_and_evaluate_with_package(
                 ast,
                 path.clone(),
@@ -278,7 +277,6 @@ impl CalibreEngine {
             });
         }
 
-        let mut mir = middle_node;
         calibre_mir::inline::inline_small_calls(&mut mir, 20);
 
         let resolved_entry = env
@@ -305,6 +303,7 @@ impl CalibreEngine {
     ) -> Result<CalibreArtifacts, CalibreError> {
         let input = source.into();
         let full_source = self.compose_source(&input);
+
         if self.cache_enabled
             && let Some(cached) = self.try_load_cached_program(&full_source)?
         {
@@ -331,7 +330,9 @@ impl CalibreEngine {
             .source_path
             .clone()
             .unwrap_or_else(|| PathBuf::from("<embedded>"));
+
         let artifacts = self.compile_cached_program_source(source)?;
+
         let mut vm = VM::new(
             artifacts.registry.clone(),
             artifacts.mappings.clone(),
@@ -403,22 +404,26 @@ impl CalibreEngine {
 
     fn stdlib_cache_tag() -> String {
         let mut hasher = blake3::Hasher::new();
-        let stdlib_main = get_stdlib_path();
-        let stdlib_root = stdlib_main
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or(stdlib_main.clone());
+        let stdlib = get_stdlib_path();
         let globals = get_globals_path();
         let mut files: Vec<PathBuf> = Vec::new();
-        files.push(stdlib_main);
+
+        files.push(stdlib.clone());
         files.push(globals);
 
-        let pattern = format!("{}/**/*.cal", stdlib_root.to_string_lossy());
+        let stdlib = stdlib
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or(stdlib.clone());
+
+        let pattern = format!("{}/**/*.cal", stdlib.to_string_lossy());
+
         if let Ok(paths) = glob(&pattern) {
             for entry in paths.flatten() {
                 files.push(entry);
             }
         }
+
         files.sort();
 
         for path in files {
@@ -427,6 +432,7 @@ impl CalibreEngine {
                 hasher.update(contents.as_bytes());
             }
         }
+
         hasher.finalize().to_string()
     }
 

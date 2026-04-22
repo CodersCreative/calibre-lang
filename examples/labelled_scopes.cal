@@ -6,7 +6,15 @@ const main := fn => {
 	};
 	
 	print("loop result = " & value);
+
+	let mut val := for i in 0..5 => {
+		if i > 8 => break i;
+	} else => {
+		0;
+	};
 	
+	print("2nd loop result = " & val);
+		
 	value := => @basic_block {
 		defer print("basic_block defer");
 		if value > 8 => break @basic_block 100;

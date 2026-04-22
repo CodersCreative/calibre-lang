@@ -48,7 +48,7 @@ const main := fn => {
 	let parts := "a,b,c".split(",");
 	print(parts[1]);
 	print("calibre".starts_with("cal"));
-	let file := File.open_read("./destructure.cal");
+	let file := try File.open_read(__file__.replace("traits.cal", "destructure.cal")) => panic();
 	print(file.read_all(10000));
 	
 	let ty := Ty { };

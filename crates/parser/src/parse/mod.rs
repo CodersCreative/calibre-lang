@@ -289,6 +289,7 @@ pub fn parse_program_with_source(
     let float_lit = lex(
         pad.clone(),
         choice((
+            dec_digits.clone().then_ignore(just('f')).map(|n| n),
             dec_digits
                 .clone()
                 .then_ignore(just('.'))
@@ -3130,9 +3131,18 @@ pub fn parse_program_with_source(
                     .then_ignore(delim.clone().or_not())
                     .then_ignore(lex(pad.clone(), just('}')))
                     .map(|groups| TypeDefType::Enum(groups.into_iter().flatten().collect())),
-                type_name
-                    .clone()
-                    .map(|typ| TypeDefType::NewType(Box::new(typ))),
+                type_name.clone().try_map(|typ, sp| match typ {
+                    PotentialNewType::DataType(x)
+                        if x.data_type == ParserInnerType::Dynamic
+                            || x.data_type == ParserInnerType::Auto(None) =>
+                    {
+                        Err(Rich::custom(
+                            sp,
+                            "Cannot overload auto or dynamic please specify the type",
+                        ))
+                    }
+                    _ => Ok(TypeDefType::NewType(Box::new(typ))),
+                }),
             )))
             .then(
                 lex(pad.clone(), just("@overload"))
