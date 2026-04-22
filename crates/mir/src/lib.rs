@@ -219,10 +219,10 @@ impl MiddleEnvironment {
             let Some(s) = self.scopes.get(&id) else {
                 break;
             };
-            out.extend(s.defers.clone());
             if stop_scope.is_some_and(|stop| stop == id) {
                 break;
             }
+            out.extend(s.defers.clone());
             current = s.parent;
         }
         out

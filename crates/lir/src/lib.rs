@@ -540,6 +540,9 @@ impl<'a> LirEnvironment<'a> {
     #[inline]
     fn lower_scope_items(&mut self, body: Vec<MiddleNode>) {
         for stmt in body {
+            if !self.current_block_open() {
+                break;
+            }
             self.lower_and_add_node(stmt);
         }
     }
@@ -756,6 +759,9 @@ impl<'a> LirEnvironment<'a> {
     }
 
     pub fn lower_and_add_node(&mut self, node: MiddleNode) {
+        if !self.current_block_open() {
+            return;
+        }
         if matches!(node.node_type, MiddleNodeType::Return { .. }) {
             let _ = self.lower_node(node);
             return;

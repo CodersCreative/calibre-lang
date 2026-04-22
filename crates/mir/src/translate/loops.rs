@@ -263,7 +263,7 @@ impl MiddleEnvironment {
             NodeType::VariableDeclaration {
                 var_type: VarType::Mutable,
                 identifier: result_ident.clone().into(),
-                value: Box::new(Node::new(self.current_span(), NodeType::Null)),
+                value: else_body.clone(),
                 data_type: PotentialNewType::DataType(ParserDataType::new(
                     self.current_span(),
                     ParserInnerType::Auto(None),
@@ -286,52 +286,10 @@ impl MiddleEnvironment {
                 )),
             },
         );
-
-        let if_assign = Node::new(
-            self.current_span(),
-            NodeType::IfStatement {
-                comparison: Box::new(IfComparisonType::If(Node::new(
-                    self.current_span(),
-                    NodeType::ComparisonExpression {
-                        left: Box::new(Node::new(
-                            self.current_span(),
-                            NodeType::Identifier(broke_ident.clone().into()),
-                        )),
-                        right: Box::new(Node::new(
-                            self.current_span(),
-                            NodeType::IntLiteral(String::from("0")),
-                        )),
-                        operator: calibre_parser::ast::comparison::ComparisonOperator::Equal,
-                    },
-                ))),
-                then: Box::new(Node::new(
-                    self.current_span(),
-                    NodeType::ScopeDeclaration {
-                        body: Some(vec![Node::new(
-                            self.current_span(),
-                            NodeType::AssignmentExpression {
-                                identifier: Box::new(Node::new(
-                                    self.current_span(),
-                                    NodeType::Identifier(result_ident.clone().into()),
-                                )),
-                                value: else_body,
-                            },
-                        )]),
-                        create_new_scope: Some(true),
-                        define: false,
-                        named: None,
-                        is_temp: true,
-                    },
-                )),
-                otherwise: None,
-            },
-        );
-
         let stmts = vec![
             self.evaluate(scope, result_decl),
             self.evaluate(scope, broke_decl),
             loop_node,
-            self.evaluate(scope, if_assign),
             self.evaluate(
                 scope,
                 Node::new(
@@ -958,9 +916,32 @@ impl MiddleEnvironment {
         loop_type: LoopType,
         mut body: Node,
         until: Option<Box<Node>>,
-        label: Option<PotentialDollarIdentifier>,
+        mut label: Option<PotentialDollarIdentifier>,
         else_body: Option<Box<Node>>,
     ) -> Result<MiddleNode, MiddleErr> {
+        if label.is_none()
+            && let NodeType::ScopeDeclaration {
+                body: scope_body,
+                named: Some(named),
+                is_temp,
+                create_new_scope,
+                define: false,
+            } = &body.node_type
+            && named.args.is_empty()
+        {
+            label = Some(named.name.clone());
+            body = Node::new(
+                body.span,
+                NodeType::ScopeDeclaration {
+                    body: scope_body.clone(),
+                    named: None,
+                    is_temp: *is_temp,
+                    create_new_scope: *create_new_scope,
+                    define: false,
+                },
+            );
+        }
+
         let scope = self.new_scope_from_parent_shallow(*scope);
         let label_text = label.as_ref().map(|l| {
             self.resolve_dollar_ident_only(&scope, l)

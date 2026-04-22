@@ -13,6 +13,18 @@ use calibre_parser::{
 };
 
 impl MiddleEnvironment {
+    fn ends_in_control_flow(node: &MiddleNode) -> bool {
+        match &node.node_type {
+            MiddleNodeType::Break { .. }
+            | MiddleNodeType::Continue { .. }
+            | MiddleNodeType::Return { .. } => true,
+            MiddleNodeType::ScopeDeclaration { body, .. } => {
+                body.last().is_some_and(Self::ends_in_control_flow)
+            }
+            _ => false,
+        }
+    }
+
     fn desugar_use_chain(&mut self, mut stmts: Vec<Node>) -> Vec<Node> {
         let Some(pos) = stmts
             .iter()
@@ -386,8 +398,10 @@ impl MiddleEnvironment {
                     None
                 };
 
-                for x in self.scope_ref_or_err(&new_scope)?.defers.clone() {
-                    stmts.push(self.evaluate(&new_scope, x));
+                if !last.as_ref().is_some_and(Self::ends_in_control_flow) {
+                    for x in self.scope_ref_or_err(&new_scope)?.defers.clone() {
+                        stmts.push(self.evaluate(&new_scope, x));
+                    }
                 }
 
                 for value in self

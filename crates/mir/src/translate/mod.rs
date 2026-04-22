@@ -904,10 +904,10 @@ impl MiddleEnvironment {
                             target_ctx.map(|ctx| ctx.scope_id),
                         )
                     };
-
+                    let has_break_value = value.is_some();
                     let value_node = value.map(|v| self.evaluate(scope, *v));
 
-                    if let Some(result_target) = result_target {
+                    if has_break_value && let Some(result_target) = result_target {
                         let assign = MiddleNode::new(
                             MiddleNodeType::AssignmentExpression {
                                 identifier: Box::new(MiddleNode::new(
@@ -925,7 +925,7 @@ impl MiddleEnvironment {
                     } else if let Some(val) = value_node {
                         lst.push(val);
                     }
-                    if let Some(broke_target) = broke_target {
+                    if has_break_value && let Some(broke_target) = broke_target {
                         let assign = MiddleNode::new(
                             MiddleNodeType::AssignmentExpression {
                                 identifier: Box::new(MiddleNode::new(
@@ -1024,18 +1024,21 @@ impl MiddleEnvironment {
                         self.loop_stack.last().cloned()
                     };
 
-                    if let Some(ctx) = continue_ctx.clone() {
+                    if let Some(ctx) = continue_ctx.as_ref() {
                         let chain_defers = self.collect_defers_until(scope, Some(ctx.scope_id));
                         for x in chain_defers {
                             lst.push(self.evaluate(scope, x));
-                        }
-                        if let Some(inject) = ctx.continue_inject.clone() {
-                            lst.push(self.evaluate(scope, inject));
                         }
                     } else if let Some(s) = self.scopes.get(scope) {
                         for x in s.defers.clone() {
                             lst.push(self.evaluate(scope, x));
                         }
+                    }
+
+                    if let Some(ctx) = continue_ctx.clone()
+                        && let Some(inject) = ctx.continue_inject.clone()
+                    {
+                        lst.push(self.evaluate(scope, inject));
                     }
 
                     let defined = self
