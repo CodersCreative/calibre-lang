@@ -5,7 +5,7 @@ pub(crate) const CLEANUP_MS: u64 = 150;
 
 pub(crate) const KEYWORDS: &[&str] = &[
     "fn", "let", "mut", "const", "struct", "enum", "trait", "impl", "if", "else", "match", "for",
-    "while", "in", "return", "break", "continue", "try", "as", "use", "extern", "type", "range",
+    "while", "in", "return", "break", "continue", "try", "as", "extern", "type", "range",
 ];
 
 pub(crate) fn keyword_doc(keyword: &str) -> &'static str {
@@ -29,7 +29,6 @@ pub(crate) fn keyword_doc(keyword: &str) -> &'static str {
         "continue" => "Skip to next loop iteration.",
         "try" => "Error-handling expression.",
         "as" => "Type cast operation.",
-        "use" => "Import module or symbols.",
         "extern" => "Declare external/native functions.",
         "type" => "Declare a type alias/new type.",
         "range" => "Construct a range expression.",

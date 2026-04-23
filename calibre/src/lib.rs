@@ -609,11 +609,12 @@ fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
                 value: Box::new(map_opt(*value, mode)?),
                 function,
             },
-            NodeType::Spawn { items } => NodeType::Spawn {
+            NodeType::Spawn { items, auto_wait } => NodeType::Spawn {
                 items: items
                     .into_iter()
                     .filter_map(|n| map_opt(n, mode))
                     .collect::<Vec<_>>(),
+                auto_wait,
             },
             other => other,
         };

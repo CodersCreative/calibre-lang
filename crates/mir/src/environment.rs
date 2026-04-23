@@ -2,7 +2,7 @@ use crate::COUNTER;
 use crate::ast::hm::{self, Subst, Type, TypeGenerator};
 use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::errors::MiddleErr;
-use crate::infer::infer_node_type;
+use crate::typing::TypingStore;
 use calibre_parser::{
     Location, Parser, Span,
     ast::{
@@ -117,7 +117,7 @@ pub struct MiddleEnvironment {
     pub impls: FxHashMap<ParserInnerType, MiddleImpl>,
     pub type_aliases: FxHashMap<String, ParserDataType>,
     pub trait_defs: FxHashMap<String, MiddleTrait>,
-    pub hm_env: FxHashMap<String, hm::TypeScheme>,
+    pub typing: TypingStore,
     pub generic_fn_templates:
         FxHashMap<String, (Vec<String>, calibre_parser::ast::FunctionHeader, Node)>,
     pub generic_type_templates: FxHashMap<String, (Vec<String>, TypeDefType, Vec<Overload>)>,
@@ -126,7 +126,6 @@ pub struct MiddleEnvironment {
     pub specialization_decls_by_scope: FxHashMap<u64, Vec<MiddleNode>>,
     pub current_location: Option<Location>,
     pub errors: Vec<MiddleErr>,
-    pub type_cache: FxHashMap<hm::Type, ParserDataType>,
     pub stdlib_nodes: Vec<MiddleNode>,
     pub loaded_scopes: FxHashSet<u64>,
     pub suppress_curry: bool,
@@ -156,7 +155,7 @@ impl Default for MiddleEnvironment {
             impls: FxHashMap::default(),
             type_aliases: FxHashMap::default(),
             trait_defs: FxHashMap::default(),
-            hm_env: FxHashMap::default(),
+            typing: TypingStore::default(),
             generic_fn_templates: FxHashMap::default(),
             generic_type_templates: FxHashMap::default(),
             type_specializations: FxHashMap::default(),
@@ -166,7 +165,6 @@ impl Default for MiddleEnvironment {
             errors: Vec::new(),
             stdlib_nodes: Vec::new(),
             loaded_scopes: FxHashSet::default(),
-            type_cache: FxHashMap::default(),
             suppress_curry: false,
             loop_stack: Vec::new(),
             package_metadata: None,
@@ -657,6 +655,7 @@ impl MiddleEnvironment {
                         ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
                     )
                 }) || self
+                    .typing
                     .hm_env
                     .get(name)
                     .is_some_and(|scheme| matches!(scheme.ty, Type::TArrow(_, _)))
@@ -1385,11 +1384,10 @@ impl MiddleEnvironment {
                     ..
                 } = &mut value.node_type
                 {
-                    if let Some(scheme) = self.hm_env.get(&identifier.text) {
+                    if let Some(scheme) = self.typing.scheme(&identifier.text) {
                         let applied = scheme.ty.clone();
-                        let mut pd_cache: FxHashMap<hm::Type, calibre_parser::ast::ParserDataType> =
-                            FxHashMap::default();
-                        let parser_ty = hm::to_parser_data_type(&applied, &mut pd_cache);
+                        let mut temp_typing = self.typing.clone();
+                        let parser_ty = temp_typing.parser_type(&applied);
 
                         if let ParserInnerType::Function {
                             return_type: inf_ret,
@@ -1498,26 +1496,19 @@ impl MiddleEnvironment {
                         .unwrap_or_else(|| caller_ident.text.clone());
 
                     let scheme = self
-                        .hm_env
-                        .get(&resolved_key)
-                        .cloned()
-                        .or_else(|| self.hm_env.get(&caller_ident.text).cloned())
-                        .or_else(|| {
-                            self.hm_env
-                                .iter()
-                                .find(|(k, _)| {
-                                    calibre_parser::qualified_name_tail(k) == base.as_str()
-                                })
-                                .map(|(_, v)| v.clone())
-                        });
+                        .typing
+                        .scheme_cloned(&resolved_key)
+                        .or_else(|| self.typing.scheme_cloned(&caller_ident.text))
+                        .or_else(|| self.typing.find_scheme_by_tail(base.as_str()));
 
                     if let Some(scheme) = scheme {
                         let mut tg = TypeGenerator::default();
                         let mut subst = Subst::default();
 
-                        let scheme_is_unresolved =
-                            hm::to_parser_data_type(&scheme.ty, &mut self.type_cache)
-                                .contains_auto();
+                        let scheme_is_unresolved = self
+                            .typing
+                            .parser_type_with_span(&scheme.ty, caller.span)
+                            .contains_auto();
                         let mut inst = if scheme_is_unresolved {
                             scheme.ty.clone()
                         } else {
@@ -1527,7 +1518,10 @@ impl MiddleEnvironment {
                         for arg in args.iter() {
                             let arg_node: Node = arg.clone().into();
                             if let Some(arg_ty) = self.resolve_type_from_node(scope, &arg_node) {
-                                let arg_hm = hm::from_parser_data_type(&arg_ty, &mut tg);
+                                let arg_hm = hm::try_from_parser_data_type(&arg_ty, &mut tg)
+                                    .unwrap_or_else(|_| {
+                                        hm::from_parser_data_type(&arg_ty, &mut tg)
+                                    });
 
                                 match inst {
                                     Type::TArrow(param, rest) => {
@@ -1552,19 +1546,16 @@ impl MiddleEnvironment {
                             }
                         }
 
-                        for (_, scheme) in self.hm_env.iter_mut() {
-                            scheme.ty = hm::apply_subst(&subst, &scheme.ty);
-                        }
-
                         if !subst.is_empty() {
-                            hm::recompute_scheme_vars_all(&mut self.hm_env);
+                            self.typing.apply_subst(&subst);
 
                             for (k, v) in self.variables.iter_mut() {
                                 if (v.data_type.is_auto() || v.data_type.contains_auto())
-                                    && let Some(scheme) = self.hm_env.get(k)
+                                    && let Some(scheme) = self.typing.scheme(k)
                                 {
+                                    let ty = scheme.ty.clone();
                                     v.data_type =
-                                        hm::to_parser_data_type(&scheme.ty, &mut self.type_cache);
+                                        self.typing.parser_type_with_span(&ty, caller.span);
                                 }
                             }
                         }
@@ -2805,11 +2796,14 @@ impl MiddleEnvironment {
             | NodeType::ScopeAlias { .. }
             | NodeType::DataType { .. }
             | NodeType::Until { .. }
-            | NodeType::SelectStatement { .. }
-            | NodeType::Use { .. } => None,
-            NodeType::Spawn { .. } => Some(ParserDataType::new(
+            | NodeType::SelectStatement { .. } => None,
+            NodeType::Spawn { auto_wait, .. } => Some(ParserDataType::new(
                 node.span,
-                ParserInnerType::Struct(String::from("WaitGroup")),
+                if *auto_wait {
+                    ParserInnerType::Null
+                } else {
+                    ParserInnerType::Struct(String::from("WaitGroup"))
+                },
             )),
             NodeType::InlineGenerator { map, data_type, .. } => {
                 let elem = match data_type {
@@ -3229,10 +3223,10 @@ impl MiddleEnvironment {
                             _ => caller.to_string(),
                         };
 
-                        if let Some(scheme) = self.hm_env.get(&base_ident) {
+                        if let Some(scheme) = self.typing.scheme(&base_ident) {
                             let mut tg = TypeGenerator::default();
                             let inst = hm::instantiate(scheme, &mut tg);
-                            let p = hm::to_parser_data_type(&inst, &mut self.type_cache);
+                            let p = self.typing.parser_type(&inst);
                             caller_type = Some(self.resolve_data_type(scope, p));
                         } else if let Some(var) = self.variables.get(&base_ident) {
                             caller_type = Some(var.data_type.clone());
@@ -3246,10 +3240,10 @@ impl MiddleEnvironment {
             }
             NodeType::Identifier(x) => {
                 if let Some(iden) = self.resolve_potential_generic_ident(scope, x) {
-                    if let Some(scheme) = self.hm_env.get(&iden.text) {
+                    if let Some(scheme) = self.typing.scheme(&iden.text) {
                         let mut tg = TypeGenerator::default();
                         let inst = hm::instantiate(scheme, &mut tg);
-                        let p = hm::to_parser_data_type(&inst, &mut self.type_cache);
+                        let p = self.typing.parser_type(&inst);
                         return Some(self.resolve_data_type(scope, p));
                     }
 
@@ -3471,7 +3465,7 @@ impl MiddleEnvironment {
             }
 
             if resolved.contains_auto() {
-                if let Some(inferred) = infer_node_type(self, scope, &node) {
+                if let Some(inferred) = self.infer_parser_type_for_node(scope, &node) {
                     return Some(self.resolve_data_type(scope, inferred));
                 }
             }

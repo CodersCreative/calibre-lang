@@ -3,7 +3,7 @@ use crate::{
     ast::{
         CallArg, MatchArmType, MatchTupleItem, NamedScope, Node, NodeType, ParserDataType,
         ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        PotentialNewType,
+        PotentialNewType, VarType,
     },
 };
 use chumsky::prelude::*;
@@ -64,6 +64,81 @@ pub(super) fn call_node(
             reverse_args,
         },
     )
+}
+
+pub(super) fn labelled_scope_parser<'a, PPad, PIdent, PScope>(
+    pad: PPad,
+    ident: PIdent,
+    scope: PScope,
+) -> impl Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone
+where
+    PPad: Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
+    PIdent: Parser<'a, &'a str, (String, Span), extra::Err<Rich<'a, char>>> + Clone + 'a,
+    PScope: Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a,
+{
+    lex(pad.clone(), just('@'))
+        .ignore_then(ident.clone())
+        .then(lex(pad.clone(), just("[]")).or_not())
+        .then(scope)
+        .map(|(((name, sp), _), body)| {
+            with_named_scope(
+                body,
+                NamedScope {
+                    name: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
+                    args: Vec::new(),
+                },
+            )
+        })
+}
+
+pub(super) fn struct_destructure_fields_parser<'a, PPad, PComma, PIdent>(
+    pad: PPad,
+    comma: PComma,
+    ident: PIdent,
+) -> impl Parser<
+    'a,
+    &'a str,
+    Vec<(String, VarType, PotentialDollarIdentifier)>,
+    extra::Err<Rich<'a, char>>,
+> + Clone
+where
+    PPad: Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
+    PComma: Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
+    PIdent: Parser<'a, &'a str, (String, Span), extra::Err<Rich<'a, char>>> + Clone + 'a,
+{
+    lex(pad.clone(), just('{'))
+        .ignore_then(
+            ident
+                .clone()
+                .then(
+                    lex(pad.clone(), just(':'))
+                        .ignore_then(lex(pad.clone(), just("mut")).or_not())
+                        .then(ident.clone())
+                        .or_not(),
+                )
+                .map(|((field, fsp), alias)| match alias {
+                    Some((mut_tok, (name, nsp))) => (
+                        field,
+                        if mut_tok.is_some() {
+                            VarType::Mutable
+                        } else {
+                            VarType::Immutable
+                        },
+                        PotentialDollarIdentifier::Identifier(ParserText::new(nsp, name)),
+                    ),
+                    None => (
+                        field.clone(),
+                        VarType::Immutable,
+                        PotentialDollarIdentifier::Identifier(ParserText::new(fsp, field)),
+                    ),
+                })
+                .separated_by(comma)
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .or_not()
+                .map(|x| x.unwrap_or_default()),
+        )
+        .then_ignore(lex(pad, just('}')))
 }
 
 fn match_arm_to_tuple_item(arm: MatchArmType) -> Option<MatchTupleItem> {
@@ -141,6 +216,13 @@ pub(super) fn member_node_from_head_and_tail(head: Node, mut tail: Vec<(Node, bo
     member_node_from_path(path)
 }
 
+pub(super) fn span_from_nodes_or(first: &Node, last: Option<&Node>, fallback: Span) -> Span {
+    let sp = last.map_or(first.span, |node| {
+        Span::new_from_spans(first.span, node.span)
+    });
+    if sp == Span::default() { fallback } else { sp }
+}
+
 pub(super) fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
     let mut normal_parts = Vec::new();
     let mut extracted_parts = Vec::new();
@@ -186,10 +268,10 @@ pub(super) fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
     (normal_parts, extracted_parts)
 }
 
-pub(super) fn parse_embedded_expr(txt: &str) -> Node {
+pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<Node, String> {
     let trimmed = txt.trim();
     if trimmed.is_empty() {
-        return null_node(Span::default());
+        return Err("expected expression inside string interpolation".to_string());
     }
 
     let is_ident = |s: &str| {
@@ -204,19 +286,19 @@ pub(super) fn parse_embedded_expr(txt: &str) -> Node {
     };
 
     if is_ident(trimmed) {
-        return Node::new(
-            Span::default(),
+        return Ok(Node::new(
+            fallback_span,
             NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
                 ParserText::from(trimmed.to_string()).into(),
             )),
-        );
+        ));
     }
 
     if trimmed
         .split('.')
         .all(|part| !part.is_empty() && is_ident(part))
     {
-        let sp = Span::default();
+        let sp = fallback_span;
         let path = trimmed
             .split('.')
             .map(|part| {
@@ -231,11 +313,14 @@ pub(super) fn parse_embedded_expr(txt: &str) -> Node {
                 )
             })
             .collect();
-        return Node::new(sp, NodeType::MemberExpression { path });
+        return Ok(Node::new(sp, NodeType::MemberExpression { path }));
     }
 
     if trimmed.parse::<i64>().is_ok() {
-        return Node::new(Span::default(), NodeType::IntLiteral(trimmed.to_string()));
+        return Ok(Node::new(
+            fallback_span,
+            NodeType::IntLiteral(trimmed.to_string()),
+        ));
     }
 
     match super::parse_program_with_source(trimmed, None) {
@@ -243,10 +328,14 @@ pub(super) fn parse_embedded_expr(txt: &str) -> Node {
             NodeType::ScopeDeclaration {
                 body: Some(mut body),
                 ..
-            } if !body.is_empty() => body.remove(0),
-            _ => null_node(Span::default()),
+            } if !body.is_empty() => Ok(body.remove(0)),
+            _ => Err("expected interpolated expression".to_string()),
         },
-        Err(_) => null_node(Span::default()),
+        Err(errs) => Err(errs
+            .into_iter()
+            .next()
+            .map(|err| err.message_with_hint())
+            .unwrap_or_else(|| "failed to parse interpolated expression".to_string())),
     }
 }
 
@@ -424,7 +513,6 @@ pub(super) fn is_keyword(ident: &str) -> bool {
             | "spawn"
             | "defer"
             | "select"
-            | "use"
             | "break"
             | "continue"
             | "extern"

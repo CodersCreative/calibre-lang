@@ -6,6 +6,7 @@ target/
 **/*.data
 **/*.old
 /src/test*
+**.svg
 
 # Node artifacts
 **/build/

@@ -5,7 +5,6 @@ use crate::{
     },
     environment::{MiddleEnvironment, MiddleVariable, get_disamubiguous_name},
     errors::MiddleErr,
-    infer::infer_node_hm,
 };
 use calibre_parser::{
     Span,
@@ -208,9 +207,9 @@ impl MiddleEnvironment {
                 ret_hm = Type::TArrow(std::sync::Arc::new(p_hm), std::sync::Arc::new(ret_hm));
             }
 
-            if !self.hm_env.contains_key(&new_name) {
-                self.hm_env
-                    .insert(new_name.clone(), TypeScheme::new(Vec::new(), ret_hm));
+            if !self.typing.contains_scheme(&new_name) {
+                self.typing
+                    .insert_scheme(new_name.clone(), TypeScheme::new(Vec::new(), ret_hm));
             }
         }
 
@@ -308,20 +307,20 @@ impl MiddleEnvironment {
                 original_value_node.node_type,
                 NodeType::InlineGenerator { .. }
             )
-            && let Some((hm_t, subst)) = infer_node_hm(self, scope, &original_value_node)
+            && let Some((hm_t, subst)) = self.infer_hm_type_for_node(scope, &original_value_node)
         {
             let t_applied = hm::apply_subst(&subst, &hm_t);
 
-            let parser_ty = hm::to_parser_data_type(&t_applied, &mut self.type_cache);
+            let parser_ty = self.typing.parser_type(&t_applied);
             let scheme = match &parser_ty.data_type {
                 calibre_parser::ast::ParserInnerType::Function { .. }
                     if parser_ty.contains_auto() =>
                 {
                     hm::TypeScheme::new(Vec::new(), t_applied.clone())
                 }
-                _ => hm::generalize(&self.hm_env, &t_applied),
+                _ => self.typing.generalize(&t_applied),
             };
-            self.hm_env.insert(new_name.clone(), scheme);
+            self.typing.insert_scheme(new_name.clone(), scheme);
 
             if !is_function_decl && let Some(v) = self.variables.get_mut(&new_name) {
                 v.data_type = parser_ty.clone();

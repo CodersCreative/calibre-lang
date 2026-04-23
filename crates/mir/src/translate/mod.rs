@@ -295,8 +295,12 @@ impl MiddleEnvironment {
             NodeType::MemberExpression { path } => {
                 self.evaluate_member_expression(scope, node.span, path)
             }
-            NodeType::Spawn { mut items } if items.len() == 1 => {
+            NodeType::Spawn {
+                mut items,
+                auto_wait,
+            } if items.len() == 1 => {
                 let value = items.remove(0);
+                let original_value = value.clone();
                 let inner = match value.node_type {
                     NodeType::ScopeDeclaration { .. } => {
                         return self.evaluate_inner(
@@ -320,6 +324,7 @@ impl MiddleEnvironment {
                                             body: Box::new(value),
                                         },
                                     )],
+                                    auto_wait,
                                 },
                             ),
                         );
@@ -544,10 +549,17 @@ impl MiddleEnvironment {
                                     node.span,
                                     NodeType::Spawn {
                                         items: vec![scope_body],
+                                        auto_wait: false,
                                     },
                                 )
                             }
-                            _ => Node::new(node.span, NodeType::Spawn { items: vec![*body] }),
+                            _ => Node::new(
+                                node.span,
+                                NodeType::Spawn {
+                                    items: vec![*body],
+                                    auto_wait: false,
+                                },
+                            ),
                         };
 
                         let join_call = Self::call_member_expr(
@@ -627,14 +639,55 @@ impl MiddleEnvironment {
                     }
                     other => self.evaluate(scope, Node::new(value.span, other)),
                 };
-                Ok(MiddleNode::new(
-                    MiddleNodeType::Spawn {
-                        value: Box::new(inner),
-                    },
-                    node.span,
-                ))
+                if auto_wait {
+                    let wg_ident: PotentialDollarIdentifier =
+                        self.temp_ident_at("__spawn_auto_wait_wg", node.span);
+                    let wait_scope = Self::temp_scope(
+                        node.span,
+                        vec![
+                            Node::new(
+                                node.span,
+                                NodeType::VariableDeclaration {
+                                    var_type: VarType::Immutable,
+                                    identifier: wg_ident.clone(),
+                                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                                        node.span,
+                                        ParserInnerType::Auto(None),
+                                    )),
+                                    value: Box::new(Node::new(
+                                        node.span,
+                                        NodeType::Spawn {
+                                            items: vec![original_value],
+                                            auto_wait: false,
+                                        },
+                                    )),
+                                },
+                            ),
+                            Self::call_member_expr(
+                                node.span,
+                                Node::new(
+                                    node.span,
+                                    NodeType::Identifier(
+                                        PotentialGenericTypeIdentifier::Identifier(wg_ident),
+                                    ),
+                                ),
+                                "wait",
+                                Vec::new(),
+                            ),
+                        ],
+                        true,
+                    );
+                    Ok(self.evaluate(scope, wait_scope))
+                } else {
+                    Ok(MiddleNode::new(
+                        MiddleNodeType::Spawn {
+                            value: Box::new(inner),
+                        },
+                        node.span,
+                    ))
+                }
             }
-            NodeType::Spawn { items } => {
+            NodeType::Spawn { items, auto_wait } => {
                 let span = node.span;
                 let wg_ident: PotentialDollarIdentifier =
                     self.temp_ident_at("__spawn_block_wg", span);
@@ -670,6 +723,7 @@ impl MiddleEnvironment {
                             item.span,
                             NodeType::Spawn {
                                 items: vec![Node::new(item.span, other)],
+                                auto_wait: false,
                             },
                         ),
                     };
@@ -705,7 +759,40 @@ impl MiddleEnvironment {
                     },
                 );
 
-                Ok(self.evaluate(scope, scope_node))
+                if auto_wait {
+                    let wait_scope = Self::temp_scope(
+                        span,
+                        vec![
+                            Node::new(
+                                span,
+                                NodeType::VariableDeclaration {
+                                    var_type: VarType::Immutable,
+                                    identifier: wg_ident.clone(),
+                                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                                        span,
+                                        ParserInnerType::Auto(None),
+                                    )),
+                                    value: Box::new(scope_node),
+                                },
+                            ),
+                            Self::call_member_expr(
+                                span,
+                                Node::new(
+                                    span,
+                                    NodeType::Identifier(
+                                        PotentialGenericTypeIdentifier::Identifier(wg_ident),
+                                    ),
+                                ),
+                                "wait",
+                                Vec::new(),
+                            ),
+                        ],
+                        true,
+                    );
+                    Ok(self.evaluate(scope, wait_scope))
+                } else {
+                    Ok(self.evaluate(scope, scope_node))
+                }
             }
             NodeType::Ternary {
                 comparison,
@@ -1938,9 +2025,6 @@ impl MiddleEnvironment {
                     },
                 )
             }
-            NodeType::Use { .. } => Err(MiddleErr::Scope(String::from(
-                "use statements are only valid inside a scope",
-            ))),
             NodeType::LoopDeclaration {
                 loop_type,
                 body,
@@ -3440,6 +3524,7 @@ impl MiddleEnvironment {
                                         | ParserInnerType::NativeFunction(_)
                                 )
                             }) || env
+                                .typing
                                 .hm_env
                                 .get(&resolved.text)
                                 .is_some_and(|scheme| matches!(scheme.ty, Type::TArrow(_, _)))

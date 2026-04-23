@@ -821,7 +821,7 @@ fn is_repl_file(contents: &str) -> bool {
 fn is_persistent_decl(line: &str) -> bool {
     let trimmed = line.trim_start();
     let keywords = [
-        "const ", "let ", "type ", "import ", "trait ", "impl ", "extern ", "use",
+        "const ", "let ", "type ", "import ", "trait ", "impl ", "extern ",
     ];
     keywords.iter().any(|k| trimmed.starts_with(k))
 }

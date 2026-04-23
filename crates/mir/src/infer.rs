@@ -1,49 +1,33 @@
-use crate::ast::hm::{self, Subst, Type, TypeCon, TypeEnv, TypeGenerator, TypeScheme};
-use crate::environment::{MiddleEnvironment, Operator};
+use crate::ast::hm::{self, Type, TypeCon, TypeEnv, TypeGenerator};
+use crate::environment::Operator;
+use crate::typing::TypeResolver;
 use calibre_parser::ast::{
     CallArg, IfComparisonType, Node, NodeType, ParserDataType, ParserInnerType, PotentialNewType,
     binary::BinaryOperator,
 };
 use rustc_hash::FxHashMap;
 
-pub fn infer_node_type(
-    env: &mut MiddleEnvironment,
-    scope: &u64,
+pub(crate) fn visit_internal(
     node: &Node,
-) -> Option<ParserDataType> {
-    let mut tg = TypeGenerator::default();
-    let mut subst = Subst::default();
-
-    let mut tenv: TypeEnv = env.hm_env.clone();
-
-    for (k, v) in env.variables.iter() {
-        if !tenv.contains_key(k) {
-            tenv.insert(
-                k.clone(),
-                hm::generalize(&tenv, &hm::from_parser_data_type(&v.data_type, &mut tg)),
-            );
-        }
-    }
-
-    match visit(node, env, scope, &mut tg, &mut tenv, &mut subst) {
-        Ok(t) => Some(hm::to_parser_data_type(
-            &hm::apply_subst(&subst, &t),
-            &mut env.type_cache,
-        )),
-        Err(_) => None,
-    }
+    env: &mut impl TypeResolver,
+    scope: &u64,
+    tg: &mut TypeGenerator,
+    tenv: &mut TypeEnv,
+    subst: &mut hm::Subst,
+) -> Result<Type, String> {
+    visit(node, env, scope, tg, tenv, subst)
 }
 
 fn visit(
     node: &Node,
-    env: &mut MiddleEnvironment,
+    env: &mut impl TypeResolver,
     scope: &u64,
     tg: &mut TypeGenerator,
     tenv: &mut TypeEnv,
     subst: &mut hm::Subst,
 ) -> Result<Type, String> {
     fn resolve_member_fn_type(
-        env: &MiddleEnvironment,
+        env: &impl TypeResolver,
         tenv: &TypeEnv,
         base_ty: &Type,
         member: &str,
@@ -51,7 +35,7 @@ fn visit(
     ) -> Option<Type> {
         let base_pd = hm::to_parser_data_type(base_ty, &mut FxHashMap::default()).unwrap_all_refs();
         for key in env.member_fn_candidates(&base_pd, member) {
-            if let Some(scheme) = tenv.get(&key).or_else(|| env.hm_env.get(&key)) {
+            if let Some(scheme) = tenv.get(&key).or_else(|| env.hm_env().get(&key)) {
                 return Some(hm::instantiate(scheme, tg));
             }
         }
@@ -59,26 +43,26 @@ fn visit(
     }
 
     fn resolve_member_field_type(
-        env: &mut MiddleEnvironment,
+        env: &mut impl TypeResolver,
         scope: &u64,
         base_t: &Type,
         member: &str,
         span: calibre_parser::Span,
     ) -> Option<Type> {
         let base_pd = env
-            .resolve_data_type(
+            .resolve_data_type_for_typing(
                 scope,
                 hm::to_parser_data_type(base_t, &mut FxHashMap::default()),
             )
             .unwrap_all_refs();
-        env.resolve_member_field_type(scope, &base_pd, member, span)
+        env.resolve_member_field_type_for_typing(scope, &base_pd, member, span)
             .map(|v| hm::from_parser_data_type(&v, &mut TypeGenerator::default()))
     }
 
     fn apply_call_iter<'a, I>(
         mut caller_t: Type,
         call_args: I,
-        env: &mut MiddleEnvironment,
+        env: &mut impl TypeResolver,
         scope: &u64,
         tg: &mut TypeGenerator,
         tenv: &mut TypeEnv,
@@ -117,7 +101,7 @@ fn visit(
         caller_t: Type,
         args: &[CallArg],
         reverse_args: &[Node],
-        env: &mut MiddleEnvironment,
+        env: &mut impl TypeResolver,
         scope: &u64,
         tg: &mut TypeGenerator,
         tenv: &mut TypeEnv,
@@ -182,7 +166,7 @@ fn visit(
         NodeType::CharLiteral(_) => Ok(Type::TCon(TypeCon::Char)),
         NodeType::Null => Ok(Type::TCon(TypeCon::Null)),
         NodeType::Identifier(id) => {
-            if let Some(iden) = env.resolve_potential_generic_ident(scope, id) {
+            if let Some(iden) = env.resolve_potential_generic_ident_for_typing(scope, id) {
                 if let Some(scheme) = tenv.get(&iden.text) {
                     if scheme.vars.is_empty() {
                         return Ok(scheme.ty.clone());
@@ -191,8 +175,10 @@ fn visit(
                     }
                 }
 
-                if env.objects.contains_key(&iden.text) {
-                    if let Some(pd) = env.resolve_potential_generic_ident_to_data_type(scope, id) {
+                if env.objects_contains(&iden.text) {
+                    if let Some(pd) =
+                        env.resolve_potential_generic_ident_to_data_type_for_typing(scope, id)
+                    {
                         return Ok(hm::from_parser_data_type(&pd, tg));
                     }
 
@@ -209,7 +195,7 @@ fn visit(
                 }
             }
 
-            Ok(tg.fresh())
+            Err(format!("unresolved identifier `{raw_name}`"))
         }
         NodeType::ListLiteral(_, items) => {
             let mut elem_ty: Option<Type> = None;
@@ -281,7 +267,7 @@ fn visit(
             }
 
             fn infer_from_overloads(
-                env: &mut MiddleEnvironment,
+                env: &mut impl TypeResolver,
                 scope: &u64,
                 tg: &mut TypeGenerator,
                 subst: &mut hm::Subst,
@@ -292,7 +278,7 @@ fn visit(
                 let lt_applied = hm::apply_subst(subst, lt);
                 let rt_applied = hm::apply_subst(subst, rt);
 
-                for overload in env.overloads.iter() {
+                for overload in env.overloads_for_typing().iter() {
                     if overload.operator != Operator::Binary(op.clone()) {
                         continue;
                     }
@@ -627,7 +613,9 @@ fn visit(
                     let acc_applied = hm::apply_subst(subst, &acc_t);
                     acc_t = match acc_applied {
                         Type::TList(inner) => (*inner).clone(),
-                        _ => tg.fresh(),
+                        other => {
+                            return Err(format!("cannot index into non-list type {:?}", other));
+                        }
                     };
                     continue;
                 }
@@ -655,7 +643,7 @@ fn visit(
                         ) {
                             acc_t = member_fn;
                         } else {
-                            acc_t = tg.fresh();
+                            return Err(format!("unknown member `{name}`"));
                         }
                     }
                     NodeType::CallExpression {
@@ -693,15 +681,15 @@ fn visit(
                                 }
                                 acc_t = apply_call_types(member_fn, arg_types, tg, subst)?;
                             } else {
-                                acc_t = tg.fresh();
+                                return Err(format!("unknown member function `{name}`"));
                             }
                         } else {
-                            acc_t = tg.fresh();
+                            return Err("unsupported callable member expression".to_string());
                         }
                     }
                     _ => {
                         let _ = visit(seg, env, scope, tg, tenv, subst)?;
-                        acc_t = tg.fresh();
+                        return Err("unsupported member expression segment".to_string());
                     }
                 }
             }
@@ -719,7 +707,7 @@ fn visit(
         NodeType::FunctionDeclaration { header, body, .. } => {
             fn unify_returns(
                 node: &Node,
-                env: &mut MiddleEnvironment,
+                env: &mut impl TypeResolver,
                 scope: &u64,
                 tg: &mut TypeGenerator,
                 tenv: &mut TypeEnv,
@@ -769,14 +757,14 @@ fn visit(
             let declared_ret_t = if matches!(declared_ret_pd.data_type, ParserInnerType::Auto(_)) {
                 tg.fresh()
             } else {
-                hm::from_parser_data_type(&declared_ret_pd, tg)
+                hm::try_from_parser_data_type(&declared_ret_pd, tg)?
             };
 
             let mut fn_tenv = tenv.clone();
             let mut param_types = Vec::new();
             for param in header.parameters.iter() {
                 let resolved_name = env
-                    .resolve_potential_dollar_ident(scope, &param.0)
+                    .resolve_potential_dollar_ident_for_typing(scope, &param.0)
                     .map(|p| p.text)
                     .unwrap_or_else(|| param.0.to_string());
 
@@ -787,7 +775,7 @@ fn visit(
                 let p_t = if matches!(p_pd.data_type, ParserInnerType::Auto(_)) {
                     tg.fresh()
                 } else {
-                    hm::from_parser_data_type(&p_pd, tg)
+                    hm::try_from_parser_data_type(&p_pd, tg)?
                 };
                 fn_tenv.insert(
                     resolved_name.clone(),
@@ -823,67 +811,9 @@ fn visit(
 
             Ok(hm::apply_subst(subst, &fn_t))
         }
-        _ => Ok(tg.fresh()),
-    }
-}
-
-pub fn infer_node_hm(
-    env: &mut MiddleEnvironment,
-    scope: &u64,
-    node: &Node,
-) -> Option<(Type, hm::Subst)> {
-    let mut tg = TypeGenerator::default();
-    let mut subst = hm::Subst::default();
-
-    let mut tenv: TypeEnv = env.hm_env.clone();
-
-    let mut var_types: FxHashMap<String, Type> = FxHashMap::default();
-    for (k, v) in env.variables.iter() {
-        if !tenv.contains_key(k) {
-            if v.data_type.contains_auto() {
-                let t = tg.fresh();
-                var_types.insert(k.clone(), t.clone());
-                let scheme = TypeScheme::new(Vec::new(), t.clone());
-                tenv.insert(k.clone(), scheme);
-            } else {
-                let t = hm::from_parser_data_type(&v.data_type, &mut tg);
-                var_types.insert(k.clone(), t.clone());
-                let scheme = hm::generalize(&FxHashMap::default(), &t);
-                tenv.insert(k.clone(), scheme);
-            }
-        }
-    }
-
-    let mut tenv2 = tenv.clone();
-    match visit(node, env, scope, &mut tg, &mut tenv2, &mut subst) {
-        Ok(t) => {
-            for (_, scheme) in env.hm_env.iter_mut() {
-                let applied = hm::apply_subst(&subst, &scheme.ty);
-                *scheme = TypeScheme::new(scheme.vars.clone(), applied);
-            }
-
-            for (k, v) in env.variables.iter_mut() {
-                if v.data_type.contains_auto() {
-                    if let Some(scheme) = env.hm_env.get(k) {
-                        v.data_type = hm::to_parser_data_type(&scheme.ty, &mut env.type_cache);
-                    }
-                }
-            }
-
-            for (k, orig_t) in var_types.iter() {
-                let applied = hm::apply_subst(&subst, orig_t);
-                if let Some(var) = env.variables.get_mut(k) {
-                    if var.data_type.contains_auto() {
-                        var.data_type = hm::to_parser_data_type(&applied, &mut env.type_cache);
-                    }
-                }
-
-                env.hm_env
-                    .insert(k.clone(), TypeScheme::new(Vec::new(), applied));
-            }
-
-            Some((hm::apply_subst(&subst, &t), subst))
-        }
-        Err(_) => None,
+        _ => Err(format!(
+            "HM inference not implemented for {:?}",
+            node.node_type
+        )),
     }
 }

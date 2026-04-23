@@ -322,7 +322,7 @@ const main := fn => {
 	*/
 	let mut channel : Channel:<int> = Channel.new();
 	
-	use spawn {
+	spawn@ {
 		=> channel.send(41),
 		=> channel.send(42),
 		=> channel.close()

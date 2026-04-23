@@ -11,7 +11,6 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType, hm},
     environment::{MiddleEnvironment, MiddleVariable, get_disamubiguous_name},
     errors::MiddleErr,
-    infer::infer_node_hm,
 };
 
 impl MiddleEnvironment {
@@ -683,9 +682,9 @@ impl MiddleEnvironment {
             }
         }
 
-        if let Some((hm_t, subst)) = infer_node_hm(self, &new_scope, &ast_node) {
+        if let Some((hm_t, subst)) = self.infer_hm_type_for_node(&new_scope, &ast_node) {
             let t_applied = hm::apply_subst(&subst, &hm_t);
-            let parser_ty = hm::to_parser_data_type(&t_applied, &mut self.type_cache);
+            let parser_ty = self.typing.parser_type(&t_applied);
 
             if let MiddleNodeType::FunctionDeclaration {
                 parameters: ref mut params2,

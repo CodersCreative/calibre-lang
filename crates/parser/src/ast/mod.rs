@@ -1204,10 +1204,7 @@ pub enum NodeType {
     Null,
     Spawn {
         items: Vec<Node>,
-    },
-    Use {
-        identifiers: Vec<PotentialDollarIdentifier>,
-        value: Box<Node>,
+        auto_wait: bool,
     },
     SelectStatement {
         arms: Vec<SelectArm>,

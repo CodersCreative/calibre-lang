@@ -5,11 +5,7 @@ use crate::{
 };
 use calibre_parser::{
     Span,
-    ast::{
-        CallArg, FunctionHeader, LoopType, NamedScope, Node, NodeType, ParserDataType,
-        ParserInnerType, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        PotentialNewType,
-    },
+    ast::{LoopType, NamedScope, Node, NodeType, PotentialDollarIdentifier},
 };
 
 impl MiddleEnvironment {
@@ -23,130 +19,6 @@ impl MiddleEnvironment {
             }
             _ => false,
         }
-    }
-
-    fn desugar_use_chain(&mut self, mut stmts: Vec<Node>) -> Vec<Node> {
-        let Some(pos) = stmts
-            .iter()
-            .position(|n| matches!(n.node_type, NodeType::Use { .. }))
-        else {
-            return stmts;
-        };
-
-        let mut prefix = stmts.drain(..pos).collect::<Vec<Node>>();
-        let use_node = stmts.remove(0);
-        let rest = stmts;
-
-        let (identifiers, value) = match use_node.node_type {
-            NodeType::Use { identifiers, value } => (identifiers, *value),
-            other => {
-                prefix.push(Node::new(use_node.span, other));
-                return prefix;
-            }
-        };
-
-        if matches!(value.node_type, NodeType::Spawn { .. }) {
-            let span = use_node.span;
-            let wg_ident = if let Some(first) = identifiers.first() {
-                first.clone()
-            } else {
-                self.temp_ident_at("__use_spawn_wg", span)
-            };
-
-            let wg_decl = Node::new(
-                span,
-                NodeType::VariableDeclaration {
-                    var_type: calibre_parser::ast::VarType::Immutable,
-                    identifier: wg_ident.clone(),
-                    data_type: PotentialNewType::DataType(ParserDataType::new(
-                        span,
-                        ParserInnerType::Auto(None),
-                    )),
-                    value: Box::new(value),
-                },
-            );
-
-            let wg_ident_node = Node::new(
-                span,
-                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                    wg_ident.clone().into(),
-                )),
-            );
-
-            let wait_call = Self::call_member_expr(span, wg_ident_node.clone(), "wait", Vec::new());
-
-            prefix.push(wg_decl);
-            prefix.push(wait_call);
-            prefix.extend(self.desugar_use_chain(rest));
-            return prefix;
-        }
-
-        let rest = if rest.is_empty() {
-            vec![Node::new(use_node.span, NodeType::Null)]
-        } else {
-            self.desugar_use_chain(rest)
-        };
-
-        let body = Self::temp_scope(use_node.span, rest, true);
-
-        let params = identifiers
-            .iter()
-            .map(|id| {
-                (
-                    id.clone(),
-                    PotentialNewType::DataType(ParserDataType::new(
-                        use_node.span,
-                        ParserInnerType::Auto(None),
-                    )),
-                )
-            })
-            .collect();
-
-        let header = FunctionHeader {
-            generics: calibre_parser::ast::GenericTypes(Vec::new()),
-            parameters: params,
-            return_type: PotentialNewType::DataType(ParserDataType::new(
-                use_node.span,
-                ParserInnerType::Auto(None),
-            )),
-            param_destructures: Vec::new(),
-        };
-
-        let callback = Node::new(
-            use_node.span,
-            NodeType::FunctionDeclaration {
-                header,
-                body: Box::new(body),
-            },
-        );
-
-        let call_node = match value.node_type {
-            NodeType::CallExpression {
-                caller,
-                mut args,
-                reverse_args,
-                string_fn,
-                generic_types,
-            } => {
-                args.push(CallArg::Value(callback));
-                Self::call_expr_full(
-                    use_node.span,
-                    *caller,
-                    generic_types,
-                    args,
-                    reverse_args,
-                    string_fn,
-                )
-            }
-            other => Self::call_expr(
-                use_node.span,
-                Node::new(use_node.span, other),
-                vec![CallArg::Value(callback)],
-            ),
-        };
-
-        prefix.push(call_node);
-        prefix
     }
 
     pub fn evaluate_scope_alias(
@@ -351,7 +223,6 @@ impl MiddleEnvironment {
         }
 
         if let Some(mut body) = body {
-            body = self.desugar_use_chain(body);
             for stmt in body.iter() {
                 if let NodeType::VariableDeclaration {
                     var_type,

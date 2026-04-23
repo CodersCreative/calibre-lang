@@ -355,12 +355,13 @@ impl Formatter {
                 self.format(&value)
             ),
 
-            NodeType::Spawn { items } => {
+            NodeType::Spawn { items, auto_wait } => {
+                let prefix = if *auto_wait { "spawn@" } else { "spawn" };
                 if items.len() == 1 {
-                    return format!("spawn {}", self.format(&items[0]));
+                    return format!("{prefix} {}", self.format(&items[0]));
                 }
 
-                let mut txt = String::from("spawn {");
+                let mut txt = format!("{prefix} {{");
                 if items.is_empty() {
                     txt.push_str("}");
                     return txt;
@@ -376,29 +377,6 @@ impl Formatter {
                 txt = txt.trim_end().trim_end_matches(",").trim_end().to_string();
                 txt.push_str("\n}");
                 txt
-            }
-            NodeType::Use { identifiers, value } => {
-                if identifiers.is_empty() && matches!(value.node_type, NodeType::Spawn { .. }) {
-                    format!("use {}", self.format(value))
-                } else if identifiers.is_empty() {
-                    let rhs = self.format(value);
-                    let single = format!("use <- {}", rhs);
-                    let multi = format!("use <-\n{}", self.fmt_txt_with_tab(&rhs, 1, true));
-                    self.wrap_if_wide(single, &multi)
-                } else {
-                    let mut names = Vec::new();
-                    for ident in identifiers {
-                        names.push(ident.to_string());
-                    }
-                    let rhs = self.format(value);
-                    let single = format!("use {} <- {}", names.join(", "), rhs);
-                    let multi = format!(
-                        "use {} <-\n{}",
-                        names.join(", "),
-                        self.fmt_txt_with_tab(&rhs, 1, true)
-                    );
-                    self.wrap_if_wide(single, &multi)
-                }
             }
             NodeType::SelectStatement { arms } => {
                 let mut txt = String::from("select {\n");

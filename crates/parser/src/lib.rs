@@ -181,37 +181,37 @@ impl ParserError {
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum SyntaxErr {
-    #[error("Expected opening bracket, {0:?}.")]
+    #[error("expected opening bracket: {0:?}")]
     ExpectedOpeningBracket(Bracket),
-    #[error("Expected closing bracket, {0:?}.")]
+    #[error("expected closing bracket: {0:?}")]
     ExpectedClosingBracket(Bracket),
-    #[error("Expected token, {0}.")]
+    #[error("{0}")]
     ExpectedToken(String),
-    #[error("Expected identifier.")]
+    #[error("expected identifier")]
     ExpectedIdentifier,
-    #[error("Expected name.")]
+    #[error("expected name")]
     ExpectedName,
-    #[error("Expected token.")]
+    #[error("unexpected token")]
     UnexpectedToken,
-    #[error("Invalid literal: {0}.")]
+    #[error("invalid literal: {0}")]
     InvalidLiteral(String),
-    #[error("Expected {0} keyword.")]
+    #[error("expected keyword: {0}")]
     ExpectedKeyword(String),
-    #[error("Expected key.")]
+    #[error("expected key")]
     ExpectedKey,
-    #[error("Expected data type.")]
+    #[error("expected data type")]
     ExpectedType,
-    #[error("Expected only functions.")]
+    #[error("expected only function declarations")]
     ExpectedFunctions,
-    #[error("Cant use while loop with iterators syntax.")]
+    #[error("cannot use while-loop syntax with iterator syntax")]
     UnexpectedWhileLoop,
-    #[error("Unexpectedly found EOF")]
+    #[error("unexpected end of file")]
     UnexpectedEOF,
-    #[error("Constants cannot be null.")]
+    #[error("constant cannot be null")]
     NullConstant,
-    #[error("Cannot use self outside of an implementation block.")]
+    #[error("cannot use self outside an impl block")]
     This,
-    #[error("Expected character, '{0:?}'.")]
+    #[error("expected character: '{0:?}'")]
     ExpectedChar(char),
 }
 

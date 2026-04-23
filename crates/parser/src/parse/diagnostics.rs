@@ -34,7 +34,7 @@ pub(super) fn to_parser_errors(
                     .unwrap_or_else(|| "EOF".to_string());
 
                 if expected.is_empty() {
-                    SyntaxErr::ExpectedToken(format!("unexpected token {found}"))
+                    SyntaxErr::ExpectedToken(format!("unexpected token: found {found}"))
                 } else {
                     SyntaxErr::ExpectedToken(format!(
                         "expected one of {}, found {}",

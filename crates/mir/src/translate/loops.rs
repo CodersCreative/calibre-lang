@@ -415,6 +415,7 @@ impl MiddleEnvironment {
                             spawned_loop_items,
                             true,
                         )],
+                        auto_wait: false,
                     },
                 ))],
             );
@@ -718,6 +719,7 @@ impl MiddleEnvironment {
                         self.current_span(),
                         NodeType::Spawn {
                             items: vec![loop_node],
+                            auto_wait: false,
                         },
                     )),
                 },
