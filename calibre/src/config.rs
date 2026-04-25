@@ -100,6 +100,7 @@ pub fn find_manifest_from(start: &Path) -> Option<PathBuf> {
     } else {
         start.parent()?.to_path_buf()
     };
+
     loop {
         let calibre_candidate = cur.join("calibre.toml");
         if calibre_candidate.exists() {
@@ -115,14 +116,18 @@ pub fn load_project_from(start: &Path) -> Result<Option<ProjectContext>, String>
     let Some(manifest_path) = find_manifest_from(start) else {
         return Ok(None);
     };
-    let txt = fs::read_to_string(&manifest_path)
-        .map_err(|e| format!("failed to read {:?}: {e}", manifest_path))?;
-    let config: Config =
-        toml::from_str(&txt).map_err(|e| format!("failed to parse {:?}: {e}", manifest_path))?;
+
+    let config: Config = toml::from_str(
+        &fs::read_to_string(&manifest_path)
+            .map_err(|e| format!("failed to read {:?}: {e}", manifest_path))?,
+    )
+    .map_err(|e| format!("failed to parse {:?}: {e}", manifest_path))?;
+
     let root = manifest_path
         .parent()
         .map(Path::to_path_buf)
         .ok_or_else(|| "manifest parent is missing".to_string())?;
+
     Ok(Some(ProjectContext {
         root,
         manifest_path,
@@ -134,9 +139,11 @@ fn collect_cal_files(dir: &Path, out: &mut Vec<PathBuf>) {
     if !dir.exists() {
         return;
     }
+
     let Ok(rd) = fs::read_dir(dir) else {
         return;
     };
+
     for entry in rd.flatten() {
         let p = entry.path();
         if p.is_dir() {
@@ -158,6 +165,7 @@ fn auto_example_name(path: &Path) -> String {
         .file_name()
         .and_then(|x| x.to_str())
         .unwrap_or_default();
+
     if file_name == "main.cal" {
         path.parent()
             .and_then(|x| x.file_name())
@@ -182,6 +190,7 @@ pub fn resolve_examples(ctx: &ProjectContext) -> Vec<ResolvedExample> {
 
     let mut auto_paths = Vec::<PathBuf>::new();
     let mut symbolic_members = Vec::<String>::new();
+
     if let Some(ex_cfg) = &ctx.config.examples {
         for member in &ex_cfg.members {
             let has_glob = member.contains('*') || member.contains('?') || member.contains('[');
@@ -200,6 +209,7 @@ pub fn resolve_examples(ctx: &ProjectContext) -> Vec<ResolvedExample> {
                 }
                 continue;
             }
+
             let p = ctx.root.join(member);
             if p.is_file() {
                 auto_paths.push(p);
@@ -218,6 +228,7 @@ pub fn resolve_examples(ctx: &ProjectContext) -> Vec<ResolvedExample> {
 
     let mut generated = Vec::<ResolvedExample>::new();
     let mut counters = HashMap::<String, usize>::new();
+
     for p in auto_paths {
         let mut base = auto_example_name(&p);
         if let Some(n) = counters.get_mut(&base) {
@@ -226,6 +237,7 @@ pub fn resolve_examples(ctx: &ProjectContext) -> Vec<ResolvedExample> {
         } else {
             counters.insert(base.clone(), 0);
         }
+
         generated.push(ResolvedExample {
             name: base,
             path: p,
@@ -235,6 +247,7 @@ pub fn resolve_examples(ctx: &ProjectContext) -> Vec<ResolvedExample> {
     if !symbolic_members.is_empty() {
         let mut fallback = Vec::new();
         collect_cal_files(&ctx.root.join("examples"), &mut fallback);
+
         for p in fallback {
             let n = auto_example_name(&p);
             if symbolic_members.iter().any(|m| m == &n) {

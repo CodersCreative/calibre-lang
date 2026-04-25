@@ -15,17 +15,20 @@ use calibre_vm::{
 };
 use glob::glob;
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::fs::{self, File};
 use std::{
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
     sync::Arc,
 };
+use thiserror::Error;
 
 pub mod config;
 
 type NativeFnCallback =
     dyn Fn(&mut VM, Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> + Send + Sync;
+
+const CACHE_FORMAT_VERSION: &str = "v6";
 
 #[derive(Clone)]
 struct ClosureNative {
@@ -43,45 +46,30 @@ impl NativeFunction for ClosureNative {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum CalibreError {
-    Io(std::io::Error),
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+    #[error("parse failed ({errors.len()})")]
     Parse {
         path: PathBuf,
         source: String,
         errors: Vec<ParserError>,
     },
+    #[error("compile failed : {error}")]
     Middle {
         path: PathBuf,
         source: String,
         error: MiddleErr,
     },
+    #[error("runtime failed : {error}")]
     Runtime {
         path: PathBuf,
         source: String,
         error: RuntimeError,
     },
+    #[error("missing entry point : {name}")]
     MissingEntryPoint(String),
-}
-
-impl Display for CalibreError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Io(e) => write!(f, "{e}"),
-            Self::Parse { errors, .. } => write!(f, "parse failed ({})", errors.len()),
-            Self::Middle { error, .. } => write!(f, "compile failed: {error}"),
-            Self::Runtime { error, .. } => write!(f, "runtime failed: {error}"),
-            Self::MissingEntryPoint(name) => write!(f, "missing entry point: {name}"),
-        }
-    }
-}
-
-impl std::error::Error for CalibreError {}
-
-impl From<std::io::Error> for CalibreError {
-    fn from(value: std::io::Error) -> Self {
-        Self::Io(value)
-    }
 }
 
 #[derive(Clone)]
@@ -133,6 +121,13 @@ pub struct CalibreEngine {
     compile_mode: CompileMode,
     cache_enabled: bool,
     cache_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CachedProgramBlob {
+    entry_name: String,
+    mappings: Vec<String>,
+    registry: VMRegistry,
 }
 
 impl Default for CalibreEngine {
@@ -247,6 +242,7 @@ impl CalibreEngine {
 
         let mut parser = Parser::default();
         parser.set_source_path(Some(path.clone()));
+
         let ast = parser.produce_ast(&full_source);
         if !parser.errors.is_empty() {
             return Err(CalibreError::Parse {
@@ -255,17 +251,16 @@ impl CalibreEngine {
                 errors: parser.errors,
             });
         }
-        let ast = filter_ast_for_mode(ast, self.compile_mode);
-        let ast_for_artifacts = ast.clone();
 
+        let ast = filter_ast_for_mode(ast, self.compile_mode);
         let (mut env, scope, mut mir) = if let Some(metadata) = &self.package_metadata {
             MiddleEnvironment::new_and_evaluate_with_package(
-                ast,
+                ast.clone(),
                 path.clone(),
                 Some(metadata.clone()),
             )
         } else {
-            MiddleEnvironment::new_and_evaluate(ast, path.clone())
+            MiddleEnvironment::new_and_evaluate(ast.clone(), path.clone())
         };
 
         let mir_errors = env.take_errors();
@@ -279,21 +274,15 @@ impl CalibreEngine {
 
         calibre_mir::inline::inline_small_calls(&mut mir, 20);
 
-        let resolved_entry = env
-            .resolve_str(&scope, &self.entry_name)
-            .map(|x| x.to_string())
-            .unwrap_or_else(|| self.entry_name.clone());
-
-        let lir = LirEnvironment::lower(&env, mir.clone());
-        let mappings: Vec<String> = env.variables.keys().cloned().collect();
-        let registry = VMRegistry::from(lir);
-
         Ok(CalibreArtifacts {
-            ast: Some(ast_for_artifacts),
-            mir: Some(mir),
-            registry,
-            mappings,
-            entry_name: resolved_entry,
+            ast: Some(ast),
+            mir: Some(mir.clone()),
+            mappings: env.variables.keys().cloned().collect(),
+            registry: VMRegistry::from(LirEnvironment::lower(&env, mir)),
+            entry_name: env
+                .resolve_str(&scope, &self.entry_name)
+                .map(|x| x.to_string())
+                .unwrap_or_else(|| self.entry_name.clone()),
         })
     }
 
@@ -349,35 +338,29 @@ impl CalibreEngine {
             ));
         };
 
-        let return_value =
-            vm.run(main.as_ref(), Vec::new())
-                .map_err(|error| CalibreError::Runtime {
+        Ok(RunResult {
+            artifacts,
+            return_value: vm.run(main.as_ref(), Vec::new()).map_err(|error| {
+                CalibreError::Runtime {
                     path,
                     source: full_source,
                     error,
-                })?;
-
-        Ok(RunResult {
-            artifacts,
-            return_value,
+                }
+            })?,
             vm,
         })
     }
 
-    pub fn compile_file(&self, path: impl AsRef<Path>) -> Result<CalibreArtifacts, CalibreError> {
+    pub fn compile_file(self, path: impl AsRef<Path>) -> Result<CalibreArtifacts, CalibreError> {
         let path = path.as_ref();
-        let source = std::fs::read_to_string(path)?;
-        self.clone()
-            .with_source_path(path.to_path_buf())
-            .compile_source(source)
+        self.with_source_path(path.to_path_buf())
+            .compile_source(fs::read_to_string(path)?)
     }
 
-    pub fn run_file(&self, path: impl AsRef<Path>) -> Result<RunResult, CalibreError> {
+    pub fn run_file(self, path: impl AsRef<Path>) -> Result<RunResult, CalibreError> {
         let path = path.as_ref();
-        let source = std::fs::read_to_string(path)?;
-        self.clone()
-            .with_source_path(path.to_path_buf())
-            .run_source(source)
+        self.with_source_path(path.to_path_buf())
+            .run_source(fs::read_to_string(path)?)
     }
 
     fn compose_source(&self, source: &str) -> String {
@@ -403,9 +386,10 @@ impl CalibreEngine {
     }
 
     fn stdlib_cache_tag() -> String {
-        let mut hasher = blake3::Hasher::new();
         let stdlib = get_stdlib_path();
         let globals = get_globals_path();
+
+        let mut hasher = blake3::Hasher::new();
         let mut files: Vec<PathBuf> = Vec::new();
 
         files.push(stdlib.clone());
@@ -417,7 +401,6 @@ impl CalibreEngine {
             .unwrap_or(stdlib.clone());
 
         let pattern = format!("{}/**/*.cal", stdlib.to_string_lossy());
-
         if let Ok(paths) = glob(&pattern) {
             for entry in paths.flatten() {
                 files.push(entry);
@@ -442,6 +425,7 @@ impl CalibreEngine {
             .as_ref()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
+
         let package = self
             .package_metadata
             .as_ref()
@@ -459,30 +443,34 @@ impl CalibreEngine {
                 )
             })
             .unwrap_or_default();
-        let stdlib = Self::stdlib_cache_tag();
-        let material = format!(
-            "{}:{}:{}:{}:{}:{}:{}:{}",
-            CACHE_FORMAT_VERSION,
-            env!("CARGO_PKG_VERSION"),
-            self.compile_mode.cache_tag(),
-            self.entry_name,
-            path,
-            package,
-            stdlib,
-            full_source
-        );
-        blake3::hash(material.as_bytes())
+
+        blake3::hash(
+            format!(
+                "{}:{}:{}:{}:{}:{}:{}:{}",
+                CACHE_FORMAT_VERSION,
+                env!("CARGO_PKG_VERSION"),
+                self.compile_mode.cache_tag(),
+                self.entry_name,
+                path,
+                package,
+                Self::stdlib_cache_tag(),
+                full_source
+            )
+            .as_bytes(),
+        )
     }
 
     fn cache_root(&self) -> Option<PathBuf> {
         if let Some(path) = &self.cache_dir {
             return Some(path.clone());
         }
+
         if let Some(path) = &self.source_path
             && let Ok(Some(project)) = crate::config::load_project_from(path)
         {
             return Some(project.root.join("target").join("calibre"));
         }
+
         let cwd = std::env::current_dir().ok()?;
         Some(cwd.join("target").join("calibre"))
     }
@@ -494,20 +482,23 @@ impl CalibreEngine {
         let Some(root) = self.cache_root() else {
             return Ok(None);
         };
+
         let key = self.cache_key(full_source);
         let path = root
             .join(env!("CARGO_PKG_VERSION"))
             .join(format!("{}.bin", key.to_hex()));
-        let file = match std::fs::File::open(&path) {
+
+        let file = match File::open(&path) {
             Ok(file) => file,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(err) => return Err(CalibreError::Io(err)),
         };
+
         let mut reader = std::io::BufReader::new(file);
         match bincode::deserialize_from::<_, CachedProgramBlob>(&mut reader) {
             Ok(cache) => Ok(Some(cache)),
             Err(_) => {
-                let _ = std::fs::remove_file(path);
+                let _ = fs::remove_file(path);
                 Ok(None)
             }
         }
@@ -521,17 +512,20 @@ impl CalibreEngine {
         let Some(root) = self.cache_root() else {
             return Ok(());
         };
+
         let key = self.cache_key(full_source);
         let dir = root.join(env!("CARGO_PKG_VERSION"));
-        std::fs::create_dir_all(&dir)?;
+        fs::create_dir_all(&dir)?;
         let path = dir.join(format!("{}.bin", key.to_hex()));
-        let file = std::fs::File::create(path)?;
+        let file = File::create(path)?;
+
         let mut writer = std::io::BufWriter::new(file);
         let cache = CachedProgramBlob {
             entry_name: artifacts.entry_name.clone(),
             mappings: artifacts.mappings.clone(),
             registry: artifacts.registry.clone(),
         };
+
         bincode::serialize_into(&mut writer, &cache)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
             .map_err(CalibreError::Io)?;
@@ -552,6 +546,7 @@ impl CompileMode {
 fn should_keep_hidden_decl(name: &str, mode: CompileMode) -> bool {
     let is_test = name.starts_with("__test__");
     let is_bench = name.starts_with("__bench__");
+
     match mode {
         CompileMode::Run => !is_test && !is_bench,
         CompileMode::Test => !is_bench,
@@ -560,8 +555,7 @@ fn should_keep_hidden_decl(name: &str, mode: CompileMode) -> bool {
 }
 
 fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
-    fn map_opt(node: Node, mode: CompileMode) -> Option<Node> {
-        let Node { span, node_type } = node;
+    fn map_opt(Node { span, node_type }: Node, mode: CompileMode) -> Option<Node> {
         let node_type = match node_type {
             NodeType::VariableDeclaration {
                 var_type,
@@ -618,19 +612,11 @@ fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
             },
             other => other,
         };
+
         Some(Node::new(span, node_type))
     }
 
     map_opt(node, mode).unwrap_or_else(|| Node::new(Default::default(), NodeType::EmptyLine))
-}
-
-const CACHE_FORMAT_VERSION: &str = "v6";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct CachedProgramBlob {
-    entry_name: String,
-    mappings: Vec<String>,
-    registry: VMRegistry,
 }
 
 fn resolve_binding_name(vm: &VM, short_name: &str) -> String {
@@ -650,16 +636,13 @@ fn resolve_binding_name(vm: &VM, short_name: &str) -> String {
         })
         .collect();
 
-    if candidates.is_empty() {
-        return short_name.to_string();
-    }
-
-    candidates.sort_unstable();
     if let Some(scope_zero) = candidates.iter().find(|name| name.starts_with("var-0-")) {
         return (*scope_zero).to_string();
     }
+
     if candidates.len() == 1 {
         return candidates[0].to_string();
     }
+
     short_name.to_string()
 }

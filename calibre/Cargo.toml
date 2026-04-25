@@ -27,3 +27,4 @@ calibre-vm = { workspace = true }
 calibre-std = { workspace = true }
 toml = "1.0.1"
 glob = "0.3.1"
+thiserror.workspace = true

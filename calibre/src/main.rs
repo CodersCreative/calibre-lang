@@ -62,49 +62,50 @@ async fn run_source(
         .with_source_path(path.to_path_buf())
         .with_compile_mode(CompileMode::Run)
         .with_cache_enabled(cache);
+
     if let Some(dir) = cache_base_dir {
         engine = engine.with_cache_dir(dir.join("target").join("calibre"));
     }
+
     if let Some(metadata) = package_metadata {
         engine = engine.with_package_metadata(metadata);
     }
+
     if let Some(name) = entry_name {
         engine = engine.with_entry_name(name);
     }
 
-    let wants_full_ir = verbosity.is_level(&Verbosity::AST) || verbosity.is_level(&Verbosity::MIR);
-
-    let mut artifacts = match if wants_full_ir {
-        engine.compile_source(contents.clone())
-    } else {
-        engine.compile_cached_program_source(contents.clone())
-    } {
-        Ok(artifacts) => artifacts,
-        Err(CalibreError::Parse { errors, .. }) => {
-            calibre_diagnostics::emit_parser_errors(path, &contents, &errors);
-            return Err("parse failed".into());
-        }
-        Err(CalibreError::Middle { error, .. }) => {
-            emit_middle_error(path, &contents, &error);
-            return Err("compile failed".into());
-        }
-        Err(CalibreError::MissingEntryPoint(name)) => {
-            calibre_diagnostics::emit_error(
-                path,
-                &contents,
-                format!("Missing entry point: {name}"),
-                None,
-            );
-            return Err("runtime error".into());
-        }
-        Err(other) => return Err(other.to_string().into()),
-    };
+    let mut artifacts =
+        match if verbosity.is_level(&Verbosity::AST) || verbosity.is_level(&Verbosity::MIR) {
+            engine.compile_source(contents.clone())
+        } else {
+            engine.compile_cached_program_source(contents.clone())
+        } {
+            Ok(artifacts) => artifacts,
+            Err(CalibreError::Parse { errors, .. }) => {
+                calibre_diagnostics::emit_parser_errors(path, &contents, &errors);
+                return Err("parse failed".into());
+            }
+            Err(CalibreError::Middle { error, .. }) => {
+                emit_middle_error(path, &contents, &error);
+                return Err("compile failed".into());
+            }
+            Err(CalibreError::MissingEntryPoint(name)) => {
+                calibre_diagnostics::emit_error(
+                    path,
+                    &contents,
+                    format!("Missing entry point: {name}"),
+                    None,
+                );
+                return Err("runtime error".into());
+            }
+            Err(other) => return Err(other.to_string().into()),
+        };
 
     if verbosity.is_level(&Verbosity::AST) {
         println!("Parser - elapsed {}ms:", start.elapsed().as_millis());
         if let Some(ast) = &artifacts.ast {
-            println!("{}", ast);
-            println!("Starting mir...");
+            println!("{}\nStarting mir...", ast);
         } else {
             println!("<AST unavailable: loaded from cache>");
         }
@@ -310,35 +311,39 @@ async fn run_suite(
     } else if let Some(target) = resolve_run_target(path, example)? {
         files.push(target);
     }
+
     files.sort();
     files.dedup();
 
     let mut out = Vec::new();
-    let suite_mode = match prefix {
-        "__test__" => CompileMode::Test,
-        "__bench__" => CompileMode::Bench,
-        _ => CompileMode::Run,
-    };
 
     for path in files {
         let contents = fs::read_to_string(&path).await?;
         if !has_suite_decl(&contents, prefix) {
             continue;
         }
+
         if !wanted.is_empty() {
             let idents = suite_idents_in_source(&contents, prefix);
             if !idents.iter().any(|ident| wanted.contains(ident)) {
                 continue;
             }
         }
+
         let mut engine = CalibreEngine::new()
             .with_vm_config(vm_config.clone())
             .with_source_path(path.clone())
-            .with_compile_mode(suite_mode)
+            .with_compile_mode(match prefix {
+                "__test__" => CompileMode::Test,
+                "__bench__" => CompileMode::Bench,
+                _ => CompileMode::Run,
+            })
             .with_cache_enabled(!no_cache);
+
         if let Some(metadata) = package_metadata.clone() {
             engine = engine.with_package_metadata(metadata);
         }
+
         if let Some(dir) = cache_base_dir.clone() {
             engine = engine.with_cache_dir(dir.join("target").join("calibre"));
         }
@@ -421,7 +426,7 @@ fn run_named_function_once(
 }
 
 fn fmt_ms(d: std::time::Duration) -> String {
-    format!("{:.3}", d.as_secs_f64() * 1000.0)
+    fmt_ms_f64(d.as_secs_f64() * 1000.0)
 }
 
 fn fmt_ms_f64(ms: f64) -> String {
