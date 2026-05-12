@@ -27,7 +27,7 @@ const main := fn => {
 	let worker_count := 8;
 	let total_jobs := 100000;
 	let wg := spawn for i in 0..worker_count => {
-		worker(i, &jobs, &mut results, &mut total);
+		worker(i, jobs.&, results.&mut, total.&mut);
 		print("spawned worker " & i & "\n");
 	};
 	

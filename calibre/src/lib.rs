@@ -17,7 +17,6 @@ use glob::glob;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::{
-    fmt::{Display, Formatter},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -50,25 +49,25 @@ impl NativeFunction for ClosureNative {
 pub enum CalibreError {
     #[error("{0}")]
     Io(#[from] std::io::Error),
-    #[error("parse failed ({errors.len()})")]
+    #[error("parse failed ({})", errors.len())]
     Parse {
         path: PathBuf,
-        source: String,
+        contents: String,
         errors: Vec<ParserError>,
     },
     #[error("compile failed : {error}")]
     Middle {
         path: PathBuf,
-        source: String,
+        contents: String,
         error: MiddleErr,
     },
     #[error("runtime failed : {error}")]
     Runtime {
         path: PathBuf,
-        source: String,
+        contents: String,
         error: RuntimeError,
     },
-    #[error("missing entry point : {name}")]
+    #[error("missing entry point : {0}")]
     MissingEntryPoint(String),
 }
 
@@ -247,7 +246,7 @@ impl CalibreEngine {
         if !parser.errors.is_empty() {
             return Err(CalibreError::Parse {
                 path,
-                source: full_source,
+                contents: full_source,
                 errors: parser.errors,
             });
         }
@@ -267,7 +266,7 @@ impl CalibreEngine {
         if !mir_errors.is_empty() {
             return Err(CalibreError::Middle {
                 path,
-                source: full_source,
+                contents: full_source,
                 error: MiddleErr::Multiple(mir_errors),
             });
         }
@@ -343,7 +342,7 @@ impl CalibreEngine {
             return_value: vm.run(main.as_ref(), Vec::new()).map_err(|error| {
                 CalibreError::Runtime {
                     path,
-                    source: full_source,
+                    contents: full_source,
                     error,
                 }
             })?,
@@ -620,7 +619,7 @@ fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
 }
 
 fn resolve_binding_name(vm: &VM, short_name: &str) -> String {
-    let mut candidates: Vec<&str> = vm
+    let candidates: Vec<&str> = vm
         .mappings
         .iter()
         .filter_map(|full| {

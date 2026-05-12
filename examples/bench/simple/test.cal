@@ -8,7 +8,7 @@ impl ThingEnum {
 	const age := 90;
 
 	const name := fn match &ThingEnum -> str {
-		.Person | .Animal | .Object : thing => *thing.name,
+		.Person | .Animal | .Object : thing => thing.name.*,
 		_ => "None"
 	};
 };

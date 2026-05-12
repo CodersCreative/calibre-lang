@@ -3,8 +3,8 @@ const sum_refs := fn (n : int) -> int => {
 	let mut acc : int = 0;
 	
 	for i in 0..n => {
-		let x : &int = &xs[i];
-		acc += *x;
+		let x : &int = xs[i].&;
+		acc += x.*;
 	};
 	
 	acc;

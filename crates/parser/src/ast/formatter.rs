@@ -564,9 +564,9 @@ impl Formatter {
                 operator,
             } => self.fmt_infix_expr(left, operator, right),
             NodeType::RefStatement { mutability, value } => {
-                mutability.fmt_with_val(&self.format(&*value))
+                format!("{}.{}", self.format(value), mutability)
             }
-            NodeType::DerefStatement { value } => format!("*{}", self.format(&*value)),
+            NodeType::DerefStatement { value } => format!("{}.*", self.format(value)),
             NodeType::ImplDeclaration {
                 generics,
                 target,

@@ -158,7 +158,17 @@ pub fn build_tail_expression_parser<'a>(
         .then_ignore(lex(pad.clone(), just(')')))
         .boxed();
 
+    #[derive(Clone)]
+    enum PostfixSuffix {
+        Member(Node, bool),
+        Ref(RefMutability),
+        Deref,
+    }
+
     let member = choice((
+        lex(pad.clone(), just(".&mut")).to(PostfixSuffix::Ref(RefMutability::MutRef)),
+        lex(pad.clone(), just(".&")).to(PostfixSuffix::Ref(RefMutability::Ref)),
+        lex(pad.clone(), just(".*")).to(PostfixSuffix::Deref),
         lex(pad.clone(), just('.'))
             .ignore_then(choice((
                 ident.clone().map(|(n, sp)| ident_node(sp, &n)),
@@ -169,12 +179,12 @@ pub fn build_tail_expression_parser<'a>(
                 let node = calls.into_iter().fold(m, |c, args| {
                     call_node(c.span, c, None, args, Vec::new(), Vec::new())
                 });
-                (node, false)
+                PostfixSuffix::Member(node, false)
             }),
         lex(pad.clone(), just('['))
             .ignore_then(expr.clone())
             .then_ignore(lex(pad.clone(), just(']')))
-            .map(|e| (e, true)),
+            .map(|e| PostfixSuffix::Member(e, true)),
     ))
     .boxed();
 
@@ -198,21 +208,58 @@ pub fn build_tail_expression_parser<'a>(
             })
     };
 
+    let apply_postfix_suffixes = |head: Node, rest: Vec<PostfixSuffix>| {
+        let mut current = head;
+        let mut pending_members = Vec::new();
+
+        let flush_members = |current: Node, pending_members: &mut Vec<(Node, bool)>| {
+            if pending_members.is_empty() {
+                current
+            } else {
+                let members = std::mem::take(pending_members);
+                let (head, rest) = normalize_scope_member_chain(current, members);
+                if rest.is_empty() {
+                    head
+                } else {
+                    member_node_from_head_and_tail(head, rest)
+                }
+            }
+        };
+
+        for suffix in rest {
+            match suffix {
+                PostfixSuffix::Member(node, is_index) => pending_members.push((node, is_index)),
+                PostfixSuffix::Ref(mutability) => {
+                    current = flush_members(current, &mut pending_members);
+                    current = Node::new(
+                        current.span,
+                        NodeType::RefStatement {
+                            mutability,
+                            value: Box::new(current),
+                        },
+                    );
+                }
+                PostfixSuffix::Deref => {
+                    current = flush_members(current, &mut pending_members);
+                    current = Node::new(
+                        current.span,
+                        NodeType::DerefStatement {
+                            value: Box::new(current),
+                        },
+                    );
+                }
+            }
+        }
+
+        flush_members(current, &mut pending_members)
+    };
+
     let postfix = atom
+        .clone()
         .then(call_suffix.clone().repeated().collect::<Vec<_>>())
         .map(move |(head, calls)| apply_calls(head, calls))
         .then(member.clone().repeated().collect::<Vec<_>>())
-        .map(|(head, rest)| {
-            if rest.is_empty() {
-                head
-            } else {
-                let (head, rest) = normalize_scope_member_chain(head, rest);
-                if rest.is_empty() {
-                    return head;
-                }
-                member_node_from_head_and_tail(head, rest)
-            }
-        })
+        .map(move |(head, rest)| apply_postfix_suffixes(head, rest))
         .boxed();
 
     let fn_standard_postfix = fn_standard_expr
@@ -295,7 +342,7 @@ pub fn build_tail_expression_parser<'a>(
                 } else {
                     Node::new(sp, NodeType::ListLiteral(data_type, values.1))
                 };
-                member_node_from_head_and_tail(list, tails)
+                apply_postfix_suffixes(list, tails)
             }
         })
         .boxed();
@@ -356,38 +403,12 @@ pub fn build_tail_expression_parser<'a>(
         })
         .boxed();
 
-    #[derive(Clone)]
-    enum PrefixOp {
-        Ref(RefMutability),
-        Deref,
-    }
-
-    let prefixed = choice((
-        lex(pad.clone(), just("&mut")).to(PrefixOp::Ref(RefMutability::MutRef)),
-        lex(pad.clone(), just('&')).to(PrefixOp::Ref(RefMutability::Ref)),
-        lex(pad.clone(), just('*')).to(PrefixOp::Deref),
-    ))
-    .repeated()
-    .collect::<Vec<_>>()
-    .then(choice((enum_with_payload, postfix.clone())))
-    .map(|(prefixes, node)| {
-        prefixes.into_iter().rev().fold(node, |value, op| match op {
-            PrefixOp::Ref(mutability) => Node::new(
-                value.span,
-                NodeType::RefStatement {
-                    mutability,
-                    value: Box::new(value),
-                },
-            ),
-            PrefixOp::Deref => Node::new(
-                value.span,
-                NodeType::DerefStatement {
-                    value: Box::new(value),
-                },
-            ),
-        })
-    })
-    .boxed();
+    let prefixed = choice((enum_with_payload, atom.clone()))
+        .then(call_suffix.clone().repeated().collect::<Vec<_>>())
+        .map(move |(head, calls)| apply_calls(head, calls))
+        .then(member.clone().repeated().collect::<Vec<_>>())
+        .map(move |(head, rest)| apply_postfix_suffixes(head, rest))
+        .boxed();
 
     let unary = choice((
         lex(pad.clone(), just('-')).to(BinaryOperator::Sub),
@@ -812,7 +833,7 @@ pub fn build_tail_expression_parser<'a>(
     let fn_inline_postfix = fn_inline_gen_expr
         .clone()
         .then(member.clone().repeated().collect::<Vec<_>>())
-        .map(|(head, rest)| member_node_from_head_and_tail(head, rest))
+        .map(move |(head, rest)| apply_postfix_suffixes(head, rest))
         .boxed();
 
     let try_expr = lex(pad.clone(), just("try"))

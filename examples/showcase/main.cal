@@ -155,8 +155,8 @@ const main := fn => {
 	*/
 	let mut lst : list:<int> = [n ** 2 for n in 0..20 if n % 2 = 0 if n % 4 != 0];
 	
-	for n in &mut lst => {
-		*n *= 2;
+	for n in lst.&mut => {
+		n.* *= 2;
 	} until n > 16;
 	
 	print("list comp => " & lst);
@@ -186,13 +186,13 @@ const main := fn => {
 	
 	// Examples of mutable references and capturing
 	fn => {
-		let maybe_mut := &mut maybe;
-		*maybe_mut += 1;
+		let maybe_mut := maybe.&mut;
+		maybe_mut.* += 1;
 	}();
 	
 	=> {
-		let maybe_mut := &mut maybe;
-		*maybe_mut += 1;
+		let maybe_mut := maybe.&mut;
+		maybe_mut.* += 1;
 	};
 	
 	print("option map/unwrap_or => " & maybe);

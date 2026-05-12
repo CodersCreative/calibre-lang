@@ -5,7 +5,7 @@ const sum_pairs := fn (n : int) -> int => {
 	let mut acc : int = 0;
 	
 	for i in 0..n => {
-		let p : &Pair = &pairs[i];
+		let p : &Pair = pairs[i].&;
 		acc += p.a + p.b;
 	};
 	
