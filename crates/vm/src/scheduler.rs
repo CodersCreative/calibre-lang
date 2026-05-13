@@ -46,6 +46,7 @@ impl SchedulerHandle {
     pub fn new(config: &VMConfig) -> Self {
         let max_per_thread = config.async_max_per_thread.unwrap_or(1);
         let quantum = config.async_quantum.unwrap_or(1024);
+
         let inner = Arc::new(SchedulerInner {
             max_per_thread,
             quantum,
@@ -53,6 +54,7 @@ impl SchedulerHandle {
             handles: Mutex::new(Vec::new()),
             shutdown: AtomicBool::new(false),
         });
+
         let worker_count = std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(2);
@@ -80,10 +82,12 @@ impl SchedulerHandle {
         if self.inner.shutdown.load(Ordering::Acquire) {
             return;
         }
+
         let worker = {
             let mut workers = self.inner.workers.lock().unwrap_or_else(|e| e.into_inner());
             let mut selected = None;
             let mut best_load = usize::MAX;
+
             for candidate in workers.iter() {
                 let load = candidate.tasks.load(Ordering::Acquire);
                 if load < self.inner.max_per_thread && load < best_load {
@@ -91,6 +95,7 @@ impl SchedulerHandle {
                     selected = Some(candidate.clone());
                 }
             }
+
             if selected.is_none() {
                 let worker = Arc::new(Worker {
                     queue: Mutex::new(VecDeque::new()),
@@ -104,6 +109,7 @@ impl SchedulerHandle {
                 workers.push(worker.clone());
                 selected = Some(worker);
             }
+
             if let Some(selected) = selected {
                 selected
             } else {
@@ -116,15 +122,14 @@ impl SchedulerHandle {
             base_vm.mappings.clone(),
             base_vm.config.clone(),
         );
-        let mut vars = base_vm.variables.clone();
-        let slot_len = vars.slot_len();
-        for id in 0..slot_len {
-            if let Some(value) = vars.get_by_id(id).cloned() {
+
+        for id in 0..vm.variables.slot_len() {
+            if let Some(value) = vm.variables.get_by_id(id).cloned() {
                 let resolved = base_vm.convert_runtime_var_into_saveable(value);
-                let _ = vars.set_by_id(id, resolved);
+                let _ = vm.variables.set_by_id(id, resolved);
             }
         }
-        vm.variables = vars;
+
         vm.ptr_heap = base_vm.ptr_heap.clone();
         vm.moved_functions = Default::default();
 
@@ -174,11 +179,14 @@ impl SchedulerHandle {
 
     fn stop_workers(&self) {
         self.inner.shutdown.store(true, Ordering::Release);
+
         let workers = self.inner.workers.lock().unwrap_or_else(|e| e.into_inner());
         for worker in workers.iter() {
             worker.cvar.notify_all();
         }
+
         drop(workers);
+
         let mut handles = self.inner.handles.lock().unwrap_or_else(|e| e.into_inner());
         for handle in handles.drain(..) {
             let _ = handle.join();
@@ -212,7 +220,9 @@ fn run_task_slice(task: &mut Task, quantum: usize) -> Option<TaskStatus> {
             let Some(func) = task.vm.resolve_function_by_name(name) else {
                 return Some(TaskStatus::Finished);
             };
+
             let mut state = task.vm.take_task_state();
+
             let status = task.vm.run_function_with_budget(
                 func.as_ref(),
                 Vec::new(),
@@ -220,7 +230,9 @@ fn run_task_slice(task: &mut Task, quantum: usize) -> Option<TaskStatus> {
                 quantum,
                 &mut state,
             );
+
             task.vm.store_task_state(state);
+
             match status {
                 Ok(Some(_)) => TaskStatus::Finished,
                 Ok(None) => TaskStatus::Yielded,

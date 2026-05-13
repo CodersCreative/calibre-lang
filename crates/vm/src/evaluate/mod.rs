@@ -526,23 +526,31 @@ impl VM {
                     prev_vars.push((key.to_string(), CaptureRestore::Keep));
                     return;
                 }
+
                 let old = self.variables.get(key).cloned();
+
                 if let RuntimeValue::VarRef(id) = value {
                     self.variables.bind_alias(key, *id);
-                    if old.is_some() {
-                        prev_vars.push((key.to_string(), CaptureRestore::Value(old)));
-                    } else {
-                        prev_vars.push((key.to_string(), CaptureRestore::AliasOnly));
-                    }
+                    prev_vars.push((
+                        key.to_string(),
+                        if old.is_some() {
+                            CaptureRestore::Value(old)
+                        } else {
+                            CaptureRestore::AliasOnly
+                        },
+                    ));
                 } else {
-                    let old_insert = self.variables.insert(key, value.clone());
-                    prev_vars.push((key.to_string(), CaptureRestore::Value(old_insert)));
+                    prev_vars.push((
+                        key.to_string(),
+                        CaptureRestore::Value(self.variables.insert(key, value.clone())),
+                    ));
                 }
             };
 
         for (name, value) in captures {
             install_one(name, value, &mut prev_vars);
         }
+
         prev_vars
     }
 
@@ -630,11 +638,9 @@ impl VM {
 
     #[inline]
     fn collect_call_args_vec(&self, args: &[u16]) -> Vec<RuntimeValue> {
-        let mut call_args = Vec::with_capacity(args.len());
-        for reg in args {
-            call_args.push(self.call_arg_from_reg(*reg));
-        }
-        call_args
+        args.into_iter()
+            .map(|reg| self.call_arg_from_reg(*reg))
+            .collect()
     }
 
     #[inline]
@@ -775,7 +781,8 @@ impl VM {
             RuntimeValue::Int(v) => *v,
             _ => return None,
         };
-        let out = match op {
+
+        Some(match op {
             BinaryOperator::Add => RuntimeValue::Int(left.wrapping_add(right)),
             BinaryOperator::Sub => RuntimeValue::Int(left.wrapping_sub(right)),
             BinaryOperator::Mul => RuntimeValue::Int(left.wrapping_mul(right)),
@@ -797,8 +804,7 @@ impl VM {
             BinaryOperator::Shl => RuntimeValue::Int(left.wrapping_shl(right as u32)),
             BinaryOperator::Shr => RuntimeValue::Int(left.wrapping_shr(right as u32)),
             BinaryOperator::Pow => return None,
-        };
-        Some(out)
+        })
     }
 
     #[inline(always)]
@@ -816,27 +822,29 @@ impl VM {
             RuntimeValue::Int(v) => *v,
             _ => return None,
         };
-        let out = match op {
+
+        Some(RuntimeValue::Bool(match op {
             ComparisonOperator::Greater => left > right,
             ComparisonOperator::Lesser => left < right,
             ComparisonOperator::LesserEqual => left <= right,
             ComparisonOperator::GreaterEqual => left >= right,
             ComparisonOperator::Equal => left == right,
             ComparisonOperator::NotEqual => left != right,
-        };
-        Some(RuntimeValue::Bool(out))
+        }))
     }
 
     fn try_resolve_global_runtime_value(&mut self, name: &str) -> Option<(RuntimeValue, String)> {
         if let Some(found) = self.resolve_named_global_runtime_value(name) {
             return Some(found);
         }
+
         if name.contains('.') && !name.contains("::") {
             let normalized = name.replace('.', "::");
             if let Some(found) = self.resolve_named_global_runtime_value(&normalized) {
                 return Some(found);
             }
         }
+
         let short_name = calibre_parser::qualified_name_tail(name);
         if short_name == name {
             if name.contains("::") {
@@ -849,9 +857,11 @@ impl VM {
                         }
                     }
                 }
+
                 if let Some(found) = self.resolve_suffix_global_runtime_value(name) {
                     return Some(found);
                 }
+
                 let base = calibre_parser::qualified_name_base(name);
                 if base != name
                     && let Some(found) = self.resolve_suffix_global_runtime_value(base)
@@ -861,22 +871,27 @@ impl VM {
             }
             return None;
         }
+
         if let Some(found) = self.resolve_named_global_runtime_value(short_name) {
             return Some(found);
         }
+
         let base = calibre_parser::qualified_name_base(short_name);
         if base != short_name
             && let Some(found) = self.resolve_suffix_global_runtime_value(base)
         {
             return Some(found);
         }
+
         let direct = self.resolve_suffix_global_runtime_value(short_name);
         if direct.is_some() {
             return direct;
         }
+
         if let Some((_, member)) = short_name.rsplit_once("::") {
             return self.resolve_suffix_global_runtime_value(member);
         }
+
         None
     }
 
@@ -890,6 +905,7 @@ impl VM {
                 return Some(Arc::clone(cached));
             }
         }
+
         if let Some(cached) = self.caches.call.get(name) {
             let resolved = Arc::clone(cached);
             self.caches.callsite.insert(callsite, Arc::clone(&resolved));
@@ -905,6 +921,7 @@ impl VM {
                 .insert(name.to_string(), Arc::clone(&cached));
             self.caches.callsite.insert(callsite, cached);
         }
+
         found
     }
 
@@ -915,13 +932,16 @@ impl VM {
         if name.contains("::") {
             return None;
         }
+
         let short_name = calibre_parser::qualified_name_tail(name);
         if short_name == name {
             return None;
         }
+
         if let Some(found) = self.move_named_global_runtime_value(short_name) {
             return Some(found);
         }
+
         self.move_suffix_global_runtime_value(short_name)
     }
 
@@ -930,6 +950,7 @@ impl VM {
         if let Some(func) = self.get_function_ref(name) {
             return Some((self.make_runtime_function(func), name.to_string()));
         }
+
         self.variables.get(name).map(|var| {
             (
                 self.resolve_saveable_runtime_value_ref(var),
@@ -969,6 +990,7 @@ impl VM {
             self.moved_functions.insert(func_name);
             return Some(value);
         }
+
         let var_name = self.find_unique_var_by_suffix_cached(short_name)?;
         self.variables
             .remove(&var_name)
@@ -1063,10 +1085,12 @@ impl VM {
 
         let func_ptr = function as *const VMFunction as usize;
         self.push_frame(function.reg_count as usize, func_ptr);
+
         for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
             let arg = self.call_arg_from_frame_reg(caller_frame, arg_reg);
             self.set_reg_value(*reg, arg);
         }
+
         let base = self.local_map_base_for(function);
         let param_names: std::collections::HashSet<&str> =
             function.params.iter().map(|x| x.as_str()).collect();
@@ -1077,7 +1101,9 @@ impl VM {
             })
             .cloned()
             .collect();
+
         let prev_vars = self.install_captures(filtered_captures.as_slice());
+
         let frame = self.current_frame_mut();
         frame.local_map_base = Some(base);
 
@@ -1093,6 +1119,7 @@ impl VM {
         let mut prev_block: Option<BlockId> = None;
         let mut result = RuntimeValue::Null;
         let mut returned = false;
+
         loop {
             match self.run_block(block, prev_block)? {
                 TerminateValue::Jump(target) => {
@@ -1361,6 +1388,7 @@ impl VM {
         let Some(prev) = prev else {
             return Ok(());
         };
+
         for phi in &block.phis {
             let mut selected = None;
             for (pred, reg) in &phi.sources {
@@ -1396,6 +1424,7 @@ impl VM {
         Ok(())
     }
 
+    #[inline]
     pub fn run_block(
         &mut self,
         block: &VMBlock,
