@@ -291,7 +291,7 @@ impl LanguageServer for CalibreLanguageServer {
                     parser.set_source_path(Some(path.clone()));
                     let ast = parser.produce_ast(&text);
                     let (mut env, scope, middle_ast) =
-                        MiddleEnvironment::new_and_evaluate(ast, path);
+                        MiddleEnvironment::new_and_evaluate(ast, path, false);
                     let current_scope =
                         CalibreLanguageServer::find_scope_at_with(&middle_ast, scope, position);
 

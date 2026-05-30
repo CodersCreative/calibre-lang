@@ -1234,10 +1234,15 @@ impl MiddleEnvironment {
         node: Node,
         path: PathBuf,
         package_metadata: Option<PackageMetadata>,
+        no_std: bool,
     ) -> (Self, u64, MiddleNode) {
         let mut env = Self::default();
         env.package_metadata = package_metadata;
-        let scope = env.new_scope_with_stdlib(None, path, None);
+        let scope = if no_std {
+            env.new_root_scope_no_std(None, path, None)
+        } else {
+            env.new_root_scope_with_std(None, path, None)
+        };
         let mut same = 0;
         let wrap = |env: &MiddleEnvironment, scope: u64, span: Span, inner: MiddleNode| {
             if env.stdlib_nodes.is_empty() {
@@ -1303,30 +1308,30 @@ impl MiddleEnvironment {
         env.apply_inferred_types_to_middlenode(&scope, &mut inner);
         middle = wrap(&env, scope, node.span, inner);
 
-        if let Some(mut decls) = env.specialization_decls_by_scope.remove(&scope) {
-            if !decls.is_empty() {
-                match &mut middle.node_type {
-                    MiddleNodeType::ScopeDeclaration { body, .. } => {
-                        let mut new_body = Vec::new();
-                        new_body.append(&mut decls);
-                        new_body.append(body);
-                        *body = new_body;
-                    }
-                    _ => {
-                        let mut body = Vec::new();
-                        body.append(&mut decls);
-                        let middle_span = middle.span;
-                        body.push(middle);
-                        middle = MiddleNode::new(
-                            MiddleNodeType::ScopeDeclaration {
-                                body,
-                                create_new_scope: false,
-                                is_temp: false,
-                                scope_id: scope,
-                            },
-                            middle_span,
-                        );
-                    }
+        if let Some(mut decls) = env.specialization_decls_by_scope.remove(&scope)
+            && !decls.is_empty()
+        {
+            match &mut middle.node_type {
+                MiddleNodeType::ScopeDeclaration { body, .. } => {
+                    let mut new_body = Vec::new();
+                    new_body.append(&mut decls);
+                    new_body.append(body);
+                    *body = new_body;
+                }
+                _ => {
+                    let mut body = Vec::new();
+                    body.append(&mut decls);
+                    let middle_span = middle.span;
+                    body.push(middle);
+                    middle = MiddleNode::new(
+                        MiddleNodeType::ScopeDeclaration {
+                            body,
+                            create_new_scope: false,
+                            is_temp: false,
+                            scope_id: scope,
+                        },
+                        middle_span,
+                    );
                 }
             }
         }
@@ -1334,8 +1339,8 @@ impl MiddleEnvironment {
         (env, scope, middle)
     }
 
-    pub fn new_and_evaluate(node: Node, path: PathBuf) -> (Self, u64, MiddleNode) {
-        Self::new_and_evaluate_with_package(node, path, None)
+    pub fn new_and_evaluate(node: Node, path: PathBuf, no_std: bool) -> (Self, u64, MiddleNode) {
+        Self::new_and_evaluate_with_package(node, path, None, no_std)
     }
 
     fn apply_inferred_types_to_middlenode(&mut self, scope: &u64, node: &mut MiddleNode) {

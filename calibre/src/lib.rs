@@ -120,6 +120,7 @@ pub struct CalibreEngine {
     compile_mode: CompileMode,
     cache_enabled: bool,
     cache_dir: Option<PathBuf>,
+    no_std: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -147,11 +148,17 @@ impl CalibreEngine {
             compile_mode: CompileMode::Run,
             cache_enabled: true,
             cache_dir: None,
+            no_std: false,
         }
     }
 
     pub fn with_vm_config(mut self, config: VMConfig) -> Self {
         self.vm_config = config;
+        self
+    }
+
+    pub fn with_no_std(mut self, no_std: bool) -> Self {
+        self.no_std = no_std;
         self
     }
 
@@ -257,9 +264,10 @@ impl CalibreEngine {
                 ast.clone(),
                 path.clone(),
                 Some(metadata.clone()),
+                self.no_std,
             )
         } else {
-            MiddleEnvironment::new_and_evaluate(ast.clone(), path.clone())
+            MiddleEnvironment::new_and_evaluate(ast.clone(), path.clone(), self.no_std)
         };
 
         let mir_errors = env.take_errors();

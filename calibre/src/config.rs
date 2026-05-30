@@ -21,6 +21,8 @@ pub struct Config {
     pub example_list: Option<Vec<Example>>,
     #[serde(default)]
     pub vm: VmConfigToml,
+    #[serde(rename = "no-std", default)]
+    pub no_std: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]

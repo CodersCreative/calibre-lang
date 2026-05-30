@@ -19,6 +19,8 @@ use std::{
     str::FromStr,
 };
 
+use crate::config::Config;
+
 pub mod config;
 
 fn emit_middle_error(path: &Path, contents: &str, err: &MiddleErr) {
@@ -55,6 +57,7 @@ async fn run_source(
     package_metadata: Option<PackageMetadata>,
     cache_base_dir: Option<PathBuf>,
     module_only: bool,
+    no_std: Option<bool>,
 ) -> Result<(), Box<dyn Error>> {
     let start = std::time::Instant::now();
     let mut engine = CalibreEngine::new()
@@ -73,6 +76,10 @@ async fn run_source(
 
     if let Some(name) = entry_name {
         engine = engine.with_entry_name(name);
+    }
+
+    if let Some(no_std) = no_std {
+        engine = engine.with_no_std(no_std);
     }
 
     let mut artifacts =
@@ -749,7 +756,7 @@ async fn run_repl_source(
     }
 
     let (mut env, scope, middle_node) =
-        MiddleEnvironment::new_and_evaluate(program, path.to_path_buf());
+        MiddleEnvironment::new_and_evaluate(program, path.to_path_buf(), false);
 
     let mir_errors = env.take_errors();
     if !mir_errors.is_empty() {
@@ -1033,12 +1040,19 @@ impl Verbosity {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    New {
+        path: Option<String>,
+        #[arg(long, default_value_t = false)]
+        no_std: bool,
+    },
     Run {
         path: Option<String>,
         #[arg(short, long)]
         example: Option<String>,
         #[arg(long)]
         verbosity: Option<Verbosity>,
+        #[arg(long)]
+        no_std: Option<bool>,
         #[arg(long)]
         module_only: bool,
         #[arg(last = true)]
@@ -1079,6 +1093,8 @@ enum Commands {
     External(Vec<String>),
 }
 
+const DEFAULT_MAIN: &'static str = "const main := fn => print(\"Hello, World!\");";
+
 fn main() -> Result<(), Box<dyn Error>> {
     fn run_with_large_stack<F>(f: F) -> Result<(), Box<dyn Error>>
     where
@@ -1098,11 +1114,47 @@ fn main() -> Result<(), Box<dyn Error>> {
     run_with_large_stack(move || {
         smol::block_on(async move {
             match args.command {
+                Some(Commands::New { path, no_std }) => {
+                    let config = Config {
+                        no_std,
+                        package: config::Package {
+                            name: path.clone().unwrap_or_default(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    };
+
+                    let path = PathBuf::from_str(&if let Some(mut path) = path {
+                        if path.ends_with("/") {
+                            path
+                        } else {
+                            path.push('/');
+                            path
+                        }
+                    } else {
+                        String::new()
+                    })
+                    .unwrap_or_default();
+
+                    let config_path = path.join("calibre.toml");
+                    let main_path = path.join("src/main.cal");
+
+                    fs::create_dir_all(main_path.parent().unwrap()).await?;
+
+                    fs::write(main_path, DEFAULT_MAIN).await?;
+                    fs::write(
+                        config_path,
+                        toml::to_string_pretty(&config).unwrap_or_default(),
+                    )
+                    .await?;
+                    Ok(())
+                }
                 Some(Commands::Run {
                     path,
                     example,
                     verbosity,
                     module_only,
+                    mut no_std,
                     program_args,
                 }) => {
                     if let Some(path) = resolve_run_target(path, example)? {
@@ -1118,6 +1170,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                         let vm_config = vm_config_from_project(project.as_ref());
                         let package_metadata = package_metadata_from_project(project.as_ref());
                         let cache_base_dir = project.as_ref().map(|p| p.root.clone());
+
+                        if let Some(project) = project
+                            && no_std.is_none()
+                        {
+                            no_std = Some(project.config.no_std);
+                        }
+
                         run_source(
                             contents,
                             &path,
@@ -1129,6 +1188,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             package_metadata,
                             cache_base_dir,
                             module_only,
+                            no_std,
                         )
                         .await
                     } else {

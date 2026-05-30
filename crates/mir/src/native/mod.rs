@@ -9,7 +9,34 @@ use std::{fs, path::PathBuf};
 use crate::environment::{MiddleEnvironment, MiddleScope, MiddleVariable, get_disamubiguous_name};
 
 impl MiddleEnvironment {
-    pub fn new_scope_with_stdlib(
+    pub fn new_root_scope_no_std(
+        &mut self,
+        parent: Option<u64>,
+        path: PathBuf,
+        namespace: Option<&str>,
+    ) -> u64 {
+        let scope = 0;
+        let counter = self.scope_counter;
+
+        self.add_scope(MiddleScope {
+            id: 0,
+            macros: FxHashMap::default(),
+            macro_args: FxHashMap::default(),
+            namespace: namespace.unwrap_or(&counter.to_string()).to_string(),
+            parent,
+            children: FxHashMap::default(),
+            path: path.clone(),
+            mappings: FxHashMap::default(),
+            defined: Vec::new(),
+            defers: Vec::new(),
+        });
+
+        let root = self.new_scope(Some(scope), path, Some("root"));
+
+        root
+    }
+
+    pub fn new_root_scope_with_std(
         &mut self,
         parent: Option<u64>,
         path: PathBuf,
