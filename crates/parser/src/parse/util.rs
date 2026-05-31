@@ -37,6 +37,10 @@ pub(super) fn auto_type(sp: Span) -> PotentialNewType {
     ParserDataType::new(sp, ParserInnerType::Auto(None)).into()
 }
 
+pub(super) fn none_type(sp: Span) -> PotentialNewType {
+    ParserDataType::new(sp, ParserInnerType::Null).into()
+}
+
 pub(super) fn ident_node(sp: Span, txt: &str) -> Node {
     Node::new(
         sp,

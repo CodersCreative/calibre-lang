@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use super::{LegacySpanMapExt, setup::StrParser};
 use crate::parse::util::{
-    auto_type, ensure_scope_node, labelled_scope_parser, lex, scope_node_parser, span,
+    auto_type, ensure_scope_node, labelled_scope_parser, lex, none_type, scope_node_parser, span,
     struct_destructure_fields_parser,
 };
 use crate::{
@@ -90,11 +90,7 @@ pub fn build_function_parsers<'a>(
             .collect::<Vec<_>>(),
         )
         .then_ignore(lex(pad.clone(), just(')')))
-        .then(
-            lex(pad.clone(), just(':'))
-                .ignore_then(type_name.clone())
-                .or_not(),
-        )
+        .then(lex(pad.clone(), just(':')).ignore_then(type_name.clone()))
         .map_with_span({
             let ls = line_starts.clone();
             move |(items, ty), r| {
@@ -102,18 +98,14 @@ pub fn build_function_parsers<'a>(
                 FnParamGroup::Destructure {
                     span: sp,
                     pattern: DestructurePattern::Tuple(items),
-                    data_type: ty.unwrap_or_else(|| auto_type(sp)),
+                    data_type: ty,
                 }
             }
         });
 
     let struct_destructure_param =
         struct_destructure_fields_parser(pad.clone(), comma.clone(), ident.clone())
-            .then(
-                lex(pad.clone(), just(':'))
-                    .ignore_then(type_name.clone())
-                    .or_not(),
-            )
+            .then(lex(pad.clone(), just(':')).ignore_then(type_name.clone()))
             .map_with_span({
                 let ls = line_starts.clone();
                 move |(items, ty), r| {
@@ -121,7 +113,7 @@ pub fn build_function_parsers<'a>(
                     FnParamGroup::Destructure {
                         span: sp,
                         pattern: DestructurePattern::Struct(items),
-                        data_type: ty.unwrap_or_else(|| auto_type(sp)),
+                        data_type: ty,
                     }
                 }
             });
@@ -156,18 +148,16 @@ pub fn build_function_parsers<'a>(
         .collect::<Vec<_>>()
         .then(
             lex(pad.clone(), just(':'))
-                .ignore_then(choice((impl_trait_param_type.clone(), type_name.clone())))
-                .or_not(),
+                .ignore_then(choice((impl_trait_param_type.clone(), type_name.clone()))),
         )
         .map(|(names, ty)| {
-            let t = ty.unwrap_or_else(|| auto_type(Span::default()));
             FnParamGroup::Plain(
                 names
                     .into_iter()
                     .map(|(n, sp)| {
                         (
                             PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
-                            t.clone(),
+                            ty.clone(),
                         )
                     })
                     .collect::<Vec<_>>(),
@@ -269,7 +259,7 @@ pub fn build_function_parsers<'a>(
                     header: FunctionHeader {
                         generics,
                         parameters,
-                        return_type: ret.unwrap_or_else(|| auto_type(body.span)),
+                        return_type: ret.unwrap_or_else(|| none_type(body.span)),
                         param_destructures,
                     },
                     body: Box::new(body),

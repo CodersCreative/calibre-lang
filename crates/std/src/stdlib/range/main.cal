@@ -15,14 +15,15 @@ impl range {
 
 	const to_list := fn (self : range) -> list:<int> => {
 		let mut out := list:<int>[];
-		
-		for i in self => out <<= i;
+		// TODO Fix range iter
+		// for i in self => out <<= i;
 		out;
 	};
 
 	const sum := fn (self : range) -> int => {
 		let mut acc := 0;
-		for i in self => acc += i;
+		// TODO Fix range iter
+		// for i in self => acc += i;
 		acc;
 	};
 

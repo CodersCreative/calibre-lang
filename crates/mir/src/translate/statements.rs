@@ -6,10 +6,11 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        Node, NodeType, ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialNewType,
-        VarType,
+        Node, NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
+        PotentialNewType, VarType,
     },
 };
+use rustc_hash::FxHashMap;
 
 impl MiddleEnvironment {
     pub fn evaluate_var_declaration(
@@ -31,7 +32,51 @@ impl MiddleEnvironment {
             get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))
         };
 
-        let function_decl = match &value.node_type {
+        let mut value = value;
+
+        if let NodeType::CallExpression {
+            caller,
+            generic_types,
+            args,
+            reverse_args,
+            ..
+        } = value.clone().node_type
+            && let NodeType::Identifier(callee_ident) = &caller.node_type
+            && callee_ident.to_string() == identifier.text
+            && let Some(first_arg) = args.first().cloned().map(|a| -> Node { a.into() })
+        {
+            let first_ty = self.resolve_type_from_node(scope, &first_arg).or_else(|| {
+                match &first_arg.node_type {
+                    NodeType::RefStatement { value, .. } => {
+                        self.resolve_type_from_node(scope, value.as_ref())
+                    }
+                    _ => None,
+                }
+            });
+            if let Some(first_ty) = first_ty
+                && let Some(mapped_name) = self
+                    .resolve_member_fn_name(&first_ty.unwrap_all_refs(), &callee_ident.to_string())
+                && mapped_name != callee_ident.to_string()
+            {
+                value = Node::new(
+                    value.span,
+                    NodeType::CallExpression {
+                        string_fn: None,
+                        caller: Box::new(Node::new(
+                            value.span,
+                            NodeType::Identifier(ParserText::from(mapped_name).into()),
+                        )),
+                        generic_types,
+                        args,
+                        reverse_args,
+                    },
+                );
+            }
+        }
+
+        let original_value_node = value.clone();
+
+        let function_decl = match &original_value_node.node_type {
             NodeType::FunctionDeclaration { header, body, .. } => Some((header, body)),
             _ => None,
         };
@@ -52,6 +97,7 @@ impl MiddleEnvironment {
             ));
         }
 
+        let is_function_decl = function_decl.is_some();
         let current_location = self.current_location.clone();
 
         let data_type = if data_type.is_auto() {
@@ -121,6 +167,27 @@ impl MiddleEnvironment {
                 },
                 span,
             );
+        }
+
+        if !matches!(
+            original_value_node.node_type,
+            NodeType::FunctionDeclaration { .. }
+        ) {
+            self.variables.insert(
+                new_name.clone(),
+                MiddleVariable {
+                    data_type: data_type.clone(),
+                    var_type: var_type.clone(),
+                    location: current_location.clone(),
+                },
+            );
+
+            let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
+            self.scopes
+                .get_mut(scope)
+                .ok_or(err)?
+                .mappings
+                .insert(identifier.text.clone(), new_name.clone());
         }
 
         Ok(MiddleNode {

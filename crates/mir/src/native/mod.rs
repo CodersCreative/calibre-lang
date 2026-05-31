@@ -128,13 +128,13 @@ impl MiddleEnvironment {
     pub fn setup_std(&mut self, scope: &u64) {
         let mut parser = Parser::default();
 
-        if let Some(scope_ref) = self.scopes.get(scope) {
-            if let Ok(stdlib) = fs::read_to_string(&scope_ref.path) {
-                let program = parser.produce_ast(&stdlib);
-                let middle = self.evaluate(scope, program);
-                self.stdlib_nodes.push(middle);
-                self.loaded_scopes.insert(*scope);
-            }
+        if let Some(scope_ref) = self.scopes.get(scope)
+            && let Ok(stdlib) = fs::read_to_string(&scope_ref.path)
+        {
+            let program = parser.produce_ast(&stdlib);
+            let middle = self.evaluate(scope, program);
+            self.stdlib_nodes.push(middle);
+            self.loaded_scopes.insert(*scope);
         }
 
         let mut add = |name, funcs, load| self.setup_std_module(scope, name, funcs, load);

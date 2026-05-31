@@ -1,6 +1,6 @@
 use super::{LegacySpanMapExt, setup::StrParser};
 use crate::parse::util::{
-    auto_type, lex, match_arm_to_tuple_items, span, struct_destructure_fields_parser,
+    auto_type, lex, match_arm_to_tuple_items, none_type, span, struct_destructure_fields_parser,
 };
 use crate::{
     Span,
@@ -207,16 +207,10 @@ pub fn build_match_parsers<'a>(
                                 None,
                             )
                         }),
-                    )))
-                    .or_not(),
+                    ))),
             )
             .map(|((name, sp), bind)| {
-                let (var_type, name_bind, destructure, pattern) =
-                    if let Some((vt, (name_bind, destructure, pattern))) = bind {
-                        (vt, name_bind, destructure, pattern)
-                    } else {
-                        (VarType::Immutable, None, None, None)
-                    };
+                let (var_type, (name_bind, destructure, pattern)) = bind;
                 MatchTupleItem::Enum {
                     value: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
                     var_type,
@@ -638,7 +632,7 @@ pub fn build_match_parsers<'a>(
     let fn_match_expr = lex(pad.clone(), just("fn"))
         .ignore_then(generic_params.clone())
         .then_ignore(lex(pad.clone(), just("match")))
-        .then(type_name.clone().or_not())
+        .then(type_name.clone())
         .then(arrow.clone().ignore_then(type_name.clone()).or_not())
         .then_ignore(lex(pad.clone(), just('{')))
         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
@@ -664,9 +658,9 @@ pub fn build_match_parsers<'a>(
                             sp,
                             "__match_value".to_string(),
                         )),
-                        param_ty.unwrap_or_else(|| auto_type(sp)),
+                        param_ty,
                     )],
-                    return_type: return_ty.unwrap_or_else(|| auto_type(sp)),
+                    return_type: return_ty.unwrap_or_else(|| none_type(sp)),
                     param_destructures: Vec::new(),
                 };
 
