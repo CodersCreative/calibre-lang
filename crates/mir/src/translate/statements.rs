@@ -1,19 +1,15 @@
 use crate::{
-    ast::{
-        MiddleNode, MiddleNodeType,
-        hm::{self, Type, TypeGenerator, TypeScheme},
-    },
+    ast::{MiddleNode, MiddleNodeType},
     environment::{MiddleEnvironment, MiddleVariable, get_disamubiguous_name},
     errors::MiddleErr,
 };
 use calibre_parser::{
     Span,
     ast::{
-        Node, NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
-        PotentialNewType, VarType,
+        Node, NodeType, ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialNewType,
+        VarType,
     },
 };
-use rustc_hash::FxHashMap;
 
 impl MiddleEnvironment {
     pub fn evaluate_var_declaration(
@@ -25,103 +21,17 @@ impl MiddleEnvironment {
         value: Node,
         data_type: PotentialNewType,
     ) -> Result<MiddleNode, MiddleErr> {
-        fn mapping_target_is_native_fn(
-            variables: &FxHashMap<String, MiddleVariable>,
-            mappings: &FxHashMap<String, String>,
-            identifier: &str,
-        ) -> bool {
-            mappings
-                .get(identifier)
-                .and_then(|name| variables.get(name))
-                .is_some_and(|var| {
-                    matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
-                })
-        }
-        #[inline]
-        fn insert_mapping_if_allowed(
-            variables: &FxHashMap<String, MiddleVariable>,
-            mappings: &mut FxHashMap<String, String>,
-            identifier: String,
-            new_name: String,
-            is_reserved_constructor: bool,
-        ) {
-            let existing_is_native = mapping_target_is_native_fn(variables, mappings, &identifier);
-            if !(is_reserved_constructor && existing_is_native) {
-                mappings.insert(identifier, new_name);
-            }
-        }
-
         let identifier = self
             .resolve_dollar_ident_only(scope, &identifier)
             .ok_or_else(|| self.err_at_current(MiddleErr::Scope(identifier.to_string())))?;
 
-        let is_reserved_constructor =
-            matches!(identifier.text.as_str(), "ok" | "err" | "some" | "none");
-
-        let new_name = if let Some(existing) = self
-            .scopes
-            .get(scope)
-            .and_then(|s| s.mappings.get(&identifier.text))
-        {
-            let existing_is_native = self.variables.get(existing).is_some_and(|var| {
-                matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
-            });
-            if is_reserved_constructor && existing_is_native {
-                get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))
-            } else {
-                existing.clone()
-            }
-        } else if identifier.text.contains("->") || identifier.text.contains("::") {
+        let new_name = if identifier.text.contains("->") || identifier.text.contains("::") {
             identifier.text.clone()
         } else {
             get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))
         };
 
-        let mut value = value;
-
-        if let NodeType::CallExpression {
-            caller,
-            generic_types,
-            args,
-            reverse_args,
-            ..
-        } = value.clone().node_type
-            && let NodeType::Identifier(callee_ident) = &caller.node_type
-            && callee_ident.to_string() == identifier.text
-            && let Some(first_arg) = args.first().cloned().map(|a| -> Node { a.into() })
-        {
-            let first_ty = self.resolve_type_from_node(scope, &first_arg).or_else(|| {
-                match &first_arg.node_type {
-                    NodeType::RefStatement { value, .. } => {
-                        self.resolve_type_from_node(scope, value.as_ref())
-                    }
-                    _ => None,
-                }
-            });
-            if let Some(first_ty) = first_ty
-                && let Some(mapped_name) = self
-                    .resolve_member_fn_name(&first_ty.unwrap_all_refs(), &callee_ident.to_string())
-                && mapped_name != callee_ident.to_string()
-            {
-                value = Node::new(
-                    value.span,
-                    NodeType::CallExpression {
-                        string_fn: None,
-                        caller: Box::new(Node::new(
-                            value.span,
-                            NodeType::Identifier(ParserText::from(mapped_name).into()),
-                        )),
-                        generic_types,
-                        args,
-                        reverse_args,
-                    },
-                );
-            }
-        }
-
-        let original_value_node = value.clone();
-
-        let function_decl = match &original_value_node.node_type {
+        let function_decl = match &value.node_type {
             NodeType::FunctionDeclaration { header, body, .. } => Some((header, body)),
             _ => None,
         };
@@ -142,96 +52,31 @@ impl MiddleEnvironment {
             ));
         }
 
-        let is_function_decl = function_decl.is_some();
         let current_location = self.current_location.clone();
 
-        let mut data_type = if data_type.is_auto() {
-            let inferred = self.resolve_type_from_node(scope, &value).or_else(|| {
-                if let NodeType::CallExpression { caller, .. } = &value.node_type
-                    && let NodeType::MemberExpression { path } = &caller.node_type
-                    && path.len() >= 2
-                    && let Some((last, _)) = path.last()
-                    && let NodeType::Identifier(ident) = &last.node_type
-                    && ident.to_string() == "new"
-                {
-                    let receiver_path = path[..path.len() - 1].to_vec();
-                    let receiver = Node::new(
-                        span,
-                        NodeType::MemberExpression {
-                            path: receiver_path,
-                        },
-                    );
-                    self.resolve_type_from_node(scope, &receiver)
-                } else {
-                    None
-                }
-            });
-
-            inferred.unwrap_or(self.resolve_potential_new_type(scope, data_type))
+        let data_type = if data_type.is_auto() {
+            let err = self.err_at_current(MiddleErr::InferImpossible);
+            self.resolve_type_from_node(scope, &value).ok_or(err)?
         } else {
             self.resolve_potential_new_type(scope, data_type)
         };
-
-        if let Some((header, _)) = function_decl {
-            data_type = ParserDataType::new(
-                span,
-                ParserInnerType::Function {
-                    return_type: Box::new(
-                        self.resolve_potential_new_type(scope, header.return_type.clone()),
-                    ),
-                    parameters: header
-                        .parameters
-                        .iter()
-                        .map(|(_, t)| self.resolve_potential_new_type(scope, t.clone()))
-                        .collect(),
-                },
-            );
-
-            let mut tg = TypeGenerator::default();
-            let ret_pd = self.resolve_potential_new_type(scope, header.return_type.clone());
-
-            let mut ret_hm = if matches!(ret_pd.data_type, ParserInnerType::Auto(_)) {
-                tg.fresh()
-            } else {
-                hm::from_parser_data_type(&ret_pd, &mut tg)
-            };
-
-            for param in header.parameters.iter().rev() {
-                let p_pd = self.resolve_potential_new_type(scope, param.1.clone());
-                let p_hm = if matches!(p_pd.data_type, ParserInnerType::Auto(_)) {
-                    tg.fresh()
-                } else {
-                    hm::from_parser_data_type(&p_pd, &mut tg)
-                };
-
-                ret_hm = Type::TArrow(std::sync::Arc::new(p_hm), std::sync::Arc::new(ret_hm));
-            }
-
-            if !self.typing.contains_scheme(&new_name) {
-                self.typing
-                    .insert_scheme(new_name.clone(), TypeScheme::new(Vec::new(), ret_hm));
-            }
-        }
 
         let mut value = if let Some((header, _)) = function_decl {
             self.variables.insert(
                 new_name.clone(),
                 MiddleVariable {
                     data_type: data_type.clone(),
-                    var_type: var_type.clone(),
+                    var_type,
                     location: current_location.clone(),
                 },
             );
 
             let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
-            let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
-            insert_mapping_if_allowed(
-                &self.variables,
-                &mut scope_ref.mappings,
-                identifier.text.clone(),
-                new_name.clone(),
-                is_reserved_constructor,
-            );
+            self.scopes
+                .get_mut(scope)
+                .ok_or(err)?
+                .mappings
+                .insert(identifier.text.clone(), new_name.clone());
 
             let new_scope = self.new_scope_from_parent_shallow(*scope);
 
@@ -276,77 +121,6 @@ impl MiddleEnvironment {
                 },
                 span,
             );
-        }
-
-        if !matches!(
-            original_value_node.node_type,
-            NodeType::FunctionDeclaration { .. }
-        ) {
-            self.variables.insert(
-                new_name.clone(),
-                MiddleVariable {
-                    data_type: data_type.clone(),
-                    var_type: var_type.clone(),
-                    location: current_location.clone(),
-                },
-            );
-
-            let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
-            let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
-            insert_mapping_if_allowed(
-                &self.variables,
-                &mut scope_ref.mappings,
-                identifier.text,
-                new_name.clone(),
-                is_reserved_constructor,
-            );
-        }
-
-        if data_type.contains_auto()
-            && !matches!(
-                original_value_node.node_type,
-                NodeType::InlineGenerator { .. }
-            )
-            && let Some((hm_t, subst)) = self.infer_hm_type_for_node(scope, &original_value_node)
-        {
-            let t_applied = hm::apply_subst(&subst, &hm_t);
-
-            let parser_ty = self.typing.parser_type(&t_applied);
-            let scheme = match &parser_ty.data_type {
-                calibre_parser::ast::ParserInnerType::Function { .. }
-                    if parser_ty.contains_auto() =>
-                {
-                    hm::TypeScheme::new(Vec::new(), t_applied.clone())
-                }
-                _ => self.typing.generalize(&t_applied),
-            };
-            self.typing.insert_scheme(new_name.clone(), scheme);
-
-            if !is_function_decl && let Some(v) = self.variables.get_mut(&new_name) {
-                v.data_type = parser_ty.clone();
-                data_type = parser_ty.clone();
-
-                if let MiddleNodeType::FunctionDeclaration {
-                    parameters: ref mut params,
-                    return_type: ref mut ret_type,
-                    ..
-                } = value.node_type
-                    && let ParserInnerType::Function {
-                        return_type: inferred_ret,
-                        parameters: inferred_params,
-                    } = parser_ty.data_type
-                {
-                    for (i, (_name, p_ty)) in params.iter_mut().enumerate() {
-                        if i < inferred_params.len() && p_ty.contains_auto() {
-                            *p_ty = inferred_params[i].clone();
-                        }
-                    }
-
-                    if ret_type.contains_auto() {
-                        *ret_type = *inferred_ret.clone();
-                    }
-                }
-            }
         }
 
         Ok(MiddleNode {

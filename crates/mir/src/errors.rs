@@ -14,6 +14,8 @@ pub enum MiddleErr {
     ExpectedOperation(String),
     #[error("Expected only functions.")]
     ExpectedFunctions,
+    #[error("Unable to infer type.")]
+    InferImpossible,
     #[error("Index out of bounds for list, {0}.")]
     InvalidIndex(i64),
     #[error("Default value name not identifier.")]

@@ -9,7 +9,6 @@ use calibre_parser::{
 };
 use std::fmt::Display;
 
-pub mod hm;
 pub mod identifiers;
 pub mod renaming;
 

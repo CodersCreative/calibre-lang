@@ -1,5 +1,4 @@
 use crate::{
-    ast::hm::Type,
     ast::{IntLiteralType, MiddleNode, MiddleNodeType},
     environment::{
         MiddleEnvironment, MiddleObject, MiddleOverload, MiddleTrait, MiddleTraitMember,
@@ -3516,21 +3515,15 @@ impl MiddleEnvironment {
                     |env: &mut Self, point: &calibre_parser::ast::PipeSegment| {
                         if let NodeType::Identifier(id) = &point.get_node().node_type
                             && let Some(resolved) = env.resolve_potential_generic_ident(scope, id)
-                        {
-                            if env.variables.get(&resolved.text).is_some_and(|var| {
+                            && env.variables.get(&resolved.text).is_some_and(|var| {
                                 matches!(
                                     var.data_type.data_type,
                                     ParserInnerType::Function { .. }
                                         | ParserInnerType::NativeFunction(_)
                                 )
-                            }) || env
-                                .typing
-                                .hm_env
-                                .get(&resolved.text)
-                                .is_some_and(|scheme| matches!(scheme.ty, Type::TArrow(_, _)))
-                            {
-                                return true;
-                            }
+                            })
+                        {
+                            return true;
                         }
                         let from_type = env
                             .resolve_type_from_node(scope, point.get_node())

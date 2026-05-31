@@ -477,6 +477,7 @@ impl MiddleEnvironment {
         let resolve_from = |env: &MiddleEnvironment, ty: &ParserDataType, m: &str| {
             env.resolve_member_fn_name(ty, m)
         };
+
         let impl_var = |env: &MiddleEnvironment, key: &ParserDataType, m: &str| {
             let key = env.impl_key(key);
             env.impls

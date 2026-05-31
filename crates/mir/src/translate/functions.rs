@@ -1,3 +1,8 @@
+use crate::{
+    ast::{MiddleNode, MiddleNodeType},
+    environment::{MiddleEnvironment, MiddleVariable, get_disamubiguous_name},
+    errors::MiddleErr,
+};
 use calibre_parser::{
     Span,
     ast::{
@@ -5,12 +10,6 @@ use calibre_parser::{
         ObjectType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
         PotentialGenericTypeIdentifier, PotentialNewType, TryCatch, VarType,
     },
-};
-
-use crate::{
-    ast::{MiddleNode, MiddleNodeType, hm},
-    environment::{MiddleEnvironment, MiddleVariable, get_disamubiguous_name},
-    errors::MiddleErr,
 };
 
 impl MiddleEnvironment {
@@ -659,7 +658,7 @@ impl MiddleEnvironment {
         };
         self.func_defers.append(&mut old_func_defers);
 
-        let mut fn_node = MiddleNode {
+        let fn_node = MiddleNode {
             node_type: MiddleNodeType::FunctionDeclaration {
                 parameters: params.clone(),
                 body: Box::new(body.clone()),
@@ -669,45 +668,16 @@ impl MiddleEnvironment {
             span,
         };
 
-        let ast_node: Node = fn_node.clone().into();
         for (p_name, _p_ty) in params.iter() {
             let full = p_name.text.clone();
             if let Some(idx) = full.rfind(':') {
                 let short = full[idx + 1..].to_string();
-                if let Some(scope_ref) = self.scopes.get_mut(&new_scope) {
-                    scope_ref.mappings.insert(short, full.clone());
-                } else {
-                    return Err(self.err_at_current(MiddleErr::Scope(new_scope.to_string())));
-                }
-            }
-        }
-
-        if let Some((hm_t, subst)) = self.infer_hm_type_for_node(&new_scope, &ast_node) {
-            let t_applied = hm::apply_subst(&subst, &hm_t);
-            let parser_ty = self.typing.parser_type(&t_applied);
-
-            if let MiddleNodeType::FunctionDeclaration {
-                parameters: ref mut params2,
-                return_type: ref mut ret2,
-                ..
-            } = fn_node.node_type
-            {
-                if let calibre_parser::ast::ParserInnerType::Function {
-                    return_type: inferred_ret,
-                    parameters: inferred_params,
-                } = parser_ty.data_type
-                {
-                    for (i, (name, p_ty)) in params2.iter_mut().enumerate() {
-                        if i < inferred_params.len() {
-                            *p_ty = inferred_params[i].clone();
-                            if let Some(var) = self.variables.get_mut(&name.text) {
-                                var.data_type = inferred_params[i].clone();
-                            }
-                        }
-                    }
-
-                    *ret2 = *inferred_ret.clone();
-                }
+                let err = self.err_at_current(MiddleErr::Scope(new_scope.to_string()));
+                self.scopes
+                    .get_mut(&new_scope)
+                    .ok_or(err)?
+                    .mappings
+                    .insert(short, full);
             }
         }
 
@@ -822,9 +792,7 @@ impl MiddleEnvironment {
                         else {
                             return None;
                         };
-                        let Some(first) = parameters.first() else {
-                            return None;
-                        };
+                        let first = parameters.first()?;
                         let param_inner = match &first.data_type {
                             ParserInnerType::Ref(inner, _) => &inner.data_type,
                             other => other,
@@ -890,30 +858,30 @@ impl MiddleEnvironment {
                         }
                     };
 
-                    if let Some(concrete_args) = concrete_args {
-                        if let Some(spec) = self.ensure_specialized_function(
+                    if let Some(concrete_args) = concrete_args
+                        && let Some(spec) = self.ensure_specialized_function(
                             scope,
                             &base_name,
                             &tpl_params,
                             &concrete_args,
-                        ) {
-                            return self.evaluate_inner(
-                                scope,
-                                Node::new(
-                                    self.current_span(),
-                                    NodeType::CallExpression {
-                                        string_fn: None,
-                                        caller: Box::new(Node::new(
-                                            self.current_span(),
-                                            NodeType::Identifier(ParserText::from(spec).into()),
-                                        )),
-                                        generic_types: Vec::new(),
-                                        args,
-                                        reverse_args,
-                                    },
-                                ),
-                            );
-                        }
+                        )
+                    {
+                        return self.evaluate_inner(
+                            scope,
+                            Node::new(
+                                self.current_span(),
+                                NodeType::CallExpression {
+                                    string_fn: None,
+                                    caller: Box::new(Node::new(
+                                        self.current_span(),
+                                        NodeType::Identifier(ParserText::from(spec).into()),
+                                    )),
+                                    generic_types: Vec::new(),
+                                    args,
+                                    reverse_args,
+                                },
+                            ),
+                        );
                     }
                 }
             }
@@ -937,16 +905,16 @@ impl MiddleEnvironment {
                 return Ok(self.aggregate_from_call_nodes(scope, span, None, args, reverse_args));
             }
 
-            if let Some(caller) = self.resolve_potential_generic_ident(scope, &caller) {
-                if self.objects.contains_key(&caller.text) {
-                    return Ok(self.aggregate_from_call_nodes(
-                        scope,
-                        span,
-                        Some(ParserText::from(caller)),
-                        args,
-                        reverse_args,
-                    ));
-                }
+            if let Some(caller) = self.resolve_potential_generic_ident(scope, caller)
+                && self.objects.contains_key(&caller.text)
+            {
+                return Ok(self.aggregate_from_call_nodes(
+                    scope,
+                    span,
+                    Some(caller),
+                    args,
+                    reverse_args,
+                ));
             }
         }
 
