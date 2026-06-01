@@ -56,15 +56,15 @@ const main := fn => {
 	let lst := list:<int>[2, 0, 4];
 	
 	let mtchfn := fn match str -> int {
-		"hello" => 0,
-		_ => 10
+		"hello" => return 0,
+		_ => return 10
 	};
 	
 	print(mtchfn("he"));
 	
 	let mut match_res : int = match "hello" {
-		"hello" => 0,
-		_ => 10
+		"hello" => emit 0,
+		_ => emit 10
 	};
 	
 	print(match_res);
@@ -126,13 +126,13 @@ const main := fn => {
 	
 	wg.wait();
 	let sum := match sum_ch.get() {
-		.Some : v => v,
-		.None => 0
+		.Some : v => emit v,
+		.None => emit 0
 	};
 	
 	let fac := match fac_ch.get() {
-		.Some : v => v,
-		.None => 0
+		.Some : v => emit v,
+		.None => emit 0
 	};
 	
 	print("parallel sum=" & sum);
