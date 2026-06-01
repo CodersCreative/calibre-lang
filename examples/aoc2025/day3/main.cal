@@ -62,7 +62,7 @@ const worker_part1 := fn (banks : list:<str>, start_idx : int, step : int, out :
 		idx += step;
 	};
 	
-	out.send(local);
+	emit out local;
 };
 
 const worker_part2 := fn (banks : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
@@ -74,7 +74,7 @@ const worker_part2 := fn (banks : list:<str>, start_idx : int, step : int, out :
 		idx += step;
 	};
 	
-	out.send(local);
+	emit out local;
 };
 
 const handle_part1 := fn (bank : str) -> int => {

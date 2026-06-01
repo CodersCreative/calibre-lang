@@ -5,13 +5,11 @@ type Mutex:<T> := struct { };
 impl<T> Channel:<T> {
 	const new := fn -> Channel:<T> => channel_new();
 
-	const send := fn (self : &mut Channel:<T>, value : T) => channel_send(self, value);
-
 	const get := fn (self : &Channel:<T>) -> T? => channel_get(self);
 
 	const try_get := fn (self : &Channel:<T>) -> T? => channel_try_get(self);
 
-	const try_send := fn (self : &mut Channel:<T>, value : T) -> bool => channel_try_send(self, value);
+	const raw_send := fn (self : &mut Channel:<T>, value : T) -> bool => channel_try_send(self, value);
 
 	const close := fn (self : &mut Channel:<T>) => channel_close(self);
 
@@ -29,7 +27,7 @@ impl<T> Channel:<T> {
 	};
 
 	const send_all := fn (self : &mut Channel:<T>, values : list:<T>) => {
-		for i in 0..len(values) => self.send(values[i]);
+		for i in 0..len(values) => emit self values[i];
 	};
 };
 

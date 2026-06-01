@@ -1,6 +1,7 @@
 use crate::COUNTER;
 use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::errors::MiddleErr;
+use calibre_parser::ast::EmitType;
 use calibre_parser::{
     Location, Parser, Span,
     ast::{
@@ -2483,7 +2484,9 @@ impl MiddleEnvironment {
             | NodeType::ScopeAlias { .. }
             | NodeType::DataType { .. }
             | NodeType::Until { .. }
-            | NodeType::SelectStatement { .. } => None,
+            | NodeType::SelectStatement { .. }
+            | NodeType::Emit(EmitType::Scope(_)) => None,
+            NodeType::Emit(_) => Some(ParserDataType::new(node.span, ParserInnerType::Bool)),
             NodeType::Spawn { auto_wait, .. } => Some(ParserDataType::new(
                 node.span,
                 if *auto_wait {

@@ -1,9 +1,9 @@
 use crate::{
     Parser, Span,
     ast::{
-        CallArg, DestructurePattern, GenericTypes, IfComparisonType, LoopType, MatchArmType,
-        MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem, Node, NodeType,
-        ObjectType, Overload, ParserDataType, ParserInnerType, PipeSegment,
+        CallArg, DestructurePattern, EmitType, GenericTypes, IfComparisonType, LoopType,
+        MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem, Node,
+        NodeType, ObjectType, Overload, ParserDataType, ParserInnerType, PipeSegment,
         PotentialDollarIdentifier, PotentialNewType, SelectArmKind, TypeDefType, VarType,
     },
 };
@@ -341,6 +341,10 @@ impl Formatter {
                 }
                 txt
             }
+            NodeType::Emit(EmitType::Scope(x)) => format!("emit {}", self.format(x)),
+            NodeType::Emit(EmitType::Channel { channel, value }) => {
+                format!("emit {} {}", self.format(channel), self.format(value))
+            }
             NodeType::Continue { label } => {
                 let mut txt = String::from("continue");
                 if let Some(label) = label {
@@ -352,9 +356,8 @@ impl Formatter {
             NodeType::Defer { value, function } => format!(
                 "defer {}{}",
                 if *function { "return " } else { "" },
-                self.format(&value)
+                self.format(value)
             ),
-
             NodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
                 if items.len() == 1 {
@@ -1044,7 +1047,7 @@ impl Formatter {
                     };
                 }
 
-                if !header.return_type.is_auto() {
+                if !header.return_type.is_null() {
                     txt.push_str(&format!(
                         " -> {}",
                         self.fmt_potential_new_type(&header.return_type)
@@ -1073,7 +1076,7 @@ impl Formatter {
                     self.tab.get_tab_from_amt(0)
                 );
                 txt = self.wrap_if_wide(single, &multi);
-                if return_type.data_type != ParserInnerType::Null {
+                if !return_type.is_null() {
                     txt.push_str(&format!(" -> {}", self.fmt_ffi_type(return_type)));
                 }
                 txt.push_str(&format!(" from \"{}\"", library));
@@ -1195,7 +1198,7 @@ impl Formatter {
                     ));
                 }
 
-                if !header.return_type.is_auto() {
+                if !header.return_type.is_null() {
                     txt.push_str(&format!(
                         " -> {}",
                         self.fmt_potential_new_type(&header.return_type)

@@ -62,7 +62,7 @@ const worker_sum_part1 := fn (ranges : list:<str>, start_idx : int, step : int, 
 		idx += step;
 	};
 	
-	out.send(local);
+	emit out local;
 };
 
 const worker_sum_part2 := fn (ranges : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
@@ -74,7 +74,7 @@ const worker_sum_part2 := fn (ranges : list:<str>, start_idx : int, step : int, 
 		idx += step;
 	};
 	
-	out.send(local);
+	emit out local;
 };
 
 const parse_range := fn (cur : str) -> <int, int> => {

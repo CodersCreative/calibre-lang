@@ -329,6 +329,13 @@ impl ParserInnerType {
         }
     }
 
+    pub fn is_null(&self) -> bool {
+        match self {
+            Self::Null => true,
+            _ => false,
+        }
+    }
+
     pub fn is_list(&self) -> bool {
         match self {
             Self::List(_) => true,
@@ -476,6 +483,13 @@ impl PotentialNewType {
     pub fn is_auto(&self) -> bool {
         match self {
             Self::DataType(x) => x.is_auto(),
+            _ => false,
+        }
+    }
+
+    pub fn is_null(&self) -> bool {
+        match self {
+            Self::DataType(x) => x.is_null(),
             _ => false,
         }
     }
@@ -1190,6 +1204,15 @@ impl Into<Node> for CallArg {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum EmitType {
+    Scope(Box<Node>),
+    Channel {
+        channel: Box<Node>,
+        value: Box<Node>,
+    },
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
@@ -1209,6 +1232,7 @@ pub enum NodeType {
     SelectStatement {
         arms: Vec<SelectArm>,
     },
+    Emit(EmitType),
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,

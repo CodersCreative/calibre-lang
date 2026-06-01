@@ -9,8 +9,8 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, MatchArmType, Node,
-        NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
+        CallArg, EmitType, FunctionHeader, GenericTypes, IfComparisonType, LoopType, MatchArmType,
+        Node, NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, VarType,
         comparison::{BooleanOperator, ComparisonOperator},
     },
@@ -291,6 +291,19 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
+            NodeType::Emit(EmitType::Channel { channel, value }) => self.evaluate_inner(
+                scope,
+                Self::call_member_expr(
+                    node.span,
+                    *channel,
+                    "raw_send",
+                    vec![CallArg::Value(*value)],
+                ),
+            ),
+            NodeType::Emit(_) => {
+                // TODO Work on emit from scope
+                Ok(MiddleNode::new(MiddleNodeType::Null, node.span))
+            }
             NodeType::MemberExpression { path } => {
                 self.evaluate_member_expression(scope, node.span, path)
             }

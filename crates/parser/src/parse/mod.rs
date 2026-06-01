@@ -1,7 +1,7 @@
 use crate::{
     ParserError, Span,
     ast::{
-        CallArg, Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
+        CallArg, EmitType, Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
     },
 };
@@ -217,6 +217,26 @@ pub fn parse_program_with_source(
                 fn_standard_expr.clone(),
                 scope_block.clone(),
                 match_expr,
+                lex(pad.clone(), just("emit"))
+                    .ignore_then(expr.clone())
+                    .then(expr.clone().or_not())
+                    .map_with_span({
+                        let ls = line_starts.clone();
+                        move |args: (Node, Option<Node>), r| {
+                            let sp = span(ls.as_ref(), r);
+                            Node::new(
+                                sp,
+                                NodeType::Emit(if let Some(value) = args.1 {
+                                    EmitType::Channel {
+                                        channel: Box::new(args.0),
+                                        value: Box::new(value),
+                                    }
+                                } else {
+                                    EmitType::Scope(Box::new(args.0))
+                                }),
+                            )
+                        }
+                    }),
                 lex(pad.clone(), just("list"))
                     .ignore_then(lex(pad.clone(), just(":<")))
                     .ignore_then(type_name.clone())

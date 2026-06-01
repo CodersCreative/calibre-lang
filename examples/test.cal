@@ -115,12 +115,12 @@ const main := fn => {
 		=> {
 			let mut s := 0;
 			for i in 0..1000 => s += i;
-			sum_ch.send(s);
+			emit sum_ch s;
 		},
 		=> {
 			let mut f := 1;
 			for i in 1..6 => f *= i;
-			fac_ch.send(f);
+			emit fac_ch f;
 		}
 	};
 	
