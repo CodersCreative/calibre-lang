@@ -484,8 +484,7 @@ impl MiddleEnvironment {
     ) -> Result<MiddleNode, MiddleErr> {
         let mut params = Vec::with_capacity(header.parameters.len());
         let mut param_idents = Vec::with_capacity(header.parameters.len());
-        let mut old_func_defers = Vec::new();
-        old_func_defers.append(&mut self.func_defers);
+        let mut old_func_defers = std::mem::take(&mut self.func_defers);
         let new_scope = self.new_scope_from_parent_shallow(*scope);
         self.copy_scope_magic_mappings(*scope, new_scope);
         for param in header.parameters {

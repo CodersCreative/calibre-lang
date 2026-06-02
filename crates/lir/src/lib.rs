@@ -777,6 +777,10 @@ impl<'a> LirEnvironment<'a> {
     pub fn lower_node(&mut self, node: MiddleNode) -> LirNodeType {
         let span = node.span;
         match node.node_type {
+            MiddleNodeType::Emit { value } => {
+                // TODO Add emit support
+                self.lower_node(*value)
+            }
             MiddleNodeType::IntLiteral { value, int_type } => match int_type {
                 IntLiteralType::Int => LirNodeType::Literal(LirLiteral::Int(value)),
                 IntLiteralType::UInt => LirNodeType::Literal(LirLiteral::UInt(value as u64)),

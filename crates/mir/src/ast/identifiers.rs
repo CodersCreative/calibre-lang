@@ -17,15 +17,15 @@ impl MiddleNode {
             | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return { value: None } => Vec::new(),
-            MiddleNodeType::Break {
-                value: Some(value), ..
-            } => value.identifiers_used(),
             MiddleNodeType::Identifier(x) | MiddleNodeType::Drop(x) | MiddleNodeType::Move(x) => {
                 vec![x]
             }
             MiddleNodeType::RefStatement {
                 mutability: _,
                 value,
+            }
+            | MiddleNodeType::Break {
+                value: Some(value), ..
             }
             | MiddleNodeType::DerefStatement { value }
             | MiddleNodeType::Spawn { value }
@@ -52,7 +52,8 @@ impl MiddleNode {
             | MiddleNodeType::Return { value: Some(value) }
             | MiddleNodeType::EnumExpression {
                 data: Some(value), ..
-            } => value.identifiers_used(),
+            }
+            | MiddleNodeType::Emit { value } => value.identifiers_used(),
             MiddleNodeType::ExternFunction { .. } => Vec::new(),
             MiddleNodeType::BinaryExpression {
                 left,
@@ -202,7 +203,8 @@ impl MiddleNode {
             | MiddleNodeType::Return { value: Some(value) }
             | MiddleNodeType::EnumExpression {
                 data: Some(value), ..
-            } => value.identifiers_declared(),
+            }
+            | MiddleNodeType::Emit { value } => value.identifiers_declared(),
 
             MiddleNodeType::VariableDeclaration {
                 var_type: _,

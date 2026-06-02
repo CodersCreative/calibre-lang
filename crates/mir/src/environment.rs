@@ -2462,6 +2462,22 @@ impl MiddleEnvironment {
         })
     }
 
+    pub fn resolve_emit_type_from_node(
+        &mut self,
+        scope: &u64,
+        node: &Node,
+    ) -> Option<ParserDataType> {
+        let typ = match &node.node_type {
+            NodeType::IfStatement { .. } | NodeType::MatchStatement { .. } => {
+                self.resolve_type_from_node(scope, node)
+            }
+            NodeType::Emit(EmitType::Scope(x)) => self.resolve_type_from_node(scope, x),
+            _ => None,
+        };
+
+        typ.map(|typ| self.resolve_data_type(scope, typ))
+    }
+
     pub fn resolve_type_from_node(&mut self, scope: &u64, node: &Node) -> Option<ParserDataType> {
         let typ = match &node.node_type {
             NodeType::Break { .. }
@@ -2499,7 +2515,7 @@ impl MiddleEnvironment {
                 let elem = match data_type {
                     Some(PotentialNewType::DataType(dt)) => dt.clone(),
                     _ => self
-                        .resolve_type_from_node(scope, &map)
+                        .resolve_type_from_node(scope, map)
                         .unwrap_or(ParserDataType::new(node.span, ParserInnerType::Auto(None))),
                 };
 
@@ -2542,7 +2558,18 @@ impl MiddleEnvironment {
             }),
             NodeType::ScopeDeclaration {
                 body: Some(body), ..
-            } => self.resolve_type_from_node(scope, body.last()?),
+            } => {
+                let mut typ = None;
+
+                for node in body {
+                    typ = self.resolve_emit_type_from_node(scope, node);
+                    if typ.is_some() {
+                        break;
+                    }
+                }
+
+                typ
+            }
             NodeType::ScopeDeclaration {
                 named: Some(named), ..
             } => {
@@ -2754,7 +2781,7 @@ impl MiddleEnvironment {
                     }),
                 }
             }
-            NodeType::IsExpression { value: _, .. } => Some(ParserDataType {
+            NodeType::IsExpression { .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Bool,
                 span: node.span,
             }),

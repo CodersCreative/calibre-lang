@@ -30,19 +30,19 @@ const main := fn => {
 	print("range to_list => " & rng.to_list());
 	print("range is_empty => " & (0..0).is_empty());
 	
-	let squares := list:<int>[1, 2, 3, 4, 5].into_iter().map(fn (x : int) -> int => x * x).collect();
+	let squares := list:<int>[1, 2, 3, 4, 5].into_iter().map(fn (x : int) -> int => return x * x).collect();
 	print("squares => " & squares);
 	
-	let opt := some(10).map(fn (x : int) -> int => x + 1).unwrap_or(0);
+	let opt := some(10).map(fn (x : int) -> int => return x + 1).unwrap_or(0);
 	print("option map => " & opt);
 	let opt2 := none.unwrap_or(123);
 	print("option unwrap_or => " & opt2);
-	let opt3 := some(5).and_then(fn (x : int) -> int? => if x > 3 => some(x * 3) else => none);
+	let opt3 := some(5).and_then(fn (x : int) -> int? => if x > 3 => return some(x * 3) else => return none);
 	print("option and_then => " & opt3);
 	
-	let res1 := ok(7).map(fn (x : int) -> int => x * 2);
+	let res1 := ok(7).map(fn (x : int) -> int => return x * 2);
 	print("result map => " & res1);
-	let res2 := err("oops").map_err(fn (e : str) -> str => "ERR: " & e);
+	let res2 := err("oops").map_err(fn (e : str) -> str => return "ERR: " & e);
 	print("result map_err => " & res2);
 	print("result is_ok => " & res1.is_ok());
 	let res3 := ok(9).unwrap_or(0);

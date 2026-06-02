@@ -93,6 +93,9 @@ pub enum MiddleNodeType {
         pretty_printed_str: String,
         value: Box<MiddleNode>,
     },
+    Emit {
+        value: Box<MiddleNode>,
+    },
     NegExpression {
         value: Box<MiddleNode>,
     },
@@ -186,6 +189,9 @@ impl Into<Node> for MiddleNode {
 impl Into<NodeType> for MiddleNodeType {
     fn into(self) -> NodeType {
         match self {
+            Self::Emit { value } => NodeType::Emit(calibre_parser::ast::EmitType::Scope(Box::new(
+                (*value).into(),
+            ))),
             Self::Spawn { value } => NodeType::Spawn {
                 items: vec![(*value).into()],
                 auto_wait: false,

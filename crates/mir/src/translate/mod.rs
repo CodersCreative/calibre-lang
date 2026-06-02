@@ -300,10 +300,12 @@ impl MiddleEnvironment {
                     vec![CallArg::Value(*value)],
                 ),
             ),
-            NodeType::Emit(_) => {
-                // TODO Work on emit from scope
-                Ok(MiddleNode::new(MiddleNodeType::Null, node.span))
-            }
+            NodeType::Emit(EmitType::Scope(value)) => Ok(MiddleNode::new(
+                MiddleNodeType::Emit {
+                    value: Box::new(self.evaluate(scope, *value)),
+                },
+                node.span,
+            )),
             NodeType::MemberExpression { path } => {
                 self.evaluate_member_expression(scope, node.span, path)
             }
