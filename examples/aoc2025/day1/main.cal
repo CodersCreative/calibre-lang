@@ -2,7 +2,7 @@ import File from std::fs;
 
 const parse_direction := fn (line : str) -> char => {
 	let chars := trim(line) as! list:<char>;
-	chars[0];
+	return chars[0];
 };
 
 const parse_distance := fn (line : str) -> int => {
@@ -10,7 +10,7 @@ const parse_distance := fn (line : str) -> int => {
 	let mut num_text : str = "";
 	
 	for i in 0..(len(chars) - 1) => num_text &= chars[i + 1];
-	num_text as! int;
+	return num_text as! int;
 };
 
 const count_zeros_part1 := fn (lines : list:<str>) -> int => {
@@ -28,7 +28,7 @@ const count_zeros_part1 := fn (lines : list:<str>) -> int => {
 		if dial = 0 => zero_count += 1;
 	};
 	
-	zero_count;
+	return zero_count;
 };
 
 const count_zeros_part2 := fn (lines : list:<str>) -> int => {
@@ -51,7 +51,7 @@ const count_zeros_part2 := fn (lines : list:<str>) -> int => {
 		};
 	};
 	
-	zero_count;
+	return zero_count;
 };
 
 const main := fn => {

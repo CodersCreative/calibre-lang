@@ -11,8 +11,8 @@ const main := fn => {
 	};
 	
 	let lines : list:<str> = try file.read_lines(100000) => panic("Failed to read file.");
-	let part1 := solve_part1(lines);
-	let part2 := solve_part2(lines);
+	let part1 : int = solve_part1(lines);
+	let part2 : int = solve_part2(lines);
 	
 	print("Part 1 - Number of accessible rolls of paper: " & part1);
 	print("Part 2 - Total rolls of paper removed: " & part2);
@@ -22,7 +22,7 @@ const build_grid := fn (lines : list:<str>) -> list:<list:<char>> => {
 	let mut grid : list:<list:<char>> = [];
 	
 	for i in 0..len(lines) => grid <<= trim(lines[i]).to_chars();
-	grid;
+	return grid;
 };
 
 const count_neighbors := fn (grid : list:<list:<char>>, row : int, col : int) -> int => {
@@ -53,7 +53,7 @@ const count_neighbors := fn (grid : list:<list:<char>>, row : int, col : int) ->
 		dr += 1;
 	};
 	
-	count;
+	return count;
 };
 
 const solve_part1 := fn (lines : list:<str>) -> int => {
@@ -66,7 +66,7 @@ const solve_part1 := fn (lines : list:<str>) -> int => {
 		};
 	};
 	
-	accessible;
+	return accessible;
 };
 
 const build_degrees := fn (grid : list:<list:<char>>) -> list:<list:<int>> => {
@@ -79,7 +79,7 @@ const build_degrees := fn (grid : list:<list:<char>>) -> list:<list:<int>> => {
 		degree <<= move row_deg;
 	};
 	
-	degree;
+	return degree;
 };
 
 const solve_part2 := fn (lines : list:<str>) -> int => {
@@ -140,5 +140,5 @@ const solve_part2 := fn (lines : list:<str>) -> int => {
 		};
 	};
 	
-	total_removed;
+	return total_removed;
 };

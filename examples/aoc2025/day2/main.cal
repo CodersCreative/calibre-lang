@@ -26,14 +26,14 @@ const solve_part1 := fn (ranges : list:<str>, worker_count : int) -> int => {
 	let mut sum := 0;
 	
 	for _ in 0..worker_count => {
-		let part := match out.get() {
-			.Some : v => v,
-			.None => 0
+		let part : int = match out.get() {
+			.Some : v => emit v,
+			.None => emit 0
 		};
 		sum += part;
 	};
 	
-	sum;
+	return sum;
 };
 
 const solve_part2 := fn (ranges : list:<str>, worker_count : int) -> int => {
@@ -43,14 +43,14 @@ const solve_part2 := fn (ranges : list:<str>, worker_count : int) -> int => {
 	let mut sum := 0;
 	
 	for _ in 0..worker_count => {
-		let part := match out.get() {
-			.Some : v => v,
-			.None => 0
+		let part : int = match out.get() {
+			.Some : v => emit v,
+			.None => emit 0
 		};
 		sum += part;
 	};
 	
-	sum;
+	return sum;
 };
 
 const worker_sum_part1 := fn (ranges : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
@@ -81,12 +81,12 @@ const parse_range := fn (cur : str) -> <int, int> => {
 	let cur : list:<str> = cur.split("-");
 	let start := cur[0] as! int;
 	let end := cur[1] as! int;
-	(start, end);
+	return (start, end);
 };
 
 const sum_interval := fn (low : int, high : int) -> int => {
 	if high < low => return 0;
-	((low + high) * (high - low + 1)) / 2;
+	return ((low + high) * (high - low + 1)) / 2;
 };
 
 const handle_range_part1 := fn (cur : str) -> int => {
@@ -98,18 +98,18 @@ const handle_range_part1 := fn (cur : str) -> int => {
 	for k <= 10 => {
 		let p := int.pow(10, k);
 		let mul := p + 1;
-		let min_x := if k = 1 => 1 else => (p / 10);
+		let min_x : int = if k = 1 => emit 1 else => emit (p / 10);
 		let max_x := p - 1;
 		let low := start.ceil_div(mul);
 		let high := end.floor_div(mul);
-		let x_low := if low < min_x => min_x else => low;
-		let x_high := if high > max_x => max_x else => high;
+		let x_low : int = if low < min_x => emit min_x else => emit low;
+		let x_high := if high > max_x => emit max_x else => emit high;
 		
 		if x_low <= x_high => sum += mul * sum_interval(x_low, x_high);
 		k += 1;
 	};
 	
-	sum;
+	return sum;
 };
 
 const repeat_multiplier := fn (block_len : int, times : int) -> int => {
@@ -122,12 +122,12 @@ const repeat_multiplier := fn (block_len : int, times : int) -> int => {
 		factor *= base;
 	};
 	
-	mul;
+	return mul;
 };
 
 const primitive_pattern_sum := fn (block_len : int, low : int, high : int) -> int => {
 	if high < low => return 0;
-	let min_value := if block_len = 1 => 1 else => int.pow(10, block_len - 1);
+	let min_value : int = if block_len = 1 => emit 1 else => emit int.pow(10, block_len - 1);
 	let max_value := 10.pow(block_len) - 1;
 	let left := low.max(min_value);
 	let right := high.min(max_value);
@@ -147,7 +147,7 @@ const primitive_pattern_sum := fn (block_len : int, low : int, high : int) -> in
 		d += 1;
 	};
 	
-	total;
+	return total;
 };
 
 const handle_range_part2 := fn (cur : str) -> int => {
@@ -189,5 +189,5 @@ const handle_range_part2 := fn (cur : str) -> int => {
 		total_len += 1;
 	};
 	
-	sum;
+	return sum;
 };

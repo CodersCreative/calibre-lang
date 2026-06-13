@@ -290,6 +290,10 @@ impl ParserDataType {
         self.data_type.contains_auto()
     }
 
+    pub fn unwrap_one_result(&self) -> Option<&Self> {
+        self.data_type.unwrap_one_result()
+    }
+
     pub fn verify(self) -> Self {
         Self {
             data_type: self.data_type.verify(),
@@ -322,9 +326,30 @@ impl ParserInnerType {
         }
     }
 
+    pub fn unwrap_one_result(&self) -> Option<&ParserDataType> {
+        match self {
+            ParserInnerType::Result { ok, err: _ } => Some(&ok),
+            _ => None,
+        }
+    }
+
     pub fn is_auto(&self) -> bool {
         match self {
             Self::Auto(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_result(&self) -> bool {
+        match self {
+            Self::Result { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_bool(&self) -> bool {
+        match self {
+            Self::Bool => true,
             _ => false,
         }
     }
@@ -483,6 +508,20 @@ impl PotentialNewType {
     pub fn is_auto(&self) -> bool {
         match self {
             Self::DataType(x) => x.is_auto(),
+            _ => false,
+        }
+    }
+
+    pub fn is_result(&self) -> bool {
+        match self {
+            Self::DataType(x) => x.is_result(),
+            _ => false,
+        }
+    }
+
+    pub fn is_bool(&self) -> bool {
+        match self {
+            Self::DataType(x) => x.is_bool(),
             _ => false,
         }
     }

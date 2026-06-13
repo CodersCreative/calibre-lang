@@ -9,9 +9,10 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        CallArg, EmitType, FunctionHeader, GenericTypes, IfComparisonType, LoopType, MatchArmType,
-        Node, NodeType, ObjectMap, ObjectType, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, VarType,
+        AsFailureMode, CallArg, EmitType, FunctionHeader, GenericTypes, IfComparisonType, LoopType,
+        MatchArmType, Node, NodeType, ObjectMap, ObjectType, Overload, ParserDataType,
+        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+        PotentialNewType, TryCatch, VarType,
         comparison::{BooleanOperator, ComparisonOperator},
     },
 };
@@ -44,6 +45,46 @@ impl MiddleEnvironment {
                 string_fn,
             },
         )
+    }
+
+    fn verify_overload(overload: &Overload) -> Result<(), MiddleErr> {
+        let operator = Operator::from_str(&overload.operator.text)?;
+        match operator {
+            Operator::As if !overload.header.return_type.is_result() => {
+                return Err(MiddleErr::Overload(format!(
+                    "Expect result return type (Err!Ok) found {}",
+                    overload.header.return_type
+                )));
+            }
+            Operator::In if !overload.header.return_type.is_bool() => {
+                return Err(MiddleErr::Overload(format!(
+                    "Expect bool return type found {}",
+                    overload.header.return_type
+                )));
+            }
+            Operator::Binary(_) | Operator::Comparison(_) | Operator::Binary(_)
+                if overload.header.return_type.is_null()
+                    || overload.header.return_type.is_auto() =>
+            {
+                return Err(MiddleErr::Overload(format!(
+                    "Expect known non-null return type found {}",
+                    overload.header.return_type
+                )));
+            }
+            Operator::Index if overload.header.parameters.len() != 2 => {
+                return Err(MiddleErr::Overload(format!(
+                    "Expect 2 parameters found {}",
+                    overload.header.parameters.len()
+                )));
+            }
+            Operator::IndexAssign if overload.header.parameters.len() != 3 => {
+                return Err(MiddleErr::Overload(format!(
+                    "Expect 3 parameters found {}",
+                    overload.header.parameters.len()
+                )));
+            }
+            _ => Ok(()),
+        }
     }
 
     fn ident_expr(span: Span, name: &str) -> Node {
@@ -1442,6 +1483,7 @@ impl MiddleEnvironment {
 
                     if !overloads.is_empty() {
                         for overload in overloads {
+                            Self::verify_overload(&overload)?;
                             let overload = MiddleOverload {
                                 operator: Operator::from_str(&overload.operator.text)?,
                                 return_type: self.resolve_potential_new_type(
@@ -1505,6 +1547,7 @@ impl MiddleEnvironment {
                         .unwrap_or_default();
 
                     for overload in overloads {
+                        Self::verify_overload(&overload)?;
                         let overload = MiddleOverload {
                             operator: Operator::from_str(&overload.operator.text)?,
                             return_type: self.resolve_potential_new_type(
@@ -1593,6 +1636,7 @@ impl MiddleEnvironment {
                     .insert(String::from("Self"), new_name.clone());
 
                 for overload in overloads {
+                    Self::verify_overload(&overload)?;
                     let overload = MiddleOverload {
                         operator: Operator::from_str(&overload.operator.text)?,
                         return_type: self
@@ -1740,12 +1784,54 @@ impl MiddleEnvironment {
                 data_type,
                 failure_mode,
             } => {
-                let target = self.resolve_potential_new_type(scope, data_type);
+                let target = self.resolve_potential_new_type(scope, data_type.clone());
+                if self
+                    .handle_as_overload_exists(scope, *value.clone(), target.clone())
+                    .unwrap_or_default()
+                {
+                    match failure_mode {
+                        AsFailureMode::Result | AsFailureMode::Option => {}
+                        AsFailureMode::Panic => {
+                            let temp_ident = self.temp_name_at("as_res", node.span);
+                            return self.evaluate_inner(
+                                scope,
+                                Node {
+                                    node_type: NodeType::Try {
+                                        value: Box::new(Node {
+                                            node_type: NodeType::AsExpression {
+                                                value,
+                                                data_type,
+                                                failure_mode: AsFailureMode::Result,
+                                            },
+                                            span: node.span,
+                                        }),
+                                        catch: Some(TryCatch {
+                                            name: Some(PotentialDollarIdentifier::from(
+                                                ParserText::from(temp_ident.clone()),
+                                            )),
+                                            body: Box::new(Self::call_expr(
+                                                node.span,
+                                                Self::ident_expr(node.span, "panic"),
+                                                vec![CallArg::Value(Self::ident_expr(
+                                                    node.span,
+                                                    &temp_ident,
+                                                ))],
+                                            )),
+                                        }),
+                                    },
+                                    span: node.span,
+                                },
+                            );
+                        }
+                    }
+                }
+
                 if let Some(x) =
                     self.handle_as_overload(scope, node.span, *value.clone(), target.clone())?
                 {
                     return Ok(x);
                 }
+
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::AsExpression {
                         value: Box::new(self.evaluate_inner(scope, *value)?),

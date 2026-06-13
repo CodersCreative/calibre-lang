@@ -12,8 +12,8 @@ const main := fn => {
 	let lines : list:<str> = try file.read_lines(100000) => panic("Failed to read file.");
 	
 	let worker_count := 12;
-	let part1 := solve_part1(lines, worker_count);
-	let part2 := solve_part2(lines, worker_count);
+	let part1 : int = solve_part1(lines, worker_count);
+	let part2 : int = solve_part2(lines, worker_count);
 	
 	print("Part 1 - The total output joltage is: " & part1);
 	print("Part 2 - The total output joltage is: " & part2);
@@ -27,13 +27,13 @@ const solve_part1 := fn (banks : list:<str>, worker_count : int) -> int => {
 	
 	for _ in 0..worker_count => {
 		let part := match out.get() {
-			.Some : v => v,
-			.None => 0
+			.Some : v => emit v,
+			.None => emit 0
 		};
 		sum += part;
 	};
 	
-	sum;
+	return sum;
 };
 
 const solve_part2 := fn (banks : list:<str>, worker_count : int) -> int => {
@@ -44,13 +44,13 @@ const solve_part2 := fn (banks : list:<str>, worker_count : int) -> int => {
 	
 	for _ in 0..worker_count => {
 		let part := match out.get() {
-			.Some : v => v,
-			.None => 0
+			.Some : v => emit v,
+			.None => emit 0
 		};
 		sum += part;
 	};
 	
-	sum;
+	return sum;
 };
 
 const worker_part1 := fn (banks : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
@@ -95,7 +95,7 @@ const handle_part1 := fn (bank : str) -> int => {
 		};
 	};
 	
-	current as! int;
+	return current as! int;
 };
 
 const max_joltage_for_count_part2 := fn (bank : str, count : int) -> int => {
@@ -128,5 +128,5 @@ const max_joltage_for_count_part2 := fn (bank : str, count : int) -> int => {
 		picked += 1;
 	};
 	
-	out as! int;
+	return out as! int;
 };

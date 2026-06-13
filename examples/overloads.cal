@@ -3,7 +3,7 @@ import * from std::list;
 import * from std::str;
 
 type int := int @overload {
-	const "as" := fn (self : int) -> str => "int";
+	const "as" := fn (self : int) -> str!str => ok("int");
 };
 
 type Vec2 := struct { x y : int } @overload {
@@ -27,7 +27,7 @@ type Vec2 := struct { x y : int } @overload {
 
 	const "in" := fn (value : int, vec : Vec2) -> bool => return value = vec.x || value = vec.y;
 
-	const "as" := fn (self : Vec2) -> str => return "Vec2";
+	const "as" := fn (self : Vec2) -> str!str => return ok("Vec2");
 };
 
 const main := fn => {
@@ -40,7 +40,7 @@ const main := fn => {
 	print(2 in v);
 	v[0] := 9;
 	print(v);
-	print(v as str);
+	print(v as! str);
 	print(v = Vec2 { x : 9, y : 2 });
 	
 	let mut nums := list:<int>[1, 2, 3];
@@ -51,5 +51,5 @@ const main := fn => {
 	
 	let text := "hello world";
 	print("world" in text);
-	print(5 as str);
+	print(5 as! str);
 };

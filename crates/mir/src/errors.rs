@@ -32,6 +32,8 @@ pub enum MiddleErr {
     Scope(String),
     #[error("Unable to find variable : {0:?}")]
     Variable(String),
+    #[error("Overload Invalid : {0:?}")]
+    Overload(String),
     #[error("Unable to find object : {0:?}")]
     Object(String),
     #[error("Enum Variant does not exist : {0:?}")]
