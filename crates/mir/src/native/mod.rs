@@ -245,7 +245,7 @@ impl MiddleEnvironment {
 
         let map: FxHashMap<String, ParserDataType> = ParserDataType::natives();
         let funcs: Vec<(String, ParserDataType)> = funcs
-            .into_iter()
+            .iter()
             .filter_map(|x| {
                 map.get(&format!("{}.{}", name, x))
                     .cloned()

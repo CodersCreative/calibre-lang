@@ -6,11 +6,10 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        Node, NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
-        PotentialNewType, VarType,
+        Node, NodeType, ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialNewType,
+        VarType,
     },
 };
-use rustc_hash::FxHashMap;
 
 impl MiddleEnvironment {
     pub fn evaluate_var_declaration(
@@ -97,7 +96,6 @@ impl MiddleEnvironment {
             ));
         }
 
-        let is_function_decl = function_decl.is_some();
         let current_location = self.current_location.clone();
 
         let data_type = if data_type.is_auto() {

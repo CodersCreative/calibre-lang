@@ -3016,7 +3016,6 @@ impl MiddleEnvironment {
                 generic_types,
                 args,
                 reverse_args,
-                true,
             ),
             NodeType::ImportStatement {
                 module,

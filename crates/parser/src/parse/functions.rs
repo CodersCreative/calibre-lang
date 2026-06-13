@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use super::{LegacySpanMapExt, setup::StrParser};
 use crate::parse::util::{
-    auto_type, ensure_scope_node, labelled_scope_parser, lex, none_type, scope_node_parser, span,
+    ensure_scope_node, labelled_scope_parser, lex, none_type, scope_node_parser, span,
     struct_destructure_fields_parser,
 };
 use crate::{

@@ -575,66 +575,66 @@ impl MiddleEnvironment {
                 scope_body.push(self.evaluate(&scope_id, defer));
             }
 
-            if return_type.data_type != ParserInnerType::Null {
-                if let Some(last_node) = last.take() {
-                    if matches!(last_node.node_type, MiddleNodeType::Return { .. }) {
-                        last = Some(last_node);
+            if return_type.data_type != ParserInnerType::Null
+                && let Some(last_node) = last.take()
+            {
+                if matches!(last_node.node_type, MiddleNodeType::Return { .. }) {
+                    last = Some(last_node);
+                } else {
+                    let simple_return = matches!(
+                        last_node.node_type,
+                        MiddleNodeType::Identifier(_)
+                            | MiddleNodeType::IntLiteral { .. }
+                            | MiddleNodeType::FloatLiteral(_)
+                            | MiddleNodeType::StringLiteral(_)
+                            | MiddleNodeType::CharLiteral(_)
+                            | MiddleNodeType::Null
+                            | MiddleNodeType::MemberExpression { .. }
+                    );
+                    if simple_return {
+                        last = Some(MiddleNode::new(
+                            MiddleNodeType::Return {
+                                value: Some(Box::new(last_node)),
+                            },
+                            self.current_span(),
+                        ));
                     } else {
-                        let simple_return = matches!(
-                            last_node.node_type,
-                            MiddleNodeType::Identifier(_)
-                                | MiddleNodeType::IntLiteral { .. }
-                                | MiddleNodeType::FloatLiteral(_)
-                                | MiddleNodeType::StringLiteral(_)
-                                | MiddleNodeType::CharLiteral(_)
-                                | MiddleNodeType::Null
-                                | MiddleNodeType::MemberExpression { .. }
-                        );
-                        if simple_return {
-                            last = Some(MiddleNode::new(
-                                MiddleNodeType::Return {
-                                    value: Some(Box::new(last_node)),
-                                },
-                                self.current_span(),
-                            ));
-                        } else {
-                            let last_node = match last_node.node_type {
-                                MiddleNodeType::Conditional {
-                                    comparison,
-                                    then,
-                                    otherwise,
-                                } => {
-                                    let wrap = |node: Box<MiddleNode>| {
-                                        if matches!(node.node_type, MiddleNodeType::Return { .. }) {
-                                            node
-                                        } else {
-                                            Box::new(MiddleNode::new(
-                                                MiddleNodeType::Return { value: Some(node) },
-                                                self.current_span(),
-                                            ))
-                                        }
-                                    };
-                                    let then = wrap(then);
-                                    let otherwise = match otherwise {
-                                        Some(other) => Some(wrap(other)),
-                                        None => Some(Box::new(MiddleNode::new(
-                                            MiddleNodeType::Return { value: None },
+                        let last_node = match last_node.node_type {
+                            MiddleNodeType::Conditional {
+                                comparison,
+                                then,
+                                otherwise,
+                            } => {
+                                let wrap = |node: Box<MiddleNode>| {
+                                    if matches!(node.node_type, MiddleNodeType::Return { .. }) {
+                                        node
+                                    } else {
+                                        Box::new(MiddleNode::new(
+                                            MiddleNodeType::Return { value: Some(node) },
                                             self.current_span(),
-                                        ))),
-                                    };
-                                    MiddleNode {
-                                        span: last_node.span,
-                                        node_type: MiddleNodeType::Conditional {
-                                            comparison,
-                                            then,
-                                            otherwise,
-                                        },
+                                        ))
                                     }
+                                };
+                                let then = wrap(then);
+                                let otherwise = match otherwise {
+                                    Some(other) => Some(wrap(other)),
+                                    None => Some(Box::new(MiddleNode::new(
+                                        MiddleNodeType::Return { value: None },
+                                        self.current_span(),
+                                    ))),
+                                };
+                                MiddleNode {
+                                    span: last_node.span,
+                                    node_type: MiddleNodeType::Conditional {
+                                        comparison,
+                                        then,
+                                        otherwise,
+                                    },
                                 }
-                                _ => last_node,
-                            };
-                            last = Some(last_node);
-                        }
+                            }
+                            _ => last_node,
+                        };
+                        last = Some(last_node);
                     }
                 }
             }
@@ -691,7 +691,6 @@ impl MiddleEnvironment {
         generic_types: Vec<PotentialNewType>,
         mut args: Vec<CallArg>,
         mut reverse_args: Vec<Node>,
-        allow_curry: bool,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut caller = caller;
         if generic_types.is_empty()
@@ -704,22 +703,21 @@ impl MiddleEnvironment {
             return self.evaluate_inner(scope, *body);
         }
 
-        if let NodeType::MemberExpression { mut path } = caller.node_type.clone() {
-            if let Some((last_node, is_dynamic)) = path.last_mut()
-                && !*is_dynamic
-                && matches!(last_node.node_type, NodeType::Identifier(_))
-            {
-                let call = Self::call_expr_full(
-                    last_node.span,
-                    last_node.clone(),
-                    generic_types,
-                    args,
-                    reverse_args,
-                    None,
-                );
-                *last_node = call;
-                return self.evaluate_member_expression(scope, span, path);
-            }
+        if let NodeType::MemberExpression { mut path } = caller.node_type.clone()
+            && let Some((last_node, is_dynamic)) = path.last_mut()
+            && !*is_dynamic
+            && matches!(last_node.node_type, NodeType::Identifier(_))
+        {
+            let call = Self::call_expr_full(
+                last_node.span,
+                last_node.clone(),
+                generic_types,
+                args,
+                reverse_args,
+                None,
+            );
+            *last_node = call;
+            return self.evaluate_member_expression(scope, span, path);
         }
 
         if let NodeType::Identifier(caller_ident) = caller.node_type.clone() {
@@ -991,129 +989,6 @@ impl MiddleEnvironment {
                         }
 
                         lst
-                    }
-                    Some(ParserInnerType::Function {
-                        return_type,
-                        parameters,
-                    }) if allow_curry
-                        && !self.suppress_curry
-                        && parameters.len() > args.len() + reverse_args.len() =>
-                    {
-                        let provided_len = args.len();
-                        let mut capture_decls = Vec::new();
-                        let mut captured_args: Vec<CallArg> = Vec::new();
-
-                        for (i, arg) in args.into_iter().enumerate() {
-                            match arg {
-                                CallArg::Value(node) => {
-                                    let name = format!("__curry_capture_{i}");
-                                    let ident: PotentialDollarIdentifier =
-                                        ParserText::from(name.clone()).into();
-                                    capture_decls.push(Node::new(
-                                        self.current_span(),
-                                        NodeType::VariableDeclaration {
-                                            var_type: VarType::Immutable,
-                                            identifier: ident.clone(),
-                                            data_type: PotentialNewType::DataType(
-                                                ParserDataType::new(
-                                                    self.current_span(),
-                                                    ParserInnerType::Auto(None),
-                                                ),
-                                            ),
-                                            value: Box::new(node),
-                                        },
-                                    ));
-                                    captured_args.push(CallArg::Value(Node::new(
-                                        self.current_span(),
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(ident),
-                                        ),
-                                    )));
-                                }
-                                other => captured_args.push(other),
-                            }
-                        }
-
-                        let mut converted_missing_param_types: Vec<PotentialNewType> = parameters
-                            .iter()
-                            .enumerate()
-                            .filter(|(i, _)| i >= &(provided_len + reverse_args.len()))
-                            .map(|x| x.1.clone().into())
-                            .collect();
-
-                        let mut missing_param_names: Vec<String> = (0
-                            ..converted_missing_param_types.len())
-                            .map(|i| format!("$-curry-{i}"))
-                            .collect();
-
-                        for name in missing_param_names.clone() {
-                            captured_args.push(CallArg::Value(Node::new(
-                                self.current_span(),
-                                NodeType::Identifier(ParserText::from(name).into()),
-                            )));
-                        }
-
-                        for _ in 0..reverse_args.len() {
-                            captured_args.push(CallArg::Value(reverse_args.remove(0)));
-                        }
-
-                        let func_decl = Node {
-                            node_type: NodeType::FunctionDeclaration {
-                                header: FunctionHeader {
-                                    generics: GenericTypes::default(),
-                                    parameters: (0..converted_missing_param_types.len())
-                                        .map(|_| {
-                                            (
-                                                ParserText::from(missing_param_names.remove(0))
-                                                    .into(),
-                                                converted_missing_param_types.remove(0),
-                                            )
-                                        })
-                                        .collect(),
-                                    return_type: (*return_type).into(),
-                                    param_destructures: Vec::new(),
-                                },
-                                body: Box::new(Self::call_expr_full(
-                                    self.current_span(),
-                                    caller.clone(),
-                                    generic_types,
-                                    captured_args,
-                                    Vec::new(),
-                                    None,
-                                )),
-                            },
-                            span,
-                        };
-
-                        let tmp_name = self.temp_name("__curry_fn");
-                        let tmp_ident: PotentialDollarIdentifier =
-                            ParserText::from(tmp_name.clone()).into();
-                        let tmp_ident_node = Node::new(
-                            self.current_span(),
-                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                tmp_ident.clone(),
-                            )),
-                        );
-
-                        let mut body = capture_decls;
-                        body.push(Node::new(
-                            self.current_span(),
-                            NodeType::VariableDeclaration {
-                                var_type: VarType::Immutable,
-                                identifier: tmp_ident,
-                                data_type: PotentialNewType::DataType(ParserDataType::new(
-                                    self.current_span(),
-                                    ParserInnerType::Auto(None),
-                                )),
-                                value: Box::new(func_decl),
-                            },
-                        ));
-                        body.push(tmp_ident_node);
-
-                        return self.evaluate_inner(
-                            scope,
-                            Self::temp_scope(self.current_span(), body, true),
-                        );
                     }
                     _ => self.lower_call_args(scope, args, reverse_args),
                 },

@@ -1,6 +1,6 @@
 use super::{LegacySpanMapExt, setup::StrParser};
 use crate::parse::util::{
-    auto_type, lex, match_arm_to_tuple_items, none_type, span, struct_destructure_fields_parser,
+    lex, match_arm_to_tuple_items, none_type, span, struct_destructure_fields_parser,
 };
 use crate::{
     Span,

@@ -126,7 +126,6 @@ pub struct MiddleEnvironment {
     pub errors: Vec<MiddleErr>,
     pub stdlib_nodes: Vec<MiddleNode>,
     pub loaded_scopes: FxHashSet<u64>,
-    pub suppress_curry: bool,
     pub loop_stack: Vec<LoopContext>,
     pub package_metadata: Option<PackageMetadata>,
 }
@@ -162,7 +161,6 @@ impl Default for MiddleEnvironment {
             errors: Vec::new(),
             stdlib_nodes: Vec::new(),
             loaded_scopes: FxHashSet::default(),
-            suppress_curry: false,
             loop_stack: Vec::new(),
             package_metadata: None,
         }
@@ -2599,7 +2597,7 @@ impl MiddleEnvironment {
                         _ => None,
                     }
                 } else {
-                    self.resolve_type_from_node(scope, then)
+                    Some(ParserDataType::new(node.span, ParserInnerType::Null))
                 }
             }
             NodeType::MatchStatement { value: _, body } => {
