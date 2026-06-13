@@ -7,27 +7,27 @@ type int := int @overload {
 };
 
 type Vec2 := struct { x y : int } @overload {
-	const "+" := fn (a : Vec2, b : Vec2) -> Vec2 => Vec2 { x : a.x + b.x, y : a.y + b.y };
+	const "+" := fn (a : Vec2, b : Vec2) -> Vec2 => return Vec2 { x : a.x + b.x, y : a.y + b.y };
 
-	const "=" := fn (a : Vec2, b : Vec2) -> bool => a.x = b.x && a.y = b.y;
+	const "=" := fn (a : Vec2, b : Vec2) -> bool => return a.x = b.x && a.y = b.y;
 
 	const "[]" := fn (self : Vec2, idx : int) -> int => {
 		if idx = 0 => return self.x;
 		
 		if idx = 1 => return self.y;
 		
-		0;
+		return 0;
 	};
 
 	const "[]=" := fn (self : Vec2, idx : int, value : int) -> Vec2 => {
 		if idx = 0 => self.x := value;
 		if idx = 1 => self.y := value;
-		self;
+		return self;
 	};
 
-	const "in" := fn (value : int, vec : Vec2) -> bool => value = vec.x || value = vec.y;
+	const "in" := fn (value : int, vec : Vec2) -> bool => return value = vec.x || value = vec.y;
 
-	const "as" := fn (self : Vec2) -> str => "Vec2";
+	const "as" := fn (self : Vec2) -> str => return "Vec2";
 };
 
 const main := fn => {

@@ -33,10 +33,10 @@ const main := fn => {
 			
 			if x = 2 => break @inner 99;
 		} else => {
-			-1;
+			emit -1;
 		};
 	} else => {
-		-999;
+		emit -999;
 	};
 	
 	print("labelled loop result = " & hit);
@@ -53,7 +53,7 @@ const main := fn => {
 			};
 		};
 	} else => {
-		0;
+		emit 0;
 	};
 	
 	print("deep break result = " & deep);

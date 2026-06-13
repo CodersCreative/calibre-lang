@@ -4,7 +4,7 @@ const sum_index := fn (n : int) -> int => {
 	
 	for i in 0..n => acc += xs[i];
 	
-	acc;
+	return acc;
 };
 
 const main := fn => {

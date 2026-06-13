@@ -37,8 +37,9 @@ const main := fn => {
 	print(adder_float(90, 10.6));
 	
 	print("piping");
-	
-	40 |: forty > adder_float(forty) |> $(80) |> fn (input : float) => print(input);
+
+	// TODO Stabilize pipes
+	// 40 |: forty > adder_float(forty) |> $(80) |> fn (input : float) => print(input);
 	
 	print("overload");
 	let mut num := NumType { num : 10 };

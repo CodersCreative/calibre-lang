@@ -27,5 +27,5 @@ const input := fn (prompt : dyn) -> str => {
 	let buf := c_malloc(try size as uint => 0u);
 	let line := c_fgets(buf, size, handle);
 	c_free(buf);
-	trim(line);
+	return trim(line);
 };

@@ -76,9 +76,4 @@ const main := fn => {
 	let stats := list:<float>[1f, 2f, 3f, 4f, 5f, 10f];
 	
 	print("list<float> => mean/var/std/median => " & stats.mean() & ", " & stats.variance() & ", " & stats.std_dev() & ", " & stats.median());
-	
-	let http_client := Http.client("https://example.com", 443).with_header("Accept: text/plain");
-	print("http base url => " & http_client.base_url());
-	let http_client2 := Http.with_scheme("api.example.com", 0, "https");
-	print("http with_scheme base => " & http_client2.base_url());
 };

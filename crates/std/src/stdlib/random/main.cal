@@ -6,35 +6,33 @@ const RAND_MAX := 2147483647;
 
 const seed := fn => {
 	c_srand(try c_time(0) as uint => 0u);
-	null;
 };
 
 const seed_with := fn (value : int) => {
 	c_srand(try value as uint => 0u);
-	null;
 };
 
-const generate := fn -> int => c_rand();
+const generate := fn -> int => return c_rand();
 
-const bool := fn -> bool => (c_rand() & 1) = 1;
+const bool := fn -> bool => return (c_rand() & 1) = 1;
 
-const ratio := fn -> float => (try c_rand() as float => 0f) / (try RAND_MAX as float => 1f);
+const ratio := fn -> float => return (try c_rand() as float => 0f) / (try RAND_MAX as float => 1f);
 
 const range := fn (min : int, max : int) -> int => {
-	if max <= min => min else => {
+	if max <= min => return min else => {
 		let span := max - min;
-		min + (c_rand() % span);
+		return min + (c_rand() % span);
 	};
 };
 
-const range_inclusive := fn (min : int, max : int) -> int => range(min, max + 1);
+const range_inclusive := fn (min : int, max : int) -> int => return range(min, max + 1);
 
 const float_range := fn (min : float, max : float) -> float => {
-	if max <= min => min else => min + (ratio() * (max - min));
+	if max <= min => return min else => return min + (ratio() * (max - min));
 };
 
 const choice := fn <T> (values : list:<T>) -> T? => {
-	if len(values) = 0 => none;
+	if len(values) = 0 => return none;
 	let idx := range(0, len(values));
-	some(values[idx]);
+	return some(values[idx]);
 };

@@ -20,7 +20,7 @@ const calculate_pi_gen := fn (n_terms : int) -> float => {
 		pi += term;
 	};
 	
-	pi;
+	return pi;
 };
 
 const main := fn => {

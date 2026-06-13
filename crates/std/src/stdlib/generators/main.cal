@@ -5,21 +5,21 @@ impl<T> Iter for gen:<T> {
 
 	const next := fn (self : &mut gen:<T>) -> T? => {
 		if self.done => return none;
-		let value := (self.data)();
+		let value : T? = (self.data)();
 		if value = none => {
 			self.done := true;
 			return none;
 		};
 		
 		self.index += 1;
-		value;
+		return value;
 	};
 };
 
 impl<T> gen:<T> {
-	const iter := fn (self : gen:<T>) -> gen:<T> => self;
+	const iter := fn (self : gen:<T>) -> gen:<T> => return self;
 
-	const iter_mut := fn (self : &mut gen:<T>) -> gen:<T> => self;
+	const iter_mut := fn (self : &mut gen:<T>) -> gen:<T> => return self;
 
-	const into_iter := fn (self : gen:<T>) -> gen:<T> => self;
+	const into_iter := fn (self : gen:<T>) -> gen:<T> => return self;
 };

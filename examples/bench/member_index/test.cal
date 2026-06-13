@@ -9,7 +9,7 @@ const sum_pairs := fn (n : int) -> int => {
 		acc += p.a + p.b;
 	};
 	
-	acc;
+	return acc;
 };
 
 const main := fn => {

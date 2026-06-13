@@ -14,7 +14,7 @@ const matmul := fn (n : int, a b : list:<list:<float>>) -> list:<list:<float>> =
 		c <<= ci;
 	};
 	
-	c;
+	return c;
 };
 
 const main := fn => {

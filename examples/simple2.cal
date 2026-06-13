@@ -3,6 +3,6 @@ const main := fn -> null => {
 	print(whatever(10, 5));
 };
 
-const whatever := fn (a b) -> int => {
+const whatever := fn (a b : int) -> int => {
 	return a + b;
 };

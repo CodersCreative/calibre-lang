@@ -2486,7 +2486,9 @@ impl MiddleEnvironment {
             | NodeType::AssignmentExpression { .. }
             | NodeType::DestructureDeclaration { .. }
             | NodeType::DestructureAssignment { .. }
-            | NodeType::LoopDeclaration { .. }
+            | NodeType::LoopDeclaration {
+                else_body: None, ..
+            }
             | NodeType::TestDeclaration { .. }
             | NodeType::BenchDeclaration { .. }
             | NodeType::ScopeDeclaration { define: true, .. }
@@ -2595,6 +2597,11 @@ impl MiddleEnvironment {
                     Some(ParserDataType::new(node.span, ParserInnerType::Null))
                 }
             }
+
+            NodeType::LoopDeclaration {
+                else_body: Some(body),
+                ..
+            } => self.resolve_type_from_node(scope, &body),
             NodeType::MatchStatement { value: _, body } => {
                 let mut return_type: Option<ParserDataType> = None;
 
