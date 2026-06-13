@@ -46,6 +46,12 @@ pub enum MiddleErr {
         contents: String,
         errors: Vec<ParserError>,
     },
+    #[error("Error in {path:?}")]
+    InFile {
+        path: PathBuf,
+        contents: String,
+        error: Box<MiddleErr>,
+    },
     #[error("Multiple middle errors")]
     Multiple(Vec<MiddleErr>),
 }

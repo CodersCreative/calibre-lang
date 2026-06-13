@@ -20,6 +20,7 @@ pub struct LirRegistry {
     pub functions: FxHashMap<String, LirFunction>,
     pub globals: FxHashMap<String, LirGlobal>,
     pub dyn_vtables: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>>,
+    pub scope_to_file: FxHashMap<u64, String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -652,6 +653,14 @@ impl<'a> LirEnvironment<'a> {
 
     pub fn new_with_hoist(env: &'a MiddleEnvironment, allow_global_hoist: bool) -> Self {
         let entry_id = BlockId(0);
+        
+        let scope_to_file: FxHashMap<u64, String> = env.scopes
+            .iter()
+            .map(|(id, scope)| {
+                (*id, scope.path.to_string_lossy().to_string())
+            })
+            .collect();
+        
         Self {
             env,
             last_ident: None,
@@ -659,6 +668,7 @@ impl<'a> LirEnvironment<'a> {
                 functions: FxHashMap::default(),
                 globals: FxHashMap::default(),
                 dyn_vtables: Self::build_dyn_vtables(env),
+                scope_to_file,
             },
             blocks: vec![LirBlock {
                 id: entry_id,

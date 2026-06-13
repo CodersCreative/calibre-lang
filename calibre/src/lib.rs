@@ -24,6 +24,20 @@ use thiserror::Error;
 
 pub mod config;
 
+pub fn extract_scope_id_from_current_frame(vm: &VM) -> Option<u64> {
+    if let Some(frame) = vm.frames.last() {
+        if let Some(func_name) = &frame.func_name {
+            let parts: Vec<&str> = func_name.split('-').collect::<Vec<&str>>();
+            if parts.len() >= 2 {
+                if let Ok(scope_id) = parts[1].parse::<u64>() {
+                    return Some(scope_id);
+                }
+            }
+        }
+    }
+    None
+}
+
 type NativeFnCallback =
     dyn Fn(&mut VM, Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> + Send + Sync;
 
@@ -348,9 +362,25 @@ impl CalibreEngine {
         Ok(RunResult {
             artifacts,
             return_value: vm.run(main.as_ref(), Vec::new()).map_err(|error| {
+                let error_path = if let Some(scope_id) = extract_scope_id_from_current_frame(&vm) {
+                    if let Some(file_path) = vm.registry.scope_to_file.get(&scope_id) {
+                        PathBuf::from(file_path.as_str())
+                    } else {
+                        path.to_path_buf()
+                    }
+                } else {
+                    path.to_path_buf()
+                };
+
+                let error_contents = if error_path != path {
+                    fs::read_to_string(&error_path).unwrap_or_else(|_| full_source.clone())
+                } else {
+                    full_source.clone()
+                };
+
                 CalibreError::Runtime {
-                    path,
-                    contents: full_source,
+                    path: error_path,
+                    contents: error_contents,
                     error,
                 }
             })?,

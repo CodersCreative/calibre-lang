@@ -20,6 +20,8 @@ pub struct VMRegistry {
     pub globals: FxHashMap<String, VMGlobal>,
     #[serde(default)]
     pub dyn_vtables: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>>,
+    #[serde(default)]
+    pub scope_to_file: FxHashMap<u64, String>,
 }
 
 impl Display for VMRegistry {
@@ -56,6 +58,7 @@ impl From<LirRegistry> for VMRegistry {
             functions,
             globals,
             dyn_vtables: value.dyn_vtables,
+            scope_to_file: value.scope_to_file,
         }
     }
 }

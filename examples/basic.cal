@@ -1,1 +1,1 @@
-const main := fn => print("Hello, World!");
+const main : fn() -> int = fn => return 0;

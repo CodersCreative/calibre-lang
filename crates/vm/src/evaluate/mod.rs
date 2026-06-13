@@ -1084,7 +1084,7 @@ impl VM {
         let caller_frame = self.frames.len().saturating_sub(1);
 
         let func_ptr = function as *const VMFunction as usize;
-        self.push_frame(function.reg_count as usize, func_ptr);
+        self.push_frame(function.reg_count as usize, func_ptr, Some(function.name.clone()));
 
         for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
             let arg = self.call_arg_from_frame_reg(caller_frame, arg_reg);
@@ -1290,7 +1290,7 @@ impl VM {
         state.yielded = None;
         let prev_vars = if state.block.is_none() {
             let func_ptr = function as *const VMFunction as usize;
-            self.push_frame(function.reg_count as usize, func_ptr);
+            self.push_frame(function.reg_count as usize, func_ptr, Some(function.name.clone()));
             for (reg, arg) in function.param_regs.iter().zip(args) {
                 self.set_reg_value(*reg, arg);
             }

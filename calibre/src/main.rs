@@ -1,4 +1,4 @@
-use calibre::{CalibreEngine, CalibreError, CompileMode};
+use calibre::{CalibreEngine, CalibreError, CompileMode, extract_scope_id_from_current_frame};
 use calibre_diagnostics;
 use calibre_lir::LirEnvironment;
 use calibre_mir::{
@@ -39,6 +39,13 @@ fn emit_middle_error(path: &Path, contents: &str, err: &MiddleErr) {
             errors,
         } => {
             calibre_diagnostics::emit_parser_errors(err_path, contents, errors);
+        }
+        MiddleErr::InFile {
+            path: err_path,
+            contents: err_contents,
+            error,
+        } => {
+            emit_middle_error(err_path, err_contents, error);
         }
         other => {
             calibre_diagnostics::emit_error(path, contents, other.to_string(), None);
@@ -169,9 +176,26 @@ async fn run_source(
     if let Some(main) = vm.registry.functions.get(&entry_name).cloned() {
         if let Err(err) = vm.run(main.as_ref(), Vec::new()) {
             let (span, inner) = err.innermost();
+
+            let error_path = if let Some(scope_id) = extract_scope_id_from_current_frame(&vm) {
+                if let Some(file_path) = vm.registry.scope_to_file.get(&scope_id) {
+                    PathBuf::from(file_path.as_str())
+                } else {
+                    path.to_path_buf()
+                }
+            } else {
+                path.to_path_buf()
+            };
+
+            let error_contents = if error_path != path {
+                std::fs::read_to_string(&error_path).unwrap_or_else(|_| contents.clone())
+            } else {
+                contents.clone()
+            };
+
             calibre_diagnostics::emit_runtime_error(
-                path,
-                &contents,
+                &error_path,
+                &error_contents,
                 inner.to_string(),
                 span,
                 inner.help(),

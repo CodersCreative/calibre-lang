@@ -36,14 +36,15 @@ mod vm_lookup;
 pub(crate) use vm_lookup::VarName;
 
 #[derive(Debug, Clone)]
-struct VMFrame {
-    reg_start: usize,
-    reg_count: usize,
-    local_map_base: Option<Arc<FxHashMap<Arc<str>, Reg>>>,
-    local_map: FxHashMap<Arc<str>, Reg>,
-    member_sources: FxHashMap<Reg, (Reg, String)>,
-    func_ptr: usize,
-    acc: RuntimeValue,
+pub struct VMFrame {
+    pub reg_start: usize,
+    pub reg_count: usize,
+    pub local_map_base: Option<Arc<FxHashMap<Arc<str>, Reg>>>,
+    pub local_map: FxHashMap<Arc<str>, Reg>,
+    pub member_sources: FxHashMap<Reg, (Reg, String)>,
+    pub func_ptr: usize,
+    pub func_name: Option<String>,
+    pub acc: RuntimeValue,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -63,6 +64,7 @@ impl Default for VMFrame {
             local_map: FxHashMap::default(),
             member_sources: FxHashMap::default(),
             func_ptr: 0,
+            func_name: None,
             acc: RuntimeValue::Null,
         }
     }
@@ -81,7 +83,7 @@ pub struct VM {
     reg_arena: Vec<RuntimeValue>,
     reg_top: usize,
     name_arena: FxHashMap<Arc<str>, Arc<str>>,
-    frames: Vec<VMFrame>,
+    pub frames: Vec<VMFrame>,
     frame_pool: Vec<VMFrame>,
     caches: VMCaches,
     func_suffix: FxHashMap<String, Option<Arc<VMFunction>>>,
@@ -390,7 +392,7 @@ impl VM {
         id
     }
 
-    fn push_frame(&mut self, reg_count: usize, func_ptr: usize) {
+    fn push_frame(&mut self, reg_count: usize, func_ptr: usize, func_name: Option<String>) {
         let start = self.reg_top;
         self.reg_top = self.reg_top.saturating_add(reg_count);
         if self.reg_top > self.reg_arena.len() {
@@ -403,6 +405,7 @@ impl VM {
             frame.local_map.clear();
             frame.member_sources.clear();
             frame.func_ptr = func_ptr;
+            frame.func_name = func_name;
             frame.acc = RuntimeValue::Null;
             self.frames.push(frame);
         } else {
@@ -413,6 +416,7 @@ impl VM {
                 local_map: FxHashMap::default(),
                 member_sources: FxHashMap::default(),
                 func_ptr,
+                func_name,
                 acc: RuntimeValue::Null,
             });
         }

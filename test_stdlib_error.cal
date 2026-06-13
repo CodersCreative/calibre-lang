@@ -1,0 +1,5 @@
+const main := fn => {
+    // This will trigger a runtime error when trying to call len on null
+    let x := null;
+    print(len(x));
+};

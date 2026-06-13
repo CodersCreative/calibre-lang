@@ -31,9 +31,7 @@ impl MiddleEnvironment {
             defers: Vec::new(),
         });
 
-        let root = self.new_scope(Some(scope), path, Some("root"));
-
-        root
+        self.new_scope(Some(scope), path, Some("root"))
     }
 
     pub fn new_root_scope_with_std(
@@ -61,9 +59,23 @@ impl MiddleEnvironment {
         self.setup_global(&scope);
         self.stdlib_nodes.clear();
         let mut parser = Parser::default();
-        if let Ok(globals) = fs::read_to_string(get_globals_path()) {
+        let global_path = get_globals_path();
+        if let Ok(globals) = fs::read_to_string(global_path.clone()) {
             let program = parser.produce_ast(&globals);
+            let error_count_before = self.errors.len();
             let middle = self.evaluate(&scope, program);
+
+            if self.errors.len() > error_count_before {
+                let new_errors: Vec<_> = self.errors.drain(error_count_before..).collect();
+                for err in new_errors {
+                    self.errors.push(crate::errors::MiddleErr::InFile {
+                        path: global_path.clone(),
+                        contents: globals.clone(),
+                        error: Box::new(err),
+                    });
+                }
+            }
+
             self.stdlib_nodes.push(middle);
         }
 
@@ -71,9 +83,7 @@ impl MiddleEnvironment {
 
         self.setup_std(&std);
 
-        let root = self.new_scope(Some(scope), path, Some("root"));
-
-        root
+        self.new_scope(Some(scope), path, Some("root"))
     }
 
     pub fn setup_global(&mut self, scope: &u64) {
@@ -104,7 +114,7 @@ impl MiddleEnvironment {
             .collect();
 
         let mut vars: Vec<(String, ParserDataType)> =
-            ParserDataType::constants().into_iter().map(|x| x).collect();
+            ParserDataType::constants().into_iter().collect();
         vars.append(&mut funcs);
 
         for var in vars {
@@ -119,7 +129,7 @@ impl MiddleEnvironment {
                 },
             );
 
-            if let Some(scope_ref) = self.scopes.get_mut(&scope) {
+            if let Some(scope_ref) = self.scopes.get_mut(scope) {
                 scope_ref.mappings.insert(var.0, name);
             }
         }
@@ -131,10 +141,23 @@ impl MiddleEnvironment {
         if let Some(scope_ref) = self.scopes.get(scope)
             && let Ok(stdlib) = fs::read_to_string(&scope_ref.path)
         {
+            let scope_path = scope_ref.path.clone();
             let program = parser.produce_ast(&stdlib);
+            let error_count_before = self.errors.len();
             let middle = self.evaluate(scope, program);
             self.stdlib_nodes.push(middle);
             self.loaded_scopes.insert(*scope);
+
+            if self.errors.len() > error_count_before {
+                let new_errors: Vec<_> = self.errors.drain(error_count_before..).collect();
+                for err in new_errors {
+                    self.errors.push(crate::errors::MiddleErr::InFile {
+                        path: scope_path.clone(),
+                        contents: stdlib.clone(),
+                        error: Box::new(err),
+                    });
+                }
+            }
         }
 
         let mut add = |name, funcs, load| self.setup_std_module(scope, name, funcs, load);
@@ -272,6 +295,7 @@ impl MiddleEnvironment {
         if load_source {
             let mut parser = Parser::default();
             if let Ok(stdlib) = fs::read_to_string(&scope_path) {
+                let scope_path_clone = scope_path.clone();
                 parser.set_source_path(Some(scope_path.clone()));
                 let program = parser.produce_ast(&stdlib);
                 if !parser.errors.is_empty() {
@@ -282,9 +306,23 @@ impl MiddleEnvironment {
                     });
                     return;
                 }
+
+                let error_count_before = self.errors.len();
                 let middle = self.evaluate(&scope, program);
+
                 self.stdlib_nodes.push(middle);
                 self.loaded_scopes.insert(scope);
+
+                if self.errors.len() > error_count_before {
+                    let new_errors: Vec<_> = self.errors.drain(error_count_before..).collect();
+                    for err in new_errors {
+                        self.errors.push(crate::errors::MiddleErr::InFile {
+                            path: scope_path_clone.clone(),
+                            contents: stdlib.clone(),
+                            error: Box::new(err),
+                        });
+                    }
+                }
             }
         }
     }
