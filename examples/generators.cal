@@ -28,7 +28,7 @@ const main := fn => {
 	let odds := fn(x for x in 0..20 if x % 2 != 0) -> gen:<int>;
 	print("odds " & odds.collect());
 	
-	let mapped := fn(x + 1 for x in 0..5).map(fn (x : int) -> int => x * 10).collect();
+	let mapped := fn(x + 1 for x in 0..5).map(fn (x : int) -> int => return x * 10).collect();
 	print(mapped);
 	
 	let mut infinite := evens_from(0);

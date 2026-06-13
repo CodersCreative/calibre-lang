@@ -18,7 +18,7 @@ impl MiddleEnvironment {
         span: Span,
         var_type: VarType,
         identifier: PotentialDollarIdentifier,
-        value: Node,
+        mut value: Node,
         data_type: PotentialNewType,
     ) -> Result<MiddleNode, MiddleErr> {
         let identifier = self
@@ -30,8 +30,6 @@ impl MiddleEnvironment {
         } else {
             get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))
         };
-
-        let mut value = value;
 
         if let NodeType::CallExpression {
             caller,

@@ -92,14 +92,16 @@ impl MiddleEnvironment {
         &self,
         name: PotentialGenericTypeIdentifier,
         value: Node,
+        data_type: Option<ParserDataType>,
         body_nodes: &mut Vec<Node>,
         guard_bindings: &mut Vec<(String, Node)>,
     ) {
-        body_nodes.push(Self::auto_var_decl(
+        body_nodes.push(Self::typed_var_decl(
             self.current_span(),
             VarType::Immutable,
             name.get_ident().clone(),
             value.clone(),
+            data_type.unwrap_or(ParserDataType::from(ParserInnerType::Auto(None))),
         ));
         guard_bindings.push((name.get_ident().to_string(), value));
     }
@@ -535,7 +537,7 @@ impl MiddleEnvironment {
             NodeType::Identifier(id)
                 if self.resolve_potential_generic_ident(scope, id).is_none() =>
             {
-                self.match_add_binding(id.clone(), actual, body_nodes, guard_bindings);
+                self.match_add_binding(id.clone(), actual, None, body_nodes, guard_bindings);
             }
             _ => {
                 let mut bitor_values = Vec::new();
@@ -729,14 +731,6 @@ impl MiddleEnvironment {
             return self.enum_variant_index_from_data_type(&dt, variant_name);
         }
         Self::builtin_enum_variant_index(variant_name)
-    }
-
-    fn enum_variant_index_from_type(
-        &self,
-        data_type: &ParserDataType,
-        variant_name: &str,
-    ) -> Option<i64> {
-        self.enum_variant_index_from_data_type(data_type, variant_name)
     }
 
     fn rewrite_match_guard_bindings(node: Node, bindings: &[(String, Node)]) -> Node {
@@ -960,6 +954,7 @@ impl MiddleEnvironment {
                                                 ParserText::from("other".to_string()).into(),
                                             ),
                                             current.clone(),
+                                            None,
                                             &mut body_nodes,
                                             &mut guard_bindings,
                                         );
@@ -993,6 +988,7 @@ impl MiddleEnvironment {
                                                 ParserText::from("other".to_string()).into(),
                                             ),
                                             current.clone(),
+                                            Some(ParserDataType::from(ParserInnerType::Bool)),
                                             &mut body_nodes,
                                             &mut guard_bindings,
                                         );
@@ -1016,6 +1012,7 @@ impl MiddleEnvironment {
                                                 ParserText::from("other".to_string()).into(),
                                             ),
                                             current.clone(),
+                                            None,
                                             &mut body_nodes,
                                             &mut guard_bindings,
                                         );
@@ -1039,6 +1036,7 @@ impl MiddleEnvironment {
                                                 ParserText::from("other".to_string()).into(),
                                             ),
                                             current.clone(),
+                                            Some(ParserDataType::from(ParserInnerType::Str)),
                                             &mut body_nodes,
                                             &mut guard_bindings,
                                         );
@@ -1104,7 +1102,7 @@ impl MiddleEnvironment {
                                                 .as_ref()
                                                 .and_then(|types| types.get(idx))
                                                 .and_then(|dt| {
-                                                    self.enum_variant_index_from_type(
+                                                    self.enum_variant_index_from_data_type(
                                                         dt,
                                                         val.text.trim(),
                                                     )
@@ -1474,6 +1472,7 @@ impl MiddleEnvironment {
                                                 ParserText::from("other".to_string()).into(),
                                             ),
                                             current.clone(),
+                                            None,
                                             &mut body_nodes,
                                             &mut guard_bindings,
                                         );
@@ -2024,7 +2023,7 @@ impl MiddleEnvironment {
                         };
                         index as i64
                     } else if let Some(index) =
-                        self.enum_variant_index_from_type(resolved_data_type, val.text.trim())
+                        self.enum_variant_index_from_data_type(resolved_data_type, val.text.trim())
                     {
                         index
                     } else {

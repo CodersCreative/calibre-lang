@@ -28,7 +28,7 @@ impl str {
 	const split_at := fn (self : str, idx : int) -> <str, str> => {
 		let chars := self.to_chars();
 		let l := len(chars);
-		let cut := if idx < 0 => 0 else => if idx > l => l else => idx;
+		let cut := if idx < 0 => emit 0 else => emit if idx > l => emit l else => emit idx;
 		let mut left := "";
 		let mut right := "";
 		for i in 0..cut => left &= chars[i];

@@ -1668,19 +1668,16 @@ impl MiddleEnvironment {
                     };
                 }
 
-                if let Some((tpl_params, _, _)) = self.generic_type_templates.get(&id).cloned() {
-                    if tpl_params.len() == resolved_gens.len()
-                        && !resolved_gens.iter().any(|g| g.is_auto())
-                    {
-                        if let Some(spec) =
-                            self.ensure_specialized_type(scope, &id, &tpl_params, &resolved_gens)
-                        {
-                            return ParserDataType {
-                                data_type: ParserInnerType::Struct(spec),
-                                span: data_type.span,
-                            };
-                        }
-                    }
+                if let Some((tpl_params, _, _)) = self.generic_type_templates.get(&id).cloned()
+                    && tpl_params.len() == resolved_gens.len()
+                    && !resolved_gens.iter().any(|g| g.is_auto())
+                    && let Some(spec) =
+                        self.ensure_specialized_type(scope, &id, &tpl_params, &resolved_gens)
+                {
+                    return ParserDataType {
+                        data_type: ParserInnerType::Struct(spec),
+                        span: data_type.span,
+                    };
                 }
 
                 ParserDataType {
@@ -1754,13 +1751,11 @@ impl MiddleEnvironment {
                     lst.push(self.resolve_data_type(scope, x));
                 }
 
-                if lst.len() == 2 {
-                    if let ParserInnerType::Struct(name) = &lst[1].data_type {
-                        if let Some(resolved) = self.resolve_associated_type(&lst[0], name.as_str())
-                        {
-                            return resolved;
-                        }
-                    }
+                if lst.len() == 2
+                    && let ParserInnerType::Struct(name) = &lst[1].data_type
+                    && let Some(resolved) = self.resolve_associated_type(&lst[0], name.as_str())
+                {
+                    return resolved;
                 }
 
                 ParserDataType {

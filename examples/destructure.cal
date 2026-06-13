@@ -13,7 +13,7 @@ impl PairEnum {
 	};
 };
 
-const sum_pair := fn ((a, b)) => a + b;
+const sum_pair := fn ((a, b) : <int, int>) => a + b;
 const sum_pair_struct := fn ({left: a, right: b} : Pair) => a + b;
 const sum_pair_struct_basic := fn ({left, right} : Pair) => left + right;
 
@@ -33,9 +33,9 @@ const classify_list := fn match list:<int> -> str {
 };
 
 const parse_command := fn match str -> str {
-	"go:" & direction => "move " & direction,
-	head @ "noop" & _ => "saw " & head,
-	_ => "unknown"
+	"go:" & direction => emit "move " & direction,
+	head @ "noop" & _ => emit "saw " & head,
+	_ => emit "unknown"
 };
 
 const main := fn => {

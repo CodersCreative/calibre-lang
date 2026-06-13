@@ -2,7 +2,7 @@ const main := fn => {
 	let mut value := for i in 0..10 => {
 		if i > 8 => break i;
 	} else => {
-		0;
+		emit 0;
 	};
 
 	print("loop result = " & value);
@@ -10,7 +10,7 @@ const main := fn => {
 	let mut val := for i in 0..5 => {
 		if i > 8 => break i;
 	} else => {
-		0;
+		emit 0;
 	};
 	
 	print("2nd loop result = " & val);

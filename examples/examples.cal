@@ -19,7 +19,7 @@ const main := fn => {
 			if i < len(inputs) => txt &= inputs[i];
 		};
 		
-		txt;
+		return txt;
 	}"Hello, my name is {name} and I'm {age} years old!";
 	
 	print(txt);
@@ -53,17 +53,17 @@ const main := fn => {
 	};
 	
 	wg.wait();
-	let bmi_val := match bmi_ch.get() {
+	let bmi_val : float = match bmi_ch.get() {
 		.Some : v => v,
 		.None => 0f
 	};
 	
-	let fac_val := match fac_ch.get() {
+	let fac_val : int = match fac_ch.get() {
 		.Some : v => v,
 		.None => 0
 	};
 	
-	let lock_val := match lock_ch.get() {
+	let lock_val : bool = match lock_ch.get() {
 		.Some : v => v,
 		.None => false
 	};

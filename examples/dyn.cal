@@ -11,57 +11,57 @@ type Unlocked := struct { };
 type Alarm := struct { };
 
 impl Display for Locked {
-	const display := fn (self : &Locked) -> str => "Locked[" & self.attempts & "]";
+	const display := fn (self : &Locked) -> str => return "Locked[" & self.attempts & "]";
 };
 
 impl Display for Unlocked {
-	const display := fn (_self : &Unlocked) -> str => "Unlocked[]";
+	const display := fn (_self : &Unlocked) -> str => return "Unlocked[]";
 };
 
 impl Display for Alarm {
-	const display := fn (_self : &Alarm) -> str => "Alarm[]";
+	const display := fn (_self : &Alarm) -> str => return "Alarm[]";
 };
 
 impl State for Locked {
-	const name := fn (self : &Locked) -> str => "Locked(" & self.attempts & ")";
+	const name := fn (self : &Locked) -> str => return "Locked(" & self.attempts & ")";
 
-	const done := fn (_self : &Locked) -> bool => false;
+	const done := fn (_self : &Locked) -> bool => return false;
 
 	const on_input := fn (self : &Locked, input : str) -> dyn:<State> => {
 		if input = "1234" => {
-			Unlocked { } as! dyn:<State>;
+			return Unlocked { } as! dyn:<State>;
 		} else if self.attempts >= 2 => {
-			Alarm { } as! dyn:<State>;
+			return Alarm { } as! dyn:<State>;
 		} else => {
-			Locked { attempts : self.attempts + 1 } as! dyn:<State>;
+			return Locked { attempts : self.attempts + 1 } as! dyn:<State>;
 		};
 	};
 };
 
 impl State for Unlocked {
-	const name := fn (_self : &Unlocked) -> str => "Unlocked";
+	const name := fn (_self : &Unlocked) -> str => return "Unlocked";
 
-	const done := fn (_self : &Unlocked) -> bool => true;
+	const done := fn (_self : &Unlocked) -> bool => return true;
 
 	const on_input := fn (_self : &Unlocked, input : str) -> dyn:<State> => {
 		if input = "lock" => {
-			Locked { attempts : 0 } as! dyn:<State>;
+			return Locked { attempts : 0 } as! dyn:<State>;
 		} else => {
-			Unlocked { } as! dyn:<State>;
+			return Unlocked { } as! dyn:<State>;
 		};
 	};
 };
 
 impl State for Alarm {
-	const name := fn (_self : &Alarm) -> str => "Alarm";
+	const name := fn (_self : &Alarm) -> str => return "Alarm";
 
-	const done := fn (_self : &Alarm) -> bool => true;
+	const done := fn (_self : &Alarm) -> bool => return true;
 
 	const on_input := fn (_self : &Alarm, input : str) -> dyn:<State> => {
 		if input = "reset" => {
-			Locked { attempts : 0 } as! dyn:<State>;
+			return Locked { attempts : 0 } as! dyn:<State>;
 		} else => {
-			Alarm { } as! dyn:<State>;
+			return Alarm { } as! dyn:<State>;
 		};
 	};
 };

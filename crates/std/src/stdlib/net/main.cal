@@ -78,14 +78,14 @@ const build_url := fn (scheme : str, host : str, port : int, path : str) -> str 
 impl Http {
 	const client := fn (host : str, port : int) -> HttpClient => {
 		let scheme := infer_scheme(host, port);
-		let resolved_port := if port <= 0 => default_port(scheme) else => port;
+		let resolved_port := if port <= 0 => emit default_port(scheme) else => emit port;
 		
 		let client := HttpClient { host : normalize_host(host), port : resolved_port, headers : list:<str>[], scheme };
 		client;
 	};
 
 	const with_scheme := fn (host : str, port : int, scheme : str) -> HttpClient => {
-		let resolved_port := if port <= 0 => default_port(scheme) else => port;
+		let resolved_port := if port <= 0 => emit default_port(scheme) else => emit port;
 		
 		let client := HttpClient { host : normalize_host(host), port : resolved_port, headers : list:<str>[], scheme };
 		client;

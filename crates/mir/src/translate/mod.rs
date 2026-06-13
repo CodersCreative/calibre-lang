@@ -483,7 +483,6 @@ impl MiddleEnvironment {
                         );
 
                         let wg_new = Self::waitgroup_static_call(node.span, "new");
-                        let start_new = Self::waitgroup_static_call(node.span, "new");
 
                         let wg_decl = Node::new(
                             node.span,
@@ -494,7 +493,7 @@ impl MiddleEnvironment {
                                     node.span,
                                     ParserInnerType::Auto(None),
                                 )),
-                                value: Box::new(wg_new),
+                                value: Box::new(wg_new.clone()),
                             },
                         );
                         let start_decl = Node::new(
@@ -506,7 +505,7 @@ impl MiddleEnvironment {
                                     node.span,
                                     ParserInnerType::Auto(None),
                                 )),
-                                value: Box::new(start_new),
+                                value: Box::new(wg_new),
                             },
                         );
                         let start_add = Self::call_member_expr(
@@ -720,8 +719,8 @@ impl MiddleEnvironment {
                         var_type: VarType::Mutable,
                         identifier: wg_ident.clone(),
                         data_type: PotentialNewType::DataType(ParserDataType::new(
-                            node.span,
-                            ParserInnerType::Auto(None),
+                            span,
+                            ParserInnerType::Struct("WaitGroup".to_string()),
                         )),
                         value: Box::new(wg_new),
                     },
@@ -784,7 +783,7 @@ impl MiddleEnvironment {
                                     identifier: wg_ident.clone(),
                                     data_type: PotentialNewType::DataType(ParserDataType::new(
                                         span,
-                                        ParserInnerType::Auto(None),
+                                        ParserInnerType::Struct("WaitGroup".to_string()),
                                     )),
                                     value: Box::new(scope_node),
                                 },

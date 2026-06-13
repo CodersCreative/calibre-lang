@@ -51,9 +51,9 @@ impl<T> list:<T> {
 
 	const slice := fn (self : list:<T>, start : int, end : int) -> list:<T> => {
 		let l := len(self);
-		let s := if start < 0 => 0 else => start;
+		let s := if start < 0 => emit 0 else => emit start;
 		
-		let e := if end > l => l else => end;
+		let e := if end > l => emit l else => emit end;
 		
 		let mut out := list:<T>[];
 		
@@ -62,18 +62,18 @@ impl<T> list:<T> {
 	};
 
 	const split_at := fn (self : list:<T>, idx : int) -> <list:<T>, list:<T>> => {
-		let cut := if idx < 0 => 0 else => if idx > len(self) => len(self) else => idx;
+		let cut := if idx < 0 => emit 0 else => emit if idx > len(self) => emit len(self) else => emit idx;
 		tuple(self.slice(0, cut), self.slice(cut, len(self)));
 	};
 
 	const take := fn (self : list:<T>, n : int) -> list:<T> => {
-		let end := if n < 0 => 0 else => n;
+		let end := if n < 0 => emit 0 else => emit n;
 		
 		self.slice(0, end);
 	};
 
 	const skip := fn (self : list:<T>, n : int) -> list:<T> => {
-		let start := if n < 0 => 0 else => n;
+		let start := if n < 0 => emit 0 else => emit n;
 		
 		self.slice(start, len(self));
 	};

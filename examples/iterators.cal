@@ -8,7 +8,7 @@ impl Iter for Counter {
 		
 		let value := self.current;
 		self.current := self.current + 1;
-		some(value);
+		return some(value);
 	};
 };
 
@@ -41,22 +41,22 @@ const main := fn => {
 	let mut mut_it : ListIter:<int> = mutable_list.iter_mut();
 	print(mut_it.next());
 	
-	let mapped := list:<int>[1, 2, 3].into_iter().map(fn (x : int) -> int => x * 2).collect();
+	let mapped := list:<int>[1, 2, 3].into_iter().map(fn (x : int) -> int => return x * 2).collect();
 	print(mapped);
 	
-	let filtered := list:<int>[1, 2, 3, 4].into_iter().filter(fn (x : int) -> bool => x % 2 = 0).collect();
+	let filtered := list:<int>[1, 2, 3, 4].into_iter().filter(fn (x : int) -> bool => return x % 2 = 0).collect();
 	print(filtered);
 	
-	let sum := list:<int>[1, 2, 3, 4].into_iter().fold(0, fn (acc : int, x : int) -> int => acc + x);
+	let sum := list:<int>[1, 2, 3, 4].into_iter().fold(0, fn (acc : int, x : int) -> int => return acc + x);
 	print(sum);
 	
-	let any_big := list:<int>[1, 2, 3].into_iter().any(fn (x : int) -> bool => x > 2);
+	let any_big := list:<int>[1, 2, 3].into_iter().any(fn (x : int) -> bool => return x > 2);
 	print(any_big);
 	
-	let all_pos := list:<int>[1, 2, 3].into_iter().all(fn (x : int) -> bool => x > 0);
+	let all_pos := list:<int>[1, 2, 3].into_iter().all(fn (x : int) -> bool => return x > 0);
 	print(all_pos);
 	
-	let found := list:<int>[3, 4, 5].into_iter().find(fn (x : int) -> bool => x = 4);
+	let found := list:<int>[3, 4, 5].into_iter().find(fn (x : int) -> bool => return x = 4);
 	print(found);
 	
 	let taken := list:<int>[1, 2, 3, 4, 5].into_iter().take(3).collect();
@@ -73,7 +73,7 @@ const main := fn => {
 	print(stepped.next());
 	print(stepped.next());
 	
-	let parts := list:<int>[1, 2, 3, 4, 5].into_iter().partition(fn (x : int) -> bool => x % 2 = 0);
+	let parts := list:<int>[1, 2, 3, 4, 5].into_iter().partition(fn (x : int) -> bool => return x % 2 = 0);
 	let mut evens := parts.0;
 	let mut odds := parts.1;
 	print(evens.next());

@@ -9,7 +9,7 @@ const worker := fn (id : int, jobs : &Channel:<int>, results : &mut Channel:<int
 			let score := job * (id + 1);
 			print("worker " & id & " got " & job & " => " & score);
 			emit results score;
-			total.with(fn (x : int) -> int => x + score);
+			total.with(fn (x : int) -> int => emit x + score);
 			handled += 1;
 		};
 	};
@@ -77,14 +77,14 @@ const main := fn => {
 		}
 	};
 	
-	let width := 32;
+	let width : int = 32;
 	
 	let concurrent := [=> {
 		if i % 2 = 0 => {
 			std::thread::Duration::from_ms((width + 1 - i) * 2).sleep();
 		};
 		
-		i;
+		emit i;
 	} spawn for i in 0..=width];
 	
 	print("concurrent list => " & concurrent);

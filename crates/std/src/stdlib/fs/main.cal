@@ -54,7 +54,7 @@ impl File {
 
 	const read_line := fn (self : &File, max : int) -> str!str => {
 		if File.is_null_handle(self.handle) => return err("read_line on null file handle");
-		let size := if max <= 0 => 1 else => max + 1;
+		let size := if max <= 0 => emit 1 else => emit max + 1;
 		let buf := c_malloc(size);
 		if (try buf as int => 0) = 0 => return err("malloc failed while reading file");
 		let line := c_fgets(buf, size, self.handle);
