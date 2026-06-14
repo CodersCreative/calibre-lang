@@ -16,10 +16,17 @@ use crate::{
 
 #[derive(Clone)]
 enum FnParamGroup {
-    Plain(Vec<(PotentialDollarIdentifier, PotentialNewType)>),
+    Plain(
+        Vec<(
+            PotentialDollarIdentifier,
+            Option<PotentialNewType>,
+            Option<Box<Node>>,
+        )>,
+    ),
     Destructure {
         pattern: DestructurePattern,
-        data_type: PotentialNewType,
+        data_type: Option<PotentialNewType>,
+        default: Option<Box<Node>>,
         span: Span,
     },
 }
@@ -90,30 +97,40 @@ pub fn build_function_parsers<'a>(
             .collect::<Vec<_>>(),
         )
         .then_ignore(lex(pad.clone(), just(')')))
-        .then(lex(pad.clone(), just(':')).ignore_then(type_name.clone()))
+        .then(
+            lex(pad.clone(), just(':'))
+                .ignore_then(type_name.clone().or_not())
+                .then(lex(pad.clone(), just('=').ignore_then(expr.clone())).or_not()),
+        )
         .map_with_span({
             let ls = line_starts.clone();
-            move |(items, ty), r| {
+            move |(items, (ty, default)), r| {
                 let sp = span(ls.as_ref(), r);
                 FnParamGroup::Destructure {
                     span: sp,
                     pattern: DestructurePattern::Tuple(items),
                     data_type: ty,
+                    default: default.map(Box::new),
                 }
             }
         });
 
     let struct_destructure_param =
         struct_destructure_fields_parser(pad.clone(), comma.clone(), ident.clone())
-            .then(lex(pad.clone(), just(':')).ignore_then(type_name.clone()))
+            .then(
+                lex(pad.clone(), just(':'))
+                    .ignore_then(type_name.clone().or_not())
+                    .then(lex(pad.clone(), just('=').ignore_then(expr.clone())).or_not()),
+            )
             .map_with_span({
                 let ls = line_starts.clone();
-                move |(items, ty), r| {
+                move |(items, (ty, default)), r| {
                     let sp = span(ls.as_ref(), r);
                     FnParamGroup::Destructure {
                         span: sp,
                         pattern: DestructurePattern::Struct(items),
                         data_type: ty,
+                        default: default.map(Box::new),
                     }
                 }
             });
@@ -148,9 +165,10 @@ pub fn build_function_parsers<'a>(
         .collect::<Vec<_>>()
         .then(
             lex(pad.clone(), just(':'))
-                .ignore_then(choice((impl_trait_param_type.clone(), type_name.clone()))),
+                .ignore_then(choice((impl_trait_param_type.clone(), type_name.clone())).or_not())
+                .then(lex(pad.clone(), just('=').ignore_then(expr.clone())).or_not()),
         )
-        .map(|(names, ty)| {
+        .map(|(names, (ty, default))| {
             FnParamGroup::Plain(
                 names
                     .into_iter()
@@ -158,6 +176,7 @@ pub fn build_function_parsers<'a>(
                         (
                             PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
                             ty.clone(),
+                            default.clone().map(Box::new),
                         )
                     })
                     .collect::<Vec<_>>(),
@@ -216,6 +235,7 @@ pub fn build_function_parsers<'a>(
                     FnParamGroup::Destructure {
                         pattern,
                         data_type,
+                        default,
                         span,
                     } => {
                         let param_index = parameters.len();
@@ -227,6 +247,7 @@ pub fn build_function_parsers<'a>(
                                 synthetic_name,
                             )),
                             data_type,
+                            default,
                         ));
                         param_destructures.push((param_index, pattern));
                     }

@@ -1223,7 +1223,11 @@ impl Overload {
 #[derive(Clone, Debug, PartialEq)]
 pub struct FunctionHeader {
     pub generics: GenericTypes,
-    pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
+    pub parameters: Vec<(
+        PotentialDollarIdentifier,
+        Option<PotentialNewType>,
+        Option<Box<Node>>,
+    )>,
     pub return_type: PotentialNewType,
     pub param_destructures: Vec<(usize, DestructurePattern)>,
 }

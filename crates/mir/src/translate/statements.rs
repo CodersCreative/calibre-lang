@@ -130,7 +130,14 @@ impl MiddleEnvironment {
                 let new_name =
                     get_disamubiguous_name(scope, Some(og_name.trim()), Some(&VarType::Mutable));
 
-                let data_type = self.resolve_potential_new_type(scope, param.1.clone());
+                let data_type = if let Some(x) = param.1.clone() {
+                    self.resolve_potential_new_type(scope, x)
+                } else if let Some(node) = &param.2 {
+                    self.resolve_type_from_node(scope, node)
+                        .ok_or(MiddleErr::InferImpossible)?
+                } else {
+                    return Err(MiddleErr::InferImpossible);
+                };
 
                 self.variables.insert(
                     new_name.clone(),

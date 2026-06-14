@@ -29,7 +29,7 @@ fn collect_inlineable(node: &MiddleNode, map: &mut FxHashMap<String, InlineFn>, 
                 if let Some(expr) = extract_single_return_expr(body) {
                     let name = identifier.text.clone();
                     if !contains_self_call(&expr, &name) && count_nodes(&expr) <= max_nodes {
-                        let params = parameters.iter().map(|(p, _)| p.text.clone()).collect();
+                        let params = parameters.iter().map(|(p, _, _)| p.text.clone()).collect();
                         map.insert(name, InlineFn { params, body: expr });
                     }
                 }

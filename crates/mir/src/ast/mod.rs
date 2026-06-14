@@ -73,7 +73,7 @@ pub enum MiddleNodeType {
         scope_id: u64,
     },
     FunctionDeclaration {
-        parameters: Vec<(ParserText, ParserDataType)>,
+        parameters: Vec<(ParserText, ParserDataType, Option<Box<MiddleNode>>)>,
         body: Box<MiddleNode>,
         return_type: ParserDataType,
         scope_id: u64,
@@ -272,7 +272,11 @@ impl Into<NodeType> for MiddleNodeType {
                         let mut lst = Vec::new();
 
                         for param in parameters {
-                            lst.push((param.0.into(), param.1.into()));
+                            lst.push((
+                                param.0.into(),
+                                Some(param.1.into()),
+                                param.2.map(|x| Box::new((*x).into())),
+                            ));
                         }
                         lst
                     },

@@ -1494,7 +1494,16 @@ impl MiddleEnvironment {
                                     let mut params = Vec::new();
                                     for param in overload.header.parameters.iter() {
                                         params.push(
-                                            self.resolve_potential_new_type(scope, param.1.clone()),
+                                            match param.1.clone() {
+                                                Some(x) if param.2.is_none() => {
+                                                    self.resolve_potential_new_type(scope, x)
+                                                }
+                                                _ => {
+                                                    return Err(MiddleErr::Overload(String::from(
+                                                        "Type needs to be explicit when doing overloads and default types arent allowed",
+                                                    )));
+                                                }
+                                            }                                            
                                         );
                                     }
                                     params
@@ -1557,9 +1566,16 @@ impl MiddleEnvironment {
                             parameters: {
                                 let mut params = Vec::new();
                                 for param in overload.header.parameters.iter() {
-                                    params.push(
-                                        self.resolve_potential_new_type(scope, param.1.clone()),
-                                    );
+                                    params.push(match param.1.clone() {
+                                        Some(x) if param.2.is_none() => {
+                                            self.resolve_potential_new_type(scope, x)
+                                        }
+                                        _ => {
+                                            return Err(MiddleErr::Overload(String::from(
+                                                "Type needs to be explicit when doing overloads and default types arent allowed",
+                                            )));
+                                        }
+                                    });
                                 }
                                 params
                             },
@@ -1646,7 +1662,16 @@ impl MiddleEnvironment {
                             let mut contains = false;
 
                             for param in overload.header.parameters.iter() {
-                                let ty = self.resolve_potential_new_type(scope, param.1.clone());
+                                let ty = match param.1.clone() {
+                                    Some(x) if param.2.is_none() => {
+                                        self.resolve_potential_new_type(scope, x)
+                                    }
+                                    _ => {
+                                        return Err(MiddleErr::Overload(String::from(
+                                            "Type needs to be explicit when doing overloads and default types arent allowed",
+                                        )));
+                                    }
+                                };
 
                                 if let ParserInnerType::Struct(x) =
                                     ty.data_type.clone().unwrap_all_refs()
@@ -2409,11 +2434,24 @@ impl MiddleEnvironment {
 
                             let dependant = match &value.node_type {
                                 NodeType::FunctionDeclaration { header, .. } => {
-                                    if let Some(PotentialNewType::DataType(param)) =
-                                        header.parameters.first().map(|x| x.1.clone())
-                                    {
-                                        let param_type =
-                                            self.resolve_data_type(scope, param).unwrap_all_refs();
+                                    let param_type =
+                                        if let Some(Some(PotentialNewType::DataType(param))) =
+                                            header.parameters.first().map(|x| x.1.clone())
+                                        {
+                                            Some(
+                                                self.resolve_data_type(scope, param)
+                                                    .unwrap_all_refs(),
+                                            )
+                                        } else if let Some(Some(node)) =
+                                            header.parameters.first().map(|x| x.2.clone())
+                                        {
+                                            self.resolve_type_from_node(scope, &node)
+                                                .map(|x| x.unwrap_all_refs())
+                                        } else {
+                                            None
+                                        };
+
+                                    if let Some(param_type) = param_type {
                                         let impl_ref =
                                             self.impls.get(&impl_key).ok_or_else(|| {
                                                 MiddleErr::At(
@@ -2669,11 +2707,24 @@ impl MiddleEnvironment {
 
                             let dependant = match &value.node_type {
                                 NodeType::FunctionDeclaration { header, .. } => {
-                                    if let Some(PotentialNewType::DataType(param)) =
-                                        header.parameters.first().map(|x| x.1.clone())
-                                    {
-                                        let param_type =
-                                            self.resolve_data_type(scope, param).unwrap_all_refs();
+                                    let param_type =
+                                        if let Some(Some(PotentialNewType::DataType(param))) =
+                                            header.parameters.first().map(|x| x.1.clone())
+                                        {
+                                            Some(
+                                                self.resolve_data_type(scope, param)
+                                                    .unwrap_all_refs(),
+                                            )
+                                        } else if let Some(Some(node)) =
+                                            header.parameters.first().map(|x| x.2.clone())
+                                        {
+                                            self.resolve_type_from_node(scope, &node)
+                                                .map(|x| x.unwrap_all_refs())
+                                        } else {
+                                            None
+                                        };
+
+                                    if let Some(param_type) = param_type {
                                         let impl_ref =
                                             self.impls.get(&impl_key).ok_or_else(|| {
                                                 MiddleErr::At(

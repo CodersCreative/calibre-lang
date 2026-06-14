@@ -494,7 +494,16 @@ impl MiddleEnvironment {
                 .ok_or_else(|| self.err_at_current(MiddleErr::Scope(param.0.to_string())))?;
             let new_name =
                 get_disamubiguous_name(scope, Some(og_name.trim()), Some(&VarType::Mutable));
-            let data_type = self.resolve_potential_new_type(scope, param.1);
+
+            let data_type = if let Some(x) = param.1 {
+                self.resolve_potential_new_type(scope, x)
+            } else if let Some(node) = &param.2 {
+                self.resolve_type_from_node(scope, node)
+                    .ok_or(MiddleErr::InferImpossible)?
+            } else {
+                return Err(MiddleErr::InferImpossible);
+            };
+
             self.variables.insert(
                 new_name.clone(),
                 MiddleVariable {
@@ -510,7 +519,11 @@ impl MiddleEnvironment {
                 .mappings
                 .insert(og_name.text.clone(), new_name.clone());
             scope_ref.defined.push(new_name.clone());
-            params.push((ParserText::from(new_name), data_type));
+            params.push((
+                ParserText::from(new_name),
+                data_type,
+                param.2.map(|x| Box::new(self.evaluate(scope, *x))),
+            ));
         }
 
         let return_type = self.resolve_potential_new_type(&new_scope, header.return_type);
@@ -667,7 +680,7 @@ impl MiddleEnvironment {
             span,
         };
 
-        for (p_name, _p_ty) in params.iter() {
+        for (p_name, _, _) in params.iter() {
             let full = p_name.text.clone();
             if let Some(idx) = full.rfind(':') {
                 let short = full[idx + 1..].to_string();
@@ -842,8 +855,9 @@ impl MiddleEnvironment {
                         let param_types: Vec<ParserDataType> = header
                             .parameters
                             .iter()
-                            .filter_map(|(_n, p)| match p {
-                                PotentialNewType::DataType(dt) => Some(dt.clone()),
+                            .filter_map(|(_, p, n)| match (p, n) {
+                                (Some(PotentialNewType::DataType(dt)), _) => Some(dt.clone()),
+                                (_, Some(node)) => self.resolve_type_from_node(scope, &node),
                                 _ => None,
                             })
                             .collect();

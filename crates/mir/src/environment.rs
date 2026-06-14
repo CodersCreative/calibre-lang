@@ -1019,8 +1019,14 @@ impl MiddleEnvironment {
         new_header.generics = calibre_parser::ast::GenericTypes::default();
         new_header.parameters = new_header
             .parameters
-            .iter()
-            .map(|(n, t)| (n.clone(), self.substitute_potential_new_type(t, &subst)))
+            .into_iter()
+            .map(|(n, t, v)| {
+                (
+                    n,
+                    t.map(|t| self.substitute_potential_new_type(&t, &subst)),
+                    v,
+                )
+            })
             .collect();
         new_header.return_type =
             self.substitute_potential_new_type(&new_header.return_type, &subst);
@@ -1602,7 +1608,15 @@ impl MiddleEnvironment {
                             let mut contains = false;
 
                             for param in overload.header.parameters.iter() {
-                                let ty = self.resolve_potential_new_type(scope, param.1.clone());
+                                let Some(ty) = (if let Some(x) = param.1.clone() {
+                                    Some(self.resolve_potential_new_type(scope, x))
+                                } else if let Some(node) = &param.2 {
+                                    self.resolve_type_from_node(scope, node)
+                                } else {
+                                    None
+                                }) else {
+                                    continue;
+                                };
 
                                 if let ParserInnerType::Struct(x) =
                                     ty.data_type.clone().unwrap_all_refs()
@@ -2674,7 +2688,14 @@ impl MiddleEnvironment {
                         let mut params = Vec::new();
 
                         for param in header.parameters.clone() {
-                            params.push(self.resolve_potential_new_type(scope, param.1.clone()));
+                            let data_type = if let Some(x) = param.1 {
+                                self.resolve_potential_new_type(scope, x)
+                            } else if let Some(node) = &param.2 {
+                                self.resolve_type_from_node(scope, node)?
+                            } else {
+                                return None;
+                            };
+                            params.push(data_type);
                         }
 
                         params

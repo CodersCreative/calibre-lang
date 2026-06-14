@@ -653,14 +653,13 @@ impl<'a> LirEnvironment<'a> {
 
     pub fn new_with_hoist(env: &'a MiddleEnvironment, allow_global_hoist: bool) -> Self {
         let entry_id = BlockId(0);
-        
-        let scope_to_file: FxHashMap<u64, String> = env.scopes
+
+        let scope_to_file: FxHashMap<u64, String> = env
+            .scopes
             .iter()
-            .map(|(id, scope)| {
-                (*id, scope.path.to_string_lossy().to_string())
-            })
+            .map(|(id, scope)| (*id, scope.path.to_string_lossy().to_string()))
             .collect();
-        
+
         Self {
             env,
             last_ident: None,
@@ -978,7 +977,7 @@ impl<'a> LirEnvironment<'a> {
                 let mut captures = Vec::new();
                 let param_names: rustc_hash::FxHashSet<String> = parameters
                     .iter()
-                    .map(|(name, _)| name.text.clone())
+                    .map(|(name, _, _)| name.text.clone())
                     .collect();
 
                 for cap in body.captured() {

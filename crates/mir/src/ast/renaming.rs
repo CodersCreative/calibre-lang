@@ -120,6 +120,7 @@ impl MiddleNodeType {
                                 span: x.0.span,
                             },
                             x.1,
+                            x.2.map(|x| Box::new(x.rename(state))),
                         )
                     })
                     .collect(),

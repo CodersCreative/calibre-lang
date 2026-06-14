@@ -632,7 +632,12 @@ pub fn build_match_parsers<'a>(
     let fn_match_expr = lex(pad.clone(), just("fn"))
         .ignore_then(generic_params.clone())
         .then_ignore(lex(pad.clone(), just("match")))
-        .then(type_name.clone())
+        .then(type_name.clone().or_not())
+        .then(
+            lex(pad.clone(), just("="))
+                .ignore_then(expr.clone())
+                .or_not(),
+        )
         .then(arrow.clone().ignore_then(type_name.clone()).or_not())
         .then_ignore(lex(pad.clone(), just('{')))
         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
@@ -649,7 +654,7 @@ pub fn build_match_parsers<'a>(
         .then_ignore(lex(pad.clone(), just('}')))
         .map_with_span({
             let ls = line_starts.clone();
-            move |(((generics, param_ty), return_ty), body), r| {
+            move |((((generics, param_ty), default), return_ty), body), r| {
                 let sp = span(ls.as_ref(), r);
                 let header = FunctionHeader {
                     generics,
@@ -659,6 +664,7 @@ pub fn build_match_parsers<'a>(
                             "__match_value".to_string(),
                         )),
                         param_ty,
+                        default.map(Box::new),
                     )],
                     return_type: return_ty.unwrap_or_else(|| none_type(sp)),
                     param_destructures: Vec::new(),

@@ -1006,18 +1006,33 @@ impl Formatter {
                                 chunk.push_str(&format!("{} ", id.0));
                                 expanded_chunk.push_str(&id.0.to_string());
                             }
-                            if !id.1.is_auto() {
+                            if let Some(x) = &id.1 {
                                 expanded_chunk
-                                    .push_str(&format!(": {}", self.fmt_potential_new_type(&id.1)));
+                                    .push_str(&format!(": {}", self.fmt_potential_new_type(x)));
+                            }
+                            if let Some(x) = &id.2 {
+                                expanded_chunk.push_str(&format!(
+                                    "{}= {}",
+                                    if id.1.is_none() { ":" } else { "" },
+                                    self.format(x)
+                                ));
                             }
                             param_txt_expanded.push(expanded_chunk);
                             param_index += 1;
                         }
 
-                        if let Some(last) = params.last()
-                            && !last.1.is_auto()
-                        {
-                            chunk.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
+                        if let Some(last) = params.last() {
+                            if let Some(x) = &last.1 {
+                                chunk.push_str(&format!(": {}", self.fmt_potential_new_type(x)));
+                            }
+
+                            if let Some(x) = &last.2 {
+                                chunk.push_str(&format!(
+                                    "{}= {}",
+                                    if last.1.is_none() { ":" } else { "" },
+                                    self.format(x)
+                                ));
+                            }
                         }
                         param_txt.push(chunk.trim_end().to_string());
                     }
@@ -1191,11 +1206,12 @@ impl Formatter {
                     txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
                 }
 
-                if !header.parameters[0].1.is_auto() {
-                    txt.push_str(&format!(
-                        " {}",
-                        self.fmt_potential_new_type(&header.parameters[0].1)
-                    ));
+                if let Some(x) = &header.parameters[0].1 {
+                    txt.push_str(&format!(" {}", self.fmt_potential_new_type(x)));
+                }
+
+                if let Some(x) = &header.parameters[0].2 {
+                    txt.push_str(&format!(" = {}", self.format(x)));
                 }
 
                 if !header.return_type.is_null() {
@@ -1694,8 +1710,10 @@ impl Formatter {
                             txt.push_str(&format!("{} ", id.0));
                         }
 
-                        if let Some(last) = params.last() {
-                            txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
+                        if let Some(last) = params.last()
+                            && let Some(x) = &last.1
+                        {
+                            txt.push_str(&format!(": {}", self.fmt_potential_new_type(x)));
                         }
 
                         txt.push_str(", ");
