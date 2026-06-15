@@ -1027,6 +1027,42 @@ impl Node {
     pub fn new(span: Span, node_type: NodeType) -> Self {
         Self { node_type, span }
     }
+
+    pub fn rewrite_main_emits_to_returns(self) -> Self {
+        match self.node_type {
+            NodeType::ScopeDeclaration {
+                body: Some(body),
+                create_new_scope,
+                is_temp,
+                named,
+                define,
+            } => Node {
+                node_type: NodeType::ScopeDeclaration {
+                    body: Some(
+                        body.into_iter()
+                            .map(|x| match x.node_type {
+                                NodeType::Emit(EmitType::Scope(value)) => Node {
+                                    node_type: NodeType::Return { value: Some(value) },
+                                    span: self.span,
+                                },
+                                _ => x,
+                            })
+                            .collect(),
+                    ),
+                    create_new_scope,
+                    is_temp,
+                    named,
+                    define,
+                },
+                span: self.span,
+            },
+            NodeType::Emit(EmitType::Scope(value)) => Node {
+                node_type: NodeType::Return { value: Some(value) },
+                span: self.span,
+            },
+            _ => self,
+        }
+    }
 }
 
 #[repr(u8)]

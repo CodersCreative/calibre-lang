@@ -480,7 +480,7 @@ impl MiddleEnvironment {
         scope: &u64,
         span: Span,
         header: FunctionHeader,
-        body: Node,
+        mut body: Node,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut params = Vec::with_capacity(header.parameters.len());
         let mut param_idents = Vec::with_capacity(header.parameters.len());
@@ -528,7 +528,7 @@ impl MiddleEnvironment {
 
         let return_type = self.resolve_potential_new_type(&new_scope, header.return_type);
 
-        let mut body_node = body;
+        body = body.rewrite_main_emits_to_returns();
 
         if !header.param_destructures.is_empty() {
             let mut destructures = Vec::new();
@@ -538,7 +538,7 @@ impl MiddleEnvironment {
                         .extend(self.emit_destructure_statements(tmp_name, &pattern, span, true));
                 }
             }
-            body_node = match body_node.node_type {
+            body = match body.node_type {
                 NodeType::ScopeDeclaration {
                     body: Some(mut inner),
                     named,
@@ -549,7 +549,7 @@ impl MiddleEnvironment {
                     let mut new_body = destructures;
                     new_body.append(&mut inner);
                     Node::new(
-                        body_node.span,
+                        body.span,
                         NodeType::ScopeDeclaration {
                             body: Some(new_body),
                             named,
@@ -560,19 +560,19 @@ impl MiddleEnvironment {
                     )
                 }
                 _ => {
-                    let body_span = body_node.span;
+                    let body_span = body.span;
                     let mut new_body = destructures;
-                    new_body.push(body_node);
+                    new_body.push(body);
                     Self::temp_scope(body_span, new_body, false)
                 }
             };
         }
 
         if let Some(elem_type) = Self::is_generator_return_type(&return_type) {
-            body_node = Self::wrap_generator_body(body_node, elem_type, span);
+            body = Self::wrap_generator_body(body, elem_type, span);
         }
 
-        let body = self.evaluate(&new_scope, body_node);
+        let body = self.evaluate(&new_scope, body);
         let mut func_defers = Vec::new();
         func_defers.append(&mut self.func_defers);
 
