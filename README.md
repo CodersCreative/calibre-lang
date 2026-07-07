@@ -35,7 +35,7 @@ let mut a, mut b = 1, 2;
 - Functions in calibre are first-class values and can even have param types and return types inferred if enough information is provided
 
 ```cal
-const add = fn (a, b) => a + b;
+const add := fn (a b : int) -> int => a + b;
 
 const main = fn => {
   let result = add(2, 3);
@@ -56,7 +56,7 @@ Calibre currently supports primitives and structured types including:
 ### Structs, Enums, and Match
 
 ```cal
-type Point = struct { x : int, y : int };
+type Point = struct { x y : int };
 
 type MaybeInt = enum {
   Some : int,
@@ -65,7 +65,7 @@ type MaybeInt = enum {
 
 const inspect = fn (v : MaybeInt) => {
   match v {
-    .Some : x => print("value=" & x),
+    .Some : x => print("value = " & x),
     .None => print("none")
   };
 };

@@ -1,1 +1,9 @@
-const main := fn => print("Hello, World!");
+type Stack := struct {
+  values : list:<int>
+};
+
+const main := fn => {
+  let mut arr := Stack {values : [0; 30]};
+  arr.values[10] := 100;
+  print(arr);
+};

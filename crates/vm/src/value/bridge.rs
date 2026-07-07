@@ -28,6 +28,7 @@ impl VM {
             }
             None
         };
+
         match value {
             RuntimeValue::Ref(pointer) => self
                 .variables

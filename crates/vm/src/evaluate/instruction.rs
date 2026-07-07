@@ -64,7 +64,7 @@ impl VM {
         None
     }
     #[inline]
-    fn propagate_member_source_reg(&mut self, src: u16, dst: u16) {
+    fn propagate_member_source_alias(&mut self, src: u16, dst: u16) {
         let source = self.current_frame().member_sources.get(&src).cloned();
         match source {
             Some(v) => {
@@ -171,7 +171,7 @@ impl VM {
             let is_local_style = name.contains(':') || name.contains("->");
             if !is_local_style {
                 if let Some(ty) = self.concrete_runtime_type_name(&resolved_receiver) {
-                    if Self::name_matches(&ty, name) {
+                    if calibre_parser::qualified_name_matches(&ty, name) {
                         return callee;
                     }
                 }
@@ -456,7 +456,7 @@ impl VM {
                 && let Some(receiver_type) = self.concrete_runtime_type_name(&receiver)
             {
                 let owner_tail = calibre_parser::qualified_name_tail(owner);
-                if !Self::name_matches(&receiver_type, owner_tail) {
+                if !calibre_parser::qualified_name_matches(&receiver_type, owner_tail) {
                     if let Some(resolved) =
                         self.resolve_associated_member_value(&receiver_type, member, Some(member))
                         && Self::is_runtime_callable(&resolved)
@@ -578,7 +578,7 @@ impl VM {
                 && let Some(receiver_type) = self.concrete_runtime_type_name(&receiver)
             {
                 let owner_tail = calibre_parser::qualified_name_tail(owner);
-                if !Self::name_matches(&receiver_type, owner_tail) {
+                if !calibre_parser::qualified_name_matches(&receiver_type, owner_tail) {
                     if let Some(resolved) =
                         self.resolve_associated_member_value(&receiver_type, member, Some(member))
                     {
@@ -1012,7 +1012,7 @@ impl VM {
                     },
                 };
                 self.set_reg_value(*dst, value);
-                self.propagate_member_source_reg(*src, *dst);
+                self.propagate_member_source_alias(*src, *dst);
             }
             VMInstruction::Copy { dst, src } => {
                 if dst == src {
@@ -1020,7 +1020,7 @@ impl VM {
                 }
                 let value = self.get_reg_value(*src).clone();
                 self.set_reg_value(*dst, value);
-                self.propagate_member_source_reg(*src, *dst);
+                self.propagate_member_source_alias(*src, *dst);
             }
             VMInstruction::As {
                 dst,
@@ -1462,7 +1462,8 @@ impl VM {
                             vtable.get(member_short).or_else(|| vtable.get(name))
                         {
                             let mapped = callee_name.rsplit_once("::").and_then(|(owner, _)| {
-                                if Self::name_matches(owner, type_name.as_str()) {
+                                if calibre_parser::qualified_name_matches(owner, type_name.as_str())
+                                {
                                     Some(callee_name.as_str())
                                 } else {
                                     None
@@ -1518,7 +1519,8 @@ impl VM {
                             self.resolve_aggregate_member_slot(&type_name, &map, name, short_name)
                         {
                             member_source = Some((source_reg, map.0.0[idx].0.clone()));
-                            map.0.0[idx].1.clone()
+                            let field_value = map.0.0[idx].1.clone();
+                            field_value
                         } else {
                             match self.resolve_associated_member_value(
                                 type_name.as_str(),
@@ -1668,6 +1670,11 @@ impl VM {
                         let value = self.ptr_heap.get(&id).cloned();
                         Self::value_or_null(value)
                     }
+                    RuntimeValue::Channel(_) if member_short == "raw_send" => {
+                        RuntimeValue::NativeFunction(Arc::new(
+                            crate::native::stdlib::r#async::ChannelSend(),
+                        ))
+                    }
                     RuntimeValue::Char(value) => {
                         bind_assoc(self, "char", RuntimeValue::Char(value))?
                     }
@@ -1786,6 +1793,7 @@ impl VM {
 
                 let mut target_value = self.get_reg_value(*target).clone();
                 let mut handled = false;
+
                 for _ in 0..64 {
                     match target_value {
                         RuntimeValue::Ref(ref_name) => {
@@ -1810,6 +1818,9 @@ impl VM {
                                     let updated = update_aggregate(&name, map)?;
                                     self.variables
                                         .insert(&ref_name, RuntimeValue::Aggregate(name, updated));
+                                }
+                                RuntimeValue::List(_list) => {
+                                    self.variables.insert(&ref_name, value);
                                 }
                                 RuntimeValue::Generator { .. } => {
                                     self.variables.insert(&ref_name, update_generator(current)?);
@@ -1838,6 +1849,9 @@ impl VM {
                                         .variables
                                         .set_by_id(id, RuntimeValue::Aggregate(name, updated));
                                 }
+                                RuntimeValue::List(_list) => {
+                                    let _ = self.variables.set_by_id(id, value);
+                                }
                                 RuntimeValue::Generator { .. } => {
                                     let _ =
                                         self.variables.set_by_id(id, update_generator(current)?);
@@ -1863,6 +1877,9 @@ impl VM {
                                         reg,
                                         RuntimeValue::Aggregate(name, updated),
                                     );
+                                }
+                                RuntimeValue::List(_list) => {
+                                    return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
                                 }
                                 RuntimeValue::Generator { .. } => {
                                     self.set_reg_value_in_frame(
@@ -1890,6 +1907,7 @@ impl VM {
                         other => return Err(RuntimeError::UnexpectedType(other)),
                     }
                 }
+
                 if !handled {
                     return Err(RuntimeError::DanglingRef(
                         "<set-member-depth-limit>".to_string(),
@@ -1899,24 +1917,27 @@ impl VM {
             VMInstruction::Index { dst, value, index } => {
                 let value_ref = self.get_reg_value(*value);
                 let mut index_val = self.get_reg_value(*index).clone();
+
                 if Self::is_ref_like(&index_val) {
                     index_val = self.resolve_value_for_op_ref(&index_val)?;
                 }
+
                 if let RuntimeValue::List(list) = value_ref {
-                    match &index_val {
-                        RuntimeValue::UInt(i) => {
-                            let out = list.as_ref().0.get(*i as usize).cloned();
-                            let out = Self::value_or_null(out);
-                            self.set_reg_value(*dst, out);
-                            return Ok(TerminateValue::None);
+                    let idx = match &index_val {
+                        RuntimeValue::UInt(i) => Some(*i as usize),
+                        RuntimeValue::Int(i) if *i >= 0 => Some(*i as usize),
+                        _ => None,
+                    };
+                    if let Some(idx) = idx {
+                        let out = list.as_ref().0.get(idx).cloned();
+                        let out = Self::value_or_null(out);
+                        self.set_reg_value(*dst, out);
+                        if let Some(source) =
+                            self.current_frame().member_sources.get(value).cloned()
+                        {
+                            self.current_frame_mut().member_sources.insert(*dst, source);
                         }
-                        RuntimeValue::Int(i) if *i >= 0 => {
-                            let out = list.as_ref().0.get(*i as usize).cloned();
-                            let out = Self::value_or_null(out);
-                            self.set_reg_value(*dst, out);
-                            return Ok(TerminateValue::None);
-                        }
-                        _ => {}
+                        return Ok(TerminateValue::None);
                     }
                 }
 
@@ -1943,6 +1964,7 @@ impl VM {
                             _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
                         }
                     };
+
                 let index_map = |map: &std::sync::Arc<
                     std::sync::Mutex<rustc_hash::FxHashMap<crate::value::HashKey, RuntimeValue>>,
                 >|
@@ -1953,6 +1975,7 @@ impl VM {
                         .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
                     Ok(guard.get(&key).cloned().unwrap_or(RuntimeValue::Null))
                 };
+
                 let resolved = self.resolve_value_for_op_ref(self.get_reg_value(*value))?;
                 let val = match resolved {
                     RuntimeValue::List(list) => index_list(&list)?,
@@ -2035,7 +2058,11 @@ impl VM {
                     RuntimeValue::Result(Err(x)) => x.as_ref().clone(),
                     other => return Err(RuntimeError::UnexpectedType(other)),
                 };
+
                 self.set_reg_value(*dst, val);
+                if !self.current_frame().member_sources.contains_key(dst) {
+                    self.propagate_member_source_alias(*value, *dst);
+                }
             }
             VMInstruction::SetIndex {
                 target,
@@ -2043,18 +2070,22 @@ impl VM {
                 value,
             } => {
                 let mut index_val = self.get_reg_value(*index).clone();
+
                 if Self::is_ref_like(&index_val) {
                     index_val = self.resolve_value_for_op_ref(&index_val)?;
                 }
+
                 let value = self.get_reg_value(*value).clone();
                 let numeric_index = || match index_val.clone() {
                     RuntimeValue::Int(index) => Ok(index),
                     RuntimeValue::UInt(index) => Ok(index as i64),
                     _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
                 };
+
                 let hash_index = || crate::value::HashKey::try_from(index_val.clone());
                 let mut target_value = self.get_reg_value(*target).clone();
                 let mut handled = false;
+
                 for _ in 0..64 {
                     match target_value {
                         RuntimeValue::Ref(ref_name) => {
@@ -2075,25 +2106,31 @@ impl VM {
                                     target_value = current;
                                     continue;
                                 }
-                                RuntimeValue::List(list) => {
+                                RuntimeValue::List(mut list) => {
                                     let index = numeric_index()?;
                                     if index < 0 {
                                         return Err(RuntimeError::UnexpectedType(
                                             RuntimeValue::Null,
                                         ));
                                     }
-                                    let mut list = list;
+
                                     let vec = &mut Gc::make_mut(&mut list).0;
                                     let idx = Self::resolve_index_or_err(vec.len(), index)?;
                                     vec[idx] = value;
+
                                     self.variables.insert(&ref_name, RuntimeValue::List(list));
+                                    self.propagate_member_source_reg(
+                                        *target,
+                                        self.frames.len().saturating_sub(1),
+                                    )?;
                                 }
                                 RuntimeValue::HashMap(map) => {
                                     let key = hash_index()?;
-                                    let guard = map.lock().map_err(|_| {
+
+                                    let mut guard = map.lock().map_err(|_| {
                                         RuntimeError::UnexpectedType(RuntimeValue::Null)
                                     })?;
-                                    let mut guard = guard;
+
                                     guard.insert(key, value);
                                 }
                                 _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
@@ -2114,25 +2151,31 @@ impl VM {
                                     target_value = current;
                                     continue;
                                 }
-                                RuntimeValue::List(list) => {
+                                RuntimeValue::List(mut list) => {
                                     let index = numeric_index()?;
                                     if index < 0 {
                                         return Err(RuntimeError::UnexpectedType(
                                             RuntimeValue::Null,
                                         ));
                                     }
-                                    let mut list = list;
+
                                     let vec = &mut Gc::make_mut(&mut list).0;
                                     let idx = Self::resolve_index_or_err(vec.len(), index)?;
                                     vec[idx] = value;
+
                                     let _ = self.variables.set_by_id(id, RuntimeValue::List(list));
+                                    self.propagate_member_source_reg(
+                                        *target,
+                                        self.frames.len().saturating_sub(1),
+                                    )?;
                                 }
                                 RuntimeValue::HashMap(map) => {
                                     let key = hash_index()?;
-                                    let guard = map.lock().map_err(|_| {
+
+                                    let mut guard = map.lock().map_err(|_| {
                                         RuntimeError::UnexpectedType(RuntimeValue::Null)
                                     })?;
-                                    let mut guard = guard;
+
                                     guard.insert(key, value);
                                 }
                                 _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
@@ -2149,23 +2192,27 @@ impl VM {
                                     target_value = current;
                                     continue;
                                 }
-                                RuntimeValue::List(list) => {
+                                RuntimeValue::List(mut list) => {
                                     let index = numeric_index()?;
+
                                     if index < 0 {
                                         return Err(RuntimeError::UnexpectedType(
                                             RuntimeValue::Null,
                                         ));
                                     }
-                                    let mut list = list;
+
                                     let vec = &mut Gc::make_mut(&mut list).0;
                                     let idx = Self::resolve_index_or_err(vec.len(), index)?;
                                     vec[idx] = value;
+
                                     self.set_reg_value_in_frame(
                                         frame,
                                         reg,
                                         RuntimeValue::List(list.clone()),
                                     );
+
                                     self.sync_local_reg_value(frame, reg, RuntimeValue::List(list));
+                                    self.propagate_member_source_reg(reg, frame)?;
                                 }
                                 RuntimeValue::HashMap(map) => {
                                     let key = hash_index()?;
@@ -2180,25 +2227,56 @@ impl VM {
                             handled = true;
                             break;
                         }
-                        RuntimeValue::List(list) => {
+                        RuntimeValue::List(mut list) => {
                             let index = numeric_index()?;
+
                             if index < 0 {
                                 return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
                             }
-                            let mut list = list;
+
+                            let list_ptr = list.as_ref() as *const crate::value::GcVec;
                             let vec = &mut Gc::make_mut(&mut list).0;
                             let idx = Self::resolve_index_or_err(vec.len(), index)?;
                             vec[idx] = value;
                             self.set_reg_value(*target, RuntimeValue::List(list));
+
+                            if !self.current_frame().member_sources.contains_key(target) {
+                                let frame_idx = self.frames.len().saturating_sub(1);
+                                if let Some((parent_reg, field_name)) =
+                                    self.current_frame().member_sources.iter().find_map(
+                                        |(reg, (parent_reg, field_name))| {
+                                            if let RuntimeValue::List(other_list) =
+                                                self.get_reg_value_in_frame(frame_idx, *reg).clone()
+                                                && std::ptr::eq(other_list.as_ref(), list_ptr)
+                                            {
+                                                Some((*parent_reg, field_name.clone()))
+                                            } else {
+                                                None
+                                            }
+                                        },
+                                    )
+                                {
+                                    self.current_frame_mut()
+                                        .member_sources
+                                        .insert(*target, (parent_reg, field_name));
+                                }
+                            }
+
+                            self.propagate_member_source_reg(
+                                *target,
+                                self.frames.len().saturating_sub(1),
+                            )?;
+
                             handled = true;
                             break;
                         }
                         RuntimeValue::HashMap(map) => {
                             let key = hash_index()?;
-                            let guard = map
+
+                            let mut guard = map
                                 .lock()
                                 .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
-                            let mut guard = guard;
+
                             guard.insert(key, value);
                             handled = true;
                             break;
@@ -2260,7 +2338,7 @@ impl VM {
                     },
                 };
                 self.set_reg_value(*dst, out);
-                self.propagate_member_source_reg(*value, *dst);
+                self.propagate_member_source_alias(*value, *dst);
             }
             VMInstruction::Deref { dst, value } => {
                 let out = match self.get_reg_value(*value).clone() {

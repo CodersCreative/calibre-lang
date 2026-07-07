@@ -28,6 +28,92 @@ enum CaptureRestore {
 }
 
 impl VM {
+    fn recover_member_source_for_list(&self, reg: u16, frame_idx: usize) -> Option<(u16, String)> {
+        if let Some(source) = self
+            .frames
+            .get(frame_idx)?
+            .member_sources
+            .get(&reg)
+            .cloned()
+        {
+            return Some(source);
+        }
+
+        let RuntimeValue::List(target_list) = self.get_reg_value_in_frame(frame_idx, reg).clone()
+        else {
+            return None;
+        };
+
+        self.frames.get(frame_idx)?.member_sources.iter().find_map(
+            |(candidate_reg, candidate_source)| {
+                if *candidate_reg == reg {
+                    return None;
+                }
+                if let RuntimeValue::List(other_list) = self
+                    .get_reg_value_in_frame(frame_idx, *candidate_reg)
+                    .clone()
+                    && std::ptr::eq(other_list.as_ref(), target_list.as_ref())
+                {
+                    return Some(candidate_source.clone());
+                }
+                None
+            },
+        )
+    }
+
+    fn write_back_runtime_value(&mut self, target: RuntimeValue, value: RuntimeValue) {
+        match target {
+            RuntimeValue::Ref(name) => {
+                if let Some(current) = self.variables.get(&name).cloned() {
+                    match current {
+                        RuntimeValue::Ref(_)
+                        | RuntimeValue::VarRef(_)
+                        | RuntimeValue::RegRef { .. } => {
+                            self.write_back_runtime_value(current, value);
+                        }
+                        _ => {
+                            let existed = self.variables.contains_key(&name);
+                            self.variables.insert(&name, value);
+                            if !existed {
+                                self.invalidate_name_resolution_caches();
+                            }
+                        }
+                    }
+                } else {
+                    self.variables.insert(&name, value);
+                }
+            }
+            RuntimeValue::VarRef(id) => {
+                if let Some(current) = self.variables.get_by_id(id).cloned() {
+                    match current {
+                        RuntimeValue::Ref(_)
+                        | RuntimeValue::VarRef(_)
+                        | RuntimeValue::RegRef { .. } => {
+                            self.write_back_runtime_value(current, value);
+                        }
+                        _ => {
+                            let _ = self.variables.set_by_id(id, value);
+                        }
+                    }
+                } else {
+                    let _ = self.variables.set_by_id(id, value);
+                }
+            }
+            RuntimeValue::RegRef { frame, reg } => {
+                let current = self.get_reg_value_in_frame(frame, reg).clone();
+                match current {
+                    RuntimeValue::Ref(_)
+                    | RuntimeValue::VarRef(_)
+                    | RuntimeValue::RegRef { .. } => {
+                        self.write_back_runtime_value(current, value);
+                    }
+                    _ => self.set_reg_value_in_frame(frame, reg, value),
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn propagate_member_source_args(
         &mut self,
         args: &[u16],
@@ -66,21 +152,39 @@ impl VM {
             {
                 entry.1 = updated_field;
                 let updated_parent = RuntimeValue::Aggregate(type_name, map);
-                match parent_raw {
-                    RuntimeValue::RegRef { frame, reg } => {
-                        self.set_reg_value_in_frame(frame, reg, updated_parent);
-                    }
-                    RuntimeValue::Ref(name) => {
-                        self.variables.insert(&name, updated_parent);
-                    }
-                    RuntimeValue::VarRef(id) => {
-                        let _ = self.variables.set_by_id(id, updated_parent);
-                    }
-                    _ => {
-                        self.set_reg_value_in_frame(frame_idx, parent_reg, updated_parent);
-                    }
-                }
+                self.write_back_runtime_value(parent_raw, updated_parent);
             }
+        }
+
+        Ok(())
+    }
+
+    fn propagate_member_source_reg(
+        &mut self,
+        reg: u16,
+        frame_idx: usize,
+    ) -> Result<(), RuntimeError> {
+        let Some((parent_reg, field_name)) = self.recover_member_source_for_list(reg, frame_idx)
+        else {
+            return Ok(());
+        };
+
+        let updated_field = self.get_reg_value_in_frame(frame_idx, reg).clone();
+        let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg).clone();
+        let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
+        let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved else {
+            return Ok(());
+        };
+
+        if let Some(entry) = Gc::make_mut(&mut map)
+            .0
+            .0
+            .iter_mut()
+            .find(|(field, _)| field == &field_name)
+        {
+            entry.1 = updated_field;
+            let updated_parent = RuntimeValue::Aggregate(type_name, map);
+            self.write_back_runtime_value(parent_raw, updated_parent);
         }
 
         Ok(())
@@ -156,6 +260,9 @@ impl VM {
         let owner_base = Self::normalize_generic_owner(owner);
         if owner_base.is_empty() {
             return None;
+        }
+        if owner_base == "Channel" && member == "raw_send" {
+            return RuntimeValue::natives().get("async.channel_send").cloned();
         }
         let owner_lower = owner_base.to_ascii_lowercase();
         let candidate = format!("async.{owner_lower}_{member}");
@@ -238,6 +345,14 @@ impl VM {
             }
             RuntimeValue::NativeFunction(func) => func.run(self, args),
             RuntimeValue::ExternFunction(func) => func.call(self, args),
+            RuntimeValue::Channel(_) => self.call_runtime_callable_at(
+                RuntimeValue::NativeFunction(Arc::new(
+                    crate::native::stdlib::r#async::ChannelSend(),
+                )),
+                args,
+                callsite_block,
+                callsite_tag,
+            ),
             RuntimeValue::BoundMethod { callee, receiver } => {
                 let mut full_args = vec![receiver.as_ref().clone()];
                 full_args.extend(args);
@@ -270,7 +385,20 @@ impl VM {
                     callsite_tag.saturating_sub(1),
                 )
             }
-            other => Err(RuntimeError::InvalidFunctionCallValue(other)),
+            other => {
+                if matches!(other, RuntimeValue::Channel(_)) {
+                    self.call_runtime_callable_at(
+                        RuntimeValue::NativeFunction(Arc::new(
+                            crate::native::stdlib::r#async::ChannelSend(),
+                        )),
+                        args,
+                        callsite_block,
+                        callsite_tag,
+                    )
+                } else {
+                    Err(RuntimeError::InvalidFunctionCallValue(other))
+                }
+            }
         }
     }
 
@@ -356,21 +484,17 @@ impl VM {
         }
     }
 
-    fn name_matches(actual: &str, target: &str) -> bool {
-        calibre_parser::qualified_name_matches(actual, target)
-    }
-
     fn lookup_dyn_trait_table(
         &self,
         concrete: &str,
         trait_name: &str,
     ) -> Option<&FxHashMap<String, String>> {
         for (imp_ty, traits) in self.registry.dyn_vtables.iter() {
-            if !Self::name_matches(imp_ty, concrete) {
+            if !calibre_parser::qualified_name_matches(imp_ty, concrete) {
                 continue;
             }
             for (imp_trait, table) in traits {
-                if Self::name_matches(imp_trait, trait_name) {
+                if calibre_parser::qualified_name_matches(imp_trait, trait_name) {
                     return Some(table);
                 }
             }
@@ -581,12 +705,6 @@ impl VM {
     }
 
     #[inline(always)]
-    fn call_arg_from_reg(&self, reg: u16) -> RuntimeValue {
-        let frame = self.frames.len().saturating_sub(1);
-        self.call_arg_from_frame_reg(frame, reg)
-    }
-
-    #[inline(always)]
     fn call_arg_from_frame_reg(&self, frame: usize, reg: u16) -> RuntimeValue {
         match self.get_reg_value_in_frame(frame, reg) {
             RuntimeValue::RegRef { frame, reg } => {
@@ -638,8 +756,9 @@ impl VM {
 
     #[inline]
     fn collect_call_args_vec(&self, args: &[u16]) -> Vec<RuntimeValue> {
+        let frame = self.frames.len().saturating_sub(1);
         args.into_iter()
-            .map(|reg| self.call_arg_from_reg(*reg))
+            .map(|reg| self.call_arg_from_frame_reg(frame, *reg))
             .collect()
     }
 
@@ -666,9 +785,11 @@ impl VM {
         {
             return match target {
                 ParserInnerType::Dynamic => true,
-                ParserInnerType::DynamicTraits(traits) => traits
-                    .iter()
-                    .all(|tr| constraints.iter().any(|x| Self::name_matches(x, tr))),
+                ParserInnerType::DynamicTraits(traits) => traits.iter().all(|tr| {
+                    constraints
+                        .iter()
+                        .any(|x| calibre_parser::qualified_name_matches(x, tr))
+                }),
                 _ => self.runtime_matches_type(inner.as_ref(), target),
             };
         }
@@ -676,9 +797,11 @@ impl VM {
         match target {
             ParserInnerType::Dynamic => true,
             ParserInnerType::DynamicTraits(traits) => match value {
-                RuntimeValue::DynObject { constraints, .. } => traits
-                    .iter()
-                    .all(|tr| constraints.iter().any(|x| Self::name_matches(x, tr))),
+                RuntimeValue::DynObject { constraints, .. } => traits.iter().all(|tr| {
+                    constraints
+                        .iter()
+                        .any(|x| calibre_parser::qualified_name_matches(x, tr))
+                }),
                 other => self
                     .build_dyn_vtable_for_value(other, traits.as_slice())
                     .is_some(),
@@ -744,19 +867,13 @@ impl VM {
                     | RuntimeValue::NativeFunction(_)
                     | RuntimeValue::ExternFunction(_)
             ),
-            ParserInnerType::Struct(name) => match value {
+            ParserInnerType::Struct(identifier)
+            | ParserInnerType::StructWithGenerics { identifier, .. } => match value {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
-                    Self::name_matches(actual, name)
-                }
-                RuntimeValue::Generator { type_name, .. } => Self::name_matches(type_name, name),
-                _ => false,
-            },
-            ParserInnerType::StructWithGenerics { identifier, .. } => match value {
-                RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
-                    Self::name_matches(actual, identifier)
+                    calibre_parser::qualified_name_matches(actual, identifier)
                 }
                 RuntimeValue::Generator { type_name, .. } => {
-                    Self::name_matches(type_name, identifier)
+                    calibre_parser::qualified_name_matches(type_name, type_name)
                 }
                 _ => false,
             },
@@ -1084,7 +1201,11 @@ impl VM {
         let caller_frame = self.frames.len().saturating_sub(1);
 
         let func_ptr = function as *const VMFunction as usize;
-        self.push_frame(function.reg_count as usize, func_ptr, Some(function.name.clone()));
+        self.push_frame(
+            function.reg_count as usize,
+            func_ptr,
+            Some(function.name.clone()),
+        );
 
         for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
             let arg = self.call_arg_from_frame_reg(caller_frame, arg_reg);
@@ -1290,7 +1411,11 @@ impl VM {
         state.yielded = None;
         let prev_vars = if state.block.is_none() {
             let func_ptr = function as *const VMFunction as usize;
-            self.push_frame(function.reg_count as usize, func_ptr, Some(function.name.clone()));
+            self.push_frame(
+                function.reg_count as usize,
+                func_ptr,
+                Some(function.name.clone()),
+            );
             for (reg, arg) in function.param_regs.iter().zip(args) {
                 self.set_reg_value(*reg, arg);
             }
