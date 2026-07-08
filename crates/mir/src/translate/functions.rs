@@ -9,10 +9,215 @@ use calibre_parser::{
         CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
         ObjectType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
         PotentialGenericTypeIdentifier, PotentialNewType, TryCatch, VarType,
+        comparison::ComparisonOperator,
     },
 };
 
 impl MiddleEnvironment {
+    #[inline]
+    fn unwrap_option_or_default_expr(span: Span, value: Node, default: Node) -> Node {
+        Node::new(
+            span,
+            NodeType::Ternary {
+                comparison: Box::new(Node::new(
+                    span,
+                    NodeType::ComparisonExpression {
+                        left: Box::new(value.clone()),
+                        right: Box::new(Node::none(span)),
+                        operator: ComparisonOperator::Equal,
+                    },
+                )),
+                then: Box::new(default),
+                otherwise: Box::new(Node::new(
+                    span,
+                    NodeType::MemberExpression {
+                        path: vec![
+                            (value, false),
+                            (
+                                Node::new(
+                                    span,
+                                    NodeType::Identifier(
+                                        ParserText::from(String::from("next")).into(),
+                                    ),
+                                ),
+                                false,
+                            ),
+                        ],
+                    },
+                )),
+            },
+        )
+    }
+
+    fn lower_defaulted_call_args(
+        &mut self,
+        scope: &u64,
+        span: Span,
+        caller: &Node,
+        data_type: &Option<ParserInnerType>,
+        args: Vec<CallArg>,
+        reverse_args: Vec<Node>,
+    ) -> Option<Vec<MiddleNode>> {
+        let NodeType::Identifier(name) = &caller.node_type else {
+            return None;
+        };
+        let raw_name = name.to_string();
+        let resolved_name = self
+            .resolve_potential_generic_ident(scope, name)
+            .map(|x| x.to_string());
+
+        let defaults_key = resolved_name.as_deref().unwrap_or(raw_name.as_str());
+        let mut defaults = self
+            .function_param_defaults
+            .get(defaults_key)
+            .or_else(|| self.function_param_defaults.get(raw_name.as_str()))
+            .cloned();
+
+        if defaults.is_none() {
+            let mut matched: Option<Vec<crate::environment::FunctionParamDefault>> = None;
+            for (key, value) in &self.function_param_defaults {
+                let suffix_match = key.ends_with(raw_name.as_str())
+                    || key.ends_with(&format!("::{raw_name}"))
+                    || key.ends_with(&format!(":{raw_name}"));
+                if !suffix_match {
+                    continue;
+                }
+                if matched.is_some() {
+                    matched = None;
+                    break;
+                }
+                matched = Some(value.clone());
+            }
+            defaults = matched;
+        }
+
+        let defaults = defaults?;
+
+        let parameters = match data_type {
+            Some(ParserInnerType::Function { parameters, .. }) => Some(parameters.clone()),
+            _ => None,
+        };
+
+        let param_len = parameters
+            .as_ref()
+            .map(|params| params.len())
+            .unwrap_or_else(|| defaults.len());
+
+        if defaults.is_empty() || param_len == 0 {
+            return None;
+        }
+
+        let mut slots: Vec<Option<Node>> = vec![None; param_len];
+        let mut wrap_with_some = vec![false; param_len];
+        let reverse_len = reverse_args.len().min(param_len);
+
+        for (i, node) in reverse_args.into_iter().enumerate().take(reverse_len) {
+            let idx = param_len - reverse_len + i;
+            slots[idx] = Some(node);
+        }
+
+        let find_named_index = |name: &str| -> Option<usize> {
+            defaults.iter().position(|d| {
+                d.name == name
+                    || calibre_parser::qualified_name_tail(d.name.as_str()) == name
+                    || d.name.ends_with(&format!(":{name}"))
+            })
+        };
+
+        let mut next_pos = 0usize;
+        for arg in args {
+            match arg {
+                CallArg::Named(name, value) => {
+                    if let Some(idx) = find_named_index(&name.to_string()) {
+                        slots[idx] = Some(value);
+                    }
+                }
+                CallArg::Value(value) => {
+                    while next_pos < param_len && slots[next_pos].is_some() {
+                        next_pos += 1;
+                    }
+                    if next_pos < param_len {
+                        slots[next_pos] = Some(value);
+                        next_pos += 1;
+                    }
+                }
+            }
+        }
+
+        for i in 0..param_len {
+            let meta = defaults.get(i)?;
+
+            if slots[i].is_none() {
+                if let Some(default) = &meta.explicit_default {
+                    slots[i] = Some(default.clone().into());
+                } else if meta.implicit_none {
+                    slots[i] = Some(Node::none(span));
+                }
+                continue;
+            }
+
+            let current = slots[i].take()?;
+            if current.is_none() {
+                slots[i] = Some(meta.explicit_default.as_ref()?.clone().into());
+                continue;
+            }
+
+            if meta.implicit_none {
+                let arg_type = self.resolve_type_from_node(scope, &current);
+                if !matches!(
+                    arg_type
+                        .as_ref()
+                        .map(|x| x.data_type.clone().unwrap_all_refs()),
+                    Some(ParserInnerType::Option(_))
+                ) {
+                    slots[i] = Some(current);
+                    wrap_with_some[i] = true;
+                } else {
+                    slots[i] = Some(current);
+                }
+                continue;
+            } else if meta.explicit_default.is_none() {
+                slots[i] = Some(current);
+                continue;
+            }
+
+            if matches!(
+                self.resolve_type_from_node(scope, &current)
+                    .as_ref()
+                    .map(|x| x.data_type.clone().unwrap_all_refs()),
+                Some(ParserInnerType::Option(_))
+            ) {
+                slots[i] = Some(Self::unwrap_option_or_default_expr(
+                    span,
+                    current,
+                    meta.explicit_default.as_ref()?.clone().into(),
+                ));
+            } else {
+                slots[i] = Some(current);
+            }
+        }
+
+        let mut lowered = Vec::with_capacity(param_len);
+        for (idx, node) in slots.into_iter().enumerate() {
+            let node = node?;
+            if wrap_with_some.get(idx).copied().unwrap_or(false) {
+                lowered.push(MiddleNode::new(
+                    MiddleNodeType::CallExpression {
+                        caller: Box::new(MiddleNode::new(
+                            MiddleNodeType::Identifier(ParserText::from(String::from("some"))),
+                            span,
+                        )),
+                        args: vec![self.evaluate(scope, node)],
+                    },
+                    span,
+                ));
+            } else {
+                lowered.push(self.evaluate(scope, node));
+            }
+        }
+        Some(lowered)
+    }
+
     #[inline]
     fn collect_call_nodes(args: Vec<CallArg>, mut reverse_args: Vec<Node>) -> Vec<Node> {
         let mut nodes: Vec<Node> = args.into_iter().map(Into::into).collect();
@@ -952,59 +1157,76 @@ impl MiddleEnvironment {
 
         Self::dedupe_receiver_call_args(&mut args, &mut reverse_args, &caller, &data_type);
 
+        let lowered_args = self.lower_defaulted_call_args(
+            scope,
+            span,
+            &caller,
+            &data_type,
+            args.clone(),
+            reverse_args.clone(),
+        );
+
         Ok(MiddleNode {
             node_type: MiddleNodeType::CallExpression {
-                args: match data_type {
-                    Some(ParserInnerType::Function {
-                        return_type: _,
-                        parameters,
-                    }) if {
-                        let total_args = args.len() + reverse_args.len();
-                        let list_idx = parameters.len().saturating_sub(reverse_args.len() + 1);
-                        let has_list_param = parameters
-                            .get(list_idx)
-                            .map(|p| p.is_list())
-                            .unwrap_or(false);
-                        (parameters.len() < total_args || parameters.len() == total_args + 1)
-                            && has_list_param
-                    } =>
-                    {
-                        let mut lst = Vec::new();
-                        for _ in 0..(parameters.len() - 1 - reverse_args.len()) {
-                            let arg = args.remove(0);
-                            lst.push(self.evaluate(scope, arg.into()));
-                        }
+                args: if let Some(lowered) = lowered_args {
+                    lowered
+                } else {
+                    match data_type {
+                        Some(ParserInnerType::Function {
+                            return_type: _,
+                            parameters,
+                        }) if {
+                            let total_args = args.len() + reverse_args.len();
+                            let list_idx = parameters.len().saturating_sub(reverse_args.len() + 1);
+                            let has_list_param = parameters
+                                .get(list_idx)
+                                .map(|p| p.is_list())
+                                .unwrap_or(false);
+                            (parameters.len() < total_args || parameters.len() == total_args + 1)
+                                && has_list_param
+                        } =>
+                        {
+                            let mut lst: Vec<MiddleNode> =
+                                (0..(parameters.len() - 1 - reverse_args.len()))
+                                    .map(|_| {
+                                        let arg = args.remove(0);
+                                        self.evaluate(scope, arg.into())
+                                    })
+                                    .collect();
 
-                        lst.push(
-                            self.evaluate(
-                                scope,
-                                Node::new(
-                                    self.current_span(),
-                                    NodeType::ListLiteral(
-                                        match parameters
-                                            .last()
-                                            .cloned()
-                                            .map(|p| p.unwrap_all_refs().data_type)
-                                        {
-                                            Some(ParserInnerType::List(x)) => (*x).into(),
-                                            _ => PotentialNewType::DataType(ParserDataType::new(
-                                                self.current_span(),
-                                                ParserInnerType::Auto(None),
-                                            )),
-                                        },
-                                        args.into_iter().map(|x| x.into()).collect(),
+                            lst.push(
+                                self.evaluate(
+                                    scope,
+                                    Node::new(
+                                        self.current_span(),
+                                        NodeType::ListLiteral(
+                                            match parameters
+                                                .last()
+                                                .cloned()
+                                                .map(|p| p.unwrap_all_refs().data_type)
+                                            {
+                                                Some(ParserInnerType::List(x)) => (*x).into(),
+                                                _ => {
+                                                    PotentialNewType::DataType(ParserDataType::new(
+                                                        self.current_span(),
+                                                        ParserInnerType::Auto(None),
+                                                    ))
+                                                }
+                                            },
+                                            args.into_iter().map(|x| x.into()).collect(),
+                                        ),
                                     ),
                                 ),
-                            ),
-                        );
+                            );
 
-                        for _ in 0..reverse_args.len() {
-                            lst.push(self.evaluate(scope, reverse_args.remove(0)));
+                            for _ in 0..reverse_args.len() {
+                                lst.push(self.evaluate(scope, reverse_args.remove(0)));
+                            }
+
+                            lst
                         }
-
-                        lst
+                        _ => self.lower_call_args(scope, args, reverse_args),
                     }
-                    _ => self.lower_call_args(scope, args, reverse_args),
                 },
                 caller: Box::new(self.evaluate_inner(scope, caller)?),
             },

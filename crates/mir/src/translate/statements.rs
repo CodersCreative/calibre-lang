@@ -1,13 +1,15 @@
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, MiddleVariable, get_disamubiguous_name},
+    environment::{
+        FunctionParamDefault, MiddleEnvironment, MiddleVariable, get_disamubiguous_name,
+    },
     errors::MiddleErr,
 };
 use calibre_parser::{
     Span,
     ast::{
-        Node, NodeType, ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialNewType,
-        VarType,
+        Node, NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
+        PotentialNewType, VarType,
     },
 };
 
@@ -92,6 +94,33 @@ impl MiddleEnvironment {
                 (*header).clone(),
                 (**body).clone(),
             ));
+        }
+
+        if let Some((header, _)) = function_decl {
+            let defaults: Vec<FunctionParamDefault> = header
+                .parameters
+                .iter()
+                .map(|(name, declared_ty, default)| FunctionParamDefault {
+                    name: name.to_string(),
+                    explicit_default: default
+                        .clone()
+                        .map(|node| Box::new(self.evaluate(scope, *node)))
+                        .map(|x| *x),
+                    implicit_none: default.is_none()
+                        && matches!(
+                            declared_ty,
+                            Some(PotentialNewType::DataType(ParserDataType {
+                                data_type: ParserInnerType::Option(_),
+                                ..
+                            }))
+                        ),
+                })
+                .collect();
+
+            self.function_param_defaults
+                .insert(new_name.clone(), defaults.clone());
+            self.function_param_defaults
+                .insert(identifier.text.clone(), defaults);
         }
 
         let current_location = self.current_location.clone();

@@ -1028,6 +1028,20 @@ impl Node {
         Self { node_type, span }
     }
 
+    pub fn none(span: Span) -> Self {
+        Node {
+            node_type: NodeType::Identifier(ParserText::from_str("none").unwrap().into()),
+            span,
+        }
+    }
+
+    pub fn is_none(&self) -> bool {
+        matches!(
+            &self.node_type,
+            NodeType::Identifier(id) if id.to_string() == "none"
+        )
+    }
+
     pub fn rewrite_main_emits_to_returns(self) -> Self {
         match self.node_type {
             NodeType::ScopeDeclaration {

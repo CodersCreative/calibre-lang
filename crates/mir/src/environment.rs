@@ -61,6 +61,13 @@ pub struct MiddleVariable {
     pub location: Option<Location>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionParamDefault {
+    pub name: String,
+    pub explicit_default: Option<MiddleNode>,
+    pub implicit_none: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct MiddleOverload {
     pub operator: Operator,
@@ -118,6 +125,7 @@ pub struct MiddleEnvironment {
     pub trait_defs: FxHashMap<String, MiddleTrait>,
     pub generic_fn_templates:
         FxHashMap<String, (Vec<String>, calibre_parser::ast::FunctionHeader, Node)>,
+    pub function_param_defaults: FxHashMap<String, Vec<FunctionParamDefault>>,
     pub generic_type_templates: FxHashMap<String, (Vec<String>, TypeDefType, Vec<Overload>)>,
     pub type_specializations: FxHashMap<String, String>,
     pub fn_specializations: FxHashMap<String, String>,
@@ -153,6 +161,7 @@ impl Default for MiddleEnvironment {
             type_aliases: FxHashMap::default(),
             trait_defs: FxHashMap::default(),
             generic_fn_templates: FxHashMap::default(),
+            function_param_defaults: FxHashMap::default(),
             generic_type_templates: FxHashMap::default(),
             type_specializations: FxHashMap::default(),
             fn_specializations: FxHashMap::default(),

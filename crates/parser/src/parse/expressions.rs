@@ -111,20 +111,34 @@ pub fn build_tail_expression_parser<'a>(
     })
     .boxed();
 
+    let arg_value = expr
+        .clone()
+        .then(
+            lex(pad.clone(), just('['))
+                .ignore_then(expr.clone())
+                .then_ignore(lex(pad.clone(), just(']')))
+                .repeated()
+                .collect::<Vec<_>>(),
+        )
+        .map(|(head, indexes)| {
+            let tails = indexes.into_iter().map(|idx| (idx, true)).collect();
+            member_node_from_head_and_tail(head, tails)
+        })
+        .boxed();
+
+    let call_arg = choice((
+        named_ident
+            .clone()
+            .then_ignore(lex(pad.clone(), just(':')))
+            .then(arg_value.clone())
+            .map(|(name, value)| CallArg::Named(name, value)),
+        arg_value.map(CallArg::Value),
+    ))
+    .boxed();
+
     let call_args = lex(pad.clone(), just('('))
         .ignore_then(
-            expr.clone()
-                .then(
-                    lex(pad.clone(), just('['))
-                        .ignore_then(expr.clone())
-                        .then_ignore(lex(pad.clone(), just(']')))
-                        .repeated()
-                        .collect::<Vec<_>>(),
-                )
-                .map(|(head, indexes)| {
-                    let tails = indexes.into_iter().map(|idx| (idx, true)).collect();
-                    member_node_from_head_and_tail(head, tails)
-                })
+            call_arg
                 .separated_by(comma.clone())
                 .allow_trailing()
                 .collect::<Vec<_>>()
@@ -132,7 +146,6 @@ pub fn build_tail_expression_parser<'a>(
                 .map(|x| x.unwrap_or_default()),
         )
         .then_ignore(lex(pad.clone(), just(')')))
-        .map(|args| args.into_iter().map(CallArg::Value).collect::<Vec<_>>())
         .boxed();
 
     let reverse_args = lex(pad.clone(), just("<("))
