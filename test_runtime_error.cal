@@ -1,7 +1,0 @@
-const main := fn => {
-    let x := 10;
-    let y := 0;
-    // This will trigger a runtime error (division by zero)
-    let result := x / y;
-    print(result);
-};

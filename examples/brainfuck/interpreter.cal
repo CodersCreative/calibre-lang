@@ -10,7 +10,7 @@ impl BrainFuck {
 		for self.pointer >= len(self.memory) => self.memory <<= 0b;
 	};
 
-	const interpret := fn (self : &mut Self, s : str) -> null => {
+	const interpret := fn (self : &mut Self, s : str) => {
 		let mut c := 0;
 		let s : list:<char> = s.to_chars();
 		let mut i := 0;

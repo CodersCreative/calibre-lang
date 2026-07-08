@@ -4,9 +4,9 @@ const main := fn => {
 	} else => {
 		emit 0;
 	};
-
+	
 	print("loop result = " & value);
-
+	
 	let mut val := for i in 0..5 => {
 		if i > 8 => break i;
 	} else => {

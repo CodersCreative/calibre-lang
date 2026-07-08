@@ -10,6 +10,7 @@ type HashMap:<K, V> := struct { } @overload {
 };
 
 type HashSet:<T> := struct { } @overload {
+
 	const "in" := fn (value : T, set : HashSet:<T>) -> bool => return set.contains(value);
 };
 
@@ -92,7 +93,8 @@ impl<K, V> Iter for HashMapIter:<K, V> {
 		if self.index >= len(self.data) => none else => {
 			return some(self.data[self.index += 1]);
 		};
-		return none;	
+		
+		return none;
 	};
 };
 
@@ -103,6 +105,7 @@ impl<T> Iter for HashSetIter:<T> {
 		if self.index >= len(self.data) => none else => {
 			return some(self.data[self.index += 1]);
 		};
+		
 		return none;
 	};
 };

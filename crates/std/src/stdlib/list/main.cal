@@ -154,6 +154,7 @@ impl<T> list:<T> {
 		return out;
 	};
 };
+
 impl list:<int> {
 	const sum := fn (self : list:<int>) -> int => {
 		let mut acc := 0;
@@ -175,6 +176,7 @@ impl list:<int> {
 		return some(m);
 	};
 };
+
 impl list:<uint> {
 	const sum := fn (self : list:<uint>) -> uint => {
 		let mut acc := 0;
@@ -196,6 +198,7 @@ impl list:<uint> {
 		return some(m);
 	};
 };
+
 impl list:<float> {
 	const sum := fn (self : list:<float>) -> float => {
 		let mut acc := 0f;

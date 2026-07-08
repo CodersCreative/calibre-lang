@@ -1,17 +1,15 @@
-type Stack := struct {
-  values : list:<int>
-};
+type Stack := struct { values : list:<int> };
 
-type Stack2 := struct(Stack);
+type Stack2 := struct (Stack);
 
-type StackList := struct(list:<Stack2>);
+type StackList := struct (list:<Stack2>);
 
 const main := fn => {
-  let mut arr := Stack {values : [0; 30]};
-  arr.values[10] := 100;
-  let mut arr2 := Stack2(move arr);
-  arr2.0.values[9] := 90;
-  let mut stacks := StackList(list:<Stack2>[move arr2]);
-  stacks.0[0].0.values[8] := 80;
-  print(stacks);
+	let mut arr := Stack { values : [0; 30] };
+	arr.values[10] := 100;
+	let mut arr2 := Stack2(move arr);
+	arr2.0.values[9] := 90;
+	let mut stacks := StackList(list:<Stack2>[move arr2]);
+	stacks.0[0].0.values[8] := 80;
+	print(stacks);
 };

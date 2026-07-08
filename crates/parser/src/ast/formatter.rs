@@ -1013,7 +1013,7 @@ impl Formatter {
                             if let Some(x) = &id.2 {
                                 expanded_chunk.push_str(&format!(
                                     "{}= {}",
-                                    if id.1.is_none() { ":" } else { "" },
+                                    if id.1.is_none() { ":" } else { " " },
                                     self.format(x)
                                 ));
                             }
@@ -1029,7 +1029,7 @@ impl Formatter {
                             if let Some(x) = &last.2 {
                                 chunk.push_str(&format!(
                                     "{}= {}",
-                                    if last.1.is_none() { ":" } else { "" },
+                                    if last.1.is_none() { ":" } else { " " },
                                     self.format(x)
                                 ));
                             }
@@ -1720,12 +1720,17 @@ impl Formatter {
                     }
 
                     txt = txt.trim_end().trim_end_matches(",").to_string();
+                    txt.push_str(") ");
 
-                    txt.push_str(&format!(
-                        ") -> {} {}",
-                        self.fmt_potential_new_type(&func.header.return_type),
-                        self.format(&func.body)
-                    ));
+                    if func.header.return_type.is_null() {
+                        txt.push_str(&self.format(&func.body));
+                    } else {
+                        txt.push_str(&format!(
+                            "-> {} {}",
+                            self.fmt_potential_new_type(&func.header.return_type),
+                            self.format(&func.body)
+                        ));
+                    }
 
                     txt
                 };
