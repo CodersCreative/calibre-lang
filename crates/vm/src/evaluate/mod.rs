@@ -140,22 +140,52 @@ impl VM {
             .collect();
 
         for (frame_idx, field_reg, parent_reg, field_name) in propagated_args {
-            let updated_field = self.get_reg_value_in_frame(frame_idx, field_reg).clone();
-            let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg).clone();
-            let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
-            if let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved
-                && let Some(entry) = Gc::make_mut(&mut map)
-                    .0
-                    .0
-                    .iter_mut()
-                    .find(|(field, _)| field == &field_name)
-            {
-                entry.1 = updated_field;
-                let updated_parent = RuntimeValue::Aggregate(type_name, map);
-                self.write_back_runtime_value(parent_raw, updated_parent);
-            }
+            self.write_back_member_field_update(frame_idx, field_reg, parent_reg, &field_name)?;
         }
 
+        Ok(())
+    }
+
+    fn write_back_member_field_update(
+        &mut self,
+        frame_idx: usize,
+        field_reg: u16,
+        parent_reg: u16,
+        field_name: &str,
+    ) -> Result<(), RuntimeError> {
+        let updated_field = self.get_reg_value_in_frame(frame_idx, field_reg).clone();
+        let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg).clone();
+        let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
+        if let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved
+            && let Some(entry) = Gc::make_mut(&mut map)
+                .0
+                .0
+                .iter_mut()
+                .find(|(field, _)| field == field_name)
+        {
+            entry.1 = updated_field;
+            let updated_parent = RuntimeValue::Aggregate(type_name, map);
+            let parent_source = self
+                .frames
+                .get(frame_idx)
+                .and_then(|frame| frame.member_sources.get(&parent_reg))
+                .cloned();
+            match parent_raw {
+                RuntimeValue::Ref(_) | RuntimeValue::VarRef(_) | RuntimeValue::RegRef { .. } => {
+                    self.write_back_runtime_value(parent_raw, updated_parent);
+                }
+                _ => {
+                    self.set_reg_value_in_frame(frame_idx, parent_reg, updated_parent.clone());
+                    self.sync_local_reg_value(frame_idx, parent_reg, updated_parent);
+                    if let Some(source) = parent_source {
+                        if let Some(frame) = self.frames.get_mut(frame_idx) {
+                            frame.member_sources.insert(parent_reg, source);
+                        }
+                        self.propagate_member_source_reg(parent_reg, frame_idx)?;
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -169,24 +199,7 @@ impl VM {
             return Ok(());
         };
 
-        let updated_field = self.get_reg_value_in_frame(frame_idx, reg).clone();
-        let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg).clone();
-        let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
-        let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved else {
-            return Ok(());
-        };
-
-        if let Some(entry) = Gc::make_mut(&mut map)
-            .0
-            .0
-            .iter_mut()
-            .find(|(field, _)| field == &field_name)
-        {
-            entry.1 = updated_field;
-            let updated_parent = RuntimeValue::Aggregate(type_name, map);
-            self.write_back_runtime_value(parent_raw, updated_parent);
-        }
-
+        self.write_back_member_field_update(frame_idx, reg, parent_reg, &field_name)?;
         Ok(())
     }
 
@@ -235,12 +248,6 @@ impl VM {
     {
         for candidate in candidates {
             if let Some((resolved, _)) = self.try_resolve_global_runtime_value(&candidate) {
-                if matches!(resolved, RuntimeValue::Null) {
-                    continue;
-                }
-                return Some(resolved);
-            }
-            if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&candidate) {
                 if matches!(resolved, RuntimeValue::Null) {
                     continue;
                 }
@@ -950,6 +957,12 @@ impl VM {
         }))
     }
 
+    #[inline]
+    fn short_name_if_qualified<'a>(name: &'a str) -> Option<&'a str> {
+        let short = calibre_parser::qualified_name_tail(name);
+        (short != name).then_some(short)
+    }
+
     fn try_resolve_global_runtime_value(&mut self, name: &str) -> Option<(RuntimeValue, String)> {
         if let Some(found) = self.resolve_named_global_runtime_value(name) {
             return Some(found);
@@ -962,8 +975,7 @@ impl VM {
             }
         }
 
-        let short_name = calibre_parser::qualified_name_tail(name);
-        if short_name == name {
+        let Some(short_name) = Self::short_name_if_qualified(name) else {
             if name.contains("::") {
                 if let Some((owner, member)) = name.rsplit_once("::") {
                     if let Some(resolved) =
@@ -987,7 +999,7 @@ impl VM {
                 }
             }
             return None;
-        }
+        };
 
         if let Some(found) = self.resolve_named_global_runtime_value(short_name) {
             return Some(found);
@@ -1050,10 +1062,9 @@ impl VM {
             return None;
         }
 
-        let short_name = calibre_parser::qualified_name_tail(name);
-        if short_name == name {
+        let Some(short_name) = Self::short_name_if_qualified(name) else {
             return None;
-        }
+        };
 
         if let Some(found) = self.move_named_global_runtime_value(short_name) {
             return Some(found);

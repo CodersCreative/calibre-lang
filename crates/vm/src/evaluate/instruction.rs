@@ -11,7 +11,7 @@ impl VM {
                 | RuntimeValue::MutexGuard(_)
         )
     }
-    fn sync_local_reg_value(&mut self, frame_idx: usize, reg: u16, value: RuntimeValue) {
+    pub fn sync_local_reg_value(&mut self, frame_idx: usize, reg: u16, value: RuntimeValue) {
         let Some(frame) = self.frames.get(frame_idx) else {
             return;
         };
@@ -1872,14 +1872,37 @@ impl VM {
                                 }
                                 RuntimeValue::Aggregate(name, map) => {
                                     let updated = update_aggregate(&name, map)?;
+                                    let member_source = self
+                                        .frames
+                                        .get(frame)
+                                        .and_then(|vm_frame| vm_frame.member_sources.get(&reg))
+                                        .cloned();
+
                                     self.set_reg_value_in_frame(
                                         frame,
                                         reg,
                                         RuntimeValue::Aggregate(name, updated),
                                     );
+
+                                    if let Some(source) = member_source
+                                        && let Some(vm_frame) = self.frames.get_mut(frame)
+                                    {
+                                        vm_frame.member_sources.insert(reg, source);
+                                    }
+
+                                    self.propagate_member_source_reg(reg, frame)?;
                                 }
-                                RuntimeValue::List(_list) => {
-                                    return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                                RuntimeValue::List(_) => {
+                                    if let Some((parent_reg, field_name)) =
+                                        self.current_frame().member_sources.get(&reg).cloned()
+                                    {
+                                        self.write_back_member_field_update(
+                                            frame,
+                                            reg,
+                                            parent_reg,
+                                            &field_name,
+                                        )?;
+                                    }
                                 }
                                 RuntimeValue::Generator { .. } => {
                                     self.set_reg_value_in_frame(
@@ -1895,7 +1918,32 @@ impl VM {
                         }
                         RuntimeValue::Aggregate(name, map) => {
                             let updated = update_aggregate(&name, map)?;
+                            let member_source =
+                                self.current_frame().member_sources.get(target).cloned();
                             self.set_reg_value(*target, RuntimeValue::Aggregate(name, updated));
+                            if let Some(source) = member_source {
+                                self.current_frame_mut()
+                                    .member_sources
+                                    .insert(*target, source);
+                            }
+                            self.propagate_member_source_reg(
+                                *target,
+                                self.frames.len().saturating_sub(1),
+                            )?;
+                            handled = true;
+                            break;
+                        }
+                        RuntimeValue::List(_) => {
+                            if let Some((parent_reg, field_name)) =
+                                self.current_frame().member_sources.get(target).cloned()
+                            {
+                                self.write_back_member_field_update(
+                                    self.frames.len().saturating_sub(1),
+                                    *target,
+                                    parent_reg,
+                                    &field_name,
+                                )?;
+                            }
                             handled = true;
                             break;
                         }
@@ -2205,11 +2253,23 @@ impl VM {
                                     let idx = Self::resolve_index_or_err(vec.len(), index)?;
                                     vec[idx] = value;
 
+                                    let member_source = self
+                                        .frames
+                                        .get(frame)
+                                        .and_then(|vm_frame| vm_frame.member_sources.get(&reg))
+                                        .cloned();
+
                                     self.set_reg_value_in_frame(
                                         frame,
                                         reg,
                                         RuntimeValue::List(list.clone()),
                                     );
+
+                                    if let Some(source) = member_source
+                                        && let Some(vm_frame) = self.frames.get_mut(frame)
+                                    {
+                                        vm_frame.member_sources.insert(reg, source);
+                                    }
 
                                     self.sync_local_reg_value(frame, reg, RuntimeValue::List(list));
                                     self.propagate_member_source_reg(reg, frame)?;
@@ -2234,32 +2294,18 @@ impl VM {
                                 return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
                             }
 
-                            let list_ptr = list.as_ref() as *const crate::value::GcVec;
                             let vec = &mut Gc::make_mut(&mut list).0;
                             let idx = Self::resolve_index_or_err(vec.len(), index)?;
                             vec[idx] = value;
+
+                            let member_source =
+                                self.current_frame().member_sources.get(target).cloned();
                             self.set_reg_value(*target, RuntimeValue::List(list));
 
-                            if !self.current_frame().member_sources.contains_key(target) {
-                                let frame_idx = self.frames.len().saturating_sub(1);
-                                if let Some((parent_reg, field_name)) =
-                                    self.current_frame().member_sources.iter().find_map(
-                                        |(reg, (parent_reg, field_name))| {
-                                            if let RuntimeValue::List(other_list) =
-                                                self.get_reg_value_in_frame(frame_idx, *reg).clone()
-                                                && std::ptr::eq(other_list.as_ref(), list_ptr)
-                                            {
-                                                Some((*parent_reg, field_name.clone()))
-                                            } else {
-                                                None
-                                            }
-                                        },
-                                    )
-                                {
-                                    self.current_frame_mut()
-                                        .member_sources
-                                        .insert(*target, (parent_reg, field_name));
-                                }
+                            if let Some(source) = member_source {
+                                self.current_frame_mut()
+                                    .member_sources
+                                    .insert(*target, source);
                             }
 
                             self.propagate_member_source_reg(

@@ -1503,7 +1503,7 @@ impl MiddleEnvironment {
                                                         "Type needs to be explicit when doing overloads and default types arent allowed",
                                                     )));
                                                 }
-                                            }                                            
+                                            }
                                         );
                                     }
                                     params

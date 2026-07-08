@@ -92,18 +92,39 @@ impl RuntimeValue {
                     let name = x.as_deref().unwrap_or("tuple");
                     format!("{} {{}}", name)
                 } else {
-                    let name = pretty_name(x.as_deref().unwrap_or("tuple"));
-                    let mut txt = format!("{} {{\n", name);
+                    let mut txt = pretty_name(x.as_deref().unwrap_or("tuple")).to_string();
+                    txt.push_str(" {\n");
 
-                    for val in data.as_ref().0.iter() {
-                        let _ = write!(txt, "\t{} : {},\n", val.0, val.1.display(vm));
+                    let fields = &data.as_ref().0.0;
+                    for (idx, (field_name, field_value)) in fields.iter().enumerate() {
+                        txt.push_str("  ");
+                        txt.push_str(field_name);
+                        txt.push_str(" : ");
+
+                        let indented = field_value
+                            .display(vm)
+                            .lines()
+                            .enumerate()
+                            .map(|(i, line)| {
+                                if i == 0 {
+                                    line.to_string()
+                                } else {
+                                    format!("\n    {}", line)
+                                }
+                            })
+                            .collect::<String>();
+
+                        txt.push_str(&indented);
+
+                        if idx + 1 < fields.len() {
+                            txt.push(',');
+                        }
+
+                        txt.push('\n');
                     }
 
-                    let trimmed = txt.trim_end_matches(',').trim_end();
-                    let mut out = trimmed.to_string();
-                    out.push_str("\n}");
-
-                    out
+                    txt.push('}');
+                    txt
                 }
             }
             x => x.to_string(),
