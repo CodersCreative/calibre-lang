@@ -10,13 +10,13 @@ type Tcp := struct { };
 type Http := struct { };
 
 impl Tcp {
-	const connect := fn (host : str, port : int) -> TcpStream => return TcpStream { inner : tcp_connect(host, port) };
+	const connect := fn (host : str, port : int = 80) -> TcpStream => return TcpStream { inner : tcp_connect(host, port) };
 
-	const listen := fn (host : str, port : int) -> TcpListener => return TcpListener { inner : tcp_listen(host, port) };
+	const listen := fn (host : str, port : int = 8080) -> TcpListener => return TcpListener { inner : tcp_listen(host, port) };
 
 	const accept := fn (listener : TcpListener) -> TcpStream => return TcpStream { inner : tcp_accept(listener.inner) };
 
-	const read := fn (stream : TcpStream, size : int) -> str => return tcp_read(stream.inner, size);
+	const read := fn (stream : TcpStream, size : int = 4096) -> str => return tcp_read(stream.inner, size);
 
 	const write := fn (stream : TcpStream, data : str) -> int => return tcp_write(stream.inner, data);
 
@@ -24,9 +24,9 @@ impl Tcp {
 };
 
 impl TcpStream {
-	const connect := fn (host : str, port : int) -> TcpStream => return Tcp.connect(host, port);
+	const connect := fn (host : str, port : int = 80) -> TcpStream => return Tcp.connect(host, port);
 
-	const read := fn (self : &TcpStream, size : int) -> str => return tcp_read(self.inner, size);
+	const read := fn (self : &TcpStream, size : int = 4096) -> str => return tcp_read(self.inner, size);
 
 	const write := fn (self : &TcpStream, data : str) -> int => return tcp_write(self.inner, data);
 
@@ -34,7 +34,7 @@ impl TcpStream {
 };
 
 impl TcpListener {
-	const listen := fn (host : str, port : int) -> TcpListener => return Tcp.listen(host, port);
+	const listen := fn (host : str, port : int = 8080) -> TcpListener => return Tcp.listen(host, port);
 
 	const accept := fn (self : &TcpListener) -> TcpStream => return TcpStream { inner : tcp_accept(self.inner) };
 };
@@ -76,7 +76,7 @@ const build_url := fn (scheme : str, host : str, port : int, path : str) -> str 
 };
 
 impl Http {
-	const client := fn (host : str, port : int) -> HttpClient => {
+	const client := fn (host : str, port : int = 0) -> HttpClient => {
 		let scheme := infer_scheme(host, port);
 		let resolved_port := if port <= 0 => emit default_port(scheme) else => emit port;
 		
@@ -84,7 +84,7 @@ impl Http {
 		return client;
 	};
 
-	const with_scheme := fn (host : str, port : int, scheme : str) -> HttpClient => {
+	const with_scheme := fn (host : str, port : int = 0, scheme : str) -> HttpClient => {
 		let resolved_port := if port <= 0 => emit default_port(scheme) else => emit port;
 		
 		let client := HttpClient { host : normalize_host(host), port : resolved_port, headers : list:<str>[], scheme };
@@ -96,21 +96,21 @@ impl Http {
 		return HttpResponse { status : 0, headers : list:<str>[], body };
 	};
 
-	const post := fn (url : str, payload : str) -> HttpResponse => {
+	const post := fn (url : str, payload : str = "") -> HttpResponse => {
 		let body := try http_request_try("POST", url, payload) => http_request_raw("POST", url, payload);
 		return HttpResponse { status : 0, headers : list:<str>[], body };
 	};
 
-	const request := fn (method : str, url : str, payload : str) -> HttpResponse => {
+	const request := fn (method : str, url : str, payload : str = "") -> HttpResponse => {
 		let body := try http_request_try(method, url, payload) => http_request_raw(method, url, payload);
 		return HttpResponse { status : 0, headers : list:<str>[], body };
 	};
 };
 
 impl HttpClient {
-	const new := fn (host : str, port : int) -> HttpClient => return Http.client(host, port);
+	const new := fn (host : str, port : int = 0) -> HttpClient => return Http.client(host, port);
 
-	const with_scheme := fn (host : str, port : int, scheme : str) -> HttpClient => return Http.with_scheme(host, port, scheme);
+	const with_scheme := fn (host : str, port : int = 0, scheme : str) -> HttpClient => return Http.with_scheme(host, port, scheme);
 
 	const with_header := fn (self : HttpClient, value : str) -> HttpClient => {
 		let mut next := HttpClient { host : self.host, port : self.port, headers : list:<str>[h for h in self.headers], scheme : self.scheme };
@@ -122,16 +122,16 @@ impl HttpClient {
 
 	const base_url := fn (self : HttpClient) -> str => return build_url(self.scheme, self.host, self.port, "/");
 
-	const request := fn (self : HttpClient, method : str, path : str, body : str) -> HttpResponse => {
+	const request := fn (self : HttpClient, method : str, path : str, body : str = "") -> HttpResponse => {
 		let url := build_url(self.scheme, self.host, self.port, path);
 		return Http.request(method, url, body);
 	};
 
 	const get := fn (self : HttpClient, path : str) -> HttpResponse => return self.request("GET", path, "");
 
-	const post := fn (self : HttpClient, path : str, body : str) -> HttpResponse => return self.request("POST", path, body);
+	const post := fn (self : HttpClient, path : str, body : str = "") -> HttpResponse => return self.request("POST", path, body);
 };
 
-const http := fn (host : str, port : int) -> HttpClient => return Http.client(host, port);
-const connect := fn (host : str, port : int) -> TcpStream => return Tcp.connect(host, port);
-const listen := fn (host : str, port : int) -> TcpListener => return Tcp.listen(host, port);
+const http := fn (host : str, port : int = 0) -> HttpClient => return Http.client(host, port);
+const connect := fn (host : str, port : int = 80) -> TcpStream => return Tcp.connect(host, port);
+const listen := fn (host : str, port : int = 8080) -> TcpListener => return Tcp.listen(host, port);

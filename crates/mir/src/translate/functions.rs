@@ -49,7 +49,7 @@ impl MiddleEnvironment {
         )
     }
 
-    fn lower_defaulted_call_args(
+    pub fn lower_defaulted_call_args(
         &mut self,
         scope: &u64,
         span: Span,

@@ -189,7 +189,7 @@ impl MiddleEnvironment {
             true,
         );
         add("random", &[], false);
-        add("fs", &["read_dir"], true);
+        add("fs", &["read_dir"], false);
         add("list", &["sort_by", "binary_search_by", "raw_remove"], true);
         add(
             "collections",
@@ -236,7 +236,7 @@ impl MiddleEnvironment {
         add("crypto", &["sha256", "sha512", "blake3"], false);
         add("regex", &["is_match", "find", "replace"], false);
         add("process", &["raw_exec"], false);
-        add("math", &[], false);
+        add("math", &[], true);
         add(
             "net",
             &[
@@ -253,7 +253,7 @@ impl MiddleEnvironment {
         );
         add("option", &[], true);
         add("result", &[], true);
-        add("json", &[], true);
+        add("json", &[], false);
     }
 
     pub fn setup_std_module(

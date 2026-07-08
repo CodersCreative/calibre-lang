@@ -18,7 +18,7 @@ impl Duration {
 	const sleep := fn (self : Duration) => wait(self.ms);
 };
 
-const wait := fn (ms : int) => if ms <= 0 => null else => {
+const wait := fn (ms : int = 1000) => if ms <= 0 => null else => {
 	c_usleep(ms * 1000);
 };
 

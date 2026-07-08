@@ -52,7 +52,7 @@ impl File {
 
 	const write_line := fn (self : &File, content : dyn) -> str!null => return self.write(("" & content) & "\n");
 
-	const read_line := fn (self : &File, max : int) -> str!str => {
+	const read_line := fn (self : &File, max : int = 4096) -> str!str => {
 		if File.is_null_handle(self.handle) => return err("read_line on null file handle");
 		let size := if max <= 0 => emit 1 else => emit max + 1;
 		let buf := c_malloc(size);
@@ -62,7 +62,7 @@ impl File {
 		if len(line) = 0 => return err("eof") else => return ok(line);
 	};
 
-	const read_lines := fn (self : &File, max : int) -> str!list:<str> => {
+	const read_lines := fn (self : &File, max : int = 4096) -> str!list:<str> => {
 		let mut out := list:<str>[];
 		
 		for  => {
@@ -79,7 +79,7 @@ impl File {
 		return ok(out);
 	};
 
-	const read_all := fn (self : &File, max : int) -> str!str => {
+	const read_all := fn (self : &File, max : int = 4096) -> str!str => {
 		let mut out := "";
 		
 		for  => {
@@ -96,14 +96,14 @@ impl File {
 		return ok(out);
 	};
 
-	const read_to_string := fn (path : str, max : int) -> str!str => {
+	const read_to_string := fn (path : str, max : int = 65536) -> str!str => {
 		let file := try File.open_read(path) => return err("failed to read: " & path);
 		let txt := file.read_all(max);
 		let _ := file.close();
 		return txt;
 	};
 
-	const read_lines_path := fn (path : str, max : int) -> str!list:<str> => {
+	const read_lines_path := fn (path : str, max : int = 4096) -> str!list:<str> => {
 		let file := try File.open_read(path) => return err("failed to read lines: " & path);
 		let lines := file.read_lines(max);
 		let _ := file.close();
