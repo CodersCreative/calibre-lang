@@ -46,6 +46,13 @@ impl Tab {
 pub struct Comment {
     pub value: String,
     pub span: Span,
+    pub kind: CommentKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CommentKind {
+    Line,
+    Block,
 }
 
 pub struct Formatter {
@@ -211,6 +218,7 @@ impl Formatter {
                         let end_col = if col > 1 { col - 1 } else { col };
                         comments.push(Comment {
                             value: val,
+                            kind: CommentKind::Line,
                             span: Span::new(
                                 crate::Position {
                                     line: start_line,
@@ -252,6 +260,7 @@ impl Formatter {
                         }
                         comments.push(Comment {
                             value: val,
+                            kind: CommentKind::Block,
                             span: Span::new(
                                 crate::Position {
                                     line: start_line,
@@ -306,19 +315,19 @@ impl Formatter {
             let formatted = handle_comment!(leading, self.format(&node));
             let formatted = formatted.trim_end().trim_end_matches(';').to_string();
             let formatted = if let Some(trailing) = trailing {
-                format!("{} {}", formatted, trailing)
+                format!("{}; {}", formatted, trailing)
             } else {
-                formatted
+                format!("{};", formatted)
             };
 
             if let Some(line) = last_line {
                 if (node.span.from.line as i32 - line as i32).abs() > 1 {
-                    lines.push(format!("\n{};\n", formatted));
+                    lines.push(format!("\n{}\n", formatted));
                 } else {
-                    lines.push(format!("{};\n", formatted));
+                    lines.push(format!("{}\n", formatted));
                 }
             } else {
-                lines.push(format!("{};\n", formatted));
+                lines.push(format!("{}\n", formatted));
             }
 
             last_line = Some(node.span.to.line);
@@ -1748,22 +1757,24 @@ impl Formatter {
         }
     }
 
-    fn fmt_comments(mut comments: Vec<Comment>) -> String {
-        let comment = comments.remove(0);
-
-        if !comments.is_empty() {
-            let mut txt = format!("/* {}\n", comment.value.trim());
-
-            while !comments.is_empty() {
-                txt.push_str(&format!("{}\n", comments.remove(0).value.trim()));
-            }
-
-            format!("{}*/", txt)
-        } else if !comment.value.trim().contains("\n") {
-            format!("// {}", comment.value.trim())
-        } else {
-            format!("/* {}\n*/", comment.value.trim())
-        }
+    fn fmt_comments(comments: Vec<Comment>) -> String {
+        comments
+            .iter()
+            .map(|comment| {
+                let value = comment.value.trim();
+                match comment.kind {
+                    CommentKind::Line => format!("// {}", value),
+                    CommentKind::Block => {
+                        if value.contains('\n') {
+                            format!("/* {}\n*/", value)
+                        } else {
+                            format!("/* {} */", value)
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub fn get_potential_comment(&mut self, span: &Span) -> Option<String> {

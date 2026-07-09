@@ -10,8 +10,8 @@ const show_uint := fn (flags : uint?) => {
 	print(flags);
 };
 
-const maybe_some := fn () -> uint? => return some(5u);
-const s := fn -> uint => return 5u; 
+const maybe_some := fn -> uint? => return some(5u);
+const s := fn -> uint => return 5u;
 
 const main := fn => {
 	setup(num : 2);

@@ -37,10 +37,9 @@ const main := fn => {
 	print(adder_float(90, 10.6));
 	
 	print("piping");
-
+	
 	// TODO Stabilize pipes
 	// 40 |: forty > adder_float(forty) |> $(80) |> fn (input : float) => print(input);
-	
 	print("overload");
 	let mut num := NumType { num : 10 };
 	let res := num + 10;
@@ -71,7 +70,7 @@ const main := fn => {
 	print(match_res);
 	
 	let => @add_scope [$first := 9f, $second := 11f, $t := type : float] {
-		// match_res will be captured at the call_site
+		// match_res will be captured at the call_site;
 		let sum : $t = $first + $second + match_res;
 		print("add_scope: ");
 		print(sum);
