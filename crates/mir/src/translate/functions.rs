@@ -49,6 +49,39 @@ impl MiddleEnvironment {
         )
     }
 
+    #[inline]
+    fn should_combine_excess_args_into_list_param(
+        parameters: &[ParserDataType],
+        positional_count: usize,
+        reverse_arg_count: usize,
+    ) -> bool {
+        let total_args = positional_count + reverse_arg_count;
+        let list_idx = parameters.len().saturating_sub(reverse_arg_count + 1);
+        let has_list_param = parameters
+            .get(list_idx)
+            .map(|p| p.is_list())
+            .unwrap_or(false);
+        has_list_param && (parameters.len() < total_args || parameters.len() == total_args + 1)
+    }
+
+    #[inline]
+    fn is_option_value_expr(node: &Node) -> bool {
+        if node.is_none() {
+            return true;
+        }
+
+        match &node.node_type {
+            NodeType::CallExpression { caller, .. } => matches!(
+                &caller.node_type,
+                NodeType::Identifier(id) if id.to_string() == "some"
+            ),
+            NodeType::EnumExpression { value, .. } => {
+                value.to_string().eq_ignore_ascii_case("some")
+            }
+            _ => false,
+        }
+    }
+
     pub fn lower_defaulted_call_args(
         &mut self,
         scope: &u64,
@@ -62,6 +95,15 @@ impl MiddleEnvironment {
             return None;
         };
         let raw_name = name.to_string();
+
+        if matches!(raw_name.as_str(), "some" | "ok" | "err")
+            && self.variables.get(&raw_name).is_some_and(|var| {
+                matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+            })
+        {
+            return None;
+        }
+
         let resolved_name = self
             .resolve_potential_generic_ident(scope, name)
             .map(|x| x.to_string());
@@ -76,7 +118,7 @@ impl MiddleEnvironment {
         if defaults.is_none() {
             let mut matched: Option<Vec<crate::environment::FunctionParamDefault>> = None;
             for (key, value) in &self.function_param_defaults {
-                let suffix_match = key.ends_with(raw_name.as_str())
+                let suffix_match = key == raw_name.as_str()
                     || key.ends_with(&format!("::{raw_name}"))
                     || key.ends_with(&format!(":{raw_name}"));
                 if !suffix_match {
@@ -93,10 +135,29 @@ impl MiddleEnvironment {
 
         let defaults = defaults?;
 
+        if !defaults
+            .iter()
+            .any(|d| d.explicit_default.is_some() || d.implicit_none)
+        {
+            return None;
+        }
+
         let parameters = match data_type {
             Some(ParserInnerType::Function { parameters, .. }) => Some(parameters.clone()),
             _ => None,
         };
+
+        if let Some(params) = &parameters
+            && Self::should_combine_excess_args_into_list_param(
+                params,
+                args.iter()
+                    .filter(|arg| matches!(arg, CallArg::Value(_)))
+                    .count(),
+                reverse_args.len(),
+            )
+        {
+            return None;
+        }
 
         let param_len = parameters
             .as_ref()
@@ -164,16 +225,18 @@ impl MiddleEnvironment {
 
             if meta.implicit_none {
                 let arg_type = self.resolve_type_from_node(scope, &current);
-                if !matches!(
-                    arg_type
-                        .as_ref()
-                        .map(|x| x.data_type.clone().unwrap_all_refs()),
-                    Some(ParserInnerType::Option(_))
-                ) {
+                if Self::is_option_value_expr(&current)
+                    || matches!(
+                        arg_type
+                            .as_ref()
+                            .map(|x| x.data_type.clone().unwrap_all_refs()),
+                        Some(ParserInnerType::Option(_))
+                    )
+                {
                     slots[i] = Some(current);
-                    wrap_with_some[i] = true;
                 } else {
                     slots[i] = Some(current);
+                    wrap_with_some[i] = true;
                 }
                 continue;
             } else if meta.explicit_default.is_none() {
@@ -1175,16 +1238,11 @@ impl MiddleEnvironment {
                         Some(ParserInnerType::Function {
                             return_type: _,
                             parameters,
-                        }) if {
-                            let total_args = args.len() + reverse_args.len();
-                            let list_idx = parameters.len().saturating_sub(reverse_args.len() + 1);
-                            let has_list_param = parameters
-                                .get(list_idx)
-                                .map(|p| p.is_list())
-                                .unwrap_or(false);
-                            (parameters.len() < total_args || parameters.len() == total_args + 1)
-                                && has_list_param
-                        } =>
+                        }) if Self::should_combine_excess_args_into_list_param(
+                            &parameters,
+                            args.len(),
+                            reverse_args.len(),
+                        ) =>
                         {
                             let mut lst: Vec<MiddleNode> =
                                 (0..(parameters.len() - 1 - reverse_args.len()))

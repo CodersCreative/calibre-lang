@@ -833,7 +833,7 @@ impl Formatter {
                         match arg {
                             CallArg::Value(x) => arg_txt.push(self.format(x)),
                             CallArg::Named(x, y) => {
-                                arg_txt.push(format!("{} = {}", x, self.format(y)))
+                                arg_txt.push(format!("{} : {}", x, self.format(y)))
                             }
                         }
                     }
@@ -1669,7 +1669,7 @@ impl Formatter {
 
         txt = txt.trim().trim_end_matches(",").trim().to_string();
 
-        txt.push_str(">");
+        txt.push('>');
         txt
     }
 
@@ -1754,17 +1754,15 @@ impl Formatter {
         if !comments.is_empty() {
             let mut txt = format!("/* {}\n", comment.value.trim());
 
-            while comments.len() > 0 {
+            while !comments.is_empty() {
                 txt.push_str(&format!("{}\n", comments.remove(0).value.trim()));
             }
 
             format!("{}*/", txt)
+        } else if !comment.value.trim().contains("\n") {
+            format!("// {}", comment.value.trim())
         } else {
-            if !comment.value.trim().contains("\n") {
-                format!("// {}", comment.value.trim())
-            } else {
-                format!("/* {}\n*/", comment.value.trim())
-            }
+            format!("/* {}\n*/", comment.value.trim())
         }
     }
 
@@ -1924,7 +1922,7 @@ impl Formatter {
 
                 txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
 
-                txt.push_str(")");
+                txt.push(')');
                 txt
             }
         }

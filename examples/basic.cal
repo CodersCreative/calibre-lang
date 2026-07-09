@@ -12,4 +12,8 @@ const main := fn => {
 	let mut stacks := StackList(list:<Stack2>[move arr2]);
 	stacks.0[0].0.values[8] := 80;
 	print(stacks);
+	let mut hashmap : HashMap:<str, str> = HashMap:<str, str>.new(("hello", "world"), ("world", "hello"));
+	if let .Some : x <- hashmap.get("hello") => print(x);
+	if let .Some : x <- hashmap.get("world") => print(x);
+	if let .None <- hashmap.get("") => print("none");
 };
