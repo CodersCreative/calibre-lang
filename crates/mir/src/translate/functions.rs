@@ -31,13 +31,7 @@ impl MiddleEnvironment {
                 otherwise: Box::new(Node::new(
                     span,
                     NodeType::MemberExpression {
-                        path: vec![
-                            (value, false),
-                            (
-                                Node::identifier(span, "next"),
-                                false,
-                            ),
-                        ],
+                        path: vec![(value, false), (Node::identifier(span, "next"), false)],
                     },
                 )),
             },
@@ -261,10 +255,7 @@ impl MiddleEnvironment {
             if wrap_with_some.get(idx).copied().unwrap_or(false) {
                 lowered.push(MiddleNode::new(
                     MiddleNodeType::CallExpression {
-                        caller: Box::new(MiddleNode::identifier(
-                            span,
-                            "some"
-                        )),
+                        caller: Box::new(MiddleNode::identifier(span, "some")),
                         args: vec![self.evaluate(scope, node)],
                     },
                     span,
@@ -1002,10 +993,7 @@ impl MiddleEnvironment {
                     .get(global_name)
                     .is_some_and(|var| Self::is_callable_parser_type(&var.data_type))
             {
-                caller = Node::identifier(
-                    span,
-                    global_name.clone(),
-                );
+                caller = Node::identifier(span, global_name.clone());
             }
             let caller_exact_callable = self.resolved_callable_name(scope, &caller_ident).is_some();
             if caller_name.contains("::")
@@ -1020,10 +1008,7 @@ impl MiddleEnvironment {
                     }
                 })
             {
-                caller = Node::identifier(
-                    span,
-                    full_name
-                );
+                caller = Node::identifier(span, full_name);
             }
 
             if !caller_exact_callable
@@ -1070,10 +1055,7 @@ impl MiddleEnvironment {
                         && let Some(var) = self.variables.get(&mapped_name)
                         && Self::is_callable_parser_type(&var.data_type)
                     {
-                        caller = Node::identifier(
-                            span,
-                            mapped_name,
-                        );
+                        caller = Node::identifier(span, mapped_name);
                     }
                 }
             }
@@ -1131,10 +1113,7 @@ impl MiddleEnvironment {
                                 self.current_span(),
                                 NodeType::CallExpression {
                                     string_fn: None,
-                                    caller: Box::new(Node::identifier(
-                                        self.current_span(),
-                                        spec,
-                                    )),
+                                    caller: Box::new(Node::identifier(self.current_span(), spec)),
                                     generic_types: Vec::new(),
                                     args,
                                     reverse_args,
@@ -1149,9 +1128,7 @@ impl MiddleEnvironment {
                 return Ok(MiddleNode {
                     node_type: MiddleNodeType::CallExpression {
                         args: self.lower_call_args(scope, args, reverse_args),
-                        caller: Box::new(MiddleNode::identifier(span,
-                            native_name,
-                        )),
+                        caller: Box::new(MiddleNode::identifier(span, native_name)),
                     },
                     span,
                 });
@@ -1185,10 +1162,7 @@ impl MiddleEnvironment {
             && let Some(var) = self.variables.get(&mapped_name)
             && Self::is_callable_parser_type(&var.data_type)
         {
-            caller = Node::identifier(
-                span,
-                mapped_name,
-            );
+            caller = Node::identifier(span, mapped_name);
         }
 
         let data_type = self

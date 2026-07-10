@@ -25,10 +25,8 @@ impl MiddleNode {
 
     pub fn identifier(span: Span, text: impl ToString) -> Self {
         Self::new(
-            
-            MiddleNodeType::Identifier(
-                ParserText::from(text.to_string()).into(),
-            ), span,
+            MiddleNodeType::Identifier(ParserText::from(text.to_string()).into()),
+            span,
         )
     }
 

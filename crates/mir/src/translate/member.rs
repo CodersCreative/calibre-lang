@@ -241,10 +241,7 @@ impl MiddleEnvironment {
 
         if let Some(function_name) = resolved_caller {
             let span = self.current_span();
-            let caller_node = Node::identifier(
-                span,
-                function_name.clone(),
-            );
+            let caller_node = Node::identifier(span, function_name.clone());
             let data_type = self
                 .variables
                 .get(&function_name)
@@ -287,9 +284,7 @@ impl MiddleEnvironment {
 
                 return Ok(MiddleNode::new(
                     MiddleNodeType::CallExpression {
-                        caller: Box::new(MiddleNode::identifier(span,
-                            function_name
-                        )),
+                        caller: Box::new(MiddleNode::identifier(span, function_name)),
                         args: lowered_args,
                     },
                     span,
@@ -327,10 +322,7 @@ impl MiddleEnvironment {
 
             Ok(MiddleNode::new(
                 MiddleNodeType::CallExpression {
-                    caller: Box::new(MiddleNode::identifier(self.current_span(),
-                        function_name,
-                        
-                    )),
+                    caller: Box::new(MiddleNode::identifier(self.current_span(), function_name)),
                     args: lowered_args,
                 },
                 self.current_span(),
@@ -348,7 +340,8 @@ impl MiddleEnvironment {
 
                     return Ok(MiddleNode::new(
                         MiddleNodeType::CallExpression {
-                            caller: Box::new(MiddleNode::identifier(self.current_span(),
+                            caller: Box::new(MiddleNode::identifier(
+                                self.current_span(),
                                 qualified,
                             )),
                             args: lowered_args,
@@ -386,8 +379,10 @@ impl MiddleEnvironment {
 
                 return Ok(MiddleNode::new(
                     MiddleNodeType::CallExpression {
-                        caller: Box::new(MiddleNode::identifier(self.current_span(),
-                            qualified.clone())),
+                        caller: Box::new(MiddleNode::identifier(
+                            self.current_span(),
+                            qualified.clone(),
+                        )),
                         args: call_args,
                     },
                     self.current_span(),
@@ -843,16 +838,10 @@ impl MiddleEnvironment {
                             if path.len() == 2 {
                                 return self.evaluate_inner(
                                     scope,
-                                    Node::identifier(
-                                        self.current_span(),
-                                        var,
-                                    ),
+                                    Node::identifier(self.current_span(), var),
                                 );
                             }
-                            let ident_node = Node::identifier(
-                                path[1].0.span,var
-                                ,
-                            );
+                            let ident_node = Node::identifier(path[1].0.span, var);
                             path[0].0 = ident_node;
                             path.remove(1);
                         }
@@ -973,10 +962,7 @@ impl MiddleEnvironment {
                         {
                             self.evaluate_inner(
                                 scope,
-                                Node::identifier(
-                                    self.current_span(),
-                                    static_var,
-                                ),
+                                Node::identifier(self.current_span(), static_var),
                             )?
                         } else {
                             MiddleNode {

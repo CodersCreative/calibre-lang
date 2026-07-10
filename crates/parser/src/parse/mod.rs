@@ -14,10 +14,7 @@ use matching::{MatchParsers, build_match_parsers};
 use setup::build_parser_prelude;
 use statements::{StatementParsers, build_statement_parser};
 use std::sync::Arc;
-use util::{
-     lex, member_node_from_head_and_tail, span,
-    strip_block_comments_keep_layout,
-};
+use util::{lex, member_node_from_head_and_tail, span, strip_block_comments_keep_layout};
 
 mod diagnostics;
 mod expressions;
@@ -287,11 +284,11 @@ pub fn parse_program_with_source(
                                         (
                                             Node::call_full(
                                                 member.span,
-                                                member,Vec::new(),
-                                                
+                                                member,
+                                                Vec::new(),
                                                 args.into_iter().map(CallArg::Value).collect(),
-                                                Vec::new(),None,
-                                                
+                                                Vec::new(),
+                                                None,
                                             ),
                                             false,
                                         )
@@ -354,14 +351,11 @@ pub fn parse_program_with_source(
                             let sp = span(ls.as_ref(), r);
                             Node::call_full(
                                 sp,
-                                Node::identifier(
-                                    sp,
-                                    "$"
-                                ),Vec::new(),
-                                
+                                Node::identifier(sp, "$"),
+                                Vec::new(),
                                 args.into_iter().map(CallArg::Value).collect(),
-                                Vec::new(),None,
-                                
+                                Vec::new(),
+                                None,
                             )
                         }
                     }),

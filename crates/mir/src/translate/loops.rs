@@ -27,20 +27,8 @@ impl MiddleEnvironment {
                 self.current_span(),
                 NodeType::MemberExpression {
                     path: vec![
-                        (
-                            Node::identifier(
-                                self.current_span(),
-                                iter_id,
-                            ),
-                            false,
-                        ),
-                        (
-                            Node::identifier(
-                                self.current_span(),
-                                idx_id,
-                            ),
-                            true,
-                        ),
+                        (Node::identifier(self.current_span(), iter_id), false),
+                        (Node::identifier(self.current_span(), idx_id), true),
                     ],
                 },
             )
@@ -290,13 +278,7 @@ impl MiddleEnvironment {
             self.evaluate(scope, result_decl),
             self.evaluate(scope, broke_decl),
             loop_node,
-            self.evaluate(
-                scope,
-                Node::identifier(
-                    self.current_span(),
-                    result_ident,
-                ),
-            ),
+            self.evaluate(scope, Node::identifier(self.current_span(), result_ident)),
         ];
 
         Ok(MiddleNode {
@@ -364,11 +346,7 @@ impl MiddleEnvironment {
             let mut spawned_loop_items: Vec<Node> = Vec::new();
             spawned_loop_items.push(Node::call(
                 self.current_span(),
-                
-                
-                Node::member(self.current_span(),
-                start_ident_node.clone(),
-                "wait"),
+                Node::member(self.current_span(), start_ident_node.clone(), "wait"),
                 Vec::new(),
             ));
             for condition in conditionals {
@@ -398,9 +376,7 @@ impl MiddleEnvironment {
             ));
             spawned_loop_items.push(Node::call(
                 self.current_span(),
-                Node::member(self.current_span(),
-                chan_ident_node.clone(),
-                "send"),
+                Node::member(self.current_span(), chan_ident_node.clone(), "send"),
                 vec![CallArg::Value(Node::new(
                     self.current_span(),
                     NodeType::Identifier(value_ident.into()),
@@ -409,9 +385,7 @@ impl MiddleEnvironment {
 
             let join_spawn_call = Node::call(
                 self.current_span(),
-                Node::member(self.current_span(),
-                wg_ident_node.clone(),
-                "join"),
+                Node::member(self.current_span(), wg_ident_node.clone(), "join"),
                 vec![CallArg::Value(Node::new(
                     self.current_span(),
                     NodeType::Spawn {
@@ -454,9 +428,11 @@ impl MiddleEnvironment {
                                 NodeType::MatchStatement {
                                     value: Some(Box::new(Node::call(
                                         self.current_span(),
-                                        Node::member(self.current_span(),
-                                        chan_ident_node.clone(),
-                                        "get"),
+                                        Node::member(
+                                            self.current_span(),
+                                            chan_ident_node.clone(),
+                                            "get",
+                                        ),
                                         Vec::new(),
                                     ))),
                                     body: vec![
@@ -529,9 +505,11 @@ impl MiddleEnvironment {
                                 )),
                                 value: Box::new(Node::call_with_generics(
                                     self.current_span(),
-                                    Node::member(self.current_span(),
-                                    Node::identifier(self.current_span(), "Channel"),
-                                    "new"),
+                                    Node::member(
+                                        self.current_span(),
+                                        Node::identifier(self.current_span(), "Channel"),
+                                        "new",
+                                    ),
                                     vec![resolved_data_type.clone().into()],
                                     Vec::new(),
                                 )),
@@ -548,9 +526,11 @@ impl MiddleEnvironment {
                                 )),
                                 value: Box::new(Node::call(
                                     self.current_span(),
-                                    Node::member(self.current_span(),
-                                    Node::identifier(self.current_span(), "WaitGroup"),
-                                    "new"),
+                                    Node::member(
+                                        self.current_span(),
+                                        Node::identifier(self.current_span(), "WaitGroup"),
+                                        "new",
+                                    ),
                                     Vec::new(),
                                 )),
                             },
@@ -566,18 +546,18 @@ impl MiddleEnvironment {
                                 )),
                                 value: Box::new(Node::call(
                                     self.current_span(),
-                                    Node::member(self.current_span(),
-                                    Node::identifier(self.current_span(), "WaitGroup"),
-                                    "new"),
+                                    Node::member(
+                                        self.current_span(),
+                                        Node::identifier(self.current_span(), "WaitGroup"),
+                                        "new",
+                                    ),
                                     Vec::new(),
                                 )),
                             },
                         ),
                         Node::call(
                             self.current_span(),
-                            Node::member(self.current_span(),
-                            start_ident_node.clone(),
-                            "raw_add"),
+                            Node::member(self.current_span(), start_ident_node.clone(), "raw_add"),
                             vec![CallArg::Value(Node::new(
                                 self.current_span(),
                                 NodeType::IntLiteral(String::from("1")),
@@ -586,23 +566,17 @@ impl MiddleEnvironment {
                         dispatch_loop,
                         Node::call(
                             self.current_span(),
-                            Node::member(self.current_span(),
-                            start_ident_node.clone(),
-                            "raw_done"),
+                            Node::member(self.current_span(), start_ident_node.clone(), "raw_done"),
                             Vec::new(),
                         ),
                         Node::call(
                             self.current_span(),
-                            Node::member(self.current_span(),
-                            wg_ident_node,
-                            "wait"),
+                            Node::member(self.current_span(), wg_ident_node, "wait"),
                             Vec::new(),
                         ),
                         Node::call(
                             self.current_span(),
-                            Node::member(self.current_span(),
-                            chan_ident_node.clone(),
-                            "close"),
+                            Node::member(self.current_span(), chan_ident_node.clone(), "close"),
                             Vec::new(),
                         ),
                         Node::new(
@@ -664,9 +638,7 @@ impl MiddleEnvironment {
 
             loop_items.push(Node::call(
                 self.current_span(),
-                Node::member(self.current_span(),
-                chan_ident_node.clone(),
-                "send"),
+                Node::member(self.current_span(), chan_ident_node.clone(), "send"),
                 vec![CallArg::Value(*map.clone())],
             ));
 
@@ -694,9 +666,11 @@ impl MiddleEnvironment {
                     .into(),
                     value: Box::new(Node::call_with_generics(
                         self.current_span(),
-                        Node::member(self.current_span(),
-                        Node::identifier(self.current_span(), "Channel"),
-                        "new"),
+                        Node::member(
+                            self.current_span(),
+                            Node::identifier(self.current_span(), "Channel"),
+                            "new",
+                        ),
                         vec![resolved_data_type.clone().into()],
                         Vec::new(),
                     )),
@@ -741,16 +715,12 @@ impl MiddleEnvironment {
             ));
             body.push(Node::call(
                 self.current_span(),
-                Node::member(self.current_span(),
-                wg_ident_node,
-                "wait"),
+                Node::member(self.current_span(), wg_ident_node, "wait"),
                 Vec::new(),
             ));
             body.push(Node::call(
                 self.current_span(),
-                Node::member(self.current_span(),
-                chan_ident_node.clone(),
-                "close"),
+                Node::member(self.current_span(), chan_ident_node.clone(), "close"),
                 Vec::new(),
             ));
             body.push(Node::new(
@@ -767,9 +737,11 @@ impl MiddleEnvironment {
                             NodeType::MatchStatement {
                                 value: Some(Box::new(Node::call(
                                     self.current_span(),
-                                    Node::member(self.current_span(),
-                                    chan_ident_node.clone(),
-                                    "get"),
+                                    Node::member(
+                                        self.current_span(),
+                                        chan_ident_node.clone(),
+                                        "get",
+                                    ),
                                     Vec::new(),
                                 ))),
                                 body: vec![
@@ -835,9 +807,11 @@ impl MiddleEnvironment {
             ));
             body.push(Node::call_with_generics(
                 self.current_span(),
-                Node::member(self.current_span(),
-                Node::identifier(self.current_span(), "Mutex"),
-                "new"),
+                Node::member(
+                    self.current_span(),
+                    Node::identifier(self.current_span(), "Mutex"),
+                    "new",
+                ),
                 vec![list_type.clone().into()],
                 vec![CallArg::Value(list_ident_node.clone())],
             ));
@@ -1224,9 +1198,7 @@ impl MiddleEnvironment {
                         } else {
                             Node::call(
                                 self.current_span(),
-                                Node::member(self.current_span(),
-                                range.clone(),
-                                "into_iter",),
+                                Node::member(self.current_span(), range.clone(), "into_iter"),
                                 vec![],
                             )
                         },
@@ -1335,10 +1307,7 @@ impl MiddleEnvironment {
                                         self.current_span(),
                                         NodeType::Identifier(next_id.clone().into()),
                                     )),
-                                    right: Box::new(Node::identifier(
-                                        self.current_span(),
-                                        "none",
-                                    )),
+                                    right: Box::new(Node::identifier(self.current_span(), "none")),
                                     operator:
                                         calibre_parser::ast::comparison::ComparisonOperator::Equal,
                                 }
@@ -1367,9 +1336,7 @@ impl MiddleEnvironment {
                             )),
                             value: Box::new(Node::call(
                                 self.current_span(),
-                                Node::member(self.current_span(),
-                                iter_node.clone(),
-                                "next"),
+                                Node::member(self.current_span(), iter_node.clone(), "next"),
                                 vec![],
                             )),
                         },
@@ -1402,13 +1369,7 @@ impl MiddleEnvironment {
                                 ),
                                 false,
                             ),
-                            (
-                                Node::identifier(
-                                    self.current_span(),
-                                    "next",
-                                ),
-                                false,
-                            ),
+                            (Node::identifier(self.current_span(), "next"), false),
                         ],
                     },
                 );

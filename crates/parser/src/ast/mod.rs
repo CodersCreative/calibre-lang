@@ -1031,7 +1031,7 @@ impl Node {
     pub fn none(span: Span) -> Self {
         Node::identifier(span, "none")
     }
-    
+
     pub fn null(span: Span) -> Self {
         Node::new(span, NodeType::Null)
     }

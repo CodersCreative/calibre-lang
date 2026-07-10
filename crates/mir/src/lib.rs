@@ -114,10 +114,7 @@ impl MiddleEnvironment {
                                 NodeType::MemberExpression {
                                     path: vec![
                                         (tmp_member_base(), false),
-                                        (
-                                            Node::identifier(span,idx),
-                                            false,
-                                        ),
+                                        (Node::identifier(span, idx), false),
                                     ],
                                 },
                             )
@@ -167,10 +164,7 @@ impl MiddleEnvironment {
                         NodeType::MemberExpression {
                             path: vec![
                                 (tmp_member_base(), false),
-                                (
-                                    Node::identifier(span, field),
-                                    false,
-                                ),
+                                (Node::identifier(span, field), false),
                             ],
                         },
                     );
@@ -291,11 +285,14 @@ impl MiddleEnvironment {
         {
             return Ok((
                 *scope,
-                Node::identifier(if let (Some(a), Some(b)) = (path.first(), path.last()) {
-                Span::new_from_spans(a.span, b.span)
-            } else {
-                Span::default()
-            }, parts.join("::"))
+                Node::identifier(
+                    if let (Some(a), Some(b)) = (path.first(), path.last()) {
+                        Span::new_from_spans(a.span, b.span)
+                    } else {
+                        Span::default()
+                    },
+                    parts.join("::"),
+                ),
             ));
         }
 

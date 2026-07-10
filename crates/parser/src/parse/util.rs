@@ -226,7 +226,6 @@ pub(super) fn match_arm_to_tuple_items(arm: MatchArmType) -> Option<Vec<MatchTup
     }
 }
 
-
 pub(super) fn member_path_span(path: &[(Node, bool)]) -> Span {
     match (path.first(), path.last()) {
         (Some(first), Some(last)) => Span::new_from_spans(first.0.span, last.0.span),

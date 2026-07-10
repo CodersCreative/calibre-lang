@@ -321,7 +321,7 @@ impl MiddleEnvironment {
                             CallArg::Value(literal_node),
                         ],
                     );
-                    current = Node::member(self.current_span(),strip_prefix_call, "next");
+                    current = Node::member(self.current_span(), strip_prefix_call, "next");
                     ends_with_capture = false;
                 }
                 MatchStringPatternPart::Binding { var_type, name } => {
@@ -468,7 +468,8 @@ impl MiddleEnvironment {
             ),
             NodeType::TupleLiteral { values } => {
                 for (idx, item) in values.iter().enumerate() {
-                    let current = Node::member(self.current_span(), actual.clone(), idx.to_string());
+                    let current =
+                        Node::member(self.current_span(), actual.clone(), idx.to_string());
                     self.apply_recursive_node_pattern(
                         scope,
                         item,
@@ -482,7 +483,8 @@ impl MiddleEnvironment {
             NodeType::StructLiteral { value, .. } => match value {
                 calibre_parser::ast::ObjectType::Map(fields) => {
                     for (field, item) in fields {
-                        let current = Node::member(self.current_span(),actual.clone(), field.clone());
+                        let current =
+                            Node::member(self.current_span(), actual.clone(), field.clone());
                         self.apply_recursive_node_pattern(
                             scope,
                             item,
@@ -495,7 +497,8 @@ impl MiddleEnvironment {
                 }
                 calibre_parser::ast::ObjectType::Tuple(items) => {
                     for (idx, item) in items.iter().enumerate() {
-                        let current = Node::member(self.current_span(),actual.clone(), idx.to_string());
+                        let current =
+                            Node::member(self.current_span(), actual.clone(), idx.to_string());
                         self.apply_recursive_node_pattern(
                             scope,
                             item,
@@ -537,7 +540,8 @@ impl MiddleEnvironment {
         match payload_pattern {
             MatchArmType::TuplePattern(items) => {
                 for (idx, item) in items.iter().enumerate() {
-                    let cur = Node::member(self.current_span(), payload_value.clone(), idx.to_string());
+                    let cur =
+                        Node::member(self.current_span(), payload_value.clone(), idx.to_string());
                     match item {
                         MatchTupleItem::Binding { var_type, name } => body_nodes.push(
                             Self::auto_var_decl(self.current_span(), *var_type, name.clone(), cur),
@@ -560,7 +564,8 @@ impl MiddleEnvironment {
                             destructure,
                             pattern,
                         } => {
-                            let nested_payload = Node::member(self.current_span(), cur.clone(), "next");
+                            let nested_payload =
+                                Node::member(self.current_span(), cur.clone(), "next");
                             if name.is_some() || destructure.is_some() {
                                 let bind_name = name.clone().unwrap_or_else(|| {
                                     self.temp_ident("__match_payload_nested_destructure")
@@ -599,7 +604,8 @@ impl MiddleEnvironment {
                         name,
                     } = field
                     {
-                        let cur = Node::member(self.current_span(), payload_value.clone(), field.clone());
+                        let cur =
+                            Node::member(self.current_span(), payload_value.clone(), field.clone());
                         body_nodes.push(Self::auto_var_decl(
                             self.current_span(),
                             *var_type,
@@ -813,10 +819,7 @@ impl MiddleEnvironment {
                         value,
                     },
                 )),
-                Some(Node::identifier(
-                    self.current_span(),
-                    tmp_name,
-                )),
+                Some(Node::identifier(self.current_span(), tmp_name)),
             )
         } else {
             (None, None, None)
@@ -910,7 +913,11 @@ impl MiddleEnvironment {
                                     idx += 1;
                                 }
                                 MatchTupleItem::Value(expected) => {
-                                    let current = Node::member(self.current_span(),value_node.clone(), idx.to_string());
+                                    let current = Node::member(
+                                        self.current_span(),
+                                        value_node.clone(),
+                                        idx.to_string(),
+                                    );
                                     if wants_other && !bound_other {
                                         self.match_add_binding(
                                             PotentialGenericTypeIdentifier::Identifier(
@@ -933,7 +940,8 @@ impl MiddleEnvironment {
                                     );
                                     self.apply_match_alias_bindings(
                                         &item_aliases,
-                                        Node::member(self.current_span(),
+                                        Node::member(
+                                            self.current_span(),
                                             value_node.clone(),
                                             idx.to_string(),
                                         ),
@@ -943,7 +951,11 @@ impl MiddleEnvironment {
                                     idx += 1;
                                 }
                                 MatchTupleItem::IsType(data_type) => {
-                                    let current = Node::member(self.current_span(), value_node.clone(), idx.to_string());
+                                    let current = Node::member(
+                                        self.current_span(),
+                                        value_node.clone(),
+                                        idx.to_string(),
+                                    );
                                     if wants_other && !bound_other {
                                         self.match_add_binding(
                                             PotentialGenericTypeIdentifier::Identifier(
@@ -966,7 +978,11 @@ impl MiddleEnvironment {
                                     idx += 1;
                                 }
                                 MatchTupleItem::In(expected) => {
-                                    let current = Node::member(self.current_span(), value_node.clone(), idx.to_string());
+                                    let current = Node::member(
+                                        self.current_span(),
+                                        value_node.clone(),
+                                        idx.to_string(),
+                                    );
                                     if wants_other && !bound_other {
                                         self.match_add_binding(
                                             PotentialGenericTypeIdentifier::Identifier(
@@ -989,7 +1005,11 @@ impl MiddleEnvironment {
                                     idx += 1;
                                 }
                                 MatchTupleItem::StringPattern(parts) => {
-                                    let current = Node::member(self.current_span(), value_node.clone(), idx.to_string());
+                                    let current = Node::member(
+                                        self.current_span(),
+                                        value_node.clone(),
+                                        idx.to_string(),
+                                    );
                                     if wants_other && !bound_other {
                                         self.match_add_binding(
                                             PotentialGenericTypeIdentifier::Identifier(
@@ -1018,7 +1038,11 @@ impl MiddleEnvironment {
                                     idx += 1;
                                 }
                                 MatchTupleItem::Binding { var_type, name } => {
-                                    let current = Node::member(self.current_span(), value_node.clone(), idx.to_string());
+                                    let current = Node::member(
+                                        self.current_span(),
+                                        value_node.clone(),
+                                        idx.to_string(),
+                                    );
                                     body_nodes.push(Self::auto_var_decl(
                                         self.current_span(),
                                         var_type.clone(),
@@ -1041,7 +1065,11 @@ impl MiddleEnvironment {
                                     destructure,
                                     pattern,
                                 } => {
-                                    let current = Node::member(self.current_span(),value_node.clone(), idx.to_string());
+                                    let current = Node::member(
+                                        self.current_span(),
+                                        value_node.clone(),
+                                        idx.to_string(),
+                                    );
                                     let val = self
                                         .resolve_dollar_ident_only(scope, &enum_val)
                                         .ok_or_else(|| {
@@ -1079,7 +1107,8 @@ impl MiddleEnvironment {
                                         current.clone(),
                                         enum_index,
                                     );
-                                    let payload_value = Node::member(self.current_span(), current.clone(), "next");
+                                    let payload_value =
+                                        Node::member(self.current_span(), current.clone(), "next");
 
                                     if let Some(payload_pattern) = pattern {
                                         match payload_pattern.as_ref() {
@@ -1090,7 +1119,8 @@ impl MiddleEnvironment {
                                                         MatchTupleItem::Rest(_) => break,
                                                         MatchTupleItem::Wildcard(_) => pidx += 1,
                                                         MatchTupleItem::Value(expected) => {
-                                                            let pcur = Node::member(self.current_span(),
+                                                            let pcur = Node::member(
+                                                                self.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
@@ -1105,7 +1135,8 @@ impl MiddleEnvironment {
                                                             pidx += 1;
                                                         }
                                                         MatchTupleItem::IsType(data_type) => {
-                                                            let pcur = Node::member(self.current_span(),
+                                                            let pcur = Node::member(
+                                                                self.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
@@ -1117,7 +1148,8 @@ impl MiddleEnvironment {
                                                             pidx += 1;
                                                         }
                                                         MatchTupleItem::In(expected) => {
-                                                            let pcur = Node::member(self.current_span(),
+                                                            let pcur = Node::member(
+                                                                self.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
@@ -1129,7 +1161,8 @@ impl MiddleEnvironment {
                                                             pidx += 1;
                                                         }
                                                         MatchTupleItem::StringPattern(parts) => {
-                                                            let pcur = Node::member(self.current_span(),
+                                                            let pcur = Node::member(
+                                                                self.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
@@ -1146,7 +1179,8 @@ impl MiddleEnvironment {
                                                             var_type,
                                                             name,
                                                         } => {
-                                                            let pcur = Node::member(self.current_span(),
+                                                            let pcur = Node::member(
+                                                                self.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
@@ -1177,7 +1211,8 @@ impl MiddleEnvironment {
                                                             destructure,
                                                             pattern,
                                                         } => {
-                                                            let pcur = Node::member(self.current_span(),
+                                                            let pcur = Node::member(
+                                                                self.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
@@ -1216,7 +1251,11 @@ impl MiddleEnvironment {
                                                                 nested_index,
                                                             );
 
-                                                            let nested_payload = Node::member(self.current_span(),pcur.clone(), "next");
+                                                            let nested_payload = Node::member(
+                                                                self.current_span(),
+                                                                pcur.clone(),
+                                                                "next",
+                                                            );
                                                             if name.is_some()
                                                                 || destructure.is_some()
                                                             {
@@ -1271,7 +1310,8 @@ impl MiddleEnvironment {
                                                             field,
                                                             value: expected,
                                                         } => {
-                                                            let cur = Node::member(self.current_span(),
+                                                            let cur = Node::member(
+                                                                self.current_span(),
                                                                 payload_value.clone(),
                                                                 field.clone(),
                                                             );
@@ -1289,7 +1329,8 @@ impl MiddleEnvironment {
                                                             var_type,
                                                             name,
                                                         } => {
-                                                            let cur = Node::member(self.current_span(),
+                                                            let cur = Node::member(
+                                                                self.current_span(),
                                                                 payload_value.clone(),
                                                                 field.clone(),
                                                             );
@@ -1549,8 +1590,11 @@ impl MiddleEnvironment {
                                     field,
                                     value: expected,
                                 } => {
-                                    let current =
-                                        Node::member(self.current_span(),value_node.clone(), field.clone());
+                                    let current = Node::member(
+                                        self.current_span(),
+                                        value_node.clone(),
+                                        field.clone(),
+                                    );
                                     self.apply_recursive_node_pattern(
                                         scope,
                                         expected,
@@ -1565,8 +1609,11 @@ impl MiddleEnvironment {
                                     var_type,
                                     name,
                                 } => {
-                                    let current =
-                                        Node::member(self.current_span(),value_node.clone(), field.clone());
+                                    let current = Node::member(
+                                        self.current_span(),
+                                        value_node.clone(),
+                                        field.clone(),
+                                    );
                                     body_nodes.push(Self::auto_var_decl(
                                         self.current_span(),
                                         *var_type,
@@ -1739,7 +1786,11 @@ impl MiddleEnvironment {
                                     NodeType::VariableDeclaration {
                                         var_type: var_type.clone(),
                                         identifier: bind_name.clone(),
-                                        value: Box::new(Node::member(self.current_span(),value.clone(), "next")),
+                                        value: Box::new(Node::member(
+                                            self.current_span(),
+                                            value.clone(),
+                                            "next",
+                                        )),
                                         data_type: PotentialNewType::DataType(ParserDataType::new(
                                             self.current_span(),
                                             ParserInnerType::Auto(None),
@@ -1759,7 +1810,7 @@ impl MiddleEnvironment {
                                 self.emit_payload_bindings_from_pattern(
                                     scope,
                                     payload_pattern.as_deref(),
-                                    Node::member(self.current_span(),value.clone(), "next"),
+                                    Node::member(self.current_span(), value.clone(), "next"),
                                     &mut body_nodes,
                                 );
 
@@ -1990,71 +2041,77 @@ impl MiddleEnvironment {
                         ));
                     };
 
-                    let then_inner = if name.is_some()
-                        || destructure.is_some()
-                        || payload_pattern.is_some()
-                    {
-                        let bind_name = if let Some(name) = name {
-                            name
-                        } else {
-                            self.temp_ident("__match_destructure")
-                        };
-                        let mut body_nodes = Vec::new();
-                        body_nodes.push(Node::new(
-                            self.current_span(),
-                            NodeType::VariableDeclaration {
-                                var_type: var_type.clone(),
-                                identifier: bind_name.clone(),
-                                value: if reference.is_some()
-                                    && reference != Some(RefMutability::Value)
-                                {
-                                    let mutability = reference.ok_or_else(|| {
-                                        MiddleErr::At(
-                                            value.span,
-                                            Box::new(MiddleErr::Internal(
-                                                "missing reference mutability".to_string(),
-                                            )),
-                                        )
-                                    })?;
-                                    Box::new(Node::new(
-                                        self.current_span(),
-                                        NodeType::RefStatement {
-                                            mutability,
-                                            value: Box::new(Node::member(self.current_span(),value.clone(), "next")),
-                                        },
-                                    ))
-                                } else {
-                                    Box::new(Node::member(self.current_span(),value.clone(), "next"))
-                                },
-                                data_type: PotentialNewType::DataType(ParserDataType::new(
-                                    self.current_span(),
-                                    ParserInnerType::Auto(None),
-                                )),
-                            },
-                        ));
-
-                        if let Some(pattern) = destructure {
-                            body_nodes.extend(self.emit_destructure_statements(
-                                &bind_name,
-                                &pattern,
+                    let then_inner =
+                        if name.is_some() || destructure.is_some() || payload_pattern.is_some() {
+                            let bind_name = if let Some(name) = name {
+                                name
+                            } else {
+                                self.temp_ident("__match_destructure")
+                            };
+                            let mut body_nodes = Vec::new();
+                            body_nodes.push(Node::new(
                                 self.current_span(),
-                                true,
+                                NodeType::VariableDeclaration {
+                                    var_type: var_type.clone(),
+                                    identifier: bind_name.clone(),
+                                    value: if reference.is_some()
+                                        && reference != Some(RefMutability::Value)
+                                    {
+                                        let mutability = reference.ok_or_else(|| {
+                                            MiddleErr::At(
+                                                value.span,
+                                                Box::new(MiddleErr::Internal(
+                                                    "missing reference mutability".to_string(),
+                                                )),
+                                            )
+                                        })?;
+                                        Box::new(Node::new(
+                                            self.current_span(),
+                                            NodeType::RefStatement {
+                                                mutability,
+                                                value: Box::new(Node::member(
+                                                    self.current_span(),
+                                                    value.clone(),
+                                                    "next",
+                                                )),
+                                            },
+                                        ))
+                                    } else {
+                                        Box::new(Node::member(
+                                            self.current_span(),
+                                            value.clone(),
+                                            "next",
+                                        ))
+                                    },
+                                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                                        self.current_span(),
+                                        ParserInnerType::Auto(None),
+                                    )),
+                                },
                             ));
-                        }
 
-                        self.emit_payload_bindings_from_pattern(
-                            scope,
-                            payload_pattern.as_deref(),
-                            Node::member(self.current_span(),value.clone(), "next"),
-                            &mut body_nodes,
-                        );
+                            if let Some(pattern) = destructure {
+                                body_nodes.extend(self.emit_destructure_statements(
+                                    &bind_name,
+                                    &pattern,
+                                    self.current_span(),
+                                    true,
+                                ));
+                            }
 
-                        body_nodes.push(*pattern.2);
+                            self.emit_payload_bindings_from_pattern(
+                                scope,
+                                payload_pattern.as_deref(),
+                                Node::member(self.current_span(), value.clone(), "next"),
+                                &mut body_nodes,
+                            );
 
-                        Box::new(Self::temp_scope(self.current_span(), body_nodes, true))
-                    } else {
-                        pattern.2
-                    };
+                            body_nodes.push(*pattern.2);
+
+                            Box::new(Self::temp_scope(self.current_span(), body_nodes, true))
+                        } else {
+                            pattern.2
+                        };
 
                     ifs.push(Node::new(
                         self.current_span(),

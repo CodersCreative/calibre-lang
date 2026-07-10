@@ -4,9 +4,8 @@ use std::sync::Arc;
 
 use super::{LegacySpanMapExt, filter, setup::StrParser};
 use crate::parse::util::{
-    ensure_scope_node,  lex, member_node_from_head_and_tail,
-    normalize_scope_member_chain, parse_embedded_expr, parse_splits, span, span_from_nodes_or,
-    unescape_string,
+    ensure_scope_node, lex, member_node_from_head_and_tail, normalize_scope_member_chain,
+    parse_embedded_expr, parse_splits, span, span_from_nodes_or, unescape_string,
 };
 use crate::{
     Span,
@@ -190,7 +189,7 @@ pub fn build_tail_expression_parser<'a>(
             .then(call_args.clone().repeated().collect::<Vec<_>>())
             .map(|(m, calls)| {
                 let node = calls.into_iter().fold(m, |c, args| {
-                    Node::call_full(c.span, c,  Vec::new(), args, Vec::new(), None,)
+                    Node::call_full(c.span, c, Vec::new(), args, Vec::new(), None)
                 });
                 PostfixSuffix::Member(node, false)
             }),
@@ -217,7 +216,7 @@ pub fn build_tail_expression_parser<'a>(
         calls
             .into_iter()
             .fold(head, |c, (string_fn, args, reverse_args)| {
-                Node::call_full(c.span, c, Vec::new(), args, reverse_args,string_fn)
+                Node::call_full(c.span, c, Vec::new(), args, reverse_args, string_fn)
             })
     };
 
