@@ -61,9 +61,9 @@ impl MiddleEnvironment {
                     value.span,
                     NodeType::CallExpression {
                         string_fn: None,
-                        caller: Box::new(Node::new(
+                        caller: Box::new(Node::identifier(
                             value.span,
-                            NodeType::Identifier(ParserText::from(mapped_name).into()),
+                            mapped_name,
                         )),
                         generic_types,
                         args,

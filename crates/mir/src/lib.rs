@@ -115,14 +115,7 @@ impl MiddleEnvironment {
                                     path: vec![
                                         (tmp_member_base(), false),
                                         (
-                                            Node::new(
-                                                span,
-                                                NodeType::Identifier(
-                                                    PotentialGenericTypeIdentifier::Identifier(
-                                                        index_ident,
-                                                    ),
-                                                ),
-                                            ),
+                                            Node::identifier(span,idx),
                                             false,
                                         ),
                                     ],
@@ -175,17 +168,7 @@ impl MiddleEnvironment {
                             path: vec![
                                 (tmp_member_base(), false),
                                 (
-                                    Node::new(
-                                        span,
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(
-                                                PotentialDollarIdentifier::Identifier(
-                                                    ParserText::from(field.clone()),
-                                                )
-                                                .into(),
-                                            ),
-                                        ),
-                                    ),
+                                    Node::identifier(span, field),
                                     false,
                                 ),
                             ],
@@ -306,20 +289,13 @@ impl MiddleEnvironment {
         if let Some(parts) = joined
             && !parts.is_empty()
         {
-            let joined_ident = parts.join("::");
-            let sp = if let (Some(a), Some(b)) = (path.first(), path.last()) {
+            return Ok((
+                *scope,
+                Node::identifier(if let (Some(a), Some(b)) = (path.first(), path.last()) {
                 Span::new_from_spans(a.span, b.span)
             } else {
                 Span::default()
-            };
-            return Ok((
-                *scope,
-                Node::new(
-                    sp,
-                    NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                        ParserText::from(joined_ident).into(),
-                    )),
-                ),
+            }, parts.join("::"))
             ));
         }
 

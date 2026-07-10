@@ -241,11 +241,9 @@ impl MiddleEnvironment {
 
         if let Some(function_name) = resolved_caller {
             let span = self.current_span();
-            let caller_node = Node::new(
+            let caller_node = Node::identifier(
                 span,
-                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                    ParserText::from(function_name.clone()).into(),
-                )),
+                function_name.clone(),
             );
             let data_type = self
                 .variables
@@ -289,9 +287,8 @@ impl MiddleEnvironment {
 
                 return Ok(MiddleNode::new(
                     MiddleNodeType::CallExpression {
-                        caller: Box::new(MiddleNode::new(
-                            MiddleNodeType::Identifier(ParserText::from(function_name)),
-                            span,
+                        caller: Box::new(MiddleNode::identifier(span,
+                            function_name
                         )),
                         args: lowered_args,
                     },
@@ -330,9 +327,9 @@ impl MiddleEnvironment {
 
             Ok(MiddleNode::new(
                 MiddleNodeType::CallExpression {
-                    caller: Box::new(MiddleNode::new(
-                        MiddleNodeType::Identifier(ParserText::from(function_name)),
-                        self.current_span(),
+                    caller: Box::new(MiddleNode::identifier(self.current_span(),
+                        function_name,
+                        
                     )),
                     args: lowered_args,
                 },
@@ -351,9 +348,8 @@ impl MiddleEnvironment {
 
                     return Ok(MiddleNode::new(
                         MiddleNodeType::CallExpression {
-                            caller: Box::new(MiddleNode::new(
-                                MiddleNodeType::Identifier(ParserText::from(qualified)),
-                                self.current_span(),
+                            caller: Box::new(MiddleNode::identifier(self.current_span(),
+                                qualified,
                             )),
                             args: lowered_args,
                         },
@@ -390,10 +386,8 @@ impl MiddleEnvironment {
 
                 return Ok(MiddleNode::new(
                     MiddleNodeType::CallExpression {
-                        caller: Box::new(MiddleNode::new(
-                            MiddleNodeType::Identifier(qualified.clone()),
-                            self.current_span(),
-                        )),
+                        caller: Box::new(MiddleNode::identifier(self.current_span(),
+                            qualified.clone())),
                         args: call_args,
                     },
                     self.current_span(),
@@ -813,13 +807,9 @@ impl MiddleEnvironment {
                                         self.current_span(),
                                         NodeType::CallExpression {
                                             string_fn: string_fn.clone(),
-                                            caller: Box::new(Node::new(
+                                            caller: Box::new(Node::identifier(
                                                 self.current_span(),
-                                                NodeType::Identifier(
-                                                    PotentialGenericTypeIdentifier::Identifier(
-                                                        ParserText::from(static_fn).into(),
-                                                    ),
-                                                ),
+                                                static_fn,
                                             )),
                                             generic_types: generic_types.clone(),
                                             args: new_args,
@@ -832,13 +822,9 @@ impl MiddleEnvironment {
                                 path[1].0.span,
                                 NodeType::CallExpression {
                                     string_fn: string_fn.clone(),
-                                    caller: Box::new(Node::new(
+                                    caller: Box::new(Node::identifier(
                                         self.current_span(),
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(
-                                                ParserText::from(static_fn).into(),
-                                            ),
-                                        ),
+                                        static_fn,
                                     )),
                                     generic_types: generic_types.clone(),
                                     args: new_args,
@@ -857,21 +843,15 @@ impl MiddleEnvironment {
                             if path.len() == 2 {
                                 return self.evaluate_inner(
                                     scope,
-                                    Node::new(
+                                    Node::identifier(
                                         self.current_span(),
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(
-                                                ParserText::from(var).into(),
-                                            ),
-                                        ),
+                                        var,
                                     ),
                                 );
                             }
-                            let ident_node = Node::new(
-                                path[1].0.span,
-                                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                    ParserText::from(var).into(),
-                                )),
+                            let ident_node = Node::identifier(
+                                path[1].0.span,var
+                                ,
                             );
                             path[0].0 = ident_node;
                             path.remove(1);
@@ -993,13 +973,9 @@ impl MiddleEnvironment {
                         {
                             self.evaluate_inner(
                                 scope,
-                                Node::new(
+                                Node::identifier(
                                     self.current_span(),
-                                    NodeType::Identifier(
-                                        PotentialGenericTypeIdentifier::Identifier(
-                                            ParserText::from(static_var).into(),
-                                        ),
-                                    ),
+                                    static_var,
                                 ),
                             )?
                         } else {

@@ -1029,10 +1029,11 @@ impl Node {
     }
 
     pub fn none(span: Span) -> Self {
-        Node {
-            node_type: NodeType::Identifier(ParserText::from_str("none").unwrap().into()),
-            span,
-        }
+        Node::identifier(span, "none")
+    }
+    
+    pub fn null(span: Span) -> Self {
+        Node::new(span, NodeType::Null)
     }
 
     pub fn bool(span: Span, value: bool) -> Self {

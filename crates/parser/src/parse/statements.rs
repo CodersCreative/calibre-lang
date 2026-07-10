@@ -1,6 +1,6 @@
 use super::{LegacySpanMapExt, setup::StrParser};
 use crate::parse::util::{
-    auto_type, ensure_scope_node, ident_node, labelled_scope_parser, lex, scope_body_or_single,
+    auto_type, ensure_scope_node, labelled_scope_parser, lex, scope_body_or_single,
     scope_node_parser, span, struct_destructure_fields_parser,
 };
 use crate::{
@@ -954,7 +954,7 @@ pub fn build_statement_parser<'a>(
             }),
         ident
             .clone()
-            .map(|(n, sp)| ident_node(sp, &n))
+            .map(|(n, sp)| Node::identifier(sp, &n))
             .then_ignore(left_arrow.clone())
             .then(expr.clone())
             .then(arrow_body_expr.clone())

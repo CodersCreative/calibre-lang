@@ -15,7 +15,7 @@ use setup::build_parser_prelude;
 use statements::{StatementParsers, build_statement_parser};
 use std::sync::Arc;
 use util::{
-    call_node, ident_node, lex, member_node_from_head_and_tail, span,
+     lex, member_node_from_head_and_tail, span,
     strip_block_comments_keep_layout,
 };
 
@@ -169,7 +169,7 @@ pub fn parse_program_with_source(
                                         .or_not(),
                                 )
                                 .map(|((k, sp), value)| {
-                                    let value = value.unwrap_or_else(|| ident_node(sp, &k));
+                                    let value = value.unwrap_or_else(|| Node::identifier(sp, &k));
                                     (k, value)
                                 })
                                 .separated_by(lex(pad_with_newline.clone(), just(',')))
@@ -282,16 +282,16 @@ pub fn parse_program_with_source(
                                         .or_not(),
                                 )
                                 .map(|((name, sp), args)| {
-                                    let member = ident_node(sp, &name);
+                                    let member = Node::identifier(sp, &name);
                                     if let Some(args) = args {
                                         (
-                                            call_node(
+                                            Node::call_full(
                                                 member.span,
-                                                member,
-                                                None,
+                                                member,Vec::new(),
+                                                
                                                 args.into_iter().map(CallArg::Value).collect(),
-                                                Vec::new(),
-                                                Vec::new(),
+                                                Vec::new(),None,
+                                                
                                             ),
                                             false,
                                         )
@@ -352,32 +352,25 @@ pub fn parse_program_with_source(
                         let ls = line_starts.clone();
                         move |args, r| {
                             let sp = span(ls.as_ref(), r);
-                            call_node(
+                            Node::call_full(
                                 sp,
-                                Node::new(
+                                Node::identifier(
                                     sp,
-                                    NodeType::Identifier(
-                                        PotentialGenericTypeIdentifier::Identifier(
-                                            PotentialDollarIdentifier::Identifier(ParserText::new(
-                                                sp,
-                                                "$".to_string(),
-                                            )),
-                                        ),
-                                    ),
-                                ),
-                                None,
+                                    "$"
+                                ),Vec::new(),
+                                
                                 args.into_iter().map(CallArg::Value).collect(),
-                                Vec::new(),
-                                Vec::new(),
+                                Vec::new(),None,
+                                
                             )
                         }
                     }),
                 ident
                     .clone()
-                    .map(|(n, sp)| ident_node(sp, &n))
+                    .map(|(n, sp)| Node::identifier(sp, &n))
                     .then(
                         lex(pad.clone(), just("::"))
-                            .ignore_then(ident.clone().map(|(n, sp)| ident_node(sp, &n)))
+                            .ignore_then(ident.clone().map(|(n, sp)| Node::identifier(sp, &n)))
                             .repeated()
                             .at_least(1)
                             .collect::<Vec<_>>(),

@@ -109,9 +109,9 @@ impl MiddleEnvironment {
     fn scope_member_call(span: Span, path: &[&str], args: Vec<CallArg>) -> Node {
         let mut items = Vec::with_capacity(path.len());
         for p in path {
-            items.push(Node::new(
+            items.push(Node::identifier(
                 span,
-                NodeType::Identifier(ParserText::from((*p).to_string()).into()),
+                p,
             ));
         }
 
@@ -410,11 +410,9 @@ impl MiddleEnvironment {
                             },
                         ));
 
-                        body.push(Node::new(
+                        body.push(Node::identifier(
                             self.current_span(),
-                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                fn_ident.into(),
-                            )),
+                            fn_ident,
                         ));
 
                         let scope_node = Node::new(
@@ -443,17 +441,13 @@ impl MiddleEnvironment {
                         let start_name = self.temp_name_at("__spawn_start", node.span);
                         let start_ident: PotentialDollarIdentifier =
                             ParserText::from(start_name.clone()).into();
-                        let wg_ident_node = Node::new(
+                        let wg_ident_node = Node::identifier(
                             node.span,
-                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                wg_ident.clone().into(),
-                            )),
+                                wg_ident.clone(),
                         );
-                        let start_ident_node = Node::new(
+                        let start_ident_node = Node::identifier(
                             node.span,
-                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                start_ident.clone().into(),
-                            )),
+                            start_ident.clone(),
                         );
 
                         let wg_new = Self::waitgroup_static_call(node.span, "new");
@@ -498,13 +492,9 @@ impl MiddleEnvironment {
 
                         let spawn_inner = match &*loop_type {
                             LoopType::For(name, _range) => {
-                                let loop_ident_node = Node::new(
+                                let loop_ident_node = Node::identifier(
                                     node.span,
-                                    NodeType::Identifier(
-                                        PotentialGenericTypeIdentifier::Identifier(
-                                            name.clone().into(),
-                                        ),
-                                    ),
+                                            name
                                 );
 
                                 let body_node = (*body).clone();
@@ -1723,9 +1713,9 @@ impl MiddleEnvironment {
                 Node {
                     node_type: NodeType::ComparisonExpression {
                         left: value,
-                        right: Box::new(Node::new(
+                        right: Box::new(Node::bool(
                             self.current_span(),
-                            NodeType::Identifier(ParserText::from("false".to_string()).into()),
+                            false,
                         )),
                         operator: ComparisonOperator::Equal,
                     },
@@ -1895,11 +1885,8 @@ impl MiddleEnvironment {
                             path: vec![
                                 (*value.clone(), false),
                                 (
-                                    Node::new(
-                                        self.current_span(),
-                                        NodeType::Identifier(
-                                            ParserText::from("contains".to_string()).into(),
-                                        ),
+                                    Node::identifier(
+                                        self.current_span(),"contains"
                                     ),
                                     false,
                                 ),
@@ -1921,9 +1908,9 @@ impl MiddleEnvironment {
                     scope,
                     Node::call(
                         self.current_span(),
-                        Node::new(
+                        Node::identifier(
                             self.current_span(),
-                            NodeType::Identifier(ParserText::from("contains".to_string()).into()),
+                            "contains"
                         ),
                         vec![CallArg::Value(*value), CallArg::Value(*identifier)],
                     ),
@@ -2016,12 +2003,6 @@ impl MiddleEnvironment {
                         Box::new(body),
                     )
                 };
-                let ident_node = |name: &str| {
-                    Node::new(
-                        Span::default(),
-                        NodeType::Identifier(ParserText::from(name.to_string()).into()),
-                    )
-                };
                 let return_call = |name: &str, args: Vec<CallArg>| {
                     Node::new(
                         Span::default(),
@@ -2045,7 +2026,7 @@ impl MiddleEnvironment {
                                 let ok_arm = enum_arm(
                                     "Some",
                                     Some(ParserText::from(ok_name.to_string()).into()),
-                                    ident_node(ok_name),
+                                    Node::identifier(self.current_span(),ok_name),
                                 );
                                 let err_arm = if let Some(catch) = catch {
                                     enum_arm("None", catch.name, *catch.body)
@@ -2058,7 +2039,7 @@ impl MiddleEnvironment {
                                 let ok_arm = enum_arm(
                                     "Ok",
                                     Some(ParserText::from(ok_name.to_string()).into()),
-                                    ident_node(ok_name),
+                                    Node::identifier(self.current_span(),ok_name),
                                 );
                                 let err_arm = if let Some(catch) = catch {
                                     enum_arm("Err", catch.name, *catch.body)
@@ -3029,13 +3010,10 @@ impl MiddleEnvironment {
                                 body: Some(vec![Node::new(
                                     self.current_span(),
                                     NodeType::MatchStatement {
-                                        value: Some(Box::new(Node::new(
+                                        value: Some(Box::new(Node::identifier(
                                             self.current_span(),
-                                            NodeType::Identifier(
-                                                PotentialGenericTypeIdentifier::Identifier(
+                                            
                                                     header.parameters[0].0.clone(),
-                                                ),
-                                            ),
                                         ))),
                                         body,
                                     },
@@ -3249,7 +3227,7 @@ impl MiddleEnvironment {
                 let mut has_default = false;
                 let mut arm_index = 0;
                 let done_ident_node =
-                    || Node::new(node.span, NodeType::Identifier(done_ident.clone().into()));
+                    || Node::identifier(node.span, done_ident.clone());
                 let break_node = || {
                     Node::new(
                         node.span,
@@ -3323,12 +3301,8 @@ impl MiddleEnvironment {
                                             node.span,
                                             NodeType::Identifier(tmp_ident.clone().into()),
                                         )),
-                                        right: Box::new(Node::new(
-                                            node.span,
-                                            NodeType::Identifier(
-                                                ParserText::from(String::from("none")).into(),
-                                            ),
-                                        )),
+                                        right: Box::new(Node::none(
+                                            node.span)),
                                         operator: ComparisonOperator::NotEqual,
                                     },
                                 );
@@ -3345,11 +3319,9 @@ impl MiddleEnvironment {
                                                 false,
                                             ),
                                             (
-                                                Node::new(
+                                                Node::identifier(
                                                     node.span,
-                                                    NodeType::Identifier(
-                                                        ParserText::from("next".to_string()).into(),
-                                                    ),
+                                                    "next",
                                                 ),
                                                 false,
                                             ),

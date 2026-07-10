@@ -813,11 +813,9 @@ impl MiddleEnvironment {
                         value,
                     },
                 )),
-                Some(Node::new(
+                Some(Node::identifier(
                     self.current_span(),
-                    NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                        ParserText::from(tmp_name).into(),
-                    )),
+                    tmp_name,
                 )),
             )
         } else {

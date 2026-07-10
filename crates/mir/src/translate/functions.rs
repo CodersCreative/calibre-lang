@@ -34,12 +34,7 @@ impl MiddleEnvironment {
                         path: vec![
                             (value, false),
                             (
-                                Node::new(
-                                    span,
-                                    NodeType::Identifier(
-                                        ParserText::from(String::from("next")).into(),
-                                    ),
-                                ),
+                                Node::identifier(span, "next"),
                                 false,
                             ),
                         ],
@@ -266,9 +261,9 @@ impl MiddleEnvironment {
             if wrap_with_some.get(idx).copied().unwrap_or(false) {
                 lowered.push(MiddleNode::new(
                     MiddleNodeType::CallExpression {
-                        caller: Box::new(MiddleNode::new(
-                            MiddleNodeType::Identifier(ParserText::from(String::from("some"))),
+                        caller: Box::new(MiddleNode::identifier(
                             span,
+                            "some"
                         )),
                         args: vec![self.evaluate(scope, node)],
                     },
@@ -1007,11 +1002,9 @@ impl MiddleEnvironment {
                     .get(global_name)
                     .is_some_and(|var| Self::is_callable_parser_type(&var.data_type))
             {
-                caller = Node::new(
+                caller = Node::identifier(
                     span,
-                    NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                        ParserText::from(global_name.clone()).into(),
-                    )),
+                    global_name.clone(),
                 );
             }
             let caller_exact_callable = self.resolved_callable_name(scope, &caller_ident).is_some();
@@ -1027,11 +1020,9 @@ impl MiddleEnvironment {
                     }
                 })
             {
-                caller = Node::new(
+                caller = Node::identifier(
                     span,
-                    NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                        ParserText::from(full_name).into(),
-                    )),
+                    full_name
                 );
             }
 
@@ -1079,11 +1070,9 @@ impl MiddleEnvironment {
                         && let Some(var) = self.variables.get(&mapped_name)
                         && Self::is_callable_parser_type(&var.data_type)
                     {
-                        caller = Node::new(
+                        caller = Node::identifier(
                             span,
-                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                ParserText::from(mapped_name).into(),
-                            )),
+                            mapped_name,
                         );
                     }
                 }
@@ -1142,9 +1131,9 @@ impl MiddleEnvironment {
                                 self.current_span(),
                                 NodeType::CallExpression {
                                     string_fn: None,
-                                    caller: Box::new(Node::new(
+                                    caller: Box::new(Node::identifier(
                                         self.current_span(),
-                                        NodeType::Identifier(ParserText::from(spec).into()),
+                                        spec,
                                     )),
                                     generic_types: Vec::new(),
                                     args,
@@ -1160,9 +1149,8 @@ impl MiddleEnvironment {
                 return Ok(MiddleNode {
                     node_type: MiddleNodeType::CallExpression {
                         args: self.lower_call_args(scope, args, reverse_args),
-                        caller: Box::new(MiddleNode::new(
-                            MiddleNodeType::Identifier(ParserText::from(native_name)),
-                            span,
+                        caller: Box::new(MiddleNode::identifier(span,
+                            native_name,
                         )),
                     },
                     span,
@@ -1197,11 +1185,9 @@ impl MiddleEnvironment {
             && let Some(var) = self.variables.get(&mapped_name)
             && Self::is_callable_parser_type(&var.data_type)
         {
-            caller = Node::new(
+            caller = Node::identifier(
                 span,
-                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                    ParserText::from(mapped_name).into(),
-                )),
+                mapped_name,
             );
         }
 

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use super::{LegacySpanMapExt, filter, setup::StrParser};
 use crate::parse::util::{
-    call_node, ensure_scope_node, ident_node, lex, member_node_from_head_and_tail,
+    ensure_scope_node,  lex, member_node_from_head_and_tail,
     normalize_scope_member_chain, parse_embedded_expr, parse_splits, span, span_from_nodes_or,
     unescape_string,
 };
@@ -184,13 +184,13 @@ pub fn build_tail_expression_parser<'a>(
         lex(pad.clone(), just(".*")).to(PostfixSuffix::Deref),
         lex(pad.clone(), just('.'))
             .ignore_then(choice((
-                ident.clone().map(|(n, sp)| ident_node(sp, &n)),
+                ident.clone().map(|(n, sp)| Node::identifier(sp, &n)),
                 int_lit.clone(),
             )))
             .then(call_args.clone().repeated().collect::<Vec<_>>())
             .map(|(m, calls)| {
                 let node = calls.into_iter().fold(m, |c, args| {
-                    call_node(c.span, c, None, args, Vec::new(), Vec::new())
+                    Node::call_full(c.span, c,  Vec::new(), args, Vec::new(), None,)
                 });
                 PostfixSuffix::Member(node, false)
             }),
@@ -217,7 +217,7 @@ pub fn build_tail_expression_parser<'a>(
         calls
             .into_iter()
             .fold(head, |c, (string_fn, args, reverse_args)| {
-                call_node(c.span, c, string_fn, args, reverse_args, Vec::new())
+                Node::call_full(c.span, c, Vec::new(), args, reverse_args,string_fn)
             })
     };
 

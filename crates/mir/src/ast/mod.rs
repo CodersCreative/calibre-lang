@@ -23,6 +23,15 @@ impl MiddleNode {
         Self { node_type, span }
     }
 
+    pub fn identifier(span: Span, text: impl ToString) -> Self {
+        Self::new(
+            
+            MiddleNodeType::Identifier(
+                ParserText::from(text.to_string()).into(),
+            ), span,
+        )
+    }
+
     pub fn rewrite_main_emits_to_returns(self) -> Self {
         match self.node_type {
             MiddleNodeType::ScopeDeclaration {

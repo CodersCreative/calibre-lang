@@ -41,35 +41,6 @@ pub(super) fn none_type(sp: Span) -> PotentialNewType {
     ParserDataType::new(sp, ParserInnerType::Null).into()
 }
 
-pub(super) fn ident_node(sp: Span, txt: &str) -> Node {
-    Node::new(
-        sp,
-        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-            PotentialDollarIdentifier::Identifier(ParserText::new(sp, txt.to_string())),
-        )),
-    )
-}
-
-pub(super) fn call_node(
-    sp: Span,
-    caller: Node,
-    string_fn: Option<ParserText>,
-    args: Vec<CallArg>,
-    reverse_args: Vec<Node>,
-    generic_types: Vec<PotentialNewType>,
-) -> Node {
-    Node::new(
-        sp,
-        NodeType::CallExpression {
-            string_fn,
-            caller: Box::new(caller),
-            generic_types,
-            args,
-            reverse_args,
-        },
-    )
-}
-
 pub(super) fn scope_node_parser<'a, P>(
     statement: P,
     delim: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
@@ -255,10 +226,6 @@ pub(super) fn match_arm_to_tuple_items(arm: MatchArmType) -> Option<Vec<MatchTup
     }
 }
 
-#[inline]
-pub(super) fn null_node(sp: Span) -> Node {
-    Node::new(sp, NodeType::Null)
-}
 
 pub(super) fn member_path_span(path: &[(Node, bool)]) -> Span {
     match (path.first(), path.last()) {
@@ -534,13 +501,13 @@ pub(super) fn normalize_scope_member_chain(
                     NodeType::ScopeMemberExpression { path: new_path },
                 );
                 (
-                    call_node(
+                    Node::call_full(
                         first.span,
                         scoped_caller,
-                        string_fn.clone(),
+                        generic_types.clone(),
                         args.clone(),
                         reverse_args.clone(),
-                        generic_types.clone(),
+                        string_fn.clone(),
                     ),
                     remaining,
                 )

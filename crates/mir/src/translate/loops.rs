@@ -28,16 +28,16 @@ impl MiddleEnvironment {
                 NodeType::MemberExpression {
                     path: vec![
                         (
-                            Node::new(
+                            Node::identifier(
                                 self.current_span(),
-                                NodeType::Identifier(iter_id.clone().into()),
+                                iter_id,
                             ),
                             false,
                         ),
                         (
-                            Node::new(
+                            Node::identifier(
                                 self.current_span(),
-                                NodeType::Identifier(idx_id.clone().into()),
+                                idx_id,
                             ),
                             true,
                         ),
@@ -292,9 +292,9 @@ impl MiddleEnvironment {
             loop_node,
             self.evaluate(
                 scope,
-                Node::new(
+                Node::identifier(
                     self.current_span(),
-                    NodeType::Identifier(result_ident.into()),
+                    result_ident,
                 ),
             ),
         ];
@@ -1335,11 +1335,9 @@ impl MiddleEnvironment {
                                         self.current_span(),
                                         NodeType::Identifier(next_id.clone().into()),
                                     )),
-                                    right: Box::new(Node::new(
+                                    right: Box::new(Node::identifier(
                                         self.current_span(),
-                                        NodeType::Identifier(
-                                            ParserText::from(String::from("none")).into(),
-                                        ),
+                                        "none",
                                     )),
                                     operator:
                                         calibre_parser::ast::comparison::ComparisonOperator::Equal,
@@ -1405,11 +1403,9 @@ impl MiddleEnvironment {
                                 false,
                             ),
                             (
-                                Node::new(
+                                Node::identifier(
                                     self.current_span(),
-                                    NodeType::Identifier(
-                                        ParserText::from(String::from("next")).into(),
-                                    ),
+                                    "next",
                                 ),
                                 false,
                             ),

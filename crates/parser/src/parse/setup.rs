@@ -1,6 +1,6 @@
 use super::{LegacySpanMapExt, filter};
 use crate::parse::util::{
-    auto_type, is_keyword, lex, null_node, span, unescape_char_literal, unescape_string,
+    auto_type, is_keyword, lex, span, unescape_char_literal, unescape_string,
 };
 use crate::{
     Span,
@@ -297,7 +297,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
     let null_lit = lex(pad.clone(), just("null"))
         .map_with_span({
             let ls = line_starts.clone();
-            move |_, r| null_node(span(ls.as_ref(), r))
+            move |_, r| Node::null(span(ls.as_ref(), r))
         })
         .boxed();
 
