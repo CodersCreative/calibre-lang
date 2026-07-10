@@ -404,27 +404,18 @@ impl MiddleEnvironment {
         }
     }
 
-    fn gen_ident(span: Span, name: &str) -> Node {
-        Node::new(
-            span,
-            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                PotentialDollarIdentifier::Identifier(ParserText::new(span, name.to_string())),
-            )),
-        )
-    }
-
     fn rewrite_generator_returns(node: Node) -> Node {
         let span = node.span;
         match node.node_type {
-            NodeType::Return { value: Some(value) } => Self::call_expr(
+            NodeType::Return { value: Some(value) } => Node::call(
                 span,
-                Self::gen_ident(span, "gen_suspend"),
+                Node::identifier(span, "gen_suspend"),
                 vec![CallArg::Value(*value)],
             ),
             NodeType::Return { value: None } => Node::new(
                 span,
                 NodeType::Return {
-                    value: Some(Box::new(Self::gen_ident(span, "none"))),
+                    value: Some(Box::new(Node::identifier(span, "none"))),
                 },
             ),
             NodeType::ScopeDeclaration {
@@ -517,12 +508,12 @@ impl MiddleEnvironment {
             } => {
                 let mut out = Vec::with_capacity(items.len() + 1);
                 out.append(&mut items);
-                out.push(Self::gen_ident(span, "none"));
+                out.push(Node::identifier(span, "none"));
                 Self::temp_scope(span, out, true)
             }
             other => Self::temp_scope(
                 span,
-                vec![Node::new(span, other), Self::gen_ident(span, "none")],
+                vec![Node::new(span, other), Node::identifier(span, "none")],
                 true,
             ),
         };
@@ -569,12 +560,12 @@ impl MiddleEnvironment {
                     generic_types: vec![PotentialNewType::DataType(elem_type)],
                 },
                 value: ObjectType::Map(vec![
-                    (String::from("data"), Self::gen_ident(span, &next_name)),
+                    (String::from("data"), Node::identifier(span, &next_name)),
                     (
                         String::from("index"),
                         Node::new(span, NodeType::IntLiteral(String::from("0"))),
                     ),
-                    (String::from("done"), Self::gen_ident(span, "false")),
+                    (String::from("done"), Node::identifier(span, "false")),
                 ]),
             },
         );
@@ -989,7 +980,7 @@ impl MiddleEnvironment {
             && !*is_dynamic
             && matches!(last_node.node_type, NodeType::Identifier(_))
         {
-            let call = Self::call_expr_full(
+            let call = Node::call_full(
                 last_node.span,
                 last_node.clone(),
                 generic_types,

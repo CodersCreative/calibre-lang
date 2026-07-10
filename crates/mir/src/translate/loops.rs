@@ -361,11 +361,14 @@ impl MiddleEnvironment {
             let value_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("anon_iter_value")).into();
 
-            let mut spawned_loop_items = Vec::new();
-            spawned_loop_items.push(Self::call_member_expr(
+            let mut spawned_loop_items: Vec<Node> = Vec::new();
+            spawned_loop_items.push(Node::call(
                 self.current_span(),
+                
+                
+                Node::member(self.current_span(),
                 start_ident_node.clone(),
-                "wait",
+                "wait"),
                 Vec::new(),
             ));
             for condition in conditionals {
@@ -393,20 +396,22 @@ impl MiddleEnvironment {
                     value: Box::new(*map),
                 },
             ));
-            spawned_loop_items.push(Self::call_member_expr(
+            spawned_loop_items.push(Node::call(
                 self.current_span(),
+                Node::member(self.current_span(),
                 chan_ident_node.clone(),
-                "send",
+                "send"),
                 vec![CallArg::Value(Node::new(
                     self.current_span(),
                     NodeType::Identifier(value_ident.into()),
                 ))],
             ));
 
-            let join_spawn_call = Self::call_member_expr(
+            let join_spawn_call = Node::call(
                 self.current_span(),
+                Node::member(self.current_span(),
                 wg_ident_node.clone(),
-                "join",
+                "join"),
                 vec![CallArg::Value(Node::new(
                     self.current_span(),
                     NodeType::Spawn {
@@ -447,10 +452,11 @@ impl MiddleEnvironment {
                             body: Some(vec![Node::new(
                                 self.current_span(),
                                 NodeType::MatchStatement {
-                                    value: Some(Box::new(Self::call_member_expr(
+                                    value: Some(Box::new(Node::call(
                                         self.current_span(),
+                                        Node::member(self.current_span(),
                                         chan_ident_node.clone(),
-                                        "get",
+                                        "get"),
                                         Vec::new(),
                                     ))),
                                     body: vec![
@@ -521,10 +527,11 @@ impl MiddleEnvironment {
                                     self.current_span(),
                                     ParserInnerType::Auto(None),
                                 )),
-                                value: Box::new(Self::call_member_expr_with_generics(
+                                value: Box::new(Node::call_with_generics(
                                     self.current_span(),
-                                    Self::ident_expr(self.current_span(), "Channel"),
-                                    "new",
+                                    Node::member(self.current_span(),
+                                    Node::identifier(self.current_span(), "Channel"),
+                                    "new"),
                                     vec![resolved_data_type.clone().into()],
                                     Vec::new(),
                                 )),
@@ -539,10 +546,11 @@ impl MiddleEnvironment {
                                     self.current_span(),
                                     ParserInnerType::Auto(None),
                                 )),
-                                value: Box::new(Self::call_member_expr(
+                                value: Box::new(Node::call(
                                     self.current_span(),
-                                    Self::ident_expr(self.current_span(), "WaitGroup"),
-                                    "new",
+                                    Node::member(self.current_span(),
+                                    Node::identifier(self.current_span(), "WaitGroup"),
+                                    "new"),
                                     Vec::new(),
                                 )),
                             },
@@ -556,40 +564,45 @@ impl MiddleEnvironment {
                                     self.current_span(),
                                     ParserInnerType::Auto(None),
                                 )),
-                                value: Box::new(Self::call_member_expr(
+                                value: Box::new(Node::call(
                                     self.current_span(),
-                                    Self::ident_expr(self.current_span(), "WaitGroup"),
-                                    "new",
+                                    Node::member(self.current_span(),
+                                    Node::identifier(self.current_span(), "WaitGroup"),
+                                    "new"),
                                     Vec::new(),
                                 )),
                             },
                         ),
-                        Self::call_member_expr(
+                        Node::call(
                             self.current_span(),
+                            Node::member(self.current_span(),
                             start_ident_node.clone(),
-                            "raw_add",
+                            "raw_add"),
                             vec![CallArg::Value(Node::new(
                                 self.current_span(),
                                 NodeType::IntLiteral(String::from("1")),
                             ))],
                         ),
                         dispatch_loop,
-                        Self::call_member_expr(
+                        Node::call(
                             self.current_span(),
+                            Node::member(self.current_span(),
                             start_ident_node.clone(),
-                            "raw_done",
+                            "raw_done"),
                             Vec::new(),
                         ),
-                        Self::call_member_expr(
+                        Node::call(
                             self.current_span(),
+                            Node::member(self.current_span(),
                             wg_ident_node,
-                            "wait",
+                            "wait"),
                             Vec::new(),
                         ),
-                        Self::call_member_expr(
+                        Node::call(
                             self.current_span(),
+                            Node::member(self.current_span(),
                             chan_ident_node.clone(),
-                            "close",
+                            "close"),
                             Vec::new(),
                         ),
                         Node::new(
@@ -649,10 +662,11 @@ impl MiddleEnvironment {
             let item_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("anon_iter_item")).into();
 
-            loop_items.push(Self::call_member_expr(
+            loop_items.push(Node::call(
                 self.current_span(),
+                Node::member(self.current_span(),
                 chan_ident_node.clone(),
-                "send",
+                "send"),
                 vec![CallArg::Value(*map.clone())],
             ));
 
@@ -678,10 +692,11 @@ impl MiddleEnvironment {
                         ParserInnerType::Auto(None),
                     )
                     .into(),
-                    value: Box::new(Self::call_member_expr_with_generics(
+                    value: Box::new(Node::call_with_generics(
                         self.current_span(),
-                        Self::ident_expr(self.current_span(), "Channel"),
-                        "new",
+                        Node::member(self.current_span(),
+                        Node::identifier(self.current_span(), "Channel"),
+                        "new"),
                         vec![resolved_data_type.clone().into()],
                         Vec::new(),
                     )),
@@ -724,16 +739,18 @@ impl MiddleEnvironment {
                     )),
                 },
             ));
-            body.push(Self::call_member_expr(
+            body.push(Node::call(
                 self.current_span(),
+                Node::member(self.current_span(),
                 wg_ident_node,
-                "wait",
+                "wait"),
                 Vec::new(),
             ));
-            body.push(Self::call_member_expr(
+            body.push(Node::call(
                 self.current_span(),
+                Node::member(self.current_span(),
                 chan_ident_node.clone(),
-                "close",
+                "close"),
                 Vec::new(),
             ));
             body.push(Node::new(
@@ -748,10 +765,11 @@ impl MiddleEnvironment {
                         vec![Node::new(
                             self.current_span(),
                             NodeType::MatchStatement {
-                                value: Some(Box::new(Self::call_member_expr(
+                                value: Some(Box::new(Node::call(
                                     self.current_span(),
+                                    Node::member(self.current_span(),
                                     chan_ident_node.clone(),
-                                    "get",
+                                    "get"),
                                     Vec::new(),
                                 ))),
                                 body: vec![
@@ -815,10 +833,11 @@ impl MiddleEnvironment {
                     )),
                 },
             ));
-            body.push(Self::call_member_expr_with_generics(
+            body.push(Node::call_with_generics(
                 self.current_span(),
-                Self::ident_expr(self.current_span(), "Mutex"),
-                "new",
+                Node::member(self.current_span(),
+                Node::identifier(self.current_span(), "Mutex"),
+                "new"),
                 vec![list_type.clone().into()],
                 vec![CallArg::Value(list_ident_node.clone())],
             ));
@@ -1203,10 +1222,11 @@ impl MiddleEnvironment {
                                 range.clone()
                             }
                         } else {
-                            Self::call_member_expr(
+                            Node::call(
                                 self.current_span(),
+                                Node::member(self.current_span(),
                                 range.clone(),
-                                "into_iter",
+                                "into_iter",),
                                 vec![],
                             )
                         },
@@ -1301,14 +1321,9 @@ impl MiddleEnvironment {
                                         right: Box::new(if is_count_loop {
                                             iter_node.clone()
                                         } else {
-                                            Self::call_expr(
+                                            Node::call(
                                                 self.current_span(),
-                                                Node::new(
-                                                    self.current_span(),
-                                                    NodeType::Identifier(
-                                                        ParserText::from("raw_len".to_string()).into(),
-                                                    ),
-                                                ),
+                                                Node::identifier(self.current_span(), "raw_len"),
                                                 vec![CallArg::Value(iter_node.clone())],
                                             )
                                         }),
@@ -1352,10 +1367,11 @@ impl MiddleEnvironment {
                                 self.current_span(),
                                 NodeType::Identifier(next_id.clone().into()),
                             )),
-                            value: Box::new(Self::call_member_expr(
+                            value: Box::new(Node::call(
                                 self.current_span(),
+                                Node::member(self.current_span(),
                                 iter_node.clone(),
-                                "next",
+                                "next"),
                                 vec![],
                             )),
                         },

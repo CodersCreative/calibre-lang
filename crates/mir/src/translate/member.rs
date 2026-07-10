@@ -52,11 +52,6 @@ impl MiddleEnvironment {
     }
 
     #[inline]
-    fn same_node_text(a: &MiddleNode, b: &MiddleNode) -> bool {
-        Self::text_matches(&a.to_string(), &b.to_string())
-    }
-
-    #[inline]
     fn dedupe_receiver_args(args: &mut Vec<MiddleNode>) {
         if args.len() < 2 {
             return;
@@ -65,7 +60,7 @@ impl MiddleEnvironment {
         let receiver_txt = receiver.to_string();
         let mut i = 1usize;
         while i < args.len() {
-            let same = Self::same_node_text(&receiver, &args[i]);
+            let same = Self::text_matches(&receiver, &args[i]);
             let same_as_receiver_ref = matches!(
                 &args[i].node_type,
                 MiddleNodeType::RefStatement { value, .. } if value.to_string() == receiver_txt
@@ -385,7 +380,7 @@ impl MiddleEnvironment {
                 let receiver = path[0].0.clone();
 
                 if let Some(first_arg) = lowered_args.first()
-                    && Self::same_node_text(&receiver, first_arg)
+                    && Self::text_matches(&receiver, first_arg)
                 {
                     lowered_args.remove(0);
                 }

@@ -4,7 +4,7 @@ use ast::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Span,
     ast::{
-        CallArg, DestructurePattern, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
+        DestructurePattern, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, VarType,
         binary::BinaryOperator,
     },
@@ -37,6 +37,7 @@ impl MiddleEnvironment {
         let mut out = Vec::with_capacity(estimated);
         let auto_type =
             PotentialNewType::DataType(ParserDataType::new(span, ParserInnerType::Auto(None)));
+
         let tmp_member_base = || {
             Node::new(
                 span,
@@ -45,6 +46,7 @@ impl MiddleEnvironment {
                 )),
             )
         };
+
         let push_binding = |out: &mut Vec<Node>,
                             var_type: &VarType,
                             name: &PotentialDollarIdentifier,
@@ -133,35 +135,21 @@ impl MiddleEnvironment {
 
                 for (i, entry) in tail.into_iter().enumerate() {
                     if let Some((var_type, name)) = entry {
-                        let len_call = Node::new(
-                            span,
-                            NodeType::CallExpression {
-                                string_fn: None,
-                                generic_types: Vec::new(),
-                                caller: Box::new(Node::new(
-                                    span,
-                                    NodeType::Identifier(
-                                        PotentialGenericTypeIdentifier::Identifier(
-                                            ParserText::from("len".to_string()).into(),
-                                        ),
-                                    ),
-                                )),
-                                args: vec![CallArg::Value(Node::new(
-                                    span,
-                                    NodeType::Identifier(
-                                        PotentialGenericTypeIdentifier::Identifier(
-                                            tmp_ident.clone(),
-                                        ),
-                                    ),
-                                ))],
-                                reverse_args: Vec::new(),
-                            },
-                        );
                         let offset = (total_tail - i as i64) as i64;
                         let index_expr = Node::new(
                             span,
                             NodeType::BinaryExpression {
-                                left: Box::new(len_call),
+                                left: Box::new(Node::len(
+                                    span,
+                                    Node::new(
+                                        span,
+                                        NodeType::Identifier(
+                                            PotentialGenericTypeIdentifier::Identifier(
+                                                tmp_ident.clone(),
+                                            ),
+                                        ),
+                                    ),
+                                )),
                                 right: Box::new(Node::new(
                                     span,
                                     NodeType::IntLiteral(offset.to_string()),

@@ -1035,6 +1035,87 @@ impl Node {
         }
     }
 
+    pub fn bool(span: Span, value: bool) -> Self {
+        Self::identifier(span, if value { "true" } else { "false" })
+    }
+
+    pub fn identifier(span: Span, text: impl ToString) -> Self {
+        Self::new(
+            span,
+            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                ParserText::from(text.to_string()).into(),
+            )),
+        )
+    }
+
+    pub fn member(span: Span, base: Self, member: impl ToString) -> Self {
+        Self::new(
+            span,
+            NodeType::MemberExpression {
+                path: vec![(base, false), (Self::identifier(span, member), false)],
+            },
+        )
+    }
+
+    pub fn call(span: Span, caller: Node, args: Vec<CallArg>) -> Self {
+        Self::new(
+            span,
+            NodeType::CallExpression {
+                string_fn: None,
+                caller: Box::new(caller),
+                generic_types: Vec::new(),
+                args,
+                reverse_args: Vec::new(),
+            },
+        )
+    }
+
+    pub fn call_with_generics(
+        span: Span,
+        caller: Node,
+        generic_types: Vec<PotentialNewType>,
+        args: Vec<CallArg>,
+    ) -> Self {
+        Self::new(
+            span,
+            NodeType::CallExpression {
+                string_fn: None,
+                caller: Box::new(caller),
+                generic_types,
+                args,
+                reverse_args: Vec::new(),
+            },
+        )
+    }
+
+    pub fn call_full(
+        span: Span,
+        caller: Node,
+        generic_types: Vec<PotentialNewType>,
+        args: Vec<CallArg>,
+        reverse_args: Vec<Node>,
+        string_fn: Option<ParserText>,
+    ) -> Self {
+        Self::new(
+            span,
+            NodeType::CallExpression {
+                string_fn,
+                caller: Box::new(caller),
+                generic_types,
+                args,
+                reverse_args,
+            },
+        )
+    }
+
+    pub fn len(span: Span, node: Node) -> Self {
+        Self::call(
+            span,
+            Self::identifier(span, "len"),
+            vec![CallArg::Value(node)],
+        )
+    }
+
     pub fn is_none(&self) -> bool {
         matches!(
             &self.node_type,

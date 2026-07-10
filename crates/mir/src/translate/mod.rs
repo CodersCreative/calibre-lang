@@ -27,26 +27,6 @@ pub mod scopes;
 pub mod statements;
 
 impl MiddleEnvironment {
-    fn call_expr_full(
-        span: Span,
-        caller: Node,
-        generic_types: Vec<PotentialNewType>,
-        args: Vec<CallArg>,
-        reverse_args: Vec<Node>,
-        string_fn: Option<ParserText>,
-    ) -> Node {
-        Node::new(
-            span,
-            NodeType::CallExpression {
-                caller: Box::new(caller),
-                generic_types,
-                args,
-                reverse_args,
-                string_fn,
-            },
-        )
-    }
-
     fn verify_overload(overload: &Overload) -> Result<(), MiddleErr> {
         let operator = Operator::from_str(&overload.operator.text)?;
         match operator {
@@ -87,51 +67,10 @@ impl MiddleEnvironment {
         }
     }
 
-    fn ident_expr(span: Span, name: &str) -> Node {
-        Node::new(
-            span,
-            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                ParserText::from(name.to_string()).into(),
-            )),
-        )
-    }
-
-    fn member_expr(span: Span, base: Node, member: &str) -> Node {
-        Node::new(
-            span,
-            NodeType::MemberExpression {
-                path: vec![(base, false), (Self::ident_expr(span, member), false)],
-            },
-        )
-    }
-
-    fn call_expr(span: Span, caller: Node, args: Vec<CallArg>) -> Node {
-        Self::call_expr_full(span, caller, Vec::new(), args, Vec::new(), None)
-    }
-
-    fn call_member_expr(span: Span, base: Node, member: &str, args: Vec<CallArg>) -> Node {
-        Self::call_expr(span, Self::member_expr(span, base, member), args)
-    }
-
-    fn call_member_expr_with_generics(
-        span: Span,
-        base: Node,
-        member: &str,
-        generic_types: Vec<PotentialNewType>,
-        args: Vec<CallArg>,
-    ) -> Node {
-        Self::call_expr_full(
-            span,
-            Self::member_expr(span, base, member),
-            generic_types,
-            args,
-            Vec::new(),
-            None,
-        )
-    }
-
     #[inline]
-    fn text_matches(left: &str, right: &str) -> bool {
+    fn text_matches(left: impl ToString, right: impl ToString) -> bool {
+        let (left, right) = (left.to_string(), right.to_string());
+
         left == right
             || left.ends_with(&format!(".{right}"))
             || right.ends_with(&format!(".{left}"))
@@ -160,10 +99,9 @@ impl MiddleEnvironment {
     }
 
     fn waitgroup_static_call(span: Span, member: &str) -> Node {
-        Self::call_member_expr(
+        Node::call(
             span,
-            Self::ident_expr(span, "WaitGroup"),
-            member,
+            Node::member(span, Node::identifier(span, "WaitGroup"), member),
             Vec::new(),
         )
     }
@@ -177,7 +115,7 @@ impl MiddleEnvironment {
             ));
         }
 
-        Self::call_expr_full(
+        Node::call_full(
             span,
             Node::new(span, NodeType::ScopeMemberExpression { path: items }),
             vec![],
@@ -185,10 +123,6 @@ impl MiddleEnvironment {
             vec![],
             None,
         )
-    }
-
-    fn bool_ident(span: Span, value: bool) -> Node {
-        Self::ident_expr(span, if value { "true" } else { "false" })
     }
 
     pub fn evaluate(&mut self, scope: &u64, node: Node) -> MiddleNode {
@@ -334,10 +268,9 @@ impl MiddleEnvironment {
             }),
             NodeType::Emit(EmitType::Channel { channel, value }) => self.evaluate_inner(
                 scope,
-                Self::call_member_expr(
+                Node::call(
                     node.span,
-                    *channel,
-                    "raw_send",
+                    Node::member(node.span, *channel, "raw_send"),
                     vec![CallArg::Value(*value)],
                 ),
             ),
@@ -451,7 +384,7 @@ impl MiddleEnvironment {
                                     .into(),
                                     param_destructures: Vec::new(),
                                 },
-                                body: Box::new(Self::call_expr_full(
+                                body: Box::new(Node::call_full(
                                     self.current_span(),
                                     *caller,
                                     generic_types,
@@ -549,19 +482,17 @@ impl MiddleEnvironment {
                                 value: Box::new(wg_new),
                             },
                         );
-                        let start_add = Self::call_member_expr(
+                        let start_add = Node::call(
                             node.span,
-                            start_ident_node.clone(),
-                            "raw_add",
+                            Node::member(node.span, start_ident_node.clone(), "raw_add"),
                             vec![CallArg::Value(Node::new(
                                 node.span,
                                 NodeType::IntLiteral(String::from("1")),
                             ))],
                         );
-                        let start_done = Self::call_member_expr(
+                        let start_done = Node::call(
                             node.span,
-                            start_ident_node.clone(),
-                            "raw_done",
+                            Node::member(node.span, start_ident_node.clone(), "raw_done"),
                             Vec::new(),
                         );
 
@@ -578,10 +509,9 @@ impl MiddleEnvironment {
 
                                 let body_node = (*body).clone();
                                 let mut body_nodes = Vec::new();
-                                body_nodes.push(Self::call_member_expr(
+                                body_nodes.push(Node::call(
                                     node.span,
-                                    start_ident_node.clone(),
-                                    "wait",
+                                    Node::member(node.span, start_ident_node.clone(), "wait"),
                                     Vec::new(),
                                 ));
                                 body_nodes.push(Node::new(
@@ -616,10 +546,9 @@ impl MiddleEnvironment {
                             ),
                         };
 
-                        let join_call = Self::call_member_expr(
+                        let join_call = Node::call(
                             node.span,
-                            wg_ident_node.clone(),
-                            "join",
+                            Node::member(node.span, wg_ident_node.clone(), "join"),
                             vec![CallArg::Value(spawn_inner)],
                         );
 
@@ -717,15 +646,18 @@ impl MiddleEnvironment {
                                     )),
                                 },
                             ),
-                            Self::call_member_expr(
+                            Node::call(
                                 node.span,
-                                Node::new(
+                                Node::member(
                                     node.span,
-                                    NodeType::Identifier(
-                                        PotentialGenericTypeIdentifier::Identifier(wg_ident),
+                                    Node::new(
+                                        node.span,
+                                        NodeType::Identifier(
+                                            PotentialGenericTypeIdentifier::Identifier(wg_ident),
+                                        ),
                                     ),
+                                    "wait",
                                 ),
-                                "wait",
                                 Vec::new(),
                             ),
                         ],
@@ -782,10 +714,9 @@ impl MiddleEnvironment {
                         ),
                     };
 
-                    let join_call = Self::call_member_expr(
+                    let join_call = Node::call(
                         span,
-                        Self::ident_expr(span, "WaitGroup"),
-                        "join",
+                        Node::member(span, Node::identifier(span, "WaitGroup"), "join"),
                         vec![
                             CallArg::Value(Node::new(
                                 span,
@@ -829,15 +760,18 @@ impl MiddleEnvironment {
                                     value: Box::new(scope_node),
                                 },
                             ),
-                            Self::call_member_expr(
+                            Node::call(
                                 span,
-                                Node::new(
+                                Node::member(
                                     span,
-                                    NodeType::Identifier(
-                                        PotentialGenericTypeIdentifier::Identifier(wg_ident),
+                                    Node::new(
+                                        span,
+                                        NodeType::Identifier(
+                                            PotentialGenericTypeIdentifier::Identifier(wg_ident),
+                                        ),
                                     ),
+                                    "wait",
                                 ),
-                                "wait",
                                 Vec::new(),
                             ),
                         ],
@@ -930,7 +864,7 @@ impl MiddleEnvironment {
             },
             NodeType::TupleLiteral { values } => {
                 let span = node.span;
-                let tuple_call = Self::call_expr(
+                let tuple_call = Node::call(
                     span,
                     Node::new(
                         span,
@@ -1834,10 +1768,10 @@ impl MiddleEnvironment {
                                             name: Some(PotentialDollarIdentifier::from(
                                                 ParserText::from(temp_ident.clone()),
                                             )),
-                                            body: Box::new(Self::call_expr(
+                                            body: Box::new(Node::call(
                                                 node.span,
-                                                Self::ident_expr(node.span, "panic"),
-                                                vec![CallArg::Value(Self::ident_expr(
+                                                Node::identifier(node.span, "panic"),
+                                                vec![CallArg::Value(Node::identifier(
                                                     node.span,
                                                     &temp_ident,
                                                 ))],
@@ -1975,7 +1909,7 @@ impl MiddleEnvironment {
 
                     return self.evaluate_inner(
                         scope,
-                        Self::call_expr(
+                        Node::call(
                             self.current_span(),
                             member,
                             vec![CallArg::Value(*identifier)],
@@ -1985,7 +1919,7 @@ impl MiddleEnvironment {
 
                 self.evaluate_inner(
                     scope,
-                    Self::call_expr(
+                    Node::call(
                         self.current_span(),
                         Node::new(
                             self.current_span(),
@@ -2092,9 +2026,9 @@ impl MiddleEnvironment {
                     Node::new(
                         Span::default(),
                         NodeType::Return {
-                            value: Some(Box::new(Self::call_expr(
+                            value: Some(Box::new(Node::call(
                                 self.current_span(),
-                                Self::ident_expr(self.current_span(), name),
+                                Node::identifier(self.current_span(), name),
                                 args,
                             ))),
                         },
@@ -2135,7 +2069,7 @@ impl MiddleEnvironment {
                                         Some(ParserText::from(err_name.to_string()).into()),
                                         return_call(
                                             "err",
-                                            vec![CallArg::Value(Self::ident_expr(
+                                            vec![CallArg::Value(Node::identifier(
                                                 self.current_span(),
                                                 err_name,
                                             ))],
@@ -3307,7 +3241,7 @@ impl MiddleEnvironment {
                             node.span,
                             ParserInnerType::Bool,
                         )),
-                        value: Box::new(Self::bool_ident(node.span, false)),
+                        value: Box::new(Node::bool(node.span, false)),
                     },
                 );
 
@@ -3330,7 +3264,7 @@ impl MiddleEnvironment {
                         node.span,
                         NodeType::AssignmentExpression {
                             identifier: Box::new(done_ident_node()),
-                            value: Box::new(Self::bool_ident(node.span, true)),
+                            value: Box::new(Node::bool(node.span, true)),
                         },
                     )
                 };
@@ -3549,7 +3483,7 @@ impl MiddleEnvironment {
                                     node.span,
                                     NodeType::AssignmentExpression {
                                         identifier: Box::new(done_ident_node()),
-                                        value: Box::new(Self::bool_ident(node.span, true)),
+                                        value: Box::new(Node::bool(node.span, true)),
                                     },
                                 )];
                                 body_items.push(arm.body.clone());
@@ -3715,8 +3649,6 @@ impl MiddleEnvironment {
                     let point_is_identifier =
                         matches!(point.get_node().node_type, NodeType::Identifier(_));
 
-                    // Allow value currying chains like `3 |> 4 |> mul3` by fusing into
-                    // `mul3(3, 4)` before normal pipe rewriting.
                     if !point.is_named()
                         && !point.get_node().node_type.is_call()
                         && !point_callable
@@ -3725,7 +3657,7 @@ impl MiddleEnvironment {
                         && !next.get_node().node_type.is_call()
                     {
                         if is_callable_point(self, &next) {
-                            value = Self::call_expr(
+                            value = Node::call(
                                 self.current_span(),
                                 next.into(),
                                 vec![CallArg::Value(value), CallArg::Value(point.into())],
@@ -3737,7 +3669,7 @@ impl MiddleEnvironment {
 
                     match point_callable || point_is_identifier {
                         true if !point.is_named() && !point.get_node().node_type.is_call() => {
-                            value = Self::call_expr(
+                            value = Node::call(
                                 self.current_span(),
                                 point.into(),
                                 vec![CallArg::Value(value)],
