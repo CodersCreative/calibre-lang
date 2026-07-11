@@ -325,11 +325,12 @@ impl MiddleEnvironment {
                     ends_with_capture = false;
                 }
                 MatchStringPatternPart::Binding { var_type, name } => {
-                    body_nodes.push(Self::auto_var_decl(
+                    body_nodes.push(Self::typed_var_decl(
                         self.current_span(),
                         *var_type,
                         name.clone(),
                         current.clone(),
+                        ParserDataType::new(self.current_span(), ParserInnerType::Str),
                     ));
                     guard_bindings.push((name.to_string(), current.clone()));
                     ends_with_capture = true;
@@ -700,7 +701,7 @@ impl MiddleEnvironment {
         variant_name: &str,
     ) -> Option<i64> {
         if let Some(dt) = self.resolve_type_from_node(scope, value_node) {
-            return self.enum_variant_index_from_data_type(&dt, variant_name);
+            return self.enum_variant_index_from_data_type(&dt.unwrap_all_refs(), variant_name);
         }
         Self::builtin_enum_variant_index(variant_name)
     }

@@ -2628,31 +2628,7 @@ impl MiddleEnvironment {
                 else_body: Some(body),
                 ..
             } => self.resolve_type_from_node(scope, &body),
-            NodeType::MatchStatement { value: _, body } => {
-                let mut return_type: Option<ParserDataType> = None;
-
-                for arm in body.iter() {
-                    if let Some(arm_ty) = self.resolve_type_from_node(scope, &arm.2) {
-                        if let Some(ty) = return_type {
-                            return_type = if ty.data_type == arm_ty.data_type
-                                || arm_ty.data_type == ParserInnerType::Null
-                            {
-                                Some(ty)
-                            } else {
-                                None
-                            };
-
-                            if return_type.is_none() {
-                                break;
-                            }
-                        } else {
-                            return_type = Some(arm_ty);
-                        }
-                    }
-                }
-
-                return_type
-            }
+            NodeType::MatchStatement { value: _, body: _ } => None,
             NodeType::EnumExpression { identifier, .. }
             | NodeType::StructLiteral { identifier, .. } => Some(ParserDataType {
                 span: *identifier.span(),

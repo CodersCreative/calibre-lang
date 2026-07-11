@@ -2548,7 +2548,7 @@ mod tests {
         let src = "let tpl = (1, 2); tpl = (3, 4);";
         let mut formatter = Formatter::default();
         let out = formatter.start_format(src, None).expect("format");
-        assert!(out.contains("let tpl = (1, 2);"), "{out}");
+        assert!(out.contains("let tpl := (1, 2);"), "{out}");
         assert!(out.contains("tpl = (3, 4);"), "{out}");
         assert!(parse_has_no_errors(&out), "{out}");
     }
@@ -2560,7 +2560,7 @@ mod tests {
         let out = formatter.start_format(src, None).expect("format");
         assert!(out.contains("one"), "{out}");
         assert!(out.contains("two"), "{out}");
-        assert!(out.contains("let x = 1;"), "{out}");
+        assert!(out.contains("let x := 1;"), "{out}");
         assert!(parse_has_no_errors(&out), "{out}");
     }
 

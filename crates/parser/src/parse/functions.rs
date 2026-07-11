@@ -100,12 +100,14 @@ pub fn build_function_parsers<'a>(
         .then(
             lex(pad.clone(), just(':'))
                 .ignore_then(type_name.clone().or_not())
-                .then(lex(pad.clone(), just('=').ignore_then(expr.clone())).or_not()),
+                .then(lex(pad.clone(), just('=').ignore_then(expr.clone())).or_not())
+                .or_not(),
         )
         .map_with_span({
             let ls = line_starts.clone();
-            move |(items, (ty, default)), r| {
+            move |(items, maybe_ty_default), r| {
                 let sp = span(ls.as_ref(), r);
+                let (ty, default) = maybe_ty_default.unwrap_or((None, None));
                 FnParamGroup::Destructure {
                     span: sp,
                     pattern: DestructurePattern::Tuple(items),
@@ -120,12 +122,14 @@ pub fn build_function_parsers<'a>(
             .then(
                 lex(pad.clone(), just(':'))
                     .ignore_then(type_name.clone().or_not())
-                    .then(lex(pad.clone(), just('=').ignore_then(expr.clone())).or_not()),
+                    .then(lex(pad.clone(), just('=').ignore_then(expr.clone())).or_not())
+                    .or_not(),
             )
             .map_with_span({
                 let ls = line_starts.clone();
-                move |(items, (ty, default)), r| {
+                move |(items, maybe_ty_default), r| {
                     let sp = span(ls.as_ref(), r);
+                    let (ty, default) = maybe_ty_default.unwrap_or((None, None));
                     FnParamGroup::Destructure {
                         span: sp,
                         pattern: DestructurePattern::Struct(items),
