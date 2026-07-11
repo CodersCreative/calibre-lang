@@ -1,5 +1,4 @@
-use std::sync::{LazyLock, RwLock};
-
+use crate::errors::MiddleErr;
 use ast::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Span,
@@ -9,9 +8,8 @@ use calibre_parser::{
         binary::BinaryOperator,
     },
 };
-
-use crate::errors::MiddleErr;
 use environment::*;
+use std::sync::{LazyLock, RwLock};
 
 pub mod ast;
 pub mod environment;
@@ -82,6 +80,7 @@ impl MiddleEnvironment {
                 let mut head = Vec::new();
                 let mut tail = Vec::new();
                 let mut in_tail = false;
+
                 for binding in bindings {
                     if binding.is_none() {
                         in_tail = true;
@@ -106,9 +105,6 @@ impl MiddleEnvironment {
                                 },
                             )
                         } else {
-                            let index_ident = PotentialDollarIdentifier::Identifier(
-                                ParserText::from(idx.to_string()),
-                            );
                             Node::new(
                                 span,
                                 NodeType::MemberExpression {

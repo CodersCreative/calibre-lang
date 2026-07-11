@@ -1,10 +1,6 @@
 use super::*;
 
 impl<'a> BlockLoweringCtx<'a> {
-    pub(super) fn symbol_tail(name: &str) -> &str {
-        calibre_parser::qualified_name_tail(name)
-    }
-
     pub(super) fn resolve_local_key(&self, name: &str) -> Option<String> {
         if self.locals.contains(name) {
             return Some(name.to_string());
@@ -16,10 +12,10 @@ impl<'a> BlockLoweringCtx<'a> {
             return None;
         }
 
-        let tail = Self::symbol_tail(name);
+        let tail = calibre_parser::qualified_name_tail(name);
         let mut found: Option<String> = None;
         for candidate in &self.locals {
-            if Self::symbol_tail(candidate.as_str()) == tail {
+            if calibre_parser::qualified_name_tail(candidate.as_str()) == tail {
                 if found.is_some() {
                     return None;
                 }
@@ -37,10 +33,10 @@ impl<'a> BlockLoweringCtx<'a> {
             return None;
         }
 
-        let tail = Self::symbol_tail(name);
+        let tail = calibre_parser::qualified_name_tail(name);
         let mut found: Option<Reg> = None;
         for (candidate, reg) in &self.map {
-            if Self::symbol_tail(candidate.as_str()) == tail {
+            if calibre_parser::qualified_name_tail(candidate.as_str()) == tail {
                 if found.is_some() {
                     return None;
                 }

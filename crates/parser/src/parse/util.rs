@@ -1,9 +1,9 @@
 use crate::{
     Position, Span,
     ast::{
-        CallArg, MatchArmType, MatchTupleItem, NamedScope, Node, NodeType, ParserDataType,
-        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        PotentialNewType, VarType,
+        MatchArmType, MatchTupleItem, NamedScope, Node, NodeType, ParserDataType, ParserInnerType,
+        ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
+        VarType,
     },
 };
 use chumsky::prelude::*;

@@ -218,6 +218,33 @@ pub enum LirNodeType {
     },
 }
 
+impl LirNodeType {
+    pub fn is_null(&self) -> bool {
+        matches!(self, LirNodeType::Literal(LirLiteral::Null))
+    }
+
+    pub fn local_name(&self) -> Option<&str> {
+        match self {
+            LirNodeType::Declare { dest, .. } => Some(dest.as_ref()),
+            LirNodeType::Assign {
+                dest: LirLValue::Var(name),
+                ..
+            } => Some(name.as_ref()),
+            _ => None,
+        }
+    }
+
+    pub fn is_return_candidate(&self) -> bool {
+        !matches!(
+            self,
+            LirNodeType::Declare { .. }
+                | LirNodeType::Assign { .. }
+                | LirNodeType::Drop(_)
+                | LirNodeType::Noop
+        )
+    }
+}
+
 impl Display for LirNodeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(

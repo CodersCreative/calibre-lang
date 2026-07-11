@@ -31,7 +31,7 @@ fn parse_list_callable_needle_args(
             list_value = Some(values.as_ref().0.clone());
             continue;
         }
-        if callable.is_none() && VM::is_runtime_callable(&resolved) {
+        if callable.is_none() && resolved.is_callable() {
             callable = Some(resolved);
             continue;
         }

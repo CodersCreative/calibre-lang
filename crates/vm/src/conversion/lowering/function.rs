@@ -155,7 +155,7 @@ impl FunctionLowering {
         for block in &func.blocks {
             let mut regs = vec![None; block.instructions.len()];
             for (idx, instr) in block.instructions.iter().enumerate() {
-                if let Some(name) = assigned_local_name(&instr.node_type) {
+                if let Some(name) = instr.node_type.local_name() {
                     if locals.contains(name) {
                         let r = reg_count;
                         reg_count += 1;
@@ -236,7 +236,7 @@ impl FunctionLowering {
                 let mut out = incoming;
                 let instructions = self.func.blocks[idx].instructions.clone();
                 for (instr_idx, instr) in instructions.iter().enumerate() {
-                    if let Some(name) = assigned_local_name(&instr.node_type) {
+                    if let Some(name) = instr.node_type.local_name() {
                         let reg = match self.assign_regs[idx].get(instr_idx).and_then(|r| *r) {
                             Some(reg) => reg,
                             None => {
@@ -410,7 +410,7 @@ impl FunctionLowering {
                     .enumerate()
                     .rev()
                     .find_map(|(i, instr)| {
-                        if is_ret_candidate(&instr.node_type) {
+                        if instr.node_type.is_return_candidate() {
                             Some(i)
                         } else {
                             None
@@ -418,7 +418,7 @@ impl FunctionLowering {
                     });
             let ret_from_body_non_null = ret_from_body.and_then(|i| {
                 let node = &block.instructions[i].node_type;
-                if is_null_literal(node) { None } else { Some(i) }
+                if node.is_null() { None } else { Some(i) }
             });
             let ret_idx = match block.terminator {
                 Some(LirTerminator::Jump { .. }) => ret_from_body,
@@ -444,29 +444,4 @@ impl FunctionLowering {
             self.blocks.push(out);
         }
     }
-}
-
-fn assigned_local_name(node: &LirNodeType) -> Option<&str> {
-    match node {
-        LirNodeType::Declare { dest, .. } => Some(dest.as_ref()),
-        LirNodeType::Assign {
-            dest: LirLValue::Var(name),
-            ..
-        } => Some(name.as_ref()),
-        _ => None,
-    }
-}
-
-fn is_ret_candidate(node: &LirNodeType) -> bool {
-    !matches!(
-        node,
-        LirNodeType::Declare { .. }
-            | LirNodeType::Assign { .. }
-            | LirNodeType::Drop(_)
-            | LirNodeType::Noop
-    )
-}
-
-fn is_null_literal(node: &LirNodeType) -> bool {
-    matches!(node, LirNodeType::Literal(LirLiteral::Null))
 }

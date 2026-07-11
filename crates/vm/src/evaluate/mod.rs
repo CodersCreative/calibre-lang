@@ -204,19 +204,6 @@ impl VM {
     }
 
     #[inline]
-    pub(crate) fn should_pass_by_reg_ref(value: &RuntimeValue) -> bool {
-        matches!(
-            value,
-            RuntimeValue::Aggregate(_, _)
-                | RuntimeValue::List(_)
-                | RuntimeValue::Enum(_, _, _)
-                | RuntimeValue::Option(_)
-                | RuntimeValue::Result(_)
-                | RuntimeValue::Ptr(_)
-        )
-    }
-
-    #[inline]
     fn push_owner_member_candidates(
         candidates: &mut Vec<String>,
         owner: &str,
@@ -304,17 +291,6 @@ impl VM {
             );
         }
         candidates
-    }
-
-    #[inline]
-    pub(crate) fn is_runtime_callable(value: &RuntimeValue) -> bool {
-        matches!(
-            value,
-            RuntimeValue::Function { .. }
-                | RuntimeValue::NativeFunction(_)
-                | RuntimeValue::ExternFunction(_)
-                | RuntimeValue::BoundMethod { .. }
-        )
     }
 
     pub(crate) fn call_runtime_callable_at(
@@ -720,7 +696,7 @@ impl VM {
                     reg: *reg,
                 }) {
                     match resolved {
-                        value if Self::should_pass_by_reg_ref(&value) => RuntimeValue::RegRef {
+                        value if value.should_pass_by_reg_ref() => RuntimeValue::RegRef {
                             frame: *frame,
                             reg: *reg,
                         },
@@ -737,7 +713,7 @@ impl VM {
                 if let Ok(resolved) =
                     self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.clone()))
                 {
-                    if Self::should_pass_by_reg_ref(&resolved) {
+                    if resolved.should_pass_by_reg_ref() {
                         RuntimeValue::Ref(name.clone())
                     } else {
                         resolved
@@ -748,7 +724,7 @@ impl VM {
             }
             RuntimeValue::VarRef(id) => {
                 if let Ok(resolved) = self.resolve_value_for_op_ref(&RuntimeValue::VarRef(*id)) {
-                    if Self::should_pass_by_reg_ref(&resolved) {
+                    if resolved.should_pass_by_reg_ref() {
                         RuntimeValue::VarRef(*id)
                     } else {
                         resolved
@@ -764,6 +740,7 @@ impl VM {
     #[inline]
     fn collect_call_args_vec(&self, args: &[u16]) -> Vec<RuntimeValue> {
         let frame = self.frames.len().saturating_sub(1);
+
         args.into_iter()
             .map(|reg| self.call_arg_from_frame_reg(frame, *reg))
             .collect()
@@ -957,12 +934,6 @@ impl VM {
         }))
     }
 
-    #[inline]
-    fn short_name_if_qualified<'a>(name: &'a str) -> Option<&'a str> {
-        let short = calibre_parser::qualified_name_tail(name);
-        (short != name).then_some(short)
-    }
-
     fn try_resolve_global_runtime_value(&mut self, name: &str) -> Option<(RuntimeValue, String)> {
         if let Some(found) = self.resolve_named_global_runtime_value(name) {
             return Some(found);
@@ -975,7 +946,7 @@ impl VM {
             }
         }
 
-        let Some(short_name) = Self::short_name_if_qualified(name) else {
+        let Some(short_name) = calibre_parser::short_name_if_qualified(name) else {
             if name.contains("::") {
                 if let Some((owner, member)) = name.rsplit_once("::") {
                     if let Some(resolved) =
@@ -1062,7 +1033,7 @@ impl VM {
             return None;
         }
 
-        let Some(short_name) = Self::short_name_if_qualified(name) else {
+        let Some(short_name) = calibre_parser::short_name_if_qualified(name) else {
             return None;
         };
 

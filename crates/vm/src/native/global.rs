@@ -1,9 +1,4 @@
-use crate::{
-    VM,
-    error::RuntimeError,
-    native::{NativeFunction, pop_or_null},
-    value::RuntimeValue,
-};
+use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
 use dumpster::sync::Gc;
 use std::{
     io::{self, Write},
@@ -268,23 +263,6 @@ impl NativeFunction for AssertFn {
             }
             other => Err(RuntimeError::UnexpectedType(other.clone())),
         }
-    }
-}
-
-pub struct GenSuspendFn();
-
-impl NativeFunction for GenSuspendFn {
-    fn name(&self) -> String {
-        String::from("gen_suspend")
-    }
-
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let value = pop_or_null(&mut args);
-        Ok(RuntimeValue::GeneratorSuspend(Box::new(value)))
     }
 }
 

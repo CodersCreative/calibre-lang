@@ -23,6 +23,12 @@ pub fn qualified_name_base(name: &str) -> &str {
 }
 
 #[inline]
+pub fn short_name_if_qualified(name: &str) -> Option<&str> {
+    let short = qualified_name_tail(name);
+    (short != name).then_some(short)
+}
+
+#[inline]
 pub fn qualified_name_matches(actual: &str, target: &str) -> bool {
     if actual == target {
         return true;

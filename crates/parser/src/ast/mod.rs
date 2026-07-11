@@ -612,7 +612,7 @@ impl Display for ParserInnerType {
                         "{}<{}",
                         identifier,
                         generic_types
-                            .get(0)
+                            .first()
                             .map(|x| x.to_string())
                             .unwrap_or(String::new())
                     );
@@ -726,7 +726,7 @@ impl Display for PotentialGenericTypeIdentifier {
                     "{}:<{}",
                     identifier,
                     generic_types
-                        .get(0)
+                        .first()
                         .map(|x| x.to_string())
                         .unwrap_or(String::new())
                 );
