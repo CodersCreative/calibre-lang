@@ -1098,10 +1098,6 @@ impl VM {
                 left,
                 right,
             } => {
-                if let Some(value) = self.try_fast_int_binary(*op, *left, *right) {
-                    self.set_reg_value(*dst, value);
-                    return Ok(TerminateValue::None);
-                }
                 let left = self.resolve_operand_value(self.get_reg_value(*left).clone())?;
                 let right = self.resolve_operand_value(self.get_reg_value(*right).clone())?;
                 let value = binary(self, op, left, right)?;
@@ -1173,10 +1169,6 @@ impl VM {
                 left,
                 right,
             } => {
-                if let Some(cmp_val) = self.try_fast_int_comparison(*op, *left, *right) {
-                    self.set_reg_value(*dst, cmp_val);
-                    return Ok(TerminateValue::None);
-                }
                 let right = self.resolve_operand_value(self.get_reg_value(*right).clone())?;
                 let left = self.resolve_operand_value(self.get_reg_value(*left).clone())?;
                 let cmp_val = comparison(op, left, right)?;
