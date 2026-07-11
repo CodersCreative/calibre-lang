@@ -13,29 +13,29 @@ impl PairEnum {
 	};
 };
 
-const sum_pair := fn ((a, b) : <int, int>) => a + b;
-const sum_pair_struct := fn ({left: a, right: b} : Pair) => a + b;
-const sum_pair_struct_basic := fn ({left, right} : Pair) => left + right;
+const sum_pair := fn ((a, b) : <int, int>) => return a + b;
+const sum_pair_struct := fn ({left: a, right: b} : Pair) => return a + b;
+const sum_pair_struct_basic := fn ({left, right} : Pair) => return left + right;
 
 const classify := fn match int -> str {
-	in 0..20 => "in-range",
-	in [30, 40, 50] => "in-list",
-	v @ is int if v > 100 => "large-int",
-	_ => "other"
+	in 0..20 => return "in-range",
+	in [30, 40, 50] => return "in-list",
+	v @ is int if v > 100 => return "large-int",
+	_ => return "other"
 };
 
 const classify_list := fn match list:<int> -> str {
-	[] => "Empty list",
-	[1] => "List of just 1",
-	[4, ..] => "List starting with 4",
-	[_, _] => "List of 2 elements",
-	_ => "Some other list"
+	[] => return "Empty list",
+	[1] => return "List of just 1",
+	[4, ..] => return "List starting with 4",
+	[_, _] => return "List of 2 elements",
+	_ => return "Some other list"
 };
 
 const parse_command := fn match str -> str {
-	"go:" & direction => emit "move " & direction,
-	head @ "noop" & _ => emit "saw " & head,
-	_ => emit "unknown"
+	"go:" & direction => return "move " & direction,
+	head @ "noop" & _ => return "saw " & head,
+	_ => return "unknown"
 };
 
 const main := fn => {

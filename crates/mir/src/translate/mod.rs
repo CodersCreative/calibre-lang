@@ -3528,7 +3528,6 @@ impl MiddleEnvironment {
             }
             NodeType::ScopeMemberExpression { module, value } => {
                 let module_path: Vec<String> = module.iter().map(|x| x.to_string()).collect();
-                println!("{:?}", module_path);
                 let new_scope: u64 = self.get_scope_list(*scope, module_path)?;
 
                 match value.node_type {
