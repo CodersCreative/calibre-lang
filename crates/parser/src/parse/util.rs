@@ -460,23 +460,19 @@ pub(super) fn normalize_scope_member_chain(
     let remaining: Vec<(Node, bool)> = iter.collect();
 
     match (&head.node_type, &first.node_type) {
-        (NodeType::ScopeMemberExpression { path }, NodeType::Identifier(_)) => {
-            let mut new_path = path.clone();
-            new_path.push(first);
-            let Some(start) = new_path.first() else {
-                return (head, remaining);
-            };
-            let Some(end) = new_path.last() else {
-                return (head, remaining);
-            };
-            let sp = Span::new_from_spans(start.span, end.span);
+        (NodeType::ScopeMemberExpression { module, value }, NodeType::Identifier(_)) => {
+            let mut new_module = module.clone();
+            if let NodeType::Identifier(ident) = &value.node_type {
+                new_module.push(ident.clone().into());
+            }
+            let sp = Span::new_from_spans(head.span, first.span);
             (
-                Node::new(sp, NodeType::ScopeMemberExpression { path: new_path }),
+                Node::new(sp, NodeType::ScopeMemberExpression { module: new_module, value: Box::new(first) }),
                 remaining,
             )
         }
         (
-            NodeType::ScopeMemberExpression { path },
+            NodeType::ScopeMemberExpression { module, value },
             NodeType::CallExpression {
                 string_fn,
                 caller,
@@ -486,18 +482,14 @@ pub(super) fn normalize_scope_member_chain(
             },
         ) => {
             if let NodeType::Identifier(_) = caller.node_type {
-                let mut new_path = path.clone();
-                new_path.push(*caller.clone());
-                let Some(start) = new_path.first() else {
-                    return (head, remaining);
-                };
-                let Some(end) = new_path.last() else {
-                    return (head, remaining);
-                };
-                let caller_span = Span::new_from_spans(start.span, end.span);
+                let mut new_module = module.clone();
+                if let NodeType::Identifier(ident) = &value.node_type {
+                    new_module.push(ident.clone().into());
+                }
+                let caller_span = Span::new_from_spans(head.span, caller.span);
                 let scoped_caller = Node::new(
                     caller_span,
-                    NodeType::ScopeMemberExpression { path: new_path },
+                    NodeType::ScopeMemberExpression { module: new_module, value: Box::new(*caller.clone()) },
                 );
                 (
                     Node::call_full(

@@ -2469,8 +2469,11 @@ impl MiddleEnvironment {
     ) -> Result<Node, MiddleErr> {
         Ok(Node {
             node_type: match node.node_type {
-                NodeType::ScopeMemberExpression { path } => {
-                    return Ok(self.evaluate_scope_member_expression(scope, path)?.into());
+                NodeType::ScopeMemberExpression { module, value } => {
+                    let module_path: Vec<String> = module.iter().map(|x| x.to_string()).collect();
+                    let new_scope: u64 = self.get_scope_list(*scope, module_path)?;
+                    let resolved_value: MiddleNode = self.evaluate(&new_scope, *value);
+                    return Ok(resolved_value.into());
                 }
                 _ => node.node_type,
             },
@@ -2914,6 +2917,7 @@ impl MiddleEnvironment {
                         return None;
                     }
                 };
+                
                 let mut caller_type = None;
                 if let NodeType::Identifier(caller) = &caller.node_type {
                     if &caller.to_string() == "tuple" {

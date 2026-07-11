@@ -107,14 +107,14 @@ impl MiddleEnvironment {
     }
 
     fn scope_member_call(span: Span, path: &[&str], args: Vec<CallArg>) -> Node {
-        let mut items = Vec::with_capacity(path.len());
-        for p in path {
-            items.push(Node::identifier(span, p));
+        let mut module = Vec::with_capacity(path.len()-1);
+        for p in &path[..path.len()-1] {
+            module.push(ParserText::new(span, p).into());
         }
 
         Node::call_full(
             span,
-            Node::new(span, NodeType::ScopeMemberExpression { path: items }),
+            Node::new(span, NodeType::ScopeMemberExpression { module, value: Box::new(Node::identifier(span, path.last().unwrap())) }),
             vec![],
             args,
             vec![],
@@ -3526,8 +3526,44 @@ impl MiddleEnvironment {
                     ),
                 )
             }
-            NodeType::ScopeMemberExpression { path } => {
-                self.evaluate_scope_member_expression(scope, path)
+            NodeType::ScopeMemberExpression { module, value } => {
+                let module_path: Vec<String> = module.iter().map(|x| x.to_string()).collect();
+                println!("{:?}", module_path);
+                let new_scope: u64 = self.get_scope_list(*scope, module_path)?;
+
+                match value.node_type {
+                    NodeType::Identifier(ident) => {
+                        let resolved = self
+                            .resolve_potential_generic_ident(&new_scope, &ident)
+                            .unwrap_or(ident.to_string().into());
+                        Ok(MiddleNode::new(
+                            MiddleNodeType::Identifier(resolved),
+                            node.span,
+                        ))
+                    }
+                    NodeType::MemberExpression { mut path } => {
+                        if let Some((
+                            Node {
+                                node_type: NodeType::Identifier(first),
+                                ..
+                            },
+                            _,
+                        )) = path.first_mut()
+                        {
+                            let resolved = self
+                                .resolve_potential_generic_ident(&new_scope, first)
+                                .unwrap_or(first.to_string().into());
+                            *first = PotentialGenericTypeIdentifier::Identifier(
+                                PotentialDollarIdentifier::Identifier(resolved),
+                            );
+                        }
+                        Ok(self.evaluate(
+                            scope,
+                            Node::new(node.span, NodeType::MemberExpression { path }),
+                        ))
+                    }
+                    other => Ok(self.evaluate(&new_scope, Node::new(node.span, other))),
+                }
             }
             NodeType::PipeExpression(mut path) if !path.is_empty() => {
                 let mut value = path.remove(0).into();

@@ -999,8 +999,8 @@ impl DerefMut for ParserText {
 }
 
 impl ParserText {
-    pub fn new(span: Span, text: String) -> Self {
-        Self { text, span }
+    pub fn new(span: Span, text: impl ToString) -> Self {
+        Self { text: text.to_string(), span }
     }
 }
 
@@ -1591,7 +1591,8 @@ pub enum NodeType {
         path: Vec<(Node, bool)>,
     },
     ScopeMemberExpression {
-        path: Vec<Node>,
+        module: Vec<PotentialDollarIdentifier>,
+        value: Box<Node>,
     },
     CallExpression {
         string_fn: Option<ParserText>,

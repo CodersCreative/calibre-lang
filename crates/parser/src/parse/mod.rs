@@ -361,24 +361,21 @@ pub fn parse_program_with_source(
                     }),
                 ident
                     .clone()
-                    .map(|(n, sp)| Node::identifier(sp, &n))
+                    .map(|(n, sp)| ParserText::new(sp, &n))
                     .then(
                         lex(pad.clone(), just("::"))
-                            .ignore_then(ident.clone().map(|(n, sp)| Node::identifier(sp, &n)))
+                            .ignore_then(ident.clone().map(|(n, sp)| ParserText::new(sp, &n)))
                             .repeated()
                             .at_least(1)
                             .collect::<Vec<_>>(),
-                    )
-                    .map(|(first, rest)| {
-                        let mut path = vec![first];
-                        path.extend(rest);
-                        let sp = match (path.first(), path.last()) {
-                            (Some(first), Some(last)) => {
-                                Span::new_from_spans(first.span, last.span)
-                            }
-                            _ => Span::default(),
-                        };
-                        Node::new(sp, NodeType::ScopeMemberExpression { path })
+                    ).then(lex(pad.clone(), just("::")).ignore_then(expr.clone()))
+                    .map(|((first, rest), value)| {
+                        let sp = Span::new_from_spans(first.span, value.span);
+                        
+                        let mut module: Vec<PotentialDollarIdentifier> = vec![first.into()];
+                        rest.into_iter().for_each(|x| module.push(x.into()));
+                        
+                        Node::new(sp, NodeType::ScopeMemberExpression { module, value: Box::new(value) })
                     }),
                 struct_lit,
                 generic_ident.map(|identifier| {

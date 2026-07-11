@@ -3,7 +3,7 @@ use ast::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Span,
     ast::{
-        DestructurePattern, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
+        DestructurePattern, Node, NodeType, ParserDataType, ParserInnerType,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, VarType,
         binary::BinaryOperator,
     },
@@ -506,73 +506,5 @@ impl MiddleEnvironment {
         }
 
         None
-    }
-
-    pub fn evaluate_scope_member_expression(
-        &mut self,
-        scope: &u64,
-        path: Vec<Node>,
-    ) -> Result<MiddleNode, MiddleErr> {
-        let joined = path
-            .iter()
-            .map(|node| match &node.node_type {
-                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                    PotentialDollarIdentifier::Identifier(txt),
-                )) => Some(txt.text.clone()),
-                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                    PotentialDollarIdentifier::DollarIdentifier(txt),
-                )) => Some(txt.text.clone()),
-                _ => None,
-            })
-            .collect::<Option<Vec<_>>>();
-        if let Some(parts) = joined
-            && !parts.is_empty()
-        {
-            let joined_ident = parts.join("::");
-            let ident = PotentialGenericTypeIdentifier::Identifier(
-                PotentialDollarIdentifier::Identifier(ParserText::from(joined_ident.clone())),
-            );
-            if let Some(resolved) = self.resolve_potential_generic_ident(scope, &ident) {
-                return Ok(MiddleNode::new(
-                    MiddleNodeType::Identifier(resolved),
-                    path.first().map(|n| n.span).unwrap_or_default(),
-                ));
-            }
-        }
-
-        let (s, node) = self.get_scope_member_scope_path(scope, path)?;
-        match node.node_type {
-            NodeType::Identifier(ident) => {
-                let resolved = self
-                    .resolve_potential_generic_ident(&s, &ident)
-                    .unwrap_or(ident.to_string().into());
-                Ok(MiddleNode::new(
-                    MiddleNodeType::Identifier(resolved),
-                    node.span,
-                ))
-            }
-            NodeType::MemberExpression { mut path } => {
-                if let Some((
-                    Node {
-                        node_type: NodeType::Identifier(first),
-                        ..
-                    },
-                    _,
-                )) = path.first_mut()
-                {
-                    let resolved = self
-                        .resolve_potential_generic_ident(&s, first)
-                        .unwrap_or(first.to_string().into());
-                    *first = PotentialGenericTypeIdentifier::Identifier(
-                        PotentialDollarIdentifier::Identifier(resolved),
-                    );
-                }
-                Ok(self.evaluate(
-                    scope,
-                    Node::new(node.span, NodeType::MemberExpression { path }),
-                ))
-            }
-            other => Ok(self.evaluate(&s, Node::new(node.span, other))),
-        }
     }
 }

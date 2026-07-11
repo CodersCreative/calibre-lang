@@ -5,6 +5,7 @@ type Stack2 := struct (Stack);
 type StackList := struct (list:<Stack2>);
 
 const main := fn => {
+	std::console::out("hello");
 	let mut arr := Stack { values : [0; 30] };
 	arr.values[10] := 100;
 	let mut arr2 := Stack2(move arr);

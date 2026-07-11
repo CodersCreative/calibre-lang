@@ -1234,18 +1234,16 @@ impl Formatter {
 
                 txt
             }
-            NodeType::ScopeMemberExpression { path } => {
-                let base = self.format(&path[0]);
+            NodeType::ScopeMemberExpression { module , value} => {
                 let mut parts = Vec::new();
-                for node in path.iter().skip(1) {
-                    parts.push(format!("::{}", self.format(node)));
+                for node in module.iter() {
+                    parts.push(node.to_string());
                 }
-                let single = format!("{}{}", base, parts.join(""));
-                let multi = format!(
-                    "{}\n{}",
-                    base,
-                    self.fmt_txt_with_tab(&parts.join("\n"), 1, true)
-                );
+                parts.push(self.format(&value));
+
+                let single = parts.join("::");
+                let multi = parts.join("\n");
+
                 self.wrap_if_wide(single, &multi)
             }
             NodeType::MemberExpression { path } => {
