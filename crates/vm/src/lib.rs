@@ -455,6 +455,21 @@ impl VM {
     }
 
     #[inline(always)]
+    pub(crate) fn get_mut_reg_value(&mut self, reg: Reg) -> Option<&mut RuntimeValue> {
+        let (reg_count, reg_start) = {
+            let frame = self.current_frame();
+            (frame.reg_count.clone(), frame.reg_start.clone())
+        };
+        let idx = reg as usize;
+
+        if idx < reg_count {
+            Some(unsafe { self.reg_arena.get_unchecked_mut(reg_start + idx) })
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
     pub(crate) fn get_reg_value_in_frame(&self, frame_idx: usize, reg: Reg) -> &RuntimeValue {
         if let Some(frame) = self.frames.get(frame_idx) {
             let idx = reg as usize;
@@ -463,6 +478,21 @@ impl VM {
             }
         }
         &NULL_RUNTIME_VALUE
+    }
+
+    #[inline(always)]
+    pub(crate) fn get_mut_reg_value_in_frame(
+        &mut self,
+        frame_idx: usize,
+        reg: Reg,
+    ) -> Option<&mut RuntimeValue> {
+        if let Some(frame) = self.frames.get(frame_idx) {
+            let idx = reg as usize;
+            if idx < frame.reg_count {
+                return Some(&mut self.reg_arena[frame.reg_start + idx]);
+            }
+        }
+        None
     }
 
     #[inline(always)]

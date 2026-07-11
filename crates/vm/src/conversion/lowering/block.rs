@@ -1,4 +1,5 @@
 use super::*;
+use calibre_parser::ast::binary::BinaryOperator;
 
 impl<'a> BlockLoweringCtx<'a> {
     pub(super) fn resolve_local_key(&self, name: &str) -> Option<String> {
@@ -156,42 +157,162 @@ impl<'a> BlockLoweringCtx<'a> {
             }
             LirNodeType::Assign { dest, value } => match dest {
                 LirLValue::Var(dest) => {
-                    let reg = self.lower_node(*value, node.span);
+                    let (is_sh, is_bitand, right, binary_left, binary_right) =
+                        if let LirNodeType::Binary {
+                            left,
+                            right,
+                            operator,
+                        } = &*value
+                        {
+                            let is_sh =
+                                matches!(operator, BinaryOperator::Shl | BinaryOperator::Shr);
+                            let is_bitand = matches!(operator, BinaryOperator::BitAnd);
+
+                            let is_right = match &**right {
+                                LirNodeType::Load(right_name) => {
+                                    right_name.as_ref() == dest.as_ref()
+                                }
+                                LirNodeType::Move(right_name) => {
+                                    right_name.as_ref() == dest.as_ref()
+                                }
+                                _ => false,
+                            };
+
+                            let is_self_assign = match &**left {
+                                LirNodeType::Load(left_name) => left_name.as_ref() == dest.as_ref(),
+                                LirNodeType::Move(left_name) => left_name.as_ref() == dest.as_ref(),
+                                _ => false,
+                            } || is_right;
+
+                            (
+                                is_sh && is_self_assign,
+                                is_bitand && is_self_assign,
+                                is_right,
+                                Some(left),
+                                Some(right),
+                            )
+                        } else {
+                            (false, false, false, None, None)
+                        };
+
                     let name_idx = self.add_string(dest.to_string());
-                    if !self.is_global && self.locals.contains(dest.as_ref()) {
-                        let target = assigned.unwrap_or(reg);
-                        if target != reg {
+
+                    if is_sh || is_bitand {
+                        let target_reg = if !self.is_global && self.locals.contains(dest.as_ref()) {
+                            let target = self
+                                .resolve_mapped_reg(dest.as_ref())
+                                .unwrap_or(self.null_reg);
+                            target
+                        } else {
+                            let dst = self.alloc_reg();
                             self.emit(
-                                VMInstruction::Copy {
-                                    dst: target,
+                                VMInstruction::LoadGlobal {
+                                    dst,
+                                    name: name_idx,
+                                },
+                                node.span,
+                            );
+                            dst
+                        };
+
+                        let value_reg = if right {
+                            self.lower_node(*binary_left.unwrap().clone(), node.span)
+                        } else {
+                            self.lower_node(*binary_right.unwrap().clone(), node.span)
+                        };
+
+                        if is_sh {
+                            self.emit(
+                                VMInstruction::ListAppend {
+                                    target: target_reg,
+                                    value: value_reg,
+                                    right,
+                                },
+                                node.span,
+                            );
+                        } else if is_bitand {
+                            self.emit(
+                                VMInstruction::StrConcat {
+                                    target: target_reg,
+                                    value: value_reg,
+                                    right,
+                                },
+                                node.span,
+                            );
+                        }
+
+                        if !self.is_global && self.locals.contains(dest.as_ref()) {
+                            let target = assigned.unwrap_or(target_reg);
+                            if target != target_reg {
+                                self.emit(
+                                    VMInstruction::Copy {
+                                        dst: target,
+                                        src: target_reg,
+                                    },
+                                    node.span,
+                                );
+                            }
+                            self.map.insert(dest.to_string(), target);
+                            self.emit(
+                                VMInstruction::SetLocalName {
+                                    name: name_idx,
+                                    src: target,
+                                },
+                                node.span,
+                            );
+                            self.emit(
+                                VMInstruction::StoreGlobal {
+                                    name: name_idx,
+                                    src: target,
+                                },
+                                node.span,
+                            );
+                        } else {
+                            self.emit(
+                                VMInstruction::StoreGlobal {
+                                    name: name_idx,
+                                    src: target_reg,
+                                },
+                                node.span,
+                            );
+                        }
+                    } else {
+                        let reg = self.lower_node(*value, node.span);
+                        if !self.is_global && self.locals.contains(dest.as_ref()) {
+                            let target = assigned.unwrap_or(reg);
+                            if target != reg {
+                                self.emit(
+                                    VMInstruction::Copy {
+                                        dst: target,
+                                        src: reg,
+                                    },
+                                    node.span,
+                                );
+                            }
+                            self.map.insert(dest.to_string(), target);
+                            self.emit(
+                                VMInstruction::SetLocalName {
+                                    name: name_idx,
+                                    src: target,
+                                },
+                                node.span,
+                            );
+                            self.emit(
+                                VMInstruction::StoreGlobal {
+                                    name: name_idx,
+                                    src: target,
+                                },
+                                node.span,
+                            );
+                        } else {
+                            self.emit(
+                                VMInstruction::StoreGlobal {
+                                    name: name_idx,
                                     src: reg,
                                 },
                                 node.span,
                             );
                         }
-                        self.map.insert(dest.to_string(), target);
-                        self.emit(
-                            VMInstruction::SetLocalName {
-                                name: name_idx,
-                                src: target,
-                            },
-                            node.span,
-                        );
-                        self.emit(
-                            VMInstruction::StoreGlobal {
-                                name: name_idx,
-                                src: target,
-                            },
-                            node.span,
-                        );
-                    } else {
-                        self.emit(
-                            VMInstruction::StoreGlobal {
-                                name: name_idx,
-                                src: reg,
-                            },
-                            node.span,
-                        );
                     }
                 }
                 LirLValue::Ptr(ptr) => {

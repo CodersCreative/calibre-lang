@@ -449,6 +449,16 @@ pub enum VMInstruction {
         target: Reg,
         value: Reg,
     },
+    ListAppend {
+        target: Reg,
+        value: Reg,
+        right: bool,
+    },
+    StrConcat {
+        target: Reg,
+        value: Reg,
+        right: bool,
+    },
     Jump(BlockId),
     Branch {
         cond: Reg,
@@ -567,6 +577,32 @@ impl Display for VMInstruction {
             VMInstruction::Ref { dst, value } => write!(f, "%r{dst} = REF %r{value}"),
             VMInstruction::Deref { dst, value } => write!(f, "%r{dst} = DEREF %r{value}"),
             VMInstruction::SetRef { target, value } => write!(f, "SETREF %r{target} = %r{value}"),
+            VMInstruction::ListAppend {
+                target,
+                value,
+                right,
+            } => {
+                write!(
+                    f,
+                    "LISTAPPEND %r{} {} %r{}",
+                    target,
+                    if *right { "->" } else { "<-" },
+                    value
+                )
+            }
+            VMInstruction::StrConcat {
+                target,
+                value,
+                right,
+            } => {
+                write!(
+                    f,
+                    "STRCONCAT %r{} {} %r{}",
+                    target,
+                    if *right { "->" } else { "<-" },
+                    value
+                )
+            }
             VMInstruction::Jump(id) => write!(f, "JMP BLK {}", id.0),
             VMInstruction::Branch {
                 cond,

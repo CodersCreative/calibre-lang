@@ -163,16 +163,15 @@ impl VM {
         if !self.callee_expects_receiver(&callee) {
             return callee;
         }
-        if let RuntimeValue::Ref(name) = raw_receiver {
-            let is_local_style = name.contains(':') || name.contains("->");
-            if !is_local_style {
-                if let Some(ty) = self.concrete_runtime_type_name(&resolved_receiver) {
-                    if calibre_parser::qualified_name_matches(&ty, name) {
-                        return callee;
-                    }
-                }
-            }
+
+        if let RuntimeValue::Ref(name) = raw_receiver
+            && (!name.contains(':') || name.contains("->"))
+            && let Some(ty) = self.concrete_runtime_type_name(&resolved_receiver)
+            && calibre_parser::qualified_name_matches(&ty, name)
+        {
+            return callee;
         }
+
         let frame_idx = self.frames.len().saturating_sub(1);
 
         if member_name.contains("::") {
@@ -248,11 +247,13 @@ impl VM {
         if let Some((_, reg)) = frame.local_map.iter().find(|(_, reg)| matches_reg(**reg)) {
             return Some(*reg);
         }
+
         if let Some(base) = frame.local_map_base.as_ref()
             && let Some((_, reg)) = base.iter().find(|(_, reg)| matches_reg(**reg))
         {
             return Some(*reg);
         }
+
         None
     }
 
@@ -2445,6 +2446,149 @@ impl VM {
                         guard.set_value(value);
                     }
                     _ => return Err(RuntimeError::InvalidBytecode("invalid ref".to_string())),
+                }
+            }
+            VMInstruction::ListAppend {
+                target,
+                value,
+                right,
+            } => {
+                let value = self.get_reg_value(*value).clone();
+
+                if let Some(RuntimeValue::List(data)) = self.get_mut_reg_value(*target) {
+                    if *right {
+                        dumpster::sync::Gc::make_mut(data).0.insert(0, value);
+                    } else {
+                        dumpster::sync::Gc::make_mut(data).0.push(value);
+                    };
+                } else {
+                    let target_val = self.get_reg_value(*target).clone();
+
+                    match target_val {
+                        RuntimeValue::List(data) => {
+                            let mut data = data.clone();
+
+                            if *right {
+                                dumpster::sync::Gc::make_mut(&mut data).0.insert(0, value);
+                            } else {
+                                dumpster::sync::Gc::make_mut(&mut data).0.push(value);
+                            }
+
+                            self.set_reg_value(*target, RuntimeValue::List(data));
+                        }
+                        RuntimeValue::Ref(name) => {
+                            if let Some(RuntimeValue::List(data)) = self.variables.get_mut(&name) {
+                                if *right {
+                                    dumpster::sync::Gc::make_mut(data).0.insert(0, value);
+                                } else {
+                                    dumpster::sync::Gc::make_mut(data).0.push(value);
+                                }
+                            }
+                        }
+                        RuntimeValue::VarRef(id) => {
+                            if let Some(RuntimeValue::List(data)) = self.variables.get_mut_by_id(id)
+                            {
+                                if *right {
+                                    dumpster::sync::Gc::make_mut(data).0.insert(0, value);
+                                } else {
+                                    dumpster::sync::Gc::make_mut(data).0.push(value);
+                                }
+                            }
+                        }
+                        RuntimeValue::RegRef { frame, reg } => {
+                            if let Some(RuntimeValue::List(data)) =
+                                self.get_mut_reg_value_in_frame(frame, reg)
+                            {
+                                if *right {
+                                    dumpster::sync::Gc::make_mut(data).0.insert(0, value);
+                                } else {
+                                    dumpster::sync::Gc::make_mut(data).0.push(value);
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(RuntimeError::InvalidBytecode(
+                                "ListAppend on non-list".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            VMInstruction::StrConcat {
+                target,
+                value,
+                right,
+            } => {
+                let value = self.get_reg_value(*value).clone();
+                let target_val = self.get_reg_value(*target).clone();
+
+                match target_val {
+                    RuntimeValue::Str(data) => {
+                        let s = if *right {
+                            let mut s = value.display(self);
+                            s.push_str(data.as_str());
+                            s
+                        } else {
+                            let mut s = data.as_str().to_string();
+                            s.push_str(&value.display(self));
+                            s
+                        };
+
+                        self.set_reg_value(*target, RuntimeValue::Str(Arc::new(s)));
+                    }
+                    RuntimeValue::Ref(name) => {
+                        if let Some(RuntimeValue::Str(data)) = self.variables.get(&name).cloned() {
+                            let s = if *right {
+                                let mut s = value.display(self);
+                                s.push_str(data.as_str());
+                                s
+                            } else {
+                                let mut s = data.as_str().to_string();
+                                s.push_str(&value.display(self));
+                                s
+                            };
+
+                            self.variables.insert(&name, RuntimeValue::Str(Arc::new(s)));
+                        }
+                    }
+                    RuntimeValue::VarRef(id) => {
+                        if let Some(RuntimeValue::Str(data)) = self.variables.get_by_id(id).cloned()
+                        {
+                            let s = if *right {
+                                let mut s = value.display(self);
+                                s.push_str(data.as_str());
+                                s
+                            } else {
+                                let mut s = data.as_str().to_string();
+                                s.push_str(&value.display(self));
+                                s
+                            };
+
+                            let _ = self.variables.set_by_id(id, RuntimeValue::Str(Arc::new(s)));
+                        }
+                    }
+                    RuntimeValue::RegRef { frame, reg } => {
+                        if let RuntimeValue::Str(data) =
+                            self.get_reg_value_in_frame(frame, reg).clone()
+                        {
+                            let s = if *right {
+                                let mut s = value.display(self);
+                                s.push_str(data.as_str());
+                                s
+                            } else {
+                                let mut s = data.as_str().to_string();
+                                s.push_str(&value.display(self));
+                                s
+                            };
+
+                            self.set_reg_value_in_frame(frame, reg, RuntimeValue::Str(Arc::new(s)));
+                        }
+                    }
+                    _ => {
+                        return Err(RuntimeError::InvalidBytecode(
+                            "StrConcat on non-string".to_string(),
+                        ));
+                    }
                 }
             }
             VMInstruction::Jump(target) => return Ok(TerminateValue::Jump(*target)),

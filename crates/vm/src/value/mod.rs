@@ -248,6 +248,7 @@ pub enum RuntimeValue {
     Ptr(u64),
     Range(i64, i64),
     Bool(bool),
+    // TODO Convert Str to Mutex to reduce copies
     Str(Arc<String>),
     Char(char),
     Aggregate(Option<String>, Gc<GcMap>),
