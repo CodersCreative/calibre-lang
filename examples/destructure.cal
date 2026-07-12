@@ -62,7 +62,7 @@ const main := fn => {
 	pair_enum.display();
 	
 	match 10, 90, 20 {
-		20, 40, 80 | 30 | 90 => print(other),
+		20, 40, 80 | 30 | 90 => print(30),
 		10, .., 50 => print(10 + 50),
 		10, mut value, 20 => {
 			value += 90;

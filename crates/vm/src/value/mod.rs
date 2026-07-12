@@ -386,6 +386,7 @@ impl RuntimeValue {
             RuntimeValue::Function { .. }
                 | RuntimeValue::NativeFunction(_)
                 | RuntimeValue::ExternFunction(_)
+                | RuntimeValue::Channel(_)
                 | RuntimeValue::BoundMethod { .. }
         )
     }

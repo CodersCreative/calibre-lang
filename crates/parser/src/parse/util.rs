@@ -467,7 +467,13 @@ pub(super) fn normalize_scope_member_chain(
             }
             let sp = Span::new_from_spans(head.span, first.span);
             (
-                Node::new(sp, NodeType::ScopeMemberExpression { module: new_module, value: Box::new(first) }),
+                Node::new(
+                    sp,
+                    NodeType::ScopeMemberExpression {
+                        module: new_module,
+                        value: Box::new(first),
+                    },
+                ),
                 remaining,
             )
         }
@@ -489,7 +495,10 @@ pub(super) fn normalize_scope_member_chain(
                 let caller_span = Span::new_from_spans(head.span, caller.span);
                 let scoped_caller = Node::new(
                     caller_span,
-                    NodeType::ScopeMemberExpression { module: new_module, value: Box::new(*caller.clone()) },
+                    NodeType::ScopeMemberExpression {
+                        module: new_module,
+                        value: Box::new(*caller.clone()),
+                    },
                 );
                 (
                     Node::call_full(

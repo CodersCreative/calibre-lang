@@ -1000,7 +1000,10 @@ impl DerefMut for ParserText {
 
 impl ParserText {
     pub fn new(span: Span, text: impl ToString) -> Self {
-        Self { text: text.to_string(), span }
+        Self {
+            text: text.to_string(),
+            span,
+        }
     }
 }
 

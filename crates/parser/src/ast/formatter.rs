@@ -1234,7 +1234,7 @@ impl Formatter {
 
                 txt
             }
-            NodeType::ScopeMemberExpression { module , value} => {
+            NodeType::ScopeMemberExpression { module, value } => {
                 let mut parts = Vec::new();
                 for node in module.iter() {
                     parts.push(node.to_string());

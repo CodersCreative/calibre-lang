@@ -376,7 +376,7 @@ impl MiddleEnvironment {
             ));
             spawned_loop_items.push(Node::call(
                 self.current_span(),
-                Node::member(self.current_span(), chan_ident_node.clone(), "send"),
+                Node::member(self.current_span(), chan_ident_node.clone(), "raw_send"),
                 vec![CallArg::Value(Node::new(
                     self.current_span(),
                     NodeType::Identifier(value_ident.into()),
@@ -638,7 +638,7 @@ impl MiddleEnvironment {
 
             loop_items.push(Node::call(
                 self.current_span(),
-                Node::member(self.current_span(), chan_ident_node.clone(), "send"),
+                Node::member(self.current_span(), chan_ident_node.clone(), "raw_send"),
                 vec![CallArg::Value(*map.clone())],
             ));
 

@@ -111,10 +111,7 @@ impl MiddleEnvironment {
                                     path: vec![
                                         (tmp_member_base(), false),
                                         (
-                                            Node::new(
-                                                span,
-                                                NodeType::IntLiteral(idx.to_string()),
-                                            ),
+                                            Node::new(span, NodeType::IntLiteral(idx.to_string())),
                                             true,
                                         ),
                                     ],

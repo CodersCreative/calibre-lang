@@ -68,14 +68,14 @@ impl VM {
                     if let Some(inner) = env.variables.get(&name).cloned() {
                         transform(env, inner)
                     } else {
-                        RuntimeValue::Null
+                        RuntimeValue::Ref(name)
                     }
                 }
                 RuntimeValue::VarRef(id) => {
                     if let Some(inner) = env.variables.get_by_id(id).cloned() {
                         transform(env, inner)
                     } else {
-                        RuntimeValue::Null
+                        RuntimeValue::VarRef(id)
                     }
                 }
                 RuntimeValue::RegRef { frame, reg } => {

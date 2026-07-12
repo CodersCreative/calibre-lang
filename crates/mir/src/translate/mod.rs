@@ -107,14 +107,20 @@ impl MiddleEnvironment {
     }
 
     fn scope_member_call(span: Span, path: &[&str], args: Vec<CallArg>) -> Node {
-        let mut module = Vec::with_capacity(path.len()-1);
-        for p in &path[..path.len()-1] {
+        let mut module = Vec::with_capacity(path.len() - 1);
+        for p in &path[..path.len() - 1] {
             module.push(ParserText::new(span, p).into());
         }
 
         Node::call_full(
             span,
-            Node::new(span, NodeType::ScopeMemberExpression { module, value: Box::new(Node::identifier(span, path.last().unwrap())) }),
+            Node::new(
+                span,
+                NodeType::ScopeMemberExpression {
+                    module,
+                    value: Box::new(Node::identifier(span, path.last().unwrap())),
+                },
+            ),
             vec![],
             args,
             vec![],

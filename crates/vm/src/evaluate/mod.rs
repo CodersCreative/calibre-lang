@@ -332,7 +332,12 @@ impl VM {
                 RuntimeValue::NativeFunction(Arc::new(
                     crate::native::stdlib::r#async::ChannelSend(),
                 )),
-                args,
+                {
+                    let mut full_args = Vec::with_capacity(args.len() + 1);
+                    full_args.push(callable);
+                    full_args.extend(args);
+                    full_args
+                },
                 callsite_block,
                 callsite_tag,
             ),

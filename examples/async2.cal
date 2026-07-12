@@ -4,7 +4,7 @@ const main := fn => {
 	let mut ch := Channel:<str>.new();
 	
 	let wg := spawn => {
-		emit ch"Hello, Joe!";
+		emit ch "Hello, Joe!";
 	};
 	
 	defer wg.wait();

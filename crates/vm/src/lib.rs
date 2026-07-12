@@ -336,11 +336,27 @@ impl VM {
 
     pub fn spawn_async_task(
         &mut self,
-        func: RuntimeValue,
+        mut func: RuntimeValue,
         wait_group: Option<Arc<WaitGroupInner>>,
     ) {
         if self.scheduler.is_none() {
             self.scheduler = Some(scheduler::SchedulerHandle::new(&self.config));
+        }
+        if let RuntimeValue::Function { name, captures } = &mut func {
+            let resolved: Vec<(String, RuntimeValue)> = captures
+                .as_ref()
+                .iter()
+                .map(|(key, value)| {
+                    let resolved = self
+                        .resolve_value_for_op_ref(value)
+                        .unwrap_or_else(|_| RuntimeValue::Null);
+                    let resolved = self.resolve_saveable_runtime_value_ref(
+                        &self.convert_runtime_var_into_saveable(resolved),
+                    );
+                    (key.clone(), resolved)
+                })
+                .collect();
+            *captures = Arc::new(resolved);
         }
         if let Some(scheduler) = &self.scheduler {
             scheduler.spawn(self, func, wait_group);

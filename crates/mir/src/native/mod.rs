@@ -232,7 +232,7 @@ impl MiddleEnvironment {
             true,
         );
         add("range", &[], true);
-        add("generators", &[], false);
+        add("generators", &[], true);
         add("crypto", &["sha256", "sha512", "blake3"], false);
         add("regex", &["is_match", "find", "replace"], false);
         add("process", &["raw_exec"], false);

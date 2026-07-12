@@ -1,4 +1,6 @@
 import (Channel, Mutex, WaitGroup) from std::async;
+import Duration from std::thread;
+
 
 const worker := fn (id : int, jobs : &Channel:<int>, results : &mut Channel:<int>, total : &mut Mutex:<int>) => {
 	print("worker " & id & " start");
@@ -60,7 +62,7 @@ const main := fn => {
 	
 	spawn@ for i in 0..100 => {
 		if i % 2 = 0 => {
-			std::thread::Duration::from_ms(101 - i).sleep();
+			Duration.from_ms(101 - i).sleep();
 		};
 		
 		print("num => " & i);
@@ -68,11 +70,11 @@ const main := fn => {
 	
 	spawn@ {
 		=> {
-			std::thread::Duration::from_ms(100).sleep();
+			Duration.from_ms(100).sleep();
 			print("spawn block => A");
 		},
 		=> {
-			std::thread::Duration::from_ms(5).sleep();
+			Duration.from_ms(5).sleep();
 			print("spawn block => B");
 		}
 	};
@@ -81,7 +83,7 @@ const main := fn => {
 	
 	let concurrent := [=> {
 		if i % 2 = 0 => {
-			std::thread::Duration::from_ms((width + 1 - i) * 2).sleep();
+			Duration.from_ms((width + 1 - i) * 2).sleep();
 		};
 		
 		emit i;

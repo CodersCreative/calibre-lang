@@ -1392,9 +1392,17 @@ impl MiddleEnvironment {
         }
 
         if let Some(parent) = scope_ref.parent.as_ref() {
-            self.resolve_str(parent, iden)
+            self.resolve_str(parent, iden).or_else(|| {
+                self.scopes
+                    .values()
+                    .find(|s| s.mappings.contains_key(iden))
+                    .and_then(|s| s.mappings.get(iden).cloned())
+            })
         } else {
-            None
+            self.scopes
+                .values()
+                .find(|s| s.mappings.contains_key(iden))
+                .and_then(|s| s.mappings.get(iden).cloned())
         }
     }
 
@@ -1457,6 +1465,9 @@ impl MiddleEnvironment {
                 let resolved = self
                     .resolve_potential_dollar_ident(scope, x)
                     .unwrap_or_else(|| ParserText::from(x.to_string()));
+                if let Some(alias) = self.type_aliases.get(&resolved.text) {
+                    return Some(alias.clone());
+                }
                 Some(ParserDataType {
                     data_type: ParserInnerType::Struct(resolved.text.to_string()),
                     span: resolved.span,
@@ -2467,13 +2478,58 @@ impl MiddleEnvironment {
         scope: &u64,
         node: Node,
     ) -> Result<Node, MiddleErr> {
+        fn member_path_from_node(node: Node) -> Vec<(Node, bool)> {
+            match node.node_type {
+                NodeType::Identifier(_) => vec![(node, false)],
+                NodeType::MemberExpression { path } => path,
+                other => vec![(Node::new(node.span, other), false)],
+            }
+        }
+
         Ok(Node {
             node_type: match node.node_type {
                 NodeType::ScopeMemberExpression { module, value } => {
                     let module_path: Vec<String> = module.iter().map(|x| x.to_string()).collect();
-                    let new_scope: u64 = self.get_scope_list(*scope, module_path)?;
-                    let resolved_value: MiddleNode = self.evaluate(&new_scope, *value);
-                    return Ok(resolved_value.into());
+
+                    for prefix_len in (0..=module_path.len()).rev() {
+                        let prefix = module_path[..prefix_len].to_vec();
+                        let new_scope = self
+                            .get_scope_list(*scope, prefix.clone())
+                            .or_else(|_| self.import_scope_list(*scope, prefix).map(|x| x.0));
+                        if let Ok(new_scope) = new_scope {
+                            if prefix_len == module_path.len() {
+                                let resolved_value: MiddleNode = self.evaluate(&new_scope, *value);
+                                return Ok(resolved_value.into());
+                            }
+
+                            let mut path = module_path[prefix_len..]
+                                .into_iter()
+                                .map(|segment| {
+                                    (
+                                        Node::new(
+                                            node.span,
+                                            NodeType::Identifier(
+                                                ParserText::from(segment.clone()).into(),
+                                            ),
+                                        ),
+                                        false,
+                                    )
+                                })
+                                .collect::<Vec<_>>();
+                            path.extend(member_path_from_node(*value));
+
+                            return Ok(self
+                                .evaluate(
+                                    &new_scope,
+                                    Node::new(node.span, NodeType::MemberExpression { path }),
+                                )
+                                .into());
+                        }
+                    }
+
+                    return Err(self.err_at_current(MiddleErr::Scope(
+                        module_path.last().cloned().unwrap_or_default(),
+                    )));
                 }
                 _ => node.node_type,
             },
@@ -2893,7 +2949,7 @@ impl MiddleEnvironment {
                         return None;
                     }
                 };
-                
+
                 let mut caller_type = None;
                 if let NodeType::Identifier(caller) = &caller.node_type {
                     if &caller.to_string() == "tuple" {
@@ -2957,10 +3013,14 @@ impl MiddleEnvironment {
                 self.apply_callable_type(caller_type.data_type, args.len(), 0, node.span)
             }
             NodeType::Identifier(x) => {
-                if let Some(iden) = self.resolve_potential_generic_ident(scope, x)
-                    && let Some(x) = self.variables.get(&iden.text)
-                {
-                    return Some(x.data_type.clone());
+                if let Some(iden) = self.resolve_potential_generic_ident(scope, x) {
+                    if let Some(x) = self.variables.get(&iden.text) {
+                        return Some(x.data_type.clone());
+                    }
+
+                    if let Some(alias) = self.type_aliases.get(&iden.text) {
+                        return Some(alias.clone());
+                    }
                 }
 
                 None

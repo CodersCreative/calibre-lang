@@ -590,7 +590,8 @@ impl VM {
             && let Some(receiver_type) = self.concrete_runtime_type_name(&receiver)
         {
             let owner_tail = calibre_parser::qualified_name_tail(owner);
-            if !calibre_parser::qualified_name_matches(&receiver_type, owner_tail)
+            if self.callee_expects_receiver(&func)
+                && !calibre_parser::qualified_name_matches(&receiver_type, owner_tail)
                 && let Some(resolved) =
                     self.resolve_associated_member_value(&receiver_type, member, Some(member))
                 && resolved.is_callable()
@@ -1690,9 +1691,12 @@ impl VM {
                         self.ptr_heap.get(&id).cloned().unwrap_or_default()
                     }
                     RuntimeValue::Channel(_) if member_short == "raw_send" => {
-                        RuntimeValue::NativeFunction(Arc::new(
-                            crate::native::stdlib::r#async::ChannelSend(),
-                        ))
+                        RuntimeValue::BoundMethod {
+                            callee: Box::new(RuntimeValue::NativeFunction(Arc::new(
+                                crate::native::stdlib::r#async::ChannelSend(),
+                            ))),
+                            receiver: Gc::new(raw_receiver.clone()),
+                        }
                     }
                     RuntimeValue::Char(value) => {
                         bind_assoc(self, "char", RuntimeValue::Char(value))?
