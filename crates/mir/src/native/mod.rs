@@ -133,6 +133,70 @@ impl MiddleEnvironment {
                 scope_ref.mappings.insert(var.0, name);
             }
         }
+
+        self.register_tag_handlers();
+    }
+
+    fn register_tag_handlers(&mut self) {
+        use crate::environment::{TagHandler, TagHandlerFn};
+        use calibre_parser::ast::{Node, NodeType, ParserText};
+        use std::sync::{Arc, Mutex};
+
+        let init_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             args: Vec<Node>| {
+                let priority =
+                    if let Some(NodeType::IntLiteral(val)) = args.first().map(|x| &x.node_type) {
+                        val.parse::<i32>().unwrap_or(100)
+                    } else {
+                        100
+                    };
+
+                env.current_tag_info.push(("init".to_string(), priority));
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.current_tag_info.pop();
+
+                Ok(middle)
+            },
+        ));
+
+        self.tag_handlers.insert(
+            "init".to_string(),
+            TagHandler {
+                handler: init_handler,
+            },
+        );
+
+        let fin_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             args: Vec<Node>| {
+                let priority =
+                    if let Some(NodeType::IntLiteral(val)) = args.first().map(|x| &x.node_type) {
+                        val.parse::<i32>().unwrap_or(100)
+                    } else {
+                        100
+                    };
+
+                env.current_tag_info.push(("fin".to_string(), priority));
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.current_tag_info.pop();
+
+                Ok(middle)
+            },
+        ));
+
+        self.tag_handlers.insert(
+            "fin".to_string(),
+            TagHandler {
+                handler: fin_handler,
+            },
+        );
     }
 
     pub fn setup_std(&mut self, scope: &u64) {

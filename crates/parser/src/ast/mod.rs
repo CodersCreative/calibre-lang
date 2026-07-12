@@ -1639,6 +1639,11 @@ pub enum NodeType {
         identifier: PotentialGenericTypeIdentifier,
         value: ObjectType<Node>,
     },
+    Tag {
+        node: Box<Node>,
+        tag: ParserText,
+        arguments: Vec<Node>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

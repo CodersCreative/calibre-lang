@@ -12,6 +12,8 @@ pub enum MiddleErr {
     At(Span, Box<MiddleErr>),
     #[error("Expected {0} operation.")]
     ExpectedOperation(String),
+    #[error("Invalid tag : {0}.")]
+    InvalidTag(String),
     #[error("Expected only functions.")]
     ExpectedFunctions,
     #[error("Unable to infer type.")]

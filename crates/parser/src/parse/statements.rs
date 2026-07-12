@@ -535,126 +535,244 @@ pub fn build_statement_parser<'a>(
         })
         .boxed();
 
-    let let_stmt = choice((
-        lex(pad.clone(), just("let")).to(VarType::Immutable),
-        lex(pad.clone(), just("const")).to(VarType::Constant),
-    ))
-    .then(lex(pad.clone(), just("mut")).or_not())
-    .then(named_ident.clone())
-    .then(
-        lex(pad.clone(), just(':'))
-            .ignore_then(type_name.clone())
-            .or_not(),
-    )
-    .then(choice((
-        lex(pad.clone(), just(":=")).to(DeclAssignOp::Infer),
-        lex(pad.clone(), just("=")).to(DeclAssignOp::Typed),
-    )))
-    .then_ignore(delim.clone().repeated())
-    .then(
-        expr.clone().then(
-            comma
-                .clone()
-                .ignore_then(expr.clone())
-                .repeated()
-                .collect::<Vec<_>>(),
-        ),
-    )
-    .try_map(
-        |(((((vt, m), name), ty), op), (first_value, rest_values)), sp| {
-            match (ty.is_some(), op) {
-                (true, DeclAssignOp::Infer) => {
-                    return Err(Rich::custom(
-                        sp,
-                        "expected `=` when a variable type is specified",
-                    ));
-                }
-                (false, DeclAssignOp::Typed) => {
-                    return Err(Rich::custom(
-                        sp,
-                        "expected `:=` when a variable type is not specified",
-                    ));
-                }
-                _ => {}
+    let tag_parser = lex(pad.clone(), just('@'))
+        .ignore_then(ident.clone())
+        .then(
+            lex(pad.clone(), just('('))
+                .ignore_then(
+                    expr.clone()
+                        .separated_by(comma.clone())
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                        .or_not()
+                        .map(|x| x.unwrap_or_default()),
+                )
+                .then_ignore(lex(pad.clone(), just(')')))
+                .or_not()
+                .map(|x| x.unwrap_or_default()),
+        )
+        .map_with_span({
+            let ls = line_starts.clone();
+            move |((name, _sp), args), r| {
+                let tag_span = span(ls.as_ref(), r);
+                (ParserText::new(tag_span, name), args, tag_span)
             }
-            let var_type = match (vt, m.is_some()) {
-                (VarType::Immutable, true) => VarType::Mutable,
-                (VarType::Constant, true) => {
-                    return Err(Rich::custom(
-                        sp,
-                        "constant cannot be mutable; use `let mut` if mutability is required",
-                    ));
+        })
+        .boxed();
+
+    let let_stmt = lex(pad_with_newline.clone(), tag_parser.clone())
+        .repeated()
+        .collect::<Vec<_>>()
+        .then(choice((
+            lex(pad.clone(), just("let")).to(VarType::Immutable),
+            lex(pad.clone(), just("const")).to(VarType::Constant),
+        )))
+        .then(lex(pad.clone(), just("mut")).or_not())
+        .then(named_ident.clone())
+        .then(
+            lex(pad.clone(), just(':'))
+                .ignore_then(type_name.clone())
+                .or_not(),
+        )
+        .then(choice((
+            lex(pad.clone(), just(":=")).to(DeclAssignOp::Infer),
+            lex(pad.clone(), just("=")).to(DeclAssignOp::Typed),
+        )))
+        .then_ignore(delim.clone().repeated())
+        .then(
+            expr.clone().then(
+                comma
+                    .clone()
+                    .ignore_then(expr.clone())
+                    .repeated()
+                    .collect::<Vec<_>>(),
+            ),
+        )
+        .try_map(
+            |((((((tags, vt), m), name), ty), op), (first_value, rest_values)), sp| {
+                let vt: VarType = vt;
+                let m: Option<&str> = m;
+                let ty: Option<PotentialNewType> = ty;
+                let op: DeclAssignOp = op;
+
+                match (ty.is_some(), op) {
+                    (true, DeclAssignOp::Infer) => {
+                        return Err(Rich::custom(
+                            sp,
+                            "expected `=` when a variable type is specified",
+                        ));
+                    }
+                    (false, DeclAssignOp::Typed) => {
+                        return Err(Rich::custom(
+                            sp,
+                            "expected `:=` when a variable type is not specified",
+                        ));
+                    }
+                    _ => {}
                 }
-                (x, _) => x,
-            };
-            let value = if rest_values.is_empty() {
-                first_value
-            } else {
-                let first_span = first_value.span;
-                let tuple_span = Span::new_from_spans(
-                    first_span,
-                    rest_values.last().map(|n| n.span).unwrap_or(first_span),
+                let var_type = match (vt, m.is_some()) {
+                    (VarType::Immutable, true) => VarType::Mutable,
+                    (VarType::Constant, true) => {
+                        return Err(Rich::custom(
+                            sp,
+                            "constant cannot be mutable; use `let mut` if mutability is required",
+                        ));
+                    }
+                    (x, _) => x,
+                };
+                let value = if rest_values.is_empty() {
+                    first_value
+                } else {
+                    let first_span = first_value.span;
+                    let tuple_span = Span::new_from_spans(
+                        first_span,
+                        rest_values.last().map(|n| n.span).unwrap_or(first_span),
+                    );
+
+                    match first_value.node_type {
+                        NodeType::EnumExpression {
+                            identifier,
+                            value,
+                            data,
+                        } => {
+                            let mut payload_values = if let Some(existing) = data {
+                                match existing.node_type {
+                                    NodeType::TupleLiteral { values } => values,
+                                    other => vec![Node::new(existing.span, other)],
+                                }
+                            } else {
+                                Vec::new()
+                            };
+                            payload_values.extend(rest_values);
+
+                            let payload = if payload_values.len() == 1 {
+                                payload_values.into_iter().next()
+                            } else {
+                                Some(Node::new(
+                                    Span::new_from_spans(
+                                        payload_values
+                                            .first()
+                                            .map(|n| n.span)
+                                            .unwrap_or(tuple_span),
+                                        payload_values.last().map(|n| n.span).unwrap_or(tuple_span),
+                                    ),
+                                    NodeType::TupleLiteral {
+                                        values: payload_values,
+                                    },
+                                ))
+                            };
+
+                            Node::new(
+                                tuple_span,
+                                NodeType::EnumExpression {
+                                    identifier,
+                                    value,
+                                    data: payload.map(Box::new),
+                                },
+                            )
+                        }
+                        other => {
+                            let mut values = vec![Node::new(first_span, other)];
+                            values.extend(rest_values);
+                            Node::new(tuple_span, NodeType::TupleLiteral { values })
+                        }
+                    }
+                };
+
+                let value_span = value.span;
+                let mut node = Node::new(
+                    Span::new_from_spans(*name.span(), value_span),
+                    NodeType::VariableDeclaration {
+                        var_type,
+                        identifier: name,
+                        value: Box::new(value),
+                        data_type: ty.unwrap_or_else(|| auto_type(value_span)),
+                    },
                 );
 
-                match first_value.node_type {
-                    NodeType::EnumExpression {
-                        identifier,
-                        value,
-                        data,
-                    } => {
-                        let mut payload_values = if let Some(existing) = data {
-                            match existing.node_type {
-                                NodeType::TupleLiteral { values } => values,
-                                other => vec![Node::new(existing.span, other)],
-                            }
-                        } else {
-                            Vec::new()
-                        };
-                        payload_values.extend(rest_values);
+                for (tag, args, tag_span) in tags {
+                    node = Node::new(
+                        Span::new_from_spans(tag_span, node.span),
+                        NodeType::Tag {
+                            node: Box::new(node),
+                            tag,
+                            arguments: args,
+                        },
+                    )
+                }
 
-                        let payload = if payload_values.len() == 1 {
-                            payload_values.into_iter().next()
-                        } else {
-                            Some(Node::new(
-                                Span::new_from_spans(
-                                    payload_values.first().map(|n| n.span).unwrap_or(tuple_span),
-                                    payload_values.last().map(|n| n.span).unwrap_or(tuple_span),
-                                ),
-                                NodeType::TupleLiteral {
-                                    values: payload_values,
-                                },
-                            ))
-                        };
+                Ok(node)
+            },
+        );
 
+    let grouped_tag_stmt = lex(pad.clone(), just('@'))
+        .ignore_then(ident.clone())
+        .then(
+            lex(pad.clone(), just('('))
+                .ignore_then(
+                    expr.clone()
+                        .separated_by(comma.clone())
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                        .or_not()
+                        .map(|x| x.unwrap_or_default()),
+                )
+                .then_ignore(lex(pad.clone(), just(')')))
+                .or_not()
+                .map(|x| x.unwrap_or_default()),
+        )
+        .map_with_span({
+            let ls = line_starts.clone();
+            move |((name, _sp), args), r| {
+                let tag_span = span(ls.as_ref(), r);
+                (ParserText::new(tag_span, name), args, tag_span)
+            }
+        })
+        .then(
+            lex(pad.clone(), just('{'))
+                .ignore_then(delim.clone().repeated().collect::<Vec<_>>())
+                .ignore_then(
+                    statement
+                        .clone()
+                        .separated_by(delim.clone())
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                        .or_not()
+                        .map(|x| x.unwrap_or_default()),
+                )
+                .then_ignore(delim.clone().or_not())
+                .then_ignore(lex(pad.clone(), just('}'))),
+        )
+        .map_with_span({
+            let ls = line_starts.clone();
+            move |((tag, args, tag_span), statements), r| {
+                let tagged_statements = statements
+                    .into_iter()
+                    .map(|stmt| {
                         Node::new(
-                            tuple_span,
-                            NodeType::EnumExpression {
-                                identifier,
-                                value,
-                                data: payload.map(Box::new),
+                            Span::new_from_spans(tag_span, stmt.span),
+                            NodeType::Tag {
+                                node: Box::new(stmt),
+                                tag: tag.clone(),
+                                arguments: args.clone(),
                             },
                         )
-                    }
-                    other => {
-                        let mut values = vec![Node::new(first_span, other)];
-                        values.extend(rest_values);
-                        Node::new(tuple_span, NodeType::TupleLiteral { values })
-                    }
-                }
-            };
+                    })
+                    .collect::<Vec<_>>();
 
-            let value_span = value.span;
-            Ok(Node::new(
-                Span::new_from_spans(*name.span(), value_span),
-                NodeType::VariableDeclaration {
-                    var_type,
-                    identifier: name,
-                    value: Box::new(value),
-                    data_type: ty.unwrap_or_else(|| auto_type(value_span)),
-                },
-            ))
-        },
-    );
+                Node::new(
+                    span(ls.as_ref(), r),
+                    NodeType::ScopeDeclaration {
+                        body: Some(tagged_statements),
+                        named: None,
+                        is_temp: false,
+                        create_new_scope: Some(false),
+                        define: false,
+                    },
+                )
+            }
+        })
+        .boxed();
 
     let scope_name = lex(pad.clone(), just('@'))
         .ignore_then(ident.clone())
@@ -1083,6 +1201,7 @@ pub fn build_statement_parser<'a>(
         scope_alias_stmt,
         scope_call_stmt,
         let_stmt,
+        grouped_tag_stmt,
         return_stmt,
         destruct_assign_stmt,
         expr,

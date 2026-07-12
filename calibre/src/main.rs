@@ -1,4 +1,4 @@
-use calibre::{CalibreEngine, CalibreError, CompileMode, extract_scope_id_from_current_frame};
+use calibre::{CalibreEngine, CalibreError, CompileMode};
 use calibre_diagnostics;
 use calibre_lir::LirEnvironment;
 use calibre_mir::{
@@ -171,45 +171,69 @@ async fn run_source(
         } else {
             println!("{}", vm.registry.as_ref());
         }
+    };
+
+    let mut init_functions = artifacts.init_functions.clone();
+
+    if !init_functions.iter().any(|x| x.1 == entry_name) {
+        init_functions.push((0, entry_name.clone()));
     }
 
-    if let Some(main) = vm.registry.functions.get(&entry_name).cloned() {
-        if let Err(err) = vm.run(main.as_ref(), Vec::new()) {
-            let (span, inner) = err.innermost();
+    init_functions.sort_by(|a, b| b.0.cmp(&a.0));
 
-            let error_path = if let Some(scope_id) = extract_scope_id_from_current_frame(&vm) {
-                if let Some(file_path) = vm.registry.scope_to_file.get(&scope_id) {
-                    PathBuf::from(file_path.as_str())
-                } else {
-                    path.to_path_buf()
-                }
-            } else {
-                path.to_path_buf()
-            };
-
-            let error_contents = if error_path != path {
-                std::fs::read_to_string(&error_path).unwrap_or_else(|_| contents.clone())
-            } else {
-                contents.clone()
-            };
-
-            calibre_diagnostics::emit_runtime_error(
-                &error_path,
-                &error_contents,
-                inner.to_string(),
-                span,
-                inner.help(),
-            );
-            return Err("runtime error".into());
+    let mut ran = false;
+    for (priority, func_name) in init_functions {
+        if let Some(init_func) = vm.registry.functions.get(&func_name).cloned() {
+            if let Err(err) = vm.run(init_func.as_ref(), Vec::new()) {
+                let (span, inner) = err.innermost();
+                calibre_diagnostics::emit_runtime_error(
+                    path,
+                    &contents,
+                    format!(
+                        "Init function error (priority {}): {}",
+                        priority,
+                        inner.to_string()
+                    ),
+                    span,
+                    inner.help(),
+                );
+                return Err("runtime error".into());
+            }
+            ran = true;
         }
-    } else {
+    }
+
+    if !ran {
         calibre_diagnostics::emit_error(
             path,
             &contents,
-            format!("Missing entry point: {}", entry_name),
+            format!("Missing @init fn or {} fn", entry_name),
             None,
         );
         return Err("runtime error".into());
+    }
+
+    let mut fin_functions = artifacts.fin_functions.clone();
+    fin_functions.sort_by(|a, b| b.0.cmp(&a.0));
+
+    for (priority, func_name) in fin_functions {
+        if let Some(fin_func) = vm.registry.functions.get(&func_name).cloned() {
+            if let Err(err) = vm.run(fin_func.as_ref(), Vec::new()) {
+                let (span, inner) = err.innermost();
+                calibre_diagnostics::emit_runtime_error(
+                    path,
+                    &contents,
+                    format!(
+                        "Fin function error (priority {}): {}",
+                        priority,
+                        inner.to_string()
+                    ),
+                    span,
+                    inner.help(),
+                );
+                return Err("runtime error".into());
+            }
+        }
     }
 
     if !verbosity.is_level(&Verbosity::None) {

@@ -871,6 +871,21 @@ impl Formatter {
             NodeType::StructLiteral { identifier, value } => {
                 format!("{} {}", identifier, self.fmt_struct_literal(value))
             }
+            NodeType::Tag { node, tag, arguments } => {
+                let args_str = if arguments.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "({})",
+                        arguments
+                            .iter()
+                            .map(|arg| self.format(arg))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
+                format!("@{}{} {}", tag, args_str, self.format(node))
+            }
             NodeType::EnumExpression {
                 identifier,
                 value,

@@ -13,7 +13,34 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::fmt::Debug;
+use std::sync::{Arc, Mutex};
 use std::{fs, path::PathBuf, str::FromStr};
+
+pub type TagHandlerFn = Arc<
+    Mutex<
+        dyn Fn(
+                &mut MiddleEnvironment,
+                &u64,
+                Node,
+                ParserText,
+                Vec<Node>,
+            ) -> Result<MiddleNode, MiddleErr>
+            + Send
+            + Sync,
+    >,
+>;
+
+#[derive(Clone)]
+pub struct TagHandler {
+    pub handler: TagHandlerFn,
+}
+
+impl Debug for TagHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TagHandler")
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MiddleTypeDefType {
@@ -136,6 +163,10 @@ pub struct MiddleEnvironment {
     pub loaded_scopes: FxHashSet<u64>,
     pub loop_stack: Vec<LoopContext>,
     pub package_metadata: Option<PackageMetadata>,
+    pub tag_handlers: FxHashMap<String, TagHandler>,
+    pub init_functions: Vec<(i32, String)>,
+    pub fin_functions: Vec<(i32, String)>,
+    pub current_tag_info: Vec<(String, i32)>,
 }
 
 #[derive(Debug, Clone)]
@@ -172,6 +203,10 @@ impl Default for MiddleEnvironment {
             loaded_scopes: FxHashSet::default(),
             loop_stack: Vec::new(),
             package_metadata: None,
+            tag_handlers: FxHashMap::default(),
+            init_functions: Vec::new(),
+            fin_functions: Vec::new(),
+            current_tag_info: Vec::new(),
         }
     }
 }
@@ -3219,6 +3254,9 @@ impl MiddleEnvironment {
                 Some(ParserDataType::new(node.span, ParserInnerType::Auto(None)))
             }
             NodeType::ScopeDeclaration { .. } => unreachable!(),
+            NodeType::Tag { .. } => {
+                Some(ParserDataType::new(node.span, ParserInnerType::Auto(None)))
+            }
         };
 
         typ.map(|typ| self.resolve_data_type(scope, typ))

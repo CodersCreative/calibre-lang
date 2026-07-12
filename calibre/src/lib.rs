@@ -98,6 +98,8 @@ pub struct CalibreArtifacts {
     pub registry: VMRegistry,
     pub mappings: Vec<String>,
     pub entry_name: String,
+    pub init_functions: Vec<(i32, String)>,
+    pub fin_functions: Vec<(i32, String)>,
 }
 
 pub struct RunResult {
@@ -142,6 +144,8 @@ struct CachedProgramBlob {
     entry_name: String,
     mappings: Vec<String>,
     registry: VMRegistry,
+    init_functions: Option<Vec<(i32, String)>>,
+    fin_functions: Option<Vec<(i32, String)>>,
 }
 
 impl Default for CalibreEngine {
@@ -295,6 +299,9 @@ impl CalibreEngine {
 
         calibre_mir::inline::inline_small_calls(&mut mir, 20);
 
+        let init_functions = std::mem::take(&mut env.init_functions);
+        let fin_functions = std::mem::take(&mut env.fin_functions);
+
         Ok(CalibreArtifacts {
             ast: Some(ast),
             mir: Some(mir.clone()),
@@ -304,6 +311,8 @@ impl CalibreEngine {
                 .resolve_str(&scope, &self.entry_name)
                 .map(|x| x.to_string())
                 .unwrap_or_else(|| self.entry_name.clone()),
+            init_functions,
+            fin_functions,
         })
     }
 
@@ -323,6 +332,8 @@ impl CalibreEngine {
                 registry: cached.registry,
                 mappings: cached.mappings,
                 entry_name: cached.entry_name,
+                init_functions: cached.init_functions.unwrap_or_default(),
+                fin_functions: cached.fin_functions.unwrap_or_default(),
             });
         }
 
@@ -561,6 +572,8 @@ impl CalibreEngine {
             entry_name: artifacts.entry_name.clone(),
             mappings: artifacts.mappings.clone(),
             registry: artifacts.registry.clone(),
+            init_functions: Some(artifacts.init_functions.clone()),
+            fin_functions: Some(artifacts.fin_functions.clone()),
         };
 
         bincode::serialize_into(&mut writer, &cache)
@@ -635,6 +648,11 @@ fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
             NodeType::FunctionDeclaration { header, body } => NodeType::FunctionDeclaration {
                 header,
                 body: Box::new(map_opt(*body, mode)?),
+            },
+            NodeType::Tag { node, tag, arguments } => NodeType::Tag {
+                node: Box::new(map_opt(*node, mode)?),
+                tag,
+                arguments: arguments.into_iter().filter_map(|n| map_opt(n, mode)).collect(),
             },
             NodeType::Defer { value, function } => NodeType::Defer {
                 value: Box::new(map_opt(*value, mode)?),

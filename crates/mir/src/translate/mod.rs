@@ -3013,6 +3013,19 @@ impl MiddleEnvironment {
             NodeType::FunctionDeclaration { header, body } => {
                 self.evaluate_function_declaration(scope, node.span, header, *body)
             }
+            NodeType::Tag {
+                node,
+                tag,
+                arguments,
+            } => {
+                if let Some(handler) = self.tag_handlers.get(&tag.text).cloned() {
+                    let handler_fn = handler.handler.lock().unwrap();
+                    handler_fn(self, scope, *node, tag, arguments)
+                } else {
+                    self.push_error(MiddleErr::InvalidTag(tag.text));
+                    self.evaluate_inner(scope, *node)
+                }
+            }
             NodeType::ExternFunctionDeclaration {
                 abi,
                 identifier,

@@ -94,6 +94,14 @@ impl MiddleEnvironment {
         }
 
         if let Some((header, _)) = function_decl {
+            for (tag_name, priority) in &self.current_tag_info {
+                if tag_name == "init" {
+                    self.init_functions.push((*priority, new_name.clone()));
+                } else if tag_name == "fin" {
+                    self.fin_functions.push((*priority, new_name.clone()));
+                }
+            }
+
             let defaults: Vec<FunctionParamDefault> = header
                 .parameters
                 .iter()

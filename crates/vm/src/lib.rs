@@ -342,7 +342,7 @@ impl VM {
         if self.scheduler.is_none() {
             self.scheduler = Some(scheduler::SchedulerHandle::new(&self.config));
         }
-        if let RuntimeValue::Function { name, captures } = &mut func {
+        if let RuntimeValue::Function { name: _, captures } = &mut func {
             let resolved: Vec<(String, RuntimeValue)> = captures
                 .as_ref()
                 .iter()
