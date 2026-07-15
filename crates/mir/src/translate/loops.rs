@@ -950,8 +950,8 @@ impl MiddleEnvironment {
         }
 
         let (result_raw, broke_raw, result_ident, broke_ident) = if else_body.is_some() {
-            let result_raw = self.temp_name_at("__loop_result", span);
-            let broke_raw = self.temp_name_at("__loop_broke", span);
+            let result_raw = ParserText::temp_name_with_prefix("loop_result", span).to_string();
+            let broke_raw = ParserText::temp_name_with_prefix("loop_broke", span).to_string();
             let result_mapped = crate::environment::get_disamubiguous_name(
                 &scope,
                 Some(result_raw.trim()),
@@ -1055,7 +1055,8 @@ impl MiddleEnvironment {
                             matches!(dt.unwrap_all_refs().data_type, ParserInnerType::List(_))
                         })
                 {
-                    let item_ident = self.temp_ident("__for_let_item");
+                    let item_ident: PotentialDollarIdentifier =
+                        ParserText::temp_name_with_prefix("for_let_item", value.span).into();
                     let item_node = Node::new(
                         self.current_span(),
                         NodeType::Identifier(item_ident.clone().into()),
@@ -1146,16 +1147,20 @@ impl MiddleEnvironment {
                     } => Some(((*from.clone()), (*to.clone()), *inclusive)),
                     _ => None,
                 };
-                let iter_id_name = self.temp_name("__anon_loop_iterable");
-                let iter_id: PotentialDollarIdentifier = ParserText::from(iter_id_name).into();
+                let iter_id: PotentialDollarIdentifier =
+                    ParserText::temp_name_with_prefix("loop_iterable", range.span).into();
+
                 let iter_node = Node::new(
                     self.current_span(),
                     NodeType::Identifier(iter_id.clone().into()),
                 );
-                let idx_id_name = self.temp_name("__anon_loop_index");
-                let idx_id: PotentialDollarIdentifier = ParserText::from(idx_id_name).into();
-                let next_id_name = self.temp_name("__anon_loop_next");
-                let next_id: PotentialDollarIdentifier = ParserText::from(next_id_name).into();
+
+                let idx_id: PotentialDollarIdentifier =
+                    ParserText::temp_name_with_prefix("loop_index", range.span).into();
+
+                let next_id: PotentialDollarIdentifier =
+                    ParserText::temp_name_with_prefix("loop_next", range.span).into();
+
                 let is_count_loop = explicit_range.is_some()
                     || matches!(
                         range_dt.as_ref().map(|x| &x.data_type),

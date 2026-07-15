@@ -299,8 +299,8 @@ impl CalibreEngine {
 
         calibre_mir::inline::inline_small_calls(&mut mir, 20);
 
-        let init_functions = std::mem::take(&mut env.init_functions);
-        let fin_functions = std::mem::take(&mut env.fin_functions);
+        let init_functions = std::mem::take(&mut env.tagging.init_functions);
+        let fin_functions = std::mem::take(&mut env.tagging.fin_functions);
 
         Ok(CalibreArtifacts {
             ast: Some(ast),
@@ -649,10 +649,17 @@ fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
                 header,
                 body: Box::new(map_opt(*body, mode)?),
             },
-            NodeType::Tag { node, tag, arguments } => NodeType::Tag {
+            NodeType::Tag {
+                node,
+                tag,
+                arguments,
+            } => NodeType::Tag {
                 node: Box::new(map_opt(*node, mode)?),
                 tag,
-                arguments: arguments.into_iter().filter_map(|n| map_opt(n, mode)).collect(),
+                arguments: arguments
+                    .into_iter()
+                    .filter_map(|n| map_opt(n, mode))
+                    .collect(),
             },
             NodeType::Defer { value, function } => NodeType::Defer {
                 value: Box::new(map_opt(*value, mode)?),

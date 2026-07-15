@@ -16,7 +16,9 @@ pub mod environment;
 pub mod errors;
 pub mod inline;
 pub mod native;
+pub mod tags;
 pub mod translate;
+pub mod typing;
 
 static COUNTER: LazyLock<RwLock<u64>> = LazyLock::new(|| RwLock::new(0));
 

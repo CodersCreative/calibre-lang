@@ -1,6 +1,7 @@
 use calibre_mir::{
     ast::{IntLiteralType, MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, MiddleTypeDefType},
+    environment::MiddleEnvironment,
+    typing::MiddleTypeDefType,
 };
 use calibre_parser::Span;
 use calibre_parser::ast::{
@@ -1137,7 +1138,7 @@ impl<'a> LirEnvironment<'a> {
                 data,
             } => LirNodeType::Enum {
                 variant: if let Some(obj) = self.env.objects.get(&identifier.to_string())
-                    && let MiddleTypeDefType::Enum(variants) = &obj.object_type
+                    && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
                 {
                     variants
                         .iter()

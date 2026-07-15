@@ -1,54 +1,22 @@
-use crate::COUNTER;
 use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::errors::MiddleErr;
+use crate::tags::Tagging;
+use crate::typing::MiddleTypeDefType;
+use calibre_parser::COUNTER;
 use calibre_parser::ast::EmitType;
 use calibre_parser::{
     Location, Parser, Span,
     ast::{
-        FunctionHeader, Node, NodeType, ObjectMap, ObjectType, Overload, ParserDataType,
-        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        PotentialNewType, TypeDefType, VarType,
+        FunctionHeader, Node, NodeType, ObjectType, Overload, ParserDataType, ParserInnerType,
+        ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
+        TypeDefType, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt::Debug;
-use std::sync::{Arc, Mutex};
 use std::{fs, path::PathBuf, str::FromStr};
-
-pub type TagHandlerFn = Arc<
-    Mutex<
-        dyn Fn(
-                &mut MiddleEnvironment,
-                &u64,
-                Node,
-                ParserText,
-                Vec<Node>,
-            ) -> Result<MiddleNode, MiddleErr>
-            + Send
-            + Sync,
-    >,
->;
-
-#[derive(Clone)]
-pub struct TagHandler {
-    pub handler: TagHandlerFn,
-}
-
-impl Debug for TagHandler {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TagHandler")
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum MiddleTypeDefType {
-    Enum(Vec<(ParserText, Option<ParserDataType>)>),
-    Struct(ObjectMap<ParserDataType>),
-    NewType(ParserDataType),
-    Trait,
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleObject {
@@ -138,7 +106,7 @@ impl FromStr for Operator {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MiddleEnvironment {
     pub scope_counter: u64,
     pub scopes: FxHashMap<u64, MiddleScope>,
@@ -163,52 +131,16 @@ pub struct MiddleEnvironment {
     pub loaded_scopes: FxHashSet<u64>,
     pub loop_stack: Vec<LoopContext>,
     pub package_metadata: Option<PackageMetadata>,
-    pub tag_handlers: FxHashMap<String, TagHandler>,
-    pub init_functions: Vec<(i32, String)>,
-    pub fin_functions: Vec<(i32, String)>,
-    pub current_tag_info: Vec<(String, i32)>,
+    pub tagging: Tagging,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct LoopContext {
     pub label: Option<String>,
     pub result_target: Option<ParserText>,
     pub broke_target: Option<ParserText>,
     pub continue_inject: Option<Node>,
     pub scope_id: u64,
-}
-
-impl Default for MiddleEnvironment {
-    fn default() -> Self {
-        Self {
-            func_defers: Vec::new(),
-            overloads: Vec::new(),
-            scope_counter: 0,
-            scopes: FxHashMap::default(),
-            resolved_variables: Vec::new(),
-            variables: FxHashMap::default(),
-            objects: FxHashMap::default(),
-            impls: FxHashMap::default(),
-            type_aliases: FxHashMap::default(),
-            trait_defs: FxHashMap::default(),
-            generic_fn_templates: FxHashMap::default(),
-            function_param_defaults: FxHashMap::default(),
-            generic_type_templates: FxHashMap::default(),
-            type_specializations: FxHashMap::default(),
-            fn_specializations: FxHashMap::default(),
-            specialization_decls_by_scope: FxHashMap::default(),
-            current_location: None,
-            errors: Vec::new(),
-            stdlib_nodes: Vec::new(),
-            loaded_scopes: FxHashSet::default(),
-            loop_stack: Vec::new(),
-            package_metadata: None,
-            tag_handlers: FxHashMap::default(),
-            init_functions: Vec::new(),
-            fin_functions: Vec::new(),
-            current_tag_info: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -263,25 +195,27 @@ pub struct MiddleScope {
 
 pub fn get_disamubiguous_name(
     scope: &u64,
-    name: Option<&str>,
+    name: Option<impl ToString>,
     var_type: Option<&VarType>,
 ) -> String {
-    let count: u64 = {
-        let mut counter = COUNTER.write().unwrap();
-        *counter += 1;
-        *counter
-    };
+    let name = name.map(|x| x.to_string()).unwrap_or(String::from("anon"));
 
     format!(
-        "{0}-{1}-{2}:{3}",
+        "{0}-{1}{2}:{3}",
         match var_type {
             Some(VarType::Mutable) => "mut",
             Some(VarType::Immutable) => "let",
             _ => "const",
         },
         scope,
-        count,
-        name.unwrap_or("anon")
+        if name.contains("-") {
+            let mut counter = COUNTER.write().unwrap();
+            *counter += 1;
+            format!("-{}", counter)
+        } else {
+            String::new()
+        },
+        name
     )
 }
 
@@ -389,19 +323,9 @@ impl MiddleEnvironment {
     }
 
     #[inline]
-    fn normalized_type(ty: &ParserDataType) -> ParserDataType {
-        ty.clone().unwrap_all_refs()
-    }
-
-    #[inline]
-    fn normalized_inner_type(ty: &ParserDataType) -> ParserInnerType {
-        Self::normalized_type(ty).data_type
-    }
-
-    #[inline]
     pub(crate) fn is_callable_parser_type(ty: &ParserDataType) -> bool {
         matches!(
-            Self::normalized_inner_type(ty),
+            ty.key(),
             ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
         )
     }
@@ -460,26 +384,6 @@ impl MiddleEnvironment {
             .ok_or_else(|| MiddleErr::Internal(format!("missing scope {scope}")))
     }
 
-    pub fn temp_name_at(&self, prefix: &str, span: Span) -> String {
-        format!("{}_{}_{}", prefix, span.from.line, span.from.col)
-    }
-
-    pub fn temp_name(&self, prefix: &str) -> String {
-        self.temp_name_at(prefix, self.current_span())
-    }
-
-    pub fn temp_name_at_index(&self, prefix: &str, span: Span, index: usize) -> String {
-        format!("{}_{}", self.temp_name_at(prefix, span), index)
-    }
-
-    pub fn temp_ident_at(&self, prefix: &str, span: Span) -> PotentialDollarIdentifier {
-        ParserText::from(self.temp_name_at(prefix, span)).into()
-    }
-
-    pub fn temp_ident(&self, prefix: &str) -> PotentialDollarIdentifier {
-        ParserText::from(self.temp_name(prefix)).into()
-    }
-
     fn lookup_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
         if let Some(obj) = self.objects.get(struct_name) {
             return Some(obj);
@@ -491,16 +395,8 @@ impl MiddleEnvironment {
         None
     }
 
-    pub fn type_key(&self, ty: &ParserDataType) -> String {
-        Self::normalized_inner_type(ty).to_string()
-    }
-
-    pub fn impl_key(&self, ty: &ParserDataType) -> ParserInnerType {
-        Self::normalized_inner_type(ty)
-    }
-
     pub fn impl_self_name(&self, ty: &ParserDataType) -> String {
-        match Self::normalized_inner_type(ty) {
+        match ty.key() {
             ParserInnerType::Struct(name) => name,
             ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
             ParserInnerType::Int => String::from("int"),
@@ -597,22 +493,22 @@ impl MiddleEnvironment {
     }
 
     pub fn find_impl_for_type(&self, ty: &ParserDataType) -> Option<&MiddleImpl> {
-        let key = self.impl_key(ty);
+        let key = ty.key();
         if let Some(imp) = self.impls.get(&key) {
             return Some(imp);
         }
-        let target = Self::normalized_inner_type(ty);
+        let target = ty.key();
         self.impls.values().find(|imp| {
             self.impl_type_matches(&imp.data_type.data_type, &target, &imp.generic_params)
         })
     }
 
     pub fn find_impl_for_type_mut(&mut self, ty: &ParserDataType) -> Option<&mut MiddleImpl> {
-        let key = self.impl_key(ty);
+        let key = ty.key();
         if self.impls.contains_key(&key) {
             return self.impls.get_mut(&key);
         }
-        let target = Self::normalized_inner_type(ty);
+        let target = ty.key();
         let key = self
             .impls
             .iter()
@@ -625,11 +521,11 @@ impl MiddleEnvironment {
 
     fn member_base_name_candidates(&self, ty: &ParserDataType) -> Vec<String> {
         let mut names = Vec::new();
-        let base = Self::normalized_type(ty);
-        let base_key = base.data_type.to_string();
+        let base = ty.key();
+        let base_key = base.to_string();
         names.push(base_key.clone());
 
-        match &base.data_type {
+        match &base {
             ParserInnerType::Struct(name) => {
                 let de_prefixed = calibre_parser::qualified_name_tail(name);
                 if de_prefixed != name {
@@ -758,13 +654,17 @@ impl MiddleEnvironment {
             ParserInnerType::Struct(struct_name) => self
                 .lookup_object_for_struct_name(struct_name)
                 .and_then(|obj| match &obj.object_type {
-                    MiddleTypeDefType::Struct(fields) => fields.get(member).cloned(),
+                    MiddleTypeDefType::Struct(fields) => {
+                        fields.get(member).map(|(ty, _)| ty.clone())
+                    }
                     _ => None,
                 }),
             ParserInnerType::StructWithGenerics { identifier, .. } => self
                 .lookup_object_for_struct_name(identifier)
                 .and_then(|obj| match &obj.object_type {
-                    MiddleTypeDefType::Struct(fields) => fields.get(member).cloned(),
+                    MiddleTypeDefType::Struct(fields) => {
+                        fields.get(member).map(|(ty, _)| ty.clone())
+                    }
                     _ => None,
                 }),
             ParserInnerType::Tuple(values) => member
@@ -832,7 +732,7 @@ impl MiddleEnvironment {
         ty: ParserDataType,
         generic_params: Vec<String>,
     ) -> ParserInnerType {
-        let key = self.impl_key(&ty);
+        let key = ty.key();
         if self.impls.contains_key(&key) {
             return key;
         }
@@ -924,56 +824,6 @@ impl MiddleEnvironment {
             .join("__")
     }
 
-    pub fn substitute_potential_new_type(
-        &mut self,
-        pnt: &PotentialNewType,
-        subst: &FxHashMap<String, ParserDataType>,
-    ) -> PotentialNewType {
-        match pnt {
-            PotentialNewType::DataType(dt) => {
-                PotentialNewType::DataType(self.substitute_data_type(dt, subst))
-            }
-            _ => pnt.clone(),
-        }
-    }
-
-    pub fn substitute_type_def(
-        &mut self,
-        td: &TypeDefType,
-        subst: &FxHashMap<String, ParserDataType>,
-    ) -> TypeDefType {
-        match td {
-            TypeDefType::Struct(obj) => TypeDefType::Struct(match obj {
-                calibre_parser::ast::ObjectType::Map(xs) => calibre_parser::ast::ObjectType::Map(
-                    xs.iter()
-                        .map(|(k, v)| (k.clone(), self.substitute_potential_new_type(v, subst)))
-                        .collect(),
-                ),
-                calibre_parser::ast::ObjectType::Tuple(xs) => {
-                    calibre_parser::ast::ObjectType::Tuple(
-                        xs.iter()
-                            .map(|v| self.substitute_potential_new_type(v, subst))
-                            .collect(),
-                    )
-                }
-            }),
-            TypeDefType::Enum(xs) => TypeDefType::Enum(
-                xs.iter()
-                    .map(|(k, v)| {
-                        (
-                            k.clone(),
-                            v.as_ref()
-                                .map(|p| self.substitute_potential_new_type(p, subst)),
-                        )
-                    })
-                    .collect(),
-            ),
-            TypeDefType::NewType(inner) => {
-                TypeDefType::NewType(Box::new(self.substitute_potential_new_type(inner, subst)))
-            }
-        }
-    }
-
     pub fn ensure_specialized_type(
         &mut self,
         _scope: &u64,
@@ -1009,7 +859,7 @@ impl MiddleEnvironment {
         self.type_specializations
             .insert(key, specialized_name.clone());
 
-        let new_obj = self.substitute_type_def(&obj, &subst);
+        let new_obj = obj.substitute(&subst);
 
         let decl_node = Node::new(
             self.current_span(),
@@ -1064,16 +914,9 @@ impl MiddleEnvironment {
         new_header.parameters = new_header
             .parameters
             .into_iter()
-            .map(|(n, t, v)| {
-                (
-                    n,
-                    t.map(|t| self.substitute_potential_new_type(&t, &subst)),
-                    v,
-                )
-            })
+            .map(|(n, t, v)| (n, t.map(|t| t.substitute(&subst)), v))
             .collect();
-        new_header.return_type =
-            self.substitute_potential_new_type(&new_header.return_type, &subst);
+        new_header.return_type = new_header.return_type.substitute(&subst);
 
         let decl_node = Node::new(
             self.current_span(),
@@ -1107,64 +950,6 @@ impl MiddleEnvironment {
         }
 
         Some(specialized_name)
-    }
-
-    pub fn substitute_data_type(
-        &mut self,
-        dt: &ParserDataType,
-        subst: &FxHashMap<String, ParserDataType>,
-    ) -> ParserDataType {
-        let span = dt.span;
-        let data_type = match &dt.data_type {
-            ParserInnerType::Struct(s) if subst.contains_key(s) => subst
-                .get(s)
-                .map(|dt| dt.data_type.clone())
-                .unwrap_or_else(|| dt.data_type.clone()),
-            ParserInnerType::Tuple(xs) => ParserInnerType::Tuple(
-                xs.iter()
-                    .map(|x| self.substitute_data_type(x, subst))
-                    .collect(),
-            ),
-            ParserInnerType::List(x) => {
-                ParserInnerType::List(Box::new(self.substitute_data_type(x, subst)))
-            }
-            ParserInnerType::Ptr(x) => {
-                ParserInnerType::Ptr(Box::new(self.substitute_data_type(x, subst)))
-            }
-            ParserInnerType::Option(x) => {
-                ParserInnerType::Option(Box::new(self.substitute_data_type(x, subst)))
-            }
-            ParserInnerType::Result { ok, err } => ParserInnerType::Result {
-                ok: Box::new(self.substitute_data_type(ok, subst)),
-                err: Box::new(self.substitute_data_type(err, subst)),
-            },
-            ParserInnerType::Function {
-                return_type,
-                parameters,
-            } => ParserInnerType::Function {
-                return_type: Box::new(self.substitute_data_type(return_type, subst)),
-                parameters: parameters
-                    .iter()
-                    .map(|p| self.substitute_data_type(p, subst))
-                    .collect(),
-            },
-            ParserInnerType::Ref(x, m) => {
-                ParserInnerType::Ref(Box::new(self.substitute_data_type(x, subst)), m.clone())
-            }
-            ParserInnerType::StructWithGenerics {
-                identifier,
-                generic_types,
-            } => ParserInnerType::StructWithGenerics {
-                identifier: identifier.clone(),
-                generic_types: generic_types
-                    .iter()
-                    .map(|g| self.substitute_data_type(g, subst))
-                    .collect(),
-            },
-            _ => dt.data_type.clone(),
-        };
-
-        ParserDataType { data_type, span }
     }
 
     pub fn infer_generic_args_from_call(
@@ -1235,40 +1020,6 @@ impl MiddleEnvironment {
             result.push(mapping.get(tp)?.clone());
         }
         Some(result)
-    }
-
-    pub fn type_def_type_into(&mut self, scope: &u64, value: TypeDefType) -> MiddleTypeDefType {
-        match value {
-            TypeDefType::Enum(x) => MiddleTypeDefType::Enum({
-                let mut lst = Vec::new();
-
-                for (k, v) in x {
-                    lst.push((
-                        self.resolve_dollar_ident_only(scope, &k)
-                            .unwrap_or_else(|| ParserText::from(k.to_string()).into()),
-                        if let Some(v) = v {
-                            Some(self.resolve_potential_new_type(scope, v))
-                        } else {
-                            None
-                        },
-                    ));
-                }
-                lst
-            }),
-            TypeDefType::Struct(x) => MiddleTypeDefType::Struct({
-                let data: ObjectMap<PotentialNewType> = x.into();
-                let mut map = Vec::new();
-
-                for (k, v) in data.0 {
-                    map.push((k, self.resolve_potential_new_type(scope, v)));
-                }
-
-                ObjectMap(map)
-            }),
-            TypeDefType::NewType(x) => {
-                MiddleTypeDefType::NewType(self.resolve_potential_new_type(scope, *x))
-            }
-        }
     }
 
     pub fn new_and_evaluate_with_package(
@@ -1622,7 +1373,7 @@ impl MiddleEnvironment {
                     .resolve_dollar_ident_only(scope, &identifier)
                     .unwrap_or_else(|| ParserText::from(identifier.to_string()).into());
                 let new_name = get_disamubiguous_name(scope, Some(identifier.text.trim()), None);
-                let type_def = self.type_def_type_into(scope, type_def);
+                let type_def = MiddleTypeDefType::from_type_def_type(self, scope, type_def);
                 self.objects.insert(
                     new_name.clone(),
                     MiddleObject {
@@ -1951,40 +1702,90 @@ impl MiddleEnvironment {
                         Self::package_type_name().to_string(),
                     )),
                 ),
-                object: TypeDefType::Struct(ObjectType::Map(vec![
-                    (
-                        "name".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
-                    ),
-                    (
-                        "version".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
-                    ),
-                    (
-                        "description".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
-                    ),
-                    (
-                        "license".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
-                    ),
-                    (
-                        "repository".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
-                    ),
-                    (
-                        "homepage".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
-                    ),
-                    (
-                        "src".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
-                    ),
-                    (
-                        "root".to_string(),
-                        PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
-                    ),
-                ])),
+                object: TypeDefType::Struct {
+                    fields: ObjectType::Map(vec![
+                        (
+                            "name".to_string(),
+                            (
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                                None,
+                            ),
+                        ),
+                        (
+                            "version".to_string(),
+                            (
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                                None,
+                            ),
+                        ),
+                        (
+                            "description".to_string(),
+                            (
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                                None,
+                            ),
+                        ),
+                        (
+                            "license".to_string(),
+                            (
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                                None,
+                            ),
+                        ),
+                        (
+                            "repository".to_string(),
+                            (
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                                None,
+                            ),
+                        ),
+                        (
+                            "homepage".to_string(),
+                            (
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                                None,
+                            ),
+                        ),
+                        (
+                            "src".to_string(),
+                            (
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                                None,
+                            ),
+                        ),
+                        (
+                            "root".to_string(),
+                            (
+                                PotentialNewType::DataType(ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Str,
+                                )),
+                                None,
+                            ),
+                        ),
+                    ]),
+                },
                 overloads: Vec::new(),
             },
         );

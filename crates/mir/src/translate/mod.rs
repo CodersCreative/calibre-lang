@@ -1,10 +1,11 @@
 use crate::{
     ast::{IntLiteralType, MiddleNode, MiddleNodeType},
     environment::{
-        MiddleEnvironment, MiddleObject, MiddleOverload, MiddleTrait, MiddleTraitMember,
-        MiddleTypeDefType, Operator, get_disamubiguous_name,
+        MiddleEnvironment, MiddleObject, MiddleTrait, MiddleTraitMember, Operator,
+        get_disamubiguous_name,
     },
     errors::MiddleErr,
+    typing::MiddleTypeDefType,
 };
 use calibre_parser::{
     Span,
@@ -398,7 +399,8 @@ impl MiddleEnvironment {
                             },
                         );
 
-                        let fn_ident: PotentialDollarIdentifier = self.temp_ident("__spawn_fn");
+                        let fn_ident: PotentialDollarIdentifier =
+                            ParserText::temp_name_with_prefix("spawn_fn", node.span).into();
 
                         body.push(Node::new(
                             self.current_span(),
@@ -435,12 +437,15 @@ impl MiddleEnvironment {
                         label,
                         else_body,
                     } => {
-                        let wg_name = self.temp_name_at("__spawn_wg", node.span);
+                        let wg_name = ParserText::temp_name_with_prefix("spawn_wg", node.span);
                         let wg_ident: PotentialDollarIdentifier =
                             ParserText::from(wg_name.clone()).into();
-                        let start_name = self.temp_name_at("__spawn_start", node.span);
+
+                        let start_name =
+                            ParserText::temp_name_with_prefix("spawn_start", node.span);
                         let start_ident: PotentialDollarIdentifier =
                             ParserText::from(start_name.clone()).into();
+
                         let wg_ident_node = Node::identifier(node.span, wg_ident.clone());
                         let start_ident_node = Node::identifier(node.span, start_ident.clone());
 
@@ -562,7 +567,8 @@ impl MiddleEnvironment {
                         return Ok(self.evaluate(scope, scope_node));
                     }
                     NodeType::FunctionDeclaration { header, body } => {
-                        let fn_ident: PotentialDollarIdentifier = self.temp_ident("__spawn_fn");
+                        let fn_ident: PotentialDollarIdentifier =
+                            ParserText::temp_name_with_prefix("spawn_fn", body.span).into();
 
                         let scope_node = Node::new(
                             self.current_span(),
@@ -603,9 +609,10 @@ impl MiddleEnvironment {
                     }
                     other => self.evaluate(scope, Node::new(value.span, other)),
                 };
+
                 if auto_wait {
                     let wg_ident: PotentialDollarIdentifier =
-                        self.temp_ident_at("__spawn_auto_wait_wg", node.span);
+                        ParserText::temp_name_with_prefix("spawn_wait_wg", node.span).into();
                     let wait_scope = Self::temp_scope(
                         node.span,
                         vec![
@@ -657,7 +664,7 @@ impl MiddleEnvironment {
             NodeType::Spawn { items, auto_wait } => {
                 let span = node.span;
                 let wg_ident: PotentialDollarIdentifier =
-                    self.temp_ident_at("__spawn_block_wg", span);
+                    ParserText::temp_name_with_prefix("spawn_wg", span).into();
                 let wg_ident_node = Node::new(
                     span,
                     NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
@@ -801,7 +808,8 @@ impl MiddleEnvironment {
                         ));
                     };
 
-                    let tmp_ident = self.temp_ident_at("__move_tmp", node.span);
+                    let tmp_ident: PotentialDollarIdentifier =
+                        ParserText::temp_name_with_prefix("move", node.span).into();
 
                     let tmp_decl = Node::new(
                         node.span,
@@ -1229,7 +1237,8 @@ impl MiddleEnvironment {
                 pattern,
                 value,
             } => {
-                let tmp_ident = self.temp_ident_at("__destructure_tmp", node.span);
+                let tmp_ident: PotentialDollarIdentifier =
+                    ParserText::temp_name_with_prefix("__destructure_tmp", node.span).into();
 
                 let tmp_decl = Node::new(
                     node.span,
@@ -1265,7 +1274,8 @@ impl MiddleEnvironment {
                 )
             }
             NodeType::DestructureAssignment { pattern, value } => {
-                let tmp_ident = self.temp_ident_at("__destructure_tmp", node.span);
+                let tmp_ident: PotentialDollarIdentifier =
+                    ParserText::temp_name_with_prefix("destructure_tmp", node.span).into();
 
                 let tmp_decl = Node::new(
                     node.span,
@@ -1312,323 +1322,7 @@ impl MiddleEnvironment {
                 identifier,
                 object,
                 overloads,
-            } => {
-                if let calibre_parser::ast::TypeDefType::NewType(inner) = &object {
-                    let identifier_text = identifier.to_string();
-                    let is_overload_auto = !overloads.is_empty()
-                        && matches!(
-                            inner.as_ref(),
-                            PotentialNewType::DataType(dt) if dt.is_auto()
-                        );
-                    let is_overload_self = !is_overload_auto
-                        && !overloads.is_empty()
-                        && matches!(
-                            inner.as_ref(),
-                            PotentialNewType::DataType(dt) if dt.to_string() == identifier_text
-                        );
-                    let mut generic_params: Vec<String> = match &identifier {
-                        calibre_parser::ast::PotentialGenericTypeIdentifier::Generic {
-                            generic_types,
-                            ..
-                        } => generic_types
-                            .iter()
-                            .filter_map(|t| match t {
-                                PotentialNewType::DataType(ParserDataType {
-                                    data_type: ParserInnerType::Struct(s),
-                                    ..
-                                }) => Some(s.clone()),
-                                _ => None,
-                            })
-                            .collect(),
-                        _ => Vec::new(),
-                    };
-                    if generic_params.is_empty()
-                        && let Some(start) = identifier_text.find('<')
-                        && let Some(end) = identifier_text.rfind('>')
-                        && end > start + 1
-                    {
-                        let inner = &identifier_text[start + 1..end];
-                        for raw in inner.split(',') {
-                            let mut name = raw.trim().to_string();
-                            if let Some(idx) = name.find('<') {
-                                name = name[..idx].trim().to_string();
-                            }
-                            if !name.is_empty() {
-                                generic_params.push(name);
-                            }
-                        }
-                    }
-
-                    let identifier = self
-                        .resolve_dollar_ident_potential_generic_only(scope, &identifier)
-                        .unwrap_or_else(|| ParserText::from(identifier_text.clone()));
-                    if !is_overload_self && !is_overload_auto {
-                        let resolved = self.resolve_potential_new_type(scope, *inner.clone());
-                        let resolved_name = resolved.data_type.to_string();
-                        let is_self_alias = identifier.text == resolved_name;
-                        let is_builtin_alias = matches!(
-                            resolved.data_type,
-                            ParserInnerType::Int
-                                | ParserInnerType::UInt
-                                | ParserInnerType::Float
-                                | ParserInnerType::Bool
-                                | ParserInnerType::Str
-                                | ParserInnerType::Char
-                                | ParserInnerType::Range
-                                | ParserInnerType::Dynamic
-                                | ParserInnerType::DynamicTraits(_)
-                                | ParserInnerType::Null
-                                | ParserInnerType::Auto(_)
-                        );
-                        if !is_builtin_alias && !is_self_alias {
-                            self.type_aliases
-                                .insert(identifier.text.clone(), resolved.clone());
-                        }
-                    }
-                    self.scopes
-                        .get_mut(scope)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                            )
-                        })?
-                        .mappings
-                        .insert(identifier.text.clone(), identifier.text.clone());
-
-                    if !overloads.is_empty() {
-                        for overload in overloads {
-                            Self::verify_overload(&overload)?;
-                            let overload = MiddleOverload {
-                                operator: Operator::from_str(&overload.operator.text)?,
-                                return_type: self.resolve_potential_new_type(
-                                    scope,
-                                    overload.header.return_type.clone(),
-                                ),
-                                parameters: {
-                                    let mut params = Vec::new();
-                                    for param in overload.header.parameters.iter() {
-                                        params.push(
-                                            match param.1.clone() {
-                                                Some(x) if param.2.is_none() => {
-                                                    self.resolve_potential_new_type(scope, x)
-                                                }
-                                                _ => {
-                                                    return Err(MiddleErr::Overload(String::from(
-                                                        "Type needs to be explicit when doing overloads and default types arent allowed",
-                                                    )));
-                                                }
-                                            }
-                                        );
-                                    }
-                                    params
-                                },
-                                func: overload.into(),
-                                generic_params: generic_params.clone(),
-                            };
-
-                            self.overloads.push(overload);
-                        }
-                    }
-
-                    return Ok(MiddleNode {
-                        node_type: MiddleNodeType::EmptyLine,
-                        span: node.span,
-                    });
-                }
-                if let calibre_parser::ast::PotentialGenericTypeIdentifier::Generic {
-                    identifier: base_ident,
-                    generic_types,
-                } = identifier.clone()
-                {
-                    let base_ident = self
-                        .resolve_dollar_ident_only(scope, &base_ident)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Scope(base_ident.to_string())),
-                            )
-                        })?;
-                    let template_params: Vec<String> = generic_types
-                        .iter()
-                        .filter_map(|t| match t {
-                            PotentialNewType::DataType(ParserDataType {
-                                data_type: ParserInnerType::Struct(s),
-                                ..
-                            }) => Some(s.clone()),
-                            _ => None,
-                        })
-                        .collect();
-
-                    self.generic_type_templates
-                        .entry(base_ident.text.clone())
-                        .or_insert((template_params, object.clone(), overloads.clone()));
-
-                    let generic_params = self
-                        .generic_type_templates
-                        .get(&base_ident.text)
-                        .map(|(params, _, _)| params.clone())
-                        .unwrap_or_default();
-
-                    for overload in overloads {
-                        Self::verify_overload(&overload)?;
-                        let overload = MiddleOverload {
-                            operator: Operator::from_str(&overload.operator.text)?,
-                            return_type: self.resolve_potential_new_type(
-                                scope,
-                                overload.header.return_type.clone(),
-                            ),
-                            parameters: {
-                                let mut params = Vec::new();
-                                for param in overload.header.parameters.iter() {
-                                    params.push(match param.1.clone() {
-                                        Some(x) if param.2.is_none() => {
-                                            self.resolve_potential_new_type(scope, x)
-                                        }
-                                        _ => {
-                                            return Err(MiddleErr::Overload(String::from(
-                                                "Type needs to be explicit when doing overloads and default types arent allowed",
-                                            )));
-                                        }
-                                    });
-                                }
-                                params
-                            },
-                            func: overload.into(),
-                            generic_params: generic_params.clone(),
-                        };
-
-                        self.overloads.push(overload);
-                    }
-
-                    self.scopes
-                        .get_mut(scope)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                            )
-                        })?
-                        .mappings
-                        .insert(base_ident.text.clone(), base_ident.text.clone());
-
-                    return Ok(MiddleNode {
-                        node_type: MiddleNodeType::EmptyLine,
-                        span: node.span,
-                    });
-                }
-
-                let identifier = self
-                    .resolve_dollar_ident_potential_generic_only(scope, &identifier)
-                    .ok_or_else(|| {
-                        MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Scope(identifier.to_string())),
-                        )
-                    })?;
-                let object = self.type_def_type_into(scope, object);
-                let new_name = if identifier.text.contains("__") {
-                    identifier.text.clone()
-                } else {
-                    get_disamubiguous_name(scope, Some(identifier.text.trim()), None)
-                };
-
-                self.objects.insert(
-                    new_name.clone(),
-                    MiddleObject {
-                        object_type: object,
-                        variables: FxHashMap::default(),
-                        traits: Vec::new(),
-                        location: self.current_location.clone(),
-                    },
-                );
-
-                self.scopes
-                    .get_mut(scope)
-                    .ok_or_else(|| {
-                        MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        )
-                    })?
-                    .mappings
-                    .insert(identifier.text, new_name.clone());
-
-                let previous_self = self
-                    .scopes
-                    .get_mut(scope)
-                    .ok_or_else(|| {
-                        MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        )
-                    })?
-                    .mappings
-                    .insert(String::from("Self"), new_name.clone());
-
-                for overload in overloads {
-                    Self::verify_overload(&overload)?;
-                    let overload = MiddleOverload {
-                        operator: Operator::from_str(&overload.operator.text)?,
-                        return_type: self
-                            .resolve_potential_new_type(scope, overload.header.return_type.clone()),
-                        parameters: {
-                            let mut params = Vec::new();
-                            let mut contains = false;
-
-                            for param in overload.header.parameters.iter() {
-                                let ty = match param.1.clone() {
-                                    Some(x) if param.2.is_none() => {
-                                        self.resolve_potential_new_type(scope, x)
-                                    }
-                                    _ => {
-                                        return Err(MiddleErr::Overload(String::from(
-                                            "Type needs to be explicit when doing overloads and default types arent allowed",
-                                        )));
-                                    }
-                                };
-
-                                if let ParserInnerType::Struct(x) =
-                                    ty.data_type.clone().unwrap_all_refs()
-                                    && x == new_name
-                                {
-                                    contains = true;
-                                }
-
-                                params.push(ty);
-                            }
-
-                            if !contains {
-                                continue;
-                            }
-
-                            params
-                        },
-                        func: overload.into(),
-                        generic_params: Vec::new(),
-                    };
-
-                    self.overloads.push(overload);
-                }
-
-                if let Some(prev) = previous_self {
-                    self.scopes
-                        .get_mut(scope)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                            )
-                        })?
-                        .mappings
-                        .insert(String::from("Self"), prev);
-                }
-
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::EmptyLine,
-                    span: node.span,
-                })
-            }
+            } => self.evaluate_type_declaration(scope, node.span, identifier, object, overloads),
             NodeType::BooleanExpression {
                 left,
                 right,
@@ -1729,7 +1423,7 @@ impl MiddleEnvironment {
                     match failure_mode {
                         AsFailureMode::Result | AsFailureMode::Option => {}
                         AsFailureMode::Panic => {
-                            let temp_ident = self.temp_name_at("as_res", node.span);
+                            let temp_ident = ParserText::temp_name_with_prefix("as_res", node.span);
                             return self.evaluate_inner(
                                 scope,
                                 Node {
@@ -1965,9 +1659,7 @@ impl MiddleEnvironment {
             NodeType::Try { value, catch } => {
                 let resolved_type = self.resolve_type_from_node(scope, &value);
                 let is_option_try = matches!(
-                    resolved_type
-                        .as_ref()
-                        .map(|t| t.clone().unwrap_all_refs().data_type),
+                    resolved_type.as_ref().map(|t| t.key()),
                     Some(ParserInnerType::Option(_))
                 );
                 let enum_arm = |variant: &str, name: Option<PotentialDollarIdentifier>, body| {
@@ -2265,7 +1957,7 @@ impl MiddleEnvironment {
                 let resolved = self
                     .resolve_potential_new_type(scope, target)
                     .unwrap_all_refs();
-                let target_key = self.type_key(&resolved);
+                let target_key = resolved.key().to_string();
                 let self_name = self.impl_self_name(&resolved);
 
                 let mut prev_generics = Vec::new();
@@ -2484,7 +2176,7 @@ impl MiddleEnvironment {
                 let resolved_target = self
                     .resolve_potential_new_type(scope, target)
                     .unwrap_all_refs();
-                let target_key = self.type_key(&resolved_target);
+                let target_key = resolved_target.key().to_string();
                 let self_name = self.impl_self_name(&resolved_target);
                 let trait_def = self.trait_defs.get(&resolved_trait.text).cloned();
 
@@ -2946,7 +2638,7 @@ impl MiddleEnvironment {
                     };
                 let raw_variant = value.to_string();
                 let value = if let Some(obj) = self.objects.get(&identifier.text)
-                    && let MiddleTypeDefType::Enum(variants) = &obj.object_type
+                    && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
                 {
                     variants
                         .iter()
@@ -3018,7 +2710,7 @@ impl MiddleEnvironment {
                 tag,
                 arguments,
             } => {
-                if let Some(handler) = self.tag_handlers.get(&tag.text).cloned() {
+                if let Some(handler) = self.tagging.tag_handlers.get(&tag.text).cloned() {
                     let handler_fn = handler.handler.lock().unwrap();
                     handler_fn(self, scope, *node, tag, arguments)
                 } else {
@@ -3200,7 +2892,8 @@ impl MiddleEnvironment {
                 }))
             }
             NodeType::SelectStatement { arms } => {
-                let done_ident = self.temp_ident_at("__select_done", node.span);
+                let done_ident: PotentialDollarIdentifier =
+                    ParserText::temp_name_with_prefix("select_done", node.span).into();
 
                 let done_decl = Node::new(
                     node.span,
@@ -3259,11 +2952,7 @@ impl MiddleEnvironment {
                                 let Some(left) = left.clone() else { continue };
                                 let Some(right) = right.clone() else { continue };
                                 let tmp_ident = PotentialDollarIdentifier::Identifier(
-                                    ParserText::from(self.temp_name_at_index(
-                                        "__select_tmp",
-                                        node.span,
-                                        arm_index,
-                                    )),
+                                    ParserText::temp_name_with_prefix("select", node.span),
                                 );
 
                                 let try_get_call = Self::scope_member_call(

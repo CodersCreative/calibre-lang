@@ -748,6 +748,8 @@ impl VM {
         seen: &mut FxHashSet<String>,
         seen_regs: &mut FxHashSet<usize>,
     ) {
+        self.call_drop_trait_method(value);
+
         match value {
             RuntimeValue::Ref(name) => {
                 if !seen.insert(name.clone()) {
@@ -780,7 +782,11 @@ impl VM {
                     self.drop_runtime_value_inner_ref(item, seen, seen_regs);
                 }
             }
-            RuntimeValue::Aggregate(_, data) => {
+            RuntimeValue::Aggregate(type_name, data) => {
+                if let Some(name) = type_name {
+                    self.call_drop_trait_for_type(name, value);
+                }
+
                 for (_, value) in data.as_ref().0.0.iter() {
                     self.drop_runtime_value_inner_ref(value, seen, seen_regs);
                 }
@@ -802,7 +808,8 @@ impl VM {
             RuntimeValue::Result(Err(x)) => {
                 self.drop_runtime_value_inner_ref(x.as_ref(), seen, seen_regs);
             }
-            RuntimeValue::Enum(_, _, payload) => {
+            RuntimeValue::Enum(type_name, _, payload) => {
+                self.call_drop_trait_for_type(type_name, value);
                 if let Some(val) = payload {
                     self.drop_runtime_value_inner_ref(val.as_ref(), seen, seen_regs);
                 }
@@ -816,6 +823,34 @@ impl VM {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn call_drop_trait_method(&mut self, value: &RuntimeValue) {
+        let type_name = match value {
+            RuntimeValue::Aggregate(type_name, _) => type_name.as_deref(),
+            RuntimeValue::Enum(type_name, _, _) => Some(type_name.as_str()),
+            _ => None,
+        };
+
+        if let Some(type_name) = type_name {
+            self.call_drop_trait_for_type(type_name, value);
+        }
+    }
+
+    fn call_drop_trait_for_type(&mut self, type_name: &str, value: &RuntimeValue) {
+        let drop_method_name = format!("{}::drop", type_name);
+
+        if let Some(_drop_func) = self.registry.functions.get(&drop_method_name) {
+            let _ = self.call_runtime_callable_at(
+                RuntimeValue::Function {
+                    name: Arc::new(drop_method_name.clone()),
+                    captures: Arc::new(Vec::new()),
+                },
+                vec![value.clone()],
+                0,
+                0,
+            );
         }
     }
 }

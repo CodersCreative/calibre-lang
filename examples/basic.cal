@@ -1,5 +1,6 @@
 import std::console;
 
+@default
 type Stack := struct { values : list:<int> };
 
 type Stack2 := struct (Stack);

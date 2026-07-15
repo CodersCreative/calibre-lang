@@ -2,7 +2,7 @@ pub mod binary;
 pub mod comparison;
 pub mod formatter;
 use crate::{
-    Span,
+    COUNTER, Span,
     ast::{comparison::BooleanOperator, formatter::Formatter},
 };
 use binary::BinaryOperator;
@@ -231,6 +231,50 @@ impl ParserDataType {
     pub fn new(span: Span, data_type: ParserInnerType) -> Self {
         Self { data_type, span }
     }
+
+    pub fn key(&self) -> ParserInnerType {
+        self.clone().unwrap_all_refs().data_type
+    }
+
+    pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> ParserDataType {
+        let span = self.span;
+        let data_type = match &self.data_type {
+            ParserInnerType::Struct(s) if subst.contains_key(s) => subst
+                .get(s)
+                .map(|dt| dt.data_type.clone())
+                .unwrap_or_else(|| self.data_type.clone()),
+            ParserInnerType::Tuple(xs) => {
+                ParserInnerType::Tuple(xs.iter().map(|x| x.substitute(subst)).collect())
+            }
+            ParserInnerType::List(x) => ParserInnerType::List(Box::new(x.substitute(subst))),
+            ParserInnerType::Ptr(x) => ParserInnerType::Ptr(Box::new(x.substitute(subst))),
+            ParserInnerType::Option(x) => ParserInnerType::Option(Box::new(x.substitute(subst))),
+            ParserInnerType::Result { ok, err } => ParserInnerType::Result {
+                ok: Box::new(ok.substitute(subst)),
+                err: Box::new(err.substitute(subst)),
+            },
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+            } => ParserInnerType::Function {
+                return_type: Box::new(return_type.substitute(subst)),
+                parameters: parameters.iter().map(|p| p.substitute(subst)).collect(),
+            },
+            ParserInnerType::Ref(x, m) => {
+                ParserInnerType::Ref(Box::new(x.substitute(subst)), m.clone())
+            }
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } => ParserInnerType::StructWithGenerics {
+                identifier: identifier.clone(),
+                generic_types: generic_types.iter().map(|g| g.substitute(subst)).collect(),
+            },
+            _ => self.data_type.clone(),
+        };
+
+        ParserDataType { data_type, span }
+    }
 }
 
 impl Deref for ParserDataType {
@@ -292,6 +336,55 @@ impl ParserDataType {
 
     pub fn unwrap_one_result(&self) -> Option<&Self> {
         self.data_type.unwrap_one_result()
+    }
+
+    pub fn default_node(&self) -> Option<Node> {
+        match &self.data_type {
+            ParserInnerType::Int => Some(Node::int(self.span, 0)),
+            ParserInnerType::UInt => Some(Node::new(
+                self.span,
+                NodeType::IntLiteral(String::from("0u")),
+            )),
+            ParserInnerType::Byte => Some(Node::new(
+                self.span,
+                NodeType::IntLiteral(String::from("0b")),
+            )),
+            ParserInnerType::Str => Some(Node::new(
+                self.span,
+                NodeType::StringLiteral(ParserText::new(self.span, "")),
+            )),
+            ParserInnerType::Char => Some(Node::new(self.span, NodeType::CharLiteral('\0'))),
+            ParserInnerType::Float => Some(Node::new(self.span, NodeType::FloatLiteral(0.0))),
+            ParserInnerType::Auto(_) => Some(Node::new(self.span, NodeType::Null)),
+            ParserInnerType::Dynamic => Some(Node::new(self.span, NodeType::Null)),
+            ParserInnerType::Null => Some(Node::new(self.span, NodeType::Null)),
+            ParserInnerType::List(t) => Some(Node::new(
+                self.span,
+                NodeType::ListLiteral((*t.clone()).into(), Vec::new()),
+            )),
+            ParserInnerType::Range => Some(Node::new(
+                self.span,
+                NodeType::RangeDeclaration {
+                    from: Box::new(Node::int(self.span, 0)),
+                    to: Box::new(Node::int(self.span, 0)),
+                    inclusive: true,
+                },
+            )),
+            ParserInnerType::Bool => Some(Node::bool(self.span, false)),
+            ParserInnerType::Tuple(values) => Some(Node::new(
+                self.span,
+                NodeType::TupleLiteral {
+                    values: values.iter().filter_map(|x| x.default_node()).collect(),
+                },
+            )),
+            ParserInnerType::Option(_) => Some(Node::none(self.span)),
+            ParserInnerType::Result { ok, .. } => Some(Node::call(
+                self.span,
+                Node::identifier(self.span, "ok"),
+                vec![CallArg::Value(ok.default_node()?)],
+            )),
+            _ => None,
+        }
     }
 
     pub fn verify(self) -> Self {
@@ -530,6 +623,13 @@ impl PotentialNewType {
         match self {
             Self::DataType(x) => x.is_null(),
             _ => false,
+        }
+    }
+
+    pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> PotentialNewType {
+        match self {
+            PotentialNewType::DataType(dt) => PotentialNewType::DataType(dt.substitute(subst)),
+            _ => self.clone(),
         }
     }
 }
@@ -923,9 +1023,49 @@ impl Display for VarType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefType {
-    Enum(Vec<(PotentialDollarIdentifier, Option<PotentialNewType>)>),
-    Struct(ObjectType<PotentialNewType>),
+    Enum {
+        variants: Vec<(PotentialDollarIdentifier, Option<PotentialNewType>)>,
+        default_variant: Option<usize>,
+        default_value: Option<Box<Node>>,
+    },
+    Struct {
+        fields: ObjectType<(PotentialNewType, Option<Node>)>,
+    },
     NewType(Box<PotentialNewType>),
+}
+
+impl TypeDefType {
+    pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> TypeDefType {
+        match self {
+            TypeDefType::Struct { fields } => TypeDefType::Struct {
+                fields: match fields {
+                    ObjectType::Map(xs) => ObjectType::Map(
+                        xs.iter()
+                            .map(|(k, (v, _default))| (k.clone(), (v.substitute(subst), None)))
+                            .collect(),
+                    ),
+                    ObjectType::Tuple(xs) => ObjectType::Tuple(
+                        xs.iter()
+                            .map(|(v, _default)| (v.substitute(subst), None))
+                            .collect(),
+                    ),
+                },
+            },
+            TypeDefType::Enum {
+                variants,
+                default_variant,
+                default_value,
+            } => TypeDefType::Enum {
+                variants: variants
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.as_ref().map(|p| p.substitute(subst))))
+                    .collect(),
+                default_variant: default_variant.clone(),
+                default_value: default_value.clone(),
+            },
+            TypeDefType::NewType(inner) => TypeDefType::NewType(Box::new(inner.substitute(subst))),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1005,6 +1145,28 @@ impl ParserText {
             span,
         }
     }
+
+    pub fn temp_name(span: Span) -> Self {
+        Self::new(
+            span,
+            format!("{}-{}", span, {
+                let mut counter = COUNTER.write().unwrap();
+                *counter += 1;
+                *counter
+            }),
+        )
+    }
+
+    pub fn temp_name_with_prefix(prefix: impl Display, span: Span) -> Self {
+        Self::new(
+            span,
+            format!("{prefix}-{}-{}", span, {
+                let mut counter = COUNTER.write().unwrap();
+                *counter += 1;
+                *counter
+            }),
+        )
+    }
 }
 
 impl From<String> for ParserText {
@@ -1033,6 +1195,46 @@ impl Node {
 
     pub fn none(span: Span) -> Self {
         Node::identifier(span, "none")
+    }
+
+    pub fn int(span: Span, value: i32) -> Self {
+        Node::new(span, NodeType::IntLiteral(value.to_string()))
+    }
+
+    pub fn new_temp_scope(body: Vec<Node>) -> Self {
+        if body.is_empty() {
+            return Self::new(
+                Span::default(),
+                NodeType::ScopeDeclaration {
+                    body: Some(Vec::new()),
+                    named: None,
+                    is_temp: true,
+                    create_new_scope: None,
+                    define: false,
+                },
+            );
+        }
+        let span = Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span);
+
+        Self::new(
+            span,
+            NodeType::ScopeDeclaration {
+                body: Some(body),
+                named: None,
+                is_temp: true,
+                create_new_scope: Some(true),
+                define: false,
+            },
+        )
+    }
+
+    pub fn ret(node: Node) -> Self {
+        Self::new(
+            node.span,
+            NodeType::Return {
+                value: Some(Box::new(node)),
+            },
+        )
     }
 
     pub fn null(span: Span) -> Self {

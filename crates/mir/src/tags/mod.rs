@@ -1,0 +1,129 @@
+use crate::{ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr};
+use calibre_parser::ast::{Node, NodeType, ParserText};
+use rustc_hash::FxHashMap;
+use std::{
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
+
+pub mod defaults;
+
+pub type TagHandlerFn = Arc<
+    Mutex<
+        dyn Fn(
+                &mut MiddleEnvironment,
+                &u64,
+                Node,
+                ParserText,
+                Vec<Node>,
+            ) -> Result<MiddleNode, MiddleErr>
+            + Send
+            + Sync,
+    >,
+>;
+
+#[derive(Clone)]
+pub struct TagHandler {
+    pub handler: TagHandlerFn,
+}
+
+impl Debug for TagHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TagHandler")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TagInfo {
+    Init(i32),
+    Fin(i32),
+    Default,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Tagging {
+    pub tag_handlers: FxHashMap<String, TagHandler>,
+    pub init_functions: Vec<(i32, String)>,
+    pub fin_functions: Vec<(i32, String)>,
+    pub tag_info: Vec<TagInfo>,
+}
+
+impl MiddleEnvironment {
+    pub fn register_tag_handlers(&mut self) {
+        let init_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             args: Vec<Node>| {
+                let priority =
+                    if let Some(NodeType::IntLiteral(val)) = args.first().map(|x| &x.node_type) {
+                        val.parse::<i32>().unwrap_or(100)
+                    } else {
+                        100
+                    };
+
+                env.tagging.tag_info.push(TagInfo::Init(priority));
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "init".to_string(),
+            TagHandler {
+                handler: init_handler,
+            },
+        );
+
+        let fin_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             args: Vec<Node>| {
+                let priority =
+                    if let Some(NodeType::IntLiteral(val)) = args.first().map(|x| &x.node_type) {
+                        val.parse::<i32>().unwrap_or(100)
+                    } else {
+                        100
+                    };
+
+                env.tagging.tag_info.push(TagInfo::Fin(priority));
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "fin".to_string(),
+            TagHandler {
+                handler: fin_handler,
+            },
+        );
+
+        let default_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             _args: Vec<Node>| {
+                env.tagging.tag_info.push(TagInfo::Default);
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "default".to_string(),
+            TagHandler {
+                handler: default_handler,
+            },
+        );
+    }
+}

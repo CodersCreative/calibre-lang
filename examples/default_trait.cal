@@ -1,0 +1,29 @@
+const SURNAME := "Doe";
+
+type ZimbabweanCities := enum {
+    @default Harare,
+    Bulawayo,
+    Gweru,
+    Masvingo,
+    Mutare,
+    Kadoma
+}
+
+type Country := enum {
+    England : str,
+    @default
+    Zimbabwe : ZimbabweanCities = ZimbabweanCities.Bulawayo, 
+}
+
+@default
+type Person := struct {
+    name: str = "John",
+    surname: str = SURNAME,    
+    age: int = (fn() -> int => return 10)(),
+    country : Country = Country.England : "London",
+}
+
+const main := fn => {
+    let person := Person.default();
+    print("Person: " & person);
+}

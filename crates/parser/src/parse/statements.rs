@@ -65,6 +65,31 @@ pub fn build_statement_parser<'a>(
         expr,
     } = parts;
 
+    let tag_parser = lex(pad.clone(), just('@'))
+        .ignore_then(ident.clone())
+        .then(
+            lex(pad.clone(), just('('))
+                .ignore_then(
+                    expr.clone()
+                        .separated_by(comma.clone())
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                        .or_not()
+                        .map(|x| x.unwrap_or_default()),
+                )
+                .then_ignore(lex(pad.clone(), just(')')))
+                .or_not()
+                .map(|x| x.unwrap_or_default()),
+        )
+        .map_with_span({
+            let ls = line_starts.clone();
+            move |((name, _sp), args), r| {
+                let tag_span = span(ls.as_ref(), r);
+                (ParserText::new(tag_span, name), args, tag_span)
+            }
+        })
+        .boxed();
+
     let import_stmt = lex(pad.clone(), just("import"))
         .ignore_then(choice((
             choice((
@@ -131,8 +156,13 @@ pub fn build_statement_parser<'a>(
             }
         });
 
-    let type_stmt = lex(pad.clone(), just("type"))
-        .ignore_then(ident.clone())
+    let type_stmt = lex(pad_with_newline.clone(), tag_parser.clone())
+        .repeated()
+        .collect::<Vec<_>>()
+        .or_not()
+        .map(|x| x.unwrap_or_default())
+        .then_ignore(lex(pad.clone(), just("type")))
+        .then(ident.clone())
         .then(
             lex(pad.clone(), just(":<"))
                 .ignore_then(
@@ -160,6 +190,11 @@ pub fn build_statement_parser<'a>(
                             .collect::<Vec<_>>()
                             .then_ignore(lex(pad.clone(), just(':')))
                             .then(type_name.clone())
+                            .then(
+                                lex(pad.clone(), just('='))
+                                    .ignore_then(expr.clone())
+                                    .or_not(),
+                            )
                             .separated_by(
                                 choice((comma.clone().ignored(), delim.clone()))
                                     .repeated()
@@ -173,12 +208,14 @@ pub fn build_statement_parser<'a>(
                     .then_ignore(lex(pad.clone(), just('}')))
                     .map(|groups| {
                         let mut fields = Vec::new();
-                        for (names, ty) in groups {
+                        for ((names, ty), default_value) in groups {
                             for (n, _sp) in names {
-                                fields.push((n, ty.clone()));
+                                fields.push((n, (ty.clone(), default_value.clone())));
                             }
                         }
-                        TypeDefType::Struct(ObjectType::Map(fields))
+                        TypeDefType::Struct {
+                            fields: ObjectType::Map(fields),
+                        }
                     })
                     .or(lex(pad.clone(), just('('))
                         .ignore_then(
@@ -196,23 +233,33 @@ pub fn build_statement_parser<'a>(
                                 .map(|x| x.unwrap_or_default()),
                         )
                         .then_ignore(lex(pad.clone(), just(')')))
-                        .map(|types| TypeDefType::Struct(ObjectType::Tuple(types)))),
+                        .map(|types| TypeDefType::Struct {
+                            fields: ObjectType::Tuple(
+                                types.into_iter().map(|t| (t, None)).collect(),
+                            ),
+                        })),
             ),
             lex(pad.clone(), just("enum"))
                 .ignore_then(lex(pad.clone(), just('{')))
                 .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                 .ignore_then(
-                    ident
-                        .clone()
+                    lex(pad_with_newline.clone(), tag_parser.clone())
                         .repeated()
-                        .at_least(1)
                         .collect::<Vec<_>>()
+                        .or_not()
+                        .map(|x| x.unwrap_or_default())
+                        .then(ident.clone().repeated().at_least(1).collect::<Vec<_>>())
                         .then(
                             lex(pad.clone(), just(':'))
                                 .ignore_then(type_name.clone())
                                 .or_not(),
                         )
-                        .map(|(names, t)| {
+                        .then(
+                            lex(pad.clone(), just('='))
+                                .ignore_then(expr.clone())
+                                .or_not(),
+                        )
+                        .map(|(((tags, names), t), default_value)| {
                             names
                                 .into_iter()
                                 .map(|(n, sp)| {
@@ -221,6 +268,8 @@ pub fn build_statement_parser<'a>(
                                             sp, n,
                                         )),
                                         t.clone(),
+                                        default_value.clone(),
+                                        tags.clone(),
                                     )
                                 })
                                 .collect::<Vec<_>>()
@@ -236,7 +285,30 @@ pub fn build_statement_parser<'a>(
                 )
                 .then_ignore(delim.clone().or_not())
                 .then_ignore(lex(pad.clone(), just('}')))
-                .map(|groups| TypeDefType::Enum(groups.into_iter().flatten().collect())),
+                .map(|groups| {
+                    let mut variants = Vec::new();
+                    let mut default_variant = None;
+                    let mut default_value = None;
+
+                    for (idx, group) in groups.iter().enumerate() {
+                        for (name, data_type, default_val, tags) in group {
+                            variants.push((name.clone(), data_type.clone()));
+
+                            for (tag, _args, _span) in tags {
+                                if tag.text == "default" {
+                                    default_variant = Some(idx);
+                                    default_value = default_val.clone().map(Box::new);
+                                }
+                            }
+                        }
+                    }
+
+                    TypeDefType::Enum {
+                        variants,
+                        default_variant,
+                        default_value,
+                    }
+                }),
             type_name.clone().try_map(|typ, sp| match typ {
                 PotentialNewType::DataType(x)
                     if x.data_type == ParserInnerType::Dynamic
@@ -282,7 +354,7 @@ pub fn build_statement_parser<'a>(
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
         )
-        .map(|((((name, sp), generics), object), overloads)| {
+        .map(|((((tags, (name, sp)), generics), object), overloads)| {
             let identifier = if let Some(generics) = generics {
                 PotentialGenericTypeIdentifier::Generic {
                     identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
@@ -301,14 +373,28 @@ pub fn build_statement_parser<'a>(
                     ParserText::new(sp, name),
                 ))
             };
-            Node::new(
+
+            let mut node = Node::new(
                 sp,
                 NodeType::TypeDeclaration {
                     identifier,
                     object,
                     overloads,
                 },
-            )
+            );
+
+            for (tag, args, tag_span) in tags {
+                node = Node::new(
+                    Span::new_from_spans(tag_span, node.span),
+                    NodeType::Tag {
+                        node: Box::new(node),
+                        tag,
+                        arguments: args,
+                    },
+                )
+            }
+
+            node
         });
 
     let trait_member = choice((
@@ -532,31 +618,6 @@ pub fn build_statement_parser<'a>(
                     value: Box::new(value),
                 },
             )
-        })
-        .boxed();
-
-    let tag_parser = lex(pad.clone(), just('@'))
-        .ignore_then(ident.clone())
-        .then(
-            lex(pad.clone(), just('('))
-                .ignore_then(
-                    expr.clone()
-                        .separated_by(comma.clone())
-                        .allow_trailing()
-                        .collect::<Vec<_>>()
-                        .or_not()
-                        .map(|x| x.unwrap_or_default()),
-                )
-                .then_ignore(lex(pad.clone(), just(')')))
-                .or_not()
-                .map(|x| x.unwrap_or_default()),
-        )
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |((name, _sp), args), r| {
-                let tag_span = span(ls.as_ref(), r);
-                (ParserText::new(tag_span, name), args, tag_span)
-            }
         })
         .boxed();
 

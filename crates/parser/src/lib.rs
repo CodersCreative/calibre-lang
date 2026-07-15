@@ -1,15 +1,20 @@
-use std::{fmt::Display, path::PathBuf};
-
 use crate::{
     ast::{Node, NodeType},
     parse::parse_program_with_source,
 };
 use serde::{Deserialize, Serialize};
+use std::{
+    fmt::Display,
+    path::PathBuf,
+    sync::{LazyLock, RwLock, atomic::AtomicU64},
+};
 use thiserror::Error;
 
 pub mod ast;
 pub mod native;
 pub mod parse;
+
+pub static COUNTER: LazyLock<RwLock<u64>> = LazyLock::new(|| RwLock::new(0));
 
 #[inline]
 pub fn qualified_name_tail(name: &str) -> &str {

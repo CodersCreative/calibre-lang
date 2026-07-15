@@ -10,9 +10,7 @@ use calibre_parser::{
 };
 
 use crate::{
-    ast::MiddleNode,
-    environment::{MiddleEnvironment, MiddleTypeDefType},
-    errors::MiddleErr,
+    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, typing::MiddleTypeDefType,
 };
 
 impl MiddleEnvironment {
@@ -569,7 +567,11 @@ impl MiddleEnvironment {
                                 Node::member(self.current_span(), cur.clone(), "next");
                             if name.is_some() || destructure.is_some() {
                                 let bind_name = name.clone().unwrap_or_else(|| {
-                                    self.temp_ident("__match_payload_nested_destructure")
+                                    ParserText::temp_name_with_prefix(
+                                        "match_payload",
+                                        Span::default(),
+                                    )
+                                    .into()
                                 });
                                 body_nodes.push(Self::auto_var_decl(
                                     self.current_span(),
@@ -643,7 +645,7 @@ impl MiddleEnvironment {
     ) -> Option<i64> {
         if let Some(key) = Self::enum_key_from_data_type(data_type)
             && let Some(obj) = self.objects.get(&key)
-            && let MiddleTypeDefType::Enum(variants) = &obj.object_type
+            && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
             && let Some(index) = variants.iter().position(|x| x.0.text == variant_name)
         {
             return Some(index as i64);
@@ -805,7 +807,7 @@ impl MiddleEnvironment {
         body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
     ) -> Result<MiddleNode, MiddleErr> {
         let (resolved_data_type, decl, value) = if let Some(value) = value {
-            let tmp_name = self.temp_name_at("__match_tmp", span);
+            let tmp_name = ParserText::temp_name_with_prefix("__match_tmp", span);
             let resolved = self.resolve_type_from_node(scope, &value);
             (
                 resolved.clone(),
@@ -852,7 +854,7 @@ impl MiddleEnvironment {
                 };
                 if let Some(x) = self.objects.get(&enum_key) {
                     match &x.object_type {
-                        MiddleTypeDefType::Enum(x) => Some(x.clone()),
+                        MiddleTypeDefType::Enum { variants, .. } => Some(variants.clone()),
                         _ => None,
                     }
                 } else {
@@ -1261,9 +1263,10 @@ impl MiddleEnvironment {
                                                                 || destructure.is_some()
                                                             {
                                                                 let bind_name = name.clone().unwrap_or_else(|| {
-                                                                    self.temp_ident(
-                                                                        "__match_tuple_nested_destructure",
-                                                                    )
+                                                                    ParserText::temp_name_with_prefix(
+                                                                        "match_tuple_nested_destructure",
+                                                                        Span::default()
+                                                                    ).into()
                                                                 });
                                                                 body_nodes.push(Node::new(
                                                                     self.current_span(),
@@ -1361,7 +1364,11 @@ impl MiddleEnvironment {
 
                                     if name.is_some() || destructure.is_some() {
                                         let bind_name = name.clone().unwrap_or_else(|| {
-                                            self.temp_ident("__match_tuple_destructure")
+                                            ParserText::temp_name_with_prefix(
+                                                "match_tuple_destructure",
+                                                Span::default(),
+                                            )
+                                            .into()
                                         });
                                         body_nodes.push(Node::new(
                                             self.current_span(),
@@ -1779,7 +1786,11 @@ impl MiddleEnvironment {
                                 let bind_name = if let Some(name) = name {
                                     name
                                 } else {
-                                    self.temp_ident("__match_destructure")
+                                    ParserText::temp_name_with_prefix(
+                                        "match_destructure",
+                                        self.current_span(),
+                                    )
+                                    .into()
                                 };
                                 let mut body_nodes = Vec::new();
                                 body_nodes.push(Node::new(
@@ -2047,7 +2058,11 @@ impl MiddleEnvironment {
                             let bind_name = if let Some(name) = name {
                                 name
                             } else {
-                                self.temp_ident("__match_destructure")
+                                ParserText::temp_name_with_prefix(
+                                    "match_destructure",
+                                    self.current_span(),
+                                )
+                                .into()
                             };
                             let mut body_nodes = Vec::new();
                             body_nodes.push(Node::new(

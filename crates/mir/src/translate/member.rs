@@ -9,8 +9,9 @@ use std::str::FromStr;
 
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, MiddleTypeDefType},
+    environment::MiddleEnvironment,
     errors::MiddleErr,
+    typing::MiddleTypeDefType,
 };
 
 impl MiddleEnvironment {
@@ -527,7 +528,7 @@ impl MiddleEnvironment {
         };
 
         let impl_var = |env: &MiddleEnvironment, key: &ParserDataType, m: &str| {
-            let key = env.impl_key(key);
+            let key = key.key();
             env.impls
                 .get(&key)
                 .and_then(|imp| imp.variables.get(m))
@@ -756,7 +757,7 @@ impl MiddleEnvironment {
             let base_is_value = base_has_value_binding;
             if let Some(Some(object)) = resolved_ident.as_ref().map(|x| self.objects.get(&x.text)) {
                 match (&object.object_type, &path[1].0.node_type) {
-                    (MiddleTypeDefType::Enum(variants), NodeType::Identifier(y))
+                    (MiddleTypeDefType::Enum { variants, .. }, NodeType::Identifier(y))
                         if path.len() == 2 =>
                     {
                         let variant_name = y.to_string();
