@@ -18,7 +18,7 @@ impl File {
 	const is_null_handle := fn (handle : ptr:<byte>) -> bool => return (try handle as int => 0) = 0;
 
 	const open := fn (path : str, mode : str) -> str!File => {
-		let handle := c_fopen(path, mode);
+		let handle : ptr:<byte> = c_fopen(path, mode);
 		if File.is_null_handle(handle) => return err("failed to open file: " & path & " (mode=" & mode & ")");
 		return ok(File { handle });
 	};
@@ -44,8 +44,8 @@ impl File {
 	const write := fn (self : &File, content : dyn) -> str!null => {
 		if File.is_null_handle(self.handle) => return err("write on null file handle");
 		let txt := "" & content;
-		let len := c_strlen(txt);
-		let written := c_fwrite(txt, 1, len, self.handle);
+		let len : int = c_strlen(txt);
+		let written : int = c_fwrite(txt, 1, len, self.handle);
 		if written != len => return err("short write");
 		return ok(null);
 	};
@@ -55,9 +55,9 @@ impl File {
 	const read_line := fn (self : &File, max : int = 4096) -> str!str => {
 		if File.is_null_handle(self.handle) => return err("read_line on null file handle");
 		let size := if max <= 0 => emit 1 else => emit max + 1;
-		let buf := c_malloc(size);
+		let buf : ptr:<byte> = c_malloc(size);
 		if (try buf as int => 0) = 0 => return err("malloc failed while reading file");
-		let line := c_fgets(buf, size, self.handle);
+		let line : str = c_fgets(buf, size, self.handle);
 		c_free(buf);
 		if len(line) = 0 => return err("eof") else => return ok(line);
 	};
@@ -65,7 +65,7 @@ impl File {
 	const read_lines := fn (self : &File, max : int = 4096) -> str!list:<str> => {
 		let mut out := list:<str>[];
 		
-		for  => {
+		for => 
 			match self.read_line(max) {
 				.Ok : line => out <<= line,
 				.Err : e => {
@@ -74,7 +74,6 @@ impl File {
 					return err(e);
 				}
 			};
-		};
 		
 		return ok(out);
 	};
@@ -82,7 +81,7 @@ impl File {
 	const read_all := fn (self : &File, max : int = 4096) -> str!str => {
 		let mut out := "";
 		
-		for  => {
+		for => 
 			match self.read_line(max) {
 				.Ok : line => out &= line,
 				.Err : e => {
@@ -91,7 +90,6 @@ impl File {
 					return err(e);
 				}
 			};
-		};
 		
 		return ok(out);
 	};

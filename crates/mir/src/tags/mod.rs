@@ -40,6 +40,7 @@ pub enum TagInfo {
     Default,
     Panics,
     Todo(Option<String>),
+    Deprecated(Option<String>),
     Skip,
 }
 
@@ -173,6 +174,33 @@ impl MiddleEnvironment {
             "todo".to_string(),
             TagHandler {
                 handler: todo_handler,
+            },
+        );
+
+        let deprecated_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             args: Vec<Node>| {
+                env.tagging
+                    .tag_info
+                    .push(TagInfo::Todo(args.first().and_then(
+                        |x| match &x.node_type {
+                            NodeType::StringLiteral(x) => Some(x.text.clone()),
+                            _ => None,
+                        },
+                    )));
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "deprecated".to_string(),
+            TagHandler {
+                handler: deprecated_handler,
             },
         );
 
