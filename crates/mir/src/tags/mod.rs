@@ -33,11 +33,14 @@ impl Debug for TagHandler {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TagInfo {
     Init(i32),
     Fin(i32),
     Default,
+    Panics,
+    Todo(Option<String>),
+    Skip,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -123,6 +126,73 @@ impl MiddleEnvironment {
             "default".to_string(),
             TagHandler {
                 handler: default_handler,
+            },
+        );
+
+        let panics_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             _args: Vec<Node>| {
+                env.tagging.tag_info.push(TagInfo::Panics);
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "panics".to_string(),
+            TagHandler {
+                handler: panics_handler,
+            },
+        );
+
+        let todo_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             args: Vec<Node>| {
+                env.tagging
+                    .tag_info
+                    .push(TagInfo::Todo(args.first().and_then(
+                        |x| match &x.node_type {
+                            NodeType::StringLiteral(x) => Some(x.text.clone()),
+                            _ => None,
+                        },
+                    )));
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "todo".to_string(),
+            TagHandler {
+                handler: todo_handler,
+            },
+        );
+
+        let skip_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             _args: Vec<Node>| {
+                env.tagging.tag_info.push(TagInfo::Skip);
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "skip".to_string(),
+            TagHandler {
+                handler: skip_handler,
             },
         );
     }

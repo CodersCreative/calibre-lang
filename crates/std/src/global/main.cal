@@ -1,4 +1,20 @@
-const print := fn (msg : dyn) => console_output(1, "" & msg & "\n");
+type Package := struct {
+	name : str,
+	version : str,
+	description : str,
+	license : str,
+	repository : str,
+	homepage : str,
+	src : str,
+	root : str,
+}
+
+const print := fn (msg : list:<dyn>) => {
+	let mut txt := "";
+	for m in msg => txt &= m;
+	
+	console_output(1, txt & "\n")
+};
 
 const range := fn (start end : mut int, step : int = 1, inclusive : bool = false) -> list:<int> => {
 	if start != INT_MIN && end = INT_MIN => {
@@ -19,8 +35,6 @@ const range := fn (start end : mut int, step : int = 1, inclusive : bool = false
 	
 	lst;
 };
-
-const raw_len := len;
 
 const fmt := fn (splits : list:<str>, inputs : list:<str>) -> str => {
 	let mut txt : str = "";

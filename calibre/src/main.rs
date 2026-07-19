@@ -100,7 +100,17 @@ async fn run_source(
                 calibre_diagnostics::emit_parser_errors(path, &contents, &errors);
                 return Err("parse failed".into());
             }
-            Err(CalibreError::Middle { error, .. }) => {
+            Err(CalibreError::Middle {
+                error,
+                ast_artifacts,
+                ..
+            }) => {
+                if verbosity.is_level(&Verbosity::AST)
+                    && let Some(ast) = ast_artifacts
+                {
+                    println!("{}", ast);
+                }
+
                 emit_middle_error(path, &contents, &error);
                 return Err("compile failed".into());
             }

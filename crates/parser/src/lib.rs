@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display,
     path::PathBuf,
-    sync::{LazyLock, RwLock, atomic::AtomicU64},
+    sync::{LazyLock, RwLock},
 };
 use thiserror::Error;
 

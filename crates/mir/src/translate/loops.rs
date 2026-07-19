@@ -1300,7 +1300,7 @@ impl MiddleEnvironment {
                                         } else {
                                             Node::call(
                                                 self.current_span(),
-                                                Node::identifier(self.current_span(), "raw_len"),
+                                                Node::identifier(self.current_span(), "len"),
                                                 vec![CallArg::Value(iter_node.clone())],
                                             )
                                         }),

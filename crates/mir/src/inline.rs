@@ -25,13 +25,12 @@ fn collect_inlineable(node: &MiddleNode, map: &mut FxHashMap<String, InlineFn>, 
             if let MiddleNodeType::FunctionDeclaration {
                 parameters, body, ..
             } = &value.node_type
+                && let Some(expr) = extract_single_return_expr(body)
             {
-                if let Some(expr) = extract_single_return_expr(body) {
-                    let name = identifier.text.clone();
-                    if !contains_self_call(&expr, &name) && count_nodes(&expr) <= max_nodes {
-                        let params = parameters.iter().map(|(p, _, _)| p.text.clone()).collect();
-                        map.insert(name, InlineFn { params, body: expr });
-                    }
+                let name = identifier.text.clone();
+                if !contains_self_call(&expr, &name) && count_nodes(&expr) <= max_nodes {
+                    let params = parameters.iter().map(|(p, _, _)| p.text.clone()).collect();
+                    map.insert(name, InlineFn { params, body: expr });
                 }
             }
         }
@@ -68,9 +67,9 @@ fn contains_self_call(node: &MiddleNode, name: &str) -> bool {
         MiddleNodeType::ScopeDeclaration { body, .. } => {
             body.iter().any(|n| contains_self_call(n, name))
         }
-        MiddleNodeType::Return { value } => value
-            .as_ref()
-            .map_or(false, |v| contains_self_call(v, name)),
+        MiddleNodeType::Return { value } => {
+            value.as_ref().is_some_and(|v| contains_self_call(v, name))
+        }
         MiddleNodeType::VariableDeclaration { value, .. } => contains_self_call(value, name),
         MiddleNodeType::AssignmentExpression { identifier, value } => {
             contains_self_call(identifier, name) || contains_self_call(value, name)
@@ -93,16 +92,14 @@ fn contains_self_call(node: &MiddleNode, name: &str) -> bool {
             contains_self_call(from, name) || contains_self_call(to, name)
         }
         MiddleNodeType::LoopDeclaration { state, body, .. } => {
-            state
-                .as_ref()
-                .map_or(false, |s| contains_self_call(s, name))
+            state.as_ref().is_some_and(|s| contains_self_call(s, name))
                 || contains_self_call(body, name)
         }
         MiddleNodeType::MemberExpression { path } => {
             path.iter().any(|(n, _)| contains_self_call(n, name))
         }
         MiddleNodeType::EnumExpression { data, .. } => {
-            data.as_ref().map_or(false, |d| contains_self_call(d, name))
+            data.as_ref().is_some_and(|d| contains_self_call(d, name))
         }
         _ => false,
     }
@@ -191,18 +188,17 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
             for a in args.iter_mut() {
                 inline_in_node(a, map);
             }
-            if let MiddleNodeType::Identifier(id) = &caller.node_type {
-                if let Some(inline_fn) = map.get(&id.text) {
-                    if inline_fn.params.len() == args.len() {
-                        let mut replacements: FxHashMap<String, MiddleNode> = FxHashMap::default();
-                        for (param, arg) in inline_fn.params.iter().zip(args.iter()) {
-                            replacements.insert(param.clone(), arg.clone());
-                        }
-                        let mut inlined = inline_fn.body.clone();
-                        substitute_idents(&mut inlined, &replacements);
-                        *node = inlined;
-                    }
+            if let MiddleNodeType::Identifier(id) = &caller.node_type
+                && let Some(inline_fn) = map.get(&id.text)
+                && inline_fn.params.len() == args.len()
+            {
+                let mut replacements: FxHashMap<String, MiddleNode> = FxHashMap::default();
+                for (param, arg) in inline_fn.params.iter().zip(args.iter()) {
+                    replacements.insert(param.clone(), arg.clone());
                 }
+                let mut inlined = inline_fn.body.clone();
+                substitute_idents(&mut inlined, &replacements);
+                *node = inlined;
             }
         }
         MiddleNodeType::Return { value } => {

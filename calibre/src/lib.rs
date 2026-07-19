@@ -72,6 +72,7 @@ pub enum CalibreError {
     #[error("compile failed : {error}")]
     Middle {
         path: PathBuf,
+        ast_artifacts: Option<Node>,
         contents: String,
         error: MiddleErr,
     },
@@ -292,6 +293,7 @@ impl CalibreEngine {
         if !mir_errors.is_empty() {
             return Err(CalibreError::Middle {
                 path,
+                ast_artifacts: Some(ast),
                 contents: full_source,
                 error: MiddleErr::Multiple(mir_errors),
             });

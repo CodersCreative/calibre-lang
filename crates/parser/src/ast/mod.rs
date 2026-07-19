@@ -844,6 +844,12 @@ impl Display for PotentialGenericTypeIdentifier {
 }
 
 impl PotentialGenericTypeIdentifier {
+    pub fn new(span: Span, text: impl ToString) -> Self {
+        return Self::Identifier(ParserText::new(span, text).into());
+    }
+}
+
+impl PotentialGenericTypeIdentifier {
     pub fn get_ident(&self) -> &PotentialDollarIdentifier {
         match self {
             Self::Identifier(x) => x,

@@ -179,7 +179,7 @@ pub fn build_statement_parser<'a>(
         )
         .then_ignore(lex(pad.clone(), just(":=")))
         .then(choice((
-            lex(pad.clone(), just("struct")).ignore_then(
+            lex(pad_with_newline.clone(), just("struct")).ignore_then(
                 lex(pad.clone(), just('{'))
                     .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                     .ignore_then(
@@ -239,7 +239,7 @@ pub fn build_statement_parser<'a>(
                             ),
                         })),
             ),
-            lex(pad.clone(), just("enum"))
+            lex(pad_with_newline.clone(), just("enum"))
                 .ignore_then(lex(pad.clone(), just('{')))
                 .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                 .ignore_then(
@@ -323,7 +323,7 @@ pub fn build_statement_parser<'a>(
             }),
         )))
         .then(
-            lex(pad.clone(), just("@overload"))
+            lex(pad_with_newline.clone(), just("@overload"))
                 .ignore_then(lex(pad.clone(), just('{')))
                 .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                 .ignore_then(
@@ -641,7 +641,7 @@ pub fn build_statement_parser<'a>(
         )))
         .then_ignore(delim.clone().repeated())
         .then(
-            expr.clone().then(
+            lex(pad_with_newline.clone(), expr.clone()).then(
                 comma
                     .clone()
                     .ignore_then(expr.clone())
@@ -1011,17 +1011,35 @@ pub fn build_statement_parser<'a>(
         )
         .boxed();
 
-    let test_stmt = lex(pad.clone(), just("test"))
-        .ignore_then(ident.clone())
+    let test_stmt = lex(pad_with_newline.clone(), tag_parser.clone())
+        .repeated()
+        .collect::<Vec<_>>()
+        .or_not()
+        .map(|x| x.unwrap_or_default())
+        .then_ignore(lex(pad.clone(), just("test")))
+        .then(ident.clone())
         .then(arrow_body_expr.clone())
-        .map(|((name, sp), body)| {
-            Node::new(
+        .map(|((tags, (name, sp)), body)| {
+            let mut node = Node::new(
                 Span::new_from_spans(sp, body.span),
                 NodeType::TestDeclaration {
                     identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
                     body: Box::new(body),
                 },
-            )
+            );
+
+            for (tag, args, tag_span) in tags {
+                node = Node::new(
+                    Span::new_from_spans(tag_span, node.span),
+                    NodeType::Tag {
+                        node: Box::new(node),
+                        tag,
+                        arguments: args,
+                    },
+                )
+            }
+
+            node
         })
         .boxed();
 

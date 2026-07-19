@@ -1115,7 +1115,7 @@ pub fn build_tail_expression_parser<'a>(
             )))
             .then(scope_block.clone())
             .then(
-                lex(pad.clone(), just("else"))
+                lex(pad_with_newline.clone(), just("else"))
                     .ignore_then(if_e.clone().or(scope_block.clone()))
                     .or_not(),
             )

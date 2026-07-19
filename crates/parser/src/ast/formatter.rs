@@ -1851,111 +1851,6 @@ impl Formatter {
         }
     }
 
-    fn fmt_new_type_obj(&mut self, obj: &ObjectType<PotentialNewType>) -> String {
-        match obj {
-            ObjectType::Map(x) => {
-                let mut fields = Vec::new();
-                for (key, value) in x {
-                    let leading = self.get_potential_comment(value.span());
-                    let trailing = self.get_trailing_comment(value.span());
-                    fields.push((
-                        key.clone(),
-                        self.fmt_potential_new_type(value),
-                        leading,
-                        trailing,
-                    ));
-                }
-                let has_comments = fields
-                    .iter()
-                    .any(|(_, _, leading, trailing)| leading.is_some() || trailing.is_some());
-
-                let mut single = String::from("{ ");
-                if has_comments {
-                    for (key, type_txt, _, _) in &fields {
-                        single.push_str(&format!("{} : {}, ", key, type_txt));
-                    }
-                } else {
-                    let mut groups: Vec<(Vec<String>, String)> = Vec::new();
-                    for (key, type_txt, _, _) in &fields {
-                        if let Some((keys, last_type)) = groups.last_mut()
-                            && *last_type == *type_txt
-                        {
-                            keys.push(key.clone());
-                        } else {
-                            groups.push((vec![key.clone()], type_txt.clone()));
-                        }
-                    }
-                    for (keys, type_txt) in &groups {
-                        if keys.len() > 1 {
-                            single.push_str(&format!("{} : {}, ", keys.join(" "), type_txt));
-                        } else if let Some(key) = keys.first() {
-                            single.push_str(&format!("{} : {}, ", key, type_txt));
-                        }
-                    }
-                }
-                single = single.trim_end().trim_end_matches(",").to_string();
-                single.push_str(" }");
-
-                let mut multi = String::from("{\n");
-                if has_comments {
-                    for (key, type_txt, leading, trailing) in &fields {
-                        let mut line =
-                            handle_comment!(leading.clone(), format!("{} : {}", key, type_txt));
-                        if let Some(trailing) = trailing {
-                            line.push(' ');
-                            line.push_str(trailing);
-                        }
-                        multi.push_str(&format!("{},\n", line));
-                    }
-                } else {
-                    let mut groups: Vec<(Vec<String>, String)> = Vec::new();
-                    for (key, type_txt, _, _) in &fields {
-                        if let Some((keys, last_type)) = groups.last_mut()
-                            && *last_type == *type_txt
-                        {
-                            keys.push(key.clone());
-                        } else {
-                            groups.push((vec![key.clone()], type_txt.clone()));
-                        }
-                    }
-                    for (keys, type_txt) in &groups {
-                        let line = if keys.len() > 1 {
-                            format!("{} : {}", keys.join(" "), type_txt)
-                        } else if let Some(key) = keys.first() {
-                            format!("{} : {}", key, type_txt)
-                        } else {
-                            String::new()
-                        };
-                        multi.push_str(&format!("{},\n", line));
-                    }
-                }
-                multi = self.fmt_txt_with_tab(multi.trim_end().trim_end_matches(","), 1, true);
-                multi.push_str("\n}");
-                if has_comments {
-                    multi
-                } else {
-                    self.wrap_if_wide(single, &multi)
-                }
-            }
-
-            ObjectType::Tuple(x) => {
-                let mut txt = String::from("(");
-
-                for value in x {
-                    txt.push_str(&handle_comment!(
-                        self.get_potential_comment(value.span()),
-                        format!("{}, ", self.fmt_potential_new_type(value))
-                    ));
-                }
-
-                txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
-
-                txt.push(')');
-                txt
-            }
-        }
-    }
-
     fn fmt_type_def_type(&mut self, type_def: &TypeDefType) -> String {
         let mut txt = String::new();
         match type_def {
@@ -1964,7 +1859,7 @@ impl Formatter {
                 default_variant,
                 default_value,
             } => {
-                let default_variant = default_variant.clone().unwrap_or(variants.len() + 1);
+                let default_variant = (*default_variant).unwrap_or(variants.len() + 1);
                 let mut entries = Vec::new();
                 for arm in variants {
                     let leading = self.get_potential_comment(arm.0.span());
@@ -2078,7 +1973,7 @@ impl Formatter {
                         if let Some(data_txt) = data_txt {
                             multi.push_str(&format!("{} : {}", names.join(" "), data_txt));
                         } else {
-                            multi.push_str(&format!("{}", names.join(", ")));
+                            multi.push_str(&names.join(", "));
                         }
 
                         if let Some(x) = default_value
@@ -2119,15 +2014,10 @@ impl Formatter {
                         .any(|(_, leading, trailing)| leading.is_some() || trailing.is_some());
 
                     let mut single = String::from("{ ");
-                    if has_comments {
-                        for (field_txt, _, _) in &fields_vec {
-                            single.push_str(&format!("{}, ", field_txt));
-                        }
-                    } else {
-                        for (field_txt, _, _) in &fields_vec {
-                            single.push_str(&format!("{}, ", field_txt));
-                        }
+                    for (field_txt, _, _) in &fields_vec {
+                        single.push_str(&format!("{}, ", field_txt));
                     }
+
                     single = single.trim_end().trim_end_matches(",").to_string();
                     single.push_str(" }");
 
@@ -2177,8 +2067,8 @@ impl Formatter {
                 format!(
                     "type {} := {}{}",
                     identifier,
-                    self.fmt_type_def_type(&type_def),
-                    self.fmt_overloads(&overloads)
+                    self.fmt_type_def_type(type_def),
+                    self.fmt_overloads(overloads)
                 )
             }
         }

@@ -5,6 +5,7 @@ use crate::{
         get_disamubiguous_name,
     },
     errors::MiddleErr,
+    tags::TagInfo,
     typing::MiddleTypeDefType,
 };
 use calibre_parser::{
@@ -1753,7 +1754,15 @@ impl MiddleEnvironment {
                         var_type: VarType::Constant,
                         identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                             node.span,
-                            format!("__test__{}", identifier),
+                            format!(
+                                "__test__{}{}",
+                                identifier,
+                                if self.tagging.tag_info.contains(&TagInfo::Panics) {
+                                    ":panics"
+                                } else {
+                                    ""
+                                }
+                            ),
                         )),
                         data_type: PotentialNewType::DataType(ParserDataType::new(
                             node.span,
@@ -2910,8 +2919,9 @@ impl MiddleEnvironment {
 
                 let mut loop_body = Vec::new();
                 let mut has_default = false;
-                let mut arm_index = 0;
+
                 let done_ident_node = || Node::identifier(node.span, done_ident.clone());
+
                 let break_node = || {
                     Node::new(
                         node.span,
@@ -2921,6 +2931,7 @@ impl MiddleEnvironment {
                         },
                     )
                 };
+
                 let set_done_node = || {
                     Node::new(
                         node.span,
@@ -2930,6 +2941,7 @@ impl MiddleEnvironment {
                         },
                     )
                 };
+
                 let fold_guards = |initial: Node, guards: &[Node]| -> Node {
                     let mut cond = initial;
                     for guard in guards {
@@ -3162,7 +3174,6 @@ impl MiddleEnvironment {
                                 ));
                             }
                         }
-                        arm_index += 1;
                     }
                 }
 

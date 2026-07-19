@@ -1,0 +1,11 @@
+const main :=  fn => {};
+
+const divide := fn(a b : int) -> int => {
+  if b = 0 => panic("b must not be 0");
+  return a / b;
+}
+
+@should_panic test something => {
+  assert(7 = 9, "Should fail");
+  assert("hello" = "hi", "Should fail")
+}

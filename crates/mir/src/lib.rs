@@ -9,18 +9,16 @@ use calibre_parser::{
     },
 };
 use environment::*;
-use std::sync::{LazyLock, RwLock};
 
 pub mod ast;
 pub mod environment;
 pub mod errors;
 pub mod inline;
+pub mod multipass;
 pub mod native;
 pub mod tags;
 pub mod translate;
 pub mod typing;
-
-static COUNTER: LazyLock<RwLock<u64>> = LazyLock::new(|| RwLock::new(0));
 
 impl MiddleEnvironment {
     fn emit_destructure_statements(

@@ -1,5 +1,6 @@
 use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::errors::MiddleErr;
+use crate::multipass::prepare_ast;
 use crate::tags::Tagging;
 use crate::typing::MiddleTypeDefType;
 use calibre_parser::COUNTER;
@@ -273,11 +274,6 @@ impl MiddleEnvironment {
         } else {
             file
         }
-    }
-
-    #[inline]
-    fn package_type_name() -> &'static str {
-        "Package"
     }
 
     fn package_metadata_for_scope(&self, scope: &MiddleScope) -> PackageMetadata {
@@ -1028,8 +1024,11 @@ impl MiddleEnvironment {
         package_metadata: Option<PackageMetadata>,
         no_std: bool,
     ) -> (Self, u64, MiddleNode) {
-        let mut env = Self::default();
-        env.package_metadata = package_metadata;
+        let mut env = Self {
+            package_metadata,
+            ..Default::default()
+        };
+
         let scope = if no_std {
             env.new_root_scope_no_std(None, path, None)
         } else {
@@ -1054,7 +1053,16 @@ impl MiddleEnvironment {
             }
         };
 
-        let node = env.inject_scope_magic_bindings(scope, node);
+        let node = env.inject_scope_magic_bindings(scope, prepare_ast(node));
+
+        if let NodeType::ScopeDeclaration {
+            body: Some(ref body),
+            ..
+        } = node.node_type
+        {
+            env.predeclare_forward_refs(&scope, body);
+        }
+
         let inner = env.evaluate(&scope, node.clone());
         let mut middle = wrap(&env, scope, node.span, inner);
 
@@ -1690,117 +1698,13 @@ impl MiddleEnvironment {
             },
         ));
 
-        let package_meta = self.package_metadata_for_scope(&scope_ref);
-
-        let meta = package_meta;
-        let package_type = Node::new(
-            sp,
-            NodeType::TypeDeclaration {
-                identifier: PotentialGenericTypeIdentifier::Identifier(
-                    PotentialDollarIdentifier::Identifier(ParserText::new(
-                        sp,
-                        Self::package_type_name().to_string(),
-                    )),
-                ),
-                object: TypeDefType::Struct {
-                    fields: ObjectType::Map(vec![
-                        (
-                            "name".to_string(),
-                            (
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                                None,
-                            ),
-                        ),
-                        (
-                            "version".to_string(),
-                            (
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                                None,
-                            ),
-                        ),
-                        (
-                            "description".to_string(),
-                            (
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                                None,
-                            ),
-                        ),
-                        (
-                            "license".to_string(),
-                            (
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                                None,
-                            ),
-                        ),
-                        (
-                            "repository".to_string(),
-                            (
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                                None,
-                            ),
-                        ),
-                        (
-                            "homepage".to_string(),
-                            (
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                                None,
-                            ),
-                        ),
-                        (
-                            "src".to_string(),
-                            (
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                                None,
-                            ),
-                        ),
-                        (
-                            "root".to_string(),
-                            (
-                                PotentialNewType::DataType(ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::Str,
-                                )),
-                                None,
-                            ),
-                        ),
-                    ]),
-                },
-                overloads: Vec::new(),
-            },
-        );
-        prefix.push(package_type);
+        let meta = self.package_metadata_for_scope(&scope_ref);
 
         let value = |v: String| Node::new(sp, NodeType::StringLiteral(ParserText::new(sp, v)));
         let package_value = Node::new(
             sp,
             NodeType::StructLiteral {
-                identifier: PotentialGenericTypeIdentifier::Identifier(
-                    PotentialDollarIdentifier::Identifier(ParserText::new(
-                        sp,
-                        Self::package_type_name().to_string(),
-                    )),
-                ),
+                identifier: PotentialGenericTypeIdentifier::new(sp, "Package"),
                 value: ObjectType::Map(vec![
                     ("name".to_string(), value(meta.name)),
                     ("version".to_string(), value(meta.version)),
@@ -1830,7 +1734,7 @@ impl MiddleEnvironment {
                 )),
                 data_type: PotentialNewType::DataType(ParserDataType::new(
                     sp,
-                    ParserInnerType::Struct(Self::package_type_name().to_string()),
+                    ParserInnerType::Struct(String::from("Package")),
                 )),
                 value: Box::new(package_value),
             },
@@ -1859,16 +1763,19 @@ impl MiddleEnvironment {
         mut parent: Option<u64>,
     ) -> Result<u64, MiddleErr> {
         let mut skip = 0;
-        if let None = parent {
+
+        if parent.is_none() {
             parent = self
                 .scopes
                 .iter()
                 .find(|(_, v)| v.namespace == path[0])
                 .map(|x| x.0)
                 .cloned();
+
             if parent.is_none() {
                 return Err(self.err_at_current(MiddleErr::Scope(path[0].clone())));
             }
+
             skip = 1;
         }
 
@@ -1885,13 +1792,15 @@ impl MiddleEnvironment {
         let parent_scope = self.scopes.get(&parent).ok_or_else(|| {
             self.err_at_current(MiddleErr::Internal(format!("missing scope {parent}")))
         })?;
+
         for (_, child) in parent_scope.children.iter() {
-            if let Some(x) = self.scopes.get(&child) {
-                if x.namespace == namespace {
-                    return Ok(x.id);
-                }
+            if let Some(x) = self.scopes.get(child)
+                && x.namespace == namespace
+            {
+                return Ok(x.id);
             }
         }
+
         Err(self.err_at_current(MiddleErr::Scope(namespace.to_string())))
     }
 
@@ -2183,7 +2092,17 @@ impl MiddleEnvironment {
                     },
                     _ => program,
                 };
-                let program = self.inject_scope_magic_bindings(scope, program);
+                let program =
+                    self.inject_scope_magic_bindings(scope, crate::multipass::prepare_ast(program));
+
+                if let NodeType::ScopeDeclaration {
+                    body: Some(ref body),
+                    ..
+                } = program.node_type
+                {
+                    self.predeclare_forward_refs(&scope, body);
+                }
+
                 let node = self.evaluate(&scope, program);
                 self.loaded_scopes.insert(scope);
                 Some(node)
@@ -2223,7 +2142,15 @@ impl MiddleEnvironment {
             });
         }
 
-        let program = self.inject_scope_magic_bindings(scope, program);
+        let program =
+            self.inject_scope_magic_bindings(scope, crate::multipass::prepare_ast(program));
+        if let NodeType::ScopeDeclaration {
+            body: Some(ref body),
+            ..
+        } = program.node_type
+        {
+            self.predeclare_forward_refs(&scope, body);
+        }
         let node = self.evaluate(&scope, program);
         self.loaded_scopes.insert(scope);
 

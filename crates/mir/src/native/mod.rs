@@ -1,4 +1,7 @@
-use crate::environment::{MiddleEnvironment, MiddleScope, MiddleVariable, get_disamubiguous_name};
+use crate::{
+    environment::{MiddleEnvironment, MiddleScope, MiddleVariable, get_disamubiguous_name},
+    errors::MiddleErr,
+};
 use calibre_parser::{
     Parser,
     ast::{ParserDataType, VarType},
@@ -67,7 +70,7 @@ impl MiddleEnvironment {
             if self.errors.len() > error_count_before {
                 let new_errors: Vec<_> = self.errors.drain(error_count_before..).collect();
                 for err in new_errors {
-                    self.errors.push(crate::errors::MiddleErr::InFile {
+                    self.errors.push(MiddleErr::InFile {
                         path: global_path.clone(),
                         contents: globals.clone(),
                         error: Box::new(err),
@@ -93,7 +96,6 @@ impl MiddleEnvironment {
             "some",
             "trim",
             "repr",
-            "print",
             "len",
             "panic",
             "assert",
@@ -152,7 +154,7 @@ impl MiddleEnvironment {
             if self.errors.len() > error_count_before {
                 let new_errors: Vec<_> = self.errors.drain(error_count_before..).collect();
                 for err in new_errors {
-                    self.errors.push(crate::errors::MiddleErr::InFile {
+                    self.errors.push(MiddleErr::InFile {
                         path: scope_path.clone(),
                         contents: stdlib.clone(),
                         error: Box::new(err),
@@ -301,7 +303,7 @@ impl MiddleEnvironment {
                 parser.set_source_path(Some(scope_path.clone()));
                 let program = parser.produce_ast(&stdlib);
                 if !parser.errors.is_empty() {
-                    self.errors.push(crate::errors::MiddleErr::ParserErrors {
+                    self.errors.push(MiddleErr::ParserErrors {
                         path: scope_path.clone(),
                         contents: stdlib,
                         errors: std::mem::take(&mut parser.errors),
@@ -318,7 +320,7 @@ impl MiddleEnvironment {
                 if self.errors.len() > error_count_before {
                     let new_errors: Vec<_> = self.errors.drain(error_count_before..).collect();
                     for err in new_errors {
-                        self.errors.push(crate::errors::MiddleErr::InFile {
+                        self.errors.push(MiddleErr::InFile {
                             path: scope_path_clone.clone(),
                             contents: stdlib.clone(),
                             error: Box::new(err),
