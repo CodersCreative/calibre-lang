@@ -50,7 +50,10 @@ impl MiddleEnvironment {
             .get(list_idx)
             .map(|p| p.is_list())
             .unwrap_or(false);
-        has_list_param && (parameters.len() < total_args || parameters.len() == total_args + 1)
+        has_list_param
+            && (parameters.len() < total_args
+                || parameters.len() == total_args + 1
+                || parameters.len() == total_args)
     }
 
     #[inline]
@@ -1203,9 +1206,11 @@ impl MiddleEnvironment {
                                     })
                                     .collect();
 
-                            lst.push(
-                                self.evaluate(
-                                    scope,
+                            let list_arg = if args.len() == 1 {
+                                let arg: Node = args.remove(0).into();
+                                if matches!(arg.node_type, NodeType::ListLiteral(_, _)) {
+                                    arg
+                                } else {
                                     Node::new(
                                         self.current_span(),
                                         NodeType::ListLiteral(
@@ -1222,11 +1227,31 @@ impl MiddleEnvironment {
                                                     ))
                                                 }
                                             },
-                                            args.into_iter().map(|x| x.into()).collect(),
+                                            vec![arg],
                                         ),
+                                    )
+                                }
+                            } else {
+                                Node::new(
+                                    self.current_span(),
+                                    NodeType::ListLiteral(
+                                        match parameters
+                                            .last()
+                                            .cloned()
+                                            .map(|p| p.unwrap_all_refs().data_type)
+                                        {
+                                            Some(ParserInnerType::List(x)) => (*x).into(),
+                                            _ => PotentialNewType::DataType(ParserDataType::new(
+                                                self.current_span(),
+                                                ParserInnerType::Auto(None),
+                                            )),
+                                        },
+                                        args.into_iter().map(|x| x.into()).collect(),
                                     ),
-                                ),
-                            );
+                                )
+                            };
+
+                            lst.push(self.evaluate(scope, list_arg));
 
                             for _ in 0..reverse_args.len() {
                                 lst.push(self.evaluate(scope, reverse_args.remove(0)));
