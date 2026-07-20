@@ -993,30 +993,20 @@ pub fn build_statement_parser<'a>(
         .boxed();
 
     let test_stmt = lex(pad.clone(), just("test"))
-        .ignore_then(ident.clone())
+        .ignore_then(string_text.clone())
         .then(arrow_body_expr.clone())
-        .map(|((name, sp), body)| {
-            Node::new(
-                Span::new_from_spans(sp, body.span),
-                NodeType::TestDeclaration {
-                    identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
-                    body: Box::new(body),
-                },
-            )
-        })
-        .boxed();
-
-    let bench_stmt = lex(pad.clone(), just("bench"))
-        .ignore_then(ident.clone())
-        .then(arrow_body_expr.clone())
-        .map(|((name, sp), body)| {
-            Node::new(
-                Span::new_from_spans(sp, body.span),
-                NodeType::BenchDeclaration {
-                    identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
-                    body: Box::new(body),
-                },
-            )
+        .map_with_span({
+            let ls = line_starts.clone();
+            move |(name, body), sp| {
+                let sp = span(ls.as_ref(), sp);
+                Node::new(
+                    sp,
+                    NodeType::TestDeclaration {
+                        identifier: ParserText::new(sp, name),
+                        body: Box::new(body),
+                    },
+                )
+            }
         })
         .boxed();
 
@@ -1236,7 +1226,6 @@ pub fn build_statement_parser<'a>(
         select_stmt,
         spawn_stmt,
         test_stmt,
-        bench_stmt,
         let_struct_destruct_stmt,
         let_tuple_destruct_stmt,
         scope_define_stmt,

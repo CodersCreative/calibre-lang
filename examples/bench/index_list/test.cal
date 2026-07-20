@@ -12,4 +12,4 @@ const main := fn => {
 	print(sum_index(n));
 };
 
-bench index_list => main();
+@bench test "index_list" => main();

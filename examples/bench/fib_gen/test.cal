@@ -19,9 +19,9 @@ const main := fn => {
 	for let .Some : v <- it.next() => print(v);
 };
 
-bench fib_gen => main();
+@bench test "fib_gen" => main();
 
-test fib_gen_10 => {
+test "fib_gen_10" => {
 	let mut it := fib_gen(11);
 	let mut out := 0;
 	for let .Some : v <- it.next() => out := v;

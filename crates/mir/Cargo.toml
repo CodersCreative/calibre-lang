@@ -17,4 +17,4 @@ calibre-parser = { workspace = true }
 calibre-std = { workspace = true }
 rustc-hash = { workspace = true }
 fastrand = { workspace = true }
-
+serde = { workspace = true }

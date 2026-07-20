@@ -61,20 +61,20 @@ impl Describe for Pair {
 };
 
 // Test showcase: run with "calibre test".
-test showcase_core_math => {
+test "showcase_core_math" => {
 	assert(factorial(6) = 720, "factorial(6) should equal 720");
 	assert(int.gcd(84, 18) = 6, "int.gcd(84, 18) should equal 6");
 	assert(float.sqrt(9f) = 3f, "float.sqrt(9f) should equal 3f");
 };
 
-test showcase_conversions => {
+test "showcase_conversions" => {
 	let ok := parse_and_add("50", 7);
 	assert(ok.is_ok(), "parse_and_add should return ok on valid int text");
 	assert(("oops" as? int).is_none(), "as? should return none on conversion failure");
 };
 
 // Benchmark showcase: run with "calibre bench".
-bench showcase_generator_throughput => {
+@bench test "showcase_generator_throughput" => {
 	let gen := even_numbers(0, 20000);
 	let mut count := 0;
 	let mut sum := 0;

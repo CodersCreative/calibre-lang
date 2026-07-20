@@ -17,6 +17,7 @@ pub mod inline;
 pub mod multipass;
 pub mod native;
 pub mod tags;
+pub mod testing;
 pub mod translate;
 pub mod typing;
 

@@ -3,6 +3,7 @@ use calibre_mir::{
     ast::MiddleNode,
     environment::{MiddleEnvironment, PackageMetadata},
     errors::MiddleErr,
+    testing::Testing,
 };
 use calibre_parser::{
     Parser, ParserError,
@@ -101,6 +102,7 @@ pub struct CalibreArtifacts {
     pub entry_name: String,
     pub init_functions: Vec<(i32, String)>,
     pub fin_functions: Vec<(i32, String)>,
+    pub testing: Testing,
 }
 
 pub struct RunResult {
@@ -147,6 +149,7 @@ struct CachedProgramBlob {
     registry: VMRegistry,
     init_functions: Option<Vec<(i32, String)>>,
     fin_functions: Option<Vec<(i32, String)>>,
+    testing: Option<Testing>,
 }
 
 impl Default for CalibreEngine {
@@ -303,6 +306,7 @@ impl CalibreEngine {
 
         let init_functions = std::mem::take(&mut env.tagging.init_functions);
         let fin_functions = std::mem::take(&mut env.tagging.fin_functions);
+        let testing = std::mem::take(&mut env.testing);
 
         Ok(CalibreArtifacts {
             ast: Some(ast),
@@ -315,6 +319,7 @@ impl CalibreEngine {
                 .unwrap_or_else(|| self.entry_name.clone()),
             init_functions,
             fin_functions,
+            testing,
         })
     }
 
@@ -336,6 +341,7 @@ impl CalibreEngine {
                 entry_name: cached.entry_name,
                 init_functions: cached.init_functions.unwrap_or_default(),
                 fin_functions: cached.fin_functions.unwrap_or_default(),
+                testing: cached.testing.unwrap_or_default(),
             });
         }
 
@@ -576,6 +582,7 @@ impl CalibreEngine {
             registry: artifacts.registry.clone(),
             init_functions: Some(artifacts.init_functions.clone()),
             fin_functions: Some(artifacts.fin_functions.clone()),
+            testing: Some(artifacts.testing.clone()),
         };
 
         bincode::serialize_into(&mut writer, &cache)

@@ -1,12 +1,14 @@
-const main :=  fn => {};
+const main := fn => {};
 
 const divide := fn(a b : int) -> int => {
-  if b = 0 => panic("b must not be 0");
+  if b = 0 =>
+    panic("b must not be 0");
   return a / b;
-}
+};
 
 @panics
-test something => {
+test "something" => {
   assert(7 = 9, "Should fail");
-  assert("hello" = "hi", "Should fail")
+  assert("hello" = "hi", "Should fail");
+  divide(10, 0);
 }

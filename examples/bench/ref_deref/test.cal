@@ -15,4 +15,4 @@ const main := fn => {
 	print(sum_refs(n));
 };
 
-bench ref_deref => main();
+@bench test "ref_deref" => main();

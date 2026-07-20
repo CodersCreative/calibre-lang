@@ -5,6 +5,7 @@ use calibre_mir::{
     ast::{MiddleNode, MiddleNodeType},
     environment::{MiddleEnvironment, PackageMetadata},
     errors::MiddleErr,
+    testing::{Test, TestOrBench},
 };
 use calibre_vm::{VM, config::VMConfig, conversion::VMRegistry, value::RuntimeValue};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -304,39 +305,8 @@ fn collect_project_sources(project: Option<&ProjectContext>, cwd: &Path, out: &m
     }
 }
 
-fn has_suite_decl(contents: &str, prefix: &str) -> bool {
-    match prefix {
-        "__test__" => contents.contains("test "),
-        "__bench__" => contents.contains("bench "),
-        _ => true,
-    }
-}
-
-fn suite_idents_in_source(contents: &str, prefix: &str) -> Vec<String> {
-    let key = match prefix {
-        "__test__" => "test",
-        "__bench__" => "bench",
-        _ => return Vec::new(),
-    };
-    contents
-        .lines()
-        .filter_map(|line| {
-            let mut parts = line.split_whitespace();
-            let head = parts.next()?;
-            if head != key {
-                return None;
-            }
-            let ident = parts.next()?;
-            let ident = ident
-                .trim_matches(|c: char| c == ';' || c == '{' || c == '(')
-                .to_string();
-            if ident.is_empty() { None } else { Some(ident) }
-        })
-        .collect()
-}
-
 async fn run_suite(
-    prefix: &str,
+    suite: CompileMode,
     wanted: &[String],
     no_cache: bool,
     path: Option<String>,
@@ -345,10 +315,9 @@ async fn run_suite(
 ) -> Result<
     Vec<(
         String,
-        String,
-        String,
         calibre_vm::conversion::VMRegistry,
         Vec<String>,
+        Test,
     )>,
     Box<dyn Error>,
 > {
@@ -366,17 +335,12 @@ async fn run_suite(
             if target.is_dir() {
                 collect_cal_sources(&target, &mut files);
             } else if target.is_file() {
-                if let Some(parent) = target.parent() {
-                    collect_cal_sources(parent, &mut files);
-                } else {
-                    files.push(target);
-                }
+                files.push(target);
             }
         }
     } else if let Some(target) = resolve_run_target(path, example)? {
         files.push(target);
     }
-
     files.sort();
     files.dedup();
 
@@ -384,25 +348,11 @@ async fn run_suite(
 
     for path in files {
         let contents = fs::read_to_string(&path).await?;
-        if !has_suite_decl(&contents, prefix) {
-            continue;
-        }
-
-        if !wanted.is_empty() {
-            let idents = suite_idents_in_source(&contents, prefix);
-            if !idents.iter().any(|ident| wanted.contains(ident)) {
-                continue;
-            }
-        }
 
         let mut engine = CalibreEngine::new()
             .with_vm_config(vm_config.clone())
             .with_source_path(path.clone())
-            .with_compile_mode(match prefix {
-                "__test__" => CompileMode::Test,
-                "__bench__" => CompileMode::Bench,
-                _ => CompileMode::Run,
-            })
+            .with_compile_mode(suite)
             .with_cache_enabled(!no_cache);
 
         if let Some(metadata) = package_metadata.clone() {
@@ -426,31 +376,26 @@ async fn run_suite(
             Err(other) => return Err(other.to_string().into()),
         };
 
-        let mut targets = artifacts
-            .registry
-            .functions
-            .keys()
-            .filter_map(|full| {
-                let short = full.split_once(':').map(|(_, s)| s).unwrap_or(full);
-                let idx = short.find(prefix)?;
-                let ident = short[idx + prefix.len()..].to_string();
-                Some((ident, full.clone()))
-            })
-            .collect::<Vec<_>>();
-        targets.sort_by(|a, b| a.0.cmp(&b.0));
-        targets.dedup_by(|a, b| a.0 == b.0);
+        for test in &artifacts.testing.tests {
+            let kind_matches = match suite {
+                CompileMode::Test => test.kind == TestOrBench::Test,
+                CompileMode::Bench => test.kind == TestOrBench::Bench,
+                _ => false,
+            };
 
-        if !wanted.is_empty() {
-            targets.retain(|(ident, _)| wanted.contains(ident));
-        }
+            if !kind_matches {
+                continue;
+            }
 
-        for (ident, key) in targets {
+            if !wanted.is_empty() && !wanted.contains(&test.name) {
+                continue;
+            }
+
             out.push((
-                ident,
-                key,
                 path.to_string_lossy().to_string(),
                 artifacts.registry.clone(),
                 artifacts.mappings.clone(),
+                test.clone(),
             ));
         }
     }
@@ -525,7 +470,16 @@ async fn run_tests(
     let cwd = std::env::current_dir()?;
     let project = load_project_from(&cwd).map_err(|e| format!("config error: {e}"))?;
     let vm_config = vm_config_from_project(project.as_ref());
-    let cases = run_suite("__test__", wanted, no_cache, path, example, recursive).await?;
+    let cases = run_suite(
+        CompileMode::Test,
+        wanted,
+        no_cache,
+        path,
+        example,
+        recursive,
+    )
+    .await?;
+
     if cases.is_empty() {
         println!("running 0 tests");
         println!("\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out");
@@ -535,17 +489,50 @@ async fn run_tests(
     println!("running {} tests", cases.len());
     let mut failures = Vec::new();
     let mut passed = 0usize;
-    for (ident, key, path, registry, mappings) in cases {
-        let label = format!("{ident} ({path})");
-        let run_result = run_named_function_once(&vm_config, registry, mappings, &key, !verbose);
+    let mut ignored = 0usize;
+    for (path, registry, mappings, test) in cases {
+        let label = format!("{:?} ({})", test.name, path);
+
+        if test.skip || test.todo {
+            ignored += 1;
+            let reason = test.skip_reason.as_ref().or(test.todo_reason.as_ref());
+            if let Some(reason) = reason {
+                println!("test {label} ... ignored: {reason}");
+            } else {
+                println!("test {label} ... ignored");
+            }
+            continue;
+        }
+
+        let run_result = run_named_function_once(
+            &vm_config,
+            registry,
+            mappings,
+            &test.function_name,
+            !verbose,
+        );
         match run_result {
             Ok((_dur, _captured)) => {
-                passed += 1;
-                println!("test {label} ... ok");
+                if test.panics {
+                    println!("test {label} ... FAILED (expected panic but succeeded)");
+                    failures.push((
+                        label,
+                        "expected panic but succeeded".to_string(),
+                        String::new(),
+                    ));
+                } else {
+                    passed += 1;
+                    println!("test {label} ... ok");
+                }
             }
             Err((msg, captured)) => {
-                println!("test {label} ... FAILED");
-                failures.push((label, msg, captured));
+                if test.panics {
+                    passed += 1;
+                    println!("test {label} ... ok (panicked as expected)");
+                } else {
+                    println!("test {label} ... FAILED");
+                    failures.push((label, msg, captured));
+                }
             }
         }
     }
@@ -565,10 +552,10 @@ async fn run_tests(
     }
 
     let failed = failures.len();
-    let filtered_out = wanted.len().saturating_sub(passed + failed);
+    let filtered_out = wanted.len().saturating_sub(passed + failed + ignored);
     let result = if failed == 0 { "ok" } else { "FAILED" };
     println!(
-        "\ntest result: {result}. {passed} passed; {failed} failed; 0 ignored; 0 measured; {filtered_out} filtered out"
+        "\ntest result: {result}. {passed} passed; {failed} failed; {ignored} ignored; 0 measured; {filtered_out} filtered out"
     );
     if failed == 0 {
         Ok(())
@@ -592,7 +579,15 @@ async fn run_benches(
     let cwd = std::env::current_dir()?;
     let project = load_project_from(&cwd).map_err(|e| format!("config error: {e}"))?;
     let vm_config = vm_config_from_project(project.as_ref());
-    let benches = run_suite("__bench__", wanted, no_cache, path, example, recursive).await?;
+    let benches = run_suite(
+        CompileMode::Bench,
+        wanted,
+        no_cache,
+        path,
+        example,
+        recursive,
+    )
+    .await?;
     if benches.is_empty() {
         println!("No benchmarks found");
         return Ok(());
@@ -612,15 +607,32 @@ async fn run_benches(
         std::time::Duration,
         std::time::Duration,
     )> = Vec::new();
+
     let mut failed = Vec::new();
-    for (ident, key, _path, registry, mappings) in benches {
+    let mut ignored = Vec::new();
+
+    for (path, registry, mappings, test) in benches {
+        if test.skip || test.todo {
+            let reason = test.skip_reason.as_ref().or(test.todo_reason.as_ref());
+            if let Some(reason) = reason {
+                println!(
+                    "benchmark {:?} ({})... ignored: {}",
+                    test.name, path, reason
+                );
+            } else {
+                println!("benchmark {:?} ({})... ignored", test.name, path);
+            }
+            ignored.push(test.name);
+            continue;
+        }
+
         let mut warmup_failed = None;
         for _ in 0..warmup {
             let warmup_result = run_named_function_once(
                 &vm_config,
                 registry.clone(),
                 mappings.clone(),
-                &key,
+                &test.function_name,
                 !verbose,
             );
             if let Err((msg, _captured)) = warmup_result {
@@ -629,7 +641,7 @@ async fn run_benches(
             }
         }
         if let Some(msg) = warmup_failed {
-            failed.push((ident, format!("warmup failed: {msg}")));
+            failed.push((test.name, format!("warmup failed: {msg}")));
             continue;
         }
         let mut samples = Vec::new();
@@ -642,7 +654,7 @@ async fn run_benches(
                 &vm_config,
                 registry.clone(),
                 mappings.clone(),
-                &key,
+                &test.function_name,
                 !verbose,
             );
             match run_result {
@@ -661,7 +673,7 @@ async fn run_benches(
         }
 
         if let Some(msg) = error {
-            failed.push((ident, msg));
+            failed.push((test.name, msg));
             continue;
         }
 
@@ -672,7 +684,7 @@ async fn run_benches(
         let p50 = samples[iters / 2];
         let mean = total.as_secs_f64() * 1000.0 / iters as f64;
         let stddev = stddev_ms(&samples, mean);
-        rows.push((ident, iters, mean, stddev, p50, min, max));
+        rows.push((test.name, iters, mean, stddev, p50, min, max));
     }
 
     if !rows.is_empty() {
@@ -916,16 +928,15 @@ fn resolve_run_target(
         return Err("cannot use both a path and --example".into());
     }
 
-    let mut cwd = if let Some(path) = path {
+    if let Some(path) = path {
         if path.ends_with(".cal") {
             return Ok(Some(PathBuf::from(path)));
         } else {
-            std::fs::canonicalize(path)?
+            return Ok(Some(std::fs::canonicalize(path)?));
         }
-    } else {
-        std::env::current_dir()?
-    };
+    }
 
+    let cwd = std::env::current_dir()?;
     let project = load_project_from(&cwd).map_err(|e| format!("config error: {e}"))?;
 
     if let Some(example) = example {
@@ -939,21 +950,22 @@ fn resolve_run_target(
     }
 
     if let Some(project) = project {
-        cwd = project.root.join(project.config.package.src);
-    }
+        let cwd = project.root.join(project.config.package.src);
+        let path1 = cwd.join("main.cal");
+        let path2 = cwd.join("src/main.cal");
 
-    let path1 = cwd.join("main.cal");
-    let path2 = cwd.join("src/main.cal");
-
-    match (
-        cwd.exists() && cwd.is_file(),
-        path1.exists() && path1.is_file(),
-        path2.exists() && path2.is_file(),
-    ) {
-        (true, _, _) => Ok(Some(cwd)),
-        (_, true, _) => Ok(Some(path1)),
-        (_, _, true) => Ok(Some(path2)),
-        _ => Ok(None),
+        match (
+            cwd.exists() && cwd.is_file(),
+            path1.exists() && path1.is_file(),
+            path2.exists() && path2.is_file(),
+        ) {
+            (true, _, _) => Ok(Some(cwd)),
+            (_, true, _) => Ok(Some(path1)),
+            (_, _, true) => Ok(Some(path2)),
+            _ => Ok(None),
+        }
+    } else {
+        Ok(None)
     }
 }
 
@@ -1132,7 +1144,6 @@ enum Commands {
     },
     Clear,
     Test {
-        #[arg(long)]
         path: Option<String>,
         #[arg(short, long)]
         example: Option<String>,
@@ -1140,10 +1151,10 @@ enum Commands {
         recursive: bool,
         #[arg(short, long, default_value_t = false)]
         verbose: bool,
-        identifiers: Vec<String>,
+        #[arg(long)]
+        tests: Vec<String>,
     },
     Bench {
-        #[arg(long)]
         path: Option<String>,
         #[arg(short, long)]
         example: Option<String>,
@@ -1159,7 +1170,8 @@ enum Commands {
         max_runs: usize,
         #[arg(long, default_value_t = 300)]
         time_limit_ms: u64,
-        identifiers: Vec<String>,
+        #[arg(long)]
+        benchmarks: Vec<String>,
     },
     #[command(external_subcommand)]
     External(Vec<String>),
@@ -1338,18 +1350,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     example,
                     recursive,
                     verbose,
-                    identifiers,
-                }) => {
-                    run_tests(
-                        &identifiers,
-                        args.no_cache,
-                        path,
-                        example,
-                        recursive,
-                        verbose,
-                    )
-                    .await
-                }
+                    tests,
+                }) => run_tests(&tests, args.no_cache, path, example, recursive, verbose).await,
                 Some(Commands::Bench {
                     path,
                     example,
@@ -1359,10 +1361,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                     min_runs,
                     max_runs,
                     time_limit_ms,
-                    identifiers,
+                    benchmarks,
                 }) => {
                     run_benches(
-                        &identifiers,
+                        &benchmarks,
                         args.no_cache,
                         path,
                         example,

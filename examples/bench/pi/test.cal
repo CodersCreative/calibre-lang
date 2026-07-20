@@ -19,4 +19,4 @@ const main := fn => {
 	print(result);
 };
 
-bench pi => main();
+@bench test "pi" => main();

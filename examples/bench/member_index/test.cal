@@ -17,4 +17,4 @@ const main := fn => {
 	print(sum_pairs(n));
 };
 
-bench member_index => main();
+@bench test "member_index" => main();

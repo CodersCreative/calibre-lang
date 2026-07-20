@@ -6,6 +6,6 @@ const main := fn => {
 	print(result);
 };
 
-bench fib => main();
+@bench test "fib" => main();
 
-test fib_10 => assert(fib(10) = 55, "Fib 10 did not equal 55 as expected");
+test "fib_10" => assert(fib(10) = 55, "Fib 10 did not equal 55 as expected");

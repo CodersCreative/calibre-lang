@@ -708,10 +708,7 @@ impl Formatter {
             NodeType::NegExpression { value } => format!("-{}", self.format(&*value)),
             NodeType::NotExpression { value } => format!("!{}", self.format(&*value)),
             NodeType::TestDeclaration { identifier, body } => {
-                format!("test {} {}", identifier, self.format(body))
-            }
-            NodeType::BenchDeclaration { identifier, body } => {
-                format!("bench {} {}", identifier, self.format(body))
+                format!("test {:?} {}", identifier.text, self.format(body))
             }
             NodeType::Try { value, catch } => {
                 let mut txt = format!("try {}", self.format(&*value));

@@ -39,6 +39,7 @@ pub enum TagInfo {
     Fin(i32),
     Default,
     Panics,
+    Bench,
     Todo(Option<String>),
     Deprecated(Option<String>),
     Skip(Option<String>),
@@ -185,7 +186,7 @@ impl MiddleEnvironment {
              args: Vec<Node>| {
                 env.tagging
                     .tag_info
-                    .push(TagInfo::Todo(args.first().and_then(
+                    .push(TagInfo::Deprecated(args.first().and_then(
                         |x| match &x.node_type {
                             NodeType::StringLiteral(x) => Some(x.text.clone()),
                             _ => None,
@@ -228,6 +229,26 @@ impl MiddleEnvironment {
             "skip".to_string(),
             TagHandler {
                 handler: skip_handler,
+            },
+        );
+
+        let bench_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             _args: Vec<Node>| {
+                env.tagging.tag_info.push(TagInfo::Bench);
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "bench".to_string(),
+            TagHandler {
+                handler: bench_handler,
             },
         );
     }

@@ -5,7 +5,6 @@ use crate::{
         get_disamubiguous_name,
     },
     errors::MiddleErr,
-    tags::TagInfo,
     typing::MiddleTypeDefType,
 };
 use calibre_parser::{
@@ -1746,78 +1745,51 @@ impl MiddleEnvironment {
             } => self.evaluate_loop_statement(
                 scope, node.span, *loop_type, *body, until, label, else_body,
             ),
-            NodeType::TestDeclaration { identifier, body } => self.evaluate_inner(
-                scope,
-                Node::new(
-                    node.span,
-                    NodeType::VariableDeclaration {
-                        var_type: VarType::Constant,
-                        identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
-                            node.span,
-                            format!(
-                                "__test__{}{}",
-                                identifier,
-                                if self.tagging.tag_info.contains(&TagInfo::Panics) {
-                                    ":panics"
-                                } else {
-                                    ""
-                                }
-                            ),
-                        )),
-                        data_type: PotentialNewType::DataType(ParserDataType::new(
-                            node.span,
-                            ParserInnerType::Auto(None),
-                        )),
-                        value: Box::new(Node::new(
-                            node.span,
-                            NodeType::FunctionDeclaration {
-                                header: FunctionHeader {
-                                    generics: GenericTypes::default(),
-                                    parameters: Vec::new(),
-                                    return_type: PotentialNewType::DataType(ParserDataType::new(
-                                        node.span,
-                                        ParserInnerType::Auto(None),
-                                    )),
-                                    param_destructures: Vec::new(),
+            NodeType::TestDeclaration { identifier, body } => {
+                let func_identifier = format!(
+                    "test::{}",
+                    get_disamubiguous_name(
+                        scope,
+                        Some(identifier.clone()),
+                        Some(&VarType::Constant)
+                    )
+                );
+                let file_path = self.scopes.get(scope).map(|s| s.path.clone());
+
+                self.register_test(identifier.text, func_identifier.clone(), *scope, file_path);
+
+                self.evaluate_inner(
+                    scope,
+                    Node::new(
+                        node.span,
+                        NodeType::VariableDeclaration {
+                            var_type: VarType::Constant,
+                            identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
+                                node.span,
+                                func_identifier,
+                            )),
+                            data_type: PotentialNewType::DataType(ParserDataType::new(
+                                node.span,
+                                ParserInnerType::Auto(None),
+                            )),
+                            value: Box::new(Node::new(
+                                node.span,
+                                NodeType::FunctionDeclaration {
+                                    header: FunctionHeader {
+                                        generics: GenericTypes::default(),
+                                        parameters: Vec::new(),
+                                        return_type: PotentialNewType::DataType(
+                                            ParserDataType::new(node.span, ParserInnerType::Null),
+                                        ),
+                                        param_destructures: Vec::new(),
+                                    },
+                                    body,
                                 },
-                                body,
-                            },
-                        )),
-                    },
-                ),
-            ),
-            NodeType::BenchDeclaration { identifier, body } => self.evaluate_inner(
-                scope,
-                Node::new(
-                    node.span,
-                    NodeType::VariableDeclaration {
-                        var_type: VarType::Constant,
-                        identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
-                            node.span,
-                            format!("__bench__{}", identifier),
-                        )),
-                        data_type: PotentialNewType::DataType(ParserDataType::new(
-                            node.span,
-                            ParserInnerType::Auto(None),
-                        )),
-                        value: Box::new(Node::new(
-                            node.span,
-                            NodeType::FunctionDeclaration {
-                                header: FunctionHeader {
-                                    generics: GenericTypes::default(),
-                                    parameters: Vec::new(),
-                                    return_type: PotentialNewType::DataType(ParserDataType::new(
-                                        node.span,
-                                        ParserInnerType::Auto(None),
-                                    )),
-                                    param_destructures: Vec::new(),
-                                },
-                                body,
-                            },
-                        )),
-                    },
-                ),
-            ),
+                            )),
+                        },
+                    ),
+                )
+            }
             NodeType::IterExpression {
                 data_type,
                 map,

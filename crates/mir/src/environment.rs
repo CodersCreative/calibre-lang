@@ -2,6 +2,7 @@ use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::errors::MiddleErr;
 use crate::multipass::prepare_ast;
 use crate::tags::Tagging;
+use crate::testing::Testing;
 use crate::typing::MiddleTypeDefType;
 use calibre_parser::COUNTER;
 use calibre_parser::ast::EmitType;
@@ -133,6 +134,7 @@ pub struct MiddleEnvironment {
     pub loop_stack: Vec<LoopContext>,
     pub package_metadata: Option<PackageMetadata>,
     pub tagging: Tagging,
+    pub testing: Testing,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -2335,7 +2337,6 @@ impl MiddleEnvironment {
                 else_body: None, ..
             }
             | NodeType::TestDeclaration { .. }
-            | NodeType::BenchDeclaration { .. }
             | NodeType::ScopeDeclaration { define: true, .. }
             | NodeType::ScopeAlias { .. }
             | NodeType::DataType { .. }

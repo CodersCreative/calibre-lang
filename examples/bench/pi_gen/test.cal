@@ -29,9 +29,9 @@ const main := fn => {
 	print(result);
 };
 
-bench pi_gen => main();
+@bench test "pi_gen" => main();
 
-test pi_gen_small => {
+test "pi_gen_small" => {
 	let pi := calculate_pi_gen(1000);
 	assert(pi > 3f && pi < 3.2, "pi approximation out of expected range");
 };

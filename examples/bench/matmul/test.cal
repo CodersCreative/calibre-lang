@@ -28,4 +28,4 @@ const main := fn => {
 	print("Success");
 };
 
-bench matmul => main();
+@bench test "matmul" => main();

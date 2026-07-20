@@ -1771,11 +1771,7 @@ pub enum NodeType {
         else_body: Option<Box<Node>>,
     },
     TestDeclaration {
-        identifier: PotentialDollarIdentifier,
-        body: Box<Node>,
-    },
-    BenchDeclaration {
-        identifier: PotentialDollarIdentifier,
+        identifier: ParserText,
         body: Box<Node>,
     },
     Try {

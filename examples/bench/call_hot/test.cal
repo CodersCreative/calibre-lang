@@ -11,4 +11,4 @@ const main := fn => {
 	print(loop_call(n));
 };
 
-bench call_hot => main();
+@bench test "call_hot" => main();

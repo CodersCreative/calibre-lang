@@ -52,4 +52,4 @@ const main := fn => {
 	print("all done, total=" & total.get() & "\n");
 };
 
-bench async => main();
+@bench test "async" => main();
