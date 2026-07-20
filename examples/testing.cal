@@ -5,7 +5,8 @@ const divide := fn(a b : int) -> int => {
   return a / b;
 }
 
-@should_panic test something => {
+@panics
+test something => {
   assert(7 = 9, "Should fail");
   assert("hello" = "hi", "Should fail")
 }

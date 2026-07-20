@@ -156,13 +156,8 @@ pub fn build_statement_parser<'a>(
             }
         });
 
-    let type_stmt = lex(pad_with_newline.clone(), tag_parser.clone())
-        .repeated()
-        .collect::<Vec<_>>()
-        .or_not()
-        .map(|x| x.unwrap_or_default())
-        .then_ignore(lex(pad.clone(), just("type")))
-        .then(ident.clone())
+    let type_stmt = lex(pad.clone(), just("type"))
+        .ignore_then(ident.clone())
         .then(
             lex(pad.clone(), just(":<"))
                 .ignore_then(
@@ -354,7 +349,7 @@ pub fn build_statement_parser<'a>(
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
         )
-        .map(|((((tags, (name, sp)), generics), object), overloads)| {
+        .map(|((((name, sp), generics), object), overloads)| {
             let identifier = if let Some(generics) = generics {
                 PotentialGenericTypeIdentifier::Generic {
                     identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
@@ -374,27 +369,14 @@ pub fn build_statement_parser<'a>(
                 ))
             };
 
-            let mut node = Node::new(
+            Node::new(
                 sp,
                 NodeType::TypeDeclaration {
                     identifier,
                     object,
                     overloads,
                 },
-            );
-
-            for (tag, args, tag_span) in tags {
-                node = Node::new(
-                    Span::new_from_spans(tag_span, node.span),
-                    NodeType::Tag {
-                        node: Box::new(node),
-                        tag,
-                        arguments: args,
-                    },
-                )
-            }
-
-            node
+            )
         });
 
     let trait_member = choice((
@@ -621,150 +603,149 @@ pub fn build_statement_parser<'a>(
         })
         .boxed();
 
-    let let_stmt = lex(pad_with_newline.clone(), tag_parser.clone())
-        .repeated()
-        .collect::<Vec<_>>()
-        .then(choice((
-            lex(pad.clone(), just("let")).to(VarType::Immutable),
-            lex(pad.clone(), just("const")).to(VarType::Constant),
-        )))
-        .then(lex(pad.clone(), just("mut")).or_not())
-        .then(named_ident.clone())
-        .then(
-            lex(pad.clone(), just(':'))
-                .ignore_then(type_name.clone())
-                .or_not(),
-        )
-        .then(choice((
-            lex(pad.clone(), just(":=")).to(DeclAssignOp::Infer),
-            lex(pad.clone(), just("=")).to(DeclAssignOp::Typed),
-        )))
-        .then_ignore(delim.clone().repeated())
-        .then(
-            lex(pad_with_newline.clone(), expr.clone()).then(
-                comma
-                    .clone()
-                    .ignore_then(expr.clone())
-                    .repeated()
-                    .collect::<Vec<_>>(),
-            ),
-        )
-        .try_map(
-            |((((((tags, vt), m), name), ty), op), (first_value, rest_values)), sp| {
-                let vt: VarType = vt;
-                let m: Option<&str> = m;
-                let ty: Option<PotentialNewType> = ty;
-                let op: DeclAssignOp = op;
+    let let_stmt = choice((
+        lex(pad.clone(), just("let")).to(VarType::Immutable),
+        lex(pad.clone(), just("const")).to(VarType::Constant),
+    ))
+    .then(lex(pad.clone(), just("mut")).or_not())
+    .then(named_ident.clone())
+    .then(
+        lex(pad.clone(), just(':'))
+            .ignore_then(type_name.clone())
+            .or_not(),
+    )
+    .then(choice((
+        lex(pad.clone(), just(":=")).to(DeclAssignOp::Infer),
+        lex(pad.clone(), just("=")).to(DeclAssignOp::Typed),
+    )))
+    .then_ignore(delim.clone().repeated())
+    .then(
+        lex(pad_with_newline.clone(), expr.clone()).then(
+            comma
+                .clone()
+                .ignore_then(expr.clone())
+                .repeated()
+                .collect::<Vec<_>>(),
+        ),
+    )
+    .try_map(
+        |(((((vt, m), name), ty), op), (first_value, rest_values)), sp| {
+            let vt: VarType = vt;
+            let m: Option<&str> = m;
+            let ty: Option<PotentialNewType> = ty;
+            let op: DeclAssignOp = op;
 
-                match (ty.is_some(), op) {
-                    (true, DeclAssignOp::Infer) => {
-                        return Err(Rich::custom(
-                            sp,
-                            "expected `=` when a variable type is specified",
-                        ));
-                    }
-                    (false, DeclAssignOp::Typed) => {
-                        return Err(Rich::custom(
-                            sp,
-                            "expected `:=` when a variable type is not specified",
-                        ));
-                    }
-                    _ => {}
+            match (ty.is_some(), op) {
+                (true, DeclAssignOp::Infer) => {
+                    return Err(Rich::custom(
+                        sp,
+                        "expected `=` when a variable type is specified",
+                    ));
                 }
-                let var_type = match (vt, m.is_some()) {
-                    (VarType::Immutable, true) => VarType::Mutable,
-                    (VarType::Constant, true) => {
-                        return Err(Rich::custom(
-                            sp,
-                            "constant cannot be mutable; use `let mut` if mutability is required",
-                        ));
-                    }
-                    (x, _) => x,
-                };
-                let value = if rest_values.is_empty() {
-                    first_value
-                } else {
-                    let first_span = first_value.span;
-                    let tuple_span = Span::new_from_spans(
-                        first_span,
-                        rest_values.last().map(|n| n.span).unwrap_or(first_span),
-                    );
-
-                    match first_value.node_type {
-                        NodeType::EnumExpression {
-                            identifier,
-                            value,
-                            data,
-                        } => {
-                            let mut payload_values = if let Some(existing) = data {
-                                match existing.node_type {
-                                    NodeType::TupleLiteral { values } => values,
-                                    other => vec![Node::new(existing.span, other)],
-                                }
-                            } else {
-                                Vec::new()
-                            };
-                            payload_values.extend(rest_values);
-
-                            let payload = if payload_values.len() == 1 {
-                                payload_values.into_iter().next()
-                            } else {
-                                Some(Node::new(
-                                    Span::new_from_spans(
-                                        payload_values
-                                            .first()
-                                            .map(|n| n.span)
-                                            .unwrap_or(tuple_span),
-                                        payload_values.last().map(|n| n.span).unwrap_or(tuple_span),
-                                    ),
-                                    NodeType::TupleLiteral {
-                                        values: payload_values,
-                                    },
-                                ))
-                            };
-
-                            Node::new(
-                                tuple_span,
-                                NodeType::EnumExpression {
-                                    identifier,
-                                    value,
-                                    data: payload.map(Box::new),
-                                },
-                            )
-                        }
-                        other => {
-                            let mut values = vec![Node::new(first_span, other)];
-                            values.extend(rest_values);
-                            Node::new(tuple_span, NodeType::TupleLiteral { values })
-                        }
-                    }
-                };
-
-                let value_span = value.span;
-                let mut node = Node::new(
-                    Span::new_from_spans(*name.span(), value_span),
-                    NodeType::VariableDeclaration {
-                        var_type,
-                        identifier: name,
-                        value: Box::new(value),
-                        data_type: ty.unwrap_or_else(|| auto_type(value_span)),
-                    },
+                (false, DeclAssignOp::Typed) => {
+                    return Err(Rich::custom(
+                        sp,
+                        "expected `:=` when a variable type is not specified",
+                    ));
+                }
+                _ => {}
+            }
+            let var_type = match (vt, m.is_some()) {
+                (VarType::Immutable, true) => VarType::Mutable,
+                (VarType::Constant, true) => {
+                    return Err(Rich::custom(
+                        sp,
+                        "constant cannot be mutable; use `let mut` if mutability is required",
+                    ));
+                }
+                (x, _) => x,
+            };
+            let value = if rest_values.is_empty() {
+                first_value
+            } else {
+                let first_span = first_value.span;
+                let tuple_span = Span::new_from_spans(
+                    first_span,
+                    rest_values.last().map(|n| n.span).unwrap_or(first_span),
                 );
 
-                for (tag, args, tag_span) in tags {
-                    node = Node::new(
-                        Span::new_from_spans(tag_span, node.span),
-                        NodeType::Tag {
-                            node: Box::new(node),
-                            tag,
-                            arguments: args,
-                        },
-                    )
-                }
+                match first_value.node_type {
+                    NodeType::EnumExpression {
+                        identifier,
+                        value,
+                        data,
+                    } => {
+                        let mut payload_values = if let Some(existing) = data {
+                            match existing.node_type {
+                                NodeType::TupleLiteral { values } => values,
+                                other => vec![Node::new(existing.span, other)],
+                            }
+                        } else {
+                            Vec::new()
+                        };
+                        payload_values.extend(rest_values);
 
-                Ok(node)
-            },
-        );
+                        let payload = if payload_values.len() == 1 {
+                            payload_values.into_iter().next()
+                        } else {
+                            Some(Node::new(
+                                Span::new_from_spans(
+                                    payload_values.first().map(|n| n.span).unwrap_or(tuple_span),
+                                    payload_values.last().map(|n| n.span).unwrap_or(tuple_span),
+                                ),
+                                NodeType::TupleLiteral {
+                                    values: payload_values,
+                                },
+                            ))
+                        };
+
+                        Node::new(
+                            tuple_span,
+                            NodeType::EnumExpression {
+                                identifier,
+                                value,
+                                data: payload.map(Box::new),
+                            },
+                        )
+                    }
+                    other => {
+                        let mut values = vec![Node::new(first_span, other)];
+                        values.extend(rest_values);
+                        Node::new(tuple_span, NodeType::TupleLiteral { values })
+                    }
+                }
+            };
+
+            let value_span = value.span;
+            Ok(Node::new(
+                Span::new_from_spans(*name.span(), value_span),
+                NodeType::VariableDeclaration {
+                    var_type,
+                    identifier: name,
+                    value: Box::new(value),
+                    data_type: ty.unwrap_or_else(|| auto_type(value_span)),
+                },
+            ))
+        },
+    );
+
+    let tag_stmt = tag_parser
+        .clone()
+        .then(lex(pad_with_newline.clone(), statement.clone()))
+        .map_with_span({
+            let ls = line_starts.clone();
+            move |((tag, args, _), node), r| {
+                Node::new(
+                    span(ls.as_ref(), r),
+                    NodeType::Tag {
+                        node: Box::new(node),
+                        tag,
+                        arguments: args,
+                    },
+                )
+            }
+        })
+        .boxed();
 
     let grouped_tag_stmt = lex(pad.clone(), just('@'))
         .ignore_then(ident.clone())
@@ -1011,35 +992,17 @@ pub fn build_statement_parser<'a>(
         )
         .boxed();
 
-    let test_stmt = lex(pad_with_newline.clone(), tag_parser.clone())
-        .repeated()
-        .collect::<Vec<_>>()
-        .or_not()
-        .map(|x| x.unwrap_or_default())
-        .then_ignore(lex(pad.clone(), just("test")))
-        .then(ident.clone())
+    let test_stmt = lex(pad.clone(), just("test"))
+        .ignore_then(ident.clone())
         .then(arrow_body_expr.clone())
-        .map(|((tags, (name, sp)), body)| {
-            let mut node = Node::new(
+        .map(|((name, sp), body)| {
+            Node::new(
                 Span::new_from_spans(sp, body.span),
                 NodeType::TestDeclaration {
                     identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
                     body: Box::new(body),
                 },
-            );
-
-            for (tag, args, tag_span) in tags {
-                node = Node::new(
-                    Span::new_from_spans(tag_span, node.span),
-                    NodeType::Tag {
-                        node: Box::new(node),
-                        tag,
-                        arguments: args,
-                    },
-                )
-            }
-
-            node
+            )
         })
         .boxed();
 
@@ -1281,6 +1244,7 @@ pub fn build_statement_parser<'a>(
         scope_call_stmt,
         let_stmt,
         grouped_tag_stmt,
+        tag_stmt,
         return_stmt,
         destruct_assign_stmt,
         expr,

@@ -41,7 +41,7 @@ pub enum TagInfo {
     Panics,
     Todo(Option<String>),
     Deprecated(Option<String>),
-    Skip,
+    Skip(Option<String>),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -209,8 +209,15 @@ impl MiddleEnvironment {
              scope: &u64,
              node: Node,
              _tag: ParserText,
-             _args: Vec<Node>| {
-                env.tagging.tag_info.push(TagInfo::Skip);
+             args: Vec<Node>| {
+                env.tagging
+                    .tag_info
+                    .push(TagInfo::Skip(args.first().and_then(
+                        |x| match &x.node_type {
+                            NodeType::StringLiteral(x) => Some(x.text.clone()),
+                            _ => None,
+                        },
+                    )));
                 let middle = env.evaluate_inner(scope, node)?;
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
