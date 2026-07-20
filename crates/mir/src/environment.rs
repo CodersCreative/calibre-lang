@@ -9,9 +9,9 @@ use calibre_parser::ast::EmitType;
 use calibre_parser::{
     Location, Parser, Span,
     ast::{
-        FunctionHeader, Node, NodeType, ObjectType, Overload, ParserDataType, ParserInnerType,
-        ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
-        TypeDefType, VarType,
+        FunctionHeader, Node, NodeType, Overload, ParserDataType, ParserInnerType, ParserText,
+        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType,
+        VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
@@ -223,103 +223,6 @@ pub fn get_disamubiguous_name(
 }
 
 impl MiddleEnvironment {
-    const SCOPE_MAGIC_KEYS: [&'static str; 3] = ["__name__", "__file__", "__package__"];
-
-    #[inline]
-    pub(crate) fn is_scope_magic_key(key: &str) -> bool {
-        Self::SCOPE_MAGIC_KEYS.contains(&key)
-    }
-
-    #[inline]
-    fn collect_scope_magic_mappings(scope: &MiddleScope) -> Vec<(String, String)> {
-        Self::SCOPE_MAGIC_KEYS
-            .iter()
-            .filter_map(|key| {
-                scope
-                    .mappings
-                    .get(*key)
-                    .cloned()
-                    .map(|value| ((*key).to_string(), value))
-            })
-            .collect()
-    }
-
-    pub(crate) fn preserve_scope_magic_mappings(&self, scope: u64) -> Vec<(String, String)> {
-        self.scopes
-            .get(&scope)
-            .map(Self::collect_scope_magic_mappings)
-            .unwrap_or_default()
-    }
-
-    pub(crate) fn restore_scope_magic_mappings(
-        &mut self,
-        scope: u64,
-        preserved: Vec<(String, String)>,
-    ) {
-        if let Some(scope_ref) = self.scopes.get_mut(&scope) {
-            for (key, value) in preserved {
-                scope_ref.mappings.insert(key, value);
-            }
-        }
-    }
-
-    pub(crate) fn copy_scope_magic_mappings(&mut self, parent: u64, child: u64) {
-        let preserved = self.preserve_scope_magic_mappings(parent);
-        self.restore_scope_magic_mappings(child, preserved);
-    }
-
-    #[inline]
-    fn scope_file_or_fallback(scope: &MiddleScope) -> String {
-        let file = scope.path.to_string_lossy().to_string();
-        if file.is_empty() {
-            String::from("__file__")
-        } else {
-            file
-        }
-    }
-
-    fn package_metadata_for_scope(&self, scope: &MiddleScope) -> PackageMetadata {
-        if scope.namespace == "std" {
-            return PackageMetadata {
-                name: String::from("std"),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                description: String::from("Calibre standard library"),
-                license: String::from("MIT"),
-                repository: String::new(),
-                homepage: String::new(),
-                src: scope.path.to_string_lossy().to_string(),
-                root: scope.path.to_string_lossy().to_string(),
-            };
-        }
-
-        if scope.namespace == "root" {
-            return self
-                .package_metadata
-                .clone()
-                .unwrap_or_else(|| PackageMetadata {
-                    name: String::from("__package__"),
-                    version: String::from("0.0.0"),
-                    description: String::from("default package metadata"),
-                    license: String::new(),
-                    repository: String::new(),
-                    homepage: String::new(),
-                    src: Self::scope_file_or_fallback(scope),
-                    root: String::new(),
-                });
-        }
-
-        PackageMetadata {
-            name: scope.namespace.clone(),
-            version: String::from("0.0.0"),
-            description: String::from("default package metadata"),
-            license: String::new(),
-            repository: String::new(),
-            homepage: String::new(),
-            src: Self::scope_file_or_fallback(scope),
-            root: String::new(),
-        }
-    }
-
     #[inline]
     pub(crate) fn is_callable_parser_type(ty: &ParserDataType) -> bool {
         matches!(
@@ -1055,7 +958,7 @@ impl MiddleEnvironment {
             }
         };
 
-        let node = env.inject_scope_magic_bindings(scope, prepare_ast(node));
+        let node = prepare_ast(node);
 
         if let NodeType::ScopeDeclaration {
             body: Some(ref body),
@@ -1126,21 +1029,6 @@ impl MiddleEnvironment {
     }
 
     pub fn resolve_str(&self, scope: &u64, iden: &str) -> Option<String> {
-        if Self::is_scope_magic_key(iden)
-            && let Some(loc) = &self.current_location
-        {
-            let preferred = self
-                .scopes
-                .values()
-                .find(|s| s.path == loc.path && s.namespace == "root")
-                .or_else(|| self.scopes.values().find(|s| s.path == loc.path));
-            if let Some(preferred) = preferred
-                && let Some(mapped) = preferred.mappings.get(iden)
-            {
-                return Some(mapped.clone());
-            }
-        }
-
         if self.variables.contains_key(iden) || self.objects.contains_key(iden) {
             return Some(iden.to_string());
         }
@@ -1620,143 +1508,18 @@ impl MiddleEnvironment {
 
     pub fn add_scope(&mut self, mut scope: MiddleScope) {
         scope.id = self.scope_counter;
-
-        let name_name = get_disamubiguous_name(&scope.id, Some("__name__"), None);
-        self.variables.insert(
-            name_name.clone(),
-            MiddleVariable {
-                data_type: ParserDataType::new(Span::default(), ParserInnerType::Str),
-                var_type: VarType::Constant,
-                location: None,
-            },
-        );
-
-        let file_name = get_disamubiguous_name(&scope.id, Some("__file__"), None);
-        self.variables.insert(
-            file_name.clone(),
-            MiddleVariable {
-                data_type: ParserDataType::new(Span::default(), ParserInnerType::Str),
-                var_type: VarType::Constant,
-                location: None,
-            },
-        );
-
-        scope.mappings.insert("__name__".to_string(), name_name);
-        scope.mappings.insert("__file__".to_string(), file_name);
         self.scopes.insert(scope.id, scope);
         self.scope_counter += 1;
     }
 
-    pub(crate) fn inject_scope_magic_bindings(&mut self, scope: u64, program: Node) -> Node {
-        let Some(scope_ref) = self.scopes.get(&scope).cloned() else {
-            return program;
-        };
-
-        let mut prefix = Vec::new();
-        let sp = Span::default();
-        let mapped_name = scope_ref
-            .mappings
-            .get("__name__")
-            .cloned()
-            .unwrap_or_else(|| "__name__".to_string());
-        let mapped_file = scope_ref
-            .mappings
-            .get("__file__")
-            .cloned()
-            .unwrap_or_else(|| "__file__".to_string());
-        let name_value = Node::new(
-            sp,
-            NodeType::StringLiteral(ParserText::new(sp, scope_ref.namespace.clone())),
-        );
-        let file_value = Node::new(
-            sp,
-            NodeType::StringLiteral(ParserText::new(sp, {
-                Self::scope_file_or_fallback(&scope_ref)
-            })),
-        );
-
-        prefix.push(Node::new(
-            sp,
-            NodeType::VariableDeclaration {
-                var_type: VarType::Constant,
-                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, mapped_name)),
-                data_type: PotentialNewType::DataType(ParserDataType::new(
-                    sp,
-                    ParserInnerType::Str,
-                )),
-                value: Box::new(name_value),
-            },
-        ));
-        prefix.push(Node::new(
-            sp,
-            NodeType::VariableDeclaration {
-                var_type: VarType::Constant,
-                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, mapped_file)),
-                data_type: PotentialNewType::DataType(ParserDataType::new(
-                    sp,
-                    ParserInnerType::Str,
-                )),
-                value: Box::new(file_value),
-            },
-        ));
-
-        let meta = self.package_metadata_for_scope(&scope_ref);
-
-        let value = |v: String| Node::new(sp, NodeType::StringLiteral(ParserText::new(sp, v)));
-        let package_value = Node::new(
-            sp,
-            NodeType::StructLiteral {
-                identifier: PotentialGenericTypeIdentifier::new(sp, "Package"),
-                value: ObjectType::Map(vec![
-                    ("name".to_string(), value(meta.name)),
-                    ("version".to_string(), value(meta.version)),
-                    ("description".to_string(), value(meta.description)),
-                    ("license".to_string(), value(meta.license)),
-                    ("repository".to_string(), value(meta.repository)),
-                    ("homepage".to_string(), value(meta.homepage)),
-                    ("src".to_string(), value(meta.src)),
-                    ("root".to_string(), value(meta.root)),
-                ]),
-            },
-        );
-        let package_ident = get_disamubiguous_name(&scope, Some("__package__"), None);
-        if let Some(scope_ref) = self.scopes.get_mut(&scope) {
-            scope_ref
-                .mappings
-                .entry("__package__".to_string())
-                .or_insert_with(|| package_ident.clone());
+    #[inline]
+    pub fn scope_file_or_fallback(scope: &MiddleScope) -> String {
+        let file = scope.path.to_string_lossy().to_string();
+        if file.is_empty() {
+            String::from("unknown")
+        } else {
+            file
         }
-        prefix.push(Node::new(
-            sp,
-            NodeType::VariableDeclaration {
-                var_type: VarType::Constant,
-                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
-                    sp,
-                    package_ident,
-                )),
-                data_type: PotentialNewType::DataType(ParserDataType::new(
-                    sp,
-                    ParserInnerType::Struct(String::from("Package")),
-                )),
-                value: Box::new(package_value),
-            },
-        ));
-
-        let mut body = match program.node_type {
-            NodeType::ScopeDeclaration { body, .. } => body.unwrap_or_default(),
-            _ => vec![program],
-        };
-        prefix.append(&mut body);
-        Node::new(
-            sp,
-            NodeType::ScopeDeclaration {
-                body: Some(prefix),
-                named: None,
-                is_temp: false,
-                create_new_scope: Some(false),
-                define: false,
-            },
-        )
     }
 
     pub fn get_scope_from_path(
@@ -2094,8 +1857,7 @@ impl MiddleEnvironment {
                     },
                     _ => program,
                 };
-                let program =
-                    self.inject_scope_magic_bindings(scope, crate::multipass::prepare_ast(program));
+                let program = crate::multipass::prepare_ast(program);
 
                 if let NodeType::ScopeDeclaration {
                     body: Some(ref body),
@@ -2144,8 +1906,7 @@ impl MiddleEnvironment {
             });
         }
 
-        let program =
-            self.inject_scope_magic_bindings(scope, crate::multipass::prepare_ast(program));
+        let program = crate::multipass::prepare_ast(program);
         if let NodeType::ScopeDeclaration {
             body: Some(ref body),
             ..

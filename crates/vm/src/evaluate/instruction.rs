@@ -949,12 +949,6 @@ impl VM {
                 let name = self.local_string(block, *name)?;
                 let mut value = self.get_reg_value(*src).clone();
 
-                if Self::is_magic_file_binding(name)
-                    && let Some(path) = self.source_file_override.clone()
-                {
-                    value = RuntimeValue::Str(path);
-                }
-
                 let is_local_style = (name.starts_with("mut-") || name.starts_with("let-"))
                     && !name.contains("__anon_loop_");
 

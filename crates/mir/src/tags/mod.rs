@@ -6,6 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+pub mod context;
 pub mod defaults;
 
 pub type TagHandlerFn = Arc<
@@ -40,6 +41,7 @@ pub enum TagInfo {
     Default,
     Panics,
     Bench,
+    CallerContext,
     Suite(String),
     Todo(Option<String>),
     Deprecated(Option<String>),
@@ -52,6 +54,7 @@ pub struct Tagging {
     pub init_functions: Vec<(i32, String)>,
     pub fin_functions: Vec<(i32, String)>,
     pub tag_info: Vec<TagInfo>,
+    pub caller_context: FxHashMap<String, String>,
 }
 
 impl MiddleEnvironment {
@@ -277,6 +280,62 @@ impl MiddleEnvironment {
             "suite".to_string(),
             TagHandler {
                 handler: suite_handler,
+            },
+        );
+
+        let package_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             _args: Vec<Node>| {
+                let middle = env.evaluate_with_package_injection(scope, node)?;
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "package".to_string(),
+            TagHandler {
+                handler: package_handler,
+            },
+        );
+
+        let caller_context_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             _args: Vec<Node>| {
+                env.tagging.tag_info.push(TagInfo::CallerContext);
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "caller_context".to_string(),
+            TagHandler {
+                handler: caller_context_handler,
+            },
+        );
+
+        let current_context_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             _args: Vec<Node>| {
+                let middle = env.evaluate_with_current_context_injection(scope, node)?;
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "current_context".to_string(),
+            TagHandler {
+                handler: current_context_handler,
             },
         );
     }

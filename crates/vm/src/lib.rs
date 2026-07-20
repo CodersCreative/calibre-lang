@@ -229,16 +229,6 @@ impl VM {
         }
     }
 
-    #[inline]
-    pub(crate) fn is_magic_binding_name(name: &str, binding: &str) -> bool {
-        name == binding || name.ends_with(&format!(":{binding}"))
-    }
-
-    #[inline]
-    pub(crate) fn is_magic_file_binding(name: &str) -> bool {
-        Self::is_magic_binding_name(name, "__file__")
-    }
-
     fn from_shared_parts(
         registry: Arc<VMRegistry>,
         mappings: Arc<Vec<String>>,
@@ -369,20 +359,6 @@ impl VM {
 
     pub fn program_args(&self) -> &[String] {
         self.program_args.as_ref()
-    }
-
-    pub fn normalize_magic_file_bindings(&mut self, path: &std::path::Path) {
-        let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        let value = RuntimeValue::Str(Arc::new(path.to_string_lossy().to_string()));
-        let keys: Vec<String> = self
-            .variables
-            .keys()
-            .filter(|name| Self::is_magic_file_binding(name))
-            .map(ToString::to_string)
-            .collect();
-        for key in keys {
-            let _ = self.variables.insert(&key, value.clone());
-        }
     }
 
     pub fn set_source_file_override(&mut self, path: &std::path::Path) {

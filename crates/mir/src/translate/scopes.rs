@@ -255,19 +255,7 @@ impl MiddleEnvironment {
                     stmts.push(self.evaluate(&new_scope, statement));
                 }
 
-                let mut in_return = Vec::new();
-
-                let last = if let Some(x) = last {
-                    let x = self.evaluate(&new_scope, x);
-                    in_return = x
-                        .identifiers_used()
-                        .into_iter()
-                        .map(|x| x.to_string())
-                        .collect();
-                    Some(x)
-                } else {
-                    None
-                };
+                let last = last.map(|x| self.evaluate(&new_scope, x));
 
                 if !last.as_ref().is_some_and(Self::ends_in_control_flow) {
                     for x in self.scope_ref_or_err(&new_scope)?.defers.clone() {
@@ -275,47 +263,14 @@ impl MiddleEnvironment {
                     }
                 }
 
-                for value in self
-                    .scope_ref_or_err(&new_scope)?
-                    .defined
-                    .clone()
-                    .into_iter()
-                    .filter(|x| !in_return.contains(x))
-                {
-                    stmts.push(MiddleNode::new(
-                        MiddleNodeType::Drop(value.into()),
-                        self.current_span(),
-                    ))
-                }
-
                 if let Some(last) = last {
                     stmts.push(last);
                 }
             } else {
-                let mut errored = Vec::new();
-
                 for statement in body.into_iter() {
                     if let Ok(x) = self.evaluate_inner(&new_scope, statement.clone()) {
                         stmts.push(x);
-                    } else {
-                        errored.push(statement);
                     }
-                }
-
-                let mut last_len = 0;
-                while !errored.is_empty() && last_len != errored.len() {
-                    last_len = errored.len();
-
-                    for elem in errored.clone() {
-                        if let Ok(x) = self.evaluate_inner(&new_scope, elem.clone()) {
-                            stmts.push(x);
-                            errored.retain(|x| x != &elem);
-                        }
-                    }
-                }
-
-                for val in errored {
-                    let _ = self.evaluate(&new_scope, val);
                 }
             }
         }
@@ -342,63 +297,10 @@ impl MiddleEnvironment {
         Ok(MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration {
                 body: {
-                    let mut body: Vec<MiddleNode> = stmts
+                    stmts
                         .into_iter()
                         .filter(|x| x.node_type != MiddleNodeType::EmptyLine)
-                        .collect();
-                    let defined = self
-                        .scopes
-                        .get(&new_scope)
-                        .map(|s| s.defined.clone())
-                        .unwrap_or_default();
-                    let defers_empty = self
-                        .scopes
-                        .get(&new_scope)
-                        .map(|s| s.defers.is_empty())
-                        .unwrap_or(true);
-                    if defers_empty {
-                        let protected_tail = body
-                            .last()
-                            .map(|n| {
-                                n.identifiers_used()
-                                    .into_iter()
-                                    .map(|x| x.to_string())
-                                    .collect::<Vec<String>>()
-                            })
-                            .unwrap_or_default();
-                        self.insert_auto_drops(&mut body, &defined, &protected_tail);
-                    }
-                    if is_temp && body.len() > 1 {
-                        let last_used = body
-                            .last()
-                            .map(|n| {
-                                n.identifiers_used()
-                                    .into_iter()
-                                    .map(|x| x.to_string())
-                                    .collect::<rustc_hash::FxHashSet<String>>()
-                            })
-                            .unwrap_or_default();
-                        let mut trailing = Vec::new();
-                        while let Some(MiddleNodeType::Drop(name)) =
-                            body.last().map(|n| &n.node_type)
-                        {
-                            if last_used.contains(&name.text) {
-                                break;
-                            }
-                            if let Some(node) = body.pop() {
-                                trailing.push(node);
-                            } else {
-                                break;
-                            }
-                        }
-                        if !trailing.is_empty() {
-                            let insert_at = body.len().saturating_sub(1);
-                            for drop_node in trailing.into_iter().rev() {
-                                body.insert(insert_at, drop_node);
-                            }
-                        }
-                    }
-                    body
+                        .collect()
                 },
                 is_temp,
                 create_new_scope: og_create_new_scope.unwrap_or(create_new_scope),

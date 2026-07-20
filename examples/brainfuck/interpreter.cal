@@ -93,10 +93,10 @@ impl BrainFuck {
 	};
 };
 
-const main := fn => {
+@current_context const main := fn => {
 	let input_path := match Args.first() {
 		.Some : p => emit p,
-		.None => emit __file__.replace("interpreter.cal", "helloworld.bf")
+		.None => emit current_context.module_name.replace("interpreter.cal", "helloworld.bf")
 	};
 	
 	let mut file := try File.open_read(input_path) : e => {

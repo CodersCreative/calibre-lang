@@ -368,7 +368,6 @@ impl CalibreEngine {
             self.vm_config.clone(),
         );
         vm.set_source_file_override(&path);
-        vm.normalize_magic_file_bindings(&path);
 
         self.install_bindings(&mut vm);
 

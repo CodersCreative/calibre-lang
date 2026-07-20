@@ -32,37 +32,37 @@ impl MiddleEnvironment {
         let operator = Operator::from_str(&overload.operator.text)?;
         match operator {
             Operator::As if !overload.header.return_type.is_result() => {
-                return Err(MiddleErr::Overload(format!(
+                Err(MiddleErr::Overload(format!(
                     "Expect result return type (Err!Ok) found {}",
                     overload.header.return_type
-                )));
+                )))
             }
             Operator::In if !overload.header.return_type.is_bool() => {
-                return Err(MiddleErr::Overload(format!(
+                Err(MiddleErr::Overload(format!(
                     "Expect bool return type found {}",
                     overload.header.return_type
-                )));
+                )))
             }
             Operator::Binary(_) | Operator::Comparison(_) | Operator::Binary(_)
                 if overload.header.return_type.is_null()
                     || overload.header.return_type.is_auto() =>
             {
-                return Err(MiddleErr::Overload(format!(
+                Err(MiddleErr::Overload(format!(
                     "Expect known non-null return type found {}",
                     overload.header.return_type
-                )));
+                )))
             }
             Operator::Index if overload.header.parameters.len() != 2 => {
-                return Err(MiddleErr::Overload(format!(
+                Err(MiddleErr::Overload(format!(
                     "Expect 2 parameters found {}",
                     overload.header.parameters.len()
-                )));
+                )))
             }
             Operator::IndexAssign if overload.header.parameters.len() != 3 => {
-                return Err(MiddleErr::Overload(format!(
+                Err(MiddleErr::Overload(format!(
                     "Expect 3 parameters found {}",
                     overload.header.parameters.len()
-                )));
+                )))
             }
             _ => Ok(()),
         }
@@ -1437,8 +1437,9 @@ impl MiddleEnvironment {
                                             span: node.span,
                                         }),
                                         catch: Some(TryCatch {
-                                            name: Some(PotentialDollarIdentifier::from(
-                                                ParserText::from(temp_ident.clone()),
+                                            name: Some(PotentialDollarIdentifier::new(
+                                                node.span,
+                                                temp_ident.clone(),
                                             )),
                                             body: Box::new(Node::call(
                                                 node.span,
@@ -2740,7 +2741,6 @@ impl MiddleEnvironment {
                     .map(|val| ParserText::new(*val.span(), val.to_string()))
                     .collect();
                 let module_path: Vec<String> = module.iter().map(|x| x.to_string()).collect();
-                let preserved_magic = self.preserve_scope_magic_mappings(*scope);
 
                 let alias = if let Some(alias) = alias {
                     self.resolve_potential_dollar_ident(scope, &alias)
@@ -2864,8 +2864,6 @@ impl MiddleEnvironment {
                         }
                     }
                 }
-
-                self.restore_scope_magic_mappings(*scope, preserved_magic);
 
                 Ok(build_node.unwrap_or(MiddleNode {
                     node_type: MiddleNodeType::EmptyLine,

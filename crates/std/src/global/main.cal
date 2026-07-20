@@ -9,6 +9,14 @@ type Package := struct {
 	root : str,
 }
 
+type ExecContext := struct {
+	function_name : str,
+	module_name : str,
+	path : str,
+	line : uint,
+	col : uint,
+}
+
 const print := fn (msg : list:<dyn>) => {
 	let mut txt := "";
 	for m in msg => txt &= m;

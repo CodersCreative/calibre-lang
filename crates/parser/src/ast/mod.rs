@@ -1092,6 +1092,12 @@ pub enum PotentialDollarIdentifier {
     Identifier(ParserText),
 }
 
+impl PotentialDollarIdentifier {
+    pub fn new(span: Span, text: impl ToString) -> Self {
+        Self::DollarIdentifier(ParserText::new(span, text))
+    }
+}
+
 impl Into<PotentialGenericTypeIdentifier> for PotentialDollarIdentifier {
     fn into(self) -> PotentialGenericTypeIdentifier {
         PotentialGenericTypeIdentifier::Identifier(self)

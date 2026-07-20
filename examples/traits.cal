@@ -41,14 +41,14 @@ const show := fn (label : str, p : dyn:<Human>) => {
 	print(label & " -> name=" & p.name & ", age=" & p.age & ", country=" & p.country);
 };
 
-const main := fn => {
+@current_context const main := fn => {
 	let user := User { name : "Ty" };
 	print(user.greeting());
 	
 	let parts := "a,b,c".split(",");
 	print(parts[1]);
 	print("calibre".starts_with("cal"));
-	let file := try File.open_read(__file__.replace("traits.cal", "destructure.cal")) => panic();
+	let file := try File.open_read(current_context.module_name.replace("traits.cal", "destructure.cal")) => panic();
 	print(file.read_all(10000));
 	
 	let ty := Ty { };

@@ -334,16 +334,21 @@ const main := fn => {
 	
 	// Membership checks.
 	if (4 in [4, 16, 32]) => print("4 in list");
-	
-	// Built-in package metadata.
-	print("__name__ => " & __name__);
-	print("__file__ => " & __file__);
-	print("__package__ => " & __package__);
-	
-	// File IO (read current showcase data module).
-	let file := File.open_read(__file__.replace("main.cal", "data.cal"));
-	let text := file.read_all(200);
-	print("file prefix => " & text);
+
+	// using tags to get metadata.
+	@package @current_context const handle_contextual := fn => {
+		// Built-in package metadata
+		print("package.name => " & package.name);
+		print("package.version => " & package.version);
+		print("current_context.module_name => " & current_context.module_name);
+		print("current_context.path => " & current_context.path);
+
+		// File IO (read current showcase data module)
+		let file := File.open_read(current_context.module_name.replace("main.cal", "data.cal"));
+		let text := file.read_all(200);
+		print("file prefix => " & text);
+	};
+	handle_contextual();
 	
 	// Recursion + option return.
 	print("factorial(6) => " & factorial(6));

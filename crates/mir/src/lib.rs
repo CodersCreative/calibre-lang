@@ -191,15 +191,6 @@ impl MiddleEnvironment {
         }
         out
     }
-
-    fn insert_auto_drops(
-        &self,
-        stmts: &mut Vec<MiddleNode>,
-        defined: &[String],
-        protected_extra: &[String],
-    ) {
-        let _ = (stmts, defined, protected_extra);
-    }
 }
 
 impl MiddleEnvironment {

@@ -1,4 +1,8 @@
-const main := fn => {};
+const main := fn => {
+  smth_panic();
+};
+
+const smth_panic := fn => panic("Run using test");
 
 const divide := fn(a b : int) -> int => {
   if b = 0 =>

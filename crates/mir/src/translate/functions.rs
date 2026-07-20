@@ -1,7 +1,8 @@
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, MiddleVariable, get_disamubiguous_name},
+    environment::{MiddleEnvironment, MiddleScope, MiddleVariable, get_disamubiguous_name},
     errors::MiddleErr,
+    tags::TagInfo,
 };
 use calibre_parser::{
     Span,
@@ -12,6 +13,7 @@ use calibre_parser::{
         comparison::ComparisonOperator,
     },
 };
+use rustc_hash::FxHashMap;
 
 impl MiddleEnvironment {
     #[inline]
@@ -734,7 +736,9 @@ impl MiddleEnvironment {
         let mut param_idents = Vec::with_capacity(header.parameters.len());
         let mut old_func_defers = std::mem::take(&mut self.func_defers);
         let new_scope = self.new_scope_from_parent_shallow(*scope);
-        self.copy_scope_magic_mappings(*scope, new_scope);
+
+        let needs_caller_context = self.tagging.tag_info.contains(&TagInfo::CallerContext);
+
         for param in header.parameters {
             param_idents.push(param.0.clone());
             let og_name = self
@@ -771,6 +775,35 @@ impl MiddleEnvironment {
                 ParserText::from(new_name),
                 data_type,
                 param.2.map(|x| Box::new(self.evaluate(scope, *x))),
+            ));
+        }
+
+        if needs_caller_context {
+            let caller_context_name =
+                get_disamubiguous_name(scope, Some("caller_context"), Some(&VarType::Mutable));
+            let caller_context_type =
+                ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
+
+            self.variables.insert(
+                caller_context_name.clone(),
+                MiddleVariable {
+                    data_type: caller_context_type.clone(),
+                    var_type: VarType::Mutable,
+                    location: self.current_location.clone(),
+                },
+            );
+
+            let err = self.err_at_current(MiddleErr::Scope(new_scope.to_string()));
+            let scope_ref = self.scopes.get_mut(&new_scope).ok_or(err)?;
+            scope_ref
+                .mappings
+                .insert("caller_context".to_string(), caller_context_name.clone());
+            scope_ref.defined.push(caller_context_name.clone());
+
+            params.push((
+                ParserText::from(caller_context_name),
+                caller_context_type,
+                None,
             ));
         }
 
@@ -948,12 +981,11 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         span: Span,
-        caller: Node,
+        mut caller: Node,
         generic_types: Vec<PotentialNewType>,
         mut args: Vec<CallArg>,
         mut reverse_args: Vec<Node>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let mut caller = caller;
         if generic_types.is_empty()
             && args.is_empty()
             && reverse_args.is_empty()
@@ -1173,6 +1205,81 @@ impl MiddleEnvironment {
             .map(|x| x.unwrap_all_refs().data_type);
 
         Self::dedupe_receiver_call_args(&mut args, &mut reverse_args, &caller, &data_type);
+
+        let caller_name = if let NodeType::Identifier(ident) = &caller.node_type {
+            ident.to_string()
+        } else {
+            String::new()
+        };
+
+        let needs_caller_context = if let Some(var) = self.variables.get(&caller_name) {
+            match var.data_type.clone().unwrap_all_refs().data_type {
+                ParserInnerType::Function {
+                    return_type,
+                    parameters,
+                } if !parameters.is_empty() => {
+                    parameters.last().unwrap().data_type
+                        == ParserInnerType::Struct(String::from("ExecContext"))
+                }
+                _ => false,
+            }
+        } else {
+            false
+        };
+
+        if needs_caller_context {
+            let scope_ref = if let Some(s) = self.scopes.get(scope) {
+                s.clone()
+            } else {
+                MiddleScope {
+                    id: *scope,
+                    parent: None,
+                    mappings: FxHashMap::default(),
+                    macros: FxHashMap::default(),
+                    macro_args: FxHashMap::default(),
+                    children: FxHashMap::default(),
+                    defined: Vec::new(),
+                    namespace: "main".to_string(),
+                    path: std::path::PathBuf::from("unknown.cal"),
+                    defers: Vec::new(),
+                }
+            };
+
+            let value =
+                |v: String| Node::new(span, NodeType::StringLiteral(ParserText::new(span, v)));
+            let uint_value = |v: u64| Node::new(span, NodeType::IntLiteral(v.to_string()));
+
+            let current_function_name = if scope_ref.namespace.parse::<u64>().is_ok() {
+                "main".to_string()
+            } else {
+                scope_ref.namespace.clone()
+            };
+
+            let module_name = if !scope_ref.path.as_os_str().is_empty() {
+                scope_ref.path.to_string_lossy().to_string()
+            } else {
+                "unknown.cal".to_string()
+            };
+
+            let caller_context_arg = Node::new(
+                span,
+                NodeType::StructLiteral {
+                    identifier: PotentialGenericTypeIdentifier::new(span, "ExecContext"),
+                    value: ObjectType::Map(vec![
+                        ("function_name".to_string(), value(current_function_name)),
+                        ("module_name".to_string(), value(module_name)),
+                        (
+                            "path".to_string(),
+                            value(scope_ref.path.to_string_lossy().to_string()),
+                        ),
+                        ("line".to_string(), uint_value(span.from.line as u64)),
+                        ("col".to_string(), uint_value(span.from.col as u64)),
+                    ]),
+                },
+            );
+
+            reverse_args.push(caller_context_arg);
+        }
 
         let lowered_args = self.lower_defaulted_call_args(
             scope,
