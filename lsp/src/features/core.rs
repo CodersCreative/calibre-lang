@@ -167,7 +167,6 @@ impl CalibreLanguageServer {
         self.insert_document_state(uri, version, text);
 
         if self.documents.len() > MAX_OPEN_DOCUMENTS {
-            // Hard guardrail against unbounded growth on misbehaving clients.
             self.documents.clear();
         }
     }

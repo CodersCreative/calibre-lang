@@ -306,8 +306,9 @@ fn collect_project_sources(project: Option<&ProjectContext>, cwd: &Path, out: &m
 }
 
 async fn run_suite(
-    suite: CompileMode,
+    compile_mode: CompileMode,
     wanted: &[String],
+    suites: &[String],
     no_cache: bool,
     path: Option<String>,
     example: Option<String>,
@@ -352,7 +353,7 @@ async fn run_suite(
         let mut engine = CalibreEngine::new()
             .with_vm_config(vm_config.clone())
             .with_source_path(path.clone())
-            .with_compile_mode(suite)
+            .with_compile_mode(compile_mode)
             .with_cache_enabled(!no_cache);
 
         if let Some(metadata) = package_metadata.clone() {
@@ -377,7 +378,7 @@ async fn run_suite(
         };
 
         for test in &artifacts.testing.tests {
-            let kind_matches = match suite {
+            let kind_matches = match compile_mode {
                 CompileMode::Test => test.kind == TestOrBench::Test,
                 CompileMode::Bench => test.kind == TestOrBench::Bench,
                 _ => false,
@@ -391,6 +392,17 @@ async fn run_suite(
                 continue;
             }
 
+            if !suites.is_empty()
+                && suites
+                    .iter()
+                    .map(|x| test.suites.contains(x))
+                    .filter(|x| !*x)
+                    .count()
+                    > 0
+            {
+                continue;
+            }
+
             out.push((
                 path.to_string_lossy().to_string(),
                 artifacts.registry.clone(),
@@ -400,8 +412,8 @@ async fn run_suite(
         }
     }
 
-    out.sort_by(|a, b| a.0.cmp(&b.0));
-    out.dedup_by(|a, b| a.0 == b.0 && a.2 == b.2);
+    out.sort_by(|a, b| a.3.name.cmp(&b.3.name));
+    out.dedup_by(|a, b| a.3.function_name == b.3.function_name && a.3.name == b.3.name);
     Ok(out)
 }
 
@@ -461,6 +473,7 @@ fn stddev_ms(samples: &[std::time::Duration], mean_ms: f64) -> f64 {
 
 async fn run_tests(
     wanted: &[String],
+    suites: &[String],
     no_cache: bool,
     path: Option<String>,
     example: Option<String>,
@@ -473,6 +486,7 @@ async fn run_tests(
     let cases = run_suite(
         CompileMode::Test,
         wanted,
+        suites,
         no_cache,
         path,
         example,
@@ -566,6 +580,7 @@ async fn run_tests(
 
 async fn run_benches(
     wanted: &[String],
+    suites: &[String],
     no_cache: bool,
     path: Option<String>,
     example: Option<String>,
@@ -582,6 +597,7 @@ async fn run_benches(
     let benches = run_suite(
         CompileMode::Bench,
         wanted,
+        suites,
         no_cache,
         path,
         example,
@@ -1153,6 +1169,8 @@ enum Commands {
         verbose: bool,
         #[arg(long)]
         tests: Vec<String>,
+        #[arg(long)]
+        suites: Vec<String>,
     },
     Bench {
         path: Option<String>,
@@ -1172,6 +1190,8 @@ enum Commands {
         time_limit_ms: u64,
         #[arg(long)]
         benchmarks: Vec<String>,
+        #[arg(long)]
+        suites: Vec<String>,
     },
     #[command(external_subcommand)]
     External(Vec<String>),
@@ -1351,7 +1371,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                     recursive,
                     verbose,
                     tests,
-                }) => run_tests(&tests, args.no_cache, path, example, recursive, verbose).await,
+                    suites,
+                }) => {
+                    run_tests(
+                        &tests,
+                        &suites,
+                        args.no_cache,
+                        path,
+                        example,
+                        recursive,
+                        verbose,
+                    )
+                    .await
+                }
                 Some(Commands::Bench {
                     path,
                     example,
@@ -1362,9 +1394,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                     max_runs,
                     time_limit_ms,
                     benchmarks,
+                    suites,
                 }) => {
                     run_benches(
                         &benchmarks,
+                        &suites,
                         args.no_cache,
                         path,
                         example,

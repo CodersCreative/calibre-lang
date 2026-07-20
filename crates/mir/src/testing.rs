@@ -25,6 +25,7 @@ pub struct Test {
     pub todo_reason: Option<String>,
     pub scope_id: u64,
     pub file_path: Option<PathBuf>,
+    pub suites: Vec<String>,
 }
 
 impl Testing {
@@ -106,6 +107,15 @@ impl MiddleEnvironment {
         self.testing.tests.push(Test {
             name,
             function_name,
+            suites: self
+                .tagging
+                .tag_info
+                .iter()
+                .filter_map(|tag| match tag {
+                    TagInfo::Suite(x) => Some(x.clone()),
+                    _ => None,
+                })
+                .collect(),
             kind: if self.tagging.tag_info.contains(&TagInfo::Bench) {
                 TestOrBench::Bench
             } else {

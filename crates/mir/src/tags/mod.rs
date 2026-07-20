@@ -40,6 +40,7 @@ pub enum TagInfo {
     Default,
     Panics,
     Bench,
+    Suite(String),
     Todo(Option<String>),
     Deprecated(Option<String>),
     Skip(Option<String>),
@@ -249,6 +250,33 @@ impl MiddleEnvironment {
             "bench".to_string(),
             TagHandler {
                 handler: bench_handler,
+            },
+        );
+
+        let suite_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             args: Vec<Node>| {
+                env.tagging.tag_info.push(TagInfo::Suite(
+                    args.first()
+                        .map(|x| match &x.node_type {
+                            NodeType::StringLiteral(x) => x.text.clone(),
+                            _ => String::new(),
+                        })
+                        .unwrap_or_default(),
+                ));
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "suite".to_string(),
+            TagHandler {
+                handler: suite_handler,
             },
         );
     }

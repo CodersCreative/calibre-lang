@@ -6,9 +6,13 @@ const divide := fn(a b : int) -> int => {
   return a / b;
 };
 
-@panics
-test "something" => {
-  assert(7 = 9, "Should fail");
-  assert("hello" = "hi", "Should fail");
-  divide(10, 0);
+@suite("main") {
+  @panics
+  test "something" => {
+    assert(7 = 9, "Should fail");
+    assert("hello" = "hi", "Should fail");
+    divide(10, 0);
+  };
+  
+  test "regular" => assert("Hi" = "Hi", "Worked!");
 }
