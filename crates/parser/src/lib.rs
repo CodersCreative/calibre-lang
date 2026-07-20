@@ -1,15 +1,20 @@
-use std::{fmt::Display, path::PathBuf};
-
 use crate::{
     ast::{Node, NodeType},
     parse::parse_program_with_source,
 };
 use serde::{Deserialize, Serialize};
+use std::{
+    fmt::Display,
+    path::PathBuf,
+    sync::{LazyLock, RwLock},
+};
 use thiserror::Error;
 
 pub mod ast;
 pub mod native;
 pub mod parse;
+
+pub static COUNTER: LazyLock<RwLock<u64>> = LazyLock::new(|| RwLock::new(0));
 
 #[inline]
 pub fn qualified_name_tail(name: &str) -> &str {
@@ -20,6 +25,12 @@ pub fn qualified_name_tail(name: &str) -> &str {
 pub fn qualified_name_base(name: &str) -> &str {
     let tail = qualified_name_tail(name);
     tail.split_once("->").map(|(base, _)| base).unwrap_or(tail)
+}
+
+#[inline]
+pub fn short_name_if_qualified(name: &str) -> Option<&str> {
+    let short = qualified_name_tail(name);
+    (short != name).then_some(short)
 }
 
 #[inline]

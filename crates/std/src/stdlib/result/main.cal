@@ -1,31 +1,31 @@
 impl<E, T> E!T {
 	const is_ok := fn (self : E!T) -> bool => match self {
-		.Ok : _ => true,
-		.Err : _ => false
+		.Ok : _ => return true,
+		.Err : _ => return false
 	};
 
 	const is_err := fn (self : E!T) -> bool => match self {
-		.Ok : _ => false,
-		.Err : _ => true
+		.Ok : _ => return false,
+		.Err : _ => return true
 	};
 
 	const unwrap := fn (self : E!T) -> T => match self {
-		.Ok : v => v,
+		.Ok : v => return v,
 		.Err : _ => panic("unwrap on err")
 	};
 
 	const unwrap_or := fn (self : E!T, default : T) -> T => match self {
-		.Ok : v => v,
-		.Err : _ => default
+		.Ok : v => return v,
+		.Err : _ => return default
 	};
 
 	const map := fn <U> (self : E!T, op : fn(T) -> U) -> U!E => match self {
-		.Ok : v => ok(op(v)),
-		.Err : e => err(e)
+		.Ok : v => return ok(op(v)),
+		.Err : e => return err(e)
 	};
 
 	const map_err := fn <F> (self : E!T, op : fn(E) -> F) -> T!F => match self {
-		.Ok : v => ok(v),
-		.Err : e => err(op(e))
+		.Ok : v => return ok(v),
+		.Err : e => return err(op(e))
 	};
 };

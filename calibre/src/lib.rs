@@ -24,6 +24,20 @@ use thiserror::Error;
 
 pub mod config;
 
+pub fn extract_scope_id_from_current_frame(vm: &VM) -> Option<u64> {
+    if let Some(frame) = vm.frames.last() {
+        if let Some(func_name) = &frame.func_name {
+            let parts: Vec<&str> = func_name.split('-').collect::<Vec<&str>>();
+            if parts.len() >= 2 {
+                if let Ok(scope_id) = parts[1].parse::<u64>() {
+                    return Some(scope_id);
+                }
+            }
+        }
+    }
+    None
+}
+
 type NativeFnCallback =
     dyn Fn(&mut VM, Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> + Send + Sync;
 
@@ -58,6 +72,7 @@ pub enum CalibreError {
     #[error("compile failed : {error}")]
     Middle {
         path: PathBuf,
+        ast_artifacts: Option<Node>,
         contents: String,
         error: MiddleErr,
     },
@@ -84,6 +99,8 @@ pub struct CalibreArtifacts {
     pub registry: VMRegistry,
     pub mappings: Vec<String>,
     pub entry_name: String,
+    pub init_functions: Vec<(i32, String)>,
+    pub fin_functions: Vec<(i32, String)>,
 }
 
 pub struct RunResult {
@@ -128,6 +145,8 @@ struct CachedProgramBlob {
     entry_name: String,
     mappings: Vec<String>,
     registry: VMRegistry,
+    init_functions: Option<Vec<(i32, String)>>,
+    fin_functions: Option<Vec<(i32, String)>>,
 }
 
 impl Default for CalibreEngine {
@@ -274,12 +293,16 @@ impl CalibreEngine {
         if !mir_errors.is_empty() {
             return Err(CalibreError::Middle {
                 path,
+                ast_artifacts: Some(ast),
                 contents: full_source,
                 error: MiddleErr::Multiple(mir_errors),
             });
         }
 
         calibre_mir::inline::inline_small_calls(&mut mir, 20);
+
+        let init_functions = std::mem::take(&mut env.tagging.init_functions);
+        let fin_functions = std::mem::take(&mut env.tagging.fin_functions);
 
         Ok(CalibreArtifacts {
             ast: Some(ast),
@@ -290,6 +313,8 @@ impl CalibreEngine {
                 .resolve_str(&scope, &self.entry_name)
                 .map(|x| x.to_string())
                 .unwrap_or_else(|| self.entry_name.clone()),
+            init_functions,
+            fin_functions,
         })
     }
 
@@ -309,6 +334,8 @@ impl CalibreEngine {
                 registry: cached.registry,
                 mappings: cached.mappings,
                 entry_name: cached.entry_name,
+                init_functions: cached.init_functions.unwrap_or_default(),
+                fin_functions: cached.fin_functions.unwrap_or_default(),
             });
         }
 
@@ -348,9 +375,25 @@ impl CalibreEngine {
         Ok(RunResult {
             artifacts,
             return_value: vm.run(main.as_ref(), Vec::new()).map_err(|error| {
+                let error_path = if let Some(scope_id) = extract_scope_id_from_current_frame(&vm) {
+                    if let Some(file_path) = vm.registry.scope_to_file.get(&scope_id) {
+                        PathBuf::from(file_path.as_str())
+                    } else {
+                        path.to_path_buf()
+                    }
+                } else {
+                    path.to_path_buf()
+                };
+
+                let error_contents = if error_path != path {
+                    fs::read_to_string(&error_path).unwrap_or_else(|_| full_source.clone())
+                } else {
+                    full_source.clone()
+                };
+
                 CalibreError::Runtime {
-                    path,
-                    contents: full_source,
+                    path: error_path,
+                    contents: error_contents,
                     error,
                 }
             })?,
@@ -531,6 +574,8 @@ impl CalibreEngine {
             entry_name: artifacts.entry_name.clone(),
             mappings: artifacts.mappings.clone(),
             registry: artifacts.registry.clone(),
+            init_functions: Some(artifacts.init_functions.clone()),
+            fin_functions: Some(artifacts.fin_functions.clone()),
         };
 
         bincode::serialize_into(&mut writer, &cache)
@@ -605,6 +650,18 @@ fn filter_ast_for_mode(node: Node, mode: CompileMode) -> Node {
             NodeType::FunctionDeclaration { header, body } => NodeType::FunctionDeclaration {
                 header,
                 body: Box::new(map_opt(*body, mode)?),
+            },
+            NodeType::Tag {
+                node,
+                tag,
+                arguments,
+            } => NodeType::Tag {
+                node: Box::new(map_opt(*node, mode)?),
+                tag,
+                arguments: arguments
+                    .into_iter()
+                    .filter_map(|n| map_opt(n, mode))
+                    .collect(),
             },
             NodeType::Defer { value, function } => NodeType::Defer {
                 value: Box::new(map_opt(*value, mode)?),

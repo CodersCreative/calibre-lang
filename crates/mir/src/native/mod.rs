@@ -1,3 +1,7 @@
+use crate::{
+    environment::{MiddleEnvironment, MiddleScope, MiddleVariable, get_disamubiguous_name},
+    errors::MiddleErr,
+};
 use calibre_parser::{
     Parser,
     ast::{ParserDataType, VarType},
@@ -5,8 +9,6 @@ use calibre_parser::{
 use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
 use rustc_hash::FxHashMap;
 use std::{fs, path::PathBuf};
-
-use crate::environment::{MiddleEnvironment, MiddleScope, MiddleVariable, get_disamubiguous_name};
 
 impl MiddleEnvironment {
     pub fn new_root_scope_no_std(
@@ -31,9 +33,7 @@ impl MiddleEnvironment {
             defers: Vec::new(),
         });
 
-        let root = self.new_scope(Some(scope), path, Some("root"));
-
-        root
+        self.new_scope(Some(scope), path, Some("root"))
     }
 
     pub fn new_root_scope_with_std(
@@ -61,9 +61,23 @@ impl MiddleEnvironment {
         self.setup_global(&scope);
         self.stdlib_nodes.clear();
         let mut parser = Parser::default();
-        if let Ok(globals) = fs::read_to_string(get_globals_path()) {
+        let global_path = get_globals_path();
+        if let Ok(globals) = fs::read_to_string(global_path.clone()) {
             let program = parser.produce_ast(&globals);
+            let error_count_before = self.errors.len();
             let middle = self.evaluate(&scope, program);
+
+            if self.errors.len() > error_count_before {
+                let new_errors: Vec<_> = self.errors.drain(error_count_before..).collect();
+                for err in new_errors {
+                    self.errors.push(MiddleErr::InFile {
+                        path: global_path.clone(),
+                        contents: globals.clone(),
+                        error: Box::new(err),
+                    });
+                }
+            }
+
             self.stdlib_nodes.push(middle);
         }
 
@@ -71,9 +85,7 @@ impl MiddleEnvironment {
 
         self.setup_std(&std);
 
-        let root = self.new_scope(Some(scope), path, Some("root"));
-
-        root
+        self.new_scope(Some(scope), path, Some("root"))
     }
 
     pub fn setup_global(&mut self, scope: &u64) {
@@ -84,7 +96,6 @@ impl MiddleEnvironment {
             "some",
             "trim",
             "repr",
-            "print",
             "len",
             "panic",
             "assert",
@@ -104,7 +115,7 @@ impl MiddleEnvironment {
             .collect();
 
         let mut vars: Vec<(String, ParserDataType)> =
-            ParserDataType::constants().into_iter().map(|x| x).collect();
+            ParserDataType::constants().into_iter().collect();
         vars.append(&mut funcs);
 
         for var in vars {
@@ -119,26 +130,42 @@ impl MiddleEnvironment {
                 },
             );
 
-            if let Some(scope_ref) = self.scopes.get_mut(&scope) {
+            if let Some(scope_ref) = self.scopes.get_mut(scope) {
                 scope_ref.mappings.insert(var.0, name);
             }
         }
+
+        self.register_tag_handlers();
     }
 
     pub fn setup_std(&mut self, scope: &u64) {
         let mut parser = Parser::default();
 
-        if let Some(scope_ref) = self.scopes.get(scope) {
-            if let Ok(stdlib) = fs::read_to_string(&scope_ref.path) {
-                let program = parser.produce_ast(&stdlib);
-                let middle = self.evaluate(scope, program);
-                self.stdlib_nodes.push(middle);
-                self.loaded_scopes.insert(*scope);
+        if let Some(scope_ref) = self.scopes.get(scope)
+            && let Ok(stdlib) = fs::read_to_string(&scope_ref.path)
+        {
+            let scope_path = scope_ref.path.clone();
+            let program = parser.produce_ast(&stdlib);
+            let error_count_before = self.errors.len();
+            let middle = self.evaluate(scope, program);
+            self.stdlib_nodes.push(middle);
+            self.loaded_scopes.insert(*scope);
+
+            if self.errors.len() > error_count_before {
+                let new_errors: Vec<_> = self.errors.drain(error_count_before..).collect();
+                for err in new_errors {
+                    self.errors.push(MiddleErr::InFile {
+                        path: scope_path.clone(),
+                        contents: stdlib.clone(),
+                        error: Box::new(err),
+                    });
+                }
             }
         }
 
         let mut add = |name, funcs, load| self.setup_std_module(scope, name, funcs, load);
 
+        add("traits", &[], true);
         add("thread", &[], true);
         add("console", &[], false);
         add(
@@ -166,7 +193,7 @@ impl MiddleEnvironment {
             true,
         );
         add("random", &[], false);
-        add("fs", &["read_dir"], true);
+        add("fs", &["read_dir"], false);
         add("list", &["sort_by", "binary_search_by", "raw_remove"], true);
         add(
             "collections",
@@ -209,11 +236,11 @@ impl MiddleEnvironment {
             true,
         );
         add("range", &[], true);
-        add("generators", &[], false);
+        add("generators", &[], true);
         add("crypto", &["sha256", "sha512", "blake3"], false);
         add("regex", &["is_match", "find", "replace"], false);
         add("process", &["raw_exec"], false);
-        add("math", &[], false);
+        add("math", &[], true);
         add(
             "net",
             &[
@@ -230,7 +257,7 @@ impl MiddleEnvironment {
         );
         add("option", &[], true);
         add("result", &[], true);
-        add("json", &[], true);
+        add("json", &[], false);
     }
 
     pub fn setup_std_module(
@@ -245,7 +272,7 @@ impl MiddleEnvironment {
 
         let map: FxHashMap<String, ParserDataType> = ParserDataType::natives();
         let funcs: Vec<(String, ParserDataType)> = funcs
-            .into_iter()
+            .iter()
             .filter_map(|x| {
                 map.get(&format!("{}.{}", name, x))
                     .cloned()
@@ -272,19 +299,34 @@ impl MiddleEnvironment {
         if load_source {
             let mut parser = Parser::default();
             if let Ok(stdlib) = fs::read_to_string(&scope_path) {
+                let scope_path_clone = scope_path.clone();
                 parser.set_source_path(Some(scope_path.clone()));
                 let program = parser.produce_ast(&stdlib);
                 if !parser.errors.is_empty() {
-                    self.errors.push(crate::errors::MiddleErr::ParserErrors {
+                    self.errors.push(MiddleErr::ParserErrors {
                         path: scope_path.clone(),
                         contents: stdlib,
                         errors: std::mem::take(&mut parser.errors),
                     });
                     return;
                 }
+
+                let error_count_before = self.errors.len();
                 let middle = self.evaluate(&scope, program);
+
                 self.stdlib_nodes.push(middle);
                 self.loaded_scopes.insert(scope);
+
+                if self.errors.len() > error_count_before {
+                    let new_errors: Vec<_> = self.errors.drain(error_count_before..).collect();
+                    for err in new_errors {
+                        self.errors.push(MiddleErr::InFile {
+                            path: scope_path_clone.clone(),
+                            contents: stdlib.clone(),
+                            error: Box::new(err),
+                        });
+                    }
+                }
             }
         }
     }

@@ -125,7 +125,9 @@ impl SchedulerHandle {
 
         for id in 0..vm.variables.slot_len() {
             if let Some(value) = vm.variables.get_by_id(id).cloned() {
-                let resolved = base_vm.convert_runtime_var_into_saveable(value);
+                let resolved = base_vm.resolve_saveable_runtime_value_ref(
+                    &base_vm.convert_runtime_var_into_saveable(value),
+                );
                 let _ = vm.variables.set_by_id(id, resolved);
             }
         }
@@ -222,11 +224,27 @@ fn run_task_slice(task: &mut Task, quantum: usize) -> Option<TaskStatus> {
             };
 
             let mut state = task.vm.take_task_state();
+            let resolved_captures = std::sync::Arc::new(
+                captures
+                    .as_ref()
+                    .iter()
+                    .map(|(k, v)| {
+                        let resolved = task
+                            .vm
+                            .resolve_value_for_op_ref(v)
+                            .unwrap_or_else(|_| RuntimeValue::Null);
+                        let resolved = task.vm.resolve_saveable_runtime_value_ref(
+                            &task.vm.convert_runtime_var_into_saveable(resolved),
+                        );
+                        (k.clone(), resolved)
+                    })
+                    .collect(),
+            );
 
             let status = task.vm.run_function_with_budget(
                 func.as_ref(),
                 Vec::new(),
-                captures.clone(),
+                resolved_captures,
                 quantum,
                 &mut state,
             );

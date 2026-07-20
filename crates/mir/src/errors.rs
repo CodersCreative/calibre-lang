@@ -12,8 +12,12 @@ pub enum MiddleErr {
     At(Span, Box<MiddleErr>),
     #[error("Expected {0} operation.")]
     ExpectedOperation(String),
+    #[error("Invalid tag : {0}.")]
+    InvalidTag(String),
     #[error("Expected only functions.")]
     ExpectedFunctions,
+    #[error("Unable to infer type.")]
+    InferImpossible,
     #[error("Index out of bounds for list, {0}.")]
     InvalidIndex(i64),
     #[error("Default value name not identifier.")]
@@ -30,6 +34,8 @@ pub enum MiddleErr {
     Scope(String),
     #[error("Unable to find variable : {0:?}")]
     Variable(String),
+    #[error("Overload Invalid : {0:?}")]
+    Overload(String),
     #[error("Unable to find object : {0:?}")]
     Object(String),
     #[error("Enum Variant does not exist : {0:?}")]
@@ -43,6 +49,12 @@ pub enum MiddleErr {
         path: PathBuf,
         contents: String,
         errors: Vec<ParserError>,
+    },
+    #[error("Error in {path:?}")]
+    InFile {
+        path: PathBuf,
+        contents: String,
+        error: Box<MiddleErr>,
     },
     #[error("Multiple middle errors")]
     Multiple(Vec<MiddleErr>),

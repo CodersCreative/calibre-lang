@@ -1,9 +1,9 @@
 use crate::{
     Parser, Span,
     ast::{
-        CallArg, DestructurePattern, GenericTypes, IfComparisonType, LoopType, MatchArmType,
-        MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem, Node, NodeType,
-        ObjectType, Overload, ParserDataType, ParserInnerType, PipeSegment,
+        CallArg, DestructurePattern, EmitType, GenericTypes, IfComparisonType, LoopType,
+        MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem, Node,
+        NodeType, ObjectType, Overload, ParserDataType, ParserInnerType, PipeSegment,
         PotentialDollarIdentifier, PotentialNewType, SelectArmKind, TypeDefType, VarType,
     },
 };
@@ -46,6 +46,13 @@ impl Tab {
 pub struct Comment {
     pub value: String,
     pub span: Span,
+    pub kind: CommentKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CommentKind {
+    Line,
+    Block,
 }
 
 pub struct Formatter {
@@ -211,6 +218,7 @@ impl Formatter {
                         let end_col = if col > 1 { col - 1 } else { col };
                         comments.push(Comment {
                             value: val,
+                            kind: CommentKind::Line,
                             span: Span::new(
                                 crate::Position {
                                     line: start_line,
@@ -252,6 +260,7 @@ impl Formatter {
                         }
                         comments.push(Comment {
                             value: val,
+                            kind: CommentKind::Block,
                             span: Span::new(
                                 crate::Position {
                                     line: start_line,
@@ -306,19 +315,19 @@ impl Formatter {
             let formatted = handle_comment!(leading, self.format(&node));
             let formatted = formatted.trim_end().trim_end_matches(';').to_string();
             let formatted = if let Some(trailing) = trailing {
-                format!("{} {}", formatted, trailing)
+                format!("{}; {}", formatted, trailing)
             } else {
-                formatted
+                format!("{};", formatted)
             };
 
             if let Some(line) = last_line {
                 if (node.span.from.line as i32 - line as i32).abs() > 1 {
-                    lines.push(format!("\n{};\n", formatted));
+                    lines.push(format!("\n{}\n", formatted));
                 } else {
-                    lines.push(format!("{};\n", formatted));
+                    lines.push(format!("{}\n", formatted));
                 }
             } else {
-                lines.push(format!("{};\n", formatted));
+                lines.push(format!("{}\n", formatted));
             }
 
             last_line = Some(node.span.to.line);
@@ -341,6 +350,10 @@ impl Formatter {
                 }
                 txt
             }
+            NodeType::Emit(EmitType::Scope(x)) => format!("emit {}", self.format(x)),
+            NodeType::Emit(EmitType::Channel { channel, value }) => {
+                format!("emit {} {}", self.format(channel), self.format(value))
+            }
             NodeType::Continue { label } => {
                 let mut txt = String::from("continue");
                 if let Some(label) = label {
@@ -352,9 +365,8 @@ impl Formatter {
             NodeType::Defer { value, function } => format!(
                 "defer {}{}",
                 if *function { "return " } else { "" },
-                self.format(&value)
+                self.format(value)
             ),
-
             NodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
                 if items.len() == 1 {
@@ -830,7 +842,7 @@ impl Formatter {
                         match arg {
                             CallArg::Value(x) => arg_txt.push(self.format(x)),
                             CallArg::Named(x, y) => {
-                                arg_txt.push(format!("{} = {}", x, self.format(y)))
+                                arg_txt.push(format!("{} : {}", x, self.format(y)))
                             }
                         }
                     }
@@ -858,6 +870,25 @@ impl Formatter {
             }
             NodeType::StructLiteral { identifier, value } => {
                 format!("{} {}", identifier, self.fmt_struct_literal(value))
+            }
+            NodeType::Tag {
+                node,
+                tag,
+                arguments,
+            } => {
+                let args_str = if arguments.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "({})",
+                        arguments
+                            .iter()
+                            .map(|arg| self.format(arg))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
+                format!("@{}{} {}", tag, args_str, self.format(node))
             }
             NodeType::EnumExpression {
                 identifier,
@@ -1003,18 +1034,33 @@ impl Formatter {
                                 chunk.push_str(&format!("{} ", id.0));
                                 expanded_chunk.push_str(&id.0.to_string());
                             }
-                            if !id.1.is_auto() {
+                            if let Some(x) = &id.1 {
                                 expanded_chunk
-                                    .push_str(&format!(": {}", self.fmt_potential_new_type(&id.1)));
+                                    .push_str(&format!(": {}", self.fmt_potential_new_type(x)));
+                            }
+                            if let Some(x) = &id.2 {
+                                expanded_chunk.push_str(&format!(
+                                    "{}= {}",
+                                    if id.1.is_none() { ":" } else { " " },
+                                    self.format(x)
+                                ));
                             }
                             param_txt_expanded.push(expanded_chunk);
                             param_index += 1;
                         }
 
-                        if let Some(last) = params.last()
-                            && !last.1.is_auto()
-                        {
-                            chunk.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
+                        if let Some(last) = params.last() {
+                            if let Some(x) = &last.1 {
+                                chunk.push_str(&format!(": {}", self.fmt_potential_new_type(x)));
+                            }
+
+                            if let Some(x) = &last.2 {
+                                chunk.push_str(&format!(
+                                    "{}= {}",
+                                    if last.1.is_none() { ":" } else { " " },
+                                    self.format(x)
+                                ));
+                            }
                         }
                         param_txt.push(chunk.trim_end().to_string());
                     }
@@ -1044,7 +1090,7 @@ impl Formatter {
                     };
                 }
 
-                if !header.return_type.is_auto() {
+                if !header.return_type.is_null() {
                     txt.push_str(&format!(
                         " -> {}",
                         self.fmt_potential_new_type(&header.return_type)
@@ -1073,7 +1119,7 @@ impl Formatter {
                     self.tab.get_tab_from_amt(0)
                 );
                 txt = self.wrap_if_wide(single, &multi);
-                if return_type.data_type != ParserInnerType::Null {
+                if !return_type.is_null() {
                     txt.push_str(&format!(" -> {}", self.fmt_ffi_type(return_type)));
                 }
                 txt.push_str(&format!(" from \"{}\"", library));
@@ -1188,14 +1234,15 @@ impl Formatter {
                     txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
                 }
 
-                if !header.parameters[0].1.is_auto() {
-                    txt.push_str(&format!(
-                        " {}",
-                        self.fmt_potential_new_type(&header.parameters[0].1)
-                    ));
+                if let Some(x) = &header.parameters[0].1 {
+                    txt.push_str(&format!(" {}", self.fmt_potential_new_type(x)));
                 }
 
-                if !header.return_type.is_auto() {
+                if let Some(x) = &header.parameters[0].2 {
+                    txt.push_str(&format!(" = {}", self.format(x)));
+                }
+
+                if !header.return_type.is_null() {
                     txt.push_str(&format!(
                         " -> {}",
                         self.fmt_potential_new_type(&header.return_type)
@@ -1206,18 +1253,16 @@ impl Formatter {
 
                 txt
             }
-            NodeType::ScopeMemberExpression { path } => {
-                let base = self.format(&path[0]);
+            NodeType::ScopeMemberExpression { module, value } => {
                 let mut parts = Vec::new();
-                for node in path.iter().skip(1) {
-                    parts.push(format!("::{}", self.format(node)));
+                for node in module.iter() {
+                    parts.push(node.to_string());
                 }
-                let single = format!("{}{}", base, parts.join(""));
-                let multi = format!(
-                    "{}\n{}",
-                    base,
-                    self.fmt_txt_with_tab(&parts.join("\n"), 1, true)
-                );
+                parts.push(self.format(&value));
+
+                let single = parts.join("::");
+                let multi = parts.join("\n");
+
                 self.wrap_if_wide(single, &multi)
             }
             NodeType::MemberExpression { path } => {
@@ -1650,7 +1695,7 @@ impl Formatter {
 
         txt = txt.trim().trim_end_matches(",").trim().to_string();
 
-        txt.push_str(">");
+        txt.push('>');
         txt
     }
 
@@ -1691,20 +1736,27 @@ impl Formatter {
                             txt.push_str(&format!("{} ", id.0));
                         }
 
-                        if let Some(last) = params.last() {
-                            txt.push_str(&format!(": {}", self.fmt_potential_new_type(&last.1)));
+                        if let Some(last) = params.last()
+                            && let Some(x) = &last.1
+                        {
+                            txt.push_str(&format!(": {}", self.fmt_potential_new_type(x)));
                         }
 
                         txt.push_str(", ");
                     }
 
                     txt = txt.trim_end().trim_end_matches(",").to_string();
+                    txt.push_str(") ");
 
-                    txt.push_str(&format!(
-                        ") -> {} {}",
-                        self.fmt_potential_new_type(&func.header.return_type),
-                        self.format(&func.body)
-                    ));
+                    if func.header.return_type.is_null() {
+                        txt.push_str(&self.format(&func.body));
+                    } else {
+                        txt.push_str(&format!(
+                            "-> {} {}",
+                            self.fmt_potential_new_type(&func.header.return_type),
+                            self.format(&func.body)
+                        ));
+                    }
 
                     txt
                 };
@@ -1722,24 +1774,24 @@ impl Formatter {
         }
     }
 
-    fn fmt_comments(mut comments: Vec<Comment>) -> String {
-        let comment = comments.remove(0);
-
-        if !comments.is_empty() {
-            let mut txt = format!("/* {}\n", comment.value.trim());
-
-            while comments.len() > 0 {
-                txt.push_str(&format!("{}\n", comments.remove(0).value.trim()));
-            }
-
-            format!("{}*/", txt)
-        } else {
-            if !comment.value.trim().contains("\n") {
-                format!("// {}", comment.value.trim())
-            } else {
-                format!("/* {}\n*/", comment.value.trim())
-            }
-        }
+    fn fmt_comments(comments: Vec<Comment>) -> String {
+        comments
+            .iter()
+            .map(|comment| {
+                let value = comment.value.trim();
+                match comment.kind {
+                    CommentKind::Line => format!("// {}", value),
+                    CommentKind::Block => {
+                        if value.contains('\n') {
+                            format!("/* {}\n*/", value)
+                        } else {
+                            format!("/* {} */", value)
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub fn get_potential_comment(&mut self, span: &Span) -> Option<String> {
@@ -1799,124 +1851,29 @@ impl Formatter {
         }
     }
 
-    fn fmt_new_type_obj(&mut self, obj: &ObjectType<PotentialNewType>) -> String {
-        match obj {
-            ObjectType::Map(x) => {
-                let mut fields = Vec::new();
-                for (key, value) in x {
-                    let leading = self.get_potential_comment(value.span());
-                    let trailing = self.get_trailing_comment(value.span());
-                    fields.push((
-                        key.clone(),
-                        self.fmt_potential_new_type(value),
-                        leading,
-                        trailing,
-                    ));
-                }
-                let has_comments = fields
-                    .iter()
-                    .any(|(_, _, leading, trailing)| leading.is_some() || trailing.is_some());
-
-                let mut single = String::from("{ ");
-                if has_comments {
-                    for (key, type_txt, _, _) in &fields {
-                        single.push_str(&format!("{} : {}, ", key, type_txt));
-                    }
-                } else {
-                    let mut groups: Vec<(Vec<String>, String)> = Vec::new();
-                    for (key, type_txt, _, _) in &fields {
-                        if let Some((keys, last_type)) = groups.last_mut()
-                            && *last_type == *type_txt
-                        {
-                            keys.push(key.clone());
-                        } else {
-                            groups.push((vec![key.clone()], type_txt.clone()));
-                        }
-                    }
-                    for (keys, type_txt) in &groups {
-                        if keys.len() > 1 {
-                            single.push_str(&format!("{} : {}, ", keys.join(" "), type_txt));
-                        } else if let Some(key) = keys.first() {
-                            single.push_str(&format!("{} : {}, ", key, type_txt));
-                        }
-                    }
-                }
-                single = single.trim_end().trim_end_matches(",").to_string();
-                single.push_str(" }");
-
-                let mut multi = String::from("{\n");
-                if has_comments {
-                    for (key, type_txt, leading, trailing) in &fields {
-                        let mut line =
-                            handle_comment!(leading.clone(), format!("{} : {}", key, type_txt));
-                        if let Some(trailing) = trailing {
-                            line.push(' ');
-                            line.push_str(trailing);
-                        }
-                        multi.push_str(&format!("{},\n", line));
-                    }
-                } else {
-                    let mut groups: Vec<(Vec<String>, String)> = Vec::new();
-                    for (key, type_txt, _, _) in &fields {
-                        if let Some((keys, last_type)) = groups.last_mut()
-                            && *last_type == *type_txt
-                        {
-                            keys.push(key.clone());
-                        } else {
-                            groups.push((vec![key.clone()], type_txt.clone()));
-                        }
-                    }
-                    for (keys, type_txt) in &groups {
-                        let line = if keys.len() > 1 {
-                            format!("{} : {}", keys.join(" "), type_txt)
-                        } else if let Some(key) = keys.first() {
-                            format!("{} : {}", key, type_txt)
-                        } else {
-                            String::new()
-                        };
-                        multi.push_str(&format!("{},\n", line));
-                    }
-                }
-                multi = self.fmt_txt_with_tab(multi.trim_end().trim_end_matches(","), 1, true);
-                multi.push_str("\n}");
-                if has_comments {
-                    multi
-                } else {
-                    self.wrap_if_wide(single, &multi)
-                }
-            }
-
-            ObjectType::Tuple(x) => {
-                let mut txt = String::from("(");
-
-                for value in x {
-                    txt.push_str(&handle_comment!(
-                        self.get_potential_comment(value.span()),
-                        format!("{}, ", self.fmt_potential_new_type(value))
-                    ));
-                }
-
-                txt = self.fmt_txt_with_tab(txt.trim_end().trim_end_matches(","), 1, false);
-
-                txt.push_str(")");
-                txt
-            }
-        }
-    }
-
     fn fmt_type_def_type(&mut self, type_def: &TypeDefType) -> String {
         let mut txt = String::new();
         match type_def {
-            TypeDefType::Enum(values) => {
+            TypeDefType::Enum {
+                variants,
+                default_variant,
+                default_value,
+            } => {
+                let default_variant = (*default_variant).unwrap_or(variants.len() + 1);
                 let mut entries = Vec::new();
-                for arm in values {
+                for arm in variants {
                     let leading = self.get_potential_comment(arm.0.span());
                     let trailing = self.get_trailing_comment(arm.0.span());
                     entries.push((arm.0.clone(), arm.1.clone(), leading, trailing));
                 }
-                let has_comments = entries
-                    .iter()
-                    .any(|(_, _, leading, trailing)| leading.is_some() || trailing.is_some());
+                let has_comments = entries.iter().any(
+                    |(_, _, leading, trailing): &(
+                        PotentialDollarIdentifier,
+                        Option<PotentialNewType>,
+                        Option<String>,
+                        Option<String>,
+                    )| leading.is_some() || trailing.is_some(),
+                );
 
                 let mut single = String::from("enum { ");
                 if has_comments {
@@ -1933,21 +1890,41 @@ impl Formatter {
                     }
                 } else {
                     let mut groups: Vec<(Vec<String>, Option<String>)> = Vec::new();
-                    for (name, data, _, _) in &entries {
-                        let data_txt = data.as_ref().map(|x| self.fmt_potential_new_type(x));
+                    let mut default_idx = entries.len() + 1;
+
+                    for (i, (name, data, _, _)) in entries.iter().enumerate() {
+                        let data_txt: Option<String> =
+                            data.as_ref().map(|x| self.fmt_potential_new_type(x));
                         if let Some((names, last_data)) = groups.last_mut()
                             && *last_data == data_txt
+                            && i != default_variant
                         {
                             names.push(name.to_string());
                         } else {
+                            if i == default_variant {
+                                default_idx = groups.len();
+                            }
                             groups.push((vec![name.to_string()], data_txt));
                         }
                     }
-                    for (names, data_txt) in &groups {
+
+                    for (i, (names, data_txt)) in groups.iter().enumerate() {
+                        if i == default_idx {
+                            single.push_str("@default ");
+                        }
+
                         if let Some(data_txt) = data_txt {
                             single.push_str(&format!("{} : {}, ", names.join(" "), data_txt));
                         } else {
                             single.push_str(&format!("{}, ", names.join(", ")));
+                        }
+
+                        if let Some(x) = default_value
+                            && i == default_idx
+                        {
+                            single.push_str(&format!(" = {}, ", self.format(x)));
+                        } else {
+                            single.push_str(", ");
                         }
                     }
                 }
@@ -1971,21 +1948,40 @@ impl Formatter {
                     }
                 } else {
                     let mut groups: Vec<(Vec<String>, Option<String>)> = Vec::new();
-                    for (name, data, _, _) in &entries {
-                        let data_txt = data.as_ref().map(|x| self.fmt_potential_new_type(x));
+                    let mut default_idx = entries.len() + 1;
+
+                    for (i, (name, data, _, _)) in entries.iter().enumerate() {
+                        let data_txt: Option<String> =
+                            data.as_ref().map(|x| self.fmt_potential_new_type(x));
                         if let Some((names, last_data)) = groups.last_mut()
                             && *last_data == data_txt
+                            && i != default_variant
                         {
                             names.push(name.to_string());
                         } else {
+                            if i == default_variant {
+                                default_idx = groups.len();
+                            }
                             groups.push((vec![name.to_string()], data_txt));
                         }
                     }
-                    for (names, data_txt) in &groups {
+
+                    for (i, (names, data_txt)) in groups.iter().enumerate() {
+                        if i == default_idx {
+                            multi.push_str("@default\n");
+                        }
                         if let Some(data_txt) = data_txt {
-                            multi.push_str(&format!("{} : {},\n", names.join(" "), data_txt));
+                            multi.push_str(&format!("{} : {}", names.join(" "), data_txt));
                         } else {
-                            multi.push_str(&format!("{},\n", names.join(", ")));
+                            multi.push_str(&names.join(", "));
+                        }
+
+                        if let Some(x) = default_value
+                            && i == default_idx
+                        {
+                            multi.push_str(&format!(" = {},\n", self.format(x)));
+                        } else {
+                            multi.push_str(",\n");
                         }
                     }
                 }
@@ -1999,9 +1995,63 @@ impl Formatter {
                 }
             }
             TypeDefType::NewType(x) => txt.push_str(&self.fmt_potential_new_type(&x)),
-            TypeDefType::Struct(x) => {
-                txt.push_str(&format!("struct {}", self.fmt_new_type_obj(&x)));
-            }
+            TypeDefType::Struct { fields } => match fields {
+                ObjectType::Map(x) => {
+                    let mut fields_vec = Vec::new();
+                    for (key, (value, default_value)) in x {
+                        let leading = self.get_potential_comment(value.span());
+                        let trailing = self.get_trailing_comment(value.span());
+                        let type_txt = self.fmt_potential_new_type(value);
+                        let field_txt = if let Some(default) = default_value {
+                            format!("{} : {} = {}", key, type_txt, self.format(default))
+                        } else {
+                            format!("{} : {}", key, type_txt)
+                        };
+                        fields_vec.push((field_txt, leading, trailing));
+                    }
+                    let has_comments = fields_vec
+                        .iter()
+                        .any(|(_, leading, trailing)| leading.is_some() || trailing.is_some());
+
+                    let mut single = String::from("{ ");
+                    for (field_txt, _, _) in &fields_vec {
+                        single.push_str(&format!("{}, ", field_txt));
+                    }
+
+                    single = single.trim_end().trim_end_matches(",").to_string();
+                    single.push_str(" }");
+
+                    let mut multi = String::from("{\n");
+                    for (field_txt, leading, trailing) in &fields_vec {
+                        let mut line = handle_comment!(leading.clone(), field_txt.clone());
+                        if let Some(trailing) = trailing {
+                            line.push(' ');
+                            line.push_str(trailing);
+                        }
+                        multi.push_str(&format!("{},\n", line));
+                    }
+                    multi = self.fmt_txt_with_tab(multi.trim_end().trim_end_matches(","), 1, false);
+                    multi.push_str("\n}");
+                    if has_comments {
+                        txt.push_str(&multi);
+                    } else {
+                        txt.push_str(&self.wrap_if_wide(single, &multi));
+                    }
+                }
+                ObjectType::Tuple(x) => {
+                    let mut types = Vec::new();
+                    for (value, default_value) in x {
+                        let type_txt = self.fmt_potential_new_type(value);
+                        let field_txt = if let Some(default) = default_value {
+                            format!("{} = {}", type_txt, self.format(default))
+                        } else {
+                            type_txt
+                        };
+                        types.push(field_txt);
+                    }
+                    txt.push_str(&format!("({})", types.join(", ")));
+                }
+            },
         }
         txt
     }
@@ -2017,8 +2067,8 @@ impl Formatter {
                 format!(
                     "type {} := {}{}",
                     identifier,
-                    self.fmt_type_def_type(&type_def),
-                    self.fmt_overloads(&overloads)
+                    self.fmt_type_def_type(type_def),
+                    self.fmt_overloads(overloads)
                 )
             }
         }
@@ -2515,7 +2565,7 @@ mod tests {
         let src = "let tpl = (1, 2); tpl = (3, 4);";
         let mut formatter = Formatter::default();
         let out = formatter.start_format(src, None).expect("format");
-        assert!(out.contains("let tpl = (1, 2);"), "{out}");
+        assert!(out.contains("let tpl := (1, 2);"), "{out}");
         assert!(out.contains("tpl = (3, 4);"), "{out}");
         assert!(parse_has_no_errors(&out), "{out}");
     }
@@ -2527,7 +2577,7 @@ mod tests {
         let out = formatter.start_format(src, None).expect("format");
         assert!(out.contains("one"), "{out}");
         assert!(out.contains("two"), "{out}");
-        assert!(out.contains("let x = 1;"), "{out}");
+        assert!(out.contains("let x := 1;"), "{out}");
         assert!(parse_has_no_errors(&out), "{out}");
     }
 

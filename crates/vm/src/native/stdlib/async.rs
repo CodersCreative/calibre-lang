@@ -78,9 +78,24 @@ impl NativeFunction for ChannelSend {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let value = pop_or_null(&mut args);
+        let (ch, value) = match args.len() {
+            2 => {
+                let first = env.resolve_value_for_op_ref(&args[0])?;
+                let second = env.resolve_value_for_op_ref(&args[1])?;
+                match (first, second) {
+                    (RuntimeValue::Channel(ch), value) => (ch, value),
+                    (value, RuntimeValue::Channel(ch)) => (ch, value),
+                    (left, _) => return Err(RuntimeError::UnexpectedType(left)),
+                }
+            }
+            _ => {
+                let value = pop_or_null(&mut args);
+                let value = env.convert_runtime_var_into_saveable(value);
+                let ch = resolve_channel(env, &mut args)?;
+                (ch, value)
+            }
+        };
         let value = env.convert_runtime_var_into_saveable(value);
-        let ch = resolve_channel(env, &mut args)?;
 
         if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(RuntimeValue::Null);
@@ -158,9 +173,24 @@ impl NativeFunction for ChannelTrySend {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let value = pop_or_null(&mut args);
+        let (ch, value) = match args.len() {
+            2 => {
+                let first = env.resolve_value_for_op_ref(&args[0])?;
+                let second = env.resolve_value_for_op_ref(&args[1])?;
+                match (first, second) {
+                    (RuntimeValue::Channel(ch), value) => (ch, value),
+                    (value, RuntimeValue::Channel(ch)) => (ch, value),
+                    (left, _) => return Err(RuntimeError::UnexpectedType(left)),
+                }
+            }
+            _ => {
+                let value = pop_or_null(&mut args);
+                let value = env.convert_runtime_var_into_saveable(value);
+                let ch = resolve_channel(env, &mut args)?;
+                (ch, value)
+            }
+        };
         let value = env.convert_runtime_var_into_saveable(value);
-        let ch = resolve_channel(env, &mut args)?;
 
         if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(RuntimeValue::Bool(false));

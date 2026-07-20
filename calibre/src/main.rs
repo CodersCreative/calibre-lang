@@ -40,6 +40,13 @@ fn emit_middle_error(path: &Path, contents: &str, err: &MiddleErr) {
         } => {
             calibre_diagnostics::emit_parser_errors(err_path, contents, errors);
         }
+        MiddleErr::InFile {
+            path: err_path,
+            contents: err_contents,
+            error,
+        } => {
+            emit_middle_error(err_path, err_contents, error);
+        }
         other => {
             calibre_diagnostics::emit_error(path, contents, other.to_string(), None);
         }
@@ -93,7 +100,17 @@ async fn run_source(
                 calibre_diagnostics::emit_parser_errors(path, &contents, &errors);
                 return Err("parse failed".into());
             }
-            Err(CalibreError::Middle { error, .. }) => {
+            Err(CalibreError::Middle {
+                error,
+                ast_artifacts,
+                ..
+            }) => {
+                if verbosity.is_level(&Verbosity::AST)
+                    && let Some(ast) = ast_artifacts
+                {
+                    println!("{}", ast);
+                }
+
                 emit_middle_error(path, &contents, &error);
                 return Err("compile failed".into());
             }
@@ -164,28 +181,69 @@ async fn run_source(
         } else {
             println!("{}", vm.registry.as_ref());
         }
+    };
+
+    let mut init_functions = artifacts.init_functions.clone();
+
+    if !init_functions.iter().any(|x| x.1 == entry_name) {
+        init_functions.push((0, entry_name.clone()));
     }
 
-    if let Some(main) = vm.registry.functions.get(&entry_name).cloned() {
-        if let Err(err) = vm.run(main.as_ref(), Vec::new()) {
-            let (span, inner) = err.innermost();
-            calibre_diagnostics::emit_runtime_error(
-                path,
-                &contents,
-                inner.to_string(),
-                span,
-                inner.help(),
-            );
-            return Err("runtime error".into());
+    init_functions.sort_by(|a, b| b.0.cmp(&a.0));
+
+    let mut ran = false;
+    for (priority, func_name) in init_functions {
+        if let Some(init_func) = vm.registry.functions.get(&func_name).cloned() {
+            if let Err(err) = vm.run(init_func.as_ref(), Vec::new()) {
+                let (span, inner) = err.innermost();
+                calibre_diagnostics::emit_runtime_error(
+                    path,
+                    &contents,
+                    format!(
+                        "Init function error (priority {}): {}",
+                        priority,
+                        inner.to_string()
+                    ),
+                    span,
+                    inner.help(),
+                );
+                return Err("runtime error".into());
+            }
+            ran = true;
         }
-    } else {
+    }
+
+    if !ran {
         calibre_diagnostics::emit_error(
             path,
             &contents,
-            format!("Missing entry point: {}", entry_name),
+            format!("Missing @init fn or {} fn", entry_name),
             None,
         );
         return Err("runtime error".into());
+    }
+
+    let mut fin_functions = artifacts.fin_functions.clone();
+    fin_functions.sort_by(|a, b| b.0.cmp(&a.0));
+
+    for (priority, func_name) in fin_functions {
+        if let Some(fin_func) = vm.registry.functions.get(&func_name).cloned() {
+            if let Err(err) = vm.run(fin_func.as_ref(), Vec::new()) {
+                let (span, inner) = err.innermost();
+                calibre_diagnostics::emit_runtime_error(
+                    path,
+                    &contents,
+                    format!(
+                        "Fin function error (priority {}): {}",
+                        priority,
+                        inner.to_string()
+                    ),
+                    span,
+                    inner.help(),
+                );
+                return Err("runtime error".into());
+            }
+        }
     }
 
     if !verbosity.is_level(&Verbosity::None) {
@@ -666,15 +724,14 @@ async fn run_benches(
 fn scope_filter_token(entry_name: &str) -> Option<String> {
     let head = entry_name.split(':').next()?;
     let mut parts = head.split('-');
-    let _prefix = parts.next()?;
-    let scope = parts.next()?;
-    Some(format!("-{scope}-"))
+    let _ = parts.next()?;
+
+    Some(format!("-{}-", parts.next()?))
 }
 
+#[inline]
 fn scope_id_from_token(token: Option<&str>) -> Option<u64> {
-    let token = token?;
-    let trimmed = token.trim_matches('-');
-    trimmed.parse::<u64>().ok()
+    token?.trim_matches('-').parse::<u64>().ok()
 }
 
 fn node_matches_scope(node: &MiddleNode, scope_id: u64, token: Option<&str>) -> bool {
@@ -698,23 +755,20 @@ fn filter_mir_node_for_scope(node: &MiddleNode, scope_id: u64, token: Option<&st
             body,
             create_new_scope,
             is_temp,
-            scope_id: sid,
-        } => {
-            let filtered_body = body
-                .iter()
-                .filter(|child| node_matches_scope(child, scope_id, token))
-                .map(|child| filter_mir_node_for_scope(child, scope_id, token))
-                .collect::<Vec<_>>();
-            MiddleNode::new(
-                MiddleNodeType::ScopeDeclaration {
-                    body: filtered_body,
-                    create_new_scope: *create_new_scope,
-                    is_temp: *is_temp,
-                    scope_id: *sid,
-                },
-                node.span,
-            )
-        }
+            scope_id: s,
+        } => MiddleNode::new(
+            MiddleNodeType::ScopeDeclaration {
+                body: body
+                    .iter()
+                    .filter(|child| node_matches_scope(child, scope_id, token))
+                    .map(|child| filter_mir_node_for_scope(child, scope_id, token))
+                    .collect(),
+                create_new_scope: *create_new_scope,
+                is_temp: *is_temp,
+                scope_id: *s,
+            },
+            node.span,
+        ),
         _ => node.clone(),
     }
 }
@@ -728,16 +782,19 @@ fn filter_registry_by_scope_text(
     };
 
     let mut out = String::new();
+
     for (name, global) in &registry.globals {
         if name.contains(token) {
             out.push_str(&format!("{}\n", global));
         }
     }
+
     for (name, func) in &registry.functions {
         if name.contains(token) {
             out.push_str(&format!("{}\n\n", func.as_ref()));
         }
     }
+
     out
 }
 
@@ -826,28 +883,29 @@ async fn run_repl_source(
     }
 }
 
+#[inline]
 fn is_repl_file(contents: &str) -> bool {
     contents.trim_start().starts_with("// REPL")
 }
 
 fn is_persistent_decl(line: &str) -> bool {
     let trimmed = line.trim_start();
-    let keywords = [
+    [
         "const ", "let ", "type ", "import ", "trait ", "impl ", "extern ",
-    ];
-    keywords.iter().any(|k| trimmed.starts_with(k))
+    ]
+    .into_iter()
+    .any(|k| trimmed.starts_with(k))
 }
 
+#[inline]
 fn vm_config_from_project(project: Option<&ProjectContext>) -> VMConfig {
-    if let Some(project) = project {
-        VMConfig {
+    project
+        .map(|project| VMConfig {
             gc_interval: project.config.vm.gc_interval,
             async_max_per_thread: project.config.vm.async_max_per_thread,
             async_quantum: project.config.vm.async_quantum,
-        }
-    } else {
-        VMConfig::default()
-    }
+        })
+        .unwrap_or_default()
 }
 
 fn resolve_run_target(
@@ -857,11 +915,17 @@ fn resolve_run_target(
     if path.is_some() && example.is_some() {
         return Err("cannot use both a path and --example".into());
     }
-    if let Some(path) = path {
-        return Ok(Some(PathBuf::from(path)));
-    }
 
-    let cwd = std::env::current_dir()?;
+    let mut cwd = if let Some(path) = path {
+        if path.ends_with(".cal") {
+            return Ok(Some(PathBuf::from(path)));
+        } else {
+            std::fs::canonicalize(path)?
+        }
+    } else {
+        std::env::current_dir()?
+    };
+
     let project = load_project_from(&cwd).map_err(|e| format!("config error: {e}"))?;
 
     if let Some(example) = example {
@@ -875,14 +939,22 @@ fn resolve_run_target(
     }
 
     if let Some(project) = project {
-        let src = project.root.join(project.config.package.src);
-        if src.is_dir() {
-            return Ok(Some(src.join("main.cal")));
-        }
-        return Ok(Some(src));
+        cwd = project.root.join(project.config.package.src);
     }
 
-    Ok(None)
+    let path1 = cwd.join("main.cal");
+    let path2 = cwd.join("src/main.cal");
+
+    match (
+        cwd.exists() && cwd.is_file(),
+        path1.exists() && path1.is_file(),
+        path2.exists() && path2.is_file(),
+    ) {
+        (true, _, _) => Ok(Some(cwd)),
+        (_, true, _) => Ok(Some(path1)),
+        (_, _, true) => Ok(Some(path2)),
+        _ => Ok(None),
+    }
 }
 
 fn package_metadata_from_project(project: Option<&ProjectContext>) -> Option<PackageMetadata> {
@@ -903,9 +975,9 @@ fn run_external_subcommand(cmd: &[String]) -> Result<(), Box<dyn Error>> {
     if cmd.is_empty() {
         return Ok(());
     }
-    let sub = &cmd[0];
+
+    let bin_name = format!("calibre-{}", cmd[0]);
     let forward = &cmd[1..];
-    let bin_name = format!("calibre-{sub}");
 
     let mut candidates = vec![PathBuf::from(&bin_name)];
     if let Ok(exe) = std::env::current_exe()
@@ -1158,7 +1230,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                     program_args,
                 }) => {
                     if let Some(path) = resolve_run_target(path, example)? {
-                        let path = PathBuf::from_str(path.to_string_lossy().as_ref())?;
                         let contents = fs::read_to_string(&path).await?;
                         if is_repl_file(&contents) {
                             let session = contents.lines().skip(1).map(|x| x.to_string()).collect();
@@ -1169,6 +1240,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             load_project_from(&path).map_err(|e| format!("config error: {e}"))?;
                         let vm_config = vm_config_from_project(project.as_ref());
                         let package_metadata = package_metadata_from_project(project.as_ref());
+
                         let cache_base_dir = project.as_ref().map(|p| p.root.clone());
 
                         if let Some(project) = project

@@ -2,7 +2,7 @@ type Args := struct { };
 type Vars := struct { };
 
 impl Args {
-	const nth := fn (idx : int) -> str? => get(idx);
+	const nth := fn (idx : int) -> str? => return get(idx);
 
 	const all := fn -> list:<str> => {
 		let mut out : list:<str> = list:<str>[];
@@ -35,22 +35,22 @@ impl Args {
 		return idx;
 	};
 
-	const first := fn -> str? => get(0);
+	const first := fn -> str? => return get(0);
 
-	const is_empty := fn -> bool => Args.count() = 0;
+	const is_empty := fn -> bool => return Args.count() = 0;
 };
 
 impl Vars {
-	const get := fn (name : str) -> str? => var(name);
+	const get := fn (name : str) -> str? => return var(name);
 
 	const has := fn (name : str) -> bool => match var(name) {
-		.Some : _ => true,
-		.None => false
+		.Some : _ => return true,
+		.None => return false
 	};
 
 	const set := fn (name : str, value : str) => set_var(name, value);
 
 	const remove := fn (name : str) => remove_var(name);
 
-	const vars := fn -> list:<str> => vars();
+	const vars := fn -> list:<str> => return vars();
 };

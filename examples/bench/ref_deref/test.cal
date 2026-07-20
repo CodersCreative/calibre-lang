@@ -7,7 +7,7 @@ const sum_refs := fn (n : int) -> int => {
 		acc += x.*;
 	};
 	
-	acc;
+	return acc;
 };
 
 const main := fn => {

@@ -1,0 +1,35 @@
+trait Drop {
+    const drop : fn(Self) -> null;
+}
+
+trait Default {
+    const default : fn() -> Self;
+}
+
+impl Default for int {
+    const default := fn => 0;
+}
+
+impl Default for uint {
+    const default := fn => 0;
+}
+
+impl Default for float {
+    const default := fn => 0.0;
+}
+
+impl Default for bool {
+    const default := fn => false;
+}
+
+impl Default for str {
+    const default := fn => "";
+}
+
+impl Default for char {
+    const default := fn => '\0';
+}
+
+impl Default for null {
+    const default := fn => null;
+}

@@ -1,3 +1,4 @@
+import std::console;
 import File from std::fs;
 import Args from std::env;
 
@@ -10,7 +11,7 @@ impl BrainFuck {
 		for self.pointer >= len(self.memory) => self.memory <<= 0b;
 	};
 
-	const interpret := fn (self : &mut Self, s : str) -> null => {
+	const interpret := fn (self : &mut Self, s : str) => {
 		let mut c := 0;
 		let s : list:<char> = s.to_chars();
 		let mut i := 0;
@@ -19,14 +20,14 @@ impl BrainFuck {
 			match s[i] {
 				'>' => {
 					if self.pointer >= (self.capacity - 1) => {
-						self.pointer = 0;
+						self.pointer := 0;
 					} else => {
 						self.pointer += 1;
 					};
 				},
 				'<' => {
 					if self.pointer = 0 => {
-						self.pointer = self.capacity - 1;
+						self.pointer := self.capacity - 1;
 					} else => {
 						self.pointer -= 1;
 					};
@@ -47,12 +48,12 @@ impl BrainFuck {
 					self.ensure_cell();
 					let inp : str = std::console::input();
 					let inp : char = inp.to_chars()[0];
-					self.memory[self.pointer] = inp as! byte;
+					self.memory[self.pointer] := inp as! byte;
 				},
 				'[' => {
 					self.ensure_cell();
 					if self.memory[self.pointer] = 0 => {
-						c = 0;
+						c := 0;
 						i += 1;
 						
 						for c > 0 || s[i] != ']' => {
@@ -69,7 +70,7 @@ impl BrainFuck {
 				']' => {
 					self.ensure_cell();
 					if self.memory[self.pointer] != 0 => {
-						c = 0;
+						c := 0;
 						i -= 1;
 						
 						for c > 0 || s[i] != '[' => {
@@ -94,8 +95,8 @@ impl BrainFuck {
 
 const main := fn => {
 	let input_path := match Args.first() {
-		.Some : p => p,
-		.None => __file__.replace("interpreter.cal", "helloworld.bf")
+		.Some : p => emit p,
+		.None => emit __file__.replace("interpreter.cal", "helloworld.bf")
 	};
 	
 	let mut file := try File.open_read(input_path) : e => {

@@ -1,9 +1,9 @@
 use crate::{
     Position, Span,
     ast::{
-        CallArg, MatchArmType, MatchTupleItem, NamedScope, Node, NodeType, ParserDataType,
-        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        PotentialNewType, VarType,
+        MatchArmType, MatchTupleItem, NamedScope, Node, NodeType, ParserDataType, ParserInnerType,
+        ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
+        VarType,
     },
 };
 use chumsky::prelude::*;
@@ -37,33 +37,60 @@ pub(super) fn auto_type(sp: Span) -> PotentialNewType {
     ParserDataType::new(sp, ParserInnerType::Auto(None)).into()
 }
 
-pub(super) fn ident_node(sp: Span, txt: &str) -> Node {
-    Node::new(
-        sp,
-        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-            PotentialDollarIdentifier::Identifier(ParserText::new(sp, txt.to_string())),
-        )),
-    )
+pub(super) fn none_type(sp: Span) -> PotentialNewType {
+    ParserDataType::new(sp, ParserInnerType::Null).into()
 }
 
-pub(super) fn call_node(
-    sp: Span,
-    caller: Node,
-    string_fn: Option<ParserText>,
-    args: Vec<CallArg>,
-    reverse_args: Vec<Node>,
-    generic_types: Vec<PotentialNewType>,
-) -> Node {
-    Node::new(
-        sp,
-        NodeType::CallExpression {
-            string_fn,
-            caller: Box::new(caller),
-            generic_types,
-            args,
-            reverse_args,
-        },
-    )
+pub(super) fn scope_node_parser<'a, P>(
+    statement: P,
+    delim: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
+    pad: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
+) -> impl Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a
+where
+    P: Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a,
+{
+    let body_items = statement
+        .separated_by(delim.clone())
+        .allow_trailing()
+        .collect::<Vec<_>>()
+        .or_not()
+        .map(|x| x.unwrap_or_default());
+
+    let mk_scope = |items: Vec<Node>, create_new_scope: bool| {
+        let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
+            Span::new_from_spans(a.span, b.span)
+        } else {
+            Span::default()
+        };
+        Node::new(
+            sp,
+            NodeType::ScopeDeclaration {
+                body: Some(items),
+                named: None,
+                is_temp: true,
+                create_new_scope: Some(create_new_scope),
+                define: false,
+            },
+        )
+    };
+
+    let no_new_scope = just("{{")
+        .padded_by(pad.clone())
+        .then_ignore(delim.clone().repeated())
+        .ignore_then(body_items.clone())
+        .then_ignore(delim.clone().or_not())
+        .then_ignore(just("}}").padded_by(pad.clone()))
+        .map(move |items| mk_scope(items, false));
+
+    let new_scope = just('{')
+        .padded_by(pad.clone())
+        .then_ignore(delim.clone().repeated())
+        .ignore_then(body_items)
+        .then_ignore(delim.or_not())
+        .then_ignore(just('}').padded_by(pad))
+        .map(move |items| mk_scope(items, true));
+
+    no_new_scope.or(new_scope)
 }
 
 pub(super) fn labelled_scope_parser<'a, PPad, PIdent, PScope>(
@@ -79,10 +106,19 @@ where
     lex(pad.clone(), just('@'))
         .ignore_then(ident.clone())
         .then(lex(pad.clone(), just("[]")).or_not())
-        .then(scope)
+        .then(scope.or_not())
         .map(|(((name, sp), _), body)| {
             with_named_scope(
-                body,
+                body.unwrap_or(Node::new(
+                    sp,
+                    NodeType::ScopeDeclaration {
+                        body: None,
+                        named: None,
+                        is_temp: true,
+                        create_new_scope: None,
+                        define: false,
+                    },
+                )),
                 NamedScope {
                     name: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
                     args: Vec::new(),
@@ -188,11 +224,6 @@ pub(super) fn match_arm_to_tuple_items(arm: MatchArmType) -> Option<Vec<MatchTup
         MatchArmType::TuplePattern(inner) => Some(inner),
         other => Some(vec![match_arm_to_tuple_item(other)?]),
     }
-}
-
-#[inline]
-pub(super) fn null_node(sp: Span) -> Node {
-    Node::new(sp, NodeType::Null)
 }
 
 pub(super) fn member_path_span(path: &[(Node, bool)]) -> Span {
@@ -429,23 +460,25 @@ pub(super) fn normalize_scope_member_chain(
     let remaining: Vec<(Node, bool)> = iter.collect();
 
     match (&head.node_type, &first.node_type) {
-        (NodeType::ScopeMemberExpression { path }, NodeType::Identifier(_)) => {
-            let mut new_path = path.clone();
-            new_path.push(first);
-            let Some(start) = new_path.first() else {
-                return (head, remaining);
-            };
-            let Some(end) = new_path.last() else {
-                return (head, remaining);
-            };
-            let sp = Span::new_from_spans(start.span, end.span);
+        (NodeType::ScopeMemberExpression { module, value }, NodeType::Identifier(_)) => {
+            let mut new_module = module.clone();
+            if let NodeType::Identifier(ident) = &value.node_type {
+                new_module.push(ident.clone().into());
+            }
+            let sp = Span::new_from_spans(head.span, first.span);
             (
-                Node::new(sp, NodeType::ScopeMemberExpression { path: new_path }),
+                Node::new(
+                    sp,
+                    NodeType::ScopeMemberExpression {
+                        module: new_module,
+                        value: Box::new(first),
+                    },
+                ),
                 remaining,
             )
         }
         (
-            NodeType::ScopeMemberExpression { path },
+            NodeType::ScopeMemberExpression { module, value },
             NodeType::CallExpression {
                 string_fn,
                 caller,
@@ -455,27 +488,26 @@ pub(super) fn normalize_scope_member_chain(
             },
         ) => {
             if let NodeType::Identifier(_) = caller.node_type {
-                let mut new_path = path.clone();
-                new_path.push(*caller.clone());
-                let Some(start) = new_path.first() else {
-                    return (head, remaining);
-                };
-                let Some(end) = new_path.last() else {
-                    return (head, remaining);
-                };
-                let caller_span = Span::new_from_spans(start.span, end.span);
+                let mut new_module = module.clone();
+                if let NodeType::Identifier(ident) = &value.node_type {
+                    new_module.push(ident.clone().into());
+                }
+                let caller_span = Span::new_from_spans(head.span, caller.span);
                 let scoped_caller = Node::new(
                     caller_span,
-                    NodeType::ScopeMemberExpression { path: new_path },
+                    NodeType::ScopeMemberExpression {
+                        module: new_module,
+                        value: Box::new(*caller.clone()),
+                    },
                 );
                 (
-                    call_node(
+                    Node::call_full(
                         first.span,
                         scoped_caller,
-                        string_fn.clone(),
+                        generic_types.clone(),
                         args.clone(),
                         reverse_args.clone(),
-                        generic_types.clone(),
+                        string_fn.clone(),
                     ),
                     remaining,
                 )
@@ -603,56 +635,4 @@ pub(super) fn unescape_char_literal(input: &str) -> Option<char> {
         return None;
     }
     Some(first)
-}
-
-pub(super) fn scope_node_parser<'a, P>(
-    statement: P,
-    delim: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
-    pad: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
-) -> impl Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a
-where
-    P: Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a,
-{
-    let body_items = statement
-        .separated_by(delim.clone())
-        .allow_trailing()
-        .collect::<Vec<_>>()
-        .or_not()
-        .map(|x| x.unwrap_or_default());
-
-    let mk_scope = |items: Vec<Node>, create_new_scope: bool| {
-        let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
-            Span::new_from_spans(a.span, b.span)
-        } else {
-            Span::default()
-        };
-        Node::new(
-            sp,
-            NodeType::ScopeDeclaration {
-                body: Some(items),
-                named: None,
-                is_temp: true,
-                create_new_scope: Some(create_new_scope),
-                define: false,
-            },
-        )
-    };
-
-    let no_new_scope = just("{{")
-        .padded_by(pad.clone())
-        .then_ignore(delim.clone().repeated())
-        .ignore_then(body_items.clone())
-        .then_ignore(delim.clone().or_not())
-        .then_ignore(just("}}").padded_by(pad.clone()))
-        .map(move |items| mk_scope(items, false));
-
-    let new_scope = just('{')
-        .padded_by(pad.clone())
-        .then_ignore(delim.clone().repeated())
-        .ignore_then(body_items)
-        .then_ignore(delim.or_not())
-        .then_ignore(just('}').padded_by(pad))
-        .map(move |items| mk_scope(items, true));
-
-    no_new_scope.or(new_scope)
 }

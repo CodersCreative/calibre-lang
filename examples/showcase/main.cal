@@ -47,7 +47,7 @@ const area_of_triangle := fn (a b c : float) -> float? => if is_a_triangle(a, b,
 type Pair := struct { left right : int };
 
 // Function parameters can be destructured
-const sum_pair_tuple := fn ((a, b)) => a + b;
+const sum_pair_tuple := fn ((a, b) : <int, int>) => a + b;
 const sum_pair_struct := fn ({left: a, right: b} : Pair) => a + b;
 
 // An example of traits in the language;
@@ -176,7 +176,7 @@ const main := fn => {
 	// Result and Option flow.
 	let parsed := parse_and_add("50", 7);
 	
-	parsed |> fn match {
+	parsed |> fn match str!int {
 		// The fn match statement that turns a pattern matching into functions easily
 		.Ok : v => print("result ok => " & v),
 		.Err : e => print("result err => " & e)
@@ -207,14 +207,6 @@ const main := fn => {
 	print("cast as! => " & cast_panic_style);
 	
 	200 |> fn (s : dyn) => print("pipe closure => " & s);
-	
-	// Pipe + closure + currying.
-	let curried := 3 |> mul3 |> $(4);
-	
-	print("currying => " & (5 |> curried));
-	let curried := 3 |> 4 |> mul3;
-	
-	print("currying => " & (5 |> curried));
 	
 	// Function-match declaration.
 	let classify := fn match int -> str {
@@ -265,7 +257,7 @@ const main := fn => {
 	
 	// String-template function call syntax.
 	let name := "Ty";
-	let intro := fn (splits : list:<str>, inputs : list:<str>) -> str => {
+	let intro : str = fn (splits : list:<str>, inputs : list:<str>) -> str => {
 		let mut txt : str = "";
 		
 		for i in len(splits) => {
@@ -273,7 +265,7 @@ const main := fn => {
 			if i < len(inputs) => txt &= inputs[i];
 		};
 		
-		txt;
+		return txt;
 	}"Hello, my name is {name} and age is {age}";
 	
 	print("template fn => " & intro);
@@ -302,7 +294,7 @@ const main := fn => {
 	}));
 	
 	=> {
-		// Defer in a temp scope.
+		// Defer in a temp scope.;
 		defer print("defer fired");
 		print("before defer");
 	};
@@ -323,8 +315,8 @@ const main := fn => {
 	let mut channel : Channel:<int> = Channel.new();
 	
 	spawn@ {
-		=> channel.send(41),
-		=> channel.send(42),
+		=> emit channel 41,
+		=> emit channel 42,
 		=> channel.close()
 	};
 	

@@ -1,6 +1,6 @@
 use super::{LegacySpanMapExt, setup::StrParser};
 use crate::parse::util::{
-    auto_type, lex, match_arm_to_tuple_items, span, struct_destructure_fields_parser,
+    lex, match_arm_to_tuple_items, none_type, span, struct_destructure_fields_parser,
 };
 use crate::{
     Span,
@@ -207,16 +207,10 @@ pub fn build_match_parsers<'a>(
                                 None,
                             )
                         }),
-                    )))
-                    .or_not(),
+                    ))),
             )
             .map(|((name, sp), bind)| {
-                let (var_type, name_bind, destructure, pattern) =
-                    if let Some((vt, (name_bind, destructure, pattern))) = bind {
-                        (vt, name_bind, destructure, pattern)
-                    } else {
-                        (VarType::Immutable, None, None, None)
-                    };
+                let (var_type, (name_bind, destructure, pattern)) = bind;
                 MatchTupleItem::Enum {
                     value: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
                     var_type,
@@ -639,6 +633,11 @@ pub fn build_match_parsers<'a>(
         .ignore_then(generic_params.clone())
         .then_ignore(lex(pad.clone(), just("match")))
         .then(type_name.clone().or_not())
+        .then(
+            lex(pad.clone(), just("="))
+                .ignore_then(expr.clone())
+                .or_not(),
+        )
         .then(arrow.clone().ignore_then(type_name.clone()).or_not())
         .then_ignore(lex(pad.clone(), just('{')))
         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
@@ -655,7 +654,7 @@ pub fn build_match_parsers<'a>(
         .then_ignore(lex(pad.clone(), just('}')))
         .map_with_span({
             let ls = line_starts.clone();
-            move |(((generics, param_ty), return_ty), body), r| {
+            move |((((generics, param_ty), default), return_ty), body), r| {
                 let sp = span(ls.as_ref(), r);
                 let header = FunctionHeader {
                     generics,
@@ -664,9 +663,10 @@ pub fn build_match_parsers<'a>(
                             sp,
                             "__match_value".to_string(),
                         )),
-                        param_ty.unwrap_or_else(|| auto_type(sp)),
+                        param_ty,
+                        default.map(Box::new),
                     )],
-                    return_type: return_ty.unwrap_or_else(|| auto_type(sp)),
+                    return_type: return_ty.unwrap_or_else(|| none_type(sp)),
                     param_destructures: Vec::new(),
                 };
 

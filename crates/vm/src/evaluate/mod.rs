@@ -28,6 +28,92 @@ enum CaptureRestore {
 }
 
 impl VM {
+    fn recover_member_source_for_list(&self, reg: u16, frame_idx: usize) -> Option<(u16, String)> {
+        if let Some(source) = self
+            .frames
+            .get(frame_idx)?
+            .member_sources
+            .get(&reg)
+            .cloned()
+        {
+            return Some(source);
+        }
+
+        let RuntimeValue::List(target_list) = self.get_reg_value_in_frame(frame_idx, reg).clone()
+        else {
+            return None;
+        };
+
+        self.frames.get(frame_idx)?.member_sources.iter().find_map(
+            |(candidate_reg, candidate_source)| {
+                if *candidate_reg == reg {
+                    return None;
+                }
+                if let RuntimeValue::List(other_list) = self
+                    .get_reg_value_in_frame(frame_idx, *candidate_reg)
+                    .clone()
+                    && std::ptr::eq(other_list.as_ref(), target_list.as_ref())
+                {
+                    return Some(candidate_source.clone());
+                }
+                None
+            },
+        )
+    }
+
+    fn write_back_runtime_value(&mut self, target: RuntimeValue, value: RuntimeValue) {
+        match target {
+            RuntimeValue::Ref(name) => {
+                if let Some(current) = self.variables.get(&name).cloned() {
+                    match current {
+                        RuntimeValue::Ref(_)
+                        | RuntimeValue::VarRef(_)
+                        | RuntimeValue::RegRef { .. } => {
+                            self.write_back_runtime_value(current, value);
+                        }
+                        _ => {
+                            let existed = self.variables.contains_key(&name);
+                            self.variables.insert(&name, value);
+                            if !existed {
+                                self.invalidate_name_resolution_caches();
+                            }
+                        }
+                    }
+                } else {
+                    self.variables.insert(&name, value);
+                }
+            }
+            RuntimeValue::VarRef(id) => {
+                if let Some(current) = self.variables.get_by_id(id).cloned() {
+                    match current {
+                        RuntimeValue::Ref(_)
+                        | RuntimeValue::VarRef(_)
+                        | RuntimeValue::RegRef { .. } => {
+                            self.write_back_runtime_value(current, value);
+                        }
+                        _ => {
+                            let _ = self.variables.set_by_id(id, value);
+                        }
+                    }
+                } else {
+                    let _ = self.variables.set_by_id(id, value);
+                }
+            }
+            RuntimeValue::RegRef { frame, reg } => {
+                let current = self.get_reg_value_in_frame(frame, reg).clone();
+                match current {
+                    RuntimeValue::Ref(_)
+                    | RuntimeValue::VarRef(_)
+                    | RuntimeValue::RegRef { .. } => {
+                        self.write_back_runtime_value(current, value);
+                    }
+                    _ => self.set_reg_value_in_frame(frame, reg, value),
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn propagate_member_source_args(
         &mut self,
         args: &[u16],
@@ -54,49 +140,67 @@ impl VM {
             .collect();
 
         for (frame_idx, field_reg, parent_reg, field_name) in propagated_args {
-            let updated_field = self.get_reg_value_in_frame(frame_idx, field_reg).clone();
-            let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg).clone();
-            let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
-            if let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved
-                && let Some(entry) = Gc::make_mut(&mut map)
-                    .0
-                    .0
-                    .iter_mut()
-                    .find(|(field, _)| field == &field_name)
-            {
-                entry.1 = updated_field;
-                let updated_parent = RuntimeValue::Aggregate(type_name, map);
-                match parent_raw {
-                    RuntimeValue::RegRef { frame, reg } => {
-                        self.set_reg_value_in_frame(frame, reg, updated_parent);
-                    }
-                    RuntimeValue::Ref(name) => {
-                        self.variables.insert(&name, updated_parent);
-                    }
-                    RuntimeValue::VarRef(id) => {
-                        let _ = self.variables.set_by_id(id, updated_parent);
-                    }
-                    _ => {
-                        self.set_reg_value_in_frame(frame_idx, parent_reg, updated_parent);
-                    }
-                }
-            }
+            self.write_back_member_field_update(frame_idx, field_reg, parent_reg, &field_name)?;
         }
 
         Ok(())
     }
 
-    #[inline]
-    pub(crate) fn should_pass_by_reg_ref(value: &RuntimeValue) -> bool {
-        matches!(
-            value,
-            RuntimeValue::Aggregate(_, _)
-                | RuntimeValue::List(_)
-                | RuntimeValue::Enum(_, _, _)
-                | RuntimeValue::Option(_)
-                | RuntimeValue::Result(_)
-                | RuntimeValue::Ptr(_)
-        )
+    fn write_back_member_field_update(
+        &mut self,
+        frame_idx: usize,
+        field_reg: u16,
+        parent_reg: u16,
+        field_name: &str,
+    ) -> Result<(), RuntimeError> {
+        let updated_field = self.get_reg_value_in_frame(frame_idx, field_reg).clone();
+        let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg).clone();
+        let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
+        if let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved
+            && let Some(entry) = Gc::make_mut(&mut map)
+                .0
+                .0
+                .iter_mut()
+                .find(|(field, _)| field == field_name)
+        {
+            entry.1 = updated_field;
+            let updated_parent = RuntimeValue::Aggregate(type_name, map);
+            let parent_source = self
+                .frames
+                .get(frame_idx)
+                .and_then(|frame| frame.member_sources.get(&parent_reg))
+                .cloned();
+            match parent_raw {
+                RuntimeValue::Ref(_) | RuntimeValue::VarRef(_) | RuntimeValue::RegRef { .. } => {
+                    self.write_back_runtime_value(parent_raw, updated_parent);
+                }
+                _ => {
+                    self.set_reg_value_in_frame(frame_idx, parent_reg, updated_parent.clone());
+                    self.sync_local_reg_value(frame_idx, parent_reg, updated_parent);
+                    if let Some(source) = parent_source {
+                        if let Some(frame) = self.frames.get_mut(frame_idx) {
+                            frame.member_sources.insert(parent_reg, source);
+                        }
+                        self.propagate_member_source_reg(parent_reg, frame_idx)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn propagate_member_source_reg(
+        &mut self,
+        reg: u16,
+        frame_idx: usize,
+    ) -> Result<(), RuntimeError> {
+        let Some((parent_reg, field_name)) = self.recover_member_source_for_list(reg, frame_idx)
+        else {
+            return Ok(());
+        };
+
+        self.write_back_member_field_update(frame_idx, reg, parent_reg, &field_name)?;
+        Ok(())
     }
 
     #[inline]
@@ -136,12 +240,6 @@ impl VM {
                 }
                 return Some(resolved);
             }
-            if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&candidate) {
-                if matches!(resolved, RuntimeValue::Null) {
-                    continue;
-                }
-                return Some(resolved);
-            }
         }
         None
     }
@@ -156,6 +254,9 @@ impl VM {
         let owner_base = Self::normalize_generic_owner(owner);
         if owner_base.is_empty() {
             return None;
+        }
+        if owner_base == "Channel" && member == "raw_send" {
+            return RuntimeValue::natives().get("async.channel_send").cloned();
         }
         let owner_lower = owner_base.to_ascii_lowercase();
         let candidate = format!("async.{owner_lower}_{member}");
@@ -190,17 +291,6 @@ impl VM {
             );
         }
         candidates
-    }
-
-    #[inline]
-    pub(crate) fn is_runtime_callable(value: &RuntimeValue) -> bool {
-        matches!(
-            value,
-            RuntimeValue::Function { .. }
-                | RuntimeValue::NativeFunction(_)
-                | RuntimeValue::ExternFunction(_)
-                | RuntimeValue::BoundMethod { .. }
-        )
     }
 
     pub(crate) fn call_runtime_callable_at(
@@ -238,6 +328,19 @@ impl VM {
             }
             RuntimeValue::NativeFunction(func) => func.run(self, args),
             RuntimeValue::ExternFunction(func) => func.call(self, args),
+            RuntimeValue::Channel(_) => self.call_runtime_callable_at(
+                RuntimeValue::NativeFunction(Arc::new(
+                    crate::native::stdlib::r#async::ChannelSend(),
+                )),
+                {
+                    let mut full_args = Vec::with_capacity(args.len() + 1);
+                    full_args.push(callable);
+                    full_args.extend(args);
+                    full_args
+                },
+                callsite_block,
+                callsite_tag,
+            ),
             RuntimeValue::BoundMethod { callee, receiver } => {
                 let mut full_args = vec![receiver.as_ref().clone()];
                 full_args.extend(args);
@@ -270,7 +373,20 @@ impl VM {
                     callsite_tag.saturating_sub(1),
                 )
             }
-            other => Err(RuntimeError::InvalidFunctionCallValue(other)),
+            other => {
+                if matches!(other, RuntimeValue::Channel(_)) {
+                    self.call_runtime_callable_at(
+                        RuntimeValue::NativeFunction(Arc::new(
+                            crate::native::stdlib::r#async::ChannelSend(),
+                        )),
+                        args,
+                        callsite_block,
+                        callsite_tag,
+                    )
+                } else {
+                    Err(RuntimeError::InvalidFunctionCallValue(other))
+                }
+            }
         }
     }
 
@@ -356,21 +472,17 @@ impl VM {
         }
     }
 
-    fn name_matches(actual: &str, target: &str) -> bool {
-        calibre_parser::qualified_name_matches(actual, target)
-    }
-
     fn lookup_dyn_trait_table(
         &self,
         concrete: &str,
         trait_name: &str,
     ) -> Option<&FxHashMap<String, String>> {
         for (imp_ty, traits) in self.registry.dyn_vtables.iter() {
-            if !Self::name_matches(imp_ty, concrete) {
+            if !calibre_parser::qualified_name_matches(imp_ty, concrete) {
                 continue;
             }
             for (imp_trait, table) in traits {
-                if Self::name_matches(imp_trait, trait_name) {
+                if calibre_parser::qualified_name_matches(imp_trait, trait_name) {
                     return Some(table);
                 }
             }
@@ -581,12 +693,6 @@ impl VM {
     }
 
     #[inline(always)]
-    fn call_arg_from_reg(&self, reg: u16) -> RuntimeValue {
-        let frame = self.frames.len().saturating_sub(1);
-        self.call_arg_from_frame_reg(frame, reg)
-    }
-
-    #[inline(always)]
     fn call_arg_from_frame_reg(&self, frame: usize, reg: u16) -> RuntimeValue {
         match self.get_reg_value_in_frame(frame, reg) {
             RuntimeValue::RegRef { frame, reg } => {
@@ -595,7 +701,7 @@ impl VM {
                     reg: *reg,
                 }) {
                     match resolved {
-                        value if Self::should_pass_by_reg_ref(&value) => RuntimeValue::RegRef {
+                        value if value.should_pass_by_reg_ref() => RuntimeValue::RegRef {
                             frame: *frame,
                             reg: *reg,
                         },
@@ -612,7 +718,7 @@ impl VM {
                 if let Ok(resolved) =
                     self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.clone()))
                 {
-                    if Self::should_pass_by_reg_ref(&resolved) {
+                    if resolved.should_pass_by_reg_ref() {
                         RuntimeValue::Ref(name.clone())
                     } else {
                         resolved
@@ -623,7 +729,7 @@ impl VM {
             }
             RuntimeValue::VarRef(id) => {
                 if let Ok(resolved) = self.resolve_value_for_op_ref(&RuntimeValue::VarRef(*id)) {
-                    if Self::should_pass_by_reg_ref(&resolved) {
+                    if resolved.should_pass_by_reg_ref() {
                         RuntimeValue::VarRef(*id)
                     } else {
                         resolved
@@ -638,8 +744,10 @@ impl VM {
 
     #[inline]
     fn collect_call_args_vec(&self, args: &[u16]) -> Vec<RuntimeValue> {
+        let frame = self.frames.len().saturating_sub(1);
+
         args.into_iter()
-            .map(|reg| self.call_arg_from_reg(*reg))
+            .map(|reg| self.call_arg_from_frame_reg(frame, *reg))
             .collect()
     }
 
@@ -666,9 +774,11 @@ impl VM {
         {
             return match target {
                 ParserInnerType::Dynamic => true,
-                ParserInnerType::DynamicTraits(traits) => traits
-                    .iter()
-                    .all(|tr| constraints.iter().any(|x| Self::name_matches(x, tr))),
+                ParserInnerType::DynamicTraits(traits) => traits.iter().all(|tr| {
+                    constraints
+                        .iter()
+                        .any(|x| calibre_parser::qualified_name_matches(x, tr))
+                }),
                 _ => self.runtime_matches_type(inner.as_ref(), target),
             };
         }
@@ -676,9 +786,11 @@ impl VM {
         match target {
             ParserInnerType::Dynamic => true,
             ParserInnerType::DynamicTraits(traits) => match value {
-                RuntimeValue::DynObject { constraints, .. } => traits
-                    .iter()
-                    .all(|tr| constraints.iter().any(|x| Self::name_matches(x, tr))),
+                RuntimeValue::DynObject { constraints, .. } => traits.iter().all(|tr| {
+                    constraints
+                        .iter()
+                        .any(|x| calibre_parser::qualified_name_matches(x, tr))
+                }),
                 other => self
                     .build_dyn_vtable_for_value(other, traits.as_slice())
                     .is_some(),
@@ -744,19 +856,13 @@ impl VM {
                     | RuntimeValue::NativeFunction(_)
                     | RuntimeValue::ExternFunction(_)
             ),
-            ParserInnerType::Struct(name) => match value {
+            ParserInnerType::Struct(identifier)
+            | ParserInnerType::StructWithGenerics { identifier, .. } => match value {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
-                    Self::name_matches(actual, name)
-                }
-                RuntimeValue::Generator { type_name, .. } => Self::name_matches(type_name, name),
-                _ => false,
-            },
-            ParserInnerType::StructWithGenerics { identifier, .. } => match value {
-                RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
-                    Self::name_matches(actual, identifier)
+                    calibre_parser::qualified_name_matches(actual, identifier)
                 }
                 RuntimeValue::Generator { type_name, .. } => {
-                    Self::name_matches(type_name, identifier)
+                    calibre_parser::qualified_name_matches(type_name, type_name)
                 }
                 _ => false,
             },
@@ -764,73 +870,6 @@ impl VM {
             | ParserInnerType::DollarIdentifier(_)
             | ParserInnerType::FfiType(_) => false,
         }
-    }
-
-    #[inline(always)]
-    fn try_fast_int_binary(
-        &mut self,
-        op: BinaryOperator,
-        left_reg: u16,
-        right_reg: u16,
-    ) -> Option<RuntimeValue> {
-        let left = match self.get_reg_value(left_reg) {
-            RuntimeValue::Int(v) => *v,
-            _ => return None,
-        };
-        let right = match self.get_reg_value(right_reg) {
-            RuntimeValue::Int(v) => *v,
-            _ => return None,
-        };
-
-        Some(match op {
-            BinaryOperator::Add => RuntimeValue::Int(left.wrapping_add(right)),
-            BinaryOperator::Sub => RuntimeValue::Int(left.wrapping_sub(right)),
-            BinaryOperator::Mul => RuntimeValue::Int(left.wrapping_mul(right)),
-            BinaryOperator::Div => {
-                if right == 0 {
-                    return None;
-                }
-                RuntimeValue::Int(left / right)
-            }
-            BinaryOperator::Mod => {
-                if right == 0 {
-                    return None;
-                }
-                RuntimeValue::Int(left % right)
-            }
-            BinaryOperator::BitAnd => RuntimeValue::Int(left & right),
-            BinaryOperator::BitOr => RuntimeValue::Int(left | right),
-            BinaryOperator::BitXor => RuntimeValue::Int(left ^ right),
-            BinaryOperator::Shl => RuntimeValue::Int(left.wrapping_shl(right as u32)),
-            BinaryOperator::Shr => RuntimeValue::Int(left.wrapping_shr(right as u32)),
-            BinaryOperator::Pow => return None,
-        })
-    }
-
-    #[inline(always)]
-    fn try_fast_int_comparison(
-        &self,
-        op: ComparisonOperator,
-        left_reg: u16,
-        right_reg: u16,
-    ) -> Option<RuntimeValue> {
-        let left = match self.get_reg_value(left_reg) {
-            RuntimeValue::Int(v) => *v,
-            _ => return None,
-        };
-        let right = match self.get_reg_value(right_reg) {
-            RuntimeValue::Int(v) => *v,
-            _ => return None,
-        };
-
-        Some(RuntimeValue::Bool(match op {
-            ComparisonOperator::Greater => left > right,
-            ComparisonOperator::Lesser => left < right,
-            ComparisonOperator::LesserEqual => left <= right,
-            ComparisonOperator::GreaterEqual => left >= right,
-            ComparisonOperator::Equal => left == right,
-            ComparisonOperator::NotEqual => left != right,
-        }))
     }
 
     fn try_resolve_global_runtime_value(&mut self, name: &str) -> Option<(RuntimeValue, String)> {
@@ -845,8 +884,7 @@ impl VM {
             }
         }
 
-        let short_name = calibre_parser::qualified_name_tail(name);
-        if short_name == name {
+        let Some(short_name) = calibre_parser::short_name_if_qualified(name) else {
             if name.contains("::") {
                 if let Some((owner, member)) = name.rsplit_once("::") {
                     if let Some(resolved) =
@@ -870,7 +908,7 @@ impl VM {
                 }
             }
             return None;
-        }
+        };
 
         if let Some(found) = self.resolve_named_global_runtime_value(short_name) {
             return Some(found);
@@ -933,10 +971,9 @@ impl VM {
             return None;
         }
 
-        let short_name = calibre_parser::qualified_name_tail(name);
-        if short_name == name {
+        let Some(short_name) = calibre_parser::short_name_if_qualified(name) else {
             return None;
-        }
+        };
 
         if let Some(found) = self.move_named_global_runtime_value(short_name) {
             return Some(found);
@@ -1084,7 +1121,11 @@ impl VM {
         let caller_frame = self.frames.len().saturating_sub(1);
 
         let func_ptr = function as *const VMFunction as usize;
-        self.push_frame(function.reg_count as usize, func_ptr);
+        self.push_frame(
+            function.reg_count as usize,
+            func_ptr,
+            Some(function.name.clone()),
+        );
 
         for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
             let arg = self.call_arg_from_frame_reg(caller_frame, arg_reg);
@@ -1290,7 +1331,11 @@ impl VM {
         state.yielded = None;
         let prev_vars = if state.block.is_none() {
             let func_ptr = function as *const VMFunction as usize;
-            self.push_frame(function.reg_count as usize, func_ptr);
+            self.push_frame(
+                function.reg_count as usize,
+                func_ptr,
+                Some(function.name.clone()),
+            );
             for (reg, arg) in function.param_regs.iter().zip(args) {
                 self.set_reg_value(*reg, arg);
             }

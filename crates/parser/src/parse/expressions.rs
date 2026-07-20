@@ -4,9 +4,8 @@ use std::sync::Arc;
 
 use super::{LegacySpanMapExt, filter, setup::StrParser};
 use crate::parse::util::{
-    call_node, ensure_scope_node, ident_node, lex, member_node_from_head_and_tail,
-    normalize_scope_member_chain, parse_embedded_expr, parse_splits, span, span_from_nodes_or,
-    unescape_string,
+    ensure_scope_node, lex, member_node_from_head_and_tail, normalize_scope_member_chain,
+    parse_embedded_expr, parse_splits, span, span_from_nodes_or, unescape_string,
 };
 use crate::{
     Span,
@@ -111,20 +110,34 @@ pub fn build_tail_expression_parser<'a>(
     })
     .boxed();
 
+    let arg_value = expr
+        .clone()
+        .then(
+            lex(pad.clone(), just('['))
+                .ignore_then(expr.clone())
+                .then_ignore(lex(pad.clone(), just(']')))
+                .repeated()
+                .collect::<Vec<_>>(),
+        )
+        .map(|(head, indexes)| {
+            let tails = indexes.into_iter().map(|idx| (idx, true)).collect();
+            member_node_from_head_and_tail(head, tails)
+        })
+        .boxed();
+
+    let call_arg = choice((
+        named_ident
+            .clone()
+            .then_ignore(lex(pad.clone(), just(':')))
+            .then(arg_value.clone())
+            .map(|(name, value)| CallArg::Named(name, value)),
+        arg_value.map(CallArg::Value),
+    ))
+    .boxed();
+
     let call_args = lex(pad.clone(), just('('))
         .ignore_then(
-            expr.clone()
-                .then(
-                    lex(pad.clone(), just('['))
-                        .ignore_then(expr.clone())
-                        .then_ignore(lex(pad.clone(), just(']')))
-                        .repeated()
-                        .collect::<Vec<_>>(),
-                )
-                .map(|(head, indexes)| {
-                    let tails = indexes.into_iter().map(|idx| (idx, true)).collect();
-                    member_node_from_head_and_tail(head, tails)
-                })
+            call_arg
                 .separated_by(comma.clone())
                 .allow_trailing()
                 .collect::<Vec<_>>()
@@ -132,7 +145,6 @@ pub fn build_tail_expression_parser<'a>(
                 .map(|x| x.unwrap_or_default()),
         )
         .then_ignore(lex(pad.clone(), just(')')))
-        .map(|args| args.into_iter().map(CallArg::Value).collect::<Vec<_>>())
         .boxed();
 
     let reverse_args = lex(pad.clone(), just("<("))
@@ -171,13 +183,13 @@ pub fn build_tail_expression_parser<'a>(
         lex(pad.clone(), just(".*")).to(PostfixSuffix::Deref),
         lex(pad.clone(), just('.'))
             .ignore_then(choice((
-                ident.clone().map(|(n, sp)| ident_node(sp, &n)),
+                ident.clone().map(|(n, sp)| Node::identifier(sp, &n)),
                 int_lit.clone(),
             )))
             .then(call_args.clone().repeated().collect::<Vec<_>>())
             .map(|(m, calls)| {
                 let node = calls.into_iter().fold(m, |c, args| {
-                    call_node(c.span, c, None, args, Vec::new(), Vec::new())
+                    Node::call_full(c.span, c, Vec::new(), args, Vec::new(), None)
                 });
                 PostfixSuffix::Member(node, false)
             }),
@@ -204,7 +216,7 @@ pub fn build_tail_expression_parser<'a>(
         calls
             .into_iter()
             .fold(head, |c, (string_fn, args, reverse_args)| {
-                call_node(c.span, c, string_fn, args, reverse_args, Vec::new())
+                Node::call_full(c.span, c, Vec::new(), args, reverse_args, string_fn)
             })
     };
 
@@ -1103,7 +1115,7 @@ pub fn build_tail_expression_parser<'a>(
             )))
             .then(scope_block.clone())
             .then(
-                lex(pad.clone(), just("else"))
+                lex(pad_with_newline.clone(), just("else"))
                     .ignore_then(if_e.clone().or(scope_block.clone()))
                     .or_not(),
             )

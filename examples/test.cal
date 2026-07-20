@@ -38,8 +38,8 @@ const main := fn => {
 	
 	print("piping");
 	
-	40 |: forty > adder_float(forty) |> $(80) |> fn (input : float) => print(input);
-	
+	// TODO Stabilize pipes
+	// 40 |: forty > adder_float(forty) |> $(80) |> fn (input : float) => print(input);
 	print("overload");
 	let mut num := NumType { num : 10 };
 	let res := num + 10;
@@ -56,21 +56,21 @@ const main := fn => {
 	let lst := list:<int>[2, 0, 4];
 	
 	let mtchfn := fn match str -> int {
-		"hello" => 0,
-		_ => 10
+		"hello" => return 0,
+		_ => return 10
 	};
 	
 	print(mtchfn("he"));
 	
 	let mut match_res : int = match "hello" {
-		"hello" => 0,
-		_ => 10
+		"hello" => emit 0,
+		_ => emit 10
 	};
 	
 	print(match_res);
 	
 	let => @add_scope [$first := 9f, $second := 11f, $t := type : float] {
-		// match_res will be captured at the call_site
+		// match_res will be captured at the call_site;
 		let sum : $t = $first + $second + match_res;
 		print("add_scope: ");
 		print(sum);
@@ -115,24 +115,24 @@ const main := fn => {
 		=> {
 			let mut s := 0;
 			for i in 0..1000 => s += i;
-			sum_ch.send(s);
+			emit sum_ch s;
 		},
 		=> {
 			let mut f := 1;
 			for i in 1..6 => f *= i;
-			fac_ch.send(f);
+			emit fac_ch f;
 		}
 	};
 	
 	wg.wait();
 	let sum := match sum_ch.get() {
-		.Some : v => v,
-		.None => 0
+		.Some : v => emit v,
+		.None => emit 0
 	};
 	
 	let fac := match fac_ch.get() {
-		.Some : v => v,
-		.None => 0
+		.Some : v => emit v,
+		.None => emit 0
 	};
 	
 	print("parallel sum=" & sum);

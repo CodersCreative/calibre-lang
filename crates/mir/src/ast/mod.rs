@@ -9,7 +9,6 @@ use calibre_parser::{
 };
 use std::fmt::Display;
 
-pub mod hm;
 pub mod identifiers;
 pub mod renaming;
 
@@ -22,6 +21,46 @@ pub struct MiddleNode {
 impl MiddleNode {
     pub fn new(node_type: MiddleNodeType, span: Span) -> Self {
         Self { node_type, span }
+    }
+
+    pub fn identifier(span: Span, text: impl ToString) -> Self {
+        Self::new(
+            MiddleNodeType::Identifier(ParserText::from(text.to_string()).into()),
+            span,
+        )
+    }
+
+    pub fn rewrite_main_emits_to_returns(self) -> Self {
+        match self.node_type {
+            MiddleNodeType::ScopeDeclaration {
+                body,
+                create_new_scope,
+                is_temp,
+                scope_id,
+            } => MiddleNode {
+                node_type: MiddleNodeType::ScopeDeclaration {
+                    body: body
+                        .into_iter()
+                        .map(|x| match x.node_type {
+                            MiddleNodeType::Emit { value } => MiddleNode {
+                                node_type: MiddleNodeType::Return { value: Some(value) },
+                                span: self.span,
+                            },
+                            _ => x,
+                        })
+                        .collect(),
+                    create_new_scope,
+                    is_temp,
+                    scope_id,
+                },
+                span: self.span,
+            },
+            MiddleNodeType::Emit { value } => MiddleNode {
+                node_type: MiddleNodeType::Return { value: Some(value) },
+                span: self.span,
+            },
+            _ => self,
+        }
     }
 }
 
@@ -74,7 +113,7 @@ pub enum MiddleNodeType {
         scope_id: u64,
     },
     FunctionDeclaration {
-        parameters: Vec<(ParserText, ParserDataType)>,
+        parameters: Vec<(ParserText, ParserDataType, Option<Box<MiddleNode>>)>,
         body: Box<MiddleNode>,
         return_type: ParserDataType,
         scope_id: u64,
@@ -92,6 +131,9 @@ pub enum MiddleNodeType {
     },
     DebugExpression {
         pretty_printed_str: String,
+        value: Box<MiddleNode>,
+    },
+    Emit {
         value: Box<MiddleNode>,
     },
     NegExpression {
@@ -187,6 +229,9 @@ impl Into<Node> for MiddleNode {
 impl Into<NodeType> for MiddleNodeType {
     fn into(self) -> NodeType {
         match self {
+            Self::Emit { value } => NodeType::Emit(calibre_parser::ast::EmitType::Scope(Box::new(
+                (*value).into(),
+            ))),
             Self::Spawn { value } => NodeType::Spawn {
                 items: vec![(*value).into()],
                 auto_wait: false,
@@ -267,7 +312,11 @@ impl Into<NodeType> for MiddleNodeType {
                         let mut lst = Vec::new();
 
                         for param in parameters {
-                            lst.push((param.0.into(), param.1.into()));
+                            lst.push((
+                                param.0.into(),
+                                Some(param.1.into()),
+                                param.2.map(|x| Box::new((*x).into())),
+                            ));
                         }
                         lst
                     },

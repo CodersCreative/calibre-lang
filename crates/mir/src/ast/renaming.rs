@@ -44,6 +44,9 @@ impl MiddleNodeType {
                 label,
                 value: Some(Box::new(value.rename(state))),
             },
+            MiddleNodeType::Emit { value } => MiddleNodeType::Emit {
+                value: Box::new(value.rename(state)),
+            },
             MiddleNodeType::Spawn { value } => MiddleNodeType::Spawn {
                 value: Box::new(value.rename(state)),
             },
@@ -117,6 +120,7 @@ impl MiddleNodeType {
                                 span: x.0.span,
                             },
                             x.1,
+                            x.2.map(|x| Box::new(x.rename(state))),
                         )
                     })
                     .collect(),

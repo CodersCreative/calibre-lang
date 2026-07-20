@@ -8,12 +8,12 @@ use codespan_reporting::{
 use std::{ops::Range, path::Path};
 
 pub fn span_to_range(contents: &str, span: &Span) -> Range<usize> {
-    let mut starts = vec![0usize];
-    for (i, b) in contents.bytes().enumerate() {
-        if b == b'\n' {
-            starts.push(i + 1);
-        }
-    }
+    let starts: Vec<usize> = contents
+        .bytes()
+        .enumerate()
+        .filter(|(_, x)| x != &b'\n')
+        .map(|(i, _)| i + 1)
+        .collect();
 
     let start_line = *starts
         .get(span.from.line.saturating_sub(1) as usize)

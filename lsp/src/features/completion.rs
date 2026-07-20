@@ -566,10 +566,10 @@ impl CalibreLanguageServer {
             let (detail, kind) = if let Some(object) = env.objects.get(canonical) {
                 match &object.object_type {
                     MiddleTypeDefType::Struct(fields) => (
-                        format!("struct ({} fields)", fields.0.len()),
+                        format!("struct ({} fields)", fields.len()),
                         CompletionItemKind::STRUCT,
                     ),
-                    MiddleTypeDefType::Enum(variants) => (
+                    MiddleTypeDefType::Enum { variants, .. } => (
                         format!("enum ({} variants)", variants.len()),
                         CompletionItemKind::ENUM,
                     ),
@@ -645,7 +645,7 @@ impl CalibreLanguageServer {
         if let Some(obj) = Self::object_from_type(env, &base_ty)
             && let MiddleTypeDefType::Struct(fields) = &obj.object_type
         {
-            for (field_name, field_ty) in &fields.0 {
+            for (field_name, (field_ty, _default)) in &fields.0 {
                 if !prefix.is_empty() && !field_name.starts_with(prefix) {
                     continue;
                 }

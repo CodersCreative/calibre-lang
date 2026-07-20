@@ -1,0 +1,23 @@
+const maybe_none := fn -> int? => return none;
+const maybe_config := fn (value : int?) -> int? => value;
+
+const setup := fn (size : int = 1024, num : int) => {
+	print(size);
+	print(num);
+};
+
+const show_uint := fn (flags : uint?) => {
+	print(flags);
+};
+
+const maybe_some := fn -> uint? => return some(5u);
+const s := fn -> uint => return 5u;
+
+const main := fn => {
+	setup(num : 2);
+	setup(none, 3);
+	let config := maybe_config(maybe_none());
+	setup(config, 4);
+	show_uint();
+	show_uint(s());
+};

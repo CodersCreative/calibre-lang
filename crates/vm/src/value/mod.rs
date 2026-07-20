@@ -21,10 +21,13 @@ use std::os::raw::c_char;
 use std::os::raw::c_void;
 
 use crate::{
-    TaskState, VM,
+    VM,
     conversion::{Reg, VMLiteral},
     error::RuntimeError,
-    native::{self, NativeFunction, stdlib},
+    native::{
+        self, NativeFunction,
+        stdlib::{self, generator::GeneratorState},
+    },
 };
 
 mod bridge;
@@ -40,21 +43,6 @@ pub struct GcVec(pub Vec<RuntimeValue>);
 
 #[derive(Debug, Clone)]
 pub struct GcMap(pub ObjectMap<RuntimeValue>);
-
-#[derive(Debug, Clone)]
-pub struct GeneratorState {
-    pub vm: VM,
-    pub function_name: Arc<String>,
-    pub captures: std::sync::Arc<Vec<(String, RuntimeValue)>>,
-    pub task_state: TaskState,
-    pub index: i64,
-    pub completed: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct GeneratorResumeFn {
-    pub state: Arc<Mutex<GeneratorState>>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HashKey {
@@ -260,6 +248,7 @@ pub enum RuntimeValue {
     Ptr(u64),
     Range(i64, i64),
     Bool(bool),
+    // TODO Convert Str to Mutex to reduce copies
     Str(Arc<String>),
     Char(char),
     Aggregate(Option<String>, Gc<GcMap>),
@@ -389,54 +378,47 @@ enum FfiArg {
     Struct { backing: Vec<u64> },
 }
 
-impl NativeFunction for GeneratorResumeFn {
-    fn run(&self, _env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
-
-        if state.completed {
-            return Ok(RuntimeValue::Option(None));
-        }
-
-        let Some(func) = state
-            .vm
-            .resolve_function_by_name(state.function_name.as_str())
-        else {
-            state.completed = true;
-            return Ok(RuntimeValue::Option(None));
-        };
-
-        let captures = state.captures.clone();
-        let mut task_state = std::mem::take(&mut state.task_state);
-        let status = state.vm.run_function_with_budget(
-            func.as_ref(),
-            Vec::new(),
-            captures,
-            usize::MAX,
-            &mut task_state,
-        )?;
-        state.task_state = task_state;
-
-        if let Some(yielded) = state.task_state.yielded.take() {
-            state.index += 1;
-            return Ok(RuntimeValue::Option(Some(Gc::new(yielded))));
-        }
-
-        if status.is_some() {
-            state.completed = true;
-        }
-
-        Ok(RuntimeValue::Option(None))
-    }
-
-    fn name(&self) -> String {
-        String::from("gen_resume")
-    }
-}
-
 impl RuntimeValue {
+    #[inline]
+    pub(crate) fn is_callable(&self) -> bool {
+        matches!(
+            self,
+            RuntimeValue::Function { .. }
+                | RuntimeValue::NativeFunction(_)
+                | RuntimeValue::ExternFunction(_)
+                | RuntimeValue::Channel(_)
+                | RuntimeValue::BoundMethod { .. }
+        )
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, RuntimeValue::Null)
+    }
+
+    #[inline]
+    pub fn is_ref_like(&self) -> bool {
+        matches!(
+            self,
+            RuntimeValue::Ref(_)
+                | RuntimeValue::VarRef(_)
+                | RuntimeValue::RegRef { .. }
+                | RuntimeValue::MutexGuard(_)
+        )
+    }
+
+    #[inline]
+    pub fn should_pass_by_reg_ref(&self) -> bool {
+        matches!(
+            self,
+            RuntimeValue::Aggregate(_, _)
+                | RuntimeValue::List(_)
+                | RuntimeValue::Enum(_, _, _)
+                | RuntimeValue::Option(_)
+                | RuntimeValue::Result(_)
+                | RuntimeValue::Ptr(_)
+        )
+    }
+
     pub fn constants() -> FxHashMap<String, Self> {
         [
             ("true", RuntimeValue::Bool(true)),
@@ -475,7 +457,10 @@ impl RuntimeValue {
             ("tuple", Arc::new(native::global::TupleFn())),
             ("panic", Arc::new(native::global::PanicFn())),
             ("assert", Arc::new(native::global::AssertFn())),
-            ("gen_suspend", Arc::new(native::global::GenSuspendFn())),
+            (
+                "gen_suspend",
+                Arc::new(stdlib::generator::GeneratorSuspendFn()),
+            ),
             ("min_or_zero", Arc::new(native::global::MinOrZero())),
             ("async.channel_new", Arc::new(stdlib::r#async::ChannelNew())),
             (

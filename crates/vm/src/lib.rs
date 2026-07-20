@@ -36,14 +36,15 @@ mod vm_lookup;
 pub(crate) use vm_lookup::VarName;
 
 #[derive(Debug, Clone)]
-struct VMFrame {
-    reg_start: usize,
-    reg_count: usize,
-    local_map_base: Option<Arc<FxHashMap<Arc<str>, Reg>>>,
-    local_map: FxHashMap<Arc<str>, Reg>,
-    member_sources: FxHashMap<Reg, (Reg, String)>,
-    func_ptr: usize,
-    acc: RuntimeValue,
+pub struct VMFrame {
+    pub reg_start: usize,
+    pub reg_count: usize,
+    pub local_map_base: Option<Arc<FxHashMap<Arc<str>, Reg>>>,
+    pub local_map: FxHashMap<Arc<str>, Reg>,
+    pub member_sources: FxHashMap<Reg, (Reg, String)>,
+    pub func_ptr: usize,
+    pub func_name: Option<String>,
+    pub acc: RuntimeValue,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -63,6 +64,7 @@ impl Default for VMFrame {
             local_map: FxHashMap::default(),
             member_sources: FxHashMap::default(),
             func_ptr: 0,
+            func_name: None,
             acc: RuntimeValue::Null,
         }
     }
@@ -81,7 +83,7 @@ pub struct VM {
     reg_arena: Vec<RuntimeValue>,
     reg_top: usize,
     name_arena: FxHashMap<Arc<str>, Arc<str>>,
-    frames: Vec<VMFrame>,
+    pub frames: Vec<VMFrame>,
     frame_pool: Vec<VMFrame>,
     caches: VMCaches,
     func_suffix: FxHashMap<String, Option<Arc<VMFunction>>>,
@@ -334,11 +336,27 @@ impl VM {
 
     pub fn spawn_async_task(
         &mut self,
-        func: RuntimeValue,
+        mut func: RuntimeValue,
         wait_group: Option<Arc<WaitGroupInner>>,
     ) {
         if self.scheduler.is_none() {
             self.scheduler = Some(scheduler::SchedulerHandle::new(&self.config));
+        }
+        if let RuntimeValue::Function { name: _, captures } = &mut func {
+            let resolved: Vec<(String, RuntimeValue)> = captures
+                .as_ref()
+                .iter()
+                .map(|(key, value)| {
+                    let resolved = self
+                        .resolve_value_for_op_ref(value)
+                        .unwrap_or_else(|_| RuntimeValue::Null);
+                    let resolved = self.resolve_saveable_runtime_value_ref(
+                        &self.convert_runtime_var_into_saveable(resolved),
+                    );
+                    (key.clone(), resolved)
+                })
+                .collect();
+            *captures = Arc::new(resolved);
         }
         if let Some(scheduler) = &self.scheduler {
             scheduler.spawn(self, func, wait_group);
@@ -390,7 +408,7 @@ impl VM {
         id
     }
 
-    fn push_frame(&mut self, reg_count: usize, func_ptr: usize) {
+    fn push_frame(&mut self, reg_count: usize, func_ptr: usize, func_name: Option<String>) {
         let start = self.reg_top;
         self.reg_top = self.reg_top.saturating_add(reg_count);
         if self.reg_top > self.reg_arena.len() {
@@ -403,6 +421,7 @@ impl VM {
             frame.local_map.clear();
             frame.member_sources.clear();
             frame.func_ptr = func_ptr;
+            frame.func_name = func_name;
             frame.acc = RuntimeValue::Null;
             self.frames.push(frame);
         } else {
@@ -413,6 +432,7 @@ impl VM {
                 local_map: FxHashMap::default(),
                 member_sources: FxHashMap::default(),
                 func_ptr,
+                func_name,
                 acc: RuntimeValue::Null,
             });
         }
@@ -451,6 +471,21 @@ impl VM {
     }
 
     #[inline(always)]
+    pub(crate) fn get_mut_reg_value(&mut self, reg: Reg) -> Option<&mut RuntimeValue> {
+        let (reg_count, reg_start) = {
+            let frame = self.current_frame();
+            (frame.reg_count.clone(), frame.reg_start.clone())
+        };
+        let idx = reg as usize;
+
+        if idx < reg_count {
+            Some(unsafe { self.reg_arena.get_unchecked_mut(reg_start + idx) })
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
     pub(crate) fn get_reg_value_in_frame(&self, frame_idx: usize, reg: Reg) -> &RuntimeValue {
         if let Some(frame) = self.frames.get(frame_idx) {
             let idx = reg as usize;
@@ -459,6 +494,21 @@ impl VM {
             }
         }
         &NULL_RUNTIME_VALUE
+    }
+
+    #[inline(always)]
+    pub(crate) fn get_mut_reg_value_in_frame(
+        &mut self,
+        frame_idx: usize,
+        reg: Reg,
+    ) -> Option<&mut RuntimeValue> {
+        if let Some(frame) = self.frames.get(frame_idx) {
+            let idx = reg as usize;
+            if idx < frame.reg_count {
+                return Some(&mut self.reg_arena[frame.reg_start + idx]);
+            }
+        }
+        None
     }
 
     #[inline(always)]
@@ -698,6 +748,8 @@ impl VM {
         seen: &mut FxHashSet<String>,
         seen_regs: &mut FxHashSet<usize>,
     ) {
+        self.call_drop_trait_method(value);
+
         match value {
             RuntimeValue::Ref(name) => {
                 if !seen.insert(name.clone()) {
@@ -730,7 +782,11 @@ impl VM {
                     self.drop_runtime_value_inner_ref(item, seen, seen_regs);
                 }
             }
-            RuntimeValue::Aggregate(_, data) => {
+            RuntimeValue::Aggregate(type_name, data) => {
+                if let Some(name) = type_name {
+                    self.call_drop_trait_for_type(name, value);
+                }
+
                 for (_, value) in data.as_ref().0.0.iter() {
                     self.drop_runtime_value_inner_ref(value, seen, seen_regs);
                 }
@@ -752,7 +808,8 @@ impl VM {
             RuntimeValue::Result(Err(x)) => {
                 self.drop_runtime_value_inner_ref(x.as_ref(), seen, seen_regs);
             }
-            RuntimeValue::Enum(_, _, payload) => {
+            RuntimeValue::Enum(type_name, _, payload) => {
+                self.call_drop_trait_for_type(type_name, value);
                 if let Some(val) = payload {
                     self.drop_runtime_value_inner_ref(val.as_ref(), seen, seen_regs);
                 }
@@ -766,6 +823,34 @@ impl VM {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn call_drop_trait_method(&mut self, value: &RuntimeValue) {
+        let type_name = match value {
+            RuntimeValue::Aggregate(type_name, _) => type_name.as_deref(),
+            RuntimeValue::Enum(type_name, _, _) => Some(type_name.as_str()),
+            _ => None,
+        };
+
+        if let Some(type_name) = type_name {
+            self.call_drop_trait_for_type(type_name, value);
+        }
+    }
+
+    fn call_drop_trait_for_type(&mut self, type_name: &str, value: &RuntimeValue) {
+        let drop_method_name = format!("{}::drop", type_name);
+
+        if let Some(_drop_func) = self.registry.functions.get(&drop_method_name) {
+            let _ = self.call_runtime_callable_at(
+                RuntimeValue::Function {
+                    name: Arc::new(drop_method_name.clone()),
+                    captures: Arc::new(Vec::new()),
+                },
+                vec![value.clone()],
+                0,
+                0,
+            );
         }
     }
 }

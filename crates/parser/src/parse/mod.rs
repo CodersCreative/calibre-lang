@@ -1,7 +1,7 @@
 use crate::{
     ParserError, Span,
     ast::{
-        CallArg, Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
+        CallArg, EmitType, Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
     },
 };
@@ -14,10 +14,7 @@ use matching::{MatchParsers, build_match_parsers};
 use setup::build_parser_prelude;
 use statements::{StatementParsers, build_statement_parser};
 use std::sync::Arc;
-use util::{
-    call_node, ident_node, lex, member_node_from_head_and_tail, span,
-    strip_block_comments_keep_layout,
-};
+use util::{lex, member_node_from_head_and_tail, span, strip_block_comments_keep_layout};
 
 mod diagnostics;
 mod expressions;
@@ -169,7 +166,7 @@ pub fn parse_program_with_source(
                                         .or_not(),
                                 )
                                 .map(|((k, sp), value)| {
-                                    let value = value.unwrap_or_else(|| ident_node(sp, &k));
+                                    let value = value.unwrap_or_else(|| Node::identifier(sp, &k));
                                     (k, value)
                                 })
                                 .separated_by(lex(pad_with_newline.clone(), just(',')))
@@ -217,6 +214,26 @@ pub fn parse_program_with_source(
                 fn_standard_expr.clone(),
                 scope_block.clone(),
                 match_expr,
+                lex(pad.clone(), just("emit"))
+                    .ignore_then(expr.clone())
+                    .then(expr.clone().or_not())
+                    .map_with_span({
+                        let ls = line_starts.clone();
+                        move |args: (Node, Option<Node>), r| {
+                            let sp = span(ls.as_ref(), r);
+                            Node::new(
+                                sp,
+                                NodeType::Emit(if let Some(value) = args.1 {
+                                    EmitType::Channel {
+                                        channel: Box::new(args.0),
+                                        value: Box::new(value),
+                                    }
+                                } else {
+                                    EmitType::Scope(Box::new(args.0))
+                                }),
+                            )
+                        }
+                    }),
                 lex(pad.clone(), just("list"))
                     .ignore_then(lex(pad.clone(), just(":<")))
                     .ignore_then(type_name.clone())
@@ -262,16 +279,16 @@ pub fn parse_program_with_source(
                                         .or_not(),
                                 )
                                 .map(|((name, sp), args)| {
-                                    let member = ident_node(sp, &name);
+                                    let member = Node::identifier(sp, &name);
                                     if let Some(args) = args {
                                         (
-                                            call_node(
+                                            Node::call_full(
                                                 member.span,
                                                 member,
-                                                None,
+                                                Vec::new(),
                                                 args.into_iter().map(CallArg::Value).collect(),
                                                 Vec::new(),
-                                                Vec::new(),
+                                                None,
                                             ),
                                             false,
                                         )
@@ -332,46 +349,47 @@ pub fn parse_program_with_source(
                         let ls = line_starts.clone();
                         move |args, r| {
                             let sp = span(ls.as_ref(), r);
-                            call_node(
+                            Node::call_full(
                                 sp,
-                                Node::new(
-                                    sp,
-                                    NodeType::Identifier(
-                                        PotentialGenericTypeIdentifier::Identifier(
-                                            PotentialDollarIdentifier::Identifier(ParserText::new(
-                                                sp,
-                                                "$".to_string(),
-                                            )),
-                                        ),
-                                    ),
-                                ),
-                                None,
+                                Node::identifier(sp, "$"),
+                                Vec::new(),
                                 args.into_iter().map(CallArg::Value).collect(),
                                 Vec::new(),
-                                Vec::new(),
+                                None,
                             )
                         }
                     }),
                 ident
                     .clone()
-                    .map(|(n, sp)| ident_node(sp, &n))
+                    .map(|(n, sp)| ParserText::new(sp, &n))
                     .then(
                         lex(pad.clone(), just("::"))
-                            .ignore_then(ident.clone().map(|(n, sp)| ident_node(sp, &n)))
+                            .ignore_then(ident.clone().map(|(n, sp)| ParserText::new(sp, &n)))
                             .repeated()
                             .at_least(1)
                             .collect::<Vec<_>>(),
                     )
-                    .map(|(first, rest)| {
-                        let mut path = vec![first];
-                        path.extend(rest);
-                        let sp = match (path.first(), path.last()) {
-                            (Some(first), Some(last)) => {
-                                Span::new_from_spans(first.span, last.span)
-                            }
-                            _ => Span::default(),
-                        };
-                        Node::new(sp, NodeType::ScopeMemberExpression { path })
+                    .map(|(first, mut segments)| {
+                        let first_span = first.span;
+                        let value_text = segments.pop().unwrap_or_else(|| first.clone());
+                        let value_span = value_text.span;
+                        let mut module: Vec<PotentialDollarIdentifier> = vec![first.into()];
+                        module.extend(segments.into_iter().map(|segment| segment.into()));
+
+                        let value = Node::new(
+                            value_span,
+                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                                value_text.into(),
+                            )),
+                        );
+                        let sp = Span::new_from_spans(first_span, value_span);
+                        Node::new(
+                            sp,
+                            NodeType::ScopeMemberExpression {
+                                module,
+                                value: Box::new(value),
+                            },
+                        )
                     }),
                 struct_lit,
                 generic_ident.map(|identifier| {

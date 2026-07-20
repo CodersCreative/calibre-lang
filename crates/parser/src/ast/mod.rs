@@ -2,7 +2,7 @@ pub mod binary;
 pub mod comparison;
 pub mod formatter;
 use crate::{
-    Span,
+    COUNTER, Span,
     ast::{comparison::BooleanOperator, formatter::Formatter},
 };
 use binary::BinaryOperator;
@@ -231,6 +231,50 @@ impl ParserDataType {
     pub fn new(span: Span, data_type: ParserInnerType) -> Self {
         Self { data_type, span }
     }
+
+    pub fn key(&self) -> ParserInnerType {
+        self.clone().unwrap_all_refs().data_type
+    }
+
+    pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> ParserDataType {
+        let span = self.span;
+        let data_type = match &self.data_type {
+            ParserInnerType::Struct(s) if subst.contains_key(s) => subst
+                .get(s)
+                .map(|dt| dt.data_type.clone())
+                .unwrap_or_else(|| self.data_type.clone()),
+            ParserInnerType::Tuple(xs) => {
+                ParserInnerType::Tuple(xs.iter().map(|x| x.substitute(subst)).collect())
+            }
+            ParserInnerType::List(x) => ParserInnerType::List(Box::new(x.substitute(subst))),
+            ParserInnerType::Ptr(x) => ParserInnerType::Ptr(Box::new(x.substitute(subst))),
+            ParserInnerType::Option(x) => ParserInnerType::Option(Box::new(x.substitute(subst))),
+            ParserInnerType::Result { ok, err } => ParserInnerType::Result {
+                ok: Box::new(ok.substitute(subst)),
+                err: Box::new(err.substitute(subst)),
+            },
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+            } => ParserInnerType::Function {
+                return_type: Box::new(return_type.substitute(subst)),
+                parameters: parameters.iter().map(|p| p.substitute(subst)).collect(),
+            },
+            ParserInnerType::Ref(x, m) => {
+                ParserInnerType::Ref(Box::new(x.substitute(subst)), m.clone())
+            }
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } => ParserInnerType::StructWithGenerics {
+                identifier: identifier.clone(),
+                generic_types: generic_types.iter().map(|g| g.substitute(subst)).collect(),
+            },
+            _ => self.data_type.clone(),
+        };
+
+        ParserDataType { data_type, span }
+    }
 }
 
 impl Deref for ParserDataType {
@@ -290,6 +334,59 @@ impl ParserDataType {
         self.data_type.contains_auto()
     }
 
+    pub fn unwrap_one_result(&self) -> Option<&Self> {
+        self.data_type.unwrap_one_result()
+    }
+
+    pub fn default_node(&self) -> Option<Node> {
+        match &self.data_type {
+            ParserInnerType::Int => Some(Node::int(self.span, 0)),
+            ParserInnerType::UInt => Some(Node::new(
+                self.span,
+                NodeType::IntLiteral(String::from("0u")),
+            )),
+            ParserInnerType::Byte => Some(Node::new(
+                self.span,
+                NodeType::IntLiteral(String::from("0b")),
+            )),
+            ParserInnerType::Str => Some(Node::new(
+                self.span,
+                NodeType::StringLiteral(ParserText::new(self.span, "")),
+            )),
+            ParserInnerType::Char => Some(Node::new(self.span, NodeType::CharLiteral('\0'))),
+            ParserInnerType::Float => Some(Node::new(self.span, NodeType::FloatLiteral(0.0))),
+            ParserInnerType::Auto(_) => Some(Node::new(self.span, NodeType::Null)),
+            ParserInnerType::Dynamic => Some(Node::new(self.span, NodeType::Null)),
+            ParserInnerType::Null => Some(Node::new(self.span, NodeType::Null)),
+            ParserInnerType::List(t) => Some(Node::new(
+                self.span,
+                NodeType::ListLiteral((*t.clone()).into(), Vec::new()),
+            )),
+            ParserInnerType::Range => Some(Node::new(
+                self.span,
+                NodeType::RangeDeclaration {
+                    from: Box::new(Node::int(self.span, 0)),
+                    to: Box::new(Node::int(self.span, 0)),
+                    inclusive: true,
+                },
+            )),
+            ParserInnerType::Bool => Some(Node::bool(self.span, false)),
+            ParserInnerType::Tuple(values) => Some(Node::new(
+                self.span,
+                NodeType::TupleLiteral {
+                    values: values.iter().filter_map(|x| x.default_node()).collect(),
+                },
+            )),
+            ParserInnerType::Option(_) => Some(Node::none(self.span)),
+            ParserInnerType::Result { ok, .. } => Some(Node::call(
+                self.span,
+                Node::identifier(self.span, "ok"),
+                vec![CallArg::Value(ok.default_node()?)],
+            )),
+            _ => None,
+        }
+    }
+
     pub fn verify(self) -> Self {
         Self {
             data_type: self.data_type.verify(),
@@ -322,9 +419,37 @@ impl ParserInnerType {
         }
     }
 
+    pub fn unwrap_one_result(&self) -> Option<&ParserDataType> {
+        match self {
+            ParserInnerType::Result { ok, err: _ } => Some(&ok),
+            _ => None,
+        }
+    }
+
     pub fn is_auto(&self) -> bool {
         match self {
             Self::Auto(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_result(&self) -> bool {
+        match self {
+            Self::Result { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_bool(&self) -> bool {
+        match self {
+            Self::Bool => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_null(&self) -> bool {
+        match self {
+            Self::Null => true,
             _ => false,
         }
     }
@@ -479,6 +604,34 @@ impl PotentialNewType {
             _ => false,
         }
     }
+
+    pub fn is_result(&self) -> bool {
+        match self {
+            Self::DataType(x) => x.is_result(),
+            _ => false,
+        }
+    }
+
+    pub fn is_bool(&self) -> bool {
+        match self {
+            Self::DataType(x) => x.is_bool(),
+            _ => false,
+        }
+    }
+
+    pub fn is_null(&self) -> bool {
+        match self {
+            Self::DataType(x) => x.is_null(),
+            _ => false,
+        }
+    }
+
+    pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> PotentialNewType {
+        match self {
+            PotentialNewType::DataType(dt) => PotentialNewType::DataType(dt.substitute(subst)),
+            _ => self.clone(),
+        }
+    }
 }
 
 impl Display for PotentialNewType {
@@ -559,7 +712,7 @@ impl Display for ParserInnerType {
                         "{}<{}",
                         identifier,
                         generic_types
-                            .get(0)
+                            .first()
                             .map(|x| x.to_string())
                             .unwrap_or(String::new())
                     );
@@ -673,7 +826,7 @@ impl Display for PotentialGenericTypeIdentifier {
                     "{}:<{}",
                     identifier,
                     generic_types
-                        .get(0)
+                        .first()
                         .map(|x| x.to_string())
                         .unwrap_or(String::new())
                 );
@@ -687,6 +840,12 @@ impl Display for PotentialGenericTypeIdentifier {
                 write!(f, "{}", txt)
             }
         }
+    }
+}
+
+impl PotentialGenericTypeIdentifier {
+    pub fn new(span: Span, text: impl ToString) -> Self {
+        return Self::Identifier(ParserText::new(span, text).into());
     }
 }
 
@@ -870,9 +1029,49 @@ impl Display for VarType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefType {
-    Enum(Vec<(PotentialDollarIdentifier, Option<PotentialNewType>)>),
-    Struct(ObjectType<PotentialNewType>),
+    Enum {
+        variants: Vec<(PotentialDollarIdentifier, Option<PotentialNewType>)>,
+        default_variant: Option<usize>,
+        default_value: Option<Box<Node>>,
+    },
+    Struct {
+        fields: ObjectType<(PotentialNewType, Option<Node>)>,
+    },
     NewType(Box<PotentialNewType>),
+}
+
+impl TypeDefType {
+    pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> TypeDefType {
+        match self {
+            TypeDefType::Struct { fields } => TypeDefType::Struct {
+                fields: match fields {
+                    ObjectType::Map(xs) => ObjectType::Map(
+                        xs.iter()
+                            .map(|(k, (v, _default))| (k.clone(), (v.substitute(subst), None)))
+                            .collect(),
+                    ),
+                    ObjectType::Tuple(xs) => ObjectType::Tuple(
+                        xs.iter()
+                            .map(|(v, _default)| (v.substitute(subst), None))
+                            .collect(),
+                    ),
+                },
+            },
+            TypeDefType::Enum {
+                variants,
+                default_variant,
+                default_value,
+            } => TypeDefType::Enum {
+                variants: variants
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.as_ref().map(|p| p.substitute(subst))))
+                    .collect(),
+                default_variant: default_variant.clone(),
+                default_value: default_value.clone(),
+            },
+            TypeDefType::NewType(inner) => TypeDefType::NewType(Box::new(inner.substitute(subst))),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -946,8 +1145,33 @@ impl DerefMut for ParserText {
 }
 
 impl ParserText {
-    pub fn new(span: Span, text: String) -> Self {
-        Self { text, span }
+    pub fn new(span: Span, text: impl ToString) -> Self {
+        Self {
+            text: text.to_string(),
+            span,
+        }
+    }
+
+    pub fn temp_name(span: Span) -> Self {
+        Self::new(
+            span,
+            format!("{}-{}", span, {
+                let mut counter = COUNTER.write().unwrap();
+                *counter += 1;
+                *counter
+            }),
+        )
+    }
+
+    pub fn temp_name_with_prefix(prefix: impl Display, span: Span) -> Self {
+        Self::new(
+            span,
+            format!("{prefix}-{}-{}", span, {
+                let mut counter = COUNTER.write().unwrap();
+                *counter += 1;
+                *counter
+            }),
+        )
     }
 }
 
@@ -973,6 +1197,178 @@ impl Display for ParserText {
 impl Node {
     pub fn new(span: Span, node_type: NodeType) -> Self {
         Self { node_type, span }
+    }
+
+    pub fn none(span: Span) -> Self {
+        Node::identifier(span, "none")
+    }
+
+    pub fn int(span: Span, value: i32) -> Self {
+        Node::new(span, NodeType::IntLiteral(value.to_string()))
+    }
+
+    pub fn new_temp_scope(body: Vec<Node>) -> Self {
+        if body.is_empty() {
+            return Self::new(
+                Span::default(),
+                NodeType::ScopeDeclaration {
+                    body: Some(Vec::new()),
+                    named: None,
+                    is_temp: true,
+                    create_new_scope: None,
+                    define: false,
+                },
+            );
+        }
+        let span = Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span);
+
+        Self::new(
+            span,
+            NodeType::ScopeDeclaration {
+                body: Some(body),
+                named: None,
+                is_temp: true,
+                create_new_scope: Some(true),
+                define: false,
+            },
+        )
+    }
+
+    pub fn ret(node: Node) -> Self {
+        Self::new(
+            node.span,
+            NodeType::Return {
+                value: Some(Box::new(node)),
+            },
+        )
+    }
+
+    pub fn null(span: Span) -> Self {
+        Node::new(span, NodeType::Null)
+    }
+
+    pub fn bool(span: Span, value: bool) -> Self {
+        Self::identifier(span, if value { "true" } else { "false" })
+    }
+
+    pub fn identifier(span: Span, text: impl ToString) -> Self {
+        Self::new(
+            span,
+            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                ParserText::from(text.to_string()).into(),
+            )),
+        )
+    }
+
+    pub fn member(span: Span, base: Self, member: impl ToString) -> Self {
+        Self::new(
+            span,
+            NodeType::MemberExpression {
+                path: vec![(base, false), (Self::identifier(span, member), false)],
+            },
+        )
+    }
+
+    pub fn call(span: Span, caller: Node, args: Vec<CallArg>) -> Self {
+        Self::new(
+            span,
+            NodeType::CallExpression {
+                string_fn: None,
+                caller: Box::new(caller),
+                generic_types: Vec::new(),
+                args,
+                reverse_args: Vec::new(),
+            },
+        )
+    }
+
+    pub fn call_with_generics(
+        span: Span,
+        caller: Node,
+        generic_types: Vec<PotentialNewType>,
+        args: Vec<CallArg>,
+    ) -> Self {
+        Self::new(
+            span,
+            NodeType::CallExpression {
+                string_fn: None,
+                caller: Box::new(caller),
+                generic_types,
+                args,
+                reverse_args: Vec::new(),
+            },
+        )
+    }
+
+    pub fn call_full(
+        span: Span,
+        caller: Node,
+        generic_types: Vec<PotentialNewType>,
+        args: Vec<CallArg>,
+        reverse_args: Vec<Node>,
+        string_fn: Option<ParserText>,
+    ) -> Self {
+        Self::new(
+            span,
+            NodeType::CallExpression {
+                string_fn,
+                caller: Box::new(caller),
+                generic_types,
+                args,
+                reverse_args,
+            },
+        )
+    }
+
+    pub fn len(span: Span, node: Node) -> Self {
+        Self::call(
+            span,
+            Self::identifier(span, "len"),
+            vec![CallArg::Value(node)],
+        )
+    }
+
+    pub fn is_none(&self) -> bool {
+        matches!(
+            &self.node_type,
+            NodeType::Identifier(id) if id.to_string() == "none"
+        )
+    }
+
+    pub fn rewrite_main_emits_to_returns(self) -> Self {
+        match self.node_type {
+            NodeType::ScopeDeclaration {
+                body: Some(body),
+                create_new_scope,
+                is_temp,
+                named,
+                define,
+            } => Node {
+                node_type: NodeType::ScopeDeclaration {
+                    body: Some(
+                        body.into_iter()
+                            .map(|x| match x.node_type {
+                                NodeType::Emit(EmitType::Scope(value)) => Node {
+                                    node_type: NodeType::Return { value: Some(value) },
+                                    span: self.span,
+                                },
+                                _ => x,
+                            })
+                            .collect(),
+                    ),
+                    create_new_scope,
+                    is_temp,
+                    named,
+                    define,
+                },
+                span: self.span,
+            },
+            NodeType::Emit(EmitType::Scope(value)) => Node {
+                node_type: NodeType::Return { value: Some(value) },
+                span: self.span,
+            },
+            _ => self,
+        }
     }
 }
 
@@ -1170,7 +1566,11 @@ impl Overload {
 #[derive(Clone, Debug, PartialEq)]
 pub struct FunctionHeader {
     pub generics: GenericTypes,
-    pub parameters: Vec<(PotentialDollarIdentifier, PotentialNewType)>,
+    pub parameters: Vec<(
+        PotentialDollarIdentifier,
+        Option<PotentialNewType>,
+        Option<Box<Node>>,
+    )>,
     pub return_type: PotentialNewType,
     pub param_destructures: Vec<(usize, DestructurePattern)>,
 }
@@ -1188,6 +1588,15 @@ impl Into<Node> for CallArg {
             Self::Named(_, x) => x,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum EmitType {
+    Scope(Box<Node>),
+    Channel {
+        channel: Box<Node>,
+        value: Box<Node>,
+    },
 }
 
 #[repr(u8)]
@@ -1209,6 +1618,7 @@ pub enum NodeType {
     SelectStatement {
         arms: Vec<SelectArm>,
     },
+    Emit(EmitType),
     RefStatement {
         mutability: RefMutability,
         value: Box<Node>,
@@ -1392,7 +1802,8 @@ pub enum NodeType {
         path: Vec<(Node, bool)>,
     },
     ScopeMemberExpression {
-        path: Vec<Node>,
+        module: Vec<PotentialDollarIdentifier>,
+        value: Box<Node>,
     },
     CallExpression {
         string_fn: Option<ParserText>,
@@ -1435,6 +1846,11 @@ pub enum NodeType {
     StructLiteral {
         identifier: PotentialGenericTypeIdentifier,
         value: ObjectType<Node>,
+    },
+    Tag {
+        node: Box<Node>,
+        tag: ParserText,
+        arguments: Vec<Node>,
     },
 }
 

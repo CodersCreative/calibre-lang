@@ -5,6 +5,7 @@ pub mod collections;
 pub mod crypto;
 pub mod env;
 pub mod fs;
+pub mod generator;
 pub mod list;
 pub mod net;
 pub mod process;

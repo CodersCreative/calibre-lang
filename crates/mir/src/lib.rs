@@ -1,28 +1,24 @@
-use std::sync::{LazyLock, RwLock};
-
+use crate::errors::MiddleErr;
 use ast::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Span,
     ast::{
-        CallArg, DestructurePattern, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
+        DestructurePattern, Node, NodeType, ParserDataType, ParserInnerType,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, VarType,
         binary::BinaryOperator,
     },
 };
-
-use crate::errors::MiddleErr;
 use environment::*;
 
 pub mod ast;
 pub mod environment;
 pub mod errors;
-pub mod infer;
 pub mod inline;
+pub mod multipass;
 pub mod native;
+pub mod tags;
 pub mod translate;
 pub mod typing;
-
-static COUNTER: LazyLock<RwLock<u64>> = LazyLock::new(|| RwLock::new(0));
 
 impl MiddleEnvironment {
     fn emit_destructure_statements(
@@ -39,6 +35,7 @@ impl MiddleEnvironment {
         let mut out = Vec::with_capacity(estimated);
         let auto_type =
             PotentialNewType::DataType(ParserDataType::new(span, ParserInnerType::Auto(None)));
+
         let tmp_member_base = || {
             Node::new(
                 span,
@@ -47,6 +44,7 @@ impl MiddleEnvironment {
                 )),
             )
         };
+
         let push_binding = |out: &mut Vec<Node>,
                             var_type: &VarType,
                             name: &PotentialDollarIdentifier,
@@ -82,6 +80,7 @@ impl MiddleEnvironment {
                 let mut head = Vec::new();
                 let mut tail = Vec::new();
                 let mut in_tail = false;
+
                 for binding in bindings {
                     if binding.is_none() {
                         in_tail = true;
@@ -106,24 +105,14 @@ impl MiddleEnvironment {
                                 },
                             )
                         } else {
-                            let index_ident = PotentialDollarIdentifier::Identifier(
-                                ParserText::from(idx.to_string()),
-                            );
                             Node::new(
                                 span,
                                 NodeType::MemberExpression {
                                     path: vec![
                                         (tmp_member_base(), false),
                                         (
-                                            Node::new(
-                                                span,
-                                                NodeType::Identifier(
-                                                    PotentialGenericTypeIdentifier::Identifier(
-                                                        index_ident,
-                                                    ),
-                                                ),
-                                            ),
-                                            false,
+                                            Node::new(span, NodeType::IntLiteral(idx.to_string())),
+                                            true,
                                         ),
                                     ],
                                 },
@@ -135,35 +124,21 @@ impl MiddleEnvironment {
 
                 for (i, entry) in tail.into_iter().enumerate() {
                     if let Some((var_type, name)) = entry {
-                        let len_call = Node::new(
-                            span,
-                            NodeType::CallExpression {
-                                string_fn: None,
-                                generic_types: Vec::new(),
-                                caller: Box::new(Node::new(
-                                    span,
-                                    NodeType::Identifier(
-                                        PotentialGenericTypeIdentifier::Identifier(
-                                            ParserText::from("len".to_string()).into(),
-                                        ),
-                                    ),
-                                )),
-                                args: vec![CallArg::Value(Node::new(
-                                    span,
-                                    NodeType::Identifier(
-                                        PotentialGenericTypeIdentifier::Identifier(
-                                            tmp_ident.clone(),
-                                        ),
-                                    ),
-                                ))],
-                                reverse_args: Vec::new(),
-                            },
-                        );
                         let offset = (total_tail - i as i64) as i64;
                         let index_expr = Node::new(
                             span,
                             NodeType::BinaryExpression {
-                                left: Box::new(len_call),
+                                left: Box::new(Node::len(
+                                    span,
+                                    Node::new(
+                                        span,
+                                        NodeType::Identifier(
+                                            PotentialGenericTypeIdentifier::Identifier(
+                                                tmp_ident.clone(),
+                                            ),
+                                        ),
+                                    ),
+                                )),
                                 right: Box::new(Node::new(
                                     span,
                                     NodeType::IntLiteral(offset.to_string()),
@@ -188,20 +163,7 @@ impl MiddleEnvironment {
                         NodeType::MemberExpression {
                             path: vec![
                                 (tmp_member_base(), false),
-                                (
-                                    Node::new(
-                                        span,
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(
-                                                PotentialDollarIdentifier::Identifier(
-                                                    ParserText::from(field.clone()),
-                                                )
-                                                .into(),
-                                            ),
-                                        ),
-                                    ),
-                                    false,
-                                ),
+                                (Node::identifier(span, field), false),
                             ],
                         },
                     );
@@ -320,19 +282,15 @@ impl MiddleEnvironment {
         if let Some(parts) = joined
             && !parts.is_empty()
         {
-            let joined_ident = parts.join("::");
-            let sp = if let (Some(a), Some(b)) = (path.first(), path.last()) {
-                Span::new_from_spans(a.span, b.span)
-            } else {
-                Span::default()
-            };
             return Ok((
                 *scope,
-                Node::new(
-                    sp,
-                    NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                        ParserText::from(joined_ident).into(),
-                    )),
+                Node::identifier(
+                    if let (Some(a), Some(b)) = (path.first(), path.last()) {
+                        Span::new_from_spans(a.span, b.span)
+                    } else {
+                        Span::default()
+                    },
+                    parts.join("::"),
                 ),
             ));
         }
@@ -406,15 +364,17 @@ impl MiddleEnvironment {
             .filter(|x| matches!(x.operator, Operator::As))
             .filter(|x| x.parameters.len() == 1)
             .find(|x| {
-                self.impl_type_matches(
+                if self.impl_type_matches(
                     &x.parameters[0].data_type,
                     &left_ty.data_type,
                     &x.generic_params,
-                ) && self.impl_type_matches(
-                    &x.return_type.data_type,
-                    &target.data_type,
-                    &x.generic_params,
-                )
+                ) && let Some(t) = x.return_type.data_type.unwrap_one_result()
+                    && self.impl_type_matches(t, &target.data_type, &x.generic_params)
+                {
+                    true
+                } else {
+                    false
+                }
             })
             .cloned();
 
@@ -429,6 +389,37 @@ impl MiddleEnvironment {
         }
 
         Ok(None)
+    }
+
+    pub fn handle_as_overload_exists(
+        &mut self,
+        scope: &u64,
+        value: Node,
+        target: ParserDataType,
+    ) -> Result<bool, MiddleErr> {
+        let Some(left_ty) = self.resolve_type_from_node(scope, &value) else {
+            return Ok(false);
+        };
+        let overload = self
+            .overloads
+            .iter()
+            .filter(|x| matches!(x.operator, Operator::As))
+            .filter(|x| x.parameters.len() == 1)
+            .find(|x| {
+                if self.impl_type_matches(
+                    &x.parameters[0].data_type,
+                    &left_ty.data_type,
+                    &x.generic_params,
+                ) && let Some(t) = x.return_type.data_type.unwrap_one_result()
+                    && self.impl_type_matches(t, &target.data_type, &x.generic_params)
+                {
+                    true
+                } else {
+                    false
+                }
+            });
+
+        Ok(overload.is_some())
     }
 
     pub fn handle_index_assign_overload(
@@ -518,73 +509,5 @@ impl MiddleEnvironment {
         }
 
         None
-    }
-
-    pub fn evaluate_scope_member_expression(
-        &mut self,
-        scope: &u64,
-        path: Vec<Node>,
-    ) -> Result<MiddleNode, MiddleErr> {
-        let joined = path
-            .iter()
-            .map(|node| match &node.node_type {
-                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                    PotentialDollarIdentifier::Identifier(txt),
-                )) => Some(txt.text.clone()),
-                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                    PotentialDollarIdentifier::DollarIdentifier(txt),
-                )) => Some(txt.text.clone()),
-                _ => None,
-            })
-            .collect::<Option<Vec<_>>>();
-        if let Some(parts) = joined
-            && !parts.is_empty()
-        {
-            let joined_ident = parts.join("::");
-            let ident = PotentialGenericTypeIdentifier::Identifier(
-                PotentialDollarIdentifier::Identifier(ParserText::from(joined_ident.clone())),
-            );
-            if let Some(resolved) = self.resolve_potential_generic_ident(scope, &ident) {
-                return Ok(MiddleNode::new(
-                    MiddleNodeType::Identifier(resolved),
-                    path.first().map(|n| n.span).unwrap_or_default(),
-                ));
-            }
-        }
-
-        let (s, node) = self.get_scope_member_scope_path(scope, path)?;
-        match node.node_type {
-            NodeType::Identifier(ident) => {
-                let resolved = self
-                    .resolve_potential_generic_ident(&s, &ident)
-                    .unwrap_or(ident.to_string().into());
-                Ok(MiddleNode::new(
-                    MiddleNodeType::Identifier(resolved),
-                    node.span,
-                ))
-            }
-            NodeType::MemberExpression { mut path } => {
-                if let Some((
-                    Node {
-                        node_type: NodeType::Identifier(first),
-                        ..
-                    },
-                    _,
-                )) = path.first_mut()
-                {
-                    let resolved = self
-                        .resolve_potential_generic_ident(&s, first)
-                        .unwrap_or(first.to_string().into());
-                    *first = PotentialGenericTypeIdentifier::Identifier(
-                        PotentialDollarIdentifier::Identifier(resolved),
-                    );
-                }
-                Ok(self.evaluate(
-                    scope,
-                    Node::new(node.span, NodeType::MemberExpression { path }),
-                ))
-            }
-            other => Ok(self.evaluate(&s, Node::new(node.span, other))),
-        }
     }
 }
