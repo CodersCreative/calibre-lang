@@ -1,68 +1,10 @@
-type Package := struct {
-	name : str,
-	version : str,
-	description : str,
-	license : str,
-	repository : str,
-	homepage : str,
-	src : str,
-	root : str,
-}
-
-const print := fn (msg : list:<dyn>) => {
-	let mut txt := "";
-	for m in msg => txt &= m;
-	
-	console_output(1, txt & "\n")
-};
-
-const range := fn (start end : mut int, step : int = 1, inclusive : bool = false) -> list:<int> => {
-	if start != INT_MIN && end = INT_MIN => {
-		end := start;
-		start := 0;
-	} else if start = INT_MIN && end = INT_MIN => return list:<int>[];
-	
-	if inclusive => end += step;
-	
-	let mut lst := list:<int>[];
-	
-	let mut index : int = start;
-	
-	for (index < end && step > 0) || (index > end && step < 0) => {
-		lst <<= index;
-		index += step;
-	};
-	
-	lst;
-};
-
-const fmt := fn (splits : list:<str>, inputs : list:<str>) -> str => {
-	let mut txt : str = "";
-	
-	for i in len(splits) => {
-		txt &= splits[i];
-		if i < len(inputs) => txt &= inputs[i];
-	};
-	
-	txt;
-};
-
-trait Display {
-	const display : fn (&Self) -> str;
-};
-
-type ListIter:<T> := struct { data : list:<T>, index : int };
-
-type gen:<T> := struct { data : fn() -> T?, index : int, done : bool };
-
-type RangeIter := struct { range : range, index : int };
-
-type StrIter := struct { data : list:<char>, index : int };
-
+// === Iter Setup ===
 trait Iter {
 	type Item;
 
 	const next : fn (&mut Self) -> Self::Item?;
+
+	const into_iter := fn (self : Self) => return self; 
 
 	const collect := fn (self : Self) -> list:<Self::Item> => {
 		let mut out := list:<Self::Item>[];
@@ -254,6 +196,14 @@ trait Iter {
 	};
 };
 
+type ListIter:<T> := struct { data : list:<T>, index : int };
+
+type gen:<T> := struct { data : fn() -> T?, index : int, done : bool };
+
+type RangeIter := struct { range : range, index : int };
+
+type StrIter := struct { data : list:<char>, index : int };
+
 impl<T> Iter for ListIter:<T> {
 	type Item := T;
 
@@ -301,8 +251,85 @@ impl Iter for StrIter {
 	};
 };
 
+// === Iter for basic types ===
+
 const iter_list := fn <T> (data : list:<T>) -> ListIter:<T> => ListIter:<T> { data, index : 0 };
 
 const iter_range := fn (rng : range) -> RangeIter => RangeIter { range : rng, index : 0 };
 
 const iter_str := fn (txt : str) -> StrIter => StrIter { data : txt as! list:<char>, index : 0 };
+
+impl float {
+	const into_iter := fn (num : float) -> RangeIter => iter_range(0..(num as! int));	
+}
+
+impl uint {
+	const into_iter := fn (num : uint) -> RangeIter => iter_range(0..(num as! int));
+}
+
+impl int {	
+	const into_iter := fn (num : int) -> RangeIter => iter_range(0..num);
+}
+
+impl<T> list:<T> {
+	const iter := fn (self : &list:<T>) -> ListIter:<T> => return iter_list(self);
+
+	const iter_mut := fn (self : &mut list:<T>) -> ListIter:<T> => return iter_list(self);
+
+	const into_iter := fn (self : list:<T>) -> ListIter:<T> => return iter_list(self);
+}
+
+// === Basic Utilities ===
+
+type Package := struct {
+	name : str,
+	version : str,
+	description : str,
+	license : str,
+	repository : str,
+	homepage : str,
+	src : str,
+	root : str,
+}
+
+const print := fn (msg : list:<dyn>) => {
+	let mut txt := "";
+	for m in msg => txt &= m;
+	
+	console_output(1, txt & "\n")
+};
+
+const range := fn (start end : mut int, step : int = 1, inclusive : bool = false) -> list:<int> => {
+	if start != INT_MIN && end = INT_MIN => {
+		end := start;
+		start := 0;
+	} else if start = INT_MIN && end = INT_MIN => return list:<int>[];
+	
+	if inclusive => end += step;
+	
+	let mut lst := list:<int>[];
+	
+	let mut index : int = start;
+	
+	for (index < end && step > 0) || (index > end && step < 0) => {
+		lst <<= index;
+		index += step;
+	};
+	
+	lst;
+};
+
+const fmt := fn (splits : list:<str>, inputs : list:<str>) -> str => {
+	let mut txt : str = "";
+	
+	for i in len(splits) => {
+		txt &= splits[i];
+		if i < len(inputs) => txt &= inputs[i];
+	};
+	
+	txt;
+};
+
+trait Display {
+	const display : fn (&Self) -> str;
+};

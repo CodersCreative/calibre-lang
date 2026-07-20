@@ -1092,6 +1092,12 @@ pub enum PotentialDollarIdentifier {
     Identifier(ParserText),
 }
 
+impl PotentialDollarIdentifier {
+    pub fn new(span: Span, text: impl ToString) -> Self {
+        Self::Identifier(ParserText::new(span, text))
+    }
+}
+
 impl Into<PotentialGenericTypeIdentifier> for PotentialDollarIdentifier {
     fn into(self) -> PotentialGenericTypeIdentifier {
         PotentialGenericTypeIdentifier::Identifier(self)
@@ -1208,6 +1214,13 @@ impl Node {
     }
 
     pub fn new_temp_scope(body: Vec<Node>) -> Self {
+        Self::new_temp_scope_with_create_new_scope(body, Some(true))
+    }
+
+    pub fn new_temp_scope_with_create_new_scope(
+        body: Vec<Node>,
+        create_new_scope: Option<bool>,
+    ) -> Self {
         if body.is_empty() {
             return Self::new(
                 Span::default(),
@@ -1215,7 +1228,7 @@ impl Node {
                     body: Some(Vec::new()),
                     named: None,
                     is_temp: true,
-                    create_new_scope: None,
+                    create_new_scope,
                     define: false,
                 },
             );
@@ -1228,7 +1241,7 @@ impl Node {
                 body: Some(body),
                 named: None,
                 is_temp: true,
-                create_new_scope: Some(true),
+                create_new_scope,
                 define: false,
             },
         )

@@ -178,7 +178,7 @@ impl uint {
 		};
 		
 		return true;
-	};
+	};	
 };
 
 impl float {
@@ -337,5 +337,5 @@ impl float {
 
 	const remap := fn (in_min in_max out_min out_max value : float) -> float => {
 		return float.lerp(out_min, out_max, float.inv_lerp(in_min, in_max, value));
-	};
+	};	
 };

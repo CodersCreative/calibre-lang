@@ -38,6 +38,8 @@ impl Args {
 	const first := fn -> str? => return get(0);
 
 	const is_empty := fn -> bool => return Args.count() = 0;
+
+	const into_iter := fn -> ListIter:<str> => iter_list(Args.all());
 };
 
 impl Vars {
@@ -53,4 +55,6 @@ impl Vars {
 	const remove := fn (name : str) => remove_var(name);
 
 	const vars := fn -> list:<str> => return vars();
+
+	const into_iter := fn -> ListIter:<str> => iter_list(Vars.vars());	
 };

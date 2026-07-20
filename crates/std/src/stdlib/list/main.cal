@@ -1,12 +1,6 @@
 impl<T> list:<T> {
 	const len := fn (self : list:<T>) -> int => return len(self);
 
-	const iter := fn (self : &list:<T>) -> ListIter:<T> => return iter_list(self);
-
-	const iter_mut := fn (self : &mut list:<T>) -> ListIter:<T> => return iter_list(self);
-
-	const into_iter := fn (self : list:<T>) -> ListIter:<T> => return iter_list(self);
-
 	const is_empty := fn (self : list:<T>) -> bool => return len(self) = 0;
 
 	const first := fn (self : list:<T>) -> T? => if len(self) = 0 => return none else => return some(self[0]);

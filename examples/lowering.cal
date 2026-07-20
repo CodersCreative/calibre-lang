@@ -1,0 +1,28 @@
+const main := fn => {
+	let mut lst := list:<int>[70 + i for i in range(100)];
+	
+	for i in lst.iter() => print(i);
+
+	for el in lst.&mut  => {
+		el += 10;
+		print(el);
+	}
+
+	for el in lst.iter_mut() => {
+		el *= 2;
+		print(el);
+	}
+
+	for el in lst.& => print(el);
+
+	for x in fn(x for x in 0..20 if x % 2 = 0) => print(x);
+
+	match lst[9] {
+		let x if x = 10 => print("10!!!"),
+		_ => print(x, "!!!"),
+	}
+
+	if let .Ok : x <- "50" as int => print(x);
+};
+
+
