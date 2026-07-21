@@ -93,7 +93,7 @@ impl MiddleEnvironment {
                             (field_name.clone(), default)
                         } else {
                             let resolved = self.resolve_data_type(scope, field_type.clone());
-                            let type_name = self.impl_self_name(&resolved);
+                            let type_name = resolved.impl_name();
                             (
                                 field_name.clone(),
                                 Node::member(

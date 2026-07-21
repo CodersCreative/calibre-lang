@@ -36,6 +36,7 @@ impl MiddleEnvironment {
 
         if scope.namespace == "root" {
             return self
+                .context
                 .package_metadata
                 .clone()
                 .unwrap_or_else(|| PackageMetadata {
@@ -45,7 +46,7 @@ impl MiddleEnvironment {
                     license: String::new(),
                     repository: String::new(),
                     homepage: String::new(),
-                    src: Self::scope_file_or_fallback(scope),
+                    src: scope.path_or_fallback(),
                     root: String::new(),
                 });
         }
@@ -57,7 +58,7 @@ impl MiddleEnvironment {
             license: String::new(),
             repository: String::new(),
             homepage: String::new(),
-            src: Self::scope_file_or_fallback(scope),
+            src: scope.path_or_fallback(),
             root: String::new(),
         }
     }
@@ -67,7 +68,7 @@ impl MiddleEnvironment {
         scope: &u64,
         node: Node,
     ) -> Result<MiddleNode, MiddleErr> {
-        let Some(scope_ref) = self.scopes.get(scope).cloned() else {
+        let Some(scope_ref) = self.scoping.scopes.get(scope).cloned() else {
             return self.evaluate_inner(scope, node);
         };
 
@@ -129,7 +130,7 @@ impl MiddleEnvironment {
         scope: &u64,
         node: Node,
     ) -> Result<MiddleNode, MiddleErr> {
-        let Some(scope_ref) = self.scopes.get(scope).cloned() else {
+        let Some(scope_ref) = self.scoping.scopes.get(scope).cloned() else {
             return self.evaluate_inner(scope, node);
         };
 
@@ -162,7 +163,7 @@ impl MiddleEnvironment {
                             ("function_name".to_string(), value(function_name)),
                             (
                                 "module_name".to_string(),
-                                value(Self::scope_file_or_fallback(&scope_ref)),
+                                value(scope_ref.path_or_fallback()),
                             ),
                             (
                                 "path".to_string(),

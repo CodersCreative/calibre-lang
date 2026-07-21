@@ -12,6 +12,7 @@ use rustc_hash::FxHashMap;
 use std::{fmt::Debug, str::FromStr};
 
 pub mod node;
+pub mod overloads;
 pub mod resolve;
 
 #[derive(Debug, Clone, Default)]

@@ -1,13 +1,12 @@
-use calibre_parser::{
-    Span,
-    ast::{Node, ParserDataType, ParserInnerType},
-};
-
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     symbols::{MiddleOverload, Operator},
+};
+use calibre_parser::{
+    Span,
+    ast::{Node, ParserDataType, ParserInnerType},
 };
 
 impl MiddleEnvironment {
@@ -43,18 +42,20 @@ impl MiddleEnvironment {
             let matches_overload = |overload: &MiddleOverload| {
                 overload.parameters.len() == 2
                     && overload.operator == operator
-                    && self.impl_type_matches(
-                        &overload.parameters[0].data_type,
-                        &left_ty.data_type,
-                        &overload.generic_params,
-                    )
-                    && self.impl_type_matches(
-                        &overload.parameters[1].data_type,
-                        &right_ty.data_type,
-                        &overload.generic_params,
-                    )
+                    && overload.parameters[0]
+                        .data_type
+                        .matches(&left_ty.data_type, &overload.generic_params)
+                    && overload.parameters[1]
+                        .data_type
+                        .matches(&right_ty.data_type, &overload.generic_params)
             };
-            if let Some(overload) = self.overloads.iter().find(|x| matches_overload(x)).cloned() {
+            if let Some(overload) = self
+                .symbols
+                .overloads
+                .iter()
+                .find(|x| matches_overload(x))
+                .cloned()
+            {
                 return Ok(Some(MiddleNode {
                     node_type: MiddleNodeType::CallExpression {
                         caller: Box::new(self.evaluate_inner(scope, overload.func.clone())?),
@@ -82,17 +83,17 @@ impl MiddleEnvironment {
             return Ok(None);
         };
         let overload = self
+            .symbols
             .overloads
             .iter()
             .filter(|x| matches!(x.operator, Operator::As))
             .filter(|x| x.parameters.len() == 1)
             .find(|x| {
-                if self.impl_type_matches(
-                    &x.parameters[0].data_type,
-                    &left_ty.data_type,
-                    &x.generic_params,
-                ) && let Some(t) = x.return_type.data_type.unwrap_one_result()
-                    && self.impl_type_matches(t, &target.data_type, &x.generic_params)
+                if x.parameters[0]
+                    .data_type
+                    .matches(&left_ty.data_type, &x.generic_params)
+                    && let Some(t) = x.return_type.data_type.unwrap_one_result()
+                    && t.matches(&target.data_type, &x.generic_params)
                 {
                     true
                 } else {
@@ -124,17 +125,17 @@ impl MiddleEnvironment {
             return Ok(false);
         };
         let overload = self
+            .symbols
             .overloads
             .iter()
             .filter(|x| matches!(x.operator, Operator::As))
             .filter(|x| x.parameters.len() == 1)
             .find(|x| {
-                if self.impl_type_matches(
-                    &x.parameters[0].data_type,
-                    &left_ty.data_type,
-                    &x.generic_params,
-                ) && let Some(t) = x.return_type.data_type.unwrap_one_result()
-                    && self.impl_type_matches(t, &target.data_type, &x.generic_params)
+                if x.parameters[0]
+                    .data_type
+                    .matches(&left_ty.data_type, &x.generic_params)
+                    && let Some(t) = x.return_type.data_type.unwrap_one_result()
+                    && t.matches(&target.data_type, &x.generic_params)
                 {
                     true
                 } else {
@@ -162,24 +163,21 @@ impl MiddleEnvironment {
         };
 
         let overload = self
+            .symbols
             .overloads
             .iter()
             .filter(|x| matches!(x.operator, Operator::IndexAssign))
             .filter(|x| x.parameters.len() == 3)
             .find(|x| {
-                self.impl_type_matches(
-                    &x.parameters[0].data_type,
-                    &base_ty.data_type,
-                    &x.generic_params,
-                ) && self.impl_type_matches(
-                    &x.parameters[1].data_type,
-                    &index_ty.data_type,
-                    &x.generic_params,
-                ) && self.impl_type_matches(
-                    &x.parameters[2].data_type,
-                    &value_ty.data_type,
-                    &x.generic_params,
-                )
+                x.parameters[0]
+                    .data_type
+                    .matches(&base_ty.data_type, &x.generic_params)
+                    && x.parameters[1]
+                        .data_type
+                        .matches(&index_ty.data_type, &x.generic_params)
+                    && x.parameters[2]
+                        .data_type
+                        .matches(&value_ty.data_type, &x.generic_params)
             })
             .cloned();
 
@@ -212,19 +210,17 @@ impl MiddleEnvironment {
             self.resolve_type_from_node(scope, right),
         ) {
             if let Some(overload) = self
+                .symbols
                 .overloads
                 .iter()
                 .filter(|x| x.parameters.len() == 2 && &x.operator == operator)
                 .find(|x| {
-                    self.impl_type_matches(
-                        &x.parameters[0].data_type,
-                        &left_ty.data_type,
-                        &x.generic_params,
-                    ) && self.impl_type_matches(
-                        &x.parameters[1].data_type,
-                        &right_ty.data_type,
-                        &x.generic_params,
-                    )
+                    x.parameters[0]
+                        .data_type
+                        .matches(&left_ty.data_type, &x.generic_params)
+                        && x.parameters[1]
+                            .data_type
+                            .matches(&right_ty.data_type, &x.generic_params)
                 })
             {
                 return Some(overload);

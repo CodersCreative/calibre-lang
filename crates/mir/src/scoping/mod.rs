@@ -6,7 +6,6 @@ use calibre_parser::{
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::PathBuf;
 
-pub mod overloads;
 pub mod resolve;
 
 #[derive(Debug, Clone, Default)]
@@ -365,8 +364,8 @@ pub struct MiddleScope {
 
 impl MiddleScope {
     #[inline]
-    pub fn path_or_fallback(scope: &MiddleScope) -> String {
-        let file = scope.path.to_string_lossy().to_string();
+    pub fn path_or_fallback(&self) -> String {
+        let file = self.path.to_string_lossy().to_string();
         if file.is_empty() {
             String::from("unknown")
         } else {
