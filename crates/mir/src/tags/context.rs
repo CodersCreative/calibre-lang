@@ -4,9 +4,7 @@ use calibre_parser::ast::{
 };
 
 use crate::{
-    ast::MiddleNode,
-    environment::{MiddleEnvironment, MiddleScope, PackageMetadata},
-    errors::MiddleErr,
+    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::MiddleScope,
 };
 
 #[derive(Debug, Clone, Default)]

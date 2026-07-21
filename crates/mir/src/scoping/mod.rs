@@ -6,6 +6,9 @@ use calibre_parser::{
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::PathBuf;
 
+pub mod overloads;
+pub mod resolve;
+
 #[derive(Debug, Clone, Default)]
 pub struct Scoping {
     pub scope_counter: u64,
@@ -74,6 +77,227 @@ impl Scoping {
 
         self.scopes.get(&0).unwrap_or_else(|| empty_scope())
     }
+
+    pub fn add_scope(&mut self, mut scope: MiddleScope) {
+        scope.id = self.scope_counter;
+        self.scopes.insert(scope.id, scope);
+        self.scope_counter += 1;
+    }
+
+    pub fn new_scope(
+        &mut self,
+        parent: Option<u64>,
+        path: PathBuf,
+        namespace: Option<&str>,
+    ) -> u64 {
+        if let (Some(parent_id), Some(ns)) = (parent, namespace) {
+            let existing = self.scopes.values().find_map(|scope| {
+                if scope.namespace != ns {
+                    return None;
+                }
+                if scope.path == path {
+                    return Some(scope.id);
+                }
+                let left = std::fs::canonicalize(&scope.path).ok();
+                let right = std::fs::canonicalize(&path).ok();
+                if left.is_some() && left == right {
+                    Some(scope.id)
+                } else {
+                    None
+                }
+            });
+            if let Some(existing_id) = existing {
+                if let Some(parent_scope) = self.scopes.get_mut(&parent_id) {
+                    parent_scope.children.insert(ns.to_string(), existing_id);
+                }
+                return existing_id;
+            }
+        }
+
+        if let Some(parent) = parent {
+            let scope = MiddleScope {
+                macros: FxHashMap::default(),
+                macro_args: FxHashMap::default(),
+                id: self.scope_counter,
+                namespace: namespace
+                    .unwrap_or(&self.scope_counter.to_string())
+                    .to_string(),
+                parent: Some(parent),
+                children: FxHashMap::default(),
+                mappings: FxHashMap::default(),
+                defined: Vec::new(),
+                defers: Vec::new(),
+                path,
+            };
+
+            let _ = self.add_scope(scope);
+
+            if let Some(scope_ref) = self.scopes.get_mut(&parent) {
+                scope_ref.children.insert(
+                    namespace
+                        .map(String::from)
+                        .unwrap_or((self.scope_counter - 1).to_string()),
+                    self.scope_counter - 1,
+                );
+            }
+
+            self.scope_counter - 1
+        } else {
+            let scope = MiddleScope {
+                macros: FxHashMap::default(),
+                macro_args: FxHashMap::default(),
+                id: self.scope_counter,
+                namespace: namespace
+                    .unwrap_or(&self.scope_counter.to_string())
+                    .to_string(),
+                parent: None,
+                children: FxHashMap::default(),
+                mappings: FxHashMap::default(),
+                defined: Vec::new(),
+                defers: Vec::new(),
+                path,
+            };
+            let _ = self.add_scope(scope);
+            self.scope_counter - 1
+        }
+    }
+
+    pub fn new_scope_from_parent_shallow(&mut self, parent: u64) -> u64 {
+        let Some(path) = self.scopes.get(&parent).map(|s| s.path.clone()) else {
+            return parent;
+        };
+        self.new_scope(Some(parent), path, None)
+    }
+
+    pub fn new_build_scope_from_parent(&mut self, parent: u64, namespace: &str) -> Option<u64> {
+        let path = self.scopes.get(&parent)?.path.clone();
+        let parent_name = path.file_name()?;
+        let folder = path.parent()?.to_path_buf();
+
+        let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
+            String::new()
+        } else {
+            let parent_str = parent_name.to_str()?;
+            let base = parent_str.split('.').next()?;
+            format!("{base}/")
+        };
+
+        let mut path1 = folder.clone();
+        path1 = path1.join(format!("{extra}{namespace}/build.cal"));
+
+        if path1.exists() {
+            Some(self.new_scope(Some(parent), path1, Some(namespace)))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_scope_from_path(
+        &self,
+        path: &[String],
+        mut parent: Option<u64>,
+    ) -> Result<u64, MiddleErr> {
+        let mut skip = 0;
+
+        if parent.is_none() {
+            parent = self
+                .scopes
+                .iter()
+                .find(|(_, v)| v.namespace == path[0])
+                .map(|x| x.0)
+                .cloned();
+
+            if parent.is_none() {
+                return Err(MiddleErr::Scope(path[0].clone()));
+            }
+
+            skip = 1;
+        }
+
+        for name in path.iter().skip(skip) {
+            if let Some(p) = parent {
+                parent = Some(self.get_scope_from_parent(p, name)?);
+            }
+        }
+
+        parent.ok_or_else(|| MiddleErr::Scope(path.join("::")))
+    }
+
+    pub fn get_scope_from_parent(&self, parent: u64, namespace: &str) -> Result<u64, MiddleErr> {
+        let parent_scope = self
+            .scopes
+            .get(&parent)
+            .ok_or_else(|| MiddleErr::Internal(format!("missing scope {parent}")))?;
+
+        for (_, child) in parent_scope.children.iter() {
+            if let Some(x) = self.scopes.get(child)
+                && x.namespace == namespace
+            {
+                return Ok(x.id);
+            }
+        }
+
+        Err(MiddleErr::Scope(namespace.to_string()))
+    }
+
+    pub fn new_scope_from_parent(
+        &mut self,
+        parent: u64,
+        namespace: &str,
+    ) -> Result<u64, MiddleErr> {
+        if let Ok(scope) = self.get_scope_from_parent(parent, namespace) {
+            return Ok(scope);
+        }
+
+        let path = self
+            .scopes
+            .get(&parent)
+            .ok_or_else(|| MiddleErr::Internal(format!("missing parent scope {parent}")))?
+            .path
+            .clone();
+        let parent_name = path.file_name().ok_or_else(|| {
+            MiddleErr::Internal(format!("missing parent filename for scope {parent}"))
+        })?;
+        let folder = path.parent().ok_or_else(|| {
+            MiddleErr::Internal(format!("missing parent directory for scope {parent}"))
+        })?;
+
+        let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
+            String::new()
+        } else {
+            let parent_str = parent_name.to_str().ok_or_else(|| {
+                MiddleErr::Internal(format!("invalid parent filename for scope {parent}"))
+            })?;
+            let base = parent_str.split('.').next().ok_or_else(|| {
+                MiddleErr::Internal(format!("invalid parent filename for scope {parent}"))
+            })?;
+            format!("{base}/")
+        };
+
+        let path_ends = [".cal", "/main.cal", "/mod.cal"];
+        let path_starts = [format!("{extra}{namespace}"), format!("{namespace}")];
+        let paths: Vec<PathBuf> = path_starts
+            .into_iter()
+            .map(|x| {
+                let folder = folder.to_path_buf();
+                path_ends
+                    .iter()
+                    .map(|y| folder.join(format!("{}{}", x, y)))
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect();
+
+        for path in paths.clone() {
+            if path.exists() {
+                return Ok(self.new_scope(Some(parent), path, Some(namespace)));
+            }
+        }
+
+        Err(MiddleErr::Scope(format!(
+            "could not resolve module {namespace}; tried {paths:?}"
+        )))
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -121,4 +345,16 @@ pub struct MiddleScope {
     pub path: PathBuf,
     pub defined: Vec<String>,
     pub defers: Vec<Node>,
+}
+
+impl MiddleScope {
+    #[inline]
+    pub fn path_or_fallback(scope: &MiddleScope) -> String {
+        let file = scope.path.to_string_lossy().to_string();
+        if file.is_empty() {
+            String::from("unknown")
+        } else {
+            file
+        }
+    }
 }

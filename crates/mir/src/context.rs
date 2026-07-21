@@ -1,9 +1,6 @@
 use calibre_parser::{Location, Span};
 
-use crate::{
-    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr,
-    tags::context::PackageMetadata,
-};
+use crate::{ast::MiddleNode, errors::MiddleErr, tags::context::PackageMetadata};
 
 #[derive(Debug, Clone, Default)]
 pub struct MiddleContext {

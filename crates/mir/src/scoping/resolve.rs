@@ -1,3 +1,14 @@
+use crate::{
+    ast::{MiddleNode, MiddleNodeType},
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+};
+use calibre_parser::{
+    Parser,
+    ast::{Node, NodeType},
+};
+use std::fs;
+
 impl MiddleEnvironment {
     pub fn get_scope_list(&self, scope: u64, mut list: Vec<String>) -> Result<u64, MiddleErr> {
         if list.len() <= 0 {
@@ -30,26 +41,28 @@ impl MiddleEnvironment {
         Ok(match key {
             "super" => {
                 let parent = self
+                    .scoping
                     .scopes
                     .get(&scope)
                     .and_then(|s| s.parent)
-                    .ok_or_else(|| self.err_at_current(MiddleErr::Scope("super".to_string())))?;
+                    .ok_or_else(|| MiddleErr::Scope("super".to_string()))?;
                 (parent, None)
             }
             _ => {
                 let current = self
+                    .scoping
                     .scopes
                     .get(&scope)
                     .cloned()
-                    .ok_or_else(|| self.err_at_current(MiddleErr::Scope(scope.to_string())))?;
+                    .ok_or_else(|| MiddleErr::Scope(scope.to_string()))?;
                 let parent_id = current.id;
 
                 let scope = if let Some(scope) = current.children.get(key) {
                     *scope
-                } else if let Some(scope) = self.get_global_scope().children.get(key) {
+                } else if let Some(scope) = self.scoping.get_global_scope().children.get(key) {
                     *scope
                 } else {
-                    self.new_scope_from_parent(parent_id, key)?
+                    self.scoping.new_scope_from_parent(parent_id, key)?
                 };
 
                 self.load_import_scope(scope, parent_id, key)?
@@ -64,22 +77,24 @@ impl MiddleEnvironment {
         key: &str,
     ) -> Result<(u64, Option<MiddleNode>), MiddleErr> {
         let mut parser = Parser::default();
-        let build_node = if let Some(scope) = self.new_build_scope_from_parent(parent, key) {
-            if self.loaded_scopes.contains(&scope) {
+        let build_node = if let Some(scope) = self.scoping.new_build_scope_from_parent(parent, key)
+        {
+            if self.scoping.loaded_scopes.contains(&scope) {
                 None
             } else {
                 let path = self
+                    .scoping
                     .scopes
                     .get(&scope)
                     .ok_or_else(|| {
-                        self.err_at_current(MiddleErr::Internal(format!(
+                        self.context.err_at_current(MiddleErr::Internal(format!(
                             "missing build scope {scope}"
                         )))
                     })?
                     .path
                     .clone();
                 let source = fs::read_to_string(&path).map_err(|err| {
-                    self.err_at_current(MiddleErr::Internal(format!(
+                    self.context.err_at_current(MiddleErr::Internal(format!(
                         "failed to read {path:?}: {err}"
                     )))
                 })?;
@@ -119,29 +134,30 @@ impl MiddleEnvironment {
                 }
 
                 let node = self.evaluate(&scope, program);
-                self.loaded_scopes.insert(scope);
+                self.scoping.loaded_scopes.insert(scope);
                 Some(node)
             }
         } else {
             None
         };
 
-        if self.loaded_scopes.contains(&scope) {
+        if self.scoping.loaded_scopes.contains(&scope) {
             return Ok((scope, None));
         }
 
         let path = self
+            .scoping
             .scopes
             .get(&scope)
             .ok_or_else(|| {
-                self.err_at_current(MiddleErr::Internal(format!(
+                self.context.err_at_current(MiddleErr::Internal(format!(
                     "missing scope {scope} for import"
                 )))
             })?
             .path
             .clone();
         let source = fs::read_to_string(&path).map_err(|err| {
-            self.err_at_current(MiddleErr::Internal(format!(
+            self.context.err_at_current(MiddleErr::Internal(format!(
                 "failed to read {path:?}: {err}"
             )))
         })?;
@@ -166,7 +182,7 @@ impl MiddleEnvironment {
             self.predeclare_forward_refs(&scope, body);
         }
         let node = self.evaluate(&scope, program);
-        self.loaded_scopes.insert(scope);
+        self.scoping.loaded_scopes.insert(scope);
 
         let node = match (node.node_type.clone(), build_node) {
             (MiddleNodeType::ScopeDeclaration { mut body, .. }, Some(build_node)) => MiddleNode {
@@ -188,7 +204,7 @@ impl MiddleEnvironment {
                     is_temp: false,
                     scope_id: scope,
                 },
-                self.current_span(),
+                self.context.current_span(),
             ),
             _ => node,
         };
@@ -199,35 +215,41 @@ impl MiddleEnvironment {
     pub fn get_next_scope(&self, scope: u64, key: &str) -> Result<u64, MiddleErr> {
         Ok(match key {
             "super" => self
+                .scoping
                 .scopes
                 .get(&scope)
                 .and_then(|s| s.parent)
-                .ok_or_else(|| self.err_at_current(MiddleErr::Scope("super".to_string())))?,
+                .ok_or_else(|| {
+                    self.context
+                        .err_at_current(MiddleErr::Scope("super".to_string()))
+                })?,
             _ => {
-                let current = self
-                    .scopes
-                    .get(&scope)
-                    .ok_or_else(|| self.err_at_current(MiddleErr::Scope(scope.to_string())))?;
+                let current = self.scoping.scopes.get(&scope).ok_or_else(|| {
+                    self.context
+                        .err_at_current(MiddleErr::Scope(scope.to_string()))
+                })?;
                 if let Some(x) = current.children.get(key) {
                     x.clone()
                 } else if let Some(mapped) = current.mappings.get(key)
                     && let Some(x) = current.children.get(mapped)
                 {
                     x.clone()
-                } else if let Some(s) = self.get_global_scope().children.get(key) {
+                } else if let Some(s) = self.scoping.get_global_scope().children.get(key) {
                     s.clone()
-                } else if let Some(mapped) = self.get_global_scope().mappings.get(key)
-                    && let Some(s) = self.get_global_scope().children.get(mapped)
+                } else if let Some(mapped) = self.scoping.get_global_scope().mappings.get(key)
+                    && let Some(s) = self.scoping.get_global_scope().children.get(mapped)
                 {
                     s.clone()
-                } else if let Some(s) = self.get_root_scope().children.get(key) {
+                } else if let Some(s) = self.scoping.get_root_scope().children.get(key) {
                     s.clone()
-                } else if let Some(mapped) = self.get_root_scope().mappings.get(key)
-                    && let Some(s) = self.get_root_scope().children.get(mapped)
+                } else if let Some(mapped) = self.scoping.get_root_scope().mappings.get(key)
+                    && let Some(s) = self.scoping.get_root_scope().children.get(mapped)
                 {
                     s.clone()
                 } else {
-                    return Err(self.err_at_current(MiddleErr::Scope(key.to_string())));
+                    return Err(self
+                        .context
+                        .err_at_current(MiddleErr::Scope(key.to_string())));
                 }
             }
         })

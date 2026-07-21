@@ -2,26 +2,23 @@ use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
 use crate::multipass::prepare_ast;
-use crate::scoping::{MiddleScope, Scoping};
+use crate::scoping::Scoping;
 use crate::symbols::Symbols;
 use crate::tags::Tagging;
+use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;
-use crate::typing::{MiddleTypeDefType, Typing};
+use crate::typing::Typing;
 use calibre_parser::COUNTER;
-use calibre_parser::ast::EmitType;
 use calibre_parser::{
-    Location, Parser, Span,
+    Span,
     ast::{
-        FunctionHeader, Node, NodeType, Overload, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType,
-        VarType,
-        binary::BinaryOperator,
-        comparison::{BooleanOperator, ComparisonOperator},
+        FunctionHeader, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
+        PotentialNewType, VarType,
     },
 };
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use std::fmt::Debug;
-use std::{fs, path::PathBuf, str::FromStr};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default)]
 pub struct MiddleEnvironment {
@@ -279,7 +276,10 @@ impl MiddleEnvironment {
         no_std: bool,
     ) -> (Self, u64, MiddleNode) {
         let mut env = Self {
-            package_metadata,
+            context: MiddleContext {
+                package_metadata,
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -290,10 +290,10 @@ impl MiddleEnvironment {
         };
 
         let wrap = |env: &MiddleEnvironment, scope: u64, span: Span, inner: MiddleNode| {
-            if env.stdlib_nodes.is_empty() {
+            if env.context.stdlib_nodes.is_empty() {
                 inner
             } else {
-                let mut body = env.stdlib_nodes.clone();
+                let mut body = env.context.stdlib_nodes.clone();
                 body.push(inner);
                 MiddleNode {
                     node_type: MiddleNodeType::ScopeDeclaration {
@@ -320,7 +320,7 @@ impl MiddleEnvironment {
         let inner = env.evaluate(&scope, node.clone());
         let mut middle = wrap(&env, scope, node.span, inner);
 
-        if let Some(mut decls) = env.specialization_decls_by_scope.remove(&scope)
+        if let Some(mut decls) = env.symbols.specialization_decls_by_scope.remove(&scope)
             && !decls.is_empty()
         {
             match &mut middle.node_type {
@@ -353,248 +353,6 @@ impl MiddleEnvironment {
 
     pub fn new_and_evaluate(node: Node, path: PathBuf, no_std: bool) -> (Self, u64, MiddleNode) {
         Self::new_and_evaluate_with_package(node, path, None, no_std)
-    }
-
-    pub fn add_scope(&mut self, mut scope: MiddleScope) {
-        scope.id = self.scope_counter;
-        self.scopes.insert(scope.id, scope);
-        self.scope_counter += 1;
-    }
-
-    #[inline]
-    pub fn scope_file_or_fallback(scope: &MiddleScope) -> String {
-        let file = scope.path.to_string_lossy().to_string();
-        if file.is_empty() {
-            String::from("unknown")
-        } else {
-            file
-        }
-    }
-
-    pub fn get_scope_from_path(
-        &self,
-        path: &[String],
-        mut parent: Option<u64>,
-    ) -> Result<u64, MiddleErr> {
-        let mut skip = 0;
-
-        if parent.is_none() {
-            parent = self
-                .scopes
-                .iter()
-                .find(|(_, v)| v.namespace == path[0])
-                .map(|x| x.0)
-                .cloned();
-
-            if parent.is_none() {
-                return Err(self.err_at_current(MiddleErr::Scope(path[0].clone())));
-            }
-
-            skip = 1;
-        }
-
-        for name in path.iter().skip(skip) {
-            if let Some(p) = parent {
-                parent = Some(self.get_scope_from_parent(p, name)?);
-            }
-        }
-
-        parent.ok_or_else(|| self.err_at_current(MiddleErr::Scope(path.join("::"))))
-    }
-
-    pub fn get_scope_from_parent(&self, parent: u64, namespace: &str) -> Result<u64, MiddleErr> {
-        let parent_scope = self.scopes.get(&parent).ok_or_else(|| {
-            self.err_at_current(MiddleErr::Internal(format!("missing scope {parent}")))
-        })?;
-
-        for (_, child) in parent_scope.children.iter() {
-            if let Some(x) = self.scopes.get(child)
-                && x.namespace == namespace
-            {
-                return Ok(x.id);
-            }
-        }
-
-        Err(self.err_at_current(MiddleErr::Scope(namespace.to_string())))
-    }
-
-    pub fn new_scope_from_parent_shallow(&mut self, parent: u64) -> u64 {
-        let Some(path) = self.scopes.get(&parent).map(|s| s.path.clone()) else {
-            return parent;
-        };
-        self.new_scope(Some(parent), path, None)
-    }
-
-    pub fn new_build_scope_from_parent(&mut self, parent: u64, namespace: &str) -> Option<u64> {
-        let path = self.scopes.get(&parent)?.path.clone();
-        let parent_name = path.file_name()?;
-        let folder = path.parent()?.to_path_buf();
-
-        let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
-            String::new()
-        } else {
-            let parent_str = parent_name.to_str()?;
-            let base = parent_str.split('.').next()?;
-            format!("{base}/")
-        };
-
-        let mut path1 = folder.clone();
-        path1 = path1.join(format!("{extra}{namespace}/build.cal"));
-
-        if path1.exists() {
-            Some(self.new_scope(Some(parent), path1, Some(namespace)))
-        } else {
-            None
-        }
-    }
-
-    pub fn new_scope_from_parent(
-        &mut self,
-        parent: u64,
-        namespace: &str,
-    ) -> Result<u64, MiddleErr> {
-        if let Ok(scope) = self.get_scope_from_parent(parent, namespace) {
-            return Ok(scope);
-        }
-
-        let path = self
-            .scopes
-            .get(&parent)
-            .ok_or_else(|| {
-                self.err_at_current(MiddleErr::Internal(format!(
-                    "missing parent scope {parent}"
-                )))
-            })?
-            .path
-            .clone();
-        let parent_name = path.file_name().ok_or_else(|| {
-            self.err_at_current(MiddleErr::Internal(format!(
-                "missing parent filename for scope {parent}"
-            )))
-        })?;
-        let folder = path.parent().ok_or_else(|| {
-            self.err_at_current(MiddleErr::Internal(format!(
-                "missing parent directory for scope {parent}"
-            )))
-        })?;
-
-        let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
-            String::new()
-        } else {
-            let parent_str = parent_name.to_str().ok_or_else(|| {
-                self.err_at_current(MiddleErr::Internal(format!(
-                    "invalid parent filename for scope {parent}"
-                )))
-            })?;
-            let base = parent_str.split('.').next().ok_or_else(|| {
-                self.err_at_current(MiddleErr::Internal(format!(
-                    "invalid parent filename for scope {parent}"
-                )))
-            })?;
-            format!("{base}/")
-        };
-
-        let path_ends = [".cal", "/main.cal", "/mod.cal"];
-        let path_starts = [format!("{extra}{namespace}"), format!("{namespace}")];
-        let paths: Vec<PathBuf> = path_starts
-            .into_iter()
-            .map(|x| {
-                let folder = folder.to_path_buf();
-                path_ends
-                    .iter()
-                    .map(|y| folder.join(format!("{}{}", x, y)))
-                    .collect::<Vec<_>>()
-            })
-            .flatten()
-            .collect();
-
-        for path in paths.clone() {
-            if path.exists() {
-                return Ok(self.new_scope(Some(parent), path, Some(namespace)));
-            }
-        }
-
-        Err(self.err_at_current(MiddleErr::Scope(format!(
-            "could not resolve module {namespace}; tried {paths:?}"
-        ))))
-    }
-
-    pub fn new_scope(
-        &mut self,
-        parent: Option<u64>,
-        path: PathBuf,
-        namespace: Option<&str>,
-    ) -> u64 {
-        if let (Some(parent_id), Some(ns)) = (parent, namespace) {
-            let existing = self.scopes.values().find_map(|scope| {
-                if scope.namespace != ns {
-                    return None;
-                }
-                if scope.path == path {
-                    return Some(scope.id);
-                }
-                let left = std::fs::canonicalize(&scope.path).ok();
-                let right = std::fs::canonicalize(&path).ok();
-                if left.is_some() && left == right {
-                    Some(scope.id)
-                } else {
-                    None
-                }
-            });
-            if let Some(existing_id) = existing {
-                if let Some(parent_scope) = self.scopes.get_mut(&parent_id) {
-                    parent_scope.children.insert(ns.to_string(), existing_id);
-                }
-                return existing_id;
-            }
-        }
-
-        if let Some(parent) = parent {
-            let scope = MiddleScope {
-                macros: FxHashMap::default(),
-                macro_args: FxHashMap::default(),
-                id: self.scope_counter,
-                namespace: namespace
-                    .unwrap_or(&self.scope_counter.to_string())
-                    .to_string(),
-                parent: Some(parent),
-                children: FxHashMap::default(),
-                mappings: FxHashMap::default(),
-                defined: Vec::new(),
-                defers: Vec::new(),
-                path,
-            };
-
-            let _ = self.add_scope(scope);
-
-            if let Some(scope_ref) = self.scopes.get_mut(&parent) {
-                scope_ref.children.insert(
-                    namespace
-                        .map(String::from)
-                        .unwrap_or((self.scope_counter - 1).to_string()),
-                    self.scope_counter - 1,
-                );
-            }
-
-            self.scope_counter - 1
-        } else {
-            let scope = MiddleScope {
-                macros: FxHashMap::default(),
-                macro_args: FxHashMap::default(),
-                id: self.scope_counter,
-                namespace: namespace
-                    .unwrap_or(&self.scope_counter.to_string())
-                    .to_string(),
-                parent: None,
-                children: FxHashMap::default(),
-                mappings: FxHashMap::default(),
-                defined: Vec::new(),
-                defers: Vec::new(),
-                path,
-            };
-            let _ = self.add_scope(scope);
-            self.scope_counter - 1
-        }
     }
 
     pub fn quick_resolve_potential_scope_member(
@@ -651,7 +409,7 @@ impl MiddleEnvironment {
                         }
                     }
 
-                    return Err(self.err_at_current(MiddleErr::Scope(
+                    return Err(self.context.err_at_current(MiddleErr::Scope(
                         module_path.last().cloned().unwrap_or_default(),
                     )));
                 }

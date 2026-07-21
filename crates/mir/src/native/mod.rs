@@ -1,6 +1,8 @@
 use crate::{
-    environment::{MiddleEnvironment, MiddleScope, MiddleVariable, get_disamubiguous_name},
+    environment::{MiddleEnvironment, get_disamubiguous_name},
     errors::MiddleErr,
+    scoping::MiddleScope,
+    symbols::MiddleVariable,
 };
 use calibre_parser::{
     Parser,
