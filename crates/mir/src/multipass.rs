@@ -1,4 +1,7 @@
-use crate::environment::{MiddleEnvironment, MiddleVariable, get_disamubiguous_name};
+use crate::{
+    environment::{MiddleEnvironment, get_disamubiguous_name},
+    symbols::MiddleVariable,
+};
 use calibre_parser::{
     Span,
     ast::{
@@ -398,11 +401,11 @@ impl MiddleEnvironment {
     fn predeclare_type_binding(&mut self, scope: &u64, identifier: &str) {
         let new_name = get_disamubiguous_name(scope, Some(identifier.trim()), None);
 
-        if self.variables.contains_key(&new_name) {
+        if self.symbols.variables.contains_key(&new_name) {
             return;
         }
 
-        self.variables.insert(
+        self.symbols.variables.insert(
             new_name.clone(),
             MiddleVariable {
                 data_type: ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
@@ -411,7 +414,7 @@ impl MiddleEnvironment {
             },
         );
 
-        if let Ok(scope_ref) = self.scope_mut_or_err(scope) {
+        if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
             scope_ref
                 .mappings
                 .entry(identifier.to_string())
@@ -438,7 +441,7 @@ impl MiddleEnvironment {
             get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))
         };
 
-        if self.variables.contains_key(&new_name) {
+        if self.symbols.variables.contains_key(&new_name) {
             return;
         }
 
@@ -449,16 +452,16 @@ impl MiddleEnvironment {
             self.resolve_potential_new_type(scope, data_type.clone())
         };
 
-        self.variables.insert(
+        self.symbols.variables.insert(
             new_name.clone(),
             MiddleVariable {
                 data_type: const_type,
                 var_type,
-                location: self.get_location(scope, span),
+                location: self.scoping.get_location(scope, span),
             },
         );
 
-        if let Ok(scope_ref) = self.scope_mut_or_err(scope) {
+        if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
             scope_ref
                 .mappings
                 .entry(identifier.text.clone())
@@ -485,10 +488,10 @@ impl MiddleEnvironment {
             )
         };
 
-        if self.variables.contains_key(&new_name) {
+        if self.symbols.variables.contains_key(&new_name) {
             return;
         }
-        self.variables.insert(
+        self.symbols.variables.insert(
             new_name.clone(),
             MiddleVariable {
                 data_type: ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
@@ -497,7 +500,7 @@ impl MiddleEnvironment {
             },
         );
 
-        if let Ok(scope_ref) = self.scope_mut_or_err(scope) {
+        if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
             scope_ref
                 .mappings
                 .entry(identifier.text.clone())

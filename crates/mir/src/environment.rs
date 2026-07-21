@@ -64,7 +64,7 @@ impl MiddleEnvironment {
         template_params: &[String],
         concrete_args: &[ParserDataType],
     ) -> Option<String> {
-        let decl_scope = self.get_root_scope().id;
+        let decl_scope = self.scoping.get_root_scope().id;
         if template_params.len() != concrete_args.len() {
             return None;
         }
@@ -72,13 +72,13 @@ impl MiddleEnvironment {
         let key = format!(
             "type::{}::{}",
             base,
-            self.canonical_type_args_key(concrete_args)
+            ParserDataType::canonical_args_key(concrete_args)
         );
-        if let Some(existing) = self.type_specializations.get(&key) {
+        if let Some(existing) = self.typing.type_specializations.get(&key) {
             return Some(existing.clone());
         }
 
-        let (tpl_params, obj, overloads) = self.generic_type_templates.get(base)?.clone();
+        let (tpl_params, obj, overloads) = self.typing.generic_type_templates.get(base)?.clone();
         if tpl_params.len() != template_params.len() {
             return None;
         }
@@ -88,14 +88,19 @@ impl MiddleEnvironment {
             subst.insert(p.clone(), arg.clone());
         }
 
-        let specialized_name = format!("{}->{}", base, self.canonical_type_args_key(concrete_args));
-        self.type_specializations
+        let specialized_name = format!(
+            "{}->{}",
+            base,
+            ParserDataType::canonical_args_key(concrete_args)
+        );
+        self.typing
+            .type_specializations
             .insert(key, specialized_name.clone());
 
         let new_obj = obj.substitute(&subst);
 
         let decl_node = Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::TypeDeclaration {
                 identifier: ParserText::from(specialized_name.clone()).into(),
                 object: new_obj,
@@ -114,7 +119,7 @@ impl MiddleEnvironment {
         template_params: &[String],
         concrete_args: &[ParserDataType],
     ) -> Option<String> {
-        let decl_scope = self.get_root_scope().id;
+        let decl_scope = self.scoping.get_root_scope().id;
         if template_params.len() != concrete_args.len() {
             return None;
         }
@@ -122,13 +127,13 @@ impl MiddleEnvironment {
         let key = format!(
             "fn::{}::{}",
             base,
-            self.canonical_type_args_key(concrete_args)
+            ParserDataType::canonical_args_key(concrete_args)
         );
-        if let Some(existing) = self.fn_specializations.get(&key) {
+        if let Some(existing) = self.symbols.fn_specializations.get(&key) {
             return Some(existing.clone());
         }
 
-        let (tpl_params, header, body) = self.generic_fn_templates.get(base)?.clone();
+        let (tpl_params, header, body) = self.symbols.generic_fn_templates.get(base)?.clone();
         if tpl_params.len() != template_params.len() {
             return None;
         }
@@ -138,8 +143,13 @@ impl MiddleEnvironment {
             subst.insert(p.clone(), arg.clone());
         }
 
-        let specialized_name = format!("{}->{}", base, self.canonical_type_args_key(concrete_args));
-        self.fn_specializations
+        let specialized_name = format!(
+            "{}->{}",
+            base,
+            ParserDataType::canonical_args_key(concrete_args)
+        );
+        self.symbols
+            .fn_specializations
             .insert(key, specialized_name.clone());
 
         let mut new_header = header.clone();
@@ -152,16 +162,16 @@ impl MiddleEnvironment {
         new_header.return_type = new_header.return_type.substitute(&subst);
 
         let decl_node = Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: ParserText::from(specialized_name.clone()).into(),
                 data_type: PotentialNewType::DataType(ParserDataType::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     ParserInnerType::Auto(None),
                 )),
                 value: Box::new(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::FunctionDeclaration {
                         header: FunctionHeader {
                             param_destructures: Vec::new(),
@@ -173,10 +183,11 @@ impl MiddleEnvironment {
             },
         );
 
-        let errors_before = self.errors.len();
+        let errors_before = self.context.errors.len();
         let mn = self.evaluate(&decl_scope, decl_node);
-        if self.errors.len() == errors_before {
-            self.specialization_decls_by_scope
+        if self.context.errors.len() == errors_before {
+            self.symbols
+                .specialization_decls_by_scope
                 .entry(decl_scope)
                 .or_default()
                 .push(mn);
@@ -270,7 +281,7 @@ impl MiddleEnvironment {
         };
 
         let scope = if no_std {
-            env.new_root_scope_no_std(None, path, None)
+            env.scoping.new_root_scope_no_std(None, path, None)
         } else {
             env.new_root_scope_with_std(None, path, None)
         };

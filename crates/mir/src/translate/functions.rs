@@ -1,7 +1,9 @@
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, MiddleScope, MiddleVariable, get_disamubiguous_name},
+    environment::{MiddleEnvironment, get_disamubiguous_name},
     errors::MiddleErr,
+    scoping::MiddleScope,
+    symbols::{FunctionParamDefault, MiddleVariable},
     tags::TagInfo,
 };
 use calibre_parser::{
@@ -58,24 +60,6 @@ impl MiddleEnvironment {
                 || parameters.len() == total_args)
     }
 
-    #[inline]
-    fn is_option_value_expr(node: &Node) -> bool {
-        if node.is_none() {
-            return true;
-        }
-
-        match &node.node_type {
-            NodeType::CallExpression { caller, .. } => matches!(
-                &caller.node_type,
-                NodeType::Identifier(id) if id.to_string() == "some"
-            ),
-            NodeType::EnumExpression { value, .. } => {
-                value.to_string().eq_ignore_ascii_case("some")
-            }
-            _ => false,
-        }
-    }
-
     pub fn lower_defaulted_call_args(
         &mut self,
         scope: &u64,
@@ -91,7 +75,7 @@ impl MiddleEnvironment {
         let raw_name = name.to_string();
 
         if matches!(raw_name.as_str(), "some" | "ok" | "err")
-            && self.variables.get(&raw_name).is_some_and(|var| {
+            && self.symbols.variables.get(&raw_name).is_some_and(|var| {
                 matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
             })
         {
@@ -104,14 +88,15 @@ impl MiddleEnvironment {
 
         let defaults_key = resolved_name.as_deref().unwrap_or(raw_name.as_str());
         let mut defaults = self
+            .symbols
             .function_param_defaults
             .get(defaults_key)
-            .or_else(|| self.function_param_defaults.get(raw_name.as_str()))
+            .or_else(|| self.symbols.function_param_defaults.get(raw_name.as_str()))
             .cloned();
 
         if defaults.is_none() {
-            let mut matched: Option<Vec<crate::environment::FunctionParamDefault>> = None;
-            for (key, value) in &self.function_param_defaults {
+            let mut matched: Option<Vec<FunctionParamDefault>> = None;
+            for (key, value) in &self.symbols.function_param_defaults {
                 let suffix_match = key == raw_name.as_str()
                     || key.ends_with(&format!("::{raw_name}"))
                     || key.ends_with(&format!(":{raw_name}"));
@@ -219,11 +204,11 @@ impl MiddleEnvironment {
 
             if meta.implicit_none {
                 let arg_type = self.resolve_type_from_node(scope, &current);
-                if Self::is_option_value_expr(&current)
+                if current.is_raw_option_value()
                     || matches!(
                         arg_type
                             .as_ref()
-                            .map(|x| x.data_type.clone().unwrap_all_refs()),
+                            .map(|x| x.data_type.unwrap_all_refs().clone()),
                         Some(ParserInnerType::Option(_))
                     )
                 {
@@ -241,7 +226,7 @@ impl MiddleEnvironment {
             if matches!(
                 self.resolve_type_from_node(scope, &current)
                     .as_ref()
-                    .map(|x| x.data_type.clone().unwrap_all_refs()),
+                    .map(|x| x.data_type.unwrap_all_refs().clone()),
                 Some(ParserInnerType::Option(_))
             ) {
                 slots[i] = Some(Self::unwrap_option_or_default_expr(
@@ -632,9 +617,10 @@ impl MiddleEnvironment {
         ident: &PotentialGenericTypeIdentifier,
     ) -> Option<String> {
         let resolved = self.resolve_potential_generic_ident(scope, ident)?;
-        self.variables
+        self.symbols
+            .variables
             .get(&resolved.text)
-            .and_then(|var| Self::is_callable_parser_type(&var.data_type).then_some(resolved.text))
+            .and_then(|var| (var.data_type.is_callable()).then_some(resolved.text))
     }
 
     #[inline]
@@ -648,14 +634,14 @@ impl MiddleEnvironment {
             return None;
         }
 
-        let native = self.variables.get(&name).and_then(|var| {
+        let native = self.symbols.variables.get(&name).and_then(|var| {
             matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
                 .then_some(name.clone())
         })?;
 
         let resolved = self.resolved_callable_name(scope, ident);
         if let Some(resolved_name) = resolved
-            && let Some(var) = self.variables.get(&resolved_name)
+            && let Some(var) = self.symbols.variables.get(&resolved_name)
             && matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
         {
             return None;
@@ -677,7 +663,10 @@ impl MiddleEnvironment {
     ) -> Result<MiddleNode, MiddleErr> {
         let ident = self
             .resolve_dollar_ident_only(scope, &identifier)
-            .ok_or_else(|| self.err_at_current(MiddleErr::Scope(identifier.to_string())))?;
+            .ok_or_else(|| {
+                self.context
+                    .err_at_current(MiddleErr::Scope(identifier.to_string()))
+            })?;
         let new_name = get_disamubiguous_name(scope, Some(ident.trim()), Some(&VarType::Constant));
 
         let mut params = Vec::new();
@@ -687,20 +676,25 @@ impl MiddleEnvironment {
 
         let return_type = self.resolve_ffi_data_type(scope, return_type);
 
-        let fn_type =
-            Self::function_data_type(self.current_span(), params.clone(), return_type.clone());
+        let fn_type = Self::function_data_type(
+            self.context.current_span(),
+            params.clone(),
+            return_type.clone(),
+        );
 
-        self.variables.insert(
+        self.symbols.variables.insert(
             new_name.clone(),
             MiddleVariable {
                 data_type: fn_type.clone(),
                 var_type: VarType::Constant,
-                location: self.current_location.clone(),
+                location: self.context.current_location.clone(),
             },
         );
 
-        let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
-        let scope_ref = self.scopes.get_mut(scope).ok_or(err)?;
+        let err = self
+            .context
+            .err_at_current(MiddleErr::Scope(scope.to_string()));
+        let scope_ref = self.scoping.scopes.get_mut(scope).ok_or(err)?;
         scope_ref
             .mappings
             .insert(ident.text.clone(), new_name.clone());
@@ -717,7 +711,7 @@ impl MiddleEnvironment {
                         parameters: params,
                         return_type,
                     },
-                    self.current_span(),
+                    self.context.current_span(),
                 )),
                 data_type: fn_type,
             },
@@ -734,8 +728,8 @@ impl MiddleEnvironment {
     ) -> Result<MiddleNode, MiddleErr> {
         let mut params = Vec::with_capacity(header.parameters.len());
         let mut param_idents = Vec::with_capacity(header.parameters.len());
-        let mut old_func_defers = std::mem::take(&mut self.func_defers);
-        let new_scope = self.new_scope_from_parent_shallow(*scope);
+        let mut old_func_defers = std::mem::take(&mut self.symbols.func_defers);
+        let new_scope = self.scoping.new_scope_from_parent_shallow(*scope);
 
         let needs_caller_context = self.tagging.tag_info.contains(&TagInfo::CallerContext);
 
@@ -743,7 +737,10 @@ impl MiddleEnvironment {
             param_idents.push(param.0.clone());
             let og_name = self
                 .resolve_dollar_ident_only(scope, &param.0)
-                .ok_or_else(|| self.err_at_current(MiddleErr::Scope(param.0.to_string())))?;
+                .ok_or_else(|| {
+                    self.context
+                        .err_at_current(MiddleErr::Scope(param.0.to_string()))
+                })?;
             let new_name =
                 get_disamubiguous_name(scope, Some(og_name.trim()), Some(&VarType::Mutable));
 
@@ -756,17 +753,19 @@ impl MiddleEnvironment {
                 return Err(MiddleErr::InferImpossible);
             };
 
-            self.variables.insert(
+            self.symbols.variables.insert(
                 new_name.clone(),
                 MiddleVariable {
                     data_type: data_type.clone(),
                     var_type: VarType::Mutable,
-                    location: self.current_location.clone(),
+                    location: self.context.current_location.clone(),
                 },
             );
 
-            let err = self.err_at_current(MiddleErr::Scope(new_scope.to_string()));
-            let scope_ref = self.scopes.get_mut(&new_scope).ok_or(err)?;
+            let err = self
+                .context
+                .err_at_current(MiddleErr::Scope(new_scope.to_string()));
+            let scope_ref = self.scoping.scopes.get_mut(&new_scope).ok_or(err)?;
             scope_ref
                 .mappings
                 .insert(og_name.text.clone(), new_name.clone());
@@ -784,17 +783,19 @@ impl MiddleEnvironment {
             let caller_context_type =
                 ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
 
-            self.variables.insert(
+            self.symbols.variables.insert(
                 caller_context_name.clone(),
                 MiddleVariable {
                     data_type: caller_context_type.clone(),
                     var_type: VarType::Mutable,
-                    location: self.current_location.clone(),
+                    location: self.context.current_location.clone(),
                 },
             );
 
-            let err = self.err_at_current(MiddleErr::Scope(new_scope.to_string()));
-            let scope_ref = self.scopes.get_mut(&new_scope).ok_or(err)?;
+            let err = self
+                .context
+                .err_at_current(MiddleErr::Scope(new_scope.to_string()));
+            let scope_ref = self.scoping.scopes.get_mut(&new_scope).ok_or(err)?;
             scope_ref
                 .mappings
                 .insert("caller_context".to_string(), caller_context_name.clone());
@@ -855,7 +856,7 @@ impl MiddleEnvironment {
 
         let body = self.evaluate(&new_scope, body);
         let mut func_defers = Vec::new();
-        func_defers.append(&mut self.func_defers);
+        func_defers.append(&mut self.symbols.func_defers);
 
         let body = if let MiddleNodeType::ScopeDeclaration {
             body: mut scope_body,
@@ -890,7 +891,7 @@ impl MiddleEnvironment {
                             MiddleNodeType::Return {
                                 value: Some(Box::new(last_node)),
                             },
-                            self.current_span(),
+                            self.context.current_span(),
                         ));
                     } else {
                         let last_node = match last_node.node_type {
@@ -905,7 +906,7 @@ impl MiddleEnvironment {
                                     } else {
                                         Box::new(MiddleNode::new(
                                             MiddleNodeType::Return { value: Some(node) },
-                                            self.current_span(),
+                                            self.context.current_span(),
                                         ))
                                     }
                                 };
@@ -914,7 +915,7 @@ impl MiddleEnvironment {
                                     Some(other) => Some(wrap(other)),
                                     None => Some(Box::new(MiddleNode::new(
                                         MiddleNodeType::Return { value: None },
-                                        self.current_span(),
+                                        self.context.current_span(),
                                     ))),
                                 };
                                 MiddleNode {
@@ -949,7 +950,7 @@ impl MiddleEnvironment {
         } else {
             body
         };
-        self.func_defers.append(&mut old_func_defers);
+        self.symbols.func_defers.append(&mut old_func_defers);
 
         let fn_node = MiddleNode {
             node_type: MiddleNodeType::FunctionDeclaration {
@@ -965,8 +966,11 @@ impl MiddleEnvironment {
             let full = p_name.text.clone();
             if let Some(idx) = full.rfind(':') {
                 let short = full[idx + 1..].to_string();
-                let err = self.err_at_current(MiddleErr::Scope(new_scope.to_string()));
-                self.scopes
+                let err = self
+                    .context
+                    .err_at_current(MiddleErr::Scope(new_scope.to_string()));
+                self.scoping
+                    .scopes
                     .get_mut(&new_scope)
                     .ok_or(err)?
                     .mappings
@@ -1021,22 +1025,24 @@ impl MiddleEnvironment {
             if !caller_name.contains("::")
                 && let Some(resolved) = caller_resolved.clone()
                 && resolved.text.contains("::")
-                && let Some(global_name) = self.get_global_scope().mappings.get(&caller_name)
+                && let Some(global_name) =
+                    self.scoping.get_global_scope().mappings.get(&caller_name)
                 && global_name != &resolved.text
                 && self
+                    .symbols
                     .variables
                     .get(global_name)
-                    .is_some_and(|var| Self::is_callable_parser_type(&var.data_type))
+                    .is_some_and(|var| var.data_type.is_callable())
             {
                 caller = Node::identifier(span, global_name.clone());
             }
             let caller_exact_callable = self.resolved_callable_name(scope, &caller_ident).is_some();
             if caller_name.contains("::")
-                && let Some(full_name) = self.variables.iter().find_map(|(name, var)| {
+                && let Some(full_name) = self.symbols.variables.iter().find_map(|(name, var)| {
                     if !name.ends_with(&caller_name) {
                         return None;
                     }
-                    if Self::is_callable_parser_type(&var.data_type) {
+                    if var.data_type.is_callable() {
                         Some(name.clone())
                     } else {
                         None
@@ -1064,31 +1070,33 @@ impl MiddleEnvironment {
                         .rsplit_once("::")
                         .map(|(_, member)| member.to_string())
                         .unwrap_or_else(|| caller_ident.to_string());
-                    let mapped_from_param = self.variables.iter().find_map(|(name, var)| {
-                        if !name.ends_with(&format!("::{}", caller_member_name)) {
-                            return None;
-                        }
-                        let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
-                        else {
-                            return None;
-                        };
-                        let first = parameters.first()?;
-                        let param_inner = match &first.data_type {
-                            ParserInnerType::Ref(inner, _) => &inner.data_type,
-                            other => other,
-                        };
-                        if self.impl_type_matches(param_inner, &target_ty.data_type, &Vec::new()) {
-                            Some(name.clone())
-                        } else {
-                            None
-                        }
-                    });
+                    let mapped_from_param =
+                        self.symbols.variables.iter().find_map(|(name, var)| {
+                            if !name.ends_with(&format!("::{}", caller_member_name)) {
+                                return None;
+                            }
+                            let ParserInnerType::Function { parameters, .. } =
+                                &var.data_type.data_type
+                            else {
+                                return None;
+                            };
+                            let first = parameters.first()?;
+                            let param_inner = match &first.data_type {
+                                ParserInnerType::Ref(inner, _) => &inner.data_type,
+                                other => other,
+                            };
+                            if param_inner.matches(&target_ty.data_type, &Vec::new()) {
+                                Some(name.clone())
+                            } else {
+                                None
+                            }
+                        });
                     if let Some(mapped_name) = self
                         .resolve_member_fn_name(&target_ty, &caller_member_name)
                         .or(mapped_from_param)
                         && mapped_name != caller_ident.to_string()
-                        && let Some(var) = self.variables.get(&mapped_name)
-                        && Self::is_callable_parser_type(&var.data_type)
+                        && let Some(var) = self.symbols.variables.get(&mapped_name)
+                        && var.data_type.is_callable()
                     {
                         caller = Node::identifier(span, mapped_name);
                     }
@@ -1099,7 +1107,7 @@ impl MiddleEnvironment {
                 let base_name = resolved_caller.text.clone();
 
                 if let Some((tpl_params, header, _body)) =
-                    self.generic_fn_templates.get(&base_name).cloned()
+                    self.symbols.generic_fn_templates.get(&base_name).cloned()
                 {
                     let explicit_args: Vec<ParserDataType> = generic_types
                         .iter()
@@ -1145,10 +1153,13 @@ impl MiddleEnvironment {
                         return self.evaluate_inner(
                             scope,
                             Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::CallExpression {
                                     string_fn: None,
-                                    caller: Box::new(Node::identifier(self.current_span(), spec)),
+                                    caller: Box::new(Node::identifier(
+                                        self.context.current_span(),
+                                        spec,
+                                    )),
                                     generic_types: Vec::new(),
                                     args,
                                     reverse_args,
@@ -1176,7 +1187,7 @@ impl MiddleEnvironment {
             }
 
             if let Some(caller) = self.resolve_potential_generic_ident(scope, caller)
-                && self.objects.contains_key(&caller.text)
+                && self.typing.objects.contains_key(&caller.text)
             {
                 return Ok(self.aggregate_from_call_nodes(
                     scope,
@@ -1194,8 +1205,8 @@ impl MiddleEnvironment {
             && let Some(first_ty) = self.resolve_type_from_node(scope, &first_arg)
             && let Some(mapped_name) =
                 self.resolve_member_fn_name(&first_ty.unwrap_all_refs(), &caller_ident.to_string())
-            && let Some(var) = self.variables.get(&mapped_name)
-            && Self::is_callable_parser_type(&var.data_type)
+            && let Some(var) = self.symbols.variables.get(&mapped_name)
+            && var.data_type.is_callable()
         {
             caller = Node::identifier(span, mapped_name);
         }
@@ -1212,7 +1223,7 @@ impl MiddleEnvironment {
             String::new()
         };
 
-        let needs_caller_context = if let Some(var) = self.variables.get(&caller_name) {
+        let needs_caller_context = if let Some(var) = self.symbols.variables.get(&caller_name) {
             match var.data_type.clone().unwrap_all_refs().data_type {
                 ParserInnerType::Function {
                     return_type,
@@ -1228,7 +1239,7 @@ impl MiddleEnvironment {
         };
 
         if needs_caller_context {
-            let scope_ref = if let Some(s) = self.scopes.get(scope) {
+            let scope_ref = if let Some(s) = self.scoping.scopes.get(scope) {
                 s.clone()
             } else {
                 MiddleScope {
@@ -1319,7 +1330,7 @@ impl MiddleEnvironment {
                                     arg
                                 } else {
                                     Node::new(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         NodeType::ListLiteral(
                                             match parameters
                                                 .last()
@@ -1329,7 +1340,7 @@ impl MiddleEnvironment {
                                                 Some(ParserInnerType::List(x)) => (*x).into(),
                                                 _ => {
                                                     PotentialNewType::DataType(ParserDataType::new(
-                                                        self.current_span(),
+                                                        self.context.current_span(),
                                                         ParserInnerType::Auto(None),
                                                     ))
                                                 }
@@ -1340,7 +1351,7 @@ impl MiddleEnvironment {
                                 }
                             } else {
                                 Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::ListLiteral(
                                         match parameters
                                             .last()
@@ -1349,7 +1360,7 @@ impl MiddleEnvironment {
                                         {
                                             Some(ParserInnerType::List(x)) => (*x).into(),
                                             _ => PotentialNewType::DataType(ParserDataType::new(
-                                                self.current_span(),
+                                                self.context.current_span(),
                                                 ParserInnerType::Auto(None),
                                             )),
                                         },

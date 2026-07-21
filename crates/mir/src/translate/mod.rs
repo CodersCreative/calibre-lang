@@ -1,9 +1,6 @@
 use crate::{
     ast::{IntLiteralType, MiddleNode, MiddleNodeType},
-    environment::{
-        MiddleEnvironment, MiddleObject, MiddleTrait, MiddleTraitMember, Operator,
-        get_disamubiguous_name,
-    },
+    environment::{MiddleEnvironment, get_disamubiguous_name},
     errors::MiddleErr,
     typing::MiddleTypeDefType,
 };
@@ -18,7 +15,6 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::str::FromStr;
 
 pub mod functions;
 pub mod loops;

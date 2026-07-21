@@ -332,7 +332,7 @@ impl ParserDataType {
         }
     }
 
-    pub fn canonical_args_key(&self, args: &[ParserDataType]) -> String {
+    pub fn canonical_args_key(args: &[ParserDataType]) -> String {
         args.iter()
             .map(Self::canonical_key)
             .collect::<Vec<_>>()
@@ -1484,6 +1484,18 @@ impl Node {
 
     pub fn bool(span: Span, value: bool) -> Self {
         Self::identifier(span, if value { "true" } else { "false" })
+    }
+
+    #[inline]
+    pub fn is_raw_option_value(&self) -> bool {
+        match &self.node_type {
+            NodeType::CallExpression { caller, .. } => matches!(
+                &caller.node_type,
+                NodeType::Identifier(x) if x.to_string() == "some"
+            ),
+            NodeType::Identifier(x) => x.to_string() == "none",
+            _ => false,
+        }
     }
 
     pub fn identifier(span: Span, text: impl ToString) -> Self {

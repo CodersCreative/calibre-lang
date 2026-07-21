@@ -1,9 +1,8 @@
-use std::path::PathBuf;
-
 use calibre_parser::{
     ParserError, Span,
     ast::{NodeType, ParserDataType},
 };
+use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq)]
