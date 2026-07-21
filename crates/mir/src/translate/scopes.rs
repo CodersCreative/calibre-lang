@@ -163,7 +163,7 @@ impl MiddleEnvironment {
                 ));
 
                 let loop_body =
-                    Self::temp_scope(self.context.current_span(), body_nodes, create_new_scope);
+                    Node::new_temp_scope_with_create(body_nodes, Some(create_new_scope));
 
                 return self.evaluate_loop_statement(
                     scope,

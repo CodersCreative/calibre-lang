@@ -1442,7 +1442,20 @@ impl Node {
         Node::new(span, NodeType::IntLiteral(value.to_string()))
     }
 
-    pub fn new_temp_scope(body: Vec<Node>) -> Self {
+    pub fn nodes(self) -> Vec<Node> {
+        match self.node_type {
+            NodeType::ScopeDeclaration {
+                body: Some(items), ..
+            } => items,
+            _ => vec![self],
+        }
+    }
+
+    pub fn new_temp_scope(body: Vec<Node>) -> Node {
+        Self::new_temp_scope_with_create(body, Some(true))
+    }
+
+    pub fn new_temp_scope_with_create(body: Vec<Node>, create_new_scope: Option<bool>) -> Self {
         if body.is_empty() {
             return Self::new(
                 Span::default(),
@@ -1450,7 +1463,7 @@ impl Node {
                     body: Some(Vec::new()),
                     named: None,
                     is_temp: true,
-                    create_new_scope: None,
+                    create_new_scope,
                     define: false,
                 },
             );
@@ -1463,7 +1476,7 @@ impl Node {
                 body: Some(body),
                 named: None,
                 is_temp: true,
-                create_new_scope: Some(true),
+                create_new_scope,
                 define: false,
             },
         )

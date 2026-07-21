@@ -281,11 +281,7 @@ impl MiddleEnvironment {
             ));
         }
         body_nodes.push(*then);
-        Box::new(Self::temp_scope(
-            self.context.current_span(),
-            body_nodes,
-            true,
-        ))
+        Box::new(Node::new_temp_scope(body_nodes))
     }
 
     fn apply_string_pattern(
@@ -388,11 +384,7 @@ impl MiddleEnvironment {
             self.context.current_span(),
             NodeType::IfStatement {
                 comparison: Box::new(IfComparisonType::If(cond)),
-                then: Box::new(Self::temp_scope(
-                    self.context.current_span(),
-                    body_nodes,
-                    true,
-                )),
+                then: Box::new(Node::new_temp_scope(body_nodes)),
                 otherwise: None,
             },
         )
@@ -1444,11 +1436,7 @@ impl MiddleEnvironment {
                             self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(cond)),
-                                then: Box::new(Self::temp_scope(
-                                    self.context.current_span(),
-                                    body_nodes,
-                                    true,
-                                )),
+                                then: Box::new(Node::new_temp_scope(body_nodes)),
                                 otherwise: None,
                             },
                         ));
@@ -1600,11 +1588,7 @@ impl MiddleEnvironment {
                             self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(cond)),
-                                then: Box::new(Self::temp_scope(
-                                    self.context.current_span(),
-                                    body_nodes,
-                                    true,
-                                )),
+                                then: Box::new(Node::new_temp_scope(body_nodes)),
                                 otherwise: None,
                             },
                         ));
@@ -1668,11 +1652,7 @@ impl MiddleEnvironment {
                             self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(cond)),
-                                then: Box::new(Self::temp_scope(
-                                    self.context.current_span(),
-                                    body_nodes,
-                                    true,
-                                )),
+                                then: Box::new(Node::new_temp_scope(body_nodes)),
                                 otherwise: None,
                             },
                         ));
@@ -1864,11 +1844,7 @@ impl MiddleEnvironment {
 
                                 body_nodes.push(*pattern.2);
 
-                                Box::new(Self::temp_scope(
-                                    self.context.current_span(),
-                                    body_nodes,
-                                    true,
-                                ))
+                                Box::new(Node::new_temp_scope(body_nodes))
                             } else {
                                 pattern.2
                             };
@@ -1895,32 +1871,28 @@ impl MiddleEnvironment {
                             self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(conditionals)),
-                                then: Box::new(Self::temp_scope(
-                                    self.context.current_span(),
-                                    vec![
-                                        Node::new(
-                                            self.context.current_span(),
-                                            NodeType::VariableDeclaration {
-                                                var_type,
-                                                identifier: name,
-                                                value: Box::new(value.clone()),
-                                                data_type: PotentialNewType::DataType(
-                                                    ParserDataType::new(
-                                                        self.context.current_span(),
-                                                        ParserInnerType::Auto(None),
-                                                    ),
+                                then: Box::new(Node::new_temp_scope(vec![
+                                    Node::new(
+                                        self.context.current_span(),
+                                        NodeType::VariableDeclaration {
+                                            var_type,
+                                            identifier: name,
+                                            value: Box::new(value.clone()),
+                                            data_type: PotentialNewType::DataType(
+                                                ParserDataType::new(
+                                                    self.context.current_span(),
+                                                    ParserInnerType::Auto(None),
                                                 ),
-                                            },
-                                        ),
-                                        *self.wrap_then_with_aliases(
-                                            &arm_aliases,
-                                            value.clone(),
-                                            pattern.2,
-                                            None,
-                                        ),
-                                    ],
-                                    true,
-                                )),
+                                            ),
+                                        },
+                                    ),
+                                    *self.wrap_then_with_aliases(
+                                        &arm_aliases,
+                                        value.clone(),
+                                        pattern.2,
+                                        None,
+                                    ),
+                                ])),
                                 otherwise: None,
                             },
                         )),
@@ -2040,27 +2012,23 @@ impl MiddleEnvironment {
                     self.context.current_span(),
                     NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(conditionals)),
-                        then: Box::new(Self::temp_scope(
-                            self.context.current_span(),
-                            vec![
-                                Node::new(
-                                    self.context.current_span(),
-                                    NodeType::VariableDeclaration {
-                                        var_type,
-                                        identifier: name,
-                                        value: Box::new(value.clone()),
-                                        data_type: resolved_data_type.clone().into(),
-                                    },
-                                ),
-                                *self.wrap_then_with_aliases(
-                                    &arm_aliases,
-                                    value.clone(),
-                                    pattern.2,
-                                    Some(resolved_data_type.clone()),
-                                ),
-                            ],
-                            true,
-                        )),
+                        then: Box::new(Node::new_temp_scope(vec![
+                            Node::new(
+                                self.context.current_span(),
+                                NodeType::VariableDeclaration {
+                                    var_type,
+                                    identifier: name,
+                                    value: Box::new(value.clone()),
+                                    data_type: resolved_data_type.clone().into(),
+                                },
+                            ),
+                            *self.wrap_then_with_aliases(
+                                &arm_aliases,
+                                value.clone(),
+                                pattern.2,
+                                Some(resolved_data_type.clone()),
+                            ),
+                        ])),
                         otherwise: None,
                     },
                 )),
@@ -2164,11 +2132,7 @@ impl MiddleEnvironment {
 
                             body_nodes.push(*pattern.2);
 
-                            Box::new(Self::temp_scope(
-                                self.context.current_span(),
-                                body_nodes,
-                                true,
-                            ))
+                            Box::new(Node::new_temp_scope(body_nodes))
                         } else {
                             pattern.2
                         };
@@ -2214,7 +2178,7 @@ impl MiddleEnvironment {
         self.evaluate_inner(
             scope,
             if let Some(decl) = decl {
-                Self::temp_scope(self.context.current_span(), vec![decl, ifs], true)
+                Node::new_temp_scope(vec![decl, ifs])
             } else {
                 ifs
             },

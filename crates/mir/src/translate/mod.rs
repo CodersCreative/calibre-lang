@@ -10,7 +10,7 @@ use calibre_parser::{
         AsFailureMode, CallArg, EmitType, FunctionHeader, GenericTypes, IfComparisonType, LoopType,
         MatchArmType, Node, NodeType, ObjectMap, ObjectType, Operator, ParserDataType,
         ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        PotentialNewType, TraitMemberKind, TryCatch, VarType,
+        PotentialNewType, TraitMemberKind, TryCatch, TypeDefType, VarType,
         comparison::{BooleanOperator, ComparisonOperator},
     },
 };
@@ -31,28 +31,6 @@ impl MiddleEnvironment {
         left == right
             || left.ends_with(&format!(".{right}"))
             || right.ends_with(&format!(".{left}"))
-    }
-
-    fn scope_body_items(node: Node) -> Vec<Node> {
-        match node.node_type {
-            NodeType::ScopeDeclaration {
-                body: Some(items), ..
-            } => items,
-            _ => vec![node],
-        }
-    }
-
-    fn temp_scope(span: Span, body: Vec<Node>, create_new_scope: bool) -> Node {
-        Node::new(
-            span,
-            NodeType::ScopeDeclaration {
-                body: Some(body),
-                named: None,
-                is_temp: true,
-                create_new_scope: Some(create_new_scope),
-                define: false,
-            },
-        )
     }
 
     fn waitgroup_static_call(span: Span, member: &str) -> Node {
@@ -472,9 +450,9 @@ impl MiddleEnvironment {
                                         value: Box::new(loop_ident_node),
                                     },
                                 ));
-                                body_nodes.extend(Self::scope_body_items(body_node));
+                                body_nodes.extend(body_node.nodes());
 
-                                let scope_body = Self::temp_scope(node.span, body_nodes, true);
+                                let scope_body = Node::new_temp_scope(body_nodes);
                                 Node::new(
                                     node.span,
                                     NodeType::Spawn {
@@ -498,7 +476,8 @@ impl MiddleEnvironment {
                             vec![CallArg::Value(spawn_inner)],
                         );
 
-                        let loop_body = Self::temp_scope(node.span, vec![join_call], false);
+                        let loop_body =
+                            Node::new_temp_scope_with_create(vec![join_call], Some(false));
 
                         let loop_node = Node::new(
                             node.span,
@@ -511,18 +490,14 @@ impl MiddleEnvironment {
                             },
                         );
 
-                        let scope_node = Self::temp_scope(
-                            node.span,
-                            vec![
-                                wg_decl,
-                                start_decl,
-                                start_add,
-                                loop_node,
-                                start_done,
-                                wg_ident_node,
-                            ],
-                            true,
-                        );
+                        let scope_node = Node::new_temp_scope(vec![
+                            wg_decl,
+                            start_decl,
+                            start_add,
+                            loop_node,
+                            start_done,
+                            wg_ident_node,
+                        ]);
 
                         return Ok(self.evaluate(scope, scope_node));
                     }
@@ -573,8 +548,7 @@ impl MiddleEnvironment {
                 if auto_wait {
                     let wg_ident: PotentialDollarIdentifier =
                         ParserText::temp_name_with_prefix("spawn_wait_wg", node.span).into();
-                    let wait_scope = Self::temp_scope(
-                        node.span,
+                    let wait_scope = Node::new_temp_scope_with_create(
                         vec![
                             Node::new(
                                 node.span,
@@ -609,7 +583,7 @@ impl MiddleEnvironment {
                                 Vec::new(),
                             ),
                         ],
-                        true,
+                        Some(true),
                     );
                     Ok(self.evaluate(scope, wait_scope))
                 } else {
@@ -693,8 +667,7 @@ impl MiddleEnvironment {
                 );
 
                 if auto_wait {
-                    let wait_scope = Self::temp_scope(
-                        span,
+                    let wait_scope = Node::new_temp_scope_with_create(
                         vec![
                             Node::new(
                                 span,
@@ -723,7 +696,7 @@ impl MiddleEnvironment {
                                 Vec::new(),
                             ),
                         ],
-                        true,
+                        Some(true),
                     );
                     Ok(self.evaluate(scope, wait_scope))
                 } else {
@@ -795,19 +768,7 @@ impl MiddleEnvironment {
                     );
                     let member = Node::new(node.span, NodeType::MemberExpression { path });
 
-                    self.evaluate_inner(
-                        scope,
-                        Node::new(
-                            node.span,
-                            NodeType::ScopeDeclaration {
-                                body: Some(vec![tmp_decl, member]),
-                                is_temp: true,
-                                create_new_scope: Some(true),
-                                define: false,
-                                named: None,
-                            },
-                        ),
-                    )
+                    self.evaluate_inner(scope, Node::new_temp_scope(vec![tmp_decl, member]))
                 }
                 _ => self.evaluate_inner(scope, *value),
             },
@@ -855,11 +816,7 @@ impl MiddleEnvironment {
                         node_type: NodeType::MatchStatement {
                             value: Some(Box::new(value)),
                             body: {
-                                let mut lst: Vec<(
-                                    calibre_parser::ast::MatchArmType,
-                                    Vec<Node>,
-                                    Box<Node>,
-                                )> = pattern
+                                let mut lst: Vec<(MatchArmType, Vec<Node>, Box<Node>)> = pattern
                                     .0
                                     .clone()
                                     .into_iter()
@@ -1262,19 +1219,7 @@ impl MiddleEnvironment {
                     self.emit_destructure_statements(&tmp_ident, &pattern, node.span, false),
                 );
 
-                self.evaluate_inner(
-                    scope,
-                    Node::new(
-                        node.span,
-                        NodeType::ScopeDeclaration {
-                            body: Some(body),
-                            named: None,
-                            is_temp: true,
-                            create_new_scope: Some(false),
-                            define: false,
-                        },
-                    ),
-                )
+                self.evaluate_inner(scope, Node::new_temp_scope_with_create(body, Some(false)))
             }
             NodeType::VariableDeclaration {
                 var_type,
@@ -1769,7 +1714,6 @@ impl MiddleEnvironment {
                 until,
             } => self.evaluate_iter_expression(
                 scope,
-                node.span,
                 data_type,
                 map,
                 spawned,
@@ -2206,7 +2150,7 @@ impl MiddleEnvironment {
                 );
 
                 for (identifier, object) in assoc_types {
-                    if let calibre_parser::ast::TypeDefType::NewType(inner) = object {
+                    if let TypeDefType::NewType(inner) = object {
                         let resolved_ty = self
                             .resolve_potential_new_type(scope, *inner)
                             .unwrap_all_refs();

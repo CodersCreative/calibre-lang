@@ -485,13 +485,11 @@ impl MiddleEnvironment {
                 let mut out = Vec::with_capacity(items.len() + 1);
                 out.append(&mut items);
                 out.push(Node::identifier(span, "none"));
-                Self::temp_scope(span, out, true)
+                Node::new_temp_scope(out)
             }
-            other => Self::temp_scope(
-                span,
-                vec![Node::new(span, other), Node::identifier(span, "none")],
-                true,
-            ),
+            other => {
+                Node::new_temp_scope(vec![Node::new(span, other), Node::identifier(span, "none")])
+            }
         };
 
         let next_decl = Node::new(
@@ -546,7 +544,7 @@ impl MiddleEnvironment {
             },
         );
 
-        Self::temp_scope(span, vec![next_decl, gen_value], false)
+        Node::new_temp_scope_with_create(vec![next_decl, gen_value], Some(false))
     }
 
     pub(crate) fn wrap_inline_generator(
@@ -596,7 +594,7 @@ impl MiddleEnvironment {
             span,
             NodeType::LoopDeclaration {
                 loop_type: Box::new(loop_type),
-                body: Box::new(Self::temp_scope(span, loop_body_items, true)),
+                body: Box::new(Node::new_temp_scope(loop_body_items)),
                 until,
                 label: None,
                 else_body: None,
@@ -604,7 +602,7 @@ impl MiddleEnvironment {
         );
 
         Self::wrap_generator_body(
-            Self::temp_scope(span, vec![loop_node], false),
+            Node::new_temp_scope_with_create(vec![loop_node], Some(false)),
             elem_type,
             span,
         )
@@ -842,10 +840,9 @@ impl MiddleEnvironment {
                     )
                 }
                 _ => {
-                    let body_span = body.span;
                     let mut new_body = destructures;
                     new_body.push(body);
-                    Self::temp_scope(body_span, new_body, false)
+                    Node::new_temp_scope_with_create(new_body, Some(false))
                 }
             };
         }
@@ -1130,7 +1127,7 @@ impl MiddleEnvironment {
                             .iter()
                             .filter_map(|(_, p, n)| match (p, n) {
                                 (Some(PotentialNewType::DataType(dt)), _) => Some(dt.clone()),
-                                (_, Some(node)) => self.resolve_type_from_node(scope, &node),
+                                (_, Some(node)) => self.resolve_type_from_node(scope, node),
                                 _ => None,
                             })
                             .collect();
