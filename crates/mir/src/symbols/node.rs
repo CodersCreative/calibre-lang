@@ -1,3 +1,12 @@
+use crate::{environment::MiddleEnvironment, symbols::Operator};
+use calibre_parser::{
+    Span,
+    ast::{
+        EmitType, Node, NodeType, ParserDataType, ParserInnerType, PotentialGenericTypeIdentifier,
+        PotentialNewType,
+    },
+};
+
 impl MiddleEnvironment {
     pub fn resolve_emit_type_from_node(
         &mut self,
@@ -112,7 +121,12 @@ impl MiddleEnvironment {
                 named: Some(named), ..
             } => {
                 let name = self.resolve_dollar_ident_only(scope, &named.name)?;
-                let resolved = self.resolve_macro(scope, &name)?.body.last()?.clone();
+                let resolved = self
+                    .scoping
+                    .resolve_macro(scope, &name)?
+                    .body
+                    .last()?
+                    .clone();
                 self.resolve_type_from_node(scope, &resolved)
             }
             NodeType::IfStatement {
@@ -161,7 +175,7 @@ impl MiddleEnvironment {
                             .collect();
 
                         if let Some((tpl_params, _, _)) =
-                            self.generic_type_templates.get(&base.text).cloned()
+                            self.typing.generic_type_templates.get(&base.text).cloned()
                         {
                             if let Some(spec) = self.ensure_specialized_type(
                                 scope,
@@ -406,7 +420,7 @@ impl MiddleEnvironment {
                 {
                     Ok(caller) => caller,
                     Err(err) => {
-                        self.errors.push(err);
+                        self.context.errors.push(err);
                         return None;
                     }
                 };
@@ -431,7 +445,7 @@ impl MiddleEnvironment {
                     {
                         match &parsed_caller_pd.data_type {
                             ParserInnerType::Struct(name) => {
-                                if self.objects.contains_key(name) {
+                                if self.typing.objects.contains_key(name) {
                                     return Some(ParserDataType {
                                         data_type: ParserInnerType::Struct(name.clone()),
                                         span: node.span,
@@ -442,7 +456,7 @@ impl MiddleEnvironment {
                                 identifier,
                                 generic_types,
                             } => {
-                                if self.objects.contains_key(identifier) {
+                                if self.typing.objects.contains_key(identifier) {
                                     return Some(ParserDataType {
                                         data_type: ParserInnerType::StructWithGenerics {
                                             identifier: identifier.clone(),
@@ -463,7 +477,7 @@ impl MiddleEnvironment {
                             _ => caller.to_string(),
                         };
 
-                        if let Some(var) = self.variables.get(&base_ident) {
+                        if let Some(var) = self.symbols.variables.get(&base_ident) {
                             caller_type = Some(var.data_type.clone());
                         }
                     }
@@ -471,15 +485,17 @@ impl MiddleEnvironment {
 
                 let caller_type = caller_type?;
 
-                self.apply_callable_type(caller_type.data_type, args.len(), 0, node.span)
+                caller_type
+                    .data_type
+                    .apply_callable(args.len(), 0, node.span)
             }
             NodeType::Identifier(x) => {
                 if let Some(iden) = self.resolve_potential_generic_ident(scope, x) {
-                    if let Some(x) = self.variables.get(&iden.text) {
+                    if let Some(x) = self.symbols.variables.get(&iden.text) {
                         return Some(x.data_type.clone());
                     }
 
-                    if let Some(alias) = self.type_aliases.get(&iden.text) {
+                    if let Some(alias) = self.typing.type_aliases.get(&iden.text) {
                         return Some(alias.clone());
                     }
                 }
@@ -565,8 +581,7 @@ impl MiddleEnvironment {
 
                             current = method_ty
                                 .and_then(|t| {
-                                    self.apply_callable_type(
-                                        t.unwrap_all_refs().data_type,
+                                    t.unwrap_all_refs().data_type.apply_callable(
                                         args.len(),
                                         1,
                                         node.span,
@@ -622,7 +637,7 @@ impl MiddleEnvironment {
                     let point = &path[idx];
                     let point_ty = self.resolve_type_from_node(scope, point.get_node());
                     let point_callable = point_ty.as_ref().is_some_and(|ty| {
-                        Self::is_callable_parser_type(ty)
+                        ty.is_callable()
                             && !point.is_named()
                             && !point.get_node().node_type.is_call()
                     });
@@ -630,7 +645,7 @@ impl MiddleEnvironment {
                     if !point_callable && let Some(next) = path.get(idx + 1) {
                         let next_ty = self.resolve_type_from_node(scope, next.get_node());
                         let next_callable = next_ty.as_ref().is_some_and(|ty| {
-                            Self::is_callable_parser_type(ty)
+                            ty.is_callable()
                                 && !next.is_named()
                                 && !next.get_node().node_type.is_call()
                         });

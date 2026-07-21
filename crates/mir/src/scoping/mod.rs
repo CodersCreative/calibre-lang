@@ -298,6 +298,22 @@ impl Scoping {
             "could not resolve module {namespace}; tried {paths:?}"
         )))
     }
+
+    pub fn collect_defers_until(&self, scope: &u64, stop_scope: Option<u64>) -> Vec<Node> {
+        let mut out = Vec::new();
+        let mut current = Some(*scope);
+        while let Some(id) = current {
+            let Some(s) = self.scopes.get(&id) else {
+                break;
+            };
+            if stop_scope.is_some_and(|stop| stop == id) {
+                break;
+            }
+            out.extend(s.defers.clone());
+            current = s.parent;
+        }
+        out
+    }
 }
 
 #[derive(Debug, Clone, Default)]

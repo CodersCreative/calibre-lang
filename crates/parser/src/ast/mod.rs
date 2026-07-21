@@ -545,7 +545,7 @@ impl ParserInnerType {
         }
     }
 
-    pub(crate) fn is_callable(&self) -> bool {
+    pub fn is_callable(&self) -> bool {
         matches!(
             self.unwrap_all_refs(),
             ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
@@ -674,7 +674,7 @@ impl ParserInnerType {
     }
 
     #[inline]
-    fn apply_callable(
+    pub fn apply_callable(
         self,
         args_len: usize,
         implicit_params: usize,

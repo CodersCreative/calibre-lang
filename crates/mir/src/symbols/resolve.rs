@@ -1,3 +1,18 @@
+use crate::{
+    environment::{MiddleEnvironment, get_disamubiguous_name},
+    symbols::{MiddleOverload, Operator},
+    typing::{MiddleObject, MiddleTrait, MiddleTypeDefType},
+};
+use calibre_parser::{
+    Span,
+    ast::{
+        NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
+        PotentialGenericTypeIdentifier, PotentialNewType,
+    },
+};
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::str::FromStr;
+
 impl MiddleEnvironment {
     pub fn resolve_member_fn_type(
         &self,
@@ -5,7 +20,7 @@ impl MiddleEnvironment {
         member: &str,
     ) -> Option<ParserDataType> {
         self.resolve_member_fn_name(ty, member)
-            .and_then(|name| self.variables.get(&name))
+            .and_then(|name| self.symbols.variables.get(&name))
             .map(|var| var.data_type.clone())
     }
 
@@ -58,7 +73,8 @@ impl MiddleEnvironment {
             .unwrap_all_refs();
         let out = match &resolved.data_type {
             ParserInnerType::Struct(struct_name) => self
-                .lookup_object_for_struct_name(struct_name)
+                .typing
+                .find_object_for_struct_name(struct_name)
                 .and_then(|obj| match &obj.object_type {
                     MiddleTypeDefType::Struct(fields) => {
                         fields.get(member).map(|(ty, _)| ty.clone())
@@ -66,7 +82,8 @@ impl MiddleEnvironment {
                     _ => None,
                 }),
             ParserInnerType::StructWithGenerics { identifier, .. } => self
-                .lookup_object_for_struct_name(identifier)
+                .typing
+                .find_object_for_struct_name(identifier)
                 .and_then(|obj| match &obj.object_type {
                     MiddleTypeDefType::Struct(fields) => {
                         fields.get(member).map(|(ty, _)| ty.clone())
@@ -99,7 +116,7 @@ impl MiddleEnvironment {
             }
             ParserInnerType::DynamicTraits(traits) => {
                 for tr in traits {
-                    if let Some(found) = trait_member_type(&self.trait_defs, tr, member) {
+                    if let Some(found) = trait_member_type(&self.typing.trait_defs, tr, member) {
                         return Some(found);
                     }
                 }
@@ -112,10 +129,11 @@ impl MiddleEnvironment {
             return out;
         }
 
-        if let Some(imp) = self.find_impl_for_type(&resolved)
+        if let Some(imp) = self.typing.find_impl_for_type(&resolved)
             && let Some((mapped_name, _)) = imp.variables.get(member)
         {
             return self
+                .symbols
                 .variables
                 .get(mapped_name)
                 .map(|var| var.data_type.clone());
@@ -139,17 +157,17 @@ impl MiddleEnvironment {
     }
 
     pub fn resolve_str(&self, scope: &u64, iden: &str) -> Option<String> {
-        if self.variables.contains_key(iden) || self.objects.contains_key(iden) {
+        if self.symbols.variables.contains_key(iden) || self.typing.objects.contains_key(iden) {
             return Some(iden.to_string());
         }
 
-        let scope_ref = self.scopes.get(scope)?;
+        let scope_ref = self.scoping.scopes.get(scope)?;
 
         let current_mapping = scope_ref.mappings.get(iden).cloned();
         if current_mapping.is_none() {
             let mut parent_id = scope_ref.parent;
             while let Some(parent) = parent_id {
-                let Some(parent_scope) = self.scopes.get(&parent) else {
+                let Some(parent_scope) = self.scoping.scopes.get(&parent) else {
                     break;
                 };
                 if let Some(mapped) = parent_scope.mappings.get(iden) {
@@ -162,7 +180,7 @@ impl MiddleEnvironment {
             let mut parent_id = scope_ref.parent;
             let mut root_mapping: Option<String> = None;
             while let Some(parent) = parent_id {
-                let Some(parent_scope) = self.scopes.get(&parent) else {
+                let Some(parent_scope) = self.scoping.scopes.get(&parent) else {
                     break;
                 };
                 if parent_scope.parent.is_none() {
@@ -187,13 +205,15 @@ impl MiddleEnvironment {
 
         if let Some(parent) = scope_ref.parent.as_ref() {
             self.resolve_str(parent, iden).or_else(|| {
-                self.scopes
+                self.scoping
+                    .scopes
                     .values()
                     .find(|s| s.mappings.contains_key(iden))
                     .and_then(|s| s.mappings.get(iden).cloned())
             })
         } else {
-            self.scopes
+            self.scoping
+                .scopes
                 .values()
                 .find(|s| s.mappings.contains_key(iden))
                 .and_then(|s| s.mappings.get(iden).cloned())
@@ -235,7 +255,7 @@ impl MiddleEnvironment {
                 let resolved = self
                     .resolve_potential_dollar_ident(scope, x)
                     .unwrap_or_else(|| ParserText::from(x.to_string()));
-                if let Some(alias) = self.type_aliases.get(&resolved.text) {
+                if let Some(alias) = self.typing.type_aliases.get(&resolved.text) {
                     return Some(alias.clone());
                 }
                 Some(ParserDataType {
@@ -292,6 +312,7 @@ impl MiddleEnvironment {
             PotentialDollarIdentifier::Identifier(x) => self.resolve_parser_text(scope, x),
             PotentialDollarIdentifier::DollarIdentifier(x) => {
                 let text = self
+                    .scoping
                     .resolve_macro_arg(scope, x)
                     .map(|x| match &x.node_type {
                         NodeType::Identifier(x) => match x.get_ident() {
@@ -319,6 +340,7 @@ impl MiddleEnvironment {
         match iden {
             PotentialDollarIdentifier::Identifier(x) => Some(x.clone()),
             PotentialDollarIdentifier::DollarIdentifier(x) => self
+                .scoping
                 .resolve_macro_arg(scope, x)
                 .map(|x| match &x.node_type {
                     NodeType::Identifier(x) => match x.get_ident() {
@@ -358,21 +380,22 @@ impl MiddleEnvironment {
                     .unwrap_or_else(|| ParserText::from(identifier.to_string()).into());
                 let new_name = get_disamubiguous_name(scope, Some(identifier.text.trim()), None);
                 let type_def = MiddleTypeDefType::from_type_def_type(self, scope, type_def);
-                self.objects.insert(
+                self.typing.objects.insert(
                     new_name.clone(),
                     MiddleObject {
                         object_type: type_def,
                         variables: FxHashMap::default(),
                         traits: Vec::new(),
-                        location: self.current_location.clone(),
+                        location: self.context.current_location.clone(),
                     },
                 );
 
-                if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
                     scope_ref.mappings.insert(identifier.text, new_name.clone());
                 }
 
                 let previous_self = self
+                    .scoping
                     .scopes
                     .get_mut(scope)
                     .map(|scope_ref| {
@@ -387,7 +410,7 @@ impl MiddleEnvironment {
                         operator: match Operator::from_str(&overload.operator.text) {
                             Ok(op) => op,
                             Err(err) => {
-                                self.errors.push(err);
+                                self.context.errors.push(err);
                                 continue;
                             }
                         },
@@ -429,11 +452,11 @@ impl MiddleEnvironment {
                         generic_params: Vec::new(),
                     };
 
-                    self.overloads.push(overload);
+                    self.symbols.overloads.push(overload);
                 }
 
                 if let Some(prev) = previous_self {
-                    if let Some(scope_ref) = self.scopes.get_mut(scope) {
+                    if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
                         scope_ref.mappings.insert(String::from("Self"), prev);
                     }
                 }
@@ -447,7 +470,7 @@ impl MiddleEnvironment {
         match data_type.data_type {
             ParserInnerType::Struct(identifier) => {
                 let id = self.resolve_str(scope, &identifier).unwrap_or(identifier);
-                if let Some(alias) = self.type_aliases.get(&id) {
+                if let Some(alias) = self.typing.type_aliases.get(&id) {
                     return alias.clone();
                 }
                 ParserDataType {
@@ -472,7 +495,8 @@ impl MiddleEnvironment {
                     };
                 }
 
-                if let Some((tpl_params, _, _)) = self.generic_type_templates.get(&id).cloned()
+                if let Some((tpl_params, _, _)) =
+                    self.typing.generic_type_templates.get(&id).cloned()
                     && tpl_params.len() == resolved_gens.len()
                     && !resolved_gens.iter().any(|g| g.is_auto())
                     && let Some(spec) =
@@ -557,7 +581,8 @@ impl MiddleEnvironment {
 
                 if lst.len() == 2
                     && let ParserInnerType::Struct(name) = &lst[1].data_type
-                    && let Some(resolved) = self.resolve_associated_type(&lst[0], name.as_str())
+                    && let Some(resolved) =
+                        self.typing.resolve_associated_type(&lst[0], name.as_str())
                 {
                     return resolved;
                 }
@@ -568,7 +593,7 @@ impl MiddleEnvironment {
                 }
             }
             ParserInnerType::DollarIdentifier(ref x) => {
-                if let Some(node) = self.resolve_macro_arg(scope, x) {
+                if let Some(node) = self.scoping.resolve_macro_arg(scope, x) {
                     let NodeType::DataType { data_type } = node.node_type.clone() else {
                         unimplemented!()
                     };

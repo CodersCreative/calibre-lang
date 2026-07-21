@@ -3,7 +3,7 @@ use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
 use crate::multipass::prepare_ast;
 use crate::scoping::Scoping;
-use crate::symbols::Symbols;
+use crate::symbols::{Operator, Symbols};
 use crate::tags::Tagging;
 use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;
@@ -57,20 +57,6 @@ pub fn get_disamubiguous_name(
 }
 
 impl MiddleEnvironment {
-    #[inline]
-    fn resolve_operator_or_bool(
-        &mut self,
-        scope: &u64,
-        left: &Node,
-        right: &Node,
-        operator: Operator,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        self.get_operator_overload(scope, left, right, &operator)
-            .map(|x| x.return_type.clone())
-            .or_else(|| Some(ParserDataType::new(span, ParserInnerType::Bool)))
-    }
-
     pub fn ensure_specialized_type(
         &mut self,
         _scope: &u64,

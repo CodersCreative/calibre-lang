@@ -42,7 +42,9 @@ impl Typing {
         }
         let target = ty.key();
         self.impls.values().find(|imp| {
-            self.impl_type_matches(&imp.data_type.data_type, &target, &imp.generic_params)
+            imp.data_type
+                .data_type
+                .matches(&target, &imp.generic_params)
         })
     }
 
@@ -56,13 +58,15 @@ impl Typing {
             .impls
             .iter()
             .find(|(_, imp)| {
-                self.impl_type_matches(&imp.data_type.data_type, &target, &imp.generic_params)
+                imp.data_type
+                    .data_type
+                    .matches(&target, &imp.generic_params)
             })
             .map(|(k, _)| k.clone())?;
         self.impls.get_mut(&key)
     }
 
-    fn find_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
+    pub fn find_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
         if let Some(obj) = self.objects.get(struct_name) {
             return Some(obj);
         }

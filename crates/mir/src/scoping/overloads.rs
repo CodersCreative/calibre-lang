@@ -1,6 +1,6 @@
 use calibre_parser::{
     Span,
-    ast::{Node, ParserDataType},
+    ast::{Node, ParserDataType, ParserInnerType},
 };
 
 use crate::{
@@ -11,6 +11,20 @@ use crate::{
 };
 
 impl MiddleEnvironment {
+    #[inline]
+    pub fn resolve_operator_or_bool(
+        &mut self,
+        scope: &u64,
+        left: &Node,
+        right: &Node,
+        operator: Operator,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        self.get_operator_overload(scope, left, right, &operator)
+            .map(|x| x.return_type.clone())
+            .or_else(|| Some(ParserDataType::new(span, ParserInnerType::Bool)))
+    }
+
     pub fn handle_operator_overloads(
         &mut self,
         scope: &u64,
