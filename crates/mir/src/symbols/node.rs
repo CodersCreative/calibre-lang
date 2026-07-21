@@ -1,9 +1,9 @@
-use crate::{environment::MiddleEnvironment, symbols::Operator};
+use crate::environment::MiddleEnvironment;
 use calibre_parser::{
     Span,
     ast::{
-        EmitType, Node, NodeType, ParserDataType, ParserInnerType, PotentialGenericTypeIdentifier,
-        PotentialNewType,
+        EmitType, Node, NodeType, Operator, ParserDataType, ParserInnerType,
+        PotentialGenericTypeIdentifier, PotentialNewType,
     },
 };
 

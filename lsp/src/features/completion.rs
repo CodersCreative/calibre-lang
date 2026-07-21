@@ -75,7 +75,7 @@ impl CalibreLanguageServer {
         let canonical_first = env
             .resolve_str(&scope, first)
             .unwrap_or_else(|| first.to_string());
-        let mut current = if let Some(var) = env.variables.get(&canonical_first) {
+        let mut current = if let Some(var) = env.symbols.variables.get(&canonical_first) {
             var.data_type.clone()
         } else if env.objects.contains_key(&canonical_first) {
             ParserDataType::new(CalSpan::default(), ParserInnerType::Struct(canonical_first))
@@ -384,7 +384,7 @@ impl CalibreLanguageServer {
             if let Some(canonical) = env
                 .resolve_str(&current_scope, &callee)
                 .or_else(|| env.resolve_str(&scope, &callee))
-                && let Some(var) = env.variables.get(&canonical)
+                && let Some(var) = env.symbols.variables.get(&canonical)
                 && let Some(sig) =
                     Self::signature_information_for_data_type(&callee, &var.data_type)
             {
@@ -524,7 +524,7 @@ impl CalibreLanguageServer {
         visible: &str,
         canonical: &str,
     ) -> CompletionItem {
-        let (detail, kind, documentation) = if let Some(var) = env.variables.get(canonical) {
+        let (detail, kind, documentation) = if let Some(var) = env.symbols.variables.get(canonical) {
             match &var.data_type.data_type {
                 ParserInnerType::Function {
                     parameters,

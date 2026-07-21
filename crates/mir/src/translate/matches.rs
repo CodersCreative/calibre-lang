@@ -2,7 +2,7 @@ use calibre_parser::{
     Span,
     ast::{
         CallArg, IfComparisonType, MatchArmType, MatchStringPatternPart, MatchStructFieldPattern,
-        MatchTupleItem, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
+        MatchTupleItem, Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, RefMutability,
         VarType,
         comparison::{BooleanOperator, ComparisonOperator},
@@ -66,13 +66,13 @@ impl MiddleEnvironment {
 
     fn match_index_access(&self, base: Node, index: usize) -> Node {
         Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::MemberExpression {
                 path: vec![
                     (base, false),
                     (
                         Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::IntLiteral((index as i64).to_string()),
                         ),
                         true,
@@ -91,7 +91,7 @@ impl MiddleEnvironment {
         guard_bindings: &mut Vec<(String, Node)>,
     ) {
         body_nodes.push(Self::typed_var_decl(
-            self.current_span(),
+            self.context.current_span(),
             VarType::Immutable,
             name.get_ident().clone(),
             value.clone(),
@@ -102,11 +102,11 @@ impl MiddleEnvironment {
 
     fn match_add_compare(&self, cond: &mut Node, left: Node, right: Node) {
         *cond = Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::BooleanExpression {
                 left: Box::new(cond.clone()),
                 right: Box::new(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::ComparisonExpression {
                         left: Box::new(left),
                         right: Box::new(right),
@@ -120,11 +120,11 @@ impl MiddleEnvironment {
 
     fn match_add_is_type(&self, cond: &mut Node, value: Node, data_type: ParserDataType) {
         *cond = Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::BooleanExpression {
                 left: Box::new(cond.clone()),
                 right: Box::new(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IsExpression {
                         value: Box::new(value),
                         data_type,
@@ -137,11 +137,11 @@ impl MiddleEnvironment {
 
     fn match_add_in(&self, cond: &mut Node, identifier: Node, value: Node) {
         *cond = Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::BooleanExpression {
                 left: Box::new(cond.clone()),
                 right: Box::new(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::InDeclaration {
                         identifier: Box::new(identifier),
                         value: Box::new(value),
@@ -162,11 +162,11 @@ impl MiddleEnvironment {
         *cond = self.bool_and_nodes(
             cond.clone(),
             Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::ComparisonExpression {
-                    left: Box::new(Node::len(self.current_span(), value)),
+                    left: Box::new(Node::len(self.context.current_span(), value)),
                     right: Box::new(Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::IntLiteral((expected_len as i64).to_string()),
                     )),
                     operator,
@@ -216,7 +216,7 @@ impl MiddleEnvironment {
     ) {
         for (var_type, name) in aliases {
             body_nodes.push(Self::auto_var_decl(
-                self.current_span(),
+                self.context.current_span(),
                 *var_type,
                 name.clone(),
                 value.clone(),
@@ -271,17 +271,21 @@ impl MiddleEnvironment {
         let mut body_nodes = Vec::with_capacity(aliases.len() + 1);
         for (var_type, name) in aliases {
             body_nodes.push(Self::typed_var_decl(
-                self.current_span(),
+                self.context.current_span(),
                 *var_type,
                 name.clone(),
                 value.clone(),
                 data_type.clone().unwrap_or_else(|| {
-                    ParserDataType::new(self.current_span(), ParserInnerType::Auto(None))
+                    ParserDataType::new(self.context.current_span(), ParserInnerType::Auto(None))
                 }),
             ));
         }
         body_nodes.push(*then);
-        Box::new(Self::temp_scope(self.current_span(), body_nodes, true))
+        Box::new(Self::temp_scope(
+            self.context.current_span(),
+            body_nodes,
+            true,
+        ))
     }
 
     fn apply_string_pattern(
@@ -302,8 +306,8 @@ impl MiddleEnvironment {
                         NodeType::StringLiteral(ParserText::new(text.span, text.text.clone())),
                     );
                     let starts_with_call = Node::call(
-                        self.current_span(),
-                        Node::identifier(self.current_span(), "starts_with"),
+                        self.context.current_span(),
+                        Node::identifier(self.context.current_span(), "starts_with"),
                         vec![
                             CallArg::Value(current.clone()),
                             CallArg::Value(literal_node.clone()),
@@ -312,23 +316,23 @@ impl MiddleEnvironment {
                     *cond = self.bool_and_nodes(cond.clone(), starts_with_call);
 
                     let strip_prefix_call = Node::call(
-                        self.current_span(),
-                        Node::identifier(self.current_span(), "strip_prefix"),
+                        self.context.current_span(),
+                        Node::identifier(self.context.current_span(), "strip_prefix"),
                         vec![
                             CallArg::Value(current.clone()),
                             CallArg::Value(literal_node),
                         ],
                     );
-                    current = Node::member(self.current_span(), strip_prefix_call, "next");
+                    current = Node::member(self.context.current_span(), strip_prefix_call, "next");
                     ends_with_capture = false;
                 }
                 MatchStringPatternPart::Binding { var_type, name } => {
                     body_nodes.push(Self::typed_var_decl(
-                        self.current_span(),
+                        self.context.current_span(),
                         *var_type,
                         name.clone(),
                         current.clone(),
-                        ParserDataType::new(self.current_span(), ParserInnerType::Str),
+                        ParserDataType::new(self.context.current_span(), ParserInnerType::Str),
                     ));
                     guard_bindings.push((name.to_string(), current.clone()));
                     ends_with_capture = true;
@@ -344,7 +348,7 @@ impl MiddleEnvironment {
                 cond,
                 current,
                 Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::StringLiteral(ParserText::from(String::new())),
                 ),
             );
@@ -359,7 +363,7 @@ impl MiddleEnvironment {
         guards: &[Node],
         body: Box<Node>,
     ) -> Node {
-        let mut cond = Node::bool(self.current_span(), true);
+        let mut cond = Node::bool(self.context.current_span(), true);
         let mut body_nodes = Vec::new();
         let mut guard_bindings = Vec::new();
         self.apply_match_alias_bindings(
@@ -381,10 +385,14 @@ impl MiddleEnvironment {
         }
         body_nodes.push(*body);
         Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::IfStatement {
                 comparison: Box::new(IfComparisonType::If(cond)),
-                then: Box::new(Self::temp_scope(self.current_span(), body_nodes, true)),
+                then: Box::new(Self::temp_scope(
+                    self.context.current_span(),
+                    body_nodes,
+                    true,
+                )),
                 otherwise: None,
             },
         )
@@ -413,7 +421,7 @@ impl MiddleEnvironment {
         let mut right_iter = rights.into_iter();
         let first = right_iter.next().unwrap_or_else(|| left.clone());
         let mut any = Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::ComparisonExpression {
                 left: Box::new(left.clone()),
                 right: Box::new(first),
@@ -422,11 +430,11 @@ impl MiddleEnvironment {
         );
         for right in right_iter {
             any = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::BooleanExpression {
                     left: Box::new(any),
                     right: Box::new(Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::ComparisonExpression {
                             left: Box::new(left.clone()),
                             right: Box::new(right),
@@ -438,7 +446,7 @@ impl MiddleEnvironment {
             );
         }
         *cond = Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::BooleanExpression {
                 left: Box::new(cond.clone()),
                 right: Box::new(any),
@@ -468,7 +476,7 @@ impl MiddleEnvironment {
             NodeType::TupleLiteral { values } => {
                 for (idx, item) in values.iter().enumerate() {
                     let current =
-                        Node::member(self.current_span(), actual.clone(), idx.to_string());
+                        Node::member(self.context.current_span(), actual.clone(), idx.to_string());
                     self.apply_recursive_node_pattern(
                         scope,
                         item,
@@ -480,10 +488,13 @@ impl MiddleEnvironment {
                 }
             }
             NodeType::StructLiteral { value, .. } => match value {
-                calibre_parser::ast::ObjectType::Map(fields) => {
+                ObjectType::Map(fields) => {
                     for (field, item) in fields {
-                        let current =
-                            Node::member(self.current_span(), actual.clone(), field.clone());
+                        let current = Node::member(
+                            self.context.current_span(),
+                            actual.clone(),
+                            field.clone(),
+                        );
                         self.apply_recursive_node_pattern(
                             scope,
                             item,
@@ -494,10 +505,13 @@ impl MiddleEnvironment {
                         );
                     }
                 }
-                calibre_parser::ast::ObjectType::Tuple(items) => {
+                ObjectType::Tuple(items) => {
                     for (idx, item) in items.iter().enumerate() {
-                        let current =
-                            Node::member(self.current_span(), actual.clone(), idx.to_string());
+                        let current = Node::member(
+                            self.context.current_span(),
+                            actual.clone(),
+                            idx.to_string(),
+                        );
                         self.apply_recursive_node_pattern(
                             scope,
                             item,
@@ -539,18 +553,26 @@ impl MiddleEnvironment {
         match payload_pattern {
             MatchArmType::TuplePattern(items) => {
                 for (idx, item) in items.iter().enumerate() {
-                    let cur =
-                        Node::member(self.current_span(), payload_value.clone(), idx.to_string());
+                    let cur = Node::member(
+                        self.context.current_span(),
+                        payload_value.clone(),
+                        idx.to_string(),
+                    );
                     match item {
-                        MatchTupleItem::Binding { var_type, name } => body_nodes.push(
-                            Self::auto_var_decl(self.current_span(), *var_type, name.clone(), cur),
-                        ),
+                        MatchTupleItem::Binding { var_type, name } => {
+                            body_nodes.push(Self::auto_var_decl(
+                                self.context.current_span(),
+                                *var_type,
+                                name.clone(),
+                                cur,
+                            ))
+                        }
                         MatchTupleItem::Value(Node {
                             node_type: NodeType::Identifier(id),
                             ..
                         }) if self.resolve_potential_generic_ident(scope, id).is_none() => {
                             body_nodes.push(Self::auto_var_decl(
-                                self.current_span(),
+                                self.context.current_span(),
                                 VarType::Immutable,
                                 id.get_ident().clone(),
                                 cur,
@@ -564,7 +586,7 @@ impl MiddleEnvironment {
                             pattern,
                         } => {
                             let nested_payload =
-                                Node::member(self.current_span(), cur.clone(), "next");
+                                Node::member(self.context.current_span(), cur.clone(), "next");
                             if name.is_some() || destructure.is_some() {
                                 let bind_name = name.clone().unwrap_or_else(|| {
                                     ParserText::temp_name_with_prefix(
@@ -574,7 +596,7 @@ impl MiddleEnvironment {
                                     .into()
                                 });
                                 body_nodes.push(Self::auto_var_decl(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     *var_type,
                                     bind_name.clone(),
                                     nested_payload.clone(),
@@ -583,7 +605,7 @@ impl MiddleEnvironment {
                                     body_nodes.extend(self.emit_destructure_statements(
                                         &bind_name,
                                         pattern,
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         true,
                                     ));
                                 }
@@ -607,10 +629,13 @@ impl MiddleEnvironment {
                         name,
                     } = field
                     {
-                        let cur =
-                            Node::member(self.current_span(), payload_value.clone(), field.clone());
+                        let cur = Node::member(
+                            self.context.current_span(),
+                            payload_value.clone(),
+                            field.clone(),
+                        );
                         body_nodes.push(Self::auto_var_decl(
-                            self.current_span(),
+                            self.context.current_span(),
                             *var_type,
                             name.clone(),
                             cur,
@@ -644,7 +669,7 @@ impl MiddleEnvironment {
         variant_name: &str,
     ) -> Option<i64> {
         if let Some(key) = Self::enum_key_from_data_type(data_type)
-            && let Some(obj) = self.objects.get(&key)
+            && let Some(obj) = self.typing.objects.get(&key)
             && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
             && let Some(index) = variants.iter().position(|x| x.0.text == variant_name)
         {
@@ -655,7 +680,7 @@ impl MiddleEnvironment {
 
     fn bool_and_nodes(&self, left: Node, right: Node) -> Node {
         Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::BooleanExpression {
                 left: Box::new(left),
                 right: Box::new(right),
@@ -666,7 +691,7 @@ impl MiddleEnvironment {
 
     fn fold_and_conditions(&self, mut conditions: Vec<Node>) -> Node {
         if conditions.is_empty() {
-            return Node::bool(self.current_span(), true);
+            return Node::bool(self.context.current_span(), true);
         }
         let first = conditions.remove(0);
         conditions
@@ -676,15 +701,15 @@ impl MiddleEnvironment {
 
     fn discriminant_eq(&self, value: Node, index: i64) -> Node {
         Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::ComparisonExpression {
                 left: Box::new(Node::call(
-                    self.current_span(),
-                    Node::identifier(self.current_span(), "discriminant"),
+                    self.context.current_span(),
+                    Node::identifier(self.context.current_span(), "discriminant"),
                     vec![CallArg::Value(value)],
                 )),
                 right: Box::new(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IntLiteral(index.to_string()),
                 )),
                 operator: ComparisonOperator::Equal,
@@ -812,17 +837,20 @@ impl MiddleEnvironment {
             (
                 resolved.clone(),
                 Some(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
                         identifier: ParserText::from(tmp_name.clone()).into(),
                         data_type: PotentialNewType::DataType(resolved.unwrap_or_else(|| {
-                            ParserDataType::new(self.current_span(), ParserInnerType::Auto(None))
+                            ParserDataType::new(
+                                self.context.current_span(),
+                                ParserInnerType::Auto(None),
+                            )
                         })),
                         value,
                     },
                 )),
-                Some(Node::identifier(self.current_span(), tmp_name)),
+                Some(Node::identifier(self.context.current_span(), tmp_name)),
             )
         } else {
             (None, None, None)
@@ -852,7 +880,7 @@ impl MiddleEnvironment {
                     ParserInnerType::StructWithGenerics { identifier, .. } => identifier.clone(),
                     other => other.to_string(),
                 };
-                if let Some(x) = self.objects.get(&enum_key) {
+                if let Some(x) = self.typing.objects.get(&enum_key) {
                     match &x.object_type {
                         MiddleTypeDefType::Enum { variants, .. } => Some(variants.clone()),
                         _ => None,
@@ -884,7 +912,7 @@ impl MiddleEnvironment {
             if let Some(value_node) = value.clone() {
                 match &pattern.0 {
                     MatchArmType::TuplePattern(items) => {
-                        let mut cond = Node::bool(self.current_span(), true);
+                        let mut cond = Node::bool(self.context.current_span(), true);
                         let mut body_nodes = Vec::new();
                         let mut guard_bindings: Vec<(String, Node)> = Vec::new();
                         self.apply_match_alias_bindings(
@@ -917,7 +945,7 @@ impl MiddleEnvironment {
                                 }
                                 MatchTupleItem::Value(expected) => {
                                     let current = Node::member(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         value_node.clone(),
                                         idx.to_string(),
                                     );
@@ -944,7 +972,7 @@ impl MiddleEnvironment {
                                     self.apply_match_alias_bindings(
                                         &item_aliases,
                                         Node::member(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             value_node.clone(),
                                             idx.to_string(),
                                         ),
@@ -955,7 +983,7 @@ impl MiddleEnvironment {
                                 }
                                 MatchTupleItem::IsType(data_type) => {
                                     let current = Node::member(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         value_node.clone(),
                                         idx.to_string(),
                                     );
@@ -982,7 +1010,7 @@ impl MiddleEnvironment {
                                 }
                                 MatchTupleItem::In(expected) => {
                                     let current = Node::member(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         value_node.clone(),
                                         idx.to_string(),
                                     );
@@ -1009,7 +1037,7 @@ impl MiddleEnvironment {
                                 }
                                 MatchTupleItem::StringPattern(parts) => {
                                     let current = Node::member(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         value_node.clone(),
                                         idx.to_string(),
                                     );
@@ -1042,12 +1070,12 @@ impl MiddleEnvironment {
                                 }
                                 MatchTupleItem::Binding { var_type, name } => {
                                     let current = Node::member(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         value_node.clone(),
                                         idx.to_string(),
                                     );
                                     body_nodes.push(Self::auto_var_decl(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         var_type.clone(),
                                         name.clone(),
                                         current.clone(),
@@ -1069,14 +1097,14 @@ impl MiddleEnvironment {
                                     pattern,
                                 } => {
                                     let current = Node::member(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         value_node.clone(),
                                         idx.to_string(),
                                     );
                                     let val = self
                                         .resolve_dollar_ident_only(scope, &enum_val)
                                         .ok_or_else(|| {
-                                            self.err_at_current(MiddleErr::Scope(
+                                            self.context.err_at_current(MiddleErr::Scope(
                                                 enum_val.to_string(),
                                             ))
                                         })?;
@@ -1098,9 +1126,9 @@ impl MiddleEnvironment {
                                                 })
                                         })
                                         .ok_or_else(|| {
-                                            self.err_at_current(MiddleErr::CantMatch(
+                                            self.context.err_at_current(MiddleErr::CantMatch(
                                                 ParserDataType::new(
-                                                    self.current_span(),
+                                                    self.context.current_span(),
                                                     ParserInnerType::Auto(None),
                                                 ),
                                             ))
@@ -1110,8 +1138,11 @@ impl MiddleEnvironment {
                                         current.clone(),
                                         enum_index,
                                     );
-                                    let payload_value =
-                                        Node::member(self.current_span(), current.clone(), "next");
+                                    let payload_value = Node::member(
+                                        self.context.current_span(),
+                                        current.clone(),
+                                        "next",
+                                    );
 
                                     if let Some(payload_pattern) = pattern {
                                         match payload_pattern.as_ref() {
@@ -1123,7 +1154,7 @@ impl MiddleEnvironment {
                                                         MatchTupleItem::Wildcard(_) => pidx += 1,
                                                         MatchTupleItem::Value(expected) => {
                                                             let pcur = Node::member(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
@@ -1139,7 +1170,7 @@ impl MiddleEnvironment {
                                                         }
                                                         MatchTupleItem::IsType(data_type) => {
                                                             let pcur = Node::member(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
@@ -1152,7 +1183,7 @@ impl MiddleEnvironment {
                                                         }
                                                         MatchTupleItem::In(expected) => {
                                                             let pcur = Node::member(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
@@ -1165,7 +1196,7 @@ impl MiddleEnvironment {
                                                         }
                                                         MatchTupleItem::StringPattern(parts) => {
                                                             let pcur = Node::member(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
@@ -1183,19 +1214,19 @@ impl MiddleEnvironment {
                                                             name,
                                                         } => {
                                                             let pcur = Node::member(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
                                                             body_nodes.push(Node::new(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 NodeType::VariableDeclaration {
                                                                     var_type: *var_type,
                                                                     identifier: name.clone(),
                                                                     value: Box::new(pcur.clone()),
                                                                     data_type: PotentialNewType::DataType(
                                                                         ParserDataType::new(
-                                                                            self.current_span(),
+                                                                            self.context.current_span(),
                                                                             ParserInnerType::Auto(None),
                                                                         ),
                                                                     ),
@@ -1215,7 +1246,7 @@ impl MiddleEnvironment {
                                                             pattern,
                                                         } => {
                                                             let pcur = Node::member(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
@@ -1225,7 +1256,7 @@ impl MiddleEnvironment {
                                                                     nested_enum_val,
                                                                 )
                                                                 .ok_or_else(|| {
-                                                                    self.err_at_current(
+                                                                    self.context.err_at_current(
                                                                         MiddleErr::Scope(
                                                                             nested_enum_val
                                                                                 .to_string(),
@@ -1239,10 +1270,10 @@ impl MiddleEnvironment {
                                                                     resolved.text.trim(),
                                                                 )
                                                                 .ok_or_else(|| {
-                                                                    self.err_at_current(
+                                                                    self.context.err_at_current(
                                                                         MiddleErr::CantMatch(
                                                                             ParserDataType::new(
-                                                                                self.current_span(),
+                                                                                self.context.current_span(),
                                                                                 ParserInnerType::Auto(None),
                                                                             ),
                                                                         ),
@@ -1255,7 +1286,7 @@ impl MiddleEnvironment {
                                                             );
 
                                                             let nested_payload = Node::member(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 pcur.clone(),
                                                                 "next",
                                                             );
@@ -1269,7 +1300,7 @@ impl MiddleEnvironment {
                                                                     ).into()
                                                                 });
                                                                 body_nodes.push(Node::new(
-                                                                    self.current_span(),
+                                                                    self.context.current_span(),
                                                                     NodeType::VariableDeclaration {
                                                                         var_type: *var_type,
                                                                         identifier: bind_name.clone(),
@@ -1278,7 +1309,7 @@ impl MiddleEnvironment {
                                                                         ),
                                                                         data_type: PotentialNewType::DataType(
                                                                             ParserDataType::new(
-                                                                                self.current_span(),
+                                                                                self.context.current_span(),
                                                                                 ParserInnerType::Auto(None),
                                                                             ),
                                                                         ),
@@ -1289,7 +1320,7 @@ impl MiddleEnvironment {
                                                                         self.emit_destructure_statements(
                                                                             &bind_name,
                                                                             pattern,
-                                                                            self.current_span(),
+                                                                            self.context.current_span(),
                                                                             true,
                                                                         ),
                                                                     );
@@ -1315,7 +1346,7 @@ impl MiddleEnvironment {
                                                             value: expected,
                                                         } => {
                                                             let cur = Node::member(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 payload_value.clone(),
                                                                 field.clone(),
                                                             );
@@ -1334,19 +1365,19 @@ impl MiddleEnvironment {
                                                             name,
                                                         } => {
                                                             let cur = Node::member(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 payload_value.clone(),
                                                                 field.clone(),
                                                             );
                                                             body_nodes.push(Node::new(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 NodeType::VariableDeclaration {
                                                                     var_type: *var_type,
                                                                     identifier: name.clone(),
                                                                     value: Box::new(cur.clone()),
                                                                     data_type: PotentialNewType::DataType(
                                                                         ParserDataType::new(
-                                                                            self.current_span(),
+                                                                            self.context.current_span(),
                                                                             ParserInnerType::Auto(None),
                                                                         ),
                                                                     ),
@@ -1371,14 +1402,14 @@ impl MiddleEnvironment {
                                             .into()
                                         });
                                         body_nodes.push(Node::new(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             NodeType::VariableDeclaration {
                                                 var_type: var_type.clone(),
                                                 identifier: bind_name.clone(),
                                                 value: Box::new(payload_value.clone()),
                                                 data_type: PotentialNewType::DataType(
                                                     ParserDataType::new(
-                                                        self.current_span(),
+                                                        self.context.current_span(),
                                                         ParserInnerType::Auto(None),
                                                     ),
                                                 ),
@@ -1388,7 +1419,7 @@ impl MiddleEnvironment {
                                             body_nodes.extend(self.emit_destructure_statements(
                                                 &bind_name,
                                                 &pattern,
-                                                self.current_span(),
+                                                self.context.current_span(),
                                                 true,
                                             ));
                                         }
@@ -1410,11 +1441,11 @@ impl MiddleEnvironment {
                         }
                         body_nodes.push(*pattern.2.clone());
                         ifs.push(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(cond)),
                                 then: Box::new(Self::temp_scope(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     body_nodes,
                                     true,
                                 )),
@@ -1424,7 +1455,7 @@ impl MiddleEnvironment {
                         continue;
                     }
                     MatchArmType::ListPattern(items) => {
-                        let mut cond = Node::bool(self.current_span(), true);
+                        let mut cond = Node::bool(self.context.current_span(), true);
                         let mut body_nodes: Vec<Node> = Vec::new();
                         let mut guard_bindings: Vec<(String, Node)> = Vec::new();
                         self.apply_match_alias_bindings(
@@ -1542,7 +1573,7 @@ impl MiddleEnvironment {
                                 MatchTupleItem::Binding { var_type, name } => {
                                     let current = self.match_index_access(value_node.clone(), idx);
                                     body_nodes.push(Self::auto_var_decl(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         var_type,
                                         name.clone(),
                                         current.clone(),
@@ -1566,11 +1597,11 @@ impl MiddleEnvironment {
                         }
                         body_nodes.push(*pattern.2.clone());
                         ifs.push(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(cond)),
                                 then: Box::new(Self::temp_scope(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     body_nodes,
                                     true,
                                 )),
@@ -1599,7 +1630,7 @@ impl MiddleEnvironment {
                                     value: expected,
                                 } => {
                                     let current = Node::member(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         value_node.clone(),
                                         field.clone(),
                                     );
@@ -1618,12 +1649,12 @@ impl MiddleEnvironment {
                                     name,
                                 } => {
                                     let current = Node::member(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         value_node.clone(),
                                         field.clone(),
                                     );
                                     body_nodes.push(Self::auto_var_decl(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         *var_type,
                                         name.clone(),
                                         current.clone(),
@@ -1634,11 +1665,11 @@ impl MiddleEnvironment {
                         }
                         body_nodes.push(*pattern.2.clone());
                         ifs.push(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(cond)),
                                 then: Box::new(Self::temp_scope(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     body_nodes,
                                     true,
                                 )),
@@ -1661,7 +1692,7 @@ impl MiddleEnvironment {
                     );
                     match pattern.0 {
                         MatchArmType::Wildcard(_) => ifs.push(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(conditionals)),
                                 then: self.wrap_then_with_aliases(
@@ -1674,13 +1705,13 @@ impl MiddleEnvironment {
                             },
                         )),
                         MatchArmType::Value(x) => ifs.push(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::BooleanExpression {
                                         left: Box::new(Node::new(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             NodeType::ComparisonExpression {
                                                 left: Box::new(value.clone()),
                                                 right: Box::new(x),
@@ -1701,13 +1732,13 @@ impl MiddleEnvironment {
                             },
                         )),
                         MatchArmType::IsType(data_type) => ifs.push(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::BooleanExpression {
                                         left: Box::new(Node::new(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             NodeType::IsExpression {
                                                 value: Box::new(value.clone()),
                                                 data_type: data_type.clone(),
@@ -1727,11 +1758,11 @@ impl MiddleEnvironment {
                             },
                         )),
                         MatchArmType::In(in_value) => ifs.push(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(self.bool_and_nodes(
                                     Node::new(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         NodeType::InDeclaration {
                                             identifier: Box::new(value.clone()),
                                             value: Box::new(in_value),
@@ -1766,7 +1797,8 @@ impl MiddleEnvironment {
                         } => {
                             let val =
                                 self.resolve_dollar_ident_only(scope, &val).ok_or_else(|| {
-                                    self.err_at_current(MiddleErr::Scope(val.to_string()))
+                                    self.context
+                                        .err_at_current(MiddleErr::Scope(val.to_string()))
                                 })?;
                             let Some(index) = Self::builtin_enum_variant_index(val.text.trim())
                             else {
@@ -1788,23 +1820,23 @@ impl MiddleEnvironment {
                                 } else {
                                     ParserText::temp_name_with_prefix(
                                         "match_destructure",
-                                        self.current_span(),
+                                        self.context.current_span(),
                                     )
                                     .into()
                                 };
                                 let mut body_nodes = Vec::new();
                                 body_nodes.push(Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::VariableDeclaration {
                                         var_type: var_type.clone(),
                                         identifier: bind_name.clone(),
                                         value: Box::new(Node::member(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             value.clone(),
                                             "next",
                                         )),
                                         data_type: PotentialNewType::DataType(ParserDataType::new(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             ParserInnerType::Auto(None),
                                         )),
                                     },
@@ -1814,7 +1846,7 @@ impl MiddleEnvironment {
                                     body_nodes.extend(self.emit_destructure_statements(
                                         &bind_name,
                                         &pattern,
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         true,
                                     ));
                                 }
@@ -1822,18 +1854,26 @@ impl MiddleEnvironment {
                                 self.emit_payload_bindings_from_pattern(
                                     scope,
                                     payload_pattern.as_deref(),
-                                    Node::member(self.current_span(), value.clone(), "next"),
+                                    Node::member(
+                                        self.context.current_span(),
+                                        value.clone(),
+                                        "next",
+                                    ),
                                     &mut body_nodes,
                                 );
 
                                 body_nodes.push(*pattern.2);
 
-                                Box::new(Self::temp_scope(self.current_span(), body_nodes, true))
+                                Box::new(Self::temp_scope(
+                                    self.context.current_span(),
+                                    body_nodes,
+                                    true,
+                                ))
                             } else {
                                 pattern.2
                             };
                             ifs.push(Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::IfStatement {
                                     comparison: Box::new(IfComparisonType::If(
                                         self.bool_and_nodes(
@@ -1852,21 +1892,21 @@ impl MiddleEnvironment {
                             ));
                         }
                         MatchArmType::Let { var_type, name } => ifs.push(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(conditionals)),
                                 then: Box::new(Self::temp_scope(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     vec![
                                         Node::new(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             NodeType::VariableDeclaration {
                                                 var_type,
                                                 identifier: name,
                                                 value: Box::new(value.clone()),
                                                 data_type: PotentialNewType::DataType(
                                                     ParserDataType::new(
-                                                        self.current_span(),
+                                                        self.context.current_span(),
                                                         ParserInnerType::Auto(None),
                                                     ),
                                                 ),
@@ -1908,7 +1948,7 @@ impl MiddleEnvironment {
                     ));
                 }
                 MatchArmType::Wildcard(_) => ifs.push(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(conditionals)),
                         then: self.wrap_then_with_aliases(
@@ -1921,11 +1961,11 @@ impl MiddleEnvironment {
                     },
                 )),
                 MatchArmType::Value(x) => ifs.push(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(self.bool_and_nodes(
                             Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::ComparisonExpression {
                                     left: Box::new(value.clone()),
                                     right: Box::new(x),
@@ -1944,11 +1984,11 @@ impl MiddleEnvironment {
                     },
                 )),
                 MatchArmType::IsType(data_type) => ifs.push(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(self.bool_and_nodes(
                             Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::IsExpression {
                                     value: Box::new(value.clone()),
                                     data_type: data_type.clone(),
@@ -1966,11 +2006,11 @@ impl MiddleEnvironment {
                     },
                 )),
                 MatchArmType::In(in_value) => ifs.push(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(self.bool_and_nodes(
                             Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::InDeclaration {
                                     identifier: Box::new(value.clone()),
                                     value: Box::new(in_value),
@@ -1997,14 +2037,14 @@ impl MiddleEnvironment {
                     ));
                 }
                 MatchArmType::Let { var_type, name } => ifs.push(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(conditionals)),
                         then: Box::new(Self::temp_scope(
-                            self.current_span(),
+                            self.context.current_span(),
                             vec![
                                 Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::VariableDeclaration {
                                         var_type,
                                         identifier: name,
@@ -2060,13 +2100,13 @@ impl MiddleEnvironment {
                             } else {
                                 ParserText::temp_name_with_prefix(
                                     "match_destructure",
-                                    self.current_span(),
+                                    self.context.current_span(),
                                 )
                                 .into()
                             };
                             let mut body_nodes = Vec::new();
                             body_nodes.push(Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::VariableDeclaration {
                                     var_type: var_type.clone(),
                                     identifier: bind_name.clone(),
@@ -2082,11 +2122,11 @@ impl MiddleEnvironment {
                                             )
                                         })?;
                                         Box::new(Node::new(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             NodeType::RefStatement {
                                                 mutability,
                                                 value: Box::new(Node::member(
-                                                    self.current_span(),
+                                                    self.context.current_span(),
                                                     value.clone(),
                                                     "next",
                                                 )),
@@ -2094,13 +2134,13 @@ impl MiddleEnvironment {
                                         ))
                                     } else {
                                         Box::new(Node::member(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             value.clone(),
                                             "next",
                                         ))
                                     },
                                     data_type: PotentialNewType::DataType(ParserDataType::new(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         ParserInnerType::Auto(None),
                                     )),
                                 },
@@ -2110,7 +2150,7 @@ impl MiddleEnvironment {
                                 body_nodes.extend(self.emit_destructure_statements(
                                     &bind_name,
                                     &pattern,
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     true,
                                 ));
                             }
@@ -2118,19 +2158,23 @@ impl MiddleEnvironment {
                             self.emit_payload_bindings_from_pattern(
                                 scope,
                                 payload_pattern.as_deref(),
-                                Node::member(self.current_span(), value.clone(), "next"),
+                                Node::member(self.context.current_span(), value.clone(), "next"),
                                 &mut body_nodes,
                             );
 
                             body_nodes.push(*pattern.2);
 
-                            Box::new(Self::temp_scope(self.current_span(), body_nodes, true))
+                            Box::new(Self::temp_scope(
+                                self.context.current_span(),
+                                body_nodes,
+                                true,
+                            ))
                         } else {
                             pattern.2
                         };
 
                     ifs.push(Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::IfStatement {
                             comparison: Box::new(IfComparisonType::If(self.bool_and_nodes(
                                 self.discriminant_eq(value.clone(), index),
@@ -2150,11 +2194,13 @@ impl MiddleEnvironment {
             }
         }
         let ifs = if ifs.is_empty() {
-            Node::new(self.current_span(), NodeType::EmptyLine)
+            Node::new(self.context.current_span(), NodeType::EmptyLine)
         } else {
             let Some(mut cur_if) = ifs.pop() else {
-                return self
-                    .evaluate_inner(scope, Node::new(self.current_span(), NodeType::EmptyLine));
+                return self.evaluate_inner(
+                    scope,
+                    Node::new(self.context.current_span(), NodeType::EmptyLine),
+                );
             };
             while let Some(mut prev) = ifs.pop() {
                 if let NodeType::IfStatement { otherwise, .. } = &mut prev.node_type {
@@ -2168,7 +2214,7 @@ impl MiddleEnvironment {
         self.evaluate_inner(
             scope,
             if let Some(decl) = decl {
-                Self::temp_scope(self.current_span(), vec![decl, ifs], true)
+                Self::temp_scope(self.context.current_span(), vec![decl, ifs], true)
             } else {
                 ifs
             },

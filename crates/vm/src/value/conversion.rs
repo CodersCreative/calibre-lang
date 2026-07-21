@@ -19,7 +19,7 @@ impl RuntimeValue {
         }
 
         if let RuntimeValue::Ref(name) = &self {
-            if let Some(value) = env.variables.get(name).cloned() {
+            if let Some(value) = env.symbols.variables.get(name).cloned() {
                 return value.convert(env, data_type);
             }
             let name = name.as_str();
@@ -37,7 +37,7 @@ impl RuntimeValue {
             }
         }
         if let RuntimeValue::VarRef(id) = &self {
-            if let Some(value) = env.variables.get_by_id(*id).cloned() {
+            if let Some(value) = env.symbols.variables.get_by_id(*id).cloned() {
                 return value.convert(env, data_type);
             }
         }

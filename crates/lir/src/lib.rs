@@ -1,7 +1,7 @@
 use calibre_mir::{
     ast::{IntLiteralType, MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
-    typing::MiddleTypeDefType,
+    typing::{MiddleImpl, MiddleTrait, MiddleTypeDefType},
 };
 use calibre_parser::Span;
 use calibre_parser::ast::{
@@ -609,8 +609,8 @@ impl<'a> LirEnvironment<'a> {
     }
 
     fn collect_trait_methods(
-        imp: &calibre_mir::environment::MiddleImpl,
-        trait_def: Option<&calibre_mir::environment::MiddleTrait>,
+        imp: &MiddleImpl,
+        trait_def: Option<&MiddleTrait>,
     ) -> FxHashMap<String, String> {
         let mut methods: FxHashMap<String, String> = FxHashMap::default();
         if let Some(trait_def) = trait_def {
@@ -633,12 +633,13 @@ impl<'a> LirEnvironment<'a> {
         let mut out: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>> =
             FxHashMap::default();
 
-        for imp in env.impls.values() {
+        for imp in env.typing.impls.values() {
             let concrete = imp.data_type.clone().unwrap_all_refs().to_string();
             let trait_map = out.entry(concrete).or_default();
 
             for trait_name in &imp.traits {
-                let methods = Self::collect_trait_methods(imp, env.trait_defs.get(trait_name));
+                let methods =
+                    Self::collect_trait_methods(imp, env.typing.trait_defs.get(trait_name));
                 if !methods.is_empty() {
                     trait_map.insert(trait_name.clone(), methods);
                 }
@@ -683,6 +684,7 @@ impl<'a> LirEnvironment<'a> {
         let entry_id = BlockId(0);
 
         let scope_to_file: FxHashMap<u64, String> = env
+            .scoping
             .scopes
             .iter()
             .map(|(id, scope)| (*id, scope.path.to_string_lossy().to_string()))
@@ -1025,6 +1027,7 @@ impl<'a> LirEnvironment<'a> {
                         (
                             cap.clone(),
                             self.env
+                                .symbols
                                 .variables
                                 .get(cap)
                                 .map(|v| v.data_type.clone())
@@ -1137,7 +1140,7 @@ impl<'a> LirEnvironment<'a> {
                 value,
                 data,
             } => LirNodeType::Enum {
-                variant: if let Some(obj) = self.env.objects.get(&identifier.to_string())
+                variant: if let Some(obj) = self.env.typing.objects.get(&identifier.to_string())
                     && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
                 {
                     variants
@@ -1454,7 +1457,7 @@ impl<'a> LirEnvironment<'a> {
 
                 let needs_ref_first_arg = if let MiddleNodeType::Identifier(name) =
                     &caller_node.node_type
-                    && let Some(var) = self.env.variables.get(&name.text)
+                    && let Some(var) = self.env.symbols.variables.get(&name.text)
                     && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
                     && let Some(first) = parameters.first()
                 {
@@ -1467,7 +1470,7 @@ impl<'a> LirEnvironment<'a> {
                 let mut l_args = self.lower_nodes(args);
 
                 if let LirNodeType::Load(name) | LirNodeType::Move(name) = &l_caller
-                    && let Some(var) = self.env.variables.get(name.as_ref())
+                    && let Some(var) = self.env.symbols.variables.get(name.as_ref())
                     && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
                 {
                     let expected = parameters.len();

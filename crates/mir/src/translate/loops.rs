@@ -11,6 +11,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    scoping::LoopContext,
 };
 
 impl MiddleEnvironment {
@@ -24,11 +25,14 @@ impl MiddleEnvironment {
         let span = node.span;
         let member_at_index = || {
             Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::MemberExpression {
                     path: vec![
-                        (Node::identifier(self.current_span(), iter_id), false),
-                        (Node::identifier(self.current_span(), idx_id), true),
+                        (
+                            Node::identifier(self.context.current_span(), iter_id),
+                            false,
+                        ),
+                        (Node::identifier(self.context.current_span(), idx_id), true),
                     ],
                 },
             )
@@ -202,7 +206,7 @@ impl MiddleEnvironment {
             instructions.push(injection);
         }
 
-        Self::temp_scope(self.current_span(), instructions, true)
+        Self::temp_scope(self.context.current_span(), instructions, true)
     }
 
     fn eval_loop_body_with_ctx(
@@ -214,16 +218,16 @@ impl MiddleEnvironment {
         continue_inject: Option<Node>,
         body_node: Node,
     ) -> Result<MiddleNode, MiddleErr> {
-        let ctx = crate::environment::LoopContext {
+        let ctx = LoopContext {
             label: label_text,
             result_target,
             broke_target,
             continue_inject,
             scope_id: *scope,
         };
-        self.loop_stack.push(ctx);
+        self.scoping.loop_stack.push(ctx);
         let out = self.evaluate_inner(scope, body_node);
-        self.loop_stack.pop();
+        self.scoping.loop_stack.pop();
         out
     }
     fn finish_loop_with_else(
@@ -239,37 +243,39 @@ impl MiddleEnvironment {
             return Ok(loop_node);
         };
         let result_raw = result_raw.ok_or_else(|| {
-            self.err_at_current(MiddleErr::Internal("loop result missing".to_string()))
+            self.context
+                .err_at_current(MiddleErr::Internal("loop result missing".to_string()))
         })?;
         let broke_raw = broke_raw.ok_or_else(|| {
-            self.err_at_current(MiddleErr::Internal("loop broke missing".to_string()))
+            self.context
+                .err_at_current(MiddleErr::Internal("loop broke missing".to_string()))
         })?;
         let result_ident = ParserText::from(result_raw.clone());
         let broke_ident = ParserText::from(broke_raw.clone());
         let result_decl = Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::VariableDeclaration {
                 var_type: VarType::Mutable,
                 identifier: result_ident.clone().into(),
                 value: else_body.clone(),
                 data_type: PotentialNewType::DataType(ParserDataType::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     ParserInnerType::Auto(None),
                 )),
             },
         );
 
         let broke_decl = Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::VariableDeclaration {
                 var_type: VarType::Mutable,
                 identifier: broke_ident.clone().into(),
                 value: Box::new(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IntLiteral(String::from("0")),
                 )),
                 data_type: PotentialNewType::DataType(ParserDataType::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     ParserInnerType::Int,
                 )),
             },
@@ -278,7 +284,10 @@ impl MiddleEnvironment {
             self.evaluate(scope, result_decl),
             self.evaluate(scope, broke_decl),
             loop_node,
-            self.evaluate(scope, Node::identifier(self.current_span(), result_ident)),
+            self.evaluate(
+                scope,
+                Node::identifier(self.context.current_span(), result_ident),
+            ),
         ];
 
         Ok(MiddleNode {
@@ -311,31 +320,31 @@ impl MiddleEnvironment {
 
         if spawned {
             let list_type = ParserDataType::new(
-                self.current_span(),
+                self.context.current_span(),
                 ParserInnerType::List(Box::new(resolved_data_type.clone())),
             );
             let chan_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("anon_iter_chan")).into();
             let chan_ident_node = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::Identifier(chan_ident.clone().into()),
             );
             let wg_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("anon_iter_wg")).into();
             let wg_ident_node = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::Identifier(wg_ident.clone().into()),
             );
             let start_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("anon_iter_start")).into();
             let start_ident_node = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::Identifier(start_ident.clone().into()),
             );
             let list_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("anon_iter_list")).into();
             let list_ident_node = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::Identifier(list_ident.clone().into()),
             );
             let item_ident: PotentialDollarIdentifier =
@@ -345,52 +354,60 @@ impl MiddleEnvironment {
 
             let mut spawned_loop_items: Vec<Node> = Vec::new();
             spawned_loop_items.push(Node::call(
-                self.current_span(),
-                Node::member(self.current_span(), start_ident_node.clone(), "wait"),
+                self.context.current_span(),
+                Node::member(
+                    self.context.current_span(),
+                    start_ident_node.clone(),
+                    "wait",
+                ),
                 Vec::new(),
             ));
             for condition in conditionals {
                 spawned_loop_items.push(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(condition)),
-                        then: Box::new(Node::new(self.current_span(), NodeType::EmptyLine)),
+                        then: Box::new(Node::new(self.context.current_span(), NodeType::EmptyLine)),
                         otherwise: Some(Box::new(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::Continue { label: None },
                         ))),
                     },
                 ));
             }
             spawned_loop_items.push(Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::VariableDeclaration {
                     var_type: VarType::Immutable,
                     identifier: value_ident.clone(),
                     data_type: PotentialNewType::DataType(ParserDataType::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         ParserInnerType::Auto(None),
                     )),
                     value: Box::new(*map),
                 },
             ));
             spawned_loop_items.push(Node::call(
-                self.current_span(),
-                Node::member(self.current_span(), chan_ident_node.clone(), "raw_send"),
+                self.context.current_span(),
+                Node::member(
+                    self.context.current_span(),
+                    chan_ident_node.clone(),
+                    "raw_send",
+                ),
                 vec![CallArg::Value(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::Identifier(value_ident.into()),
                 ))],
             ));
 
             let join_spawn_call = Node::call(
-                self.current_span(),
-                Node::member(self.current_span(), wg_ident_node.clone(), "join"),
+                self.context.current_span(),
+                Node::member(self.context.current_span(), wg_ident_node.clone(), "join"),
                 vec![CallArg::Value(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::Spawn {
                         items: vec![Self::temp_scope(
-                            self.current_span(),
+                            self.context.current_span(),
                             spawned_loop_items,
                             true,
                         )],
@@ -399,14 +416,14 @@ impl MiddleEnvironment {
                 ))],
             );
             let dispatch_loop = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::LoopDeclaration {
                     loop_type,
                     until,
                     label: None,
                     else_body: None,
                     body: Box::new(Self::temp_scope(
-                        self.current_span(),
+                        self.context.current_span(),
                         vec![join_spawn_call],
                         true,
                     )),
@@ -414,22 +431,22 @@ impl MiddleEnvironment {
             );
 
             let collect_loop = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::LoopDeclaration {
                     loop_type: Box::new(LoopType::Loop),
                     until: None,
                     label: None,
                     else_body: None,
                     body: Box::new(Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::ScopeDeclaration {
                             body: Some(vec![Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::MatchStatement {
                                     value: Some(Box::new(Node::call(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         Node::member(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             chan_ident_node.clone(),
                                             "get",
                                         ),
@@ -447,15 +464,15 @@ impl MiddleEnvironment {
                                             },
                                             Vec::new(),
                                             Box::new(Node::new(
-                                                self.current_span(),
+                                                self.context.current_span(),
                                                 NodeType::AssignmentExpression {
                                                     identifier: Box::new(list_ident_node.clone()),
                                                     value: Box::new(Node::new(
-                                                        self.current_span(),
+                                                        self.context.current_span(),
                                                         NodeType::BinaryExpression {
                                                             left: Box::new(list_ident_node.clone()),
                                                             right: Box::new(Node::new(
-                                                                self.current_span(),
+                                                                self.context.current_span(),
                                                                 NodeType::Identifier(
                                                                     item_ident.clone().into(),
                                                                 ),
@@ -467,10 +484,10 @@ impl MiddleEnvironment {
                                             )),
                                         ),
                                         (
-                                            MatchArmType::Wildcard(self.current_span()),
+                                            MatchArmType::Wildcard(self.context.current_span()),
                                             Vec::new(),
                                             Box::new(Node::new(
-                                                self.current_span(),
+                                                self.context.current_span(),
                                                 NodeType::Break {
                                                     label: None,
                                                     value: None,
@@ -495,19 +512,19 @@ impl MiddleEnvironment {
                     span,
                     vec![
                         Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::VariableDeclaration {
                                 var_type: VarType::Mutable,
                                 identifier: chan_ident.clone(),
                                 data_type: PotentialNewType::DataType(ParserDataType::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     ParserInnerType::Auto(None),
                                 )),
                                 value: Box::new(Node::call_with_generics(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     Node::member(
-                                        self.current_span(),
-                                        Node::identifier(self.current_span(), "Channel"),
+                                        self.context.current_span(),
+                                        Node::identifier(self.context.current_span(), "Channel"),
                                         "new",
                                     ),
                                     vec![resolved_data_type.clone().into()],
@@ -516,19 +533,19 @@ impl MiddleEnvironment {
                             },
                         ),
                         Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::VariableDeclaration {
                                 var_type: VarType::Mutable,
                                 identifier: wg_ident.clone(),
                                 data_type: PotentialNewType::DataType(ParserDataType::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     ParserInnerType::Auto(None),
                                 )),
                                 value: Box::new(Node::call(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     Node::member(
-                                        self.current_span(),
-                                        Node::identifier(self.current_span(), "WaitGroup"),
+                                        self.context.current_span(),
+                                        Node::identifier(self.context.current_span(), "WaitGroup"),
                                         "new",
                                     ),
                                     Vec::new(),
@@ -536,19 +553,19 @@ impl MiddleEnvironment {
                             },
                         ),
                         Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::VariableDeclaration {
                                 var_type: VarType::Mutable,
                                 identifier: start_ident.clone(),
                                 data_type: PotentialNewType::DataType(ParserDataType::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     ParserInnerType::Auto(None),
                                 )),
                                 value: Box::new(Node::call(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     Node::member(
-                                        self.current_span(),
-                                        Node::identifier(self.current_span(), "WaitGroup"),
+                                        self.context.current_span(),
+                                        Node::identifier(self.context.current_span(), "WaitGroup"),
                                         "new",
                                     ),
                                     Vec::new(),
@@ -556,36 +573,48 @@ impl MiddleEnvironment {
                             },
                         ),
                         Node::call(
-                            self.current_span(),
-                            Node::member(self.current_span(), start_ident_node.clone(), "raw_add"),
+                            self.context.current_span(),
+                            Node::member(
+                                self.context.current_span(),
+                                start_ident_node.clone(),
+                                "raw_add",
+                            ),
                             vec![CallArg::Value(Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::IntLiteral(String::from("1")),
                             ))],
                         ),
                         dispatch_loop,
                         Node::call(
-                            self.current_span(),
-                            Node::member(self.current_span(), start_ident_node.clone(), "raw_done"),
+                            self.context.current_span(),
+                            Node::member(
+                                self.context.current_span(),
+                                start_ident_node.clone(),
+                                "raw_done",
+                            ),
                             Vec::new(),
                         ),
                         Node::call(
-                            self.current_span(),
-                            Node::member(self.current_span(), wg_ident_node, "wait"),
+                            self.context.current_span(),
+                            Node::member(self.context.current_span(), wg_ident_node, "wait"),
                             Vec::new(),
                         ),
                         Node::call(
-                            self.current_span(),
-                            Node::member(self.current_span(), chan_ident_node.clone(), "close"),
+                            self.context.current_span(),
+                            Node::member(
+                                self.context.current_span(),
+                                chan_ident_node.clone(),
+                                "close",
+                            ),
                             Vec::new(),
                         ),
                         Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::VariableDeclaration {
                                 var_type: VarType::Mutable,
                                 identifier: list_ident.clone(),
                                 value: Box::new(Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::ListLiteral(data_type.clone(), Vec::new()),
                                 )),
                                 data_type: list_type.clone().into(),
@@ -604,18 +633,18 @@ impl MiddleEnvironment {
         let list_ident: calibre_parser::ast::PotentialDollarIdentifier =
             ParserText::from(String::from("anon_iter_list")).into();
         let list_ident_node = Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::Identifier(list_ident.clone().into()),
         );
 
         let list_type = ParserDataType::new(
-            self.current_span(),
+            self.context.current_span(),
             ParserInnerType::List(Box::new(resolved_data_type.clone())),
         );
 
         let guard = conditionals.into_iter().reduce(|left, right| {
             Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::BooleanExpression {
                     left: Box::new(left),
                     right: Box::new(right),
@@ -630,45 +659,53 @@ impl MiddleEnvironment {
             let chan_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("anon_iter_chan")).into();
             let chan_ident_node = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::Identifier(chan_ident.clone().into()),
             );
             let item_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("anon_iter_item")).into();
 
             loop_items.push(Node::call(
-                self.current_span(),
-                Node::member(self.current_span(), chan_ident_node.clone(), "raw_send"),
+                self.context.current_span(),
+                Node::member(
+                    self.context.current_span(),
+                    chan_ident_node.clone(),
+                    "raw_send",
+                ),
                 vec![CallArg::Value(*map.clone())],
             ));
 
             let loop_node = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::LoopDeclaration {
                     loop_type,
                     until,
                     label: None,
                     else_body: None,
-                    body: Box::new(Self::temp_scope(self.current_span(), loop_items, true)),
+                    body: Box::new(Self::temp_scope(
+                        self.context.current_span(),
+                        loop_items,
+                        true,
+                    )),
                 },
             );
 
             let mut body = Vec::new();
             body.push(Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::VariableDeclaration {
                     var_type: VarType::Mutable,
                     identifier: chan_ident.clone(),
                     data_type: ParserDataType::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         ParserInnerType::Auto(None),
                     )
                     .into(),
                     value: Box::new(Node::call_with_generics(
-                        self.current_span(),
+                        self.context.current_span(),
                         Node::member(
-                            self.current_span(),
-                            Node::identifier(self.current_span(), "Channel"),
+                            self.context.current_span(),
+                            Node::identifier(self.context.current_span(), "Channel"),
                             "new",
                         ),
                         vec![resolved_data_type.clone().into()],
@@ -677,12 +714,12 @@ impl MiddleEnvironment {
                 },
             ));
             body.push(Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::VariableDeclaration {
                     var_type: VarType::Mutable,
                     identifier: list_ident.clone(),
                     value: Box::new(Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::ListLiteral(data_type.clone(), Vec::new()),
                     )),
                     data_type: list_type.clone().into(),
@@ -691,21 +728,21 @@ impl MiddleEnvironment {
             let wg_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("anon_iter_wg")).into();
             let wg_ident_node = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::Identifier(wg_ident.clone().into()),
             );
             body.push(Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::VariableDeclaration {
                     var_type: VarType::Immutable,
                     identifier: wg_ident.clone(),
                     data_type: ParserDataType::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         ParserInnerType::Auto(None),
                     )
                     .into(),
                     value: Box::new(Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::Spawn {
                             items: vec![loop_node],
                             auto_wait: false,
@@ -714,31 +751,35 @@ impl MiddleEnvironment {
                 },
             ));
             body.push(Node::call(
-                self.current_span(),
-                Node::member(self.current_span(), wg_ident_node, "wait"),
+                self.context.current_span(),
+                Node::member(self.context.current_span(), wg_ident_node, "wait"),
                 Vec::new(),
             ));
             body.push(Node::call(
-                self.current_span(),
-                Node::member(self.current_span(), chan_ident_node.clone(), "close"),
+                self.context.current_span(),
+                Node::member(
+                    self.context.current_span(),
+                    chan_ident_node.clone(),
+                    "close",
+                ),
                 Vec::new(),
             ));
             body.push(Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::LoopDeclaration {
                     loop_type: Box::new(LoopType::Loop),
                     until: None,
                     label: None,
                     else_body: None,
                     body: Box::new(Self::temp_scope(
-                        self.current_span(),
+                        self.context.current_span(),
                         vec![Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::MatchStatement {
                                 value: Some(Box::new(Node::call(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     Node::member(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         chan_ident_node.clone(),
                                         "get",
                                     ),
@@ -755,22 +796,22 @@ impl MiddleEnvironment {
                                         },
                                         Vec::new(),
                                         Box::new(Node::new(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             NodeType::ScopeDeclaration {
                                                 body: Some(vec![Node::new(
-                                                    self.current_span(),
+                                                    self.context.current_span(),
                                                     NodeType::AssignmentExpression {
                                                         identifier: Box::new(
                                                             list_ident_node.clone(),
                                                         ),
                                                         value: Box::new(Node::new(
-                                                            self.current_span(),
+                                                            self.context.current_span(),
                                                             NodeType::BinaryExpression {
                                                                 left: Box::new(
                                                                     list_ident_node.clone(),
                                                                 ),
                                                                 right: Box::new(Node::new(
-                                                                    self.current_span(),
+                                                                    self.context.current_span(),
                                                                     NodeType::Identifier(
                                                                         item_ident.clone().into(),
                                                                     ),
@@ -788,10 +829,10 @@ impl MiddleEnvironment {
                                         )),
                                     ),
                                     (
-                                        MatchArmType::Wildcard(self.current_span()),
+                                        MatchArmType::Wildcard(self.context.current_span()),
                                         Vec::new(),
                                         Box::new(Node::new(
-                                            self.current_span(),
+                                            self.context.current_span(),
                                             NodeType::Break {
                                                 label: None,
                                                 value: None,
@@ -806,10 +847,10 @@ impl MiddleEnvironment {
                 },
             ));
             body.push(Node::call_with_generics(
-                self.current_span(),
+                self.context.current_span(),
                 Node::member(
-                    self.current_span(),
-                    Node::identifier(self.current_span(), "Mutex"),
+                    self.context.current_span(),
+                    Node::identifier(self.context.current_span(), "Mutex"),
                     "new",
                 ),
                 vec![list_type.clone().into()],
@@ -822,12 +863,12 @@ impl MiddleEnvironment {
             let map_tmp_ident: PotentialDollarIdentifier =
                 ParserText::from(String::from("__iter_map_value")).into();
             let map_tmp_decl = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::VariableDeclaration {
                     var_type: VarType::Immutable,
                     identifier: map_tmp_ident.clone(),
                     data_type: PotentialNewType::DataType(ParserDataType::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         ParserInnerType::Auto(None),
                     )),
                     value: map,
@@ -835,15 +876,15 @@ impl MiddleEnvironment {
             );
 
             let append_node = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::AssignmentExpression {
                     identifier: Box::new(list_ident_node.clone()),
                     value: Box::new(Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::BinaryExpression {
                             left: Box::new(list_ident_node.clone()),
                             right: Box::new(Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::Identifier(map_tmp_ident.into()),
                             )),
                             operator: calibre_parser::ast::binary::BinaryOperator::Shl,
@@ -851,12 +892,15 @@ impl MiddleEnvironment {
                     )),
                 },
             );
-            let filtered_block =
-                Self::temp_scope(self.current_span(), vec![map_tmp_decl, append_node], true);
+            let filtered_block = Self::temp_scope(
+                self.context.current_span(),
+                vec![map_tmp_decl, append_node],
+                true,
+            );
 
             if let Some(cond) = guard {
                 loop_items.push(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(cond)),
                         then: Box::new(filtered_block),
@@ -869,24 +913,28 @@ impl MiddleEnvironment {
         }
 
         let loop_node = Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::LoopDeclaration {
                 loop_type,
                 until,
                 label: None,
                 else_body: None,
-                body: Box::new(Self::temp_scope(self.current_span(), loop_items, true)),
+                body: Box::new(Self::temp_scope(
+                    self.context.current_span(),
+                    loop_items,
+                    true,
+                )),
             },
         );
 
         let mut body = Vec::new();
         body.push(Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::VariableDeclaration {
                 var_type: VarType::Mutable,
                 identifier: list_ident.clone(),
                 value: Box::new(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::ListLiteral(data_type.clone(), Vec::new()),
                 )),
                 data_type: list_type.into(),
@@ -895,7 +943,7 @@ impl MiddleEnvironment {
         body.push(loop_node);
 
         body.push(Node::new(
-            self.current_span(),
+            self.context.current_span(),
             NodeType::Identifier(list_ident.into()),
         ));
 
@@ -937,7 +985,7 @@ impl MiddleEnvironment {
             );
         }
 
-        let scope = self.new_scope_from_parent_shallow(*scope);
+        let scope = self.scoping.new_scope_from_parent_shallow(*scope);
         let label_text = label.as_ref().map(|l| {
             self.resolve_dollar_ident_only(&scope, l)
                 .map(|t| t.text)
@@ -945,7 +993,10 @@ impl MiddleEnvironment {
         });
 
         if let Some(until) = until {
-            let until_node = Node::new(self.current_span(), NodeType::Until { condition: until });
+            let until_node = Node::new(
+                self.context.current_span(),
+                NodeType::Until { condition: until },
+            );
             body = self.wrap_loop_body(body, until_node, false);
         }
 
@@ -962,7 +1013,7 @@ impl MiddleEnvironment {
                 Some(broke_raw.trim()),
                 Some(&VarType::Mutable),
             );
-            if let Some(scope_data) = self.scopes.get_mut(&scope) {
+            if let Some(scope_data) = self.scoping.scopes.get_mut(&scope) {
                 scope_data
                     .mappings
                     .insert(result_raw.clone(), result_mapped.clone());
@@ -1005,16 +1056,16 @@ impl MiddleEnvironment {
             }
             LoopType::While(condition) => {
                 let break_if_not = Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::NotExpression {
                                 value: Box::new(condition),
                             },
                         ))),
                         then: Box::new(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::Break {
                                 label: None,
                                 value: None,
@@ -1058,11 +1109,11 @@ impl MiddleEnvironment {
                     let item_ident: PotentialDollarIdentifier =
                         ParserText::temp_name_with_prefix("for_let_item", value.span).into();
                     let item_node = Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::Identifier(item_ident.clone().into()),
                     );
                     let filtered_body = Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::IfStatement {
                             comparison: Box::new(IfComparisonType::IfLet {
                                 value: item_node,
@@ -1070,7 +1121,7 @@ impl MiddleEnvironment {
                             }),
                             then: Box::new(body),
                             otherwise: Some(Box::new(Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::EmptyLine,
                             ))),
                         },
@@ -1093,12 +1144,12 @@ impl MiddleEnvironment {
                     broke_ident.clone(),
                     None,
                     Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::IfStatement {
                             comparison: Box::new(IfComparisonType::IfLet { value, pattern }),
                             then: Box::new(body),
                             otherwise: Some(Box::new(Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::Break {
                                     label: None,
                                     value: None,
@@ -1151,7 +1202,7 @@ impl MiddleEnvironment {
                     ParserText::temp_name_with_prefix("loop_iterable", range.span).into();
 
                 let iter_node = Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::Identifier(iter_id.clone().into()),
                 );
 
@@ -1178,11 +1229,11 @@ impl MiddleEnvironment {
                 {
                     let end = if inclusive {
                         Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::BinaryExpression {
                                 left: Box::new(to),
                                 right: Box::new(Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::IntLiteral(String::from("1")),
                                 )),
                                 operator: BinaryOperator::Add,
@@ -1202,12 +1253,19 @@ impl MiddleEnvironment {
                             }
                         } else {
                             Node::call(
-                                self.current_span(),
-                                Node::member(self.current_span(), range.clone(), "into_iter"),
+                                self.context.current_span(),
+                                Node::member(
+                                    self.context.current_span(),
+                                    range.clone(),
+                                    "into_iter",
+                                ),
                                 vec![],
                             )
                         },
-                        Node::new(self.current_span(), NodeType::IntLiteral(String::from("0"))),
+                        Node::new(
+                            self.context.current_span(),
+                            NodeType::IntLiteral(String::from("0")),
+                        ),
                     )
                 };
                 let mut state_nodes = Vec::new();
@@ -1215,7 +1273,7 @@ impl MiddleEnvironment {
                     self.evaluate(
                         &scope,
                         Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::VariableDeclaration {
                                 var_type: if is_indexable_loop {
                                     VarType::Immutable
@@ -1225,7 +1283,7 @@ impl MiddleEnvironment {
                                 identifier: iter_id.clone(),
                                 value: Box::new(iter_value),
                                 data_type: ParserDataType::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     ParserInnerType::Auto(None),
                                 )
                                 .into(),
@@ -1238,13 +1296,13 @@ impl MiddleEnvironment {
                         self.evaluate(
                             &scope,
                             Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::VariableDeclaration {
                                     var_type: VarType::Mutable,
                                     identifier: idx_id.clone(),
                                     value: Box::new(idx_initial),
                                     data_type: ParserDataType::new(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         ParserInnerType::Int,
                                     )
                                     .into(),
@@ -1257,18 +1315,18 @@ impl MiddleEnvironment {
                         self.evaluate(
                             &scope,
                             Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::VariableDeclaration {
                                     var_type: VarType::Mutable,
                                     identifier: next_id.clone(),
                                     value: Box::new(Node::new(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         NodeType::Identifier(
                                             ParserText::from(String::from("none")).into(),
                                         ),
                                     )),
                                     data_type: ParserDataType::new(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         ParserInnerType::Auto(None),
                                     )
                                     .into(),
@@ -1284,23 +1342,23 @@ impl MiddleEnvironment {
                         is_temp: true,
                         scope_id: scope,
                     },
-                    span: self.current_span(),
+                    span: self.context.current_span(),
                 }));
 
                 let break_node = Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             if is_indexable_loop {
                                 NodeType::ComparisonExpression {
-                                        left: Box::new(Node::new(self.current_span(), NodeType::Identifier(idx_id.clone().into()))),
+                                        left: Box::new(Node::new(self.context.current_span(), NodeType::Identifier(idx_id.clone().into()))),
                                         right: Box::new(if is_count_loop {
                                             iter_node.clone()
                                         } else {
                                             Node::call(
-                                                self.current_span(),
-                                                Node::identifier(self.current_span(), "len"),
+                                                self.context.current_span(),
+                                                Node::identifier(self.context.current_span(), "len"),
                                                 vec![CallArg::Value(iter_node.clone())],
                                             )
                                         }),
@@ -1309,17 +1367,20 @@ impl MiddleEnvironment {
                             } else {
                                 NodeType::ComparisonExpression {
                                     left: Box::new(Node::new(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         NodeType::Identifier(next_id.clone().into()),
                                     )),
-                                    right: Box::new(Node::identifier(self.current_span(), "none")),
+                                    right: Box::new(Node::identifier(
+                                        self.context.current_span(),
+                                        "none",
+                                    )),
                                     operator:
                                         calibre_parser::ast::comparison::ComparisonOperator::Equal,
                                 }
                             },
                         ))),
                         then: Box::new(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::Break {
                                 label: None,
                                 value: None,
@@ -1333,15 +1394,19 @@ impl MiddleEnvironment {
                     None
                 } else {
                     Some(Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::AssignmentExpression {
                             identifier: Box::new(Node::new(
-                                self.current_span(),
+                                self.context.current_span(),
                                 NodeType::Identifier(next_id.clone().into()),
                             )),
                             value: Box::new(Node::call(
-                                self.current_span(),
-                                Node::member(self.current_span(), iter_node.clone(), "next"),
+                                self.context.current_span(),
+                                Node::member(
+                                    self.context.current_span(),
+                                    iter_node.clone(),
+                                    "next",
+                                ),
                                 vec![],
                             )),
                         },
@@ -1349,13 +1414,13 @@ impl MiddleEnvironment {
                 };
 
                 let indexed_value_node = Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::MemberExpression {
                         path: vec![
                             (iter_node.clone(), false),
                             (
                                 Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::Identifier(idx_id.clone().into()),
                                 ),
                                 true,
@@ -1364,29 +1429,29 @@ impl MiddleEnvironment {
                     },
                 );
                 let next_value_node = Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::MemberExpression {
                         path: vec![
                             (
                                 Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::Identifier(next_id.clone().into()),
                                 ),
                                 false,
                             ),
-                            (Node::identifier(self.current_span(), "next"), false),
+                            (Node::identifier(self.context.current_span(), "next"), false),
                         ],
                     },
                 );
                 let loop_item_value = if is_count_loop {
                     Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::Identifier(idx_id.clone().into()),
                     )
                 } else if is_indexable_loop {
                     if iter_by_mut_ref {
                         Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::RefStatement {
                                 mutability: RefMutability::MutRef,
                                 value: Box::new(indexed_value_node),
@@ -1400,12 +1465,12 @@ impl MiddleEnvironment {
                 };
 
                 let var_name_node = Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::VariableDeclaration {
                         identifier: name,
                         var_type: VarType::Mutable,
                         data_type: PotentialNewType::DataType(ParserDataType::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             ParserInnerType::Auto(None),
                         )),
                         value: Box::new(loop_item_value),
@@ -1413,21 +1478,21 @@ impl MiddleEnvironment {
                 );
 
                 let increment_node = Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::AssignmentExpression {
                         identifier: Box::new(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::Identifier(idx_id.clone().into()),
                         )),
                         value: Box::new(Node::new(
-                            self.current_span(),
+                            self.context.current_span(),
                             NodeType::BinaryExpression {
                                 left: Box::new(Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::Identifier(idx_id.clone().into()),
                                 )),
                                 right: Box::new(Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::IntLiteral(String::from("1")),
                                 )),
                                 operator: BinaryOperator::Add,
@@ -1453,7 +1518,7 @@ impl MiddleEnvironment {
                 }
                 if let Some(target) = iter_target {
                     instructions.push(Node::new(
-                        self.current_span(),
+                        self.context.current_span(),
                         NodeType::AssignmentExpression {
                             identifier: Box::new(target),
                             value: Box::new(iter_node.clone()),
@@ -1461,7 +1526,7 @@ impl MiddleEnvironment {
                     ));
                 }
 
-                let final_body = Self::temp_scope(self.current_span(), instructions, true);
+                let final_body = Self::temp_scope(self.context.current_span(), instructions, true);
 
                 let body = self.eval_loop_body_with_ctx(
                     &scope,

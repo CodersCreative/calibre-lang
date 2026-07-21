@@ -90,6 +90,7 @@ impl Typing {
         &mut self,
         ty: ParserDataType,
         generic_params: Vec<String>,
+        location: Option<Location>,
     ) -> ParserInnerType {
         let key = ty.key();
         if self.impls.contains_key(&key) {
@@ -104,7 +105,7 @@ impl Typing {
                 variables: FxHashMap::default(),
                 traits: Vec::new(),
                 assoc_types: FxHashMap::default(),
-                location: self.current_location.clone(),
+                location,
             },
         );
 

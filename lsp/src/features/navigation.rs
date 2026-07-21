@@ -180,7 +180,7 @@ impl CalibreLanguageServer {
                 });
 
             if let Some(resolved) = resolved {
-                if let Some(var) = env.variables.get(&resolved)
+                if let Some(var) = env.symbols.variables.get(&resolved)
                     && let Some(loc) = &var.location
                     && let Ok(uri) = Url::from_file_path(&loc.path)
                 {

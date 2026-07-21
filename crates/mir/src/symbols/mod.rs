@@ -3,7 +3,7 @@ use crate::errors::MiddleErr;
 use calibre_parser::{
     Location,
     ast::{
-        Node, ParserDataType, VarType,
+        Node, Operator, ParserDataType, VarType,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
@@ -49,38 +49,4 @@ pub struct MiddleOverload {
     pub return_type: ParserDataType,
     pub func: Node,
     pub generic_params: Vec<String>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Operator {
-    Binary(BinaryOperator),
-    Comparison(ComparisonOperator),
-    Boolean(BooleanOperator),
-    Index,
-    IndexAssign,
-    In,
-    As,
-}
-
-impl FromStr for Operator {
-    type Err = MiddleErr;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "[]" {
-            Ok(Self::Index)
-        } else if s == "[]=" {
-            Ok(Self::IndexAssign)
-        } else if s == "in" {
-            Ok(Self::In)
-        } else if s == "as" {
-            Ok(Self::As)
-        } else if let Some(x) = BinaryOperator::from_symbol(s) {
-            Ok(Self::Binary(x))
-        } else if let Some(x) = ComparisonOperator::from_operator(s) {
-            Ok(Self::Comparison(x))
-        } else if let Some(x) = BooleanOperator::from_operator(s) {
-            Ok(Self::Boolean(x))
-        } else {
-            Err(MiddleErr::Scope(format!("unknown operator {s}")))
-        }
-    }
 }

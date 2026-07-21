@@ -311,7 +311,7 @@ impl CalibreEngine {
         Ok(CalibreArtifacts {
             ast: Some(ast),
             mir: Some(mir.clone()),
-            mappings: env.variables.keys().cloned().collect(),
+            mappings: env.symbols.variables.keys().cloned().collect(),
             registry: VMRegistry::from(LirEnvironment::lower(&env, mir)),
             entry_name: env
                 .resolve_str(&scope, &self.entry_name)

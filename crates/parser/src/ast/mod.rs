@@ -1786,6 +1786,39 @@ pub struct NamedScope {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum Operator {
+    Binary(BinaryOperator),
+    Comparison(ComparisonOperator),
+    Boolean(BooleanOperator),
+    Index,
+    IndexAssign,
+    In,
+    As,
+}
+
+impl FromStr for Operator {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "[]" {
+            Ok(Self::Index)
+        } else if s == "[]=" {
+            Ok(Self::IndexAssign)
+        } else if s == "in" {
+            Ok(Self::In)
+        } else if s == "as" {
+            Ok(Self::As)
+        } else if let Some(x) = BinaryOperator::from_symbol(s) {
+            Ok(Self::Binary(x))
+        } else if let Some(x) = ComparisonOperator::from_operator(s) {
+            Ok(Self::Comparison(x))
+        } else if let Some(x) = BooleanOperator::from_operator(s) {
+            Ok(Self::Boolean(x))
+        } else {
+            Err(format!("unknown operator {s}"))
+        }
+    }
+}
+#[derive(Clone, Debug, PartialEq)]
 pub struct Overload {
     pub operator: ParserText,
     pub body: Box<Node>,
@@ -1807,6 +1840,37 @@ impl Into<Node> for Overload {
 impl Overload {
     pub fn span(&self) -> &Span {
         &self.operator.span
+    }
+
+    pub fn verify(&self) -> Result<(), String> {
+        let operator = Operator::from_str(&self.operator.text)?;
+        match operator {
+            Operator::As if !self.header.return_type.is_result() => Err(format!(
+                "Expect result return type (Err!Ok) found {}",
+                self.header.return_type
+            )),
+            Operator::In if !self.header.return_type.is_bool() => Err(format!(
+                "Expect bool return type found {}",
+                self.header.return_type
+            )),
+            Operator::Binary(_) | Operator::Comparison(_) | Operator::Binary(_)
+                if self.header.return_type.is_null() || self.header.return_type.is_auto() =>
+            {
+                Err(format!(
+                    "Expect known non-null return type found {}",
+                    self.header.return_type
+                ))
+            }
+            Operator::Index if self.header.parameters.len() != 2 => Err(format!(
+                "Expect 2 parameters found {}",
+                self.header.parameters.len()
+            )),
+            Operator::IndexAssign if self.header.parameters.len() != 3 => Err(format!(
+                "Expect 3 parameters found {}",
+                self.header.parameters.len()
+            )),
+            _ => Ok(()),
+        }
     }
 }
 

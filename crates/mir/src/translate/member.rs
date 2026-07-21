@@ -1,7 +1,7 @@
 use calibre_parser::{
     Span,
     ast::{
-        CallArg, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
+        CallArg, Node, NodeType, Operator, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, RefMutability,
     },
 };
@@ -11,12 +11,13 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    symbols::MiddleVariable,
     typing::MiddleTypeDefType,
 };
 
 impl MiddleEnvironment {
     fn first_param_ref_mutability(&self, function_name: &str) -> Option<RefMutability> {
-        let from_var = |var: &crate::environment::MiddleVariable| -> Option<RefMutability> {
+        let from_var = |var: &MiddleVariable| -> Option<RefMutability> {
             let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type else {
                 return None;
             };
@@ -27,7 +28,7 @@ impl MiddleEnvironment {
             }
         };
 
-        if let Some(var) = self.variables.get(function_name)
+        if let Some(var) = self.symbols.variables.get(function_name)
             && let Some(m) = from_var(var)
         {
             return Some(m);
@@ -35,7 +36,7 @@ impl MiddleEnvironment {
 
         let short = function_name.rsplit("::").next().unwrap_or(function_name);
         let mut found: Option<RefMutability> = None;
-        for (name, var) in &self.variables {
+        for (name, var) in &self.symbols.variables {
             if !name.ends_with(&format!("::{short}")) {
                 continue;
             }
@@ -166,13 +167,15 @@ impl MiddleEnvironment {
         let receiver_middle = if list.len() <= 1 {
             list.first()
                 .map(|(node, _)| node.clone())
-                .unwrap_or_else(|| MiddleNode::new(MiddleNodeType::EmptyLine, self.current_span()))
+                .unwrap_or_else(|| {
+                    MiddleNode::new(MiddleNodeType::EmptyLine, self.context.current_span())
+                })
         } else {
             MiddleNode::new(
                 MiddleNodeType::MemberExpression {
                     path: list.to_vec(),
                 },
-                self.current_span(),
+                self.context.current_span(),
             )
         };
         let receiver_node: Node = receiver_middle.clone().into();
@@ -184,7 +187,7 @@ impl MiddleEnvironment {
                 let receiver_name = receiver_ident.to_string();
                 let member_name = member_ident.to_string();
                 let candidate = format!("{receiver_name}::{member_name}");
-                if self.variables.contains_key(&candidate) {
+                if self.symbols.variables.contains_key(&candidate) {
                     Some(candidate)
                 } else {
                     self.resolve_str(scope, &candidate)
@@ -216,7 +219,7 @@ impl MiddleEnvironment {
                         list.last()
                             .and_then(|(base, _)| self.resolve_chain_member_name(base, &name))
                             .and_then(|candidate| {
-                                if self.variables.contains_key(&candidate) {
+                                if self.symbols.variables.contains_key(&candidate) {
                                     Some(candidate)
                                 } else {
                                     self.resolve_str(scope, &candidate)
@@ -241,9 +244,10 @@ impl MiddleEnvironment {
         let resolved_caller = resolved_caller.map(|name| Self::normalize_member_path_name(&name));
 
         if let Some(function_name) = resolved_caller {
-            let span = self.current_span();
+            let span = self.context.current_span();
             let caller_node = Node::identifier(span, function_name.clone());
             let data_type = self
+                .symbols
                 .variables
                 .get(&function_name)
                 .map(|var| var.data_type.clone().unwrap_all_refs().data_type);
@@ -311,7 +315,7 @@ impl MiddleEnvironment {
                             mutability,
                             value: Box::new(self_arg),
                         },
-                        self.current_span(),
+                        self.context.current_span(),
                     );
                 }
 
@@ -323,10 +327,13 @@ impl MiddleEnvironment {
 
             Ok(MiddleNode::new(
                 MiddleNodeType::CallExpression {
-                    caller: Box::new(MiddleNode::identifier(self.current_span(), function_name)),
+                    caller: Box::new(MiddleNode::identifier(
+                        self.context.current_span(),
+                        function_name,
+                    )),
                     args: lowered_args,
                 },
-                self.current_span(),
+                self.context.current_span(),
             ))
         } else {
             if let NodeType::Identifier(member_ident) = &caller.node_type {
@@ -342,18 +349,18 @@ impl MiddleEnvironment {
                     return Ok(MiddleNode::new(
                         MiddleNodeType::CallExpression {
                             caller: Box::new(MiddleNode::identifier(
-                                self.current_span(),
+                                self.context.current_span(),
                                 qualified,
                             )),
                             args: lowered_args,
                         },
-                        self.current_span(),
+                        self.context.current_span(),
                     ));
                 }
             }
 
             let member_call_caller = Node::new(
-                self.current_span(),
+                self.context.current_span(),
                 NodeType::MemberExpression {
                     path: vec![(receiver_node, false), (*caller, false)],
                 },
@@ -381,12 +388,12 @@ impl MiddleEnvironment {
                 return Ok(MiddleNode::new(
                     MiddleNodeType::CallExpression {
                         caller: Box::new(MiddleNode::identifier(
-                            self.current_span(),
+                            self.context.current_span(),
                             qualified.clone(),
                         )),
                         args: call_args,
                     },
-                    self.current_span(),
+                    self.context.current_span(),
                 ));
             }
 
@@ -395,7 +402,7 @@ impl MiddleEnvironment {
                     caller: Box::new(lowered_caller),
                     args: lowered_args,
                 },
-                self.current_span(),
+                self.context.current_span(),
             ))
         }
     }
@@ -411,7 +418,7 @@ impl MiddleEnvironment {
         let text = caller_name.text.as_str();
         let family = text.rsplit_once("::").map(|(lhs, _)| lhs).unwrap_or(text);
 
-        for imp in self.impls.values() {
+        for imp in self.typing.impls.values() {
             if let Some((mapped, _)) = imp.variables.get(member) {
                 let mapped_family = mapped
                     .rsplit_once("::")
@@ -439,7 +446,7 @@ impl MiddleEnvironment {
 
         let needle = format!("{family}::{member}");
         let mut found = None;
-        for key in self.variables.keys() {
+        for key in self.symbols.variables.keys() {
             if key.ends_with(&needle) {
                 found = Some(key.clone());
                 break;
@@ -459,12 +466,12 @@ impl MiddleEnvironment {
 
                 if let Some(var) = resolved_ident
                     .as_ref()
-                    .and_then(|resolved| self.variables.get(&resolved.text))
+                    .and_then(|resolved| self.symbols.variables.get(&resolved.text))
                     .or_else(|| {
                         self.resolve_str(scope, &ident.text)
-                            .and_then(|resolved| self.variables.get(&resolved))
+                            .and_then(|resolved| self.symbols.variables.get(&resolved))
                     })
-                    .or_else(|| self.variables.get(&ident.text))
+                    .or_else(|| self.symbols.variables.get(&ident.text))
                 {
                     return Some(var.data_type.clone().unwrap_all_refs());
                 }
@@ -479,7 +486,7 @@ impl MiddleEnvironment {
             }
             MiddleNodeType::CallExpression { caller, .. } => {
                 if let MiddleNodeType::Identifier(ident) = &caller.node_type
-                    && let Some(var) = self.variables.get(&ident.text)
+                    && let Some(var) = self.symbols.variables.get(&ident.text)
                     && let ParserInnerType::Function { return_type, .. } = &var.data_type.data_type
                 {
                     return Some((**return_type).clone().unwrap_all_refs());
@@ -499,11 +506,11 @@ impl MiddleEnvironment {
                     &PotentialDollarIdentifier::Identifier(ident.clone()),
                 )
                 .as_ref()
-                .is_some_and(|resolved| self.variables.contains_key(&resolved.text))
+                .is_some_and(|resolved| self.symbols.variables.contains_key(&resolved.text))
                 || self
                     .resolve_str(scope, &ident.text)
-                    .is_some_and(|resolved| self.variables.contains_key(&resolved))
-                || self.variables.contains_key(&ident.text)
+                    .is_some_and(|resolved| self.symbols.variables.contains_key(&resolved))
+                || self.symbols.variables.contains_key(&ident.text)
             {
                 return true;
             }
@@ -529,7 +536,8 @@ impl MiddleEnvironment {
 
         let impl_var = |env: &MiddleEnvironment, key: &ParserDataType, m: &str| {
             let key = key.key();
-            env.impls
+            env.typing
+                .impls
                 .get(&key)
                 .and_then(|imp| imp.variables.get(m))
                 .map(|(mapped, _)| mapped.clone())
@@ -551,7 +559,7 @@ impl MiddleEnvironment {
                                       target_inner: &ParserInnerType,
                                       member: &str,
                                       match_tail: bool| {
-            env.variables.iter().find_map(|(name, var)| {
+            env.symbols.variables.iter().find_map(|(name, var)| {
                 if match_tail {
                     if calibre_parser::qualified_name_tail(name) != member {
                         return None;
@@ -560,7 +568,7 @@ impl MiddleEnvironment {
                     return None;
                 }
                 let param_inner = first_param_inner(&var.data_type)?;
-                if env.impl_type_matches(&param_inner, target_inner, &Vec::new()) {
+                if param_inner.matches(target_inner, &Vec::new()) {
                     Some(name.clone())
                 } else {
                     None
@@ -636,7 +644,7 @@ impl MiddleEnvironment {
         };
 
         if let Some(target_family) = &target_family
-            && let Some(found) = self.variables.keys().find(|name| {
+            && let Some(found) = self.symbols.variables.keys().find(|name| {
                 let Some((owner, meth)) = name.rsplit_once("::") else {
                     return false;
                 };
@@ -684,7 +692,7 @@ impl MiddleEnvironment {
         }?;
         let target_family = calibre_parser::qualified_name_base(&target_name).to_string();
 
-        let template = self.impls.values().find_map(|imp| {
+        let template = self.typing.impls.values().find_map(|imp| {
             let imp_name = match &imp.data_type.data_type {
                 ParserInnerType::Struct(name) => calibre_parser::qualified_name_tail(name),
                 ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
@@ -698,8 +706,12 @@ impl MiddleEnvironment {
             }
         })?;
 
-        let impl_key = self.get_or_create_impl(target.clone(), template.generic_params.clone());
-        if let Some(new_impl) = self.impls.get_mut(&impl_key)
+        let impl_key = self.typing.get_or_create_impl(
+            target.clone(),
+            template.generic_params.clone(),
+            self.context.current_location.clone(),
+        );
+        if let Some(new_impl) = self.typing.impls.get_mut(&impl_key)
             && new_impl.variables.is_empty()
         {
             new_impl.variables = template.variables.clone();
@@ -746,16 +758,19 @@ impl MiddleEnvironment {
             let resolved_ident = self.resolve_potential_generic_ident(scope, x);
             let base_has_value_binding = resolved_ident
                 .as_ref()
-                .map(|id| self.variables.contains_key(&id.text))
+                .map(|id| self.symbols.variables.contains_key(&id.text))
                 .unwrap_or(false)
                 || self
                     .resolve_str(scope, &x.to_string())
                     .as_ref()
-                    .is_some_and(|name| self.variables.contains_key(name))
-                || self.variables.contains_key(&x.to_string());
+                    .is_some_and(|name| self.symbols.variables.contains_key(name))
+                || self.symbols.variables.contains_key(&x.to_string());
             let base_type = self.resolve_type_from_ident(scope, x);
             let base_is_value = base_has_value_binding;
-            if let Some(Some(object)) = resolved_ident.as_ref().map(|x| self.objects.get(&x.text)) {
+            if let Some(Some(object)) = resolved_ident
+                .as_ref()
+                .map(|x| self.typing.objects.get(&x.text))
+            {
                 match (&object.object_type, &path[1].0.node_type) {
                     (MiddleTypeDefType::Enum { variants, .. }, NodeType::Identifier(y))
                         if path.len() == 2 =>
@@ -768,7 +783,7 @@ impl MiddleEnvironment {
                             return self.evaluate_inner(
                                 scope,
                                 Node::new(
-                                    self.current_span(),
+                                    self.context.current_span(),
                                     NodeType::EnumExpression {
                                         identifier: x.clone(),
                                         value: canonical.clone().into(),
@@ -800,11 +815,11 @@ impl MiddleEnvironment {
                                 return self.evaluate_inner(
                                     scope,
                                     Node::new(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         NodeType::CallExpression {
                                             string_fn: string_fn.clone(),
                                             caller: Box::new(Node::identifier(
-                                                self.current_span(),
+                                                self.context.current_span(),
                                                 static_fn,
                                             )),
                                             generic_types: generic_types.clone(),
@@ -819,7 +834,7 @@ impl MiddleEnvironment {
                                 NodeType::CallExpression {
                                     string_fn: string_fn.clone(),
                                     caller: Box::new(Node::identifier(
-                                        self.current_span(),
+                                        self.context.current_span(),
                                         static_fn,
                                     )),
                                     generic_types: generic_types.clone(),
@@ -839,7 +854,7 @@ impl MiddleEnvironment {
                             if path.len() == 2 {
                                 return self.evaluate_inner(
                                     scope,
-                                    Node::identifier(self.current_span(), var),
+                                    Node::identifier(self.context.current_span(), var),
                                 );
                             }
                             let ident_node = Node::identifier(path[1].0.span, var);
@@ -868,12 +883,12 @@ impl MiddleEnvironment {
             {
                 let receiver_expr = if list.len() <= 1 {
                     list.first().map(|(n, _)| n.clone()).unwrap_or_else(|| {
-                        MiddleNode::new(MiddleNodeType::EmptyLine, self.current_span())
+                        MiddleNode::new(MiddleNodeType::EmptyLine, self.context.current_span())
                     })
                 } else {
                     MiddleNode::new(
                         MiddleNodeType::MemberExpression { path: list.clone() },
-                        self.current_span(),
+                        self.context.current_span(),
                     )
                 };
 
@@ -929,14 +944,14 @@ impl MiddleEnvironment {
             if item.1 {
                 let base_node = MiddleNode::new(
                     MiddleNodeType::MemberExpression { path: list.clone() },
-                    self.current_span(),
+                    self.context.current_span(),
                 );
                 if let Some(overloaded) = self.handle_operator_overloads(
                     scope,
                     item.0.span,
                     base_node.clone().into(),
                     item.0.clone(),
-                    crate::environment::Operator::Index,
+                    Operator::Index,
                 )? {
                     list = vec![(overloaded, false)];
                     continue;
@@ -963,7 +978,7 @@ impl MiddleEnvironment {
                         {
                             self.evaluate_inner(
                                 scope,
-                                Node::identifier(self.current_span(), static_var),
+                                Node::identifier(self.context.current_span(), static_var),
                             )?
                         } else {
                             MiddleNode {

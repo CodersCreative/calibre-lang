@@ -1,7 +1,8 @@
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, ScopeMacro, get_disamubiguous_name},
+    environment::{MiddleEnvironment, get_disamubiguous_name},
     errors::MiddleErr,
+    scoping::ScopeMacro,
 };
 use calibre_parser::{
     Span,
@@ -40,6 +41,7 @@ impl MiddleEnvironment {
             .text;
 
         let scope_macro = self
+            .scoping
             .resolve_macro(scope, &name)
             .cloned()
             .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(name.clone()))))?;
@@ -76,7 +78,8 @@ impl MiddleEnvironment {
             ..scope_macro
         };
 
-        self.scope_mut_or_err(scope)?
+        self.scoping
+            .scope_mut_or_err(scope)?
             .macros
             .insert(identifer, scope_macro);
 
@@ -117,7 +120,8 @@ impl MiddleEnvironment {
                     create_new_scope: og_create_new_scope.unwrap_or(create_new_scope),
                 };
 
-                self.scope_mut_or_err(scope)?
+                self.scoping
+                    .scope_mut_or_err(scope)?
                     .macros
                     .insert(name, scope_macro);
 
@@ -133,7 +137,7 @@ impl MiddleEnvironment {
                     MiddleErr::At(span, Box::new(MiddleErr::Scope(named.name.to_string())))
                 })?
                 .text;
-            if self.resolve_macro(scope, &name).is_none() {
+            if self.scoping.resolve_macro(scope, &name).is_none() {
                 if !named.args.is_empty() {
                     let scope_macro = ScopeMacro {
                         name: name.clone(),
@@ -141,7 +145,8 @@ impl MiddleEnvironment {
                         body: body.clone().unwrap_or_default(),
                         create_new_scope,
                     };
-                    self.scope_mut_or_err(scope)?
+                    self.scoping
+                        .scope_mut_or_err(scope)?
                         .macros
                         .insert(name.clone(), scope_macro);
                 }
@@ -150,14 +155,15 @@ impl MiddleEnvironment {
                 let last = body_nodes.pop();
                 let break_value = last.map(Box::new);
                 body_nodes.push(Node::new(
-                    self.current_span(),
+                    self.context.current_span(),
                     NodeType::Break {
                         label: Some(named.name.clone()),
                         value: break_value,
                     },
                 ));
 
-                let loop_body = Self::temp_scope(self.current_span(), body_nodes, create_new_scope);
+                let loop_body =
+                    Self::temp_scope(self.context.current_span(), body_nodes, create_new_scope);
 
                 return self.evaluate_loop_statement(
                     scope,
@@ -166,13 +172,17 @@ impl MiddleEnvironment {
                     loop_body,
                     None,
                     Some(named.name),
-                    Some(Box::new(Node::new(self.current_span(), NodeType::Null))),
+                    Some(Box::new(Node::new(
+                        self.context.current_span(),
+                        NodeType::Null,
+                    ))),
                 );
             }
             let mut added = Vec::new();
 
             let scope_macro_args: Vec<(PotentialDollarIdentifier, Node)> = {
                 let scope_macro = self
+                    .scoping
                     .resolve_macro(scope, &name)
                     .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(name.clone()))))?;
                 if og_create_new_scope.is_none() {
@@ -210,13 +220,13 @@ impl MiddleEnvironment {
         }
 
         let new_scope = if create_new_scope && !define {
-            self.new_scope_from_parent_shallow(*scope)
+            self.scoping.new_scope_from_parent_shallow(*scope)
         } else {
             *scope
         };
 
         if !macro_args_to_insert.is_empty() {
-            let scope_data = self.scope_mut_or_err(&new_scope)?;
+            let scope_data = self.scoping.scope_mut_or_err(&new_scope)?;
             for (key, value) in macro_args_to_insert {
                 scope_data.macro_args.insert(key, value);
             }
@@ -242,7 +252,8 @@ impl MiddleEnvironment {
                     } else {
                         get_disamubiguous_name(&new_scope, Some(ident.text.trim()), Some(var_type))
                     };
-                    self.scope_mut_or_err(&new_scope)?
+                    self.scoping
+                        .scope_mut_or_err(&new_scope)?
                         .mappings
                         .entry(ident.text.clone())
                         .or_insert(new_name);
@@ -258,7 +269,7 @@ impl MiddleEnvironment {
                 let last = last.map(|x| self.evaluate(&new_scope, x));
 
                 if !last.as_ref().is_some_and(Self::ends_in_control_flow) {
-                    for x in self.scope_ref_or_err(&new_scope)?.defers.clone() {
+                    for x in self.scoping.scope_or_err(&new_scope)?.defers.clone() {
                         stmts.push(self.evaluate(&new_scope, x));
                     }
                 }
@@ -277,18 +288,20 @@ impl MiddleEnvironment {
 
         if &new_scope != scope && !og_create_new_scope.unwrap_or(create_new_scope) {
             let (mappings, macros) = {
-                let scope = self.scope_ref_or_err(&new_scope)?;
+                let scope = self.scoping.scope_or_err(&new_scope)?;
                 (scope.mappings.clone(), scope.macros.clone())
             };
 
             for mapping in mappings {
-                self.scope_mut_or_err(scope)?
+                self.scoping
+                    .scope_mut_or_err(scope)?
                     .mappings
                     .insert(mapping.0, mapping.1);
             }
 
             for scope_macro in macros {
-                self.scope_mut_or_err(scope)?
+                self.scoping
+                    .scope_mut_or_err(scope)?
                     .macros
                     .insert(scope_macro.0, scope_macro.1);
             }

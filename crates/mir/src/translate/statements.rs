@@ -2,18 +2,16 @@ use std::str::FromStr;
 
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{
-        FunctionParamDefault, MiddleEnvironment, MiddleObject, MiddleOverload, MiddleVariable,
-        Operator, get_disamubiguous_name,
-    },
+    environment::{MiddleEnvironment, get_disamubiguous_name},
     errors::MiddleErr,
+    symbols::{FunctionParamDefault, MiddleOverload, MiddleVariable},
     tags::TagInfo,
-    typing::MiddleTypeDefType,
+    typing::{MiddleObject, MiddleTypeDefType},
 };
 use calibre_parser::{
     Span,
     ast::{
-        Node, NodeType, Overload, ParserDataType, ParserInnerType, ParserText,
+        Node, NodeType, Operator, Overload, ParserDataType, ParserInnerType, ParserText,
         PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType,
         VarType,
     },
@@ -32,7 +30,10 @@ impl MiddleEnvironment {
     ) -> Result<MiddleNode, MiddleErr> {
         let identifier = self
             .resolve_dollar_ident_only(scope, &identifier)
-            .ok_or_else(|| self.err_at_current(MiddleErr::Scope(identifier.to_string())))?;
+            .ok_or_else(|| {
+                self.context
+                    .err_at_current(MiddleErr::Scope(identifier.to_string()))
+            })?;
 
         let new_name = if identifier.text.contains("->") || identifier.text.contains("::") {
             identifier.text.clone()
@@ -93,11 +94,10 @@ impl MiddleEnvironment {
                 .iter()
                 .map(|g| g.identifier.to_string())
                 .collect();
-            self.generic_fn_templates.entry(base_name).or_insert((
-                template_params,
-                (*header).clone(),
-                (**body).clone(),
-            ));
+            self.symbols
+                .generic_fn_templates
+                .entry(base_name)
+                .or_insert((template_params, (*header).clone(), (**body).clone()));
         }
 
         if let Some((header, _)) = function_decl {
@@ -135,23 +135,25 @@ impl MiddleEnvironment {
                 })
                 .collect();
 
-            self.function_param_defaults
+            self.symbols
+                .function_param_defaults
                 .insert(new_name.clone(), defaults.clone());
-            self.function_param_defaults
+            self.symbols
+                .function_param_defaults
                 .insert(identifier.text.clone(), defaults);
         }
 
-        let current_location = self.current_location.clone();
+        let current_location = self.context.current_location.clone();
 
         let data_type = if data_type.is_auto() {
-            let err = self.err_at_current(MiddleErr::InferImpossible);
+            let err = self.context.err_at_current(MiddleErr::InferImpossible);
             self.resolve_type_from_node(scope, &value).ok_or(err)?
         } else {
             self.resolve_potential_new_type(scope, data_type)
         };
 
         let mut value = if let Some((header, _)) = function_decl {
-            self.variables.insert(
+            self.symbols.variables.insert(
                 new_name.clone(),
                 MiddleVariable {
                     data_type: data_type.clone(),
@@ -160,19 +162,25 @@ impl MiddleEnvironment {
                 },
             );
 
-            let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
-            self.scopes
+            let err = self
+                .context
+                .err_at_current(MiddleErr::Scope(scope.to_string()));
+            self.scoping
+                .scopes
                 .get_mut(scope)
                 .ok_or(err)?
                 .mappings
                 .insert(identifier.text.clone(), new_name.clone());
 
-            let new_scope = self.new_scope_from_parent_shallow(*scope);
+            let new_scope = self.scoping.new_scope_from_parent_shallow(*scope);
 
             for param in header.parameters.iter() {
                 let og_name = self
                     .resolve_dollar_ident_only(scope, &param.0)
-                    .ok_or_else(|| self.err_at_current(MiddleErr::Scope(param.0.to_string())))?;
+                    .ok_or_else(|| {
+                        self.context
+                            .err_at_current(MiddleErr::Scope(param.0.to_string()))
+                    })?;
 
                 let new_name =
                     get_disamubiguous_name(scope, Some(og_name.trim()), Some(&VarType::Mutable));
@@ -186,7 +194,7 @@ impl MiddleEnvironment {
                     return Err(MiddleErr::InferImpossible);
                 };
 
-                self.variables.insert(
+                self.symbols.variables.insert(
                     new_name.clone(),
                     MiddleVariable {
                         data_type: data_type.clone(),
@@ -195,8 +203,10 @@ impl MiddleEnvironment {
                     },
                 );
 
-                let err = self.err_at_current(MiddleErr::Scope(new_scope.to_string()));
-                let scope_ref = self.scopes.get_mut(&new_scope).ok_or(err)?;
+                let err = self
+                    .context
+                    .err_at_current(MiddleErr::Scope(new_scope.to_string()));
+                let scope_ref = self.scoping.scopes.get_mut(&new_scope).ok_or(err)?;
                 scope_ref
                     .mappings
                     .insert(og_name.text.clone(), new_name.clone());
@@ -223,7 +233,7 @@ impl MiddleEnvironment {
             original_value_node.node_type,
             NodeType::FunctionDeclaration { .. }
         ) {
-            self.variables.insert(
+            self.symbols.variables.insert(
                 new_name.clone(),
                 MiddleVariable {
                     data_type: data_type.clone(),
@@ -232,8 +242,11 @@ impl MiddleEnvironment {
                 },
             );
 
-            let err = self.err_at_current(MiddleErr::Scope(scope.to_string()));
-            self.scopes
+            let err = self
+                .context
+                .err_at_current(MiddleErr::Scope(scope.to_string()));
+            self.scoping
+                .scopes
                 .get_mut(scope)
                 .ok_or(err)?
                 .mappings
@@ -341,12 +354,14 @@ impl MiddleEnvironment {
                 );
 
                 if !is_builtin_alias && !is_self_alias {
-                    self.type_aliases
+                    self.typing
+                        .type_aliases
                         .insert(identifier.text.clone(), resolved.clone());
                 }
             }
 
-            self.scopes
+            self.scoping
+                .scopes
                 .get_mut(scope)
                 .ok_or_else(|| {
                     MiddleErr::At(
@@ -359,9 +374,10 @@ impl MiddleEnvironment {
 
             if !overloads.is_empty() {
                 for overload in overloads {
-                    Self::verify_overload(&overload)?;
+                    overload.verify().map_err(|e| MiddleErr::Overload(e))?;
                     let overload = MiddleOverload {
-                        operator: Operator::from_str(&overload.operator.text)?,
+                        operator: Operator::from_str(&overload.operator.text)
+                            .map_err(|e| MiddleErr::Overload(e))?,
                         return_type: self
                             .resolve_potential_new_type(scope, overload.header.return_type.clone()),
                         parameters: {
@@ -386,7 +402,7 @@ impl MiddleEnvironment {
                         generic_params: generic_params.clone(),
                     };
 
-                    self.overloads.push(overload);
+                    self.symbols.overloads.push(overload);
                 }
             }
 
@@ -417,20 +433,23 @@ impl MiddleEnvironment {
                 })
                 .collect();
 
-            self.generic_type_templates
+            self.typing
+                .generic_type_templates
                 .entry(base_ident.text.clone())
                 .or_insert((template_params, object.clone(), overloads.clone()));
 
             let generic_params = self
+                .typing
                 .generic_type_templates
                 .get(&base_ident.text)
                 .map(|(params, _, _)| params.clone())
                 .unwrap_or_default();
 
             for overload in overloads {
-                Self::verify_overload(&overload)?;
+                overload.verify().map_err(|e| MiddleErr::Overload(e))?;
                 let overload = MiddleOverload {
-                    operator: Operator::from_str(&overload.operator.text)?,
+                    operator: Operator::from_str(&overload.operator.text)
+                        .map_err(|e| MiddleErr::Overload(e))?,
                     return_type: self
                         .resolve_potential_new_type(scope, overload.header.return_type.clone()),
                     parameters: {
@@ -453,10 +472,11 @@ impl MiddleEnvironment {
                     generic_params: generic_params.clone(),
                 };
 
-                self.overloads.push(overload);
+                self.symbols.overloads.push(overload);
             }
 
-            self.scopes
+            self.scoping
+                .scopes
                 .get_mut(scope)
                 .ok_or_else(|| {
                     MiddleErr::At(
@@ -495,7 +515,7 @@ impl MiddleEnvironment {
                 _ => false,
             };
 
-        self.objects.insert(
+        self.typing.objects.insert(
             new_name.clone(),
             MiddleObject {
                 object_type: object.clone(),
@@ -505,11 +525,12 @@ impl MiddleEnvironment {
                 } else {
                     Vec::new()
                 },
-                location: self.current_location.clone(),
+                location: self.context.current_location.clone(),
             },
         );
 
-        self.scopes
+        self.scoping
+            .scopes
             .get_mut(scope)
             .ok_or_else(|| {
                 MiddleErr::At(
@@ -521,6 +542,7 @@ impl MiddleEnvironment {
             .insert(identifier.text.clone(), new_name.clone());
 
         let previous_self = self
+            .scoping
             .scopes
             .get_mut(scope)
             .ok_or_else(|| {
@@ -539,9 +561,10 @@ impl MiddleEnvironment {
         };
 
         for overload in overloads {
-            Self::verify_overload(&overload)?;
+            overload.verify().map_err(|e| MiddleErr::Overload(e))?;
             let overload = MiddleOverload {
-                operator: Operator::from_str(&overload.operator.text)?,
+                operator: Operator::from_str(&overload.operator.text)
+                    .map_err(|e| MiddleErr::Overload(e))?,
                 return_type: self
                     .resolve_potential_new_type(scope, overload.header.return_type.clone()),
                 parameters: {
@@ -561,7 +584,7 @@ impl MiddleEnvironment {
                         };
 
                         if let ParserInnerType::Struct(x) = ty.data_type.clone().unwrap_all_refs()
-                            && x == new_name
+                            && x == &new_name
                         {
                             contains = true;
                         }
@@ -579,11 +602,12 @@ impl MiddleEnvironment {
                 generic_params: Vec::new(),
             };
 
-            self.overloads.push(overload);
+            self.symbols.overloads.push(overload);
         }
 
         if let Some(prev) = previous_self {
-            self.scopes
+            self.scoping
+                .scopes
                 .get_mut(scope)
                 .ok_or_else(|| {
                     MiddleErr::At(

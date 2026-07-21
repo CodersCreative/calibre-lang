@@ -3,7 +3,7 @@ use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
 use crate::multipass::prepare_ast;
 use crate::scoping::Scoping;
-use crate::symbols::{Operator, Symbols};
+use crate::symbols::Symbols;
 use crate::tags::Tagging;
 use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;

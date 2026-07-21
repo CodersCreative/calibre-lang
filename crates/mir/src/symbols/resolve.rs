@@ -1,17 +1,19 @@
+use std::str::FromStr;
+
 use crate::{
     environment::{MiddleEnvironment, get_disamubiguous_name},
-    symbols::{MiddleOverload, Operator},
+    errors::MiddleErr,
+    symbols::MiddleOverload,
     typing::{MiddleObject, MiddleTrait, MiddleTypeDefType},
 };
 use calibre_parser::{
     Span,
     ast::{
-        NodeType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
+        NodeType, Operator, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
         PotentialGenericTypeIdentifier, PotentialNewType,
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::str::FromStr;
 
 impl MiddleEnvironment {
     pub fn resolve_member_fn_type(
@@ -410,7 +412,7 @@ impl MiddleEnvironment {
                         operator: match Operator::from_str(&overload.operator.text) {
                             Ok(op) => op,
                             Err(err) => {
-                                self.context.errors.push(err);
+                                self.context.errors.push(MiddleErr::Overload(err));
                                 continue;
                             }
                         },
@@ -434,7 +436,7 @@ impl MiddleEnvironment {
                                 if let ParserInnerType::Struct(x) =
                                     ty.data_type.clone().unwrap_all_refs()
                                 {
-                                    if x == new_name {
+                                    if x == &new_name {
                                         contains = true;
                                     }
                                 }

@@ -2,11 +2,11 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    symbols::{MiddleOverload, Operator},
+    symbols::MiddleOverload,
 };
 use calibre_parser::{
     Span,
-    ast::{Node, ParserDataType, ParserInnerType},
+    ast::{Node, Operator, ParserDataType, ParserInnerType},
 };
 
 impl MiddleEnvironment {
