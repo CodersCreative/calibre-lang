@@ -1,6 +1,14 @@
 use crate::environment::MiddleEnvironment;
-use calibre_parser::ast::{Node, ObjectMap, ObjectType, ParserDataType, ParserText, TypeDefType};
+use calibre_parser::{
+    Location,
+    ast::{
+        Node, ObjectMap, ObjectType, Overload, ParserDataType, ParserInnerType, ParserText,
+        TypeDefType,
+    },
+};
+use rustc_hash::FxHashMap;
 
+#[derive(Debug, Clone, Default)]
 pub struct Typing {
     pub objects: FxHashMap<String, MiddleObject>,
     pub impls: FxHashMap<ParserInnerType, MiddleImpl>,
@@ -8,6 +16,96 @@ pub struct Typing {
     pub trait_defs: FxHashMap<String, MiddleTrait>,
     pub generic_type_templates: FxHashMap<String, (Vec<String>, TypeDefType, Vec<Overload>)>,
     pub type_specializations: FxHashMap<String, String>,
+}
+
+impl Typing {
+    pub fn member_fn_candidates(&self, ty: &ParserDataType, member: &str) -> Vec<String> {
+        let mut candidates = Vec::new();
+
+        if let Some(imp) = self.find_impl_for_type(ty)
+            && let Some((mapped_name, _)) = imp.variables.get(member)
+        {
+            candidates.push(mapped_name.clone());
+        }
+
+        for base in ty.member_base_name_candidates() {
+            candidates.push(format!("{base}::{member}"));
+        }
+        candidates.dedup();
+        candidates
+    }
+
+    pub fn find_impl_for_type(&self, ty: &ParserDataType) -> Option<&MiddleImpl> {
+        let key = ty.key();
+        if let Some(imp) = self.impls.get(&key) {
+            return Some(imp);
+        }
+        let target = ty.key();
+        self.impls.values().find(|imp| {
+            self.impl_type_matches(&imp.data_type.data_type, &target, &imp.generic_params)
+        })
+    }
+
+    pub fn find_impl_for_type_mut(&mut self, ty: &ParserDataType) -> Option<&mut MiddleImpl> {
+        let key = ty.key();
+        if self.impls.contains_key(&key) {
+            return self.impls.get_mut(&key);
+        }
+        let target = ty.key();
+        let key = self
+            .impls
+            .iter()
+            .find(|(_, imp)| {
+                self.impl_type_matches(&imp.data_type.data_type, &target, &imp.generic_params)
+            })
+            .map(|(k, _)| k.clone())?;
+        self.impls.get_mut(&key)
+    }
+
+    fn find_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
+        if let Some(obj) = self.objects.get(struct_name) {
+            return Some(obj);
+        }
+        let base = calibre_parser::qualified_name_base(struct_name);
+        if base != struct_name {
+            return self.objects.get(base);
+        }
+        None
+    }
+
+    pub fn resolve_associated_type(
+        &self,
+        base: &ParserDataType,
+        name: &str,
+    ) -> Option<ParserDataType> {
+        self.find_impl_for_type(base)
+            .and_then(|imp| imp.assoc_types.get(name).cloned())
+    }
+
+    pub fn get_or_create_impl(
+        &mut self,
+        ty: ParserDataType,
+        generic_params: Vec<String>,
+    ) -> ParserInnerType {
+        let key = ty.key();
+        if self.impls.contains_key(&key) {
+            return key;
+        }
+
+        self.impls.insert(
+            key.clone(),
+            MiddleImpl {
+                data_type: ty,
+                generic_params,
+                variables: FxHashMap::default(),
+                traits: Vec::new(),
+                assoc_types: FxHashMap::default(),
+                location: self.current_location.clone(),
+            },
+        );
+
+        key
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

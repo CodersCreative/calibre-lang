@@ -4,6 +4,7 @@ pub mod formatter;
 use crate::{
     COUNTER, Span,
     ast::{comparison::BooleanOperator, formatter::Formatter},
+    qualified_name_base, qualified_name_tail,
 };
 use binary::BinaryOperator;
 use comparison::ComparisonOperator;
@@ -16,40 +17,6 @@ use std::{
     str::FromStr,
     string::ParseError,
 };
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Operator {
-    Binary(BinaryOperator),
-    Comparison(ComparisonOperator),
-    Boolean(BooleanOperator),
-    Index,
-    IndexAssign,
-    In,
-    As,
-}
-
-impl FromStr for Operator {
-    type Err = MiddleErr;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "[]" {
-            Ok(Self::Index)
-        } else if s == "[]=" {
-            Ok(Self::IndexAssign)
-        } else if s == "in" {
-            Ok(Self::In)
-        } else if s == "as" {
-            Ok(Self::As)
-        } else if let Some(x) = BinaryOperator::from_symbol(s) {
-            Ok(Self::Binary(x))
-        } else if let Some(x) = ComparisonOperator::from_operator(s) {
-            Ok(Self::Comparison(x))
-        } else if let Some(x) = BooleanOperator::from_operator(s) {
-            Ok(Self::Boolean(x))
-        } else {
-            Err(MiddleErr::Scope(format!("unknown operator {s}")))
-        }
-    }
-}
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -270,6 +237,124 @@ impl ParserDataType {
         self.clone().unwrap_all_refs().data_type
     }
 
+    pub fn member_base_name_candidates(&self) -> Vec<String> {
+        let mut names = Vec::new();
+        let base = self.key();
+        let base_key = base.to_string();
+        names.push(base_key.clone());
+
+        match &base {
+            ParserInnerType::Struct(name) => {
+                let de_prefixed = qualified_name_tail(name);
+                if de_prefixed != name {
+                    names.push(de_prefixed.to_string());
+                }
+                let short = name.rsplit_once("::").map(|(_, rhs)| rhs).unwrap_or(name);
+                if short != name {
+                    names.push(short.to_string());
+                }
+            }
+            ParserInnerType::StructWithGenerics { identifier, .. } => {
+                names.push(identifier.clone());
+                let de_prefixed = qualified_name_tail(identifier);
+                if de_prefixed != identifier {
+                    names.push(de_prefixed.to_string());
+                }
+                let short = identifier
+                    .rsplit_once("::")
+                    .map(|(_, rhs)| rhs)
+                    .unwrap_or(identifier);
+                if short != identifier {
+                    names.push(short.to_string());
+                }
+            }
+            _ => {
+                let short = base_key
+                    .rsplit_once("::")
+                    .map(|(_, rhs)| rhs)
+                    .unwrap_or(base_key.as_str());
+                if short != base_key {
+                    names.push(short.to_string());
+                }
+            }
+        }
+
+        names
+    }
+
+    fn canonical_key(&self) -> String {
+        match &self.data_type {
+            ParserInnerType::Struct(s) => format!("struct_{}", s),
+            ParserInnerType::List(x) => format!("list_{}", x.canonical_key()),
+            ParserInnerType::Ptr(x) => format!("ptr_{}", x.canonical_key()),
+            ParserInnerType::Option(x) => format!("opt_{}", x.canonical_key()),
+            ParserInnerType::Result { ok, err } => {
+                format!("res_{}_{}", err.canonical_key(), ok.canonical_key())
+            }
+            ParserInnerType::Tuple(xs) => {
+                let inner = xs
+                    .iter()
+                    .map(Self::canonical_key)
+                    .collect::<Vec<_>>()
+                    .join("_");
+                format!("tup_{}", inner)
+            }
+            ParserInnerType::Ref(x, m) => format!("ref{}_{}", m, x.canonical_key()),
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } => {
+                let inner = generic_types
+                    .iter()
+                    .map(Self::canonical_key)
+                    .collect::<Vec<_>>()
+                    .join("_");
+                format!("gen_{}_{}", identifier, inner)
+            }
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+            } => {
+                let params = parameters
+                    .iter()
+                    .map(Self::canonical_key)
+                    .collect::<Vec<_>>()
+                    .join("_");
+                format!("fn_{}_ret_{}", params, return_type.canonical_key())
+            }
+            ParserInnerType::Auto(_)
+            | ParserInnerType::DollarIdentifier(_)
+            | ParserInnerType::Scope(_)
+            | ParserInnerType::NativeFunction(_) => {
+                format!("other_{}", self.impl_name())
+            }
+            _ => self.impl_name(),
+        }
+    }
+
+    pub fn canonical_args_key(&self, args: &[ParserDataType]) -> String {
+        args.iter()
+            .map(Self::canonical_key)
+            .collect::<Vec<_>>()
+            .join("__")
+    }
+
+    pub fn impl_name(&self) -> String {
+        match self.key() {
+            ParserInnerType::Struct(name) => name,
+            ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
+            ParserInnerType::Int => String::from("int"),
+            ParserInnerType::UInt => String::from("uint"),
+            ParserInnerType::Byte => String::from("byte"),
+            ParserInnerType::Float => String::from("float"),
+            ParserInnerType::Bool => String::from("bool"),
+            ParserInnerType::Char => String::from("char"),
+            ParserInnerType::Str => String::from("str"),
+            ParserInnerType::Range => String::from("range"),
+            other => other.to_string(),
+        }
+    }
+
     pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> ParserDataType {
         let span = self.span;
         let data_type = match &self.data_type {
@@ -359,7 +444,7 @@ pub enum ParserInnerType {
 impl ParserDataType {
     pub fn unwrap_all_refs(self) -> Self {
         Self {
-            data_type: self.data_type.unwrap_all_refs(),
+            data_type: self.data_type.unwrap_all_refs().clone(),
             span: self.span,
         }
     }
@@ -446,7 +531,7 @@ impl From<ParserFfiDataType> for ParserDataType {
 }
 
 impl ParserInnerType {
-    pub fn unwrap_all_refs(self) -> Self {
+    pub fn unwrap_all_refs(&self) -> &Self {
         match self {
             Self::Ref(x, _) => x.data_type.unwrap_all_refs(),
             _ => self,
@@ -458,6 +543,13 @@ impl ParserInnerType {
             ParserInnerType::Result { ok, err: _ } => Some(&ok),
             _ => None,
         }
+    }
+
+    pub(crate) fn is_callable(&self) -> bool {
+        matches!(
+            self.unwrap_all_refs(),
+            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
+        )
     }
 
     pub fn is_auto(&self) -> bool {
@@ -578,6 +670,109 @@ impl ParserInnerType {
             Self::Scope(x) => Self::Scope(x.into_iter().map(|x| x.resolve_ffi()).collect()),
             Self::DynamicTraits(x) => Self::DynamicTraits(x),
             x => x,
+        }
+    }
+
+    #[inline]
+    fn apply_callable(
+        self,
+        args_len: usize,
+        implicit_params: usize,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        match self {
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+            } if parameters.len() > args_len + implicit_params => Some(ParserDataType {
+                data_type: ParserInnerType::Function {
+                    return_type,
+                    parameters: parameters
+                        .into_iter()
+                        .skip(args_len + implicit_params)
+                        .collect(),
+                },
+                span,
+            }),
+            ParserInnerType::Function { return_type, .. } => Some(*return_type),
+            ParserInnerType::NativeFunction(ret) => Some(*ret),
+            _ => None,
+        }
+    }
+
+    pub fn matches(&self, other: &Self, generic_params: &[String]) -> bool {
+        fn struct_base(name: &str) -> &str {
+            let short = name.rsplit_once("::").map(|(lhs, _)| lhs).unwrap_or(name);
+            qualified_name_base(short)
+        }
+
+        match (self, other) {
+            (ParserInnerType::Struct(s), target)
+                if ParserInnerType::from_str(struct_base(s)).as_ref() == Ok(target) =>
+            {
+                true
+            }
+            (ParserInnerType::Struct(a), _) if generic_params.contains(a) => true,
+            (ParserInnerType::Struct(a), ParserInnerType::Struct(b))
+                if b == a
+                    || b.starts_with(&format!("{}->", a))
+                    || struct_base(a) == struct_base(b) =>
+            {
+                true
+            }
+            (
+                ParserInnerType::StructWithGenerics { identifier: a, .. },
+                ParserInnerType::Struct(b),
+            ) if b == a || b.starts_with(&format!("{}->", a)) || struct_base(b) == a => true,
+            (
+                ParserInnerType::Struct(a),
+                ParserInnerType::StructWithGenerics { identifier: b, .. },
+            ) => a == b || struct_base(a) == b,
+            (
+                ParserInnerType::StructWithGenerics {
+                    identifier: a,
+                    generic_types: ag,
+                },
+                ParserInnerType::StructWithGenerics {
+                    identifier: b,
+                    generic_types: bg,
+                },
+            ) => {
+                if struct_base(a) != struct_base(b) || ag.len() != bg.len() {
+                    return false;
+                }
+                ag.iter()
+                    .zip(bg.iter())
+                    .all(|(x, y)| x.data_type.matches(&y.data_type, generic_params))
+            }
+            (ParserInnerType::List(a), ParserInnerType::List(b)) => {
+                a.data_type.matches(&b.data_type, generic_params)
+            }
+            (ParserInnerType::Option(a), ParserInnerType::Option(b)) => {
+                a.data_type.matches(&b.data_type, generic_params)
+            }
+            (
+                ParserInnerType::Result { ok: ao, err: ae },
+                ParserInnerType::Result { ok: bo, err: be },
+            ) => {
+                ao.data_type.matches(&bo.data_type, generic_params)
+                    && ae.data_type.matches(&be.data_type, generic_params)
+            }
+            (ParserInnerType::Ptr(a), ParserInnerType::Ptr(b)) => {
+                a.data_type.matches(&b.data_type, generic_params)
+            }
+            (ParserInnerType::Ref(a, _), ParserInnerType::Ref(b, _)) => {
+                a.data_type.matches(&b.data_type, generic_params)
+            }
+            (ParserInnerType::Tuple(a), ParserInnerType::Tuple(b)) => {
+                if a.len() != b.len() {
+                    return false;
+                }
+                a.iter()
+                    .zip(b.iter())
+                    .all(|(x, y)| x.data_type.matches(&y.data_type, generic_params))
+            }
+            (x, y) => x == y,
         }
     }
 }

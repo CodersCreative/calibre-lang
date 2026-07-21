@@ -1,3 +1,6 @@
+pub mod node;
+pub mod resolve;
+
 #[derive(Debug, Clone, Default)]
 pub struct Symbols {
     pub variables: FxHashMap<String, MiddleVariable>,
