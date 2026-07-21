@@ -1,6 +1,46 @@
 use crate::environment::MiddleEnvironment;
 use calibre_parser::ast::{Node, ObjectMap, ObjectType, ParserDataType, ParserText, TypeDefType};
 
+pub struct Typing {
+    pub objects: FxHashMap<String, MiddleObject>,
+    pub impls: FxHashMap<ParserInnerType, MiddleImpl>,
+    pub type_aliases: FxHashMap<String, ParserDataType>,
+    pub trait_defs: FxHashMap<String, MiddleTrait>,
+    pub generic_type_templates: FxHashMap<String, (Vec<String>, TypeDefType, Vec<Overload>)>,
+    pub type_specializations: FxHashMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiddleObject {
+    pub object_type: MiddleTypeDefType,
+    pub variables: FxHashMap<String, (String, bool)>,
+    pub traits: Vec<String>,
+    pub location: Option<Location>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiddleImpl {
+    pub data_type: ParserDataType,
+    pub generic_params: Vec<String>,
+    pub variables: FxHashMap<String, (String, bool)>,
+    pub traits: Vec<String>,
+    pub assoc_types: FxHashMap<String, ParserDataType>,
+    pub location: Option<Location>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiddleTraitMember {
+    pub data_type: ParserDataType,
+    pub default: Option<Node>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiddleTrait {
+    pub implied_traits: Vec<String>,
+    pub members: FxHashMap<String, MiddleTraitMember>,
+    pub assoc_types: FxHashMap<String, ParserDataType>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum MiddleTypeDefType {
     Enum {

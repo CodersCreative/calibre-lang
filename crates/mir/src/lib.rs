@@ -11,11 +11,14 @@ use calibre_parser::{
 use environment::*;
 
 pub mod ast;
+pub mod context;
 pub mod environment;
 pub mod errors;
 pub mod inline;
 pub mod multipass;
 pub mod native;
+pub mod scoping;
+pub mod symbols;
 pub mod tags;
 pub mod testing;
 pub mod translate;

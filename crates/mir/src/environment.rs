@@ -1,9 +1,12 @@
 use crate::ast::{MiddleNode, MiddleNodeType};
+use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
 use crate::multipass::prepare_ast;
+use crate::scoping::Scoping;
+use crate::symbols::Symbols;
 use crate::tags::Tagging;
 use crate::testing::Testing;
-use crate::typing::MiddleTypeDefType;
+use crate::typing::{MiddleTypeDefType, Typing};
 use calibre_parser::COUNTER;
 use calibre_parser::ast::EmitType;
 use calibre_parser::{
@@ -20,180 +23,14 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt::Debug;
 use std::{fs, path::PathBuf, str::FromStr};
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct MiddleObject {
-    pub object_type: MiddleTypeDefType,
-    pub variables: FxHashMap<String, (String, bool)>,
-    pub traits: Vec<String>,
-    pub location: Option<Location>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct MiddleImpl {
-    pub data_type: ParserDataType,
-    pub generic_params: Vec<String>,
-    pub variables: FxHashMap<String, (String, bool)>,
-    pub traits: Vec<String>,
-    pub assoc_types: FxHashMap<String, ParserDataType>,
-    pub location: Option<Location>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct MiddleTraitMember {
-    pub data_type: ParserDataType,
-    pub default: Option<Node>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct MiddleTrait {
-    pub implied_traits: Vec<String>,
-    pub members: FxHashMap<String, MiddleTraitMember>,
-    pub assoc_types: FxHashMap<String, ParserDataType>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct MiddleVariable {
-    pub data_type: ParserDataType,
-    pub var_type: VarType,
-    pub location: Option<Location>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct FunctionParamDefault {
-    pub name: String,
-    pub explicit_default: Option<MiddleNode>,
-    pub implicit_none: bool,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct MiddleOverload {
-    pub operator: Operator,
-    pub parameters: Vec<ParserDataType>,
-    pub return_type: ParserDataType,
-    pub func: Node,
-    pub generic_params: Vec<String>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Operator {
-    Binary(BinaryOperator),
-    Comparison(ComparisonOperator),
-    Boolean(BooleanOperator),
-    Index,
-    IndexAssign,
-    In,
-    As,
-}
-
-impl FromStr for Operator {
-    type Err = MiddleErr;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "[]" {
-            Ok(Self::Index)
-        } else if s == "[]=" {
-            Ok(Self::IndexAssign)
-        } else if s == "in" {
-            Ok(Self::In)
-        } else if s == "as" {
-            Ok(Self::As)
-        } else if let Some(x) = BinaryOperator::from_symbol(s) {
-            Ok(Self::Binary(x))
-        } else if let Some(x) = ComparisonOperator::from_operator(s) {
-            Ok(Self::Comparison(x))
-        } else if let Some(x) = BooleanOperator::from_operator(s) {
-            Ok(Self::Boolean(x))
-        } else {
-            Err(MiddleErr::Scope(format!("unknown operator {s}")))
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct MiddleEnvironment {
-    pub scope_counter: u64,
-    pub scopes: FxHashMap<u64, MiddleScope>,
-    pub variables: FxHashMap<String, MiddleVariable>,
-    pub resolved_variables: Vec<String>,
-    pub overloads: Vec<MiddleOverload>,
-    pub func_defers: Vec<Node>,
-    pub objects: FxHashMap<String, MiddleObject>,
-    pub impls: FxHashMap<ParserInnerType, MiddleImpl>,
-    pub type_aliases: FxHashMap<String, ParserDataType>,
-    pub trait_defs: FxHashMap<String, MiddleTrait>,
-    pub generic_fn_templates:
-        FxHashMap<String, (Vec<String>, calibre_parser::ast::FunctionHeader, Node)>,
-    pub function_param_defaults: FxHashMap<String, Vec<FunctionParamDefault>>,
-    pub generic_type_templates: FxHashMap<String, (Vec<String>, TypeDefType, Vec<Overload>)>,
-    pub type_specializations: FxHashMap<String, String>,
-    pub fn_specializations: FxHashMap<String, String>,
-    pub specialization_decls_by_scope: FxHashMap<u64, Vec<MiddleNode>>,
-    pub current_location: Option<Location>,
-    pub errors: Vec<MiddleErr>,
-    pub stdlib_nodes: Vec<MiddleNode>,
-    pub loaded_scopes: FxHashSet<u64>,
-    pub loop_stack: Vec<LoopContext>,
-    pub package_metadata: Option<PackageMetadata>,
+    pub context: MiddleContext,
+    pub symbols: Symbols,
+    pub typing: Typing,
+    pub scoping: Scoping,
     pub tagging: Tagging,
     pub testing: Testing,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct LoopContext {
-    pub label: Option<String>,
-    pub result_target: Option<ParserText>,
-    pub broke_target: Option<ParserText>,
-    pub continue_inject: Option<Node>,
-    pub scope_id: u64,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct PackageMetadata {
-    pub name: String,
-    pub version: String,
-    pub description: String,
-    pub license: String,
-    pub repository: String,
-    pub homepage: String,
-    pub src: String,
-    pub root: String,
-}
-
-fn empty_scope() -> &'static MiddleScope {
-    static EMPTY: std::sync::OnceLock<MiddleScope> = std::sync::OnceLock::new();
-    EMPTY.get_or_init(|| MiddleScope {
-        id: 0,
-        parent: None,
-        mappings: FxHashMap::default(),
-        macros: FxHashMap::default(),
-        macro_args: FxHashMap::default(),
-        children: FxHashMap::default(),
-        namespace: "empty".to_string(),
-        path: PathBuf::new(),
-        defined: Vec::new(),
-        defers: Vec::new(),
-    })
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ScopeMacro {
-    pub name: String,
-    pub args: Vec<(PotentialDollarIdentifier, Node)>,
-    pub body: Vec<Node>,
-    pub create_new_scope: bool,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct MiddleScope {
-    pub id: u64,
-    pub parent: Option<u64>,
-    pub mappings: FxHashMap<String, String>,
-    pub macros: FxHashMap<String, ScopeMacro>,
-    pub macro_args: FxHashMap<String, Node>,
-    pub children: FxHashMap<String, u64>,
-    pub namespace: String,
-    pub path: PathBuf,
-    pub defined: Vec<String>,
-    pub defers: Vec<Node>,
 }
 
 pub fn get_disamubiguous_name(

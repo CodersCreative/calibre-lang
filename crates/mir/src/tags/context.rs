@@ -9,6 +9,18 @@ use crate::{
     errors::MiddleErr,
 };
 
+#[derive(Debug, Clone, Default)]
+pub struct PackageMetadata {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub license: String,
+    pub repository: String,
+    pub homepage: String,
+    pub src: String,
+    pub root: String,
+}
+
 impl MiddleEnvironment {
     pub fn package_metadata_for_scope(&self, scope: &MiddleScope) -> PackageMetadata {
         if scope.namespace == "std" {
