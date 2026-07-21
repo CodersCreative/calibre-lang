@@ -1,9 +1,7 @@
 use calibre_lir::LirEnvironment;
 use calibre_mir::{
-    ast::MiddleNode,
-    environment::{MiddleEnvironment, PackageMetadata},
-    errors::MiddleErr,
-    testing::Testing,
+    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr,
+    tags::context::PackageMetadata, testing::Testing,
 };
 use calibre_parser::{
     Parser, ParserError,
@@ -292,7 +290,7 @@ impl CalibreEngine {
             MiddleEnvironment::new_and_evaluate(ast.clone(), path.clone(), self.no_std)
         };
 
-        let mir_errors = env.take_errors();
+        let mir_errors = env.context.take_errors();
         if !mir_errors.is_empty() {
             return Err(CalibreError::Middle {
                 path,

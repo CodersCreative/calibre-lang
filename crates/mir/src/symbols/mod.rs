@@ -1,15 +1,10 @@
 use crate::ast::MiddleNode;
-use crate::errors::MiddleErr;
 use calibre_parser::{
     Location,
-    ast::{
-        Node, Operator, ParserDataType, VarType,
-        binary::BinaryOperator,
-        comparison::{BooleanOperator, ComparisonOperator},
-    },
+    ast::{Node, Operator, ParserDataType, VarType},
 };
 use rustc_hash::FxHashMap;
-use std::{fmt::Debug, str::FromStr};
+use std::fmt::Debug;
 
 pub mod node;
 pub mod overloads;

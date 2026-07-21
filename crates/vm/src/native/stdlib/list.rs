@@ -171,7 +171,7 @@ fn remove_from_target(
 ) -> Result<Option<RuntimeValue>, RuntimeError> {
     match target {
         RuntimeValue::Ref(name) => {
-            let Some(current) = env.symbols.variables.get(&name).cloned() else {
+            let Some(current) = env.variables.get(&name).cloned() else {
                 return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
             };
             match current {
@@ -179,7 +179,7 @@ fn remove_from_target(
                     let old_list = list.clone();
                     let removed = remove_from_list_value(&mut list, idx);
                     env.propagate_list_aliases(&old_list, &list);
-                    env.symbols.variables.insert(&name, RuntimeValue::List(list));
+                    env.variables.insert(&name, RuntimeValue::List(list));
                     Ok(removed)
                 }
                 alias @ (RuntimeValue::Ref(_)
@@ -189,7 +189,7 @@ fn remove_from_target(
             }
         }
         RuntimeValue::VarRef(id) => {
-            let Some(current) = env.symbols.variables.get_by_id(id).cloned() else {
+            let Some(current) = env.variables.get_by_id(id).cloned() else {
                 return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
             };
             match current {
@@ -197,7 +197,7 @@ fn remove_from_target(
                     let old_list = list.clone();
                     let removed = remove_from_list_value(&mut list, idx);
                     env.propagate_list_aliases(&old_list, &list);
-                    let _ = env.symbols.variables.set_by_id(id, RuntimeValue::List(list));
+                    let _ = env.variables.set_by_id(id, RuntimeValue::List(list));
                     Ok(removed)
                 }
                 alias @ (RuntimeValue::Ref(_)

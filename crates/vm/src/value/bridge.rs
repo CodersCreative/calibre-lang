@@ -65,14 +65,14 @@ impl VM {
         fn transform(env: &VM, val: RuntimeValue) -> RuntimeValue {
             match val {
                 RuntimeValue::Ref(name) => {
-                    if let Some(inner) = env.symbols.variables.get(&name).cloned() {
+                    if let Some(inner) = env.variables.get(&name).cloned() {
                         transform(env, inner)
                     } else {
                         RuntimeValue::Ref(name)
                     }
                 }
                 RuntimeValue::VarRef(id) => {
-                    if let Some(inner) = env.symbols.variables.get_by_id(id).cloned() {
+                    if let Some(inner) = env.variables.get_by_id(id).cloned() {
                         transform(env, inner)
                     } else {
                         RuntimeValue::VarRef(id)

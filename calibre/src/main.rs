@@ -3,8 +3,9 @@ use calibre_diagnostics;
 use calibre_lir::LirEnvironment;
 use calibre_mir::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, PackageMetadata},
+    environment::MiddleEnvironment,
     errors::MiddleErr,
+    tags::context::PackageMetadata,
     testing::{Test, TestOrBench},
 };
 use calibre_vm::{VM, config::VMConfig, conversion::VMRegistry, value::RuntimeValue};
@@ -842,7 +843,7 @@ async fn run_repl_source(
     let (mut env, scope, middle_node) =
         MiddleEnvironment::new_and_evaluate(program, path.to_path_buf(), false);
 
-    let mir_errors = env.take_errors();
+    let mir_errors = env.context.take_errors();
     if !mir_errors.is_empty() {
         emit_middle_error(path, &contents, &MiddleErr::Multiple(mir_errors));
         return Err(format!("compile failed").into());
@@ -858,6 +859,7 @@ async fn run_repl_source(
 
     let mappings: Vec<String> = middle_result
         .0
+        .symbols
         .variables
         .iter()
         .map(|x| x.0.to_string())

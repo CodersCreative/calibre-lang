@@ -62,7 +62,7 @@ impl CalibreLanguageServer {
         if parser.errors.is_empty() {
             let path = Self::path_from_url(uri).unwrap_or_default();
             let (mut env, _, _) = MiddleEnvironment::new_and_evaluate(ast, path, false);
-            let semantic_errors = env.take_errors();
+            let semantic_errors = env.context.take_errors();
             if !semantic_errors.is_empty() {
                 diagnostics.extend(Self::semantic_diagnostics(&MiddleErr::Multiple(
                     semantic_errors,

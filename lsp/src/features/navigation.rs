@@ -174,7 +174,8 @@ impl CalibreLanguageServer {
                 .resolve_str(&position_scope, &word)
                 .or_else(|| env.resolve_str(&scope, &word))
                 .or_else(|| {
-                    env.scopes
+                    env.scoping
+                        .scopes
                         .values()
                         .find_map(|scope_ref| scope_ref.mappings.get(&word).cloned())
                 });
@@ -190,7 +191,7 @@ impl CalibreLanguageServer {
                     )));
                 }
 
-                if let Some(obj) = env.objects.get(&resolved)
+                if let Some(obj) = env.typing.objects.get(&resolved)
                     && let Some(loc) = &obj.location
                     && let Ok(uri) = Url::from_file_path(&loc.path)
                 {
@@ -202,7 +203,6 @@ impl CalibreLanguageServer {
             }
         }
 
-        // TODO Make lexical definitions unnecessary
         let primary = all_documents
             .get(uri)
             .and_then(|contents| Self::find_lexical_definition_range(contents, &word))
@@ -346,7 +346,8 @@ impl CalibreLanguageServer {
         env.resolve_str(&position_scope, &word)
             .or_else(|| env.resolve_str(&scope, &word))
             .or_else(|| {
-                env.scopes
+                env.scoping
+                    .scopes
                     .values()
                     .find_map(|scope_ref| scope_ref.mappings.get(&word).cloned())
             })
@@ -367,7 +368,8 @@ impl CalibreLanguageServer {
         let (env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path, false);
 
         let mut out = Vec::new();
-        for (visible_name, mapped_canonical) in env.scopes.values().flat_map(|s| s.mappings.iter())
+        for (visible_name, mapped_canonical) in
+            env.scoping.scopes.values().flat_map(|s| s.mappings.iter())
         {
             if mapped_canonical != canonical {
                 continue;

@@ -8,7 +8,7 @@ use calibre_parser::{
     Span,
     ast::{
         AsFailureMode, CallArg, EmitType, FunctionHeader, GenericTypes, IfComparisonType, LoopType,
-        MatchArmType, Node, NodeType, ObjectMap, ObjectType, Operator, Overload, ParserDataType,
+        MatchArmType, Node, NodeType, ObjectMap, ObjectType, Operator, ParserDataType,
         ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
         PotentialNewType, TraitMemberKind, TryCatch, VarType,
         comparison::{BooleanOperator, ComparisonOperator},

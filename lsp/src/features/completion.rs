@@ -1,3 +1,5 @@
+use calibre_mir::typing::MiddleObject;
+
 use super::*;
 
 impl CalibreLanguageServer {
@@ -77,7 +79,7 @@ impl CalibreLanguageServer {
             .unwrap_or_else(|| first.to_string());
         let mut current = if let Some(var) = env.symbols.variables.get(&canonical_first) {
             var.data_type.clone()
-        } else if env.objects.contains_key(&canonical_first) {
+        } else if env.typing.objects.contains_key(&canonical_first) {
             ParserDataType::new(CalSpan::default(), ParserInnerType::Struct(canonical_first))
         } else {
             ParserDataType::new(
@@ -116,13 +118,15 @@ impl CalibreLanguageServer {
     pub(super) fn object_from_type<'a>(
         env: &'a MiddleEnvironment,
         data_type: &ParserDataType,
-    ) -> Option<&'a calibre_mir::environment::MiddleObject> {
+    ) -> Option<&'a MiddleObject> {
         match &data_type.clone().unwrap_all_refs().data_type {
-            ParserInnerType::Struct(name) => env.objects.get(name).or_else(|| {
+            ParserInnerType::Struct(name) => env.typing.objects.get(name).or_else(|| {
                 name.split_once("->")
-                    .and_then(|(base, _)| env.objects.get(base))
+                    .and_then(|(base, _)| env.typing.objects.get(base))
             }),
-            ParserInnerType::StructWithGenerics { identifier, .. } => env.objects.get(identifier),
+            ParserInnerType::StructWithGenerics { identifier, .. } => {
+                env.typing.objects.get(identifier)
+            }
             _ => None,
         }
     }
@@ -524,7 +528,8 @@ impl CalibreLanguageServer {
         visible: &str,
         canonical: &str,
     ) -> CompletionItem {
-        let (detail, kind, documentation) = if let Some(var) = env.symbols.variables.get(canonical) {
+        let (detail, kind, documentation) = if let Some(var) = env.symbols.variables.get(canonical)
+        {
             match &var.data_type.data_type {
                 ParserInnerType::Function {
                     parameters,
@@ -562,8 +567,8 @@ impl CalibreLanguageServer {
                     (ty, CompletionItemKind::VARIABLE, doc)
                 }
             }
-        } else if env.objects.contains_key(canonical) {
-            let (detail, kind) = if let Some(object) = env.objects.get(canonical) {
+        } else if env.typing.objects.contains_key(canonical) {
+            let (detail, kind) = if let Some(object) = env.typing.objects.get(canonical) {
                 match &object.object_type {
                     MiddleTypeDefType::Struct(fields) => (
                         format!("struct ({} fields)", fields.len()),
@@ -615,7 +620,7 @@ impl CalibreLanguageServer {
     ) {
         let mut cursor = Some(current_scope);
         while let Some(scope_id) = cursor {
-            if let Some(scope_ref) = env.scopes.get(&scope_id) {
+            if let Some(scope_ref) = env.scoping.scopes.get(&scope_id) {
                 for (visible, canonical) in &scope_ref.mappings {
                     if !prefix.is_empty() && !visible.starts_with(prefix) {
                         continue;
@@ -666,12 +671,13 @@ impl CalibreLanguageServer {
             }
         }
 
-        if let Some(imp) = env.find_impl_for_type(&base_ty) {
+        if let Some(imp) = env.typing.find_impl_for_type(&base_ty) {
             for (member_name, (canonical_fn, _)) in &imp.variables {
                 if !prefix.is_empty() && !member_name.starts_with(prefix) {
                     continue;
                 }
                 let detail = env
+                    .symbols
                     .variables
                     .get(canonical_fn)
                     .and_then(|v| Self::format_function_signature(&v.data_type))
