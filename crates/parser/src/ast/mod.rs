@@ -1,6 +1,3 @@
-pub mod binary;
-pub mod comparison;
-pub mod formatter;
 use crate::{
     COUNTER, Span,
     ast::{comparison::BooleanOperator, formatter::Formatter},
@@ -17,6 +14,14 @@ use std::{
     str::FromStr,
     string::ParseError,
 };
+
+pub mod binary;
+pub mod comparison;
+pub mod ffi;
+pub mod formatter;
+pub mod idents;
+pub mod nodes;
+pub mod types;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -66,151 +71,6 @@ pub enum LoopType {
     While(Node),
     For(PotentialDollarIdentifier, Node),
     Loop,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ParserFfiDataType {
-    pub data_type: ParserFfiInnerType,
-    pub span: Span,
-}
-
-impl Display for ParserFfiDataType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.data_type)
-    }
-}
-
-impl From<ParserFfiInnerType> for ParserFfiDataType {
-    fn from(value: ParserFfiInnerType) -> Self {
-        Self {
-            data_type: value,
-            span: Span::default(),
-        }
-    }
-}
-
-impl ParserFfiDataType {
-    pub fn new(span: Span, data_type: ParserFfiInnerType) -> Self {
-        Self { data_type, span }
-    }
-}
-
-impl Deref for ParserFfiDataType {
-    type Target = ParserFfiInnerType;
-    fn deref(&self) -> &Self::Target {
-        &self.data_type
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum ParserFfiInnerType {
-    F32,
-    F64,
-    LongDouble,
-    U8,
-    I8,
-    U16,
-    I16,
-    U32,
-    I32,
-    U64,
-    I64,
-    USize,
-    ISize,
-    SChar,
-    UChar,
-    Int,
-    UInt,
-    Short,
-    UShort,
-    Long,
-    ULong,
-    LongLong,
-    ULongLong,
-}
-
-impl Into<ParserInnerType> for ParserFfiInnerType {
-    fn into(self) -> ParserInnerType {
-        match self {
-            Self::F32 | Self::F64 | Self::LongDouble => ParserInnerType::Float,
-            Self::SChar | Self::UChar => ParserInnerType::Char,
-            Self::U16
-            | Self::U8
-            | Self::U32
-            | Self::U64
-            | Self::USize
-            | Self::UInt
-            | Self::UShort
-            | Self::ULong
-            | Self::ULongLong => ParserInnerType::UInt,
-            _ => ParserInnerType::Int,
-        }
-    }
-}
-
-impl Display for ParserFfiInnerType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "@{}",
-            match self {
-                Self::U8 => "u8",
-                Self::I8 => "i8",
-                Self::U16 => "u16",
-                Self::I16 => "i16",
-                Self::U32 => "u32",
-                Self::I32 => "i32",
-                Self::U64 => "u64",
-                Self::I64 => "i64",
-                Self::USize => "usize",
-                Self::ISize => "isize",
-                Self::UInt => "uint",
-                Self::Int => "int",
-                Self::UShort => "ushort",
-                Self::Short => "short",
-                Self::ULong => "ulong",
-                Self::Long => "long",
-                Self::ULongLong => "ulonglong",
-                Self::LongLong => "longlong",
-                Self::LongDouble => "longdouble",
-                Self::F32 => "f32",
-                Self::F64 => "f64",
-                Self::SChar => "schar",
-                Self::UChar => "uchar",
-            }
-        )
-    }
-}
-
-impl FromStr for ParserFfiInnerType {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s.trim_start_matches("@") {
-            "u8" => Self::U8,
-            "i8" => Self::I8,
-            "u16" => Self::U16,
-            "i16" => Self::I16,
-            "u32" => Self::U32,
-            "i32" => Self::I32,
-            "u64" => Self::U64,
-            "i64" => Self::I64,
-            "usize" => Self::USize,
-            "isize" => Self::ISize,
-            "uint" => Self::UInt,
-            "int" => Self::Int,
-            "ushort" => Self::UShort,
-            "short" => Self::Short,
-            "ulong" => Self::ULong,
-            "long" => Self::Long,
-            "ulonglong" => Self::ULongLong,
-            "longlong" => Self::LongLong,
-            "f32" => Self::F32,
-            "f64" => Self::F64,
-            "schar" => Self::SChar,
-            "uchar" => Self::UChar,
-            _ => return Err(()),
-        })
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -1905,11 +1765,20 @@ pub enum CallArg {
     Named(PotentialDollarIdentifier, Node),
 }
 
-impl Into<Node> for CallArg {
-    fn into(self) -> Node {
-        match self {
-            Self::Value(x) => x,
-            Self::Named(_, x) => x,
+impl From<CallArg> for Node {
+    fn from(value: CallArg) -> Self {
+        match value {
+            CallArg::Value(x) => x,
+            CallArg::Named(_, x) => x,
+        }
+    }
+}
+
+impl<'a> From<&'a CallArg> for &'a Node {
+    fn from(value: &'a CallArg) -> Self {
+        match value {
+            CallArg::Value(x) => x,
+            CallArg::Named(_, x) => x,
         }
     }
 }

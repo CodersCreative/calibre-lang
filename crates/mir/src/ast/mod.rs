@@ -62,6 +62,63 @@ impl MiddleNode {
             _ => self,
         }
     }
+
+    fn len(&self) -> usize {
+        let mut count = 1;
+        match &self.node_type {
+            MiddleNodeType::AssignmentExpression { identifier, value } => {
+                count += identifier.len();
+                count += value.len();
+            }
+            MiddleNodeType::CallExpression { caller, args } => {
+                count += caller.len();
+                for a in args {
+                    count += a.len();
+                }
+            }
+            MiddleNodeType::BinaryExpression { left, right, .. }
+            | MiddleNodeType::ComparisonExpression { left, right, .. }
+            | MiddleNodeType::BooleanExpression { left, right, .. }
+            | MiddleNodeType::RangeDeclaration {
+                from: left,
+                to: right,
+                ..
+            } => {
+                count += left.len();
+                count += right.len();
+            }
+            MiddleNodeType::AsExpression { value, .. }
+            | MiddleNodeType::IsExpression { value, .. }
+            | MiddleNodeType::NegExpression { value }
+            | MiddleNodeType::RefStatement { value, .. }
+            | MiddleNodeType::DerefStatement { value }
+            | MiddleNodeType::DebugExpression { value, .. }
+            | MiddleNodeType::Return { value: Some(value) }
+            | MiddleNodeType::EnumExpression {
+                data: Some(value), ..
+            }
+            | MiddleNodeType::VariableDeclaration { value, .. } => count += value.len(),
+            MiddleNodeType::ListLiteral(_, values)
+            | MiddleNodeType::ScopeDeclaration { body: values, .. } => {
+                for v in values {
+                    count += v.len();
+                }
+            }
+            MiddleNodeType::LoopDeclaration { state, body, .. } => {
+                if let Some(s) = state.as_ref() {
+                    count += s.len();
+                }
+                count += body.len();
+            }
+            MiddleNodeType::MemberExpression { path } => {
+                for (n, _) in path {
+                    count += n.len();
+                }
+            }
+            _ => {}
+        }
+        count
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

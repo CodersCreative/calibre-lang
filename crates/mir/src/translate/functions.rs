@@ -288,9 +288,9 @@ impl MiddleEnvironment {
 
     #[inline]
     fn same_call_arg_text(a: &CallArg, b: &CallArg) -> bool {
-        let left: Node = a.clone().into();
-        let right: Node = b.clone().into();
-        Self::text_matches(&left.to_string(), &right.to_string())
+        let left: &Node = a.into();
+        let right: &Node = b.into();
+        Self::text_matches(left, right)
     }
 
     #[inline]
@@ -353,10 +353,6 @@ impl MiddleEnvironment {
                 parameters,
             },
         )
-    }
-
-    fn span_suffix(span: Span) -> String {
-        format!("{}_{}", span.from.line, span.from.col)
     }
 
     pub(crate) fn is_generator_return_type(return_type: &ParserDataType) -> Option<ParserDataType> {
@@ -474,8 +470,7 @@ impl MiddleEnvironment {
     }
 
     pub(crate) fn wrap_generator_body(body: Node, elem_type: ParserDataType, span: Span) -> Node {
-        let suffix = Self::span_suffix(span);
-        let next_name = format!("gennext{}", suffix);
+        let next_name = ParserText::temp_name_with_prefix("gen_next", span);
         let rewritten = Self::rewrite_generator_returns(body);
         let next_body = match rewritten.node_type {
             NodeType::ScopeDeclaration {
