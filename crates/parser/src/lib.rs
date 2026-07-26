@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Node, NodeType},
+    ast::nodes::{Node, NodeType},
     parse::parse_program_with_source,
 };
 use serde::{Deserialize, Serialize};

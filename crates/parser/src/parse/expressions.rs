@@ -1,8 +1,8 @@
-use chumsky::error::Rich;
-use chumsky::prelude::*;
-use std::sync::Arc;
-
 use super::{LegacySpanMapExt, filter, setup::StrParser};
+use crate::ast::idents::PotentialDollarIdentifier;
+use crate::ast::matching::MatchArmType;
+use crate::ast::nodes::{Node, NodeType};
+use crate::ast::types::{ParserInnerType, PotentialNewType};
 use crate::parse::util::{
     ensure_scope_node, lex, member_node_from_head_and_tail, normalize_scope_member_chain,
     parse_embedded_expr, parse_splits, span, span_from_nodes_or, unescape_string,
@@ -10,13 +10,13 @@ use crate::parse::util::{
 use crate::{
     Span,
     ast::{
-        AsFailureMode, CallArg, IfComparisonType, LoopType, MatchArmType, Node, NodeType,
-        ParserDataType, ParserInnerType, ParserText, PipeSegment, PotentialDollarIdentifier,
-        PotentialNewType, RefMutability, TryCatch,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
 };
+use chumsky::error::Rich;
+use chumsky::prelude::*;
+use std::sync::Arc;
 
 pub struct TailExpressionParsers<'a> {
     pub pad: StrParser<'a, ()>,

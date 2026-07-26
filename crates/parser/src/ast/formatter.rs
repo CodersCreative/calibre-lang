@@ -1,11 +1,7 @@
 use crate::{
     Parser, Span,
-    ast::{
-        CallArg, DestructurePattern, EmitType, GenericTypes, IfComparisonType, LoopType,
-        MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem, Node,
-        NodeType, ObjectType, Overload, ParserDataType, ParserInnerType, PipeSegment,
-        PotentialDollarIdentifier, PotentialNewType, SelectArmKind, TypeDefType, VarType,
-    },
+    ast::matching::MatchTupleItem,
+    ast::nodes::{Node, NodeType},
 };
 use rustc_hash::FxHashMap;
 use std::error::Error;
@@ -106,6 +102,7 @@ impl Formatter {
         let NodeType::ScopeDeclaration { body, .. } = parser.produce_ast(contents).node_type else {
             return Err("Expected scope declaration".into());
         };
+
         let Some(body) = body else {
             return Ok(Vec::new());
         };
