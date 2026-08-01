@@ -1,5 +1,5 @@
 use calibre_mir::{
-    ast::{IntLiteralType, MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     typing::{MiddleImpl, MiddleTrait, MiddleTypeDefType},
 };
@@ -9,7 +9,7 @@ use calibre_parser::{
         ObjectMap,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
-        idents::ParserText,
+        idents::{IntLiteralType, ParsedIntLiteral, ParserText},
         nodes::AsFailureMode,
         types::{ParserDataType, ParserInnerType},
     },
@@ -723,7 +723,7 @@ impl<'a> LirEnvironment<'a> {
     fn member_field(step: MiddleNode) -> Box<str> {
         match step.node_type {
             MiddleNodeType::Identifier(name) => name.text.into_boxed_str(),
-            MiddleNodeType::IntLiteral { value, int_type } => match int_type {
+            MiddleNodeType::IntLiteral(ParsedIntLiteral { value, int_type }) => match int_type {
                 IntLiteralType::Int => value.to_string().into_boxed_str(),
                 IntLiteralType::UInt => format!("{value}u").into_boxed_str(),
                 IntLiteralType::Byte => format!("{value}b").into_boxed_str(),
@@ -833,7 +833,7 @@ impl<'a> LirEnvironment<'a> {
                 // TODO Add emit support
                 self.lower_node(*value)
             }
-            MiddleNodeType::IntLiteral { value, int_type } => match int_type {
+            MiddleNodeType::IntLiteral(ParsedIntLiteral { value, int_type }) => match int_type {
                 IntLiteralType::Int => LirNodeType::Literal(LirLiteral::Int(value)),
                 IntLiteralType::UInt => LirNodeType::Literal(LirLiteral::UInt(value as u64)),
                 IntLiteralType::Byte => LirNodeType::Literal(LirLiteral::Byte(value as u8)),

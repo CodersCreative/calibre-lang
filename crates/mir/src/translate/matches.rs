@@ -70,13 +70,7 @@ impl MiddleEnvironment {
             NodeType::MemberExpression {
                 path: vec![
                     (base, false),
-                    (
-                        Node::new(
-                            self.context.current_span(),
-                            NodeType::IntLiteral((index as i64).to_string()),
-                        ),
-                        true,
-                    ),
+                    (Node::int(self.context.current_span(), index), true),
                 ],
             },
         )
@@ -165,10 +159,7 @@ impl MiddleEnvironment {
                 self.context.current_span(),
                 NodeType::ComparisonExpression {
                     left: Box::new(Node::len(self.context.current_span(), value)),
-                    right: Box::new(Node::new(
-                        self.context.current_span(),
-                        NodeType::IntLiteral((expected_len as i64).to_string()),
-                    )),
+                    right: Box::new(Node::int(self.context.current_span(), expected_len)),
                     operator,
                 },
             ),
@@ -700,10 +691,7 @@ impl MiddleEnvironment {
                     Node::identifier(self.context.current_span(), "discriminant"),
                     vec![CallArg::Value(value)],
                 )),
-                right: Box::new(Node::new(
-                    self.context.current_span(),
-                    NodeType::IntLiteral(index.to_string()),
-                )),
+                right: Box::new(Node::int(self.context.current_span(), index)),
                 operator: ComparisonOperator::Equal,
             },
         )

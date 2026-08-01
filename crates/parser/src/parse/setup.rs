@@ -249,7 +249,10 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
     )
     .map_with_span({
         let ls = line_starts.clone();
-        move |number: String, r| Node::new(span(ls.as_ref(), r), NodeType::IntLiteral(number))
+        move |number: String, r| {
+            let sp = span(ls.as_ref(), r);
+            Node::new(sp, NodeType::IntLiteral(ParserText::new(sp, number)))
+        }
     })
     .boxed();
 

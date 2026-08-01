@@ -532,10 +532,7 @@ impl MiddleEnvironment {
                 },
                 value: ObjectType::Map(vec![
                     (String::from("data"), Node::identifier(span, &next_name)),
-                    (
-                        String::from("index"),
-                        Node::new(span, NodeType::IntLiteral(String::from("0"))),
-                    ),
+                    (String::from("index"), Node::int(span, 0)),
                     (String::from("done"), Node::identifier(span, "false")),
                 ]),
             },
@@ -1252,7 +1249,6 @@ impl MiddleEnvironment {
 
             let value =
                 |v: String| Node::new(span, NodeType::StringLiteral(ParserText::new(span, v)));
-            let uint_value = |v: u64| Node::new(span, NodeType::IntLiteral(v.to_string()));
 
             let current_function_name = if scope_ref.namespace.parse::<u64>().is_ok() {
                 "main".to_string()
@@ -1277,8 +1273,14 @@ impl MiddleEnvironment {
                             "path".to_string(),
                             value(scope_ref.path.to_string_lossy().to_string()),
                         ),
-                        ("line".to_string(), uint_value(span.from.line as u64)),
-                        ("col".to_string(), uint_value(span.from.col as u64)),
+                        (
+                            "line".to_string(),
+                            Node::int(span, format!("{}u", span.from.line)),
+                        ),
+                        (
+                            "col".to_string(),
+                            Node::int(span, format!("{}u", span.from.col)),
+                        ),
                     ]),
                 },
             );

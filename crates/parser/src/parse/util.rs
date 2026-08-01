@@ -1,8 +1,9 @@
 use crate::{
     Position, Span,
     ast::{
-        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        matching::{MatchArmType, MatchTupleItem},
+        idents::{
+            ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+        },
         nodes::{NamedScope, Node, NodeType, VarType},
     },
 };
@@ -170,55 +171,6 @@ where
         .then_ignore(lex(pad, just('}')))
 }
 
-fn match_arm_to_tuple_item(arm: MatchArmType) -> Option<MatchTupleItem> {
-    match arm {
-        MatchArmType::At {
-            var_type,
-            name,
-            pattern,
-        } => Some(MatchTupleItem::At {
-            var_type,
-            name,
-            pattern: Box::new(match_arm_to_tuple_item(*pattern)?),
-        }),
-        MatchArmType::Wildcard(sp) => Some(MatchTupleItem::Wildcard(sp)),
-        MatchArmType::Let { var_type, name } => Some(MatchTupleItem::Binding { var_type, name }),
-        MatchArmType::Enum {
-            value,
-            var_type,
-            name,
-            destructure,
-            pattern,
-        } => Some(MatchTupleItem::Enum {
-            value,
-            var_type,
-            name,
-            destructure,
-            pattern,
-        }),
-        MatchArmType::Value(node) => Some(MatchTupleItem::Value(node)),
-        MatchArmType::IsType(data_type) => Some(MatchTupleItem::IsType(data_type)),
-        MatchArmType::In(node) => Some(MatchTupleItem::In(node)),
-        MatchArmType::StringPattern(parts) => Some(MatchTupleItem::StringPattern(parts)),
-        MatchArmType::TuplePattern(mut inner) => {
-            if inner.len() == 1 {
-                Some(inner.remove(0))
-            } else {
-                None
-            }
-        }
-        MatchArmType::ListPattern(_) => None,
-        MatchArmType::StructPattern(_) => None,
-    }
-}
-
-pub(super) fn match_arm_to_tuple_items(arm: MatchArmType) -> Option<Vec<MatchTupleItem>> {
-    match arm {
-        MatchArmType::TuplePattern(inner) => Some(inner),
-        other => Some(vec![match_arm_to_tuple_item(other)?]),
-    }
-}
-
 pub(super) fn member_path_span(path: &[(Node, bool)]) -> Span {
     match (path.first(), path.last()) {
         (Some(first), Some(last)) => Span::new_from_spans(first.0.span, last.0.span),
@@ -340,10 +292,10 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<Node
         return Ok(Node::new(sp, NodeType::MemberExpression { path }));
     }
 
-    if trimmed.parse::<i64>().is_ok() {
+    if ParsedIntLiteral::parse(trimmed).is_some() {
         return Ok(Node::new(
             fallback_span,
-            NodeType::IntLiteral(trimmed.to_string()),
+            NodeType::IntLiteral(ParserText::from(trimmed.to_string())),
         ));
     }
 

@@ -116,6 +116,57 @@ impl MatchArmType {
         None
     }
 
+    pub fn into_tuple_item(self) -> Option<MatchTupleItem> {
+        match self {
+            MatchArmType::At {
+                var_type,
+                name,
+                pattern,
+            } => Some(MatchTupleItem::At {
+                var_type,
+                name,
+                pattern: Box::new(pattern.into_tuple_item()?),
+            }),
+            MatchArmType::Wildcard(sp) => Some(MatchTupleItem::Wildcard(sp)),
+            MatchArmType::Let { var_type, name } => {
+                Some(MatchTupleItem::Binding { var_type, name })
+            }
+            MatchArmType::Enum {
+                value,
+                var_type,
+                name,
+                destructure,
+                pattern,
+            } => Some(MatchTupleItem::Enum {
+                value,
+                var_type,
+                name,
+                destructure,
+                pattern,
+            }),
+            MatchArmType::Value(node) => Some(MatchTupleItem::Value(node)),
+            MatchArmType::IsType(data_type) => Some(MatchTupleItem::IsType(data_type)),
+            MatchArmType::In(node) => Some(MatchTupleItem::In(node)),
+            MatchArmType::StringPattern(parts) => Some(MatchTupleItem::StringPattern(parts)),
+            MatchArmType::TuplePattern(mut inner) => {
+                if inner.len() == 1 {
+                    Some(inner.remove(0))
+                } else {
+                    None
+                }
+            }
+            MatchArmType::ListPattern(_) => None,
+            MatchArmType::StructPattern(_) => None,
+        }
+    }
+
+    pub fn into_tuple_items(self) -> Option<Vec<MatchTupleItem>> {
+        match self {
+            MatchArmType::TuplePattern(inner) => Some(inner),
+            other => Some(vec![other.into_tuple_item()?]),
+        }
+    }
+
     fn default_span() -> &'static Span {
         static DEFAULT: Span = Span {
             from: crate::Position { line: 0, col: 0 },

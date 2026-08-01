@@ -166,6 +166,63 @@ impl Display for PotentialDollarIdentifier {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IntLiteralType {
+    Int,
+    UInt,
+    Byte,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ParsedIntLiteral {
+    pub value: i64,
+    pub int_type: IntLiteralType,
+}
+
+impl ParsedIntLiteral {
+    pub fn parse(text: impl ToString) -> Option<Self> {
+        let text = text.to_string();
+
+        let (number_text, int_suffix) = match text.chars().last() {
+            Some(c) if matches!(c, 'u' | 'i' | 'b') => {
+                (&text[..text.len().saturating_sub(1)], Some(c))
+            }
+            _ => (text.as_str(), None),
+        };
+
+        let number_text = number_text.replace('_', "");
+        let parse_base = |text: &str| {
+            if let Some((_, x)) = text.split_once("x") {
+                i64::from_str_radix(x, 16)
+            } else if let Some((_, x)) = text.split_once("o") {
+                i64::from_str_radix(x, 8)
+            } else if let Some((_, x)) = text.split_once("b") {
+                i64::from_str_radix(x, 2)
+            } else {
+                text.parse()
+            }
+        };
+
+        let parsed = if let Some((base, exp)) = number_text.split_once('e') {
+            match (parse_base(base).ok(), exp.parse::<u32>().ok()) {
+                (Some(base_val), Some(power)) => base_val.checked_mul(10_i64.pow(power)).ok_or(()),
+                _ => Err(()),
+            }
+        } else {
+            parse_base(&number_text).map_err(|_| ())
+        };
+
+        Some(Self {
+            value: parsed.ok()?,
+            int_type: match int_suffix {
+                Some('u') => IntLiteralType::UInt,
+                Some('b') => IntLiteralType::Byte,
+                _ => IntLiteralType::Int,
+            },
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ParserText {
     pub text: String,

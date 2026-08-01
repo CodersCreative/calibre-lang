@@ -291,14 +291,8 @@ impl ParserDataType {
     pub fn default_node(&self) -> Option<Node> {
         match &self.data_type {
             ParserInnerType::Int => Some(Node::int(self.span, 0)),
-            ParserInnerType::UInt => Some(Node::new(
-                self.span,
-                NodeType::IntLiteral(String::from("0u")),
-            )),
-            ParserInnerType::Byte => Some(Node::new(
-                self.span,
-                NodeType::IntLiteral(String::from("0b")),
-            )),
+            ParserInnerType::UInt => Some(Node::int(self.span, "0u")),
+            ParserInnerType::Byte => Some(Node::int(self.span, "0b")),
             ParserInnerType::Str => Some(Node::new(
                 self.span,
                 NodeType::StringLiteral(ParserText::new(self.span, "")),

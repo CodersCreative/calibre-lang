@@ -6,7 +6,7 @@ use crate::ast::matching::{
 };
 use crate::ast::nodes::{DestructurePattern, FunctionHeader, Node, NodeType, VarType};
 use crate::ast::types::{GenericTypes, PotentialNewType};
-use crate::parse::util::{lex, match_arm_to_tuple_items, span, struct_destructure_fields_parser};
+use crate::parse::util::{lex, span, struct_destructure_fields_parser};
 use chumsky::prelude::*;
 use std::sync::Arc;
 
@@ -516,7 +516,7 @@ pub fn build_match_parsers<'a>(
                     let mut variants = Vec::new();
                     for arm in slot {
                         let mut items = Vec::new();
-                        if let Some(mapped) = match_arm_to_tuple_items(arm) {
+                        if let Some(mapped) = arm.into_tuple_items() {
                             items.extend(mapped);
                         } else {
                             continue;

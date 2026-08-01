@@ -1,5 +1,5 @@
 use crate::{
-    ast::{IntLiteralType, MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType},
     environment::{MiddleEnvironment, get_disamubiguous_name},
     errors::MiddleErr,
     typing::{MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType},
@@ -10,7 +10,10 @@ use calibre_parser::{
         ObjectMap, ObjectType, Operator,
         comparison::{BooleanOperator, ComparisonOperator},
         generics::TraitMemberKind,
-        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        idents::{
+            IntLiteralType, ParsedIntLiteral, ParserText, PotentialDollarIdentifier,
+            PotentialGenericTypeIdentifier,
+        },
         matching::{MatchArmType, SelectArmKind, TryCatch},
         nodes::{
             AsFailureMode, CallArg, EmitType, FunctionHeader, IfComparisonType, LoopType, Node,
@@ -135,60 +138,19 @@ impl MiddleEnvironment {
                 ),
                 span: node.span,
             }),
-            NodeType::IntLiteral(number) => {
-                let literal = number.clone();
-                let (number_text, int_suffix) = match number.chars().last() {
-                    Some(c) if matches!(c, 'u' | 'i' | 'b') => {
-                        (&number[..number.len().saturating_sub(1)], Some(c))
-                    }
-                    _ => (number.as_str(), None),
-                };
-                let number_text = number_text.replace('_', "");
-
-                let parse_base = |text: &str| {
-                    if let Some((_, x)) = text.split_once("x") {
-                        i64::from_str_radix(x, 16)
-                    } else if let Some((_, x)) = text.split_once("o") {
-                        i64::from_str_radix(x, 8)
-                    } else if let Some((_, x)) = text.split_once("b") {
-                        i64::from_str_radix(x, 2)
-                    } else {
-                        text.parse()
-                    }
-                };
-
-                let parsed = if let Some((base, exp)) = number_text.split_once('e') {
-                    match (parse_base(base).ok(), exp.parse::<u32>().ok()) {
-                        (Some(base_val), Some(power)) => {
-                            base_val.checked_mul(10_i64.pow(power)).ok_or(())
-                        }
-                        _ => Err(()),
-                    }
-                } else {
-                    parse_base(&number_text).map_err(|_| ())
-                };
-
-                let number = parsed.map_err(|_| {
-                    MiddleErr::At(
-                        node.span,
-                        Box::new(MiddleErr::Internal(format!(
-                            "invalid integer literal {literal}"
-                        ))),
-                    )
-                })?;
-
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::IntLiteral {
-                        value: number,
-                        int_type: match int_suffix {
-                            Some('u') => IntLiteralType::UInt,
-                            Some('b') => IntLiteralType::Byte,
-                            _ => IntLiteralType::Int,
-                        },
-                    },
-                    span: node.span,
-                })
-            }
+            NodeType::IntLiteral(text) => Ok(MiddleNode {
+                node_type: MiddleNodeType::IntLiteral(
+                    ParsedIntLiteral::parse(text.clone()).ok_or_else(|| {
+                        MiddleErr::At(
+                            node.span,
+                            Box::new(MiddleErr::Internal(format!(
+                                "invalid integer literal {text}"
+                            ))),
+                        )
+                    })?,
+                ),
+                span: node.span,
+            }),
             NodeType::FloatLiteral(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::FloatLiteral(x),
                 span: node.span,
@@ -418,10 +380,7 @@ impl MiddleEnvironment {
                         let start_add = Node::call(
                             node.span,
                             Node::member(node.span, start_ident_node.clone(), "raw_add"),
-                            vec![CallArg::Value(Node::new(
-                                node.span,
-                                NodeType::IntLiteral(String::from("1")),
-                            ))],
+                            vec![CallArg::Value(Node::int(node.span, 1))],
                         );
                         let start_done = Node::call(
                             node.span,
@@ -916,10 +875,10 @@ impl MiddleEnvironment {
                                     self.context.current_span(),
                                 )),
                                 value: Box::new(MiddleNode::new(
-                                    MiddleNodeType::IntLiteral {
+                                    MiddleNodeType::IntLiteral(ParsedIntLiteral {
                                         value: 1,
                                         int_type: IntLiteralType::Int,
-                                    },
+                                    }),
                                     self.context.current_span(),
                                 )),
                             },
@@ -1544,7 +1503,7 @@ impl MiddleEnvironment {
             } => {
                 let count = self.evaluate(scope, *count);
                 let count = match count.node_type {
-                    MiddleNodeType::IntLiteral { value, .. } => value as usize,
+                    MiddleNodeType::IntLiteral(value) => value.value as usize,
                     _ => {
                         return Err(MiddleErr::At(
                             count.span,
@@ -3103,10 +3062,7 @@ impl MiddleEnvironment {
                             then: Box::new(Self::scope_member_call(
                                 node.span,
                                 &["std", "thread", "wait"],
-                                vec![CallArg::Value(Node::new(
-                                    node.span,
-                                    NodeType::IntLiteral(String::from("1")),
-                                ))],
+                                vec![CallArg::Value(Node::int(node.span, 1))],
                             )),
                             otherwise: None,
                         },

@@ -1,3 +1,9 @@
+use crate::{
+    ast::{MiddleNode, MiddleNodeType},
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    scoping::LoopContext,
+};
 use calibre_parser::{
     Span,
     ast::{
@@ -8,13 +14,6 @@ use calibre_parser::{
         nodes::{CallArg, IfComparisonType, LoopType, Node, NodeType, VarType},
         types::{ParserDataType, ParserInnerType, PotentialNewType},
     },
-};
-
-use crate::{
-    ast::{MiddleNode, MiddleNodeType},
-    environment::MiddleEnvironment,
-    errors::MiddleErr,
-    scoping::LoopContext,
 };
 
 impl MiddleEnvironment {
@@ -270,10 +269,7 @@ impl MiddleEnvironment {
             NodeType::VariableDeclaration {
                 var_type: VarType::Mutable,
                 identifier: broke_ident.clone().into(),
-                value: Box::new(Node::new(
-                    self.context.current_span(),
-                    NodeType::IntLiteral(String::from("0")),
-                )),
+                value: Box::new(Node::int(self.context.current_span(), 0)),
                 data_type: PotentialNewType::DataType(ParserDataType::new(
                     self.context.current_span(),
                     ParserInnerType::Int,
@@ -557,10 +553,7 @@ impl MiddleEnvironment {
                         start_ident_node.clone(),
                         "raw_add",
                     ),
-                    vec![CallArg::Value(Node::new(
-                        self.context.current_span(),
-                        NodeType::IntLiteral(String::from("1")),
-                    ))],
+                    vec![CallArg::Value(Node::int(self.context.current_span(), 1))],
                 ),
                 dispatch_loop,
                 Node::call(
@@ -1185,10 +1178,7 @@ impl MiddleEnvironment {
                             self.context.current_span(),
                             NodeType::BinaryExpression {
                                 left: Box::new(to),
-                                right: Box::new(Node::new(
-                                    self.context.current_span(),
-                                    NodeType::IntLiteral(String::from("1")),
-                                )),
+                                right: Box::new(Node::int(self.context.current_span(), 1)),
                                 operator: BinaryOperator::Add,
                             },
                         )
@@ -1215,10 +1205,7 @@ impl MiddleEnvironment {
                                 vec![],
                             )
                         },
-                        Node::new(
-                            self.context.current_span(),
-                            NodeType::IntLiteral(String::from("0")),
-                        ),
+                        Node::int(self.context.current_span(), 0),
                     )
                 };
                 let mut state_nodes = Vec::new();
@@ -1444,10 +1431,7 @@ impl MiddleEnvironment {
                                     self.context.current_span(),
                                     NodeType::Identifier(idx_id.clone().into()),
                                 )),
-                                right: Box::new(Node::new(
-                                    self.context.current_span(),
-                                    NodeType::IntLiteral(String::from("1")),
-                                )),
+                                right: Box::new(Node::int(self.context.current_span(), 1)),
                                 operator: BinaryOperator::Add,
                             },
                         )),

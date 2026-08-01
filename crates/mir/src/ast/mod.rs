@@ -4,7 +4,7 @@ use calibre_parser::{
         ObjectMap, ObjectType, RefMutability,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
-        idents::ParserText,
+        idents::{IntLiteralType, ParsedIntLiteral, ParserText},
         nodes::{
             AsFailureMode, CallArg, EmitType, FunctionHeader, IfComparisonType, LoopType, Node,
             NodeType, VarType,
@@ -126,13 +126,6 @@ impl MiddleNode {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum IntLiteralType {
-    Int,
-    UInt,
-    Byte,
-}
-
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
@@ -229,10 +222,7 @@ pub enum MiddleNodeType {
     ListLiteral(ParserDataType, Vec<MiddleNode>),
     CharLiteral(char),
     FloatLiteral(f64),
-    IntLiteral {
-        value: i64,
-        int_type: IntLiteralType,
-    },
+    IntLiteral(ParsedIntLiteral),
     MemberExpression {
         path: Vec<(MiddleNode, bool)>,
     },
@@ -495,14 +485,14 @@ impl Into<NodeType> for MiddleNodeType {
             }),
             Self::CharLiteral(x) => NodeType::CharLiteral(x),
             Self::FloatLiteral(x) => NodeType::FloatLiteral(x),
-            Self::IntLiteral { value, int_type } => {
-                let mut out = value.to_string();
-                match int_type {
+            Self::IntLiteral(x) => {
+                let mut out = x.value.to_string();
+                match x.int_type {
                     IntLiteralType::Int => {}
                     IntLiteralType::UInt => out.push('u'),
                     IntLiteralType::Byte => out.push('b'),
                 }
-                NodeType::IntLiteral(out)
+                NodeType::IntLiteral(ParserText::from(out))
             }
             Self::MemberExpression { path } => NodeType::MemberExpression {
                 path: {

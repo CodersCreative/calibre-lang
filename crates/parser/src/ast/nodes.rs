@@ -162,8 +162,11 @@ impl Node {
         Node::identifier(span, "none")
     }
 
-    pub fn int(span: Span, value: i32) -> Self {
-        Node::new(span, NodeType::IntLiteral(value.to_string()))
+    pub fn int(span: Span, value: impl ToString) -> Self {
+        Node::new(
+            span,
+            NodeType::IntLiteral(ParserText::new(span, value.to_string())),
+        )
     }
 
     pub fn nodes(self) -> Vec<Node> {
@@ -694,7 +697,7 @@ pub enum NodeType {
     },
     CharLiteral(char),
     FloatLiteral(f64),
-    IntLiteral(String),
+    IntLiteral(ParserText),
     MemberExpression {
         path: Vec<(Node, bool)>,
     },

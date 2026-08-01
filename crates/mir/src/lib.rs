@@ -100,7 +100,7 @@ impl MiddleEnvironment {
                 for (idx, entry) in head.into_iter().enumerate() {
                     if let Some((var_type, name)) = entry {
                         let member = if has_tail {
-                            let index_node = Node::new(span, NodeType::IntLiteral(idx.to_string()));
+                            let index_node = Node::int(span, idx);
                             Node::new(
                                 span,
                                 NodeType::MemberExpression {
@@ -113,10 +113,7 @@ impl MiddleEnvironment {
                                 NodeType::MemberExpression {
                                     path: vec![
                                         (tmp_member_base(), false),
-                                        (
-                                            Node::new(span, NodeType::IntLiteral(idx.to_string())),
-                                            true,
-                                        ),
+                                        (Node::int(span, idx), true),
                                     ],
                                 },
                             )
@@ -142,10 +139,7 @@ impl MiddleEnvironment {
                                         ),
                                     ),
                                 )),
-                                right: Box::new(Node::new(
-                                    span,
-                                    NodeType::IntLiteral(offset.to_string()),
-                                )),
+                                right: Box::new(Node::int(span, offset)),
                                 operator: BinaryOperator::Sub,
                             },
                         );

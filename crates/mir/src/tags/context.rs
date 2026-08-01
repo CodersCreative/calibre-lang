@@ -137,7 +137,6 @@ impl MiddleEnvironment {
 
         let sp = node.span;
         let value = |v: String| Node::new(sp, NodeType::StringLiteral(ParserText::new(sp, v)));
-        let uint_value = |v: u64| Node::new(sp, NodeType::IntLiteral(v.to_string()));
 
         let function_name = match &node.node_type {
             NodeType::VariableDeclaration { identifier, .. } => match identifier {
@@ -170,8 +169,14 @@ impl MiddleEnvironment {
                                 "path".to_string(),
                                 value(scope_ref.path.to_string_lossy().to_string()),
                             ),
-                            ("line".to_string(), uint_value(sp.from.line as u64)),
-                            ("col".to_string(), uint_value(sp.from.col as u64)),
+                            (
+                                "line".to_string(),
+                                Node::int(sp, format!("{}u", sp.from.line)),
+                            ),
+                            (
+                                "col".to_string(),
+                                Node::int(sp, format!("{}u", sp.from.col)),
+                            ),
                         ]),
                     },
                 )),
