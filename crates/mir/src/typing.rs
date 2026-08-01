@@ -2,8 +2,10 @@ use crate::environment::MiddleEnvironment;
 use calibre_parser::{
     Location,
     ast::{
-        Node, ObjectMap, ObjectType, Overload, ParserDataType, ParserInnerType, ParserText,
-        TypeDefType,
+        ObjectMap, ObjectType,
+        idents::ParserText,
+        nodes::{Node, Overload, TypeDefType},
+        types::{ParserDataType, ParserInnerType},
     },
 };
 use rustc_hash::FxHashMap;

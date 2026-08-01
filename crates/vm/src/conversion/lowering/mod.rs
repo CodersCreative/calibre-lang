@@ -3,7 +3,7 @@ use calibre_lir::{
     BlockId, LirBlock, LirFunction, LirInstr, LirLValue, LirLiteral, LirNodeType, LirTerminator,
 };
 use calibre_parser::Span;
-use calibre_parser::ast::{ParserDataType, ParserInnerType};
+use calibre_parser::ast::types::{ParserDataType, ParserInnerType};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 mod block;

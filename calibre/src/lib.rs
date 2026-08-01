@@ -5,7 +5,10 @@ use calibre_mir::{
 };
 use calibre_parser::{
     Parser, ParserError,
-    ast::{Node, NodeType, PotentialDollarIdentifier},
+    ast::{
+        idents::PotentialDollarIdentifier,
+        nodes::{Node, NodeType},
+    },
 };
 use calibre_std::{get_globals_path, get_stdlib_path};
 use calibre_vm::{

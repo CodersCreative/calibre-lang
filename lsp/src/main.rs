@@ -21,7 +21,7 @@ use calibre_mir::environment::MiddleEnvironment;
 use calibre_mir::errors::MiddleErr;
 use calibre_mir::typing::MiddleTypeDefType;
 use calibre_parser::ast::formatter::{Formatter, Tab};
-use calibre_parser::ast::{ParserDataType, ParserInnerType};
+use calibre_parser::ast::types::{ParserDataType, ParserInnerType};
 use calibre_parser::{Parser, ParserError, Position as CalPosition, Span as CalSpan};
 use futures::future::{BoxFuture, ready};
 use model::*;

@@ -6,7 +6,7 @@ use crate::{
 };
 use calibre_parser::{
     Parser,
-    ast::{ParserDataType, VarType},
+    ast::{nodes::VarType, types::ParserDataType},
 };
 use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
 use rustc_hash::FxHashMap;

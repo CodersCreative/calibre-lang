@@ -7,11 +7,16 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        AsFailureMode, CallArg, EmitType, FunctionHeader, GenericTypes, IfComparisonType, LoopType,
-        MatchArmType, Node, NodeType, ObjectMap, ObjectType, Operator, ParserDataType,
-        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        PotentialNewType, TraitMemberKind, TryCatch, TypeDefType, VarType,
+        ObjectMap, ObjectType, Operator,
         comparison::{BooleanOperator, ComparisonOperator},
+        generics::TraitMemberKind,
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        matching::{MatchArmType, SelectArmKind, TryCatch},
+        nodes::{
+            AsFailureMode, CallArg, EmitType, FunctionHeader, IfComparisonType, LoopType, Node,
+            NodeType, PipeSegment, TypeDefType, VarType,
+        },
+        types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -281,10 +286,7 @@ impl MiddleEnvironment {
                                 NodeType::VariableDeclaration {
                                     var_type: VarType::Immutable,
                                     identifier: ident.clone(),
-                                    data_type: PotentialNewType::DataType(ParserDataType::new(
-                                        self.context.current_span(),
-                                        ParserInnerType::Auto(None),
-                                    )),
+                                    data_type: PotentialNewType::auto(self.context.current_span()),
                                     value: Box::new(arg),
                                 },
                             ));
@@ -2471,7 +2473,7 @@ impl MiddleEnvironment {
                 node_type: MiddleNodeType::AggregateExpression {
                     identifier: Some({
                         match &identifier {
-                            calibre_parser::ast::PotentialGenericTypeIdentifier::Generic {
+                            PotentialGenericTypeIdentifier::Generic {
                                 identifier: base,
                                 generic_types,
                             } => {
@@ -2862,7 +2864,7 @@ impl MiddleEnvironment {
                 for arm in arms {
                     for (kind, left, right) in arm.patterns.iter() {
                         match kind {
-                            calibre_parser::ast::SelectArmKind::Recv => {
+                            SelectArmKind::Recv => {
                                 let Some(left) = left.clone() else { continue };
                                 let Some(right) = right.clone() else { continue };
                                 let tmp_ident = PotentialDollarIdentifier::Identifier(
@@ -2999,7 +3001,7 @@ impl MiddleEnvironment {
                                     },
                                 ));
                             }
-                            calibre_parser::ast::SelectArmKind::Send => {
+                            SelectArmKind::Send => {
                                 let Some(left) = left.clone() else { continue };
                                 let Some(right) = right.clone() else { continue };
 
@@ -3036,7 +3038,7 @@ impl MiddleEnvironment {
                                     },
                                 ));
                             }
-                            calibre_parser::ast::SelectArmKind::Default => {
+                            SelectArmKind::Default => {
                                 has_default = true;
                                 let mut body_items = vec![Node::new(
                                     node.span,
@@ -3188,36 +3190,35 @@ impl MiddleEnvironment {
             NodeType::PipeExpression(mut path) if !path.is_empty() => {
                 let mut value = path.remove(0).into();
                 let mut prior_mappings = FxHashMap::default();
-                let is_callable_point =
-                    |env: &mut Self, point: &calibre_parser::ast::PipeSegment| {
-                        if let NodeType::Identifier(id) = &point.get_node().node_type
-                            && let Some(resolved) = env.resolve_potential_generic_ident(scope, id)
-                            && env
-                                .symbols
-                                .variables
-                                .get(&resolved.text)
-                                .is_some_and(|var| {
-                                    matches!(
-                                        var.data_type.data_type,
-                                        ParserInnerType::Function { .. }
-                                            | ParserInnerType::NativeFunction(_)
-                                    )
-                                })
-                        {
-                            return true;
-                        }
-                        let from_type = env
-                            .resolve_type_from_node(scope, point.get_node())
-                            .map(|x| x.unwrap_all_refs().data_type);
-                        if matches!(
-                            from_type,
-                            Some(ParserInnerType::Function { .. })
-                                | Some(ParserInnerType::NativeFunction(_))
-                        ) {
-                            return true;
-                        }
-                        false
-                    };
+                let is_callable_point = |env: &mut Self, point: &PipeSegment| {
+                    if let NodeType::Identifier(id) = &point.get_node().node_type
+                        && let Some(resolved) = env.resolve_potential_generic_ident(scope, id)
+                        && env
+                            .symbols
+                            .variables
+                            .get(&resolved.text)
+                            .is_some_and(|var| {
+                                matches!(
+                                    var.data_type.data_type,
+                                    ParserInnerType::Function { .. }
+                                        | ParserInnerType::NativeFunction(_)
+                                )
+                            })
+                    {
+                        return true;
+                    }
+                    let from_type = env
+                        .resolve_type_from_node(scope, point.get_node())
+                        .map(|x| x.unwrap_all_refs().data_type);
+                    if matches!(
+                        from_type,
+                        Some(ParserInnerType::Function { .. })
+                            | Some(ParserInnerType::NativeFunction(_))
+                    ) {
+                        return true;
+                    }
+                    false
+                };
                 let get_mapping = |env: &Self, key: &str| -> Result<Option<String>, MiddleErr> {
                     Ok(env
                         .scoping
@@ -3276,7 +3277,7 @@ impl MiddleEnvironment {
                         _ => {
                             let keep_scope = point.is_named();
                             let var_dec = match &point {
-                                calibre_parser::ast::PipeSegment::Named { identifier, .. } => {
+                                PipeSegment::Named { identifier, .. } => {
                                     let ident = self
                                         .resolve_dollar_ident_only(scope, identifier)
                                         .ok_or_else(|| {

@@ -1,7 +1,10 @@
 use crate::errors::MiddleErr;
 use calibre_parser::{
     Location, Span,
-    ast::{Node, ParserText, PotentialDollarIdentifier},
+    ast::{
+        idents::{ParserText, PotentialDollarIdentifier},
+        nodes::Node,
+    },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::PathBuf;

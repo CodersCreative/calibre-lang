@@ -1,8 +1,10 @@
 use crate::{
     ParserError, Span,
     ast::{
-        CallArg, EmitType, Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
+        ObjectType,
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        nodes::{CallArg, EmitType, Node, NodeType},
+        types::{ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 use chumsky::error::Rich;
@@ -130,15 +132,11 @@ pub fn parse_program_with_source(
                 .map(|((n, sp), generics)| {
                     if let Some(generic_types) = generics {
                         PotentialGenericTypeIdentifier::Generic {
-                            identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
-                                sp, n,
-                            )),
+                            identifier: PotentialDollarIdentifier::new(sp, n),
                             generic_types,
                         }
                     } else {
-                        PotentialGenericTypeIdentifier::Identifier(
-                            PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
-                        )
+                        PotentialGenericTypeIdentifier::new(sp, n)
                     }
                 })
                 .boxed();

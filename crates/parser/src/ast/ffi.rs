@@ -131,7 +131,7 @@ impl Display for ParserFfiInnerType {
 impl FromStr for ParserFfiInnerType {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s.trim_start_matches("@") {
+        Ok(match s.trim().trim_start_matches("@") {
             "u8" => Self::U8,
             "i8" => Self::I8,
             "u16" => Self::U16,

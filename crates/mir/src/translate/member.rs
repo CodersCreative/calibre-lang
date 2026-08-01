@@ -1,12 +1,3 @@
-use calibre_parser::{
-    Span,
-    ast::{
-        CallArg, Node, NodeType, Operator, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, RefMutability,
-    },
-};
-use std::str::FromStr;
-
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
@@ -14,6 +5,16 @@ use crate::{
     symbols::MiddleVariable,
     typing::MiddleTypeDefType,
 };
+use calibre_parser::{
+    Span,
+    ast::{
+        Operator, RefMutability,
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        nodes::{CallArg, Node, NodeType},
+        types::{ParserDataType, ParserInnerType, PotentialNewType},
+    },
+};
+use std::str::FromStr;
 
 impl MiddleEnvironment {
     fn first_param_ref_mutability(&self, function_name: &str) -> Option<RefMutability> {
@@ -158,7 +159,7 @@ impl MiddleEnvironment {
         scope: &u64,
         list: &[(MiddleNode, bool)],
         caller: Box<Node>,
-        _generic_types: Vec<calibre_parser::ast::PotentialNewType>,
+        _generic_types: Vec<PotentialNewType>,
         args: Vec<CallArg>,
         reverse_args: Vec<Node>,
         receiver_is_value: bool,
@@ -489,7 +490,7 @@ impl MiddleEnvironment {
                     && let Some(var) = self.symbols.variables.get(&ident.text)
                     && let ParserInnerType::Function { return_type, .. } = &var.data_type.data_type
                 {
-                    return Some((**return_type).clone().unwrap_all_refs());
+                    return Some((*return_type.clone()).unwrap_all_refs());
                 }
             }
             _ => {}
@@ -603,7 +604,7 @@ impl MiddleEnvironment {
             return Some(found);
         }
 
-        fn normalize_owner(owner: &str) -> String {
+        fn normalize_owner(owner: impl ToString) -> String {
             let mut cur = owner.to_string();
             loop {
                 let is_mangled =
@@ -686,7 +687,7 @@ impl MiddleEnvironment {
         let target = resolved.clone();
         let target_name = match &target.data_type {
             ParserInnerType::Struct(name) => {
-                Some(calibre_parser::qualified_name_tail(name).to_string())
+                Some(calibre_parser::qualified_name_tail(&name).to_string())
             }
             _ => None,
         }?;

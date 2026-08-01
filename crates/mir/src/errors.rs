@@ -1,6 +1,6 @@
 use calibre_parser::{
     ParserError, Span,
-    ast::{NodeType, ParserDataType},
+    ast::{nodes::NodeType, types::ParserDataType},
 };
 use std::path::PathBuf;
 use thiserror::Error;

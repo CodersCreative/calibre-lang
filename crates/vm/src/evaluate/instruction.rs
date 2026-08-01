@@ -1,6 +1,6 @@
-use crate::native::stdlib::generator::{GeneratorResumeFn, GeneratorState};
-
 use super::*;
+use crate::native::stdlib::generator::{GeneratorResumeFn, GeneratorState};
+use calibre_parser::ast::nodes::AsFailureMode;
 
 impl VM {
     pub fn sync_local_reg_value(&mut self, frame_idx: usize, reg: u16, value: RuntimeValue) {
@@ -1056,7 +1056,7 @@ impl VM {
                 let value = self.get_reg_value(*src).clone();
                 let conversion = value.convert(self, &data_type.data_type);
                 let converted = match failure_mode {
-                    calibre_parser::ast::AsFailureMode::Panic => match conversion {
+                    AsFailureMode::Panic => match conversion {
                         Ok(value) => value,
                         Err(err) => {
                             return Err(RuntimeError::Panic(Some(format!(
@@ -1065,11 +1065,11 @@ impl VM {
                             ))));
                         }
                     },
-                    calibre_parser::ast::AsFailureMode::Option => match conversion {
+                    AsFailureMode::Option => match conversion {
                         Ok(value) => RuntimeValue::Option(Some(Gc::new(value))),
                         Err(_) => RuntimeValue::Option(None),
                     },
-                    calibre_parser::ast::AsFailureMode::Result => match conversion {
+                    AsFailureMode::Result => match conversion {
                         Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
                         Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                             Arc::new(err.to_string()),

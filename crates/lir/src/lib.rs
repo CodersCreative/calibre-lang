@@ -3,11 +3,16 @@ use calibre_mir::{
     environment::MiddleEnvironment,
     typing::{MiddleImpl, MiddleTrait, MiddleTypeDefType},
 };
-use calibre_parser::Span;
-use calibre_parser::ast::{
-    AsFailureMode, ObjectMap, ParserDataType, ParserInnerType,
-    binary::BinaryOperator,
-    comparison::{BooleanOperator, ComparisonOperator},
+use calibre_parser::{
+    Span,
+    ast::{
+        ObjectMap,
+        binary::BinaryOperator,
+        comparison::{BooleanOperator, ComparisonOperator},
+        idents::ParserText,
+        nodes::AsFailureMode,
+        types::{ParserDataType, ParserInnerType},
+    },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -577,7 +582,7 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    fn loop_label(label: &Option<calibre_parser::ast::ParserText>) -> Option<&str> {
+    fn loop_label(label: &Option<ParserText>) -> Option<&str> {
         label.as_ref().map(|x| x.text.as_str())
     }
 

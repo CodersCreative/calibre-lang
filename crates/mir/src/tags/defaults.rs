@@ -1,12 +1,13 @@
 use crate::environment::MiddleEnvironment;
 use crate::{ast::MiddleNode, errors::MiddleErr, typing::MiddleTypeDefType};
+use calibre_parser::ast::idents::{
+    ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+};
+use calibre_parser::ast::nodes::{FunctionHeader, Node, NodeType, VarType};
+use calibre_parser::ast::types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType};
 use calibre_parser::{
     Span,
-    ast::{
-        FunctionHeader, GenericTypes, Node, NodeType, ObjectMap, ObjectType, ParserDataType,
-        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        PotentialNewType, VarType,
-    },
+    ast::{ObjectMap, ObjectType},
 };
 
 impl MiddleEnvironment {
@@ -32,10 +33,7 @@ impl MiddleEnvironment {
                                 identifier: PotentialDollarIdentifier::Identifier(
                                     ParserText::from("default".to_string()),
                                 ),
-                                data_type: PotentialNewType::DataType(ParserDataType::new(
-                                    span,
-                                    ParserInnerType::Auto(None),
-                                )),
+                                data_type: PotentialNewType::auto(span),
                                 value: Box::new(Node::new(
                                     span,
                                     NodeType::FunctionDeclaration {
@@ -157,11 +155,7 @@ impl MiddleEnvironment {
                 span,
                 NodeType::ImplTraitDeclaration {
                     generics: GenericTypes::default(),
-                    trait_ident: PotentialGenericTypeIdentifier::Identifier(
-                        PotentialDollarIdentifier::Identifier(ParserText::from(
-                            "Default".to_string(),
-                        )),
-                    ),
+                    trait_ident: PotentialGenericTypeIdentifier::new(Span::default(), "Default"),
                     target: PotentialNewType::DataType(ParserDataType::new(
                         span,
                         ParserInnerType::Struct(identifier.text),

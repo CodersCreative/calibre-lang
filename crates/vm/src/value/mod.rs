@@ -10,7 +10,11 @@ use std::{
 };
 
 use calibre_lir::BlockId;
-use calibre_parser::ast::{ObjectMap, ParserDataType, ParserFfiInnerType, ParserInnerType};
+use calibre_parser::ast::{
+    ObjectMap,
+    ffi::ParserFfiInnerType,
+    types::{ParserDataType, ParserInnerType},
+};
 use dumpster::sync::Gc;
 use dumpster::{TraceWith, Visitor};
 use libffi::middle::{Arg, Cif, CodePtr, Type};

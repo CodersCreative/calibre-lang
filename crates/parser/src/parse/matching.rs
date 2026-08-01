@@ -1,15 +1,12 @@
 use super::{LegacySpanMapExt, setup::StrParser};
-use crate::parse::util::{
-    lex, match_arm_to_tuple_items, none_type, span, struct_destructure_fields_parser,
+use crate::Span;
+use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
+use crate::ast::matching::{
+    MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem,
 };
-use crate::{
-    Span,
-    ast::{
-        FunctionHeader, MatchArmType, MatchStringPatternPart, MatchStructFieldPattern,
-        MatchTupleItem, Node, NodeType, ParserText, PotentialDollarIdentifier, PotentialNewType,
-        VarType,
-    },
-};
+use crate::ast::nodes::{DestructurePattern, FunctionHeader, Node, NodeType, VarType};
+use crate::ast::types::{GenericTypes, PotentialNewType};
+use crate::parse::util::{lex, match_arm_to_tuple_items, span, struct_destructure_fields_parser};
 use chumsky::prelude::*;
 use std::sync::Arc;
 
@@ -19,7 +16,7 @@ pub struct MatchParsers<'a> {
     pub comma: StrParser<'a, ()>,
     pub arrow: StrParser<'a, ()>,
     pub ident: StrParser<'a, (String, Span)>,
-    pub generic_params: StrParser<'a, crate::ast::GenericTypes>,
+    pub generic_params: StrParser<'a, GenericTypes>,
     pub string_lit: StrParser<'a, Node>,
     pub type_name: StrParser<'a, PotentialNewType>,
     pub expr: StrParser<'a, Node>,
@@ -125,7 +122,7 @@ pub fn build_match_parsers<'a>(
 
     let match_struct_destructure =
         struct_destructure_fields_parser(pad.clone(), comma.clone(), ident.clone())
-            .map(crate::ast::DestructurePattern::Struct)
+            .map(DestructurePattern::Struct)
             .boxed();
 
     let match_tuple_destructure = lex(pad.clone(), just('('))
@@ -156,7 +153,7 @@ pub fn build_match_parsers<'a>(
             .map(|x| x.unwrap_or_default()),
         )
         .then_ignore(lex(pad.clone(), just(')')))
-        .map(crate::ast::DestructurePattern::Tuple)
+        .map(DestructurePattern::Tuple)
         .boxed();
 
     let match_tuple_item_atom = choice((
@@ -344,11 +341,7 @@ pub fn build_match_parsers<'a>(
                             PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
                         )));
                     }
-                    (
-                        None,
-                        Some(crate::ast::DestructurePattern::Tuple(items)),
-                        None,
-                    )
+                    (None, Some(DestructurePattern::Tuple(items)), None)
                 }),
             match_struct_destructure
                 .clone()
@@ -666,7 +659,7 @@ pub fn build_match_parsers<'a>(
                         param_ty,
                         default.map(Box::new),
                     )],
-                    return_type: return_ty.unwrap_or_else(|| none_type(sp)),
+                    return_type: return_ty.unwrap_or_else(|| PotentialNewType::null(sp)),
                     param_destructures: Vec::new(),
                 };
 

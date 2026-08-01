@@ -9,10 +9,12 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node, NodeType,
-        ObjectType, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
-        PotentialGenericTypeIdentifier, PotentialNewType, TryCatch, VarType,
-        comparison::ComparisonOperator,
+        ObjectType,
+        comparison::{BooleanOperator, ComparisonOperator},
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        matching::TryCatch,
+        nodes::{CallArg, FunctionHeader, IfComparisonType, LoopType, Node, NodeType, VarType},
+        types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 use rustc_hash::FxHashMap;
@@ -556,7 +558,7 @@ impl MiddleEnvironment {
                 NodeType::BooleanExpression {
                     left: Box::new(left),
                     right: Box::new(right),
-                    operator: calibre_parser::ast::comparison::BooleanOperator::And,
+                    operator: BooleanOperator::And,
                 },
             )
         });

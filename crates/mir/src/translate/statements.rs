@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::{MiddleEnvironment, get_disamubiguous_name},
@@ -11,12 +9,14 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        Node, NodeType, Operator, Overload, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, TypeDefType,
-        VarType,
+        Operator,
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        nodes::{AsFailureMode, Node, NodeType, Overload, TypeDefType, VarType},
+        types::{ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 use rustc_hash::FxHashMap;
+use std::str::FromStr;
 
 impl MiddleEnvironment {
     pub fn evaluate_var_declaration(
@@ -223,7 +223,7 @@ impl MiddleEnvironment {
                 MiddleNodeType::AsExpression {
                     value: Box::new(value),
                     data_type: data_type.clone(),
-                    failure_mode: calibre_parser::ast::AsFailureMode::Panic,
+                    failure_mode: AsFailureMode::Panic,
                 },
                 span,
             );

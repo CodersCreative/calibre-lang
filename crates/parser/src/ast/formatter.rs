@@ -1,7 +1,19 @@
 use crate::{
     Parser, Span,
-    ast::matching::MatchTupleItem,
-    ast::nodes::{Node, NodeType},
+    ast::{
+        ObjectType,
+        generics::TraitMemberKind,
+        idents::PotentialDollarIdentifier,
+        matching::{
+            MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem,
+            SelectArmKind,
+        },
+        nodes::{
+            AsFailureMode, CallArg, DestructurePattern, EmitType, IfComparisonType, LoopType, Node,
+            NodeType, Overload, PipeSegment, TypeDefType, VarType,
+        },
+        types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType},
+    },
 };
 use rustc_hash::FxHashMap;
 use std::error::Error;
@@ -654,19 +666,17 @@ impl Formatter {
                 if !members.is_empty() {
                     for member in members {
                         let mut line = match member.kind {
-                            crate::ast::TraitMemberKind::Type => {
+                            TraitMemberKind::Type => {
                                 format!("type {}", member.identifier)
                             }
-                            crate::ast::TraitMemberKind::Const => {
+                            TraitMemberKind::Const => {
                                 format!("const {}", member.identifier)
                             }
                         };
 
                         match member.kind {
-                            crate::ast::TraitMemberKind::Type => {
-                                if let crate::ast::PotentialNewType::DataType(dt) =
-                                    &member.data_type
-                                {
+                            TraitMemberKind::Type => {
+                                if let PotentialNewType::DataType(dt) = &member.data_type {
                                     if !dt.data_type.is_auto() {
                                         line.push_str(&format!(" = {}", member.data_type));
                                     }
@@ -674,10 +684,8 @@ impl Formatter {
                                     line.push_str(&format!(" = {}", member.data_type));
                                 }
                             }
-                            crate::ast::TraitMemberKind::Const => {
-                                if let crate::ast::PotentialNewType::DataType(dt) =
-                                    &member.data_type
-                                {
+                            TraitMemberKind::Const => {
+                                if let PotentialNewType::DataType(dt) = &member.data_type {
                                     if !dt.data_type.is_auto() {
                                         line.push_str(&format!(" : {}", member.data_type));
                                     }
@@ -784,9 +792,9 @@ impl Formatter {
                     "{} as{} {}",
                     self.format(value),
                     match failure_mode {
-                        crate::ast::AsFailureMode::Panic => "!",
-                        crate::ast::AsFailureMode::Option => "?",
-                        crate::ast::AsFailureMode::Result => "",
+                        AsFailureMode::Panic => "!",
+                        AsFailureMode::Option => "?",
+                        AsFailureMode::Result => "",
                     },
                     self.fmt_potential_new_type(data_type)
                 )
@@ -2395,6 +2403,7 @@ impl Formatter {
             MatchArmType::Wildcard(_) => String::from("_"),
         }
     }
+
     pub fn fmt_loop_type(&mut self, loop_type: &LoopType) -> String {
         match loop_type {
             LoopType::While(x) => self.format(x),

@@ -1,9 +1,12 @@
 use calibre_parser::{
     Span,
     ast::{
-        CallArg, IfComparisonType, LoopType, MatchArmType, Node, NodeType, ParserDataType,
-        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialNewType, RefMutability,
-        VarType, binary::BinaryOperator,
+        RefMutability,
+        binary::BinaryOperator,
+        idents::{ParserText, PotentialDollarIdentifier},
+        matching::MatchArmType,
+        nodes::{CallArg, IfComparisonType, LoopType, Node, NodeType, VarType},
+        types::{ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 
@@ -258,10 +261,7 @@ impl MiddleEnvironment {
                 var_type: VarType::Mutable,
                 identifier: result_ident.clone().into(),
                 value: else_body.clone(),
-                data_type: PotentialNewType::DataType(ParserDataType::new(
-                    self.context.current_span(),
-                    ParserInnerType::Auto(None),
-                )),
+                data_type: PotentialNewType::auto(self.context.current_span()),
             },
         );
 
@@ -604,7 +604,7 @@ impl MiddleEnvironment {
             return self.evaluate_inner(scope, full);
         }
 
-        let list_ident: calibre_parser::ast::PotentialDollarIdentifier =
+        let list_ident: PotentialDollarIdentifier =
             ParserText::from(String::from("anon_iter_list")).into();
         let list_ident_node = Node::new(
             self.context.current_span(),

@@ -1,18 +1,14 @@
-use chumsky::prelude::*;
-use std::sync::Arc;
-
 use super::{LegacySpanMapExt, setup::StrParser};
+use crate::Span;
+use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
+use crate::ast::nodes::{DestructurePattern, FunctionHeader, Node, NodeType, VarType};
+use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType};
 use crate::parse::util::{
-    ensure_scope_node, labelled_scope_parser, lex, none_type, scope_node_parser, span,
+    ensure_scope_node, labelled_scope_parser, lex, scope_node_parser, span,
     struct_destructure_fields_parser,
 };
-use crate::{
-    Span,
-    ast::{
-        DestructurePattern, FunctionHeader, Node, NodeType, ParserDataType, ParserInnerType,
-        ParserText, PotentialDollarIdentifier, PotentialNewType, VarType,
-    },
-};
+use chumsky::prelude::*;
+use std::sync::Arc;
 
 #[derive(Clone)]
 enum FnParamGroup {
@@ -40,7 +36,7 @@ pub struct FunctionParsers<'a> {
     pub fat_arrow: StrParser<'a, ()>,
     pub raw_ident: StrParser<'a, (String, Span)>,
     pub ident: StrParser<'a, (String, Span)>,
-    pub generic_params: StrParser<'a, crate::ast::GenericTypes>,
+    pub generic_params: StrParser<'a, GenericTypes>,
     pub type_name: StrParser<'a, PotentialNewType>,
     pub expr: StrParser<'a, Node>,
     pub statement: StrParser<'a, Node>,
@@ -284,7 +280,7 @@ pub fn build_function_parsers<'a>(
                     header: FunctionHeader {
                         generics,
                         parameters,
-                        return_type: ret.unwrap_or_else(|| none_type(body.span)),
+                        return_type: ret.unwrap_or_else(|| PotentialNewType::null(body.span)),
                         param_destructures,
                     },
                     body: Box::new(body),

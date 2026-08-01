@@ -1,5 +1,5 @@
 use crate::{MiddleNode, MiddleNodeType};
-use calibre_parser::ast::{ObjectMap, ParserText};
+use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use rustc_hash::FxHashMap;
 
 #[derive(Default)]

@@ -1,9 +1,9 @@
 use crate::{
     Position, Span,
     ast::{
-        MatchArmType, MatchTupleItem, NamedScope, Node, NodeType, ParserDataType, ParserInnerType,
-        ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType,
-        VarType,
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        matching::{MatchArmType, MatchTupleItem},
+        nodes::{NamedScope, Node, NodeType, VarType},
     },
 };
 use chumsky::prelude::*;
@@ -33,14 +33,6 @@ pub(super) fn span(line_starts: &[usize], r: std::ops::Range<usize>) -> Span {
     Span::new(pos(line_starts, r.start), pos(line_starts, r.end))
 }
 
-pub(super) fn auto_type(sp: Span) -> PotentialNewType {
-    ParserDataType::new(sp, ParserInnerType::Auto(None)).into()
-}
-
-pub(super) fn none_type(sp: Span) -> PotentialNewType {
-    ParserDataType::new(sp, ParserInnerType::Null).into()
-}
-
 pub(super) fn scope_node_parser<'a, P>(
     statement: P,
     delim: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
@@ -62,6 +54,7 @@ where
         } else {
             Span::default()
         };
+
         Node::new(
             sp,
             NodeType::ScopeDeclaration {

@@ -6,7 +6,10 @@ use crate::{
 };
 use calibre_parser::{
     Span,
-    ast::{LoopType, NamedScope, Node, NodeType, PotentialDollarIdentifier},
+    ast::{
+        idents::PotentialDollarIdentifier,
+        nodes::{LoopType, NamedScope, Node, NodeType},
+    },
 };
 
 impl MiddleEnvironment {

@@ -1,10 +1,11 @@
-use calibre_parser::ast::{
-    Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
-    PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, VarType,
-};
-
 use crate::{
     ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::MiddleScope,
+};
+use calibre_parser::ast::{
+    ObjectType,
+    idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+    nodes::{Node, NodeType, VarType},
+    types::{ParserDataType, ParserInnerType, PotentialNewType},
 };
 
 #[derive(Debug, Clone, Default)]

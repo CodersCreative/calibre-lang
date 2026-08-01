@@ -1,9 +1,9 @@
 use crate::value::RuntimeValue;
 use calibre_parser::Span;
 use calibre_parser::ast::{
-    ParserInnerType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
+    types::ParserInnerType,
 };
 use std::num::{ParseFloatError, ParseIntError};
 

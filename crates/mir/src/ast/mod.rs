@@ -1,10 +1,15 @@
 use calibre_parser::{
     Span,
     ast::{
-        AsFailureMode, CallArg, FunctionHeader, GenericTypes, IfComparisonType, LoopType, Node,
-        NodeType, ObjectMap, ObjectType, ParserDataType, ParserText, RefMutability, VarType,
+        ObjectMap, ObjectType, RefMutability,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
+        idents::ParserText,
+        nodes::{
+            AsFailureMode, CallArg, EmitType, FunctionHeader, IfComparisonType, LoopType, Node,
+            NodeType, VarType,
+        },
+        types::{GenericTypes, ParserDataType},
     },
 };
 use std::fmt::Display;
@@ -63,7 +68,7 @@ impl MiddleNode {
         }
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         let mut count = 1;
         match &self.node_type {
             MiddleNodeType::AssignmentExpression { identifier, value } => {
@@ -286,9 +291,7 @@ impl Into<Node> for MiddleNode {
 impl Into<NodeType> for MiddleNodeType {
     fn into(self) -> NodeType {
         match self {
-            Self::Emit { value } => NodeType::Emit(calibre_parser::ast::EmitType::Scope(Box::new(
-                (*value).into(),
-            ))),
+            Self::Emit { value } => NodeType::Emit(EmitType::Scope(Box::new((*value).into()))),
             Self::Spawn { value } => NodeType::Spawn {
                 items: vec![(*value).into()],
                 auto_wait: false,

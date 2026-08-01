@@ -3,9 +3,10 @@ use ast::{MiddleNode, MiddleNodeType};
 use calibre_parser::{
     Span,
     ast::{
-        DestructurePattern, Node, NodeType, ParserDataType, ParserInnerType,
-        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, VarType,
         binary::BinaryOperator,
+        idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        nodes::{DestructurePattern, Node, NodeType, VarType},
+        types::PotentialNewType,
     },
 };
 use environment::*;
@@ -37,8 +38,6 @@ impl MiddleEnvironment {
             DestructurePattern::Struct(fields) => fields.len(),
         };
         let mut out = Vec::with_capacity(estimated);
-        let auto_type =
-            PotentialNewType::DataType(ParserDataType::new(span, ParserInnerType::Auto(None)));
 
         let tmp_member_base = || {
             Node::new(
@@ -59,7 +58,7 @@ impl MiddleEnvironment {
                     NodeType::VariableDeclaration {
                         var_type: *var_type,
                         identifier: name.clone(),
-                        data_type: auto_type.clone(),
+                        data_type: PotentialNewType::auto(span),
                         value: Box::new(member),
                     },
                 ));

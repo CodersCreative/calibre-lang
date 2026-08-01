@@ -1,3 +1,5 @@
+use crate::ast::{idents::PotentialDollarIdentifier, nodes::Node, types::PotentialNewType};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TraitMemberKind {
     Const,

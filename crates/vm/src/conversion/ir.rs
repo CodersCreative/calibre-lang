@@ -1,9 +1,10 @@
 use calibre_lir::{BlockId, LirGlobal, LirLiteral, LirRegistry};
 use calibre_parser::Span;
 use calibre_parser::ast::{
-    AsFailureMode, ParserDataType,
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
+    nodes::AsFailureMode,
+    types::ParserDataType,
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};

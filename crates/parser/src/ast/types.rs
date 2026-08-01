@@ -4,7 +4,7 @@ use crate::{
         RefMutability,
         ffi::ParserFfiInnerType,
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{Node, NodeType, Overload, TypeDefType},
+        nodes::{CallArg, Node, NodeType, Overload, TypeDefType},
     },
     qualified_name_base, qualified_name_tail,
 };
@@ -597,6 +597,21 @@ pub enum PotentialNewType {
 }
 
 impl PotentialNewType {
+    pub fn unwrap_or_auto(self) -> ParserDataType {
+        match self {
+            PotentialNewType::DataType(data_type) => data_type,
+            _ => ParserDataType::new(*self.span(), ParserInnerType::Auto(None)),
+        }
+    }
+
+    pub fn auto(sp: Span) -> Self {
+        ParserDataType::new(sp, ParserInnerType::Auto(None)).into()
+    }
+
+    pub fn null(sp: Span) -> Self {
+        ParserDataType::new(sp, ParserInnerType::Null).into()
+    }
+
     pub fn is_auto(&self) -> bool {
         match self {
             Self::DataType(x) => x.is_auto(),

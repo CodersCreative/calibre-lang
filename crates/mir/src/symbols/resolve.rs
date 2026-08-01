@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use crate::{
     environment::{MiddleEnvironment, get_disamubiguous_name},
     errors::MiddleErr,
@@ -9,11 +7,14 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        NodeType, Operator, ParserDataType, ParserInnerType, ParserText, PotentialDollarIdentifier,
-        PotentialGenericTypeIdentifier, PotentialNewType,
+        Operator,
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        nodes::NodeType,
+        types::{ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::str::FromStr;
 
 impl MiddleEnvironment {
     pub fn resolve_member_fn_type(

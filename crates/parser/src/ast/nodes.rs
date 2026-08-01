@@ -13,7 +13,7 @@ use crate::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

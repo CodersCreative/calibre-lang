@@ -2,8 +2,10 @@ use crate::environment::MiddleEnvironment;
 use calibre_parser::{
     Span,
     ast::{
-        EmitType, Node, NodeType, Operator, ParserDataType, ParserInnerType,
-        PotentialGenericTypeIdentifier, PotentialNewType,
+        Operator,
+        idents::PotentialGenericTypeIdentifier,
+        nodes::{AsFailureMode, EmitType, Node, NodeType},
+        types::{ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 
@@ -307,12 +309,12 @@ impl MiddleEnvironment {
             } => {
                 let ok = self.resolve_potential_new_type(scope, data_type.clone());
                 match failure_mode {
-                    calibre_parser::ast::AsFailureMode::Panic => Some(ok),
-                    calibre_parser::ast::AsFailureMode::Option => Some(ParserDataType {
+                    AsFailureMode::Panic => Some(ok),
+                    AsFailureMode::Option => Some(ParserDataType {
                         data_type: ParserInnerType::Option(Box::new(ok)),
                         span: node.span,
                     }),
-                    calibre_parser::ast::AsFailureMode::Result => Some(ParserDataType {
+                    AsFailureMode::Result => Some(ParserDataType {
                         data_type: ParserInnerType::Result {
                             ok: Box::new(ok),
                             err: Box::new(ParserDataType::new(node.span, ParserInnerType::Dynamic)),

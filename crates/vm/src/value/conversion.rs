@@ -1,9 +1,7 @@
-use calibre_parser::ast::ParserInnerType;
-
-use std::sync::Arc;
-
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
+use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
+use std::sync::Arc;
 
 impl RuntimeValue {
     pub fn convert(

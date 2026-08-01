@@ -1,16 +1,17 @@
 use super::{LegacySpanMapExt, setup::StrParser};
-use crate::parse::util::{
-    auto_type, ensure_scope_node, labelled_scope_parser, lex, scope_body_or_single,
-    scope_node_parser, span, struct_destructure_fields_parser,
+use crate::Span;
+use crate::ast::ObjectType;
+use crate::ast::ffi::ParserFfiInnerType;
+use crate::ast::generics::{TraitMember, TraitMemberKind};
+use crate::ast::idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier};
+use crate::ast::matching::{SelectArm, SelectArmKind};
+use crate::ast::nodes::{
+    DestructurePattern, NamedScope, Node, NodeType, Overload, TypeDefType, VarType,
 };
-use crate::{
-    Span,
-    ast::{
-        DestructurePattern, NamedScope, Node, NodeType, ObjectType, Overload, ParserDataType,
-        ParserFfiInnerType, ParserInnerType, ParserText, PotentialDollarIdentifier,
-        PotentialGenericTypeIdentifier, PotentialNewType, SelectArm, SelectArmKind, TraitMember,
-        TraitMemberKind, TypeDefType, VarType,
-    },
+use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType};
+use crate::parse::util::{
+    ensure_scope_node, labelled_scope_parser, lex, scope_body_or_single, scope_node_parser, span,
+    struct_destructure_fields_parser,
 };
 use chumsky::error::Rich;
 use chumsky::prelude::*;
@@ -35,7 +36,7 @@ pub struct StatementParsers<'a> {
     pub raw_ident: StrParser<'a, (String, Span)>,
     pub ident: StrParser<'a, (String, Span)>,
     pub named_ident: StrParser<'a, PotentialDollarIdentifier>,
-    pub generic_params: StrParser<'a, crate::ast::GenericTypes>,
+    pub generic_params: StrParser<'a, GenericTypes>,
     pub string_text: StrParser<'a, String>,
     pub type_name: StrParser<'a, PotentialNewType>,
     pub statement: StrParser<'a, Node>,
@@ -97,19 +98,15 @@ pub fn build_statement_parser<'a>(
                     .ignore_then(
                         ident
                             .clone()
-                            .map(|(n, sp)| {
-                                PotentialDollarIdentifier::Identifier(ParserText::new(sp, n))
-                            })
+                            .map(|(n, sp)| PotentialDollarIdentifier::new(sp, n))
                             .separated_by(comma.clone())
                             .allow_trailing()
                             .collect::<Vec<_>>(),
                     )
                     .then_ignore(lex(pad.clone(), just(')'))),
-                ident.clone().map(|(n, sp)| {
-                    vec![PotentialDollarIdentifier::Identifier(ParserText::new(
-                        sp, n,
-                    ))]
-                }),
+                ident
+                    .clone()
+                    .map(|(n, sp)| vec![PotentialDollarIdentifier::new(sp, n)]),
                 lex(pad.clone(), just('*')).map(|_| {
                     vec![PotentialDollarIdentifier::Identifier(ParserText::from(
                         "*".to_string(),
@@ -120,7 +117,7 @@ pub fn build_statement_parser<'a>(
             .then(
                 ident
                     .clone()
-                    .map(|(n, sp)| PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)))
+                    .map(|(n, sp)| PotentialDollarIdentifier::new(sp, n))
                     .separated_by(lex(pad.clone(), just("::")))
                     .at_least(1)
                     .collect::<Vec<_>>(),
@@ -128,16 +125,14 @@ pub fn build_statement_parser<'a>(
             .map(|(values, module)| (values, module, None)),
             ident
                 .clone()
-                .map(|(n, sp)| PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)))
+                .map(|(n, sp)| PotentialDollarIdentifier::new(sp, n))
                 .separated_by(lex(pad.clone(), just("::")))
                 .at_least(1)
                 .collect::<Vec<_>>()
                 .then(
                     lex(pad.clone(), just("as"))
                         .ignore_then(ident.clone())
-                        .map(|(n, sp)| {
-                            PotentialDollarIdentifier::Identifier(ParserText::new(sp, n))
-                        })
+                        .map(|(n, sp)| PotentialDollarIdentifier::new(sp, n))
                         .or_not(),
                 )
                 .map(|(module, alias)| (Vec::new(), module, alias)),
@@ -395,7 +390,7 @@ pub fn build_statement_parser<'a>(
             .map(|(((n, sp), ty), value)| TraitMember {
                 kind: TraitMemberKind::Const,
                 identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
-                data_type: ty.unwrap_or_else(|| auto_type(sp)),
+                data_type: ty.unwrap_or_else(|| PotentialNewType::auto(sp)),
                 value: value.map(Box::new),
             }),
         lex(pad.clone(), just("type"))
@@ -403,7 +398,7 @@ pub fn build_statement_parser<'a>(
             .map(|(n, sp)| TraitMember {
                 kind: TraitMemberKind::Type,
                 identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
-                data_type: auto_type(sp),
+                data_type: PotentialNewType::auto(sp),
                 value: None,
             }),
     ));
@@ -723,7 +718,7 @@ pub fn build_statement_parser<'a>(
                     var_type,
                     identifier: name,
                     value: Box::new(value),
-                    data_type: ty.unwrap_or_else(|| auto_type(value_span)),
+                    data_type: ty.unwrap_or_else(|| PotentialNewType::auto(value_span)),
                 },
             ))
         },

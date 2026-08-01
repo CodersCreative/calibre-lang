@@ -8,12 +8,12 @@ use crate::tags::Tagging;
 use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;
 use crate::typing::Typing;
-use calibre_parser::COUNTER;
 use calibre_parser::{
-    Span,
+    COUNTER, Span,
     ast::{
-        FunctionHeader, Node, NodeType, ParserDataType, ParserInnerType, ParserText,
-        PotentialNewType, VarType,
+        idents::ParserText,
+        nodes::{FunctionHeader, Node, NodeType, VarType},
+        types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 use rustc_hash::FxHashMap;
@@ -153,7 +153,7 @@ impl MiddleEnvironment {
             .insert(key, specialized_name.clone());
 
         let mut new_header = header.clone();
-        new_header.generics = calibre_parser::ast::GenericTypes::default();
+        new_header.generics = GenericTypes::default();
         new_header.parameters = new_header
             .parameters
             .into_iter()
@@ -166,10 +166,7 @@ impl MiddleEnvironment {
             NodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: ParserText::from(specialized_name.clone()).into(),
-                data_type: PotentialNewType::DataType(ParserDataType::new(
-                    self.context.current_span(),
-                    ParserInnerType::Auto(None),
-                )),
+                data_type: PotentialNewType::auto(self.context.current_span()),
                 value: Box::new(Node::new(
                     self.context.current_span(),
                     NodeType::FunctionDeclaration {

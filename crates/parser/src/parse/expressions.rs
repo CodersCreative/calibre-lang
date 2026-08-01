@@ -1,8 +1,11 @@
 use super::{LegacySpanMapExt, filter, setup::StrParser};
-use crate::ast::idents::PotentialDollarIdentifier;
-use crate::ast::matching::MatchArmType;
-use crate::ast::nodes::{Node, NodeType};
-use crate::ast::types::{ParserInnerType, PotentialNewType};
+use crate::ast::RefMutability;
+use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
+use crate::ast::matching::{MatchArmType, TryCatch};
+use crate::ast::nodes::{
+    AsFailureMode, CallArg, IfComparisonType, LoopType, Node, NodeType, PipeSegment,
+};
+use crate::ast::types::{ParserDataType, ParserInnerType, PotentialNewType};
 use crate::parse::util::{
     ensure_scope_node, lex, member_node_from_head_and_tail, normalize_scope_member_chain,
     parse_embedded_expr, parse_splits, span, span_from_nodes_or, unescape_string,

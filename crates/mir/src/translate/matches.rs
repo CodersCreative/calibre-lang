@@ -1,16 +1,16 @@
+use crate::{
+    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, typing::MiddleTypeDefType,
+};
 use calibre_parser::{
     Span,
     ast::{
-        CallArg, IfComparisonType, MatchArmType, MatchStringPatternPart, MatchStructFieldPattern,
-        MatchTupleItem, Node, NodeType, ObjectType, ParserDataType, ParserInnerType, ParserText,
-        PotentialDollarIdentifier, PotentialGenericTypeIdentifier, PotentialNewType, RefMutability,
-        VarType,
+        ObjectType, RefMutability,
         comparison::{BooleanOperator, ComparisonOperator},
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        matching::{MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem},
+        nodes::{CallArg, IfComparisonType, Node, NodeType, VarType},
+        types::{ParserDataType, ParserInnerType, PotentialNewType},
     },
-};
-
-use crate::{
-    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, typing::MiddleTypeDefType,
 };
 
 impl MiddleEnvironment {

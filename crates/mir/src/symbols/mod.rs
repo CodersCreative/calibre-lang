@@ -1,7 +1,11 @@
 use crate::ast::MiddleNode;
 use calibre_parser::{
     Location,
-    ast::{Node, Operator, ParserDataType, VarType},
+    ast::{
+        Operator,
+        nodes::{FunctionHeader, Node, VarType},
+        types::ParserDataType,
+    },
 };
 use rustc_hash::FxHashMap;
 use std::fmt::Debug;
@@ -15,8 +19,7 @@ pub struct Symbols {
     pub variables: FxHashMap<String, MiddleVariable>,
     pub resolved_variables: Vec<String>,
     pub overloads: Vec<MiddleOverload>,
-    pub generic_fn_templates:
-        FxHashMap<String, (Vec<String>, calibre_parser::ast::FunctionHeader, Node)>,
+    pub generic_fn_templates: FxHashMap<String, (Vec<String>, FunctionHeader, Node)>,
     pub function_param_defaults: FxHashMap<String, Vec<FunctionParamDefault>>,
     pub fn_specializations: FxHashMap<String, String>,
     pub specialization_decls_by_scope: FxHashMap<u64, Vec<MiddleNode>>,

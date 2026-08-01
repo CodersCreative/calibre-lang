@@ -1,5 +1,8 @@
 use crate::{ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr};
-use calibre_parser::ast::{Node, NodeType, ParserText};
+use calibre_parser::ast::{
+    idents::ParserText,
+    nodes::{Node, NodeType},
+};
 use rustc_hash::FxHashMap;
 use std::{
     fmt::Debug,

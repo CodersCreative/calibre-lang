@@ -5,8 +5,10 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        CallArg, Node, NodeType, ObjectType, ParserDataType, ParserInnerType,
-        PotentialDollarIdentifier, PotentialNewType, TypeDefType, VarType,
+        ObjectType,
+        idents::PotentialDollarIdentifier,
+        nodes::{CallArg, Node, NodeType, TypeDefType, VarType},
+        types::{ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -427,7 +429,7 @@ impl MiddleEnvironment {
         scope: &u64,
         span: Span,
         var_type: VarType,
-        identifier: &calibre_parser::ast::PotentialDollarIdentifier,
+        identifier: &PotentialDollarIdentifier,
         value: &Node,
         data_type: &PotentialNewType,
     ) {

@@ -7,7 +7,7 @@ use std::{
 
 use calibre_parser::{
     Parser, ParserError,
-    ast::{NodeType, formatter::Formatter},
+    ast::{formatter::Formatter, nodes::NodeType},
 };
 
 #[derive(Debug)]

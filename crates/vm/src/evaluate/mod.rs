@@ -1,8 +1,8 @@
 use calibre_lir::BlockId;
 use calibre_parser::ast::ObjectMap;
-use calibre_parser::ast::ParserInnerType;
 use calibre_parser::ast::binary::BinaryOperator;
 use calibre_parser::ast::comparison::ComparisonOperator;
+use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;

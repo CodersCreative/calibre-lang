@@ -1,5 +1,3 @@
-use serde::{Deserialize, Serialize};
-
 use crate::{
     COUNTER, ParserError, Span,
     ast::{
@@ -7,6 +5,7 @@ use crate::{
         types::PotentialNewType,
     },
 };
+use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display,
     ops::{Deref, DerefMut},

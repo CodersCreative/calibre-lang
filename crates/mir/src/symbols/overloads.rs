@@ -6,7 +6,11 @@ use crate::{
 };
 use calibre_parser::{
     Span,
-    ast::{Node, Operator, ParserDataType, ParserInnerType},
+    ast::{
+        Operator,
+        nodes::Node,
+        types::{ParserDataType, ParserInnerType},
+    },
 };
 
 impl MiddleEnvironment {

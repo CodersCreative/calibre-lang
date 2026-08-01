@@ -5,7 +5,7 @@ use crate::{
 };
 use calibre_parser::{
     Parser,
-    ast::{Node, NodeType},
+    ast::nodes::{Node, NodeType},
 };
 use std::fs;
 

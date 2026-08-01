@@ -1,14 +1,13 @@
 use super::{LegacySpanMapExt, filter};
-use crate::parse::util::{
-    auto_type, is_keyword, lex, span, unescape_char_literal, unescape_string,
+use crate::Span;
+use crate::ast::RefMutability;
+use crate::ast::ffi::ParserFfiInnerType;
+use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
+use crate::ast::nodes::{Node, NodeType};
+use crate::ast::types::{
+    GenericType, GenericTypes, ParserDataType, ParserInnerType, PotentialNewType,
 };
-use crate::{
-    Span,
-    ast::{
-        GenericType, GenericTypes, Node, NodeType, ParserDataType, ParserFfiInnerType,
-        ParserInnerType, ParserText, PotentialDollarIdentifier, PotentialNewType, RefMutability,
-    },
-};
+use crate::parse::util::{is_keyword, lex, span, unescape_char_literal, unescape_string};
 use chumsky::error::Rich;
 use chumsky::prelude::*;
 use std::str::FromStr;
@@ -37,13 +36,6 @@ pub struct ParserPrelude<'a> {
     pub float_lit: StrParser<'a, Node>,
     pub null_lit: StrParser<'a, Node>,
     pub type_name: StrParser<'a, PotentialNewType>,
-}
-
-fn parser_data_type_or_auto(value: PotentialNewType) -> ParserDataType {
-    match value {
-        PotentialNewType::DataType(data_type) => data_type,
-        _ => ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
-    }
 }
 
 pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'a> {
@@ -123,7 +115,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
     let named_ident = choice((
         ident
             .clone()
-            .map(|(name, sp)| PotentialDollarIdentifier::Identifier(ParserText::new(sp, name))),
+            .map(|(name, sp)| PotentialDollarIdentifier::new(sp, name)),
         dollar_ident.clone(),
     ))
     .boxed();
@@ -146,9 +138,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                     .unwrap_or_default()
                     .into_iter()
                     .map(|(name, sp)| GenericType {
-                        identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
-                            sp, name,
-                        )),
+                        identifier: PotentialDollarIdentifier::new(sp, name),
                         trait_constraints: Vec::new(),
                     })
                     .collect(),
@@ -364,7 +354,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                                 identifier: name,
                                 generic_types: generic_types
                                     .into_iter()
-                                    .map(parser_data_type_or_auto)
+                                    .map(|x| x.unwrap_or_auto())
                                     .collect(),
                             },
                         ))
@@ -407,7 +397,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                         PotentialNewType::DataType(ParserDataType::new(
                             span(ls.as_ref(), r),
                             ParserInnerType::Tuple(
-                                types.into_iter().map(parser_data_type_or_auto).collect(),
+                                types.into_iter().map(|x| x.unwrap_or_auto()).collect(),
                             ),
                         ))
                     }
@@ -431,7 +421,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                     move |inner, r| {
                         PotentialNewType::DataType(ParserDataType::new(
                             span(ls.as_ref(), r),
-                            ParserInnerType::List(Box::new(parser_data_type_or_auto(inner))),
+                            ParserInnerType::List(Box::new(inner.unwrap_or_auto())),
                         ))
                     }
                 }),
@@ -444,7 +434,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                     move |inner, r| {
                         PotentialNewType::DataType(ParserDataType::new(
                             span(ls.as_ref(), r),
-                            ParserInnerType::Ptr(Box::new(parser_data_type_or_auto(inner))),
+                            ParserInnerType::Ptr(Box::new(inner.unwrap_or_auto())),
                         ))
                     }
                 }),
@@ -464,15 +454,16 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                     let ls = line_starts.clone();
                     move |(params, ret), r| {
                         let sp = span(ls.as_ref(), r);
-                        let return_type =
-                            parser_data_type_or_auto(ret.unwrap_or_else(|| auto_type(sp)));
+                        let return_type = ret
+                            .unwrap_or_else(|| PotentialNewType::auto(sp))
+                            .unwrap_or_auto();
                         PotentialNewType::DataType(ParserDataType::new(
                             sp,
                             ParserInnerType::Function {
                                 return_type: Box::new(return_type),
                                 parameters: params
                                     .into_iter()
-                                    .map(parser_data_type_or_auto)
+                                    .map(|x| x.unwrap_or_auto())
                                     .collect(),
                             },
                         ))
@@ -498,7 +489,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                         PotentialNewType::DataType(ParserDataType::new(
                             span(ls.as_ref(), r),
                             ParserInnerType::Ref(
-                                Box::new(parser_data_type_or_auto(inner)),
+                                Box::new(inner.unwrap_or_auto()),
                                 RefMutability::MutValue,
                             ),
                         ))
@@ -512,7 +503,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                         PotentialNewType::DataType(ParserDataType::new(
                             span(ls.as_ref(), r),
                             ParserInnerType::Ref(
-                                Box::new(parser_data_type_or_auto(inner)),
+                                Box::new(inner.unwrap_or_auto()),
                                 RefMutability::MutRef,
                             ),
                         ))
@@ -526,7 +517,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                         PotentialNewType::DataType(ParserDataType::new(
                             span(ls.as_ref(), r),
                             ParserInnerType::Ref(
-                                Box::new(parser_data_type_or_auto(inner)),
+                                Box::new(inner.unwrap_or_auto()),
                                 RefMutability::Ref,
                             ),
                         ))
@@ -537,8 +528,8 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
         .then(lex(pad.clone(), just('!')).ignore_then(ty.clone()).or_not())
         .map(|(left, right)| {
             if let Some(right) = right {
-                let err = parser_data_type_or_auto(left);
-                let ok = parser_data_type_or_auto(right);
+                let err = left.unwrap_or_auto();
+                let ok = right.unwrap_or_auto();
                 PotentialNewType::DataType(ParserDataType::new(
                     Span::new_from_spans(err.span, ok.span),
                     ParserInnerType::Result {

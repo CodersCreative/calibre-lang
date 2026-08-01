@@ -121,6 +121,7 @@ impl MatchArmType {
             from: crate::Position { line: 0, col: 0 },
             to: crate::Position { line: 0, col: 0 },
         };
+
         &DEFAULT
     }
 
