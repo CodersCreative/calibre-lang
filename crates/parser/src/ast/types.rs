@@ -1,5 +1,5 @@
 use crate::{
-    ParserError, Span,
+    IdentifiersUsed, ParserError, Span,
     ast::{
         RefMutability,
         ffi::ParserFfiInnerType,
@@ -192,6 +192,38 @@ impl ParserDataType {
         };
 
         ParserDataType { data_type, span }
+    }
+}
+
+impl IdentifiersUsed for ParserDataType {
+    fn identifiers_used(&self) -> Vec<&String> {
+        let mut types = Vec::new();
+        match &self.data_type {
+            ParserInnerType::Struct(name) => {
+                types.push(name);
+            }
+            ParserInnerType::StructWithGenerics { identifier, .. } => {
+                types.push(identifier);
+            }
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+            } => {
+                types.extend(return_type.identifiers_used());
+                for param in parameters {
+                    types.extend(param.identifiers_used());
+                }
+            }
+            ParserInnerType::Option(inner) => {
+                types.extend(inner.identifiers_used());
+            }
+            ParserInnerType::Result { ok, err } => {
+                types.extend(ok.identifiers_used());
+                types.extend(err.identifiers_used());
+            }
+            _ => {}
+        }
+        types
     }
 }
 
@@ -645,6 +677,21 @@ impl PotentialNewType {
             PotentialNewType::DataType(dt) => PotentialNewType::DataType(dt.substitute(subst)),
             _ => self.clone(),
         }
+    }
+}
+
+impl IdentifiersUsed for PotentialNewType {
+    fn identifiers_used(&self) -> Vec<&String> {
+        let mut names = Vec::new();
+        match self {
+            PotentialNewType::NewType { type_def, .. } => {
+                names.extend(type_def.identifiers_used());
+            }
+            PotentialNewType::DataType(data_type) => {
+                names.extend(data_type.identifiers_used());
+            }
+        }
+        names
     }
 }
 

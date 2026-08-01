@@ -5,7 +5,7 @@ use crate::{
     typing::{MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType},
 };
 use calibre_parser::{
-    Span,
+    IdentifiersUsed, Span,
     ast::{
         ObjectMap, ObjectType, Operator,
         comparison::{BooleanOperator, ComparisonOperator},

@@ -16,6 +16,14 @@ pub mod parse;
 
 pub static COUNTER: LazyLock<RwLock<u64>> = LazyLock::new(|| RwLock::new(0));
 
+pub trait IdentifiersUsed {
+    fn identifiers_used(&self) -> Vec<&String>;
+
+    fn owned_identifiers_used(&self) -> Vec<String> {
+        self.identifiers_used().into_iter().cloned().collect()
+    }
+}
+
 #[inline]
 pub fn qualified_name_tail(name: &str) -> &str {
     name.rsplit(':').next().unwrap_or(name)
@@ -103,7 +111,7 @@ pub enum Bracket {
 #[derive(Debug, Default)]
 pub struct Parser {
     pub errors: Vec<ParserError>,
-    source_path: Option<std::path::PathBuf>,
+    source_path: Option<PathBuf>,
 }
 
 #[inline]
@@ -121,7 +129,7 @@ fn empty_scope_node() -> Node {
 }
 
 impl Parser {
-    pub fn set_source_path(&mut self, path: Option<std::path::PathBuf>) {
+    pub fn set_source_path(&mut self, path: Option<PathBuf>) {
         self.source_path = path;
     }
 

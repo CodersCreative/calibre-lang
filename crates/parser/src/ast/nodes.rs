@@ -1,5 +1,5 @@
 use crate::{
-    Span,
+    IdentifiersUsed, Span,
     ast::{
         ObjectType, Operator, RefMutability,
         binary::BinaryOperator,
@@ -115,6 +115,35 @@ impl TypeDefType {
             },
             TypeDefType::NewType(inner) => TypeDefType::NewType(Box::new(inner.substitute(subst))),
         }
+    }
+}
+
+impl IdentifiersUsed for TypeDefType {
+    fn identifiers_used(&self) -> Vec<&String> {
+        let mut names = Vec::new();
+        match self {
+            TypeDefType::Enum { variants, .. } => {
+                for (_, potential_type) in variants {
+                    if let Some(potential) = potential_type {
+                        names.extend(potential.identifiers_used());
+                    }
+                }
+            }
+            TypeDefType::Struct { fields } => {
+                if let ObjectType::Map(field_map) = fields {
+                    for (_, (potential_type, default_value)) in field_map {
+                        names.extend(potential_type.identifiers_used());
+                        if let Some(default) = default_value {
+                            names.extend(default.identifiers_used());
+                        }
+                    }
+                }
+            }
+            TypeDefType::NewType(inner) => {
+                names.extend(inner.identifiers_used());
+            }
+        }
+        names
     }
 }
 
@@ -324,6 +353,43 @@ impl Node {
             },
             _ => self,
         }
+    }
+}
+
+impl IdentifiersUsed for Node {
+    fn identifiers_used(&self) -> Vec<&String> {
+        let mut names = Vec::new();
+        match &self.node_type {
+            NodeType::Identifier(text) => {
+                names.push(text.get_ident().text());
+            }
+            NodeType::MemberExpression { path, .. } => {
+                if let Some((first, _)) = path.first() {
+                    names.extend(first.identifiers_used());
+                }
+            }
+            NodeType::CallExpression { args, .. } => {
+                for arg in args {
+                    match arg {
+                        CallArg::Value(node) => {
+                            names.extend(node.identifiers_used());
+                        }
+                        CallArg::Named(_, node) => {
+                            names.extend(node.identifiers_used());
+                        }
+                    }
+                }
+            }
+            NodeType::ScopeDeclaration {
+                body: Some(body), ..
+            } => {
+                for stmt in body {
+                    names.extend(stmt.identifiers_used());
+                }
+            }
+            _ => {}
+        }
+        names
     }
 }
 

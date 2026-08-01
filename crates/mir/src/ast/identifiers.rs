@@ -1,7 +1,8 @@
 use crate::{MiddleNode, MiddleNodeType};
+use calibre_parser::IdentifiersUsed;
 
-impl MiddleNode {
-    pub fn identifiers_used(&self) -> Vec<&String> {
+impl IdentifiersUsed for MiddleNode {
+    fn identifiers_used(&self) -> Vec<&String> {
         match &self.node_type {
             MiddleNodeType::Break { value: None, .. }
             | MiddleNodeType::EmptyLine
@@ -149,7 +150,9 @@ impl MiddleNode {
             }
         }
     }
+}
 
+impl MiddleNode {
     pub fn captured(&self) -> Vec<&String> {
         let mut used = self.identifiers_used();
         let declared = self.identifiers_declared();

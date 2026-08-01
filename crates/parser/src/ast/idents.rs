@@ -127,6 +127,13 @@ impl PotentialDollarIdentifier {
             Self::DollarIdentifier(x) => &x.span,
         }
     }
+
+    pub fn text(&self) -> &String {
+        match self {
+            Self::Identifier(x) => &x.text,
+            Self::DollarIdentifier(x) => &x.text,
+        }
+    }
 }
 
 impl Into<PotentialGenericTypeIdentifier> for PotentialDollarIdentifier {

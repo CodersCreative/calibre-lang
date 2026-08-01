@@ -3,11 +3,10 @@ use crate::{
     symbols::MiddleVariable,
 };
 use calibre_parser::{
-    Span,
+    IdentifiersUsed, Span,
     ast::{
-        ObjectType,
         idents::PotentialDollarIdentifier,
-        nodes::{CallArg, Node, NodeType, TypeDefType, VarType},
+        nodes::{Node, NodeType, VarType},
         types::{ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
@@ -127,7 +126,7 @@ fn order_declarations_by_dependencies(types: &[Node], constants: &[Node]) -> Vec
     for (i, node) in all_declarations.iter().enumerate() {
         match &node.node_type {
             NodeType::TypeDeclaration { object, .. } => {
-                let referenced_names = extract_referenced_names_from_type_def(object);
+                let referenced_names = object.owned_identifiers_used();
 
                 for ref_name in referenced_names {
                     if let Some(&ref_idx) = decl_names.get(&ref_name)
@@ -144,9 +143,8 @@ fn order_declarations_by_dependencies(types: &[Node], constants: &[Node]) -> Vec
                 data_type,
                 ..
             } if *var_type == VarType::Constant => {
-                let mut referenced_names = extract_referenced_names_from_node(value);
-                referenced_names
-                    .extend(extract_referenced_names_from_potential_new_type(data_type));
+                let mut referenced_names = value.owned_identifiers_used();
+                referenced_names.extend(data_type.owned_identifiers_used());
 
                 for ref_name in referenced_names {
                     if let Some(&ref_idx) = decl_names.get(&ref_name)
@@ -196,113 +194,6 @@ fn order_declarations_by_dependencies(types: &[Node], constants: &[Node]) -> Vec
     }
 
     ordered
-}
-
-fn extract_referenced_names_from_type_def(type_def: &TypeDefType) -> Vec<String> {
-    let mut names = Vec::new();
-    match type_def {
-        TypeDefType::Enum { variants, .. } => {
-            for (_, potential_type) in variants {
-                if let Some(potential) = potential_type {
-                    names.extend(extract_referenced_names_from_potential_new_type(potential));
-                }
-            }
-        }
-        TypeDefType::Struct { fields } => {
-            if let ObjectType::Map(field_map) = fields {
-                for (_, (potential_type, default_value)) in field_map {
-                    names.extend(extract_referenced_names_from_potential_new_type(
-                        potential_type,
-                    ));
-                    if let Some(default) = default_value {
-                        names.extend(extract_referenced_names_from_node(default));
-                    }
-                }
-            }
-        }
-        TypeDefType::NewType(inner) => {
-            names.extend(extract_referenced_names_from_potential_new_type(inner));
-        }
-    }
-    names
-}
-
-fn extract_referenced_names_from_potential_new_type(potential: &PotentialNewType) -> Vec<String> {
-    let mut names = Vec::new();
-    match potential {
-        PotentialNewType::NewType { type_def, .. } => {
-            names.extend(extract_referenced_names_from_type_def(type_def));
-        }
-        PotentialNewType::DataType(data_type) => {
-            names.extend(extract_referenced_types_from_parser_data_type(data_type));
-        }
-    }
-    names
-}
-
-fn extract_referenced_types_from_parser_data_type(data_type: &ParserDataType) -> Vec<String> {
-    let mut types = Vec::new();
-    match &data_type.data_type {
-        ParserInnerType::Struct(name) => {
-            types.push(name.clone());
-        }
-        ParserInnerType::StructWithGenerics { identifier, .. } => {
-            types.push(identifier.clone());
-        }
-        ParserInnerType::Function {
-            return_type,
-            parameters,
-        } => {
-            types.extend(extract_referenced_types_from_parser_data_type(return_type));
-            for param in parameters {
-                types.extend(extract_referenced_types_from_parser_data_type(param));
-            }
-        }
-        ParserInnerType::Option(inner) => {
-            types.extend(extract_referenced_types_from_parser_data_type(inner));
-        }
-        ParserInnerType::Result { ok, err } => {
-            types.extend(extract_referenced_types_from_parser_data_type(ok));
-            types.extend(extract_referenced_types_from_parser_data_type(err));
-        }
-        _ => {}
-    }
-    types
-}
-
-fn extract_referenced_names_from_node(node: &Node) -> Vec<String> {
-    let mut names = Vec::new();
-    match &node.node_type {
-        NodeType::Identifier(text) => {
-            names.push(text.to_string());
-        }
-        NodeType::MemberExpression { path, .. } => {
-            if let Some((first, _)) = path.first() {
-                names.extend(extract_referenced_names_from_node(first));
-            }
-        }
-        NodeType::CallExpression { args, .. } => {
-            for arg in args {
-                match arg {
-                    CallArg::Value(node) => {
-                        names.extend(extract_referenced_names_from_node(node));
-                    }
-                    CallArg::Named(_, node) => {
-                        names.extend(extract_referenced_names_from_node(node));
-                    }
-                }
-            }
-        }
-        NodeType::ScopeDeclaration {
-            body: Some(body), ..
-        } => {
-            for stmt in body {
-                names.extend(extract_referenced_names_from_node(stmt));
-            }
-        }
-        _ => {}
-    }
-    names
 }
 
 fn reorder_scope_body(body: Vec<Node>) -> Vec<Node> {
