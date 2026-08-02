@@ -6,7 +6,7 @@ use crate::{
     value::{ExternFunction, GcMap, RuntimeValue, WaitGroupInner},
     variables::VariableStore,
 };
-use calibre_lir::BlockId;
+use calibre_lir::ast::BlockId;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::OnceLock;

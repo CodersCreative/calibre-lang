@@ -1,15 +1,4 @@
-use std::{
-    cell::UnsafeCell,
-    collections::VecDeque,
-    fmt::{Debug, Display, Write},
-    net::{TcpListener, TcpStream},
-    sync::{
-        Arc, Condvar, Mutex,
-        atomic::{AtomicBool, AtomicIsize, Ordering},
-    },
-};
-
-use calibre_lir::BlockId;
+use calibre_lir::ast::BlockId;
 use calibre_parser::ast::{
     ObjectMap,
     ffi::ParserFfiInnerType,
@@ -23,6 +12,16 @@ use rustc_hash::FxHashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::os::raw::c_void;
+use std::{
+    cell::UnsafeCell,
+    collections::VecDeque,
+    fmt::{Debug, Display, Write},
+    net::{TcpListener, TcpStream},
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicBool, AtomicIsize, Ordering},
+    },
+};
 
 use crate::{
     VM,

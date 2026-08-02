@@ -1,4 +1,4 @@
-use calibre_lir::LirEnvironment;
+use calibre_lir::environment::LirEnvironment;
 use calibre_mir::{
     ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr,
     tags::context::PackageMetadata, testing::Testing,

@@ -1,4 +1,7 @@
-use calibre_lir::{BlockId, LirGlobal, LirLiteral, LirRegistry};
+use calibre_lir::{
+    ast::{BlockId, LirLiteral},
+    environment::{LirGlobal, LirRegistry},
+};
 use calibre_parser::Span;
 use calibre_parser::ast::{
     binary::BinaryOperator,

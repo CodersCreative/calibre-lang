@@ -1,6 +1,7 @@
 use super::ir::*;
 use calibre_lir::{
-    BlockId, LirBlock, LirFunction, LirInstr, LirLValue, LirLiteral, LirNodeType, LirTerminator,
+    ast::{BlockId, LirBlock, LirLValue, LirLiteral, LirNode, LirNodeType, LirTerminator},
+    environment::LirFunction,
 };
 use calibre_parser::Span;
 use calibre_parser::ast::types::{ParserDataType, ParserInnerType};

@@ -1,6 +1,6 @@
 use calibre::{CalibreEngine, CalibreError, CompileMode};
 use calibre_diagnostics;
-use calibre_lir::LirEnvironment;
+use calibre_lir::environment::LirEnvironment;
 use calibre_mir::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,

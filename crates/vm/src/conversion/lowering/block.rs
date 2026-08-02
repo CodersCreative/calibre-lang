@@ -123,7 +123,7 @@ impl<'a> BlockLoweringCtx<'a> {
         self.block.instruction_spans.push(span);
     }
 
-    pub(super) fn lower_instr(&mut self, node: LirInstr, assigned: Option<Reg>, set_ret: bool) {
+    pub(super) fn lower_instr(&mut self, node: LirNode, assigned: Option<Reg>, set_ret: bool) {
         match node.node_type {
             LirNodeType::Noop => {}
             LirNodeType::Declare { dest, value } => {

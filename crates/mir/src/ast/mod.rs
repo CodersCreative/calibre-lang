@@ -29,10 +29,20 @@ impl MiddleNode {
     }
 
     pub fn identifier(span: Span, text: impl ToString) -> Self {
-        Self::new(
-            MiddleNodeType::Identifier(ParserText::from(text.to_string()).into()),
-            span,
-        )
+        Self::new(MiddleNodeType::Identifier(text.to_string().into()), span)
+    }
+
+    pub fn member_field(&self) -> Box<str> {
+        match &self.node_type {
+            MiddleNodeType::Identifier(name) => name.text.clone().into_boxed_str(),
+            MiddleNodeType::IntLiteral(ParsedIntLiteral { value, int_type }) => match int_type {
+                IntLiteralType::Int => value.to_string().into_boxed_str(),
+                IntLiteralType::UInt => format!("{value}u").into_boxed_str(),
+                IntLiteralType::Byte => format!("{value}b").into_boxed_str(),
+            },
+            MiddleNodeType::FloatLiteral(x) => x.to_string().into_boxed_str(),
+            _ => "<invalid>".to_string().into_boxed_str(),
+        }
     }
 
     pub fn rewrite_main_emits_to_returns(self) -> Self {
@@ -254,6 +264,25 @@ pub enum MiddleNodeType {
         then: Box<MiddleNode>,
         otherwise: Option<Box<MiddleNode>>,
     },
+}
+
+impl MiddleNodeType {
+    #[inline]
+    pub fn is_simple_function_fallback(&self) -> bool {
+        matches!(
+            self,
+            MiddleNodeType::Identifier(_)
+                | MiddleNodeType::IntLiteral { .. }
+                | MiddleNodeType::FloatLiteral(_)
+                | MiddleNodeType::StringLiteral(_)
+                | MiddleNodeType::CharLiteral(_)
+                | MiddleNodeType::Null
+                | MiddleNodeType::MemberExpression { .. }
+                | MiddleNodeType::AggregateExpression { .. }
+                | MiddleNodeType::ListLiteral(_, _)
+                | MiddleNodeType::RangeDeclaration { .. }
+        )
+    }
 }
 
 impl Display for MiddleNode {

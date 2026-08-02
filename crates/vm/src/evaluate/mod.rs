@@ -1,4 +1,4 @@
-use calibre_lir::BlockId;
+use calibre_lir::ast::BlockId;
 use calibre_parser::ast::ObjectMap;
 use calibre_parser::ast::binary::BinaryOperator;
 use calibre_parser::ast::comparison::ComparisonOperator;
