@@ -2,21 +2,19 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::{MiddleEnvironment, get_disamubiguous_name},
     errors::MiddleErr,
-    symbols::{FunctionParamDefault, MiddleOverload, MiddleVariable},
+    symbols::FunctionParamDefault,
     tags::TagInfo,
     typing::{MiddleObject, MiddleTypeDefType},
 };
 use calibre_parser::{
     Span,
     ast::{
-        Operator,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{AsFailureMode, Node, NodeType, Overload, TypeDefType, VarType},
         types::{ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 use rustc_hash::FxHashMap;
-use std::str::FromStr;
 
 impl MiddleEnvironment {
     pub fn evaluate_var_declaration(
@@ -143,8 +141,6 @@ impl MiddleEnvironment {
                 .insert(identifier.text.clone(), defaults);
         }
 
-        let current_location = self.context.current_location.clone();
-
         let data_type = if data_type.is_auto() {
             let err = self.context.err_at_current(MiddleErr::InferImpossible);
             self.resolve_type_from_node(scope, &value).ok_or(err)?
@@ -153,24 +149,13 @@ impl MiddleEnvironment {
         };
 
         let mut value = if let Some((header, _)) = function_decl {
-            self.symbols.variables.insert(
+            self.register_variable(
+                scope,
+                &identifier.text,
                 new_name.clone(),
-                MiddleVariable {
-                    data_type: data_type.clone(),
-                    var_type,
-                    location: current_location.clone(),
-                },
-            );
-
-            let err = self
-                .context
-                .err_at_current(MiddleErr::Scope(scope.to_string()));
-            self.scoping
-                .scopes
-                .get_mut(scope)
-                .ok_or(err)?
-                .mappings
-                .insert(identifier.text.clone(), new_name.clone());
+                data_type.clone(),
+                var_type,
+            )?;
 
             let new_scope = self.scoping.new_scope_from_parent_shallow(*scope);
 
@@ -194,22 +179,15 @@ impl MiddleEnvironment {
                     return Err(MiddleErr::InferImpossible);
                 };
 
-                self.symbols.variables.insert(
+                self.register_variable(
+                    &new_scope,
+                    &og_name.text,
                     new_name.clone(),
-                    MiddleVariable {
-                        data_type: data_type.clone(),
-                        var_type: VarType::Mutable,
-                        location: current_location.clone(),
-                    },
-                );
+                    data_type.clone(),
+                    VarType::Mutable,
+                )?;
 
-                let err = self
-                    .context
-                    .err_at_current(MiddleErr::Scope(new_scope.to_string()));
-                let scope_ref = self.scoping.scopes.get_mut(&new_scope).ok_or(err)?;
-                scope_ref
-                    .mappings
-                    .insert(og_name.text.clone(), new_name.clone());
+                let scope_ref = self.scoping.scope_mut_or_err(&new_scope)?;
                 scope_ref.defined.push(new_name.clone());
             }
 
@@ -233,24 +211,13 @@ impl MiddleEnvironment {
             original_value_node.node_type,
             NodeType::FunctionDeclaration { .. }
         ) {
-            self.symbols.variables.insert(
+            self.register_variable(
+                scope,
+                &identifier.text,
                 new_name.clone(),
-                MiddleVariable {
-                    data_type: data_type.clone(),
-                    var_type: var_type.clone(),
-                    location: current_location.clone(),
-                },
-            );
-
-            let err = self
-                .context
-                .err_at_current(MiddleErr::Scope(scope.to_string()));
-            self.scoping
-                .scopes
-                .get_mut(scope)
-                .ok_or(err)?
-                .mappings
-                .insert(identifier.text.clone(), new_name.clone());
+                data_type.clone(),
+                var_type.clone(),
+            )?;
         }
 
         Ok(MiddleNode {
@@ -374,35 +341,11 @@ impl MiddleEnvironment {
 
             if !overloads.is_empty() {
                 for overload in overloads {
-                    overload.verify().map_err(|e| MiddleErr::Overload(e))?;
-                    let overload = MiddleOverload {
-                        operator: Operator::from_str(&overload.operator.text)
-                            .map_err(|e| MiddleErr::Overload(e))?,
-                        return_type: self
-                            .resolve_potential_new_type(scope, overload.header.return_type.clone()),
-                        parameters: {
-                            let mut params = Vec::new();
-                            for param in overload.header.parameters.iter() {
-                                params.push(
-                                            match param.1.clone() {
-                                                Some(x) if param.2.is_none() => {
-                                                    self.resolve_potential_new_type(scope, x)
-                                                }
-                                                _ => {
-                                                    return Err(MiddleErr::Overload(String::from(
-                                                        "Type needs to be explicit when doing overloads and default types arent allowed",
-                                                    )));
-                                                }
-                                            }
-                                        );
-                            }
-                            params
-                        },
-                        func: overload.into(),
-                        generic_params: generic_params.clone(),
-                    };
-
-                    self.symbols.overloads.push(overload);
+                    if let Some(processed) =
+                        self.process_overload(scope, overload, generic_params.clone(), None)?
+                    {
+                        self.symbols.overloads.push(processed);
+                    }
                 }
             }
 
@@ -446,33 +389,11 @@ impl MiddleEnvironment {
                 .unwrap_or_default();
 
             for overload in overloads {
-                overload.verify().map_err(|e| MiddleErr::Overload(e))?;
-                let overload = MiddleOverload {
-                    operator: Operator::from_str(&overload.operator.text)
-                        .map_err(|e| MiddleErr::Overload(e))?,
-                    return_type: self
-                        .resolve_potential_new_type(scope, overload.header.return_type.clone()),
-                    parameters: {
-                        let mut params = Vec::new();
-                        for param in overload.header.parameters.iter() {
-                            params.push(match param.1.clone() {
-                                        Some(x) if param.2.is_none() => {
-                                            self.resolve_potential_new_type(scope, x)
-                                        }
-                                        _ => {
-                                            return Err(MiddleErr::Overload(String::from(
-                                                "Type needs to be explicit when doing overloads and default types arent allowed",
-                                            )));
-                                        }
-                                    });
-                        }
-                        params
-                    },
-                    func: overload.into(),
-                    generic_params: generic_params.clone(),
-                };
-
-                self.symbols.overloads.push(overload);
+                if let Some(processed) =
+                    self.process_overload(scope, overload, generic_params.clone(), None)?
+                {
+                    self.symbols.overloads.push(processed);
+                }
             }
 
             self.scoping
@@ -561,48 +482,11 @@ impl MiddleEnvironment {
         };
 
         for overload in overloads {
-            overload.verify().map_err(|e| MiddleErr::Overload(e))?;
-            let overload = MiddleOverload {
-                operator: Operator::from_str(&overload.operator.text)
-                    .map_err(|e| MiddleErr::Overload(e))?,
-                return_type: self
-                    .resolve_potential_new_type(scope, overload.header.return_type.clone()),
-                parameters: {
-                    let mut params = Vec::new();
-                    let mut contains = false;
-
-                    for param in overload.header.parameters.iter() {
-                        let ty = match param.1.clone() {
-                            Some(x) if param.2.is_none() => {
-                                self.resolve_potential_new_type(scope, x)
-                            }
-                            _ => {
-                                return Err(MiddleErr::Overload(String::from(
-                                    "Type needs to be explicit when doing overloads and default types arent allowed",
-                                )));
-                            }
-                        };
-
-                        if let ParserInnerType::Struct(x) = ty.data_type.clone().unwrap_all_refs()
-                            && x == &new_name
-                        {
-                            contains = true;
-                        }
-
-                        params.push(ty);
-                    }
-
-                    if !contains {
-                        continue;
-                    }
-
-                    params
-                },
-                func: overload.into(),
-                generic_params: Vec::new(),
-            };
-
-            self.symbols.overloads.push(overload);
+            if let Some(processed) =
+                self.process_overload(scope, overload, Vec::new(), Some(new_name.clone()))?
+            {
+                self.symbols.overloads.push(processed);
+            }
         }
 
         if let Some(prev) = previous_self {

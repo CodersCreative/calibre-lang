@@ -3,7 +3,7 @@ use crate::{
     environment::{MiddleEnvironment, get_disamubiguous_name},
     errors::MiddleErr,
     scoping::MiddleScope,
-    symbols::{FunctionParamDefault, MiddleVariable},
+    symbols::FunctionParamDefault,
     tags::TagInfo,
 };
 use calibre_parser::{
@@ -674,22 +674,13 @@ impl MiddleEnvironment {
             return_type.clone(),
         );
 
-        self.symbols.variables.insert(
+        self.register_variable(
+            scope,
+            &ident.text,
             new_name.clone(),
-            MiddleVariable {
-                data_type: fn_type.clone(),
-                var_type: VarType::Constant,
-                location: self.context.current_location.clone(),
-            },
-        );
-
-        let err = self
-            .context
-            .err_at_current(MiddleErr::Scope(scope.to_string()));
-        let scope_ref = self.scoping.scopes.get_mut(scope).ok_or(err)?;
-        scope_ref
-            .mappings
-            .insert(ident.text.clone(), new_name.clone());
+            fn_type.clone(),
+            VarType::Constant,
+        )?;
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::VariableDeclaration {
@@ -745,22 +736,15 @@ impl MiddleEnvironment {
                 return Err(MiddleErr::InferImpossible);
             };
 
-            self.symbols.variables.insert(
+            self.register_variable(
+                &new_scope,
+                &og_name.text,
                 new_name.clone(),
-                MiddleVariable {
-                    data_type: data_type.clone(),
-                    var_type: VarType::Mutable,
-                    location: self.context.current_location.clone(),
-                },
-            );
+                data_type.clone(),
+                VarType::Mutable,
+            )?;
 
-            let err = self
-                .context
-                .err_at_current(MiddleErr::Scope(new_scope.to_string()));
-            let scope_ref = self.scoping.scopes.get_mut(&new_scope).ok_or(err)?;
-            scope_ref
-                .mappings
-                .insert(og_name.text.clone(), new_name.clone());
+            let scope_ref = self.scoping.scope_mut_or_err(&new_scope)?;
             scope_ref.defined.push(new_name.clone());
             params.push((
                 ParserText::from(new_name),
@@ -775,22 +759,15 @@ impl MiddleEnvironment {
             let caller_context_type =
                 ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
 
-            self.symbols.variables.insert(
+            self.register_variable(
+                &new_scope,
+                "caller_context",
                 caller_context_name.clone(),
-                MiddleVariable {
-                    data_type: caller_context_type.clone(),
-                    var_type: VarType::Mutable,
-                    location: self.context.current_location.clone(),
-                },
-            );
+                caller_context_type.clone(),
+                VarType::Mutable,
+            )?;
 
-            let err = self
-                .context
-                .err_at_current(MiddleErr::Scope(new_scope.to_string()));
-            let scope_ref = self.scoping.scopes.get_mut(&new_scope).ok_or(err)?;
-            scope_ref
-                .mappings
-                .insert("caller_context".to_string(), caller_context_name.clone());
+            let scope_ref = self.scoping.scope_mut_or_err(&new_scope)?;
             scope_ref.defined.push(caller_context_name.clone());
 
             params.push((

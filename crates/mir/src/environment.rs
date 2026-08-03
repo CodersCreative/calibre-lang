@@ -3,7 +3,7 @@ use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
 use crate::multipass::prepare_ast;
 use crate::scoping::Scoping;
-use crate::symbols::Symbols;
+use crate::symbols::{MiddleOverload, MiddleVariable, Symbols};
 use crate::tags::Tagging;
 use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;
@@ -11,14 +11,16 @@ use crate::typing::Typing;
 use calibre_parser::{
     COUNTER, Span,
     ast::{
+        Operator,
         idents::ParserText,
-        nodes::{FunctionHeader, Node, NodeType, VarType},
+        nodes::{FunctionHeader, Node, NodeType, Overload, VarType},
         types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 use rustc_hash::FxHashMap;
 use std::fmt::Debug;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Default)]
 pub struct MiddleEnvironment {
@@ -57,6 +59,82 @@ pub fn get_disamubiguous_name(
 }
 
 impl MiddleEnvironment {
+    pub fn process_overload(
+        &mut self,
+        scope: &u64,
+        overload: Overload,
+        generic_params: Vec<String>,
+        target_name: Option<String>,
+    ) -> Result<Option<MiddleOverload>, MiddleErr> {
+        overload.verify().map_err(|e| MiddleErr::Overload(e))?;
+
+        let operator =
+            Operator::from_str(&overload.operator.text).map_err(|e| MiddleErr::Overload(e))?;
+
+        let return_type =
+            self.resolve_potential_new_type(scope, overload.header.return_type.clone());
+
+        let mut params = Vec::new();
+        let mut contains_target = false;
+
+        for param in overload.header.parameters.iter() {
+            let ty = match param.1.clone() {
+                Some(x) if param.2.is_none() => self.resolve_potential_new_type(scope, x),
+                _ => {
+                    return Err(MiddleErr::Overload(String::from(
+                        "Type needs to be explicit when doing overloads and default types arent allowed",
+                    )));
+                }
+            };
+
+            if let Some(ref target) = target_name
+                && let ParserInnerType::Struct(x) = ty.data_type.clone().unwrap_all_refs()
+                && x == target
+            {
+                contains_target = true;
+            }
+
+            params.push(ty);
+        }
+
+        if target_name.is_some() && !contains_target {
+            return Ok(None);
+        }
+
+        Ok(Some(MiddleOverload {
+            operator,
+            return_type,
+            parameters: params,
+            func: overload.into(),
+            generic_params,
+        }))
+    }
+
+    pub fn register_variable(
+        &mut self,
+        scope: &u64,
+        original_name: impl ToString,
+        new_name: String,
+        data_type: ParserDataType,
+        var_type: VarType,
+    ) -> Result<(), MiddleErr> {
+        self.symbols.variables.insert(
+            new_name.clone(),
+            MiddleVariable {
+                data_type,
+                var_type,
+                location: self.context.current_location.clone(),
+            },
+        );
+
+        self.scoping
+            .scope_mut_or_err(scope)?
+            .mappings
+            .insert(original_name.to_string(), new_name);
+
+        Ok(())
+    }
+
     pub fn ensure_specialized_type(
         &mut self,
         _scope: &u64,

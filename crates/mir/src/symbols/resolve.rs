@@ -306,16 +306,17 @@ impl MiddleEnvironment {
         }
     }
 
-    pub fn resolve_potential_dollar_ident(
+    fn resolve_identifier_with_mode(
         &self,
         scope: &u64,
         iden: &PotentialDollarIdentifier,
+        with_macro_expansion: bool,
+        with_scope_resolution: bool,
     ) -> Option<ParserText> {
-        match iden {
-            PotentialDollarIdentifier::Identifier(x) => self.resolve_parser_text(scope, x),
-            PotentialDollarIdentifier::DollarIdentifier(x) => {
-                let text = self
-                    .scoping
+        let base_text = match iden {
+            PotentialDollarIdentifier::Identifier(x) => Some(x.clone()),
+            PotentialDollarIdentifier::DollarIdentifier(x) => if with_macro_expansion {
+                self.scoping
                     .resolve_macro_arg(scope, x)
                     .map(|x| match &x.node_type {
                         NodeType::Identifier(x) => match x.get_ident() {
@@ -324,15 +325,30 @@ impl MiddleEnvironment {
                         },
                         _ => None,
                     })
-                    .flatten();
-
-                if let Some(text) = text {
-                    self.resolve_parser_text(scope, &text)
-                } else {
-                    None
-                }
+                    .flatten()
+            } else {
+                None
             }
+            .or_else(|| Some(x.clone())),
+        };
+
+        if let Some(text) = base_text {
+            if with_scope_resolution {
+                self.resolve_parser_text(scope, &text)
+            } else {
+                Some(text)
+            }
+        } else {
+            None
         }
+    }
+
+    pub fn resolve_potential_dollar_ident(
+        &self,
+        scope: &u64,
+        iden: &PotentialDollarIdentifier,
+    ) -> Option<ParserText> {
+        self.resolve_identifier_with_mode(scope, iden, true, true)
     }
 
     pub fn resolve_dollar_ident_only(
@@ -340,21 +356,7 @@ impl MiddleEnvironment {
         scope: &u64,
         iden: &PotentialDollarIdentifier,
     ) -> Option<ParserText> {
-        match iden {
-            PotentialDollarIdentifier::Identifier(x) => Some(x.clone()),
-            PotentialDollarIdentifier::DollarIdentifier(x) => self
-                .scoping
-                .resolve_macro_arg(scope, x)
-                .map(|x| match &x.node_type {
-                    NodeType::Identifier(x) => match x.get_ident() {
-                        PotentialDollarIdentifier::DollarIdentifier(x) => Some(x.clone()),
-                        PotentialDollarIdentifier::Identifier(x) => Some(x.clone()),
-                    },
-                    _ => None,
-                })
-                .flatten()
-                .or_else(|| Some(x.clone())),
-        }
+        self.resolve_identifier_with_mode(scope, iden, true, false)
     }
 
     pub fn resolve_ffi_data_type(
