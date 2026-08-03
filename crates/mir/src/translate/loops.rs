@@ -3,6 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::LoopContext,
+    traversal::NodeVisitor,
 };
 use calibre_parser::{
     Span,
@@ -16,6 +17,38 @@ use calibre_parser::{
     },
 };
 
+struct MutIterAliasDerefVisitor<'a> {
+    alias: &'a str,
+    iter_id: &'a PotentialDollarIdentifier,
+    idx_id: &'a PotentialDollarIdentifier,
+    context: &'a crate::context::MiddleContext,
+}
+
+impl<'a> NodeVisitor for MutIterAliasDerefVisitor<'a> {
+    fn visit_node_type(&mut self, node_type: NodeType) -> NodeType {
+        let span = self.context.current_span();
+
+        match node_type {
+            NodeType::DerefStatement { value } => {
+                if let NodeType::Identifier(ref id) = value.node_type
+                    && id.get_ident().to_string() == self.alias
+                {
+                    return NodeType::MemberExpression {
+                        path: vec![
+                            (Node::identifier(span, self.iter_id), false),
+                            (Node::identifier(span, self.idx_id), true),
+                        ],
+                    };
+                }
+                NodeType::DerefStatement {
+                    value: Box::new(self.visit(*value)),
+                }
+            }
+            other => self.visit_children(other),
+        }
+    }
+}
+
 impl MiddleEnvironment {
     fn rewrite_mut_iter_alias_deref(
         &self,
@@ -24,180 +57,13 @@ impl MiddleEnvironment {
         iter_id: &PotentialDollarIdentifier,
         idx_id: &PotentialDollarIdentifier,
     ) -> Node {
-        let span = node.span;
-        let member_at_index = || {
-            Node::new(
-                self.context.current_span(),
-                NodeType::MemberExpression {
-                    path: vec![
-                        (
-                            Node::identifier(self.context.current_span(), iter_id),
-                            false,
-                        ),
-                        (Node::identifier(self.context.current_span(), idx_id), true),
-                    ],
-                },
-            )
+        let mut visitor = MutIterAliasDerefVisitor {
+            alias,
+            iter_id,
+            idx_id,
+            context: &self.context,
         };
-
-        match node.node_type {
-            NodeType::DerefStatement { value } => match value.node_type {
-                NodeType::Identifier(id) if id.get_ident().to_string() == alias => {
-                    member_at_index()
-                }
-                other => Node::new(
-                    span,
-                    NodeType::DerefStatement {
-                        value: Box::new(self.rewrite_mut_iter_alias_deref(
-                            Node::new(span, other),
-                            alias,
-                            iter_id,
-                            idx_id,
-                        )),
-                    },
-                ),
-            },
-            NodeType::AssignmentExpression { identifier, value } => Node::new(
-                span,
-                NodeType::AssignmentExpression {
-                    identifier: Box::new(self.rewrite_mut_iter_alias_deref(
-                        *identifier,
-                        alias,
-                        iter_id,
-                        idx_id,
-                    )),
-                    value: Box::new(
-                        self.rewrite_mut_iter_alias_deref(*value, alias, iter_id, idx_id),
-                    ),
-                },
-            ),
-            NodeType::BinaryExpression {
-                left,
-                right,
-                operator,
-            } => Node::new(
-                span,
-                NodeType::BinaryExpression {
-                    left: Box::new(
-                        self.rewrite_mut_iter_alias_deref(*left, alias, iter_id, idx_id),
-                    ),
-                    right: Box::new(
-                        self.rewrite_mut_iter_alias_deref(*right, alias, iter_id, idx_id),
-                    ),
-                    operator,
-                },
-            ),
-            NodeType::BooleanExpression {
-                left,
-                right,
-                operator,
-            } => Node::new(
-                span,
-                NodeType::BooleanExpression {
-                    left: Box::new(
-                        self.rewrite_mut_iter_alias_deref(*left, alias, iter_id, idx_id),
-                    ),
-                    right: Box::new(
-                        self.rewrite_mut_iter_alias_deref(*right, alias, iter_id, idx_id),
-                    ),
-                    operator,
-                },
-            ),
-            NodeType::ComparisonExpression {
-                left,
-                right,
-                operator,
-            } => Node::new(
-                span,
-                NodeType::ComparisonExpression {
-                    left: Box::new(
-                        self.rewrite_mut_iter_alias_deref(*left, alias, iter_id, idx_id),
-                    ),
-                    right: Box::new(
-                        self.rewrite_mut_iter_alias_deref(*right, alias, iter_id, idx_id),
-                    ),
-                    operator,
-                },
-            ),
-            NodeType::CallExpression {
-                string_fn,
-                caller,
-                generic_types,
-                args,
-                reverse_args,
-            } => Node::new(
-                span,
-                NodeType::CallExpression {
-                    string_fn,
-                    caller: Box::new(
-                        self.rewrite_mut_iter_alias_deref(*caller, alias, iter_id, idx_id),
-                    ),
-                    generic_types,
-                    args: args
-                        .into_iter()
-                        .map(|a| match a {
-                            CallArg::Value(v) => CallArg::Value(
-                                self.rewrite_mut_iter_alias_deref(v, alias, iter_id, idx_id),
-                            ),
-                            CallArg::Named(n, v) => CallArg::Named(
-                                n,
-                                self.rewrite_mut_iter_alias_deref(v, alias, iter_id, idx_id),
-                            ),
-                        })
-                        .collect(),
-                    reverse_args: reverse_args
-                        .into_iter()
-                        .map(|n| self.rewrite_mut_iter_alias_deref(n, alias, iter_id, idx_id))
-                        .collect(),
-                },
-            ),
-            NodeType::IfStatement {
-                comparison,
-                then,
-                otherwise,
-            } => Node::new(
-                span,
-                NodeType::IfStatement {
-                    comparison: Box::new(match *comparison {
-                        IfComparisonType::If(n) => IfComparisonType::If(
-                            self.rewrite_mut_iter_alias_deref(n, alias, iter_id, idx_id),
-                        ),
-                        IfComparisonType::IfLet { value, pattern } => IfComparisonType::IfLet {
-                            value: self.rewrite_mut_iter_alias_deref(value, alias, iter_id, idx_id),
-                            pattern,
-                        },
-                    }),
-                    then: Box::new(
-                        self.rewrite_mut_iter_alias_deref(*then, alias, iter_id, idx_id),
-                    ),
-                    otherwise: otherwise.map(|n| {
-                        Box::new(self.rewrite_mut_iter_alias_deref(*n, alias, iter_id, idx_id))
-                    }),
-                },
-            ),
-            NodeType::ScopeDeclaration {
-                body,
-                named,
-                is_temp,
-                create_new_scope,
-                define,
-            } => Node::new(
-                span,
-                NodeType::ScopeDeclaration {
-                    body: body.map(|items| {
-                        items
-                            .into_iter()
-                            .map(|n| self.rewrite_mut_iter_alias_deref(n, alias, iter_id, idx_id))
-                            .collect()
-                    }),
-                    named,
-                    is_temp,
-                    create_new_scope,
-                    define,
-                },
-            ),
-            other => Node::new(span, other),
-        }
+        visitor.visit(node)
     }
 
     fn wrap_loop_body(&mut self, target_body: Node, injection: Node, at_start: bool) -> Node {

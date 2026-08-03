@@ -1,5 +1,9 @@
 use crate::{
-    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, typing::MiddleTypeDefType,
+    ast::MiddleNode,
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    traversal::{NodeAnalyzer, NodeVisitor},
+    typing::MiddleTypeDefType,
 };
 use calibre_parser::{
     Span,
@@ -13,55 +17,31 @@ use calibre_parser::{
     },
 };
 
+struct IdentAnalyzer<'a> {
+    target: &'a str,
+    found: bool,
+}
+
+impl<'a> crate::traversal::NodeAnalyzer for IdentAnalyzer<'a> {
+    fn analyze_node_type(&mut self, node_type: &NodeType) -> bool {
+        if let NodeType::Identifier(id) = node_type {
+            if id.get_ident().to_string() == self.target {
+                self.found = true;
+                return false; // Stop traversal
+            }
+        }
+        !self.found && self.analyze_children(node_type)
+    }
+}
+
 impl MiddleEnvironment {
     fn node_uses_ident(node: &Node, target: &str) -> bool {
-        match &node.node_type {
-            NodeType::Identifier(id) => id.get_ident().to_string() == target,
-            NodeType::BooleanExpression { left, right, .. }
-            | NodeType::ComparisonExpression { left, right, .. } => {
-                Self::node_uses_ident(left, target) || Self::node_uses_ident(right, target)
-            }
-            NodeType::AsExpression { value, .. } => Self::node_uses_ident(value, target),
-            NodeType::IsExpression { value, .. } => Self::node_uses_ident(value, target),
-            NodeType::CallExpression {
-                caller,
-                args,
-                reverse_args,
-                ..
-            } => {
-                Self::node_uses_ident(caller, target)
-                    || args.iter().any(|a| match a {
-                        CallArg::Value(v) => Self::node_uses_ident(v, target),
-                        CallArg::Named(_, v) => Self::node_uses_ident(v, target),
-                    })
-                    || reverse_args
-                        .iter()
-                        .any(|a| Self::node_uses_ident(a, target))
-            }
-            NodeType::MemberExpression { path } => {
-                path.iter().any(|(n, _)| Self::node_uses_ident(n, target))
-            }
-            NodeType::ParenExpression { value }
-            | NodeType::NotExpression { value }
-            | NodeType::NegExpression { value }
-            | NodeType::DebugExpression { value } => Self::node_uses_ident(value, target),
-            NodeType::TupleLiteral { values } => {
-                values.iter().any(|n| Self::node_uses_ident(n, target))
-            }
-            NodeType::StructLiteral { value, .. } => match value {
-                calibre_parser::ast::ObjectType::Map(fields) => {
-                    fields.iter().any(|(_, n)| Self::node_uses_ident(n, target))
-                }
-                calibre_parser::ast::ObjectType::Tuple(values) => {
-                    values.iter().any(|n| Self::node_uses_ident(n, target))
-                }
-            },
-            NodeType::ScopeDeclaration { body, .. } => body
-                .as_ref()
-                .map(|b| b.iter().any(|n| Self::node_uses_ident(n, target)))
-                .unwrap_or(false),
-            _ => false,
-        }
+        let mut analyzer = IdentAnalyzer {
+            target,
+            found: false,
+        };
+        analyzer.analyze(node);
+        analyzer.found
     }
 
     fn match_index_access(&self, base: Node, index: usize) -> Node {
@@ -712,76 +692,35 @@ impl MiddleEnvironment {
         }
         Self::builtin_enum_variant_index(variant_name)
     }
+}
 
-    fn rewrite_match_guard_bindings(node: Node, bindings: &[(String, Node)]) -> Node {
-        match node.node_type {
+struct GuardBindingsRewriter<'a> {
+    bindings: &'a [(String, Node)],
+}
+
+impl<'a> NodeVisitor for GuardBindingsRewriter<'a> {
+    fn visit_node_type(&mut self, node_type: NodeType) -> NodeType {
+        match node_type {
             NodeType::Identifier(id) => {
-                if let Some((_, replacement)) = bindings
+                if let Some((_, replacement)) = self
+                    .bindings
                     .iter()
                     .find(|(name, _)| *name == id.get_ident().to_string())
                 {
-                    replacement.clone()
+                    replacement.node_type.clone()
                 } else {
-                    Node::new(node.span, NodeType::Identifier(id))
+                    NodeType::Identifier(id)
                 }
             }
-            NodeType::BooleanExpression {
-                left,
-                right,
-                operator,
-            } => Node::new(
-                node.span,
-                NodeType::BooleanExpression {
-                    left: Box::new(Self::rewrite_match_guard_bindings(*left, bindings)),
-                    right: Box::new(Self::rewrite_match_guard_bindings(*right, bindings)),
-                    operator,
-                },
-            ),
-            NodeType::ComparisonExpression {
-                left,
-                right,
-                operator,
-            } => Node::new(
-                node.span,
-                NodeType::ComparisonExpression {
-                    left: Box::new(Self::rewrite_match_guard_bindings(*left, bindings)),
-                    right: Box::new(Self::rewrite_match_guard_bindings(*right, bindings)),
-                    operator,
-                },
-            ),
-            NodeType::ParenExpression { value } => Node::new(
-                node.span,
-                NodeType::ParenExpression {
-                    value: Box::new(Self::rewrite_match_guard_bindings(*value, bindings)),
-                },
-            ),
-            NodeType::NotExpression { value } => Node::new(
-                node.span,
-                NodeType::NotExpression {
-                    value: Box::new(Self::rewrite_match_guard_bindings(*value, bindings)),
-                },
-            ),
-            NodeType::NegExpression { value } => Node::new(
-                node.span,
-                NodeType::NegExpression {
-                    value: Box::new(Self::rewrite_match_guard_bindings(*value, bindings)),
-                },
-            ),
-            NodeType::DebugExpression { value } => Node::new(
-                node.span,
-                NodeType::DebugExpression {
-                    value: Box::new(Self::rewrite_match_guard_bindings(*value, bindings)),
-                },
-            ),
-            NodeType::IsExpression { value, data_type } => Node::new(
-                node.span,
-                NodeType::IsExpression {
-                    value: Box::new(Self::rewrite_match_guard_bindings(*value, bindings)),
-                    data_type,
-                },
-            ),
-            _ => node,
+            other => self.visit_children(other),
         }
+    }
+}
+
+impl MiddleEnvironment {
+    fn rewrite_match_guard_bindings(node: Node, bindings: &[(String, Node)]) -> Node {
+        let mut rewriter = GuardBindingsRewriter { bindings };
+        rewriter.visit(node)
     }
 
     fn alias_bindings_for_value(

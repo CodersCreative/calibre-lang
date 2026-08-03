@@ -5,6 +5,7 @@ use crate::{
     scoping::MiddleScope,
     symbols::FunctionParamDefault,
     tags::TagInfo,
+    traversal::NodeVisitor,
 };
 use calibre_parser::{
     Span,
@@ -12,12 +13,36 @@ use calibre_parser::{
         ObjectType,
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        matching::TryCatch,
         nodes::{CallArg, FunctionHeader, IfComparisonType, LoopType, Node, NodeType, VarType},
         types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType},
     },
 };
 use rustc_hash::FxHashMap;
+
+struct GeneratorReturnsRewriter;
+
+impl NodeVisitor for GeneratorReturnsRewriter {
+    fn visit(&mut self, node: Node) -> Node {
+        let span = node.span;
+        match node.node_type {
+            NodeType::Return { value: Some(value) } => Node::call(
+                span,
+                Node::identifier(span, "gen_suspend"),
+                vec![CallArg::Value(*value)],
+            ),
+            NodeType::Return { value: None } => Node::new(
+                span,
+                NodeType::Return {
+                    value: Some(Box::new(Node::identifier(span, "none"))),
+                },
+            ),
+            _ => {
+                let node_type = self.visit_children(node.node_type);
+                Node::new(span, node_type)
+            }
+        }
+    }
+}
 
 impl MiddleEnvironment {
     #[inline]
@@ -379,96 +404,8 @@ impl MiddleEnvironment {
     }
 
     fn rewrite_generator_returns(node: Node) -> Node {
-        let span = node.span;
-        match node.node_type {
-            NodeType::Return { value: Some(value) } => Node::call(
-                span,
-                Node::identifier(span, "gen_suspend"),
-                vec![CallArg::Value(*value)],
-            ),
-            NodeType::Return { value: None } => Node::new(
-                span,
-                NodeType::Return {
-                    value: Some(Box::new(Node::identifier(span, "none"))),
-                },
-            ),
-            NodeType::ScopeDeclaration {
-                body,
-                named,
-                is_temp,
-                create_new_scope,
-                define,
-            } => Node::new(
-                span,
-                NodeType::ScopeDeclaration {
-                    body: body.map(|items| {
-                        items
-                            .into_iter()
-                            .map(Self::rewrite_generator_returns)
-                            .collect()
-                    }),
-                    named,
-                    is_temp,
-                    create_new_scope,
-                    define,
-                },
-            ),
-            NodeType::LoopDeclaration {
-                loop_type,
-                body,
-                until,
-                label,
-                else_body,
-            } => Node::new(
-                span,
-                NodeType::LoopDeclaration {
-                    loop_type,
-                    body: Box::new(Self::rewrite_generator_returns(*body)),
-                    until: until.map(|n| Box::new(Self::rewrite_generator_returns(*n))),
-                    label,
-                    else_body: else_body.map(|n| Box::new(Self::rewrite_generator_returns(*n))),
-                },
-            ),
-            NodeType::IfStatement {
-                comparison,
-                then,
-                otherwise,
-            } => Node::new(
-                span,
-                NodeType::IfStatement {
-                    comparison,
-                    then: Box::new(Self::rewrite_generator_returns(*then)),
-                    otherwise: otherwise.map(|n| Box::new(Self::rewrite_generator_returns(*n))),
-                },
-            ),
-            NodeType::MatchStatement { value, body } => Node::new(
-                span,
-                NodeType::MatchStatement {
-                    value,
-                    body: body
-                        .into_iter()
-                        .map(|(arm, conditions, node)| {
-                            (
-                                arm,
-                                conditions,
-                                Box::new(Self::rewrite_generator_returns(*node)),
-                            )
-                        })
-                        .collect(),
-                },
-            ),
-            NodeType::Try { value, catch } => Node::new(
-                span,
-                NodeType::Try {
-                    value: Box::new(Self::rewrite_generator_returns(*value)),
-                    catch: catch.map(|c| TryCatch {
-                        name: c.name,
-                        body: Box::new(Self::rewrite_generator_returns(*c.body)),
-                    }),
-                },
-            ),
-            other => Node::new(span, other),
-        }
+        let mut rewriter = GeneratorReturnsRewriter;
+        rewriter.visit(node)
     }
 
     pub(crate) fn wrap_generator_body(body: Node, elem_type: ParserDataType, span: Span) -> Node {
