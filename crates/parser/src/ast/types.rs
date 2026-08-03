@@ -273,6 +273,20 @@ pub enum ParserInnerType {
 }
 
 impl ParserDataType {
+    pub fn null(span: Span) -> Self {
+        ParserDataType {
+            data_type: ParserInnerType::Null,
+            span,
+        }
+    }
+
+    pub fn auto(span: Span) -> Self {
+        ParserDataType {
+            data_type: ParserInnerType::Auto(None),
+            span,
+        }
+    }
+
     pub fn unwrap_all_refs(self) -> Self {
         Self {
             data_type: self.data_type.unwrap_all_refs().clone(),

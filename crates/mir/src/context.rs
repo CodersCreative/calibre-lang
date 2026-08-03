@@ -20,6 +20,7 @@ impl MiddleContext {
         std::mem::take(&mut self.errors)
     }
 
+    #[inline]
     pub fn current_span(&self) -> Span {
         self.current_location
             .as_ref()
