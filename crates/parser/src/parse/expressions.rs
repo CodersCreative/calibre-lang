@@ -911,6 +911,7 @@ pub fn build_tail_expression_parser<'a>(
             )
         })
         .boxed();
+
     let break_expr = lex(pad.clone(), just("break"))
         .ignore_then(
             lex(pad.clone(), just('@'))
@@ -932,6 +933,7 @@ pub fn build_tail_expression_parser<'a>(
             }
         })
         .boxed();
+
     let continue_expr = lex(pad.clone(), just("continue"))
         .ignore_then(
             lex(pad.clone(), just('@'))

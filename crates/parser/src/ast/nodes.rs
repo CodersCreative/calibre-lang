@@ -50,14 +50,12 @@ pub enum VarType {
 
 impl VarType {
     pub fn print_only_ends(&self) -> String {
-        format!(
-            "{}",
-            match self {
-                Self::Mutable => "mut",
-                Self::Immutable => "let",
-                Self::Constant => "const",
-            }
-        )
+        match self {
+            Self::Mutable => "mut",
+            Self::Immutable => "let",
+            Self::Constant => "const",
+        }
+        .to_string()
     }
 }
 

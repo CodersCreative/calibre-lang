@@ -118,7 +118,7 @@ pub enum PotentialDollarIdentifier {
 
 impl PotentialDollarIdentifier {
     pub fn new(span: Span, text: impl ToString) -> Self {
-        Self::DollarIdentifier(ParserText::new(span, text))
+        Self::Identifier(ParserText::new(span, text))
     }
 
     pub fn span(&self) -> &Span {
