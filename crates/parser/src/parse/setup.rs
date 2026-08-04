@@ -57,7 +57,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
         .ignored()
         .boxed();
 
-    let pad_with_newline = choice((ws, comment, just('\n').ignored()))
+    let pad_with_newline = choice((ws.clone(), comment, just('\n').ignored()))
         .repeated()
         .ignored()
         .boxed();

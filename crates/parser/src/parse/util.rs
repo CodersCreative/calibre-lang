@@ -43,8 +43,7 @@ where
     P: Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a,
 {
     let body_items = statement
-        .separated_by(delim.clone())
-        .allow_trailing()
+        .repeated()
         .collect::<Vec<_>>()
         .or_not()
         .map(|x| x.unwrap_or_default());
