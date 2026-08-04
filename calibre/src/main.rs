@@ -162,21 +162,10 @@ async fn run_source(
     init_functions.sort_by(|a, b| b.0.cmp(&a.0));
 
     let mut ran = false;
-    for (priority, func_name) in init_functions {
+    for (_, func_name) in init_functions {
         if let Some(init_func) = vm.registry.functions.get(&func_name).cloned() {
             if let Err(err) = vm.run(init_func.as_ref(), Vec::new()) {
-                let (span, inner) = err.innermost();
-                calibre_diagnostics::emit_runtime_error(
-                    path,
-                    &contents,
-                    format!(
-                        "Init function error (priority {}): {}",
-                        priority,
-                        inner.to_string()
-                    ),
-                    span,
-                    inner.help(),
-                );
+                calibre_diagnostics::emit_runtime_error(path, &contents, &err);
                 return Err("runtime error".into());
             }
             ran = true;
@@ -196,21 +185,10 @@ async fn run_source(
     let mut fin_functions = artifacts.fin_functions.clone();
     fin_functions.sort_by(|a, b| b.0.cmp(&a.0));
 
-    for (priority, func_name) in fin_functions {
+    for (_, func_name) in fin_functions {
         if let Some(fin_func) = vm.registry.functions.get(&func_name).cloned() {
             if let Err(err) = vm.run(fin_func.as_ref(), Vec::new()) {
-                let (span, inner) = err.innermost();
-                calibre_diagnostics::emit_runtime_error(
-                    path,
-                    &contents,
-                    format!(
-                        "Fin function error (priority {}): {}",
-                        priority,
-                        inner.to_string()
-                    ),
-                    span,
-                    inner.help(),
-                );
+                calibre_diagnostics::emit_runtime_error(path, &contents, &err);
                 return Err("runtime error".into());
             }
         }
@@ -840,14 +818,7 @@ async fn run_repl_source(
 
     for (_, global) in globals {
         if let Err(err) = vm.run_global(&global) {
-            let (span, inner) = err.innermost();
-            calibre_diagnostics::emit_runtime_error(
-                path,
-                &contents,
-                inner.to_string(),
-                span,
-                inner.help(),
-            );
+            calibre_diagnostics::emit_runtime_error(path, &contents, &err);
             return Err(format!("runtime error").into());
         }
     }
@@ -860,14 +831,7 @@ async fn run_repl_source(
     let value = match vm.run_global(&repl_global) {
         Ok(value) => value,
         Err(err) => {
-            let (span, inner) = err.innermost();
-            calibre_diagnostics::emit_runtime_error(
-                path,
-                &contents,
-                inner.to_string(),
-                span,
-                inner.help(),
-            );
+            calibre_diagnostics::emit_runtime_error(path, &contents, &err);
             return Err(format!("runtime error").into());
         }
     };

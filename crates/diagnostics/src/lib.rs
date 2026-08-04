@@ -1,5 +1,6 @@
 use calibre_mir::errors::MiddleErr;
 use calibre_parser::{CalibreError, ParserError, Span};
+use calibre_vm::error::RuntimeError;
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     files::SimpleFiles,
@@ -62,7 +63,7 @@ pub fn emit_error(path: &Path, contents: &str, message: String, span: Option<Spa
     let _ = term::emit_to_io_write(&mut writer, &config, &files, &diagnostic);
 }
 
-pub fn emit_runtime_error(
+pub fn emit_generic_error(
     path: &Path,
     contents: &str,
     message: String,
@@ -123,6 +124,35 @@ fn emit_mir_error_with_span(path: &Path, contents: &str, err: &MiddleErr, span: 
         .with_code(err.code().to_string());
 
     let span = span.unwrap_or_else(|| err.span());
+    if span != Span::default() {
+        diagnostic = diagnostic.with_labels(vec![
+            Label::primary(file_id, span.to_range(contents)).with_message(err.to_string()),
+        ]);
+    } else {
+        diagnostic = diagnostic.with_labels(vec![
+            Label::primary(file_id, 0..contents.len().min(1)).with_message(err.to_string()),
+        ]);
+    }
+
+    if let Some(hint) = err.hint() {
+        diagnostic = diagnostic.with_notes(vec![format!("hint: {hint}")]);
+    }
+
+    let mut writer = writer.lock();
+    let _ = term::emit_to_io_write(&mut writer, &config, &files, &diagnostic);
+}
+
+pub fn emit_runtime_error(path: &Path, contents: &str, err: &RuntimeError) {
+    let mut files = SimpleFiles::new();
+    let file_id = files.add(path.to_string_lossy().to_string(), contents.to_string());
+    let writer = StandardStream::stderr(ColorChoice::Auto);
+    let config = term::Config::default();
+
+    let mut diagnostic = Diagnostic::error()
+        .with_message(err.to_string())
+        .with_code(err.code().to_string());
+
+    let span = err.span();
     if span != Span::default() {
         diagnostic = diagnostic.with_labels(vec![
             Label::primary(file_id, span.to_range(contents)).with_message(err.to_string()),

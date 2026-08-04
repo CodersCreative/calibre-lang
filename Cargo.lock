@@ -349,6 +349,7 @@ version = "0.0.1"
 dependencies = [
  "calibre-mir",
  "calibre-parser",
+ "calibre-vm",
  "codespan-reporting",
 ]
 

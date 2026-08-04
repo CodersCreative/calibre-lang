@@ -1,5 +1,5 @@
 use crate::value::RuntimeValue;
-use calibre_parser::Span;
+use calibre_parser::{CalibreError, Span};
 use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
@@ -80,6 +80,94 @@ impl std::fmt::Display for RuntimeError {
     }
 }
 
+impl CalibreError for RuntimeError {
+    fn code(&self) -> usize {
+        match self {
+            Self::At(_, inner) => inner.code(),
+            Self::Boolean(_, _, _) => 401,
+            Self::Comparison(_, _, _) => 402,
+            Self::Binary(_, _, _) => 403,
+            Self::UnexpectedType(_) => 404,
+            Self::MissingMember { .. } => 405,
+            Self::ParseFloat(_) => 406,
+            Self::ParseInt(_) => 407,
+            Self::CantConvert(_, _) => 408,
+            Self::StackUnderflow => 409,
+            Self::FunctionNotFound(_) => 410,
+            Self::InvalidFunctionCall => 411,
+            Self::InvalidFunctionCallValue(_) => 412,
+            Self::Ffi(_) => 413,
+            Self::DanglingRef(_) => 414,
+            Self::InvalidBytecode(_) => 415,
+            Self::Io(_) => 416,
+            Self::Panic(_) => 417,
+        }
+    }
+
+    fn hint(&self) -> Option<String> {
+        match self {
+            Self::At(_, inner) => inner.hint(),
+            Self::Boolean(_, _, _) => Some(
+                "Ensure both operands are booleans (true/false) when using boolean operators."
+                    .to_string(),
+            ),
+            Self::Comparison(_, _, _) => {
+                Some("Check that both sides of the comparison are compatible types.".to_string())
+            }
+            Self::Binary(_, _, _) => {
+                Some("Check that both operands support this arithmetic operator.".to_string())
+            }
+            Self::UnexpectedType(_) => Some(
+                "Verify the value you're using matches the expected type in this context."
+                    .to_string(),
+            ),
+            Self::MissingMember { .. } => {
+                Some("Check the field or method name is correct for this value's type.".to_string())
+            }
+            Self::CantConvert(_, _) => Some(
+                "Use an explicit conversion or adjust the value to a compatible type.".to_string(),
+            ),
+            Self::StackUnderflow => Some(
+                "This is likely a compiler/runtime bug. Please report this with a repro."
+                    .to_string(),
+            ),
+            Self::FunctionNotFound(_) => Some(
+                "Make sure the function is defined, imported, and spelled correctly.".to_string(),
+            ),
+            Self::InvalidFunctionCall => Some(
+                "Check that you are calling a function value and passing the right arguments."
+                    .to_string(),
+            ),
+            Self::InvalidFunctionCallValue(_) => Some(
+                "Ensure the callee is a function, native function, or bound method.".to_string(),
+            ),
+            Self::ParseFloat(x) => Some(x.to_string()),
+            Self::ParseInt(x) => Some(x.to_string()),
+            Self::Ffi(_) => Some(
+                "Verify the library path, symbol name, and FFI types match the external function."
+                    .to_string(),
+            ),
+            Self::DanglingRef(_) => {
+                Some("This value was freed or went out of scope before use.".to_string())
+            }
+            Self::InvalidBytecode(_) => Some(
+                "This is likely a compiler/runtime bug. Please report this with a repro."
+                    .to_string(),
+            ),
+            Self::Io(_) => Some(
+                "Check file permissions, terminal availability, or input/output state.".to_string(),
+            ),
+            Self::Panic(_) => Some(
+                "A panic was triggered. If this is unexpected, inspect the call stack.".to_string(),
+            ),
+        }
+    }
+
+    fn step(&self) -> &'static str {
+        "VM"
+    }
+}
+
 impl RuntimeError {
     pub fn at(span: Span, err: RuntimeError) -> RuntimeError {
         if span == Span::default() {
@@ -103,62 +191,10 @@ impl RuntimeError {
         (span, current)
     }
 
-    pub fn help(&self) -> Option<String> {
+    pub fn span(&self) -> Span {
         match self {
-            RuntimeError::At(_, inner) => inner.help(),
-            RuntimeError::Boolean(_, _, _) => Some(
-                "Ensure both operands are booleans (true/false) when using boolean operators."
-                    .to_string(),
-            ),
-            RuntimeError::Comparison(_, _, _) => {
-                Some("Check that both sides of the comparison are compatible types.".to_string())
-            }
-            RuntimeError::Binary(_, _, _) => {
-                Some("Check that both operands support this arithmetic operator.".to_string())
-            }
-            RuntimeError::UnexpectedType(_) => Some(
-                "Verify the value you're using matches the expected type in this context."
-                    .to_string(),
-            ),
-            RuntimeError::MissingMember { .. } => {
-                Some("Check the field or method name is correct for this value's type.".to_string())
-            }
-            RuntimeError::CantConvert(_, _) => Some(
-                "Use an explicit conversion or adjust the value to a compatible type.".to_string(),
-            ),
-            RuntimeError::StackUnderflow => Some(
-                "This is likely a compiler/runtime bug. Please report this with a repro."
-                    .to_string(),
-            ),
-            RuntimeError::FunctionNotFound(_) => Some(
-                "Make sure the function is defined, imported, and spelled correctly.".to_string(),
-            ),
-            RuntimeError::InvalidFunctionCall => Some(
-                "Check that you are calling a function value and passing the right arguments."
-                    .to_string(),
-            ),
-            RuntimeError::InvalidFunctionCallValue(_) => Some(
-                "Ensure the callee is a function, native function, or bound method.".to_string(),
-            ),
-            RuntimeError::ParseFloat(x) => Some(x.to_string()),
-            RuntimeError::ParseInt(x) => Some(x.to_string()),
-            RuntimeError::Ffi(_) => Some(
-                "Verify the library path, symbol name, and FFI types match the external function."
-                    .to_string(),
-            ),
-            RuntimeError::DanglingRef(_) => {
-                Some("This value was freed or went out of scope before use.".to_string())
-            }
-            RuntimeError::InvalidBytecode(_) => Some(
-                "This is likely a compiler/runtime bug. Please report this with a repro."
-                    .to_string(),
-            ),
-            RuntimeError::Io(_) => Some(
-                "Check file permissions, terminal availability, or input/output state.".to_string(),
-            ),
-            RuntimeError::Panic(_) => Some(
-                "A panic was triggered. If this is unexpected, inspect the call stack.".to_string(),
-            ),
+            Self::At(span, _) => *span,
+            _ => Span::default(),
         }
     }
 }
