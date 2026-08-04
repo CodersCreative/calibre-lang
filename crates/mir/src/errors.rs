@@ -136,10 +136,8 @@ impl calibre_parser::CalibreError for MiddleErr {
     fn step(&self) -> &'static str {
         "MIR"
     }
-}
 
-impl MiddleErr {
-    pub fn span(&self) -> Span {
+    fn span(&self) -> Span {
         match self {
             Self::At(span, _) => *span,
             _ => Span::default(),

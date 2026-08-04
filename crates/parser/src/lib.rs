@@ -174,6 +174,7 @@ pub trait CalibreError: Display {
     fn code(&self) -> usize;
     fn hint(&self) -> Option<String>;
     fn step(&self) -> &'static str;
+    fn span(&self) -> Span;
 
     fn message_with_hint(&self) -> String {
         if let Some(hint) = self.hint() {
@@ -191,14 +192,6 @@ pub enum ParserError {
     Syntax { err: SyntaxErr, span: Span },
 }
 
-impl ParserError {
-    pub fn span(&self) -> Span {
-        match self {
-            Self::Syntax { span, .. } => *span,
-        }
-    }
-}
-
 impl CalibreError for ParserError {
     fn code(&self) -> usize {
         match self {
@@ -214,6 +207,12 @@ impl CalibreError for ParserError {
 
     fn step(&self) -> &'static str {
         "parser"
+    }
+
+    fn span(&self) -> Span {
+        match self {
+            Self::Syntax { span, .. } => *span,
+        }
     }
 }
 
@@ -335,5 +334,9 @@ impl CalibreError for SyntaxErr {
 
     fn step(&self) -> &'static str {
         "parser"
+    }
+
+    fn span(&self) -> Span {
+        Span::default()
     }
 }

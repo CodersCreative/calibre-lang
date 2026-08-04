@@ -68,7 +68,7 @@ async fn run_source(
         } {
             Ok(artifacts) => artifacts,
             Err(CalibreError::Parse { errors, .. }) => {
-                calibre_diagnostics::emit_parser_errors(path, &contents, &errors);
+                calibre_diagnostics::emit_calibre_errors(path, &contents, &errors);
                 return Err("parse failed".into());
             }
             Err(CalibreError::Middle {
@@ -165,7 +165,7 @@ async fn run_source(
     for (_, func_name) in init_functions {
         if let Some(init_func) = vm.registry.functions.get(&func_name).cloned() {
             if let Err(err) = vm.run(init_func.as_ref(), Vec::new()) {
-                calibre_diagnostics::emit_runtime_error(path, &contents, &err);
+                calibre_diagnostics::emit_calibre_error(path, &contents, &err,None);
                 return Err("runtime error".into());
             }
             ran = true;
@@ -188,7 +188,7 @@ async fn run_source(
     for (_, func_name) in fin_functions {
         if let Some(fin_func) = vm.registry.functions.get(&func_name).cloned() {
             if let Err(err) = vm.run(fin_func.as_ref(), Vec::new()) {
-                calibre_diagnostics::emit_runtime_error(path, &contents, &err);
+                calibre_diagnostics::emit_calibre_error(path, &contents, &err, None);
                 return Err("runtime error".into());
             }
         }
@@ -314,7 +314,7 @@ async fn run_suite(
         let artifacts = match engine.compile_cached_program_source(contents.clone()) {
             Ok(artifacts) => artifacts,
             Err(CalibreError::Parse { errors, .. }) => {
-                calibre_diagnostics::emit_parser_errors(&path, &contents, &errors);
+                calibre_diagnostics::emit_calibre_errors(&path, &contents, &errors);
                 continue;
             }
             Err(CalibreError::Middle { error, .. }) => {
@@ -783,7 +783,7 @@ async fn run_repl_source(
     let program = parser.produce_ast(&contents);
 
     if !parser.errors.is_empty() {
-        calibre_diagnostics::emit_parser_errors(path, &contents, &parser.errors);
+        calibre_diagnostics::emit_calibre_errors(path, &contents, &parser.errors);
         return Err(format!("parse failed").into());
     }
 
@@ -818,7 +818,7 @@ async fn run_repl_source(
 
     for (_, global) in globals {
         if let Err(err) = vm.run_global(&global) {
-            calibre_diagnostics::emit_runtime_error(path, &contents, &err);
+            calibre_diagnostics::emit_calibre_error(path, &contents, &err,None);
             return Err(format!("runtime error").into());
         }
     }
@@ -831,7 +831,7 @@ async fn run_repl_source(
     let value = match vm.run_global(&repl_global) {
         Ok(value) => value,
         Err(err) => {
-            calibre_diagnostics::emit_runtime_error(path, &contents, &err);
+            calibre_diagnostics::emit_calibre_error(path, &contents, &err,None);
             return Err(format!("runtime error").into());
         }
     };

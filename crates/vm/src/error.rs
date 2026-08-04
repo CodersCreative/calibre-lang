@@ -166,6 +166,13 @@ impl CalibreError for RuntimeError {
     fn step(&self) -> &'static str {
         "VM"
     }
+
+    fn span(&self) -> Span {
+        match self {
+            Self::At(span, _) => *span,
+            _ => Span::default(),
+        }
+    }
 }
 
 impl RuntimeError {
@@ -189,12 +196,5 @@ impl RuntimeError {
         }
 
         (span, current)
-    }
-
-    pub fn span(&self) -> Span {
-        match self {
-            Self::At(span, _) => *span,
-            _ => Span::default(),
-        }
     }
 }
