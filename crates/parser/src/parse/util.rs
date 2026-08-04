@@ -1,5 +1,5 @@
 use crate::{
-    Position, Span,
+    CalibreError, Position, Span,
     ast::{
         idents::{
             ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,

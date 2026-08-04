@@ -1231,13 +1231,16 @@ pub fn build_statement_parser<'a>(
         tag_stmt,
         return_stmt,
         destruct_assign_stmt,
-        delim.clone().repeated().at_least(1).ignored().map_with_span({
-        let ls = line_starts.clone();
-        move |_, r| {
-            Node::new(span(ls.as_ref(), r), NodeType::EmptyLine)
-        }
-    })
-    .boxed(),
+        delim
+            .clone()
+            .repeated()
+            .at_least(1)
+            .ignored()
+            .map_with_span({
+                let ls = line_starts.clone();
+                move |_, r| Node::new(span(ls.as_ref(), r), NodeType::EmptyLine)
+            })
+            .boxed(),
         expr,
     ))
     .boxed()

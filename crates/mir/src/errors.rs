@@ -58,3 +58,91 @@ pub enum MiddleErr {
     #[error("Multiple middle errors")]
     Multiple(Vec<MiddleErr>),
 }
+
+impl calibre_parser::CalibreError for MiddleErr {
+    fn code(&self) -> usize {
+        match self {
+            Self::At(_, inner) => inner.code(),
+            Self::ExpectedOperation(_) => 201,
+            Self::InvalidTag(_) => 202,
+            Self::ExpectedFunctions => 203,
+            Self::InferImpossible => 204,
+            Self::InvalidIndex(_) => 205,
+            Self::InvalidDefaultFuncArg => 206,
+            Self::UnexpectedEnumItem(_, _) => 207,
+            Self::SetterArgs(_) => 208,
+            Self::PropertyNotFound(_) => 209,
+            Self::CantImport(_) => 210,
+            Self::Scope(_) => 211,
+            Self::Variable(_) => 212,
+            Self::Overload(_) => 213,
+            Self::Object(_) => 214,
+            Self::EnumVariant(_) => 215,
+            Self::Internal(_) => 216,
+            Self::CantMatch(_) => 217,
+            Self::ParserErrors { .. } => 218,
+            Self::InFile { .. } => 2019,
+            Self::Multiple(_) => 220,
+        }
+    }
+
+    fn hint(&self) -> Option<String> {
+        match self {
+            Self::At(_, inner) => inner.hint(),
+            Self::ExpectedOperation(op) => Some(format!(
+                "ensure the operation `{op}` is valid in this context"
+            )),
+            Self::InvalidTag(tag) => Some(format!("use a valid tag instead of `{tag}`")),
+            Self::ExpectedFunctions => {
+                Some("only function declarations are valid in this section".to_string())
+            }
+            Self::InferImpossible => {
+                Some("add explicit type annotations to help type inference".to_string())
+            }
+            Self::InvalidIndex(idx) => {
+                Some(format!("index {idx} is out of bounds - check list length"))
+            }
+            Self::UnexpectedEnumItem(item, enum_name) => Some(format!(
+                "`{item}` is not a valid variant of enum `{enum_name}`"
+            )),
+            Self::SetterArgs(args) => Some(format!(
+                "setters must have exactly one argument, found {}",
+                args.len()
+            )),
+            Self::PropertyNotFound(prop) => {
+                Some(format!("property `{prop}` does not exist on this type"))
+            }
+            Self::CantImport(path) => Some(format!("cannot import from `{path}` - check the path")),
+            Self::Scope(scope) => Some(format!("scope `{scope}` not found - check module path")),
+            Self::Variable(var) => Some(format!(
+                "variable `{var}` not found - check spelling or scope"
+            )),
+            Self::Overload(msg) => Some(format!("overload error: {msg}")),
+            Self::Object(obj) => Some(format!(
+                "object `{obj}` not found - check spelling or imports"
+            )),
+            Self::EnumVariant(variant) => Some(format!("enum variant `{variant}` does not exist")),
+            Self::Internal(msg) => Some(format!("internal error: {msg} - please report this bug")),
+            Self::CantMatch(ty) => Some(format!(
+                "cannot perform enum pattern matching on type `{ty}`"
+            )),
+            Self::ParserErrors { .. } => None,
+            Self::InFile { .. } => None,
+            Self::Multiple(_) => None,
+            _ => None,
+        }
+    }
+
+    fn step(&self) -> &'static str {
+        "MIR"
+    }
+}
+
+impl MiddleErr {
+    pub fn span(&self) -> Span {
+        match self {
+            Self::At(span, _) => *span,
+            _ => Span::default(),
+        }
+    }
+}

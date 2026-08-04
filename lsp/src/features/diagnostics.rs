@@ -7,8 +7,8 @@ impl CalibreLanguageServer {
             .map(|err| Diagnostic {
                 range: Self::lsp_range(err.span()),
                 severity: Some(DiagnosticSeverity::ERROR),
-                code: Some(NumberOrString::String(err.code().to_string())),
-                source: Some(err.source_name().to_string()),
+                code: Some(NumberOrString::Number(err.code() as i32)),
+                source: Some(err.step().to_string()),
                 message: err.message_with_hint(),
                 ..Diagnostic::default()
             })

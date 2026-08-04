@@ -1,3 +1,4 @@
+use crate::config::Config;
 use calibre::{CalibreEngine, CalibreError, CompileMode};
 use calibre_diagnostics;
 use calibre_lir::environment::LirEnvironment;
@@ -21,39 +22,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::config::Config;
-
 pub mod config;
-
-fn emit_middle_error(path: &Path, contents: &str, err: &MiddleErr) {
-    match err {
-        MiddleErr::Multiple(errors) => {
-            for err in errors {
-                emit_middle_error(path, contents, err);
-            }
-        }
-        MiddleErr::At(span, inner) => {
-            calibre_diagnostics::emit_error(path, contents, inner.to_string(), Some(*span));
-        }
-        MiddleErr::ParserErrors {
-            path: err_path,
-            contents,
-            errors,
-        } => {
-            calibre_diagnostics::emit_parser_errors(err_path, contents, errors);
-        }
-        MiddleErr::InFile {
-            path: err_path,
-            contents: err_contents,
-            error,
-        } => {
-            emit_middle_error(err_path, err_contents, error);
-        }
-        other => {
-            calibre_diagnostics::emit_error(path, contents, other.to_string(), None);
-        }
-    }
-}
 
 async fn run_source(
     contents: String,
@@ -113,7 +82,7 @@ async fn run_source(
                     println!("{}", ast);
                 }
 
-                emit_middle_error(path, &contents, &error);
+                calibre_diagnostics::emit_mir_error(path, &contents, &error);
                 return Err("compile failed".into());
             }
             Err(CalibreError::MissingEntryPoint(name)) => {
@@ -371,7 +340,7 @@ async fn run_suite(
                 continue;
             }
             Err(CalibreError::Middle { error, .. }) => {
-                emit_middle_error(&path, &contents, &error);
+                calibre_diagnostics::emit_mir_error(&path, &contents, &error);
                 continue;
             }
             Err(other) => return Err(other.to_string().into()),
@@ -845,7 +814,7 @@ async fn run_repl_source(
 
     let mir_errors = env.context.take_errors();
     if !mir_errors.is_empty() {
-        emit_middle_error(path, &contents, &MiddleErr::Multiple(mir_errors));
+        calibre_diagnostics::emit_mir_error(path, &contents, &MiddleErr::Multiple(mir_errors));
         return Err(format!("compile failed").into());
     }
 

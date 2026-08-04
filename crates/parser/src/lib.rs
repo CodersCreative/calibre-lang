@@ -5,6 +5,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display,
+    ops::Range,
     path::PathBuf,
     sync::{LazyLock, RwLock},
 };
@@ -99,6 +100,28 @@ impl Span {
             to: to.to,
         }
     }
+
+    pub fn to_range(&self, contents: &str) -> Range<usize> {
+        let mut line_starts: Vec<usize> = vec![0];
+        line_starts.append(&mut contents.match_indices('\n').map(|(i, _)| i + 1).collect());
+
+        let start = *line_starts
+            .get(self.from.line.saturating_sub(1) as usize)
+            .unwrap_or(&0);
+        let end = *line_starts
+            .get(self.to.line.saturating_sub(1) as usize)
+            .unwrap_or(&start);
+
+        let start = start
+            .saturating_add(self.from.col as usize)
+            .min(contents.len());
+        let end = end
+            .saturating_add(self.to.col as usize)
+            .min(contents.len())
+            .max(start + 1);
+
+        start..end
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -147,6 +170,20 @@ impl Parser {
     }
 }
 
+pub trait CalibreError: Display {
+    fn code(&self) -> usize;
+    fn hint(&self) -> Option<String>;
+    fn step(&self) -> &'static str;
+
+    fn message_with_hint(&self) -> String {
+        if let Some(hint) = self.hint() {
+            format!("{self}. Hint: {hint}")
+        } else {
+            self.to_string()
+        }
+    }
+}
+
 #[allow(unused_assignments)]
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParserError {
@@ -160,41 +197,23 @@ impl ParserError {
             Self::Syntax { span, .. } => *span,
         }
     }
+}
 
-    pub fn source_name(&self) -> &'static str {
-        "calibre-parser"
-    }
-
-    pub fn code(&self) -> &'static str {
+impl CalibreError for ParserError {
+    fn code(&self) -> usize {
         match self {
             Self::Syntax { err, .. } => err.code(),
         }
     }
 
-    pub fn summary(&self) -> &'static str {
-        match self {
-            Self::Syntax { err, .. } => err.summary(),
-        }
-    }
-
-    pub fn hint(&self) -> Option<&'static str> {
+    fn hint(&self) -> Option<String> {
         match self {
             Self::Syntax { err, .. } => err.hint(),
         }
     }
 
-    pub fn hint_message(&self) -> Option<String> {
-        match self {
-            Self::Syntax { err, .. } => err.hint_message(),
-        }
-    }
-
-    pub fn message_with_hint(&self) -> String {
-        if let Some(hint) = self.hint_message() {
-            format!("{self}. Hint: {hint}")
-        } else {
-            self.to_string()
-        }
+    fn step(&self) -> &'static str {
+        "parser"
     }
 }
 
@@ -234,83 +253,29 @@ pub enum SyntaxErr {
     ExpectedChar(char),
 }
 
-impl SyntaxErr {
-    pub fn code(&self) -> &'static str {
+impl CalibreError for SyntaxErr {
+    fn code(&self) -> usize {
         match self {
-            Self::ExpectedOpeningBracket(_) => "CAL001",
-            Self::ExpectedClosingBracket(_) => "CAL002",
-            Self::ExpectedToken(_) => "CAL003",
-            Self::ExpectedIdentifier => "CAL004",
-            Self::ExpectedName => "CAL005",
-            Self::UnexpectedToken => "CAL006",
-            Self::InvalidLiteral(_) => "CAL007",
-            Self::ExpectedKeyword(_) => "CAL008",
-            Self::ExpectedKey => "CAL009",
-            Self::ExpectedType => "CAL010",
-            Self::ExpectedFunctions => "CAL011",
-            Self::UnexpectedWhileLoop => "CAL012",
-            Self::UnexpectedEOF => "CAL013",
-            Self::NullConstant => "CAL014",
-            Self::This => "CAL015",
-            Self::ExpectedChar(_) => "CAL016",
+            Self::ExpectedOpeningBracket(_) => 1,
+            Self::ExpectedClosingBracket(_) => 2,
+            Self::ExpectedToken(_) => 3,
+            Self::ExpectedIdentifier => 4,
+            Self::ExpectedName => 5,
+            Self::UnexpectedToken => 6,
+            Self::InvalidLiteral(_) => 7,
+            Self::ExpectedKeyword(_) => 8,
+            Self::ExpectedKey => 9,
+            Self::ExpectedType => 10,
+            Self::ExpectedFunctions => 11,
+            Self::UnexpectedWhileLoop => 12,
+            Self::UnexpectedEOF => 13,
+            Self::NullConstant => 14,
+            Self::This => 15,
+            Self::ExpectedChar(_) => 16,
         }
     }
 
-    pub fn summary(&self) -> &'static str {
-        match self {
-            Self::ExpectedOpeningBracket(_) => "missing opening bracket",
-            Self::ExpectedClosingBracket(_) => "missing closing bracket",
-            Self::ExpectedToken(_) => "unexpected or missing token",
-            Self::ExpectedIdentifier => "missing identifier",
-            Self::ExpectedName => "missing name",
-            Self::UnexpectedToken => "unexpected token",
-            Self::InvalidLiteral(_) => "invalid literal",
-            Self::ExpectedKeyword(_) => "missing keyword",
-            Self::ExpectedKey => "missing key",
-            Self::ExpectedType => "missing type",
-            Self::ExpectedFunctions => "only functions allowed here",
-            Self::UnexpectedWhileLoop => "invalid while loop in iterator syntax",
-            Self::UnexpectedEOF => "unexpected end of file",
-            Self::NullConstant => "constant cannot be null",
-            Self::This => "self used outside impl",
-            Self::ExpectedChar(_) => "missing required character",
-        }
-    }
-
-    pub fn hint(&self) -> Option<&'static str> {
-        match self {
-            Self::ExpectedOpeningBracket(_) => {
-                Some("check that this construct starts with the correct bracket")
-            }
-            Self::ExpectedClosingBracket(_) => {
-                Some("add the missing closing bracket for the nearest unmatched opener")
-            }
-            Self::ExpectedToken(_) => {
-                Some("insert the required token or remove the unexpected token")
-            }
-            Self::ExpectedIdentifier => {
-                Some("add an identifier (letters/digits/underscore, not a keyword)")
-            }
-            Self::ExpectedName => Some("provide a name after this construct"),
-            Self::UnexpectedToken => Some("remove this token or replace it with a valid one"),
-            Self::InvalidLiteral(_) => {
-                Some("fix the literal syntax (quotes/suffix/numeric format)")
-            }
-            Self::ExpectedKeyword(_) => Some("insert the expected keyword"),
-            Self::ExpectedKey => Some("add a key before ':'"),
-            Self::ExpectedType => Some("add an explicit type"),
-            Self::ExpectedFunctions => Some("keep only function declarations in this section"),
-            Self::UnexpectedWhileLoop => {
-                Some("iterator syntax cannot be combined with while loop syntax")
-            }
-            Self::UnexpectedEOF => Some("complete the current declaration before end of file"),
-            Self::NullConstant => Some("replace null with a non-null constant value"),
-            Self::This => Some("use self only inside an impl block"),
-            Self::ExpectedChar(_) => Some("insert the expected character"),
-        }
-    }
-
-    pub fn hint_message(&self) -> Option<String> {
+    fn hint(&self) -> Option<String> {
         match self {
             Self::ExpectedOpeningBracket(bracket) => Some(format!(
                 "insert the matching opening {:?} bracket before this point",
@@ -366,5 +331,9 @@ impl SyntaxErr {
             Self::This => Some("use self only inside an impl block".to_string()),
             Self::ExpectedChar(ch) => Some(format!("insert `{ch}` here")),
         }
+    }
+
+    fn step(&self) -> &'static str {
+        "parser"
     }
 }

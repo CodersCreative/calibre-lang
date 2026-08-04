@@ -21,7 +21,7 @@ const print := fn (msg : list:<dyn>) => {
 	let mut txt := "";
 	for m in msg => txt &= m;
 	
-	console_output(1, txt & "\n")
+	return console_output(1, txt & "\n")
 };
 
 const range := fn (start end : mut int, step : int = 1, inclusive : bool = false) -> list:<int> => {
@@ -41,7 +41,7 @@ const range := fn (start end : mut int, step : int = 1, inclusive : bool = false
 		index += step;
 	};
 	
-	lst;
+	return lst;
 };
 
 const fmt := fn (splits : list:<str>, inputs : list:<str>) -> str => {
@@ -52,7 +52,7 @@ const fmt := fn (splits : list:<str>, inputs : list:<str>) -> str => {
 		if i < len(inputs) => txt &= inputs[i];
 	};
 	
-	txt;
+	return txt;
 };
 
 trait Display {
@@ -75,7 +75,7 @@ trait Iter {
 	const collect := fn (self : Self) -> list:<Self::Item> => {
 		let mut out := list:<Self::Item>[];
 		for let .Some : value <- self.next() => out <<= value;
-		out;
+		return out;
 	};
 
 	const map := fn <U> (self : Self, op : fn(Self::Item) -> U) -> ListIter:<U> => {
@@ -88,7 +88,7 @@ trait Iter {
 			out <<= op(v.next);
 		};
 		
-		ListIter:<U> { data : out, index : 0 };
+		return ListIter:<U> { data : out, index : 0 };
 	};
 
 	const filter := fn (self : Self, pred : fn(Self::Item) -> bool) -> ListIter:<Self::Item> => {
@@ -102,7 +102,7 @@ trait Iter {
 			if pred(value) => out <<= value;
 		};
 		
-		ListIter:<Self::Item> { data : out, index : 0 };
+		return ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
 	const for_each := fn (self : Self, op : fn(Self::Item) -> null) => {
@@ -124,7 +124,7 @@ trait Iter {
 			acc := op(acc, v.next);
 		};
 		
-		acc;
+		return acc;
 	};
 
 	const any := fn (self : Self, pred : fn(Self::Item) -> bool) -> bool => {
@@ -135,7 +135,7 @@ trait Iter {
 			if pred(v.next) => return true;
 		};
 		
-		false;
+		return false;
 	};
 
 	const all := fn (self : Self, pred : fn(Self::Item) -> bool) -> bool => {
@@ -146,7 +146,7 @@ trait Iter {
 			if !pred(v.next) => return false;
 		};
 		
-		true;
+		return true;
 	};
 
 	const find := fn (self : Self, pred : fn(Self::Item) -> bool) -> Self::Item? => {
@@ -158,7 +158,7 @@ trait Iter {
 			if pred(value) => return some(value);
 		};
 		
-		none;
+		return none;
 	};
 
 	const count := fn (self : Self) -> int => {
@@ -171,7 +171,7 @@ trait Iter {
 			n += 1;
 		};
 		
-		n;
+		return n;
 	};
 
 	const take := fn (self : Self, n : int) -> ListIter:<Self::Item> => {
@@ -187,7 +187,7 @@ trait Iter {
 			i += 1;
 		};
 		
-		ListIter:<Self::Item> { data : out, index : 0 };
+		return ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
 	const skip := fn (self : Self, n : int) -> ListIter:<Self::Item> => {
@@ -209,7 +209,7 @@ trait Iter {
 			out <<= v.next;
 		};
 		
-		ListIter:<Self::Item> { data : out, index : 0 };
+		return ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
 	const enumerate := fn (self : Self) -> ListIter:<<int, Self::Item>> => {
@@ -224,7 +224,7 @@ trait Iter {
 			out <<= tuple(i += 1, v.next);
 		};
 		
-		ListIter:<<int, Self::Item>> { data : out, index : 0 };
+		return ListIter:<<int, Self::Item>> { data : out, index : 0 };
 	};
 
 	const step_by := fn (self : Self, step : int) -> ListIter:<Self::Item> => {
@@ -242,7 +242,7 @@ trait Iter {
 			i += 1;
 		};
 		
-		ListIter:<Self::Item> { data : out, index : 0 };
+		return ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
 	const partition := fn (self : Self, pred : fn(Self::Item) -> bool) -> <ListIter:<Self::Item>, ListIter:<Self::Item>> => {
@@ -258,7 +258,7 @@ trait Iter {
 			if pred(value) => left <<= value else => right <<= value;
 		};
 		
-		tuple(ListIter:<Self::Item> { data : left, index : 0 }, ListIter:<Self::Item> { data : right, index : 0 });
+		return tuple(ListIter:<Self::Item> { data : left, index : 0 }, ListIter:<Self::Item> { data : right, index : 0 });
 	};
 };
 
@@ -279,12 +279,12 @@ impl<T> Iter for ListIter:<T> {
 			if pred(value) => left <<= value else => right <<= value;
 		};
 		
-		tuple(ListIter:<T> { data : left, index : 0 }, ListIter:<T> { data : right, index : 0 });
+		return tuple(ListIter:<T> { data : left, index : 0 }, ListIter:<T> { data : right, index : 0 });
 	};
 
 	const next := fn (self : &mut ListIter:<T>) -> T? => {
 		if self.index >= len(self.data) => return none;
-		some(self.data[self.index += 1]);
+		return some(self.data[self.index += 1]);
 	};
 };
 
@@ -296,7 +296,7 @@ impl Iter for RangeIter {
 		let start := min_or_zero(self.range);
 		let current := start + self.index;
 		if current >= end => return none;
-		some(start + (self.index += 1));
+		return some(start + (self.index += 1));
 	};
 };
 
@@ -305,12 +305,12 @@ impl Iter for StrIter {
 
 	const next := fn (self : &mut StrIter) -> char? => {
 		if self.index >= len(self.data) => return none;
-		some(self.data[self.index += 1]);
+		return some(self.data[self.index += 1]);
 	};
 };
 
-const iter_list := fn <T> (data : list:<T>) -> ListIter:<T> => ListIter:<T> { data, index : 0 };
+const iter_list := fn <T> (data : list:<T>) -> ListIter:<T> => return ListIter:<T> { data, index : 0 };
 
-const iter_range := fn (rng : range) -> RangeIter => RangeIter { range : rng, index : 0 };
+const iter_range := fn (rng : range) -> RangeIter => return RangeIter { range : rng, index : 0 };
 
-const iter_str := fn (txt : str) -> StrIter => StrIter { data : txt as! list:<char>, index : 0 };
+const iter_str := fn (txt : str) -> StrIter => return StrIter { data : txt as! list:<char>, index : 0 };
