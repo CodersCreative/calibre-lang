@@ -1,6 +1,6 @@
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, get_disamubiguous_name},
+    environment::MiddleEnvironment,
     errors::MiddleErr,
     symbols::FunctionParamDefault,
     tags::TagInfo,
@@ -36,7 +36,7 @@ impl MiddleEnvironment {
         let new_name = if identifier.text.contains("->") || identifier.text.contains("::") {
             identifier.text.clone()
         } else {
-            get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))
+            ParserText::temp_name_with_prefix(identifier.text.trim(), span).text
         };
 
         if let NodeType::CallExpression {
@@ -167,8 +167,7 @@ impl MiddleEnvironment {
                             .err_at_current(MiddleErr::Scope(param.0.to_string()))
                     })?;
 
-                let new_name =
-                    get_disamubiguous_name(scope, Some(og_name.trim()), Some(&VarType::Mutable));
+                let new_name = ParserText::temp_name_with_prefix(og_name.trim(), span);
 
                 let data_type = if let Some(x) = param.1.clone() {
                     self.resolve_potential_new_type(scope, x)
@@ -182,13 +181,15 @@ impl MiddleEnvironment {
                 self.register_variable(
                     &new_scope,
                     &og_name.text,
-                    new_name.clone(),
+                    new_name.text.clone(),
                     data_type.clone(),
                     VarType::Mutable,
                 )?;
 
-                let scope_ref = self.scoping.scope_mut_or_err(&new_scope)?;
-                scope_ref.defined.push(new_name.clone());
+                self.scoping
+                    .scope_mut_or_err(&new_scope)?
+                    .defined
+                    .push(new_name.text.clone());
             }
 
             self.evaluate(&new_scope, value)
@@ -420,12 +421,13 @@ impl MiddleEnvironment {
                 MiddleErr::At(span, Box::new(MiddleErr::Scope(identifier.to_string())))
             })?;
 
-        let object = MiddleTypeDefType::from_type_def_type(self, scope, object.clone());
         let new_name = if identifier.text.contains("__") {
             identifier.text.clone()
         } else {
-            get_disamubiguous_name(scope, Some(identifier.text.trim()), None)
+            ParserText::temp_name_with_prefix(identifier.text.trim(), span).text
         };
+
+        let object = MiddleTypeDefType::from_type_def_type(self, scope, object.clone());
 
         has_default = has_default
             || match &object {

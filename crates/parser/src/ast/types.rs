@@ -287,6 +287,13 @@ impl ParserDataType {
         }
     }
 
+    pub fn object(span: Span, identifier: impl ToString) -> Self {
+        ParserDataType {
+            data_type: ParserInnerType::Struct(identifier.to_string()),
+            span,
+        }
+    }
+
     pub fn unwrap_all_refs(self) -> Self {
         Self {
             data_type: self.data_type.unwrap_all_refs().clone(),

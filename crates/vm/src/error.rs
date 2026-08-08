@@ -1,10 +1,10 @@
 use crate::value::RuntimeValue;
-use calibre_parser::{CalibreError, Span};
 use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
     types::ParserInnerType,
 };
+use calibre_parser::{CalibreError, Span};
 use std::num::{ParseFloatError, ParseIntError};
 
 #[derive(Debug)]

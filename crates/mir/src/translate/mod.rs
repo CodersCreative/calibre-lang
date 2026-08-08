@@ -1,13 +1,13 @@
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, get_disamubiguous_name},
+    environment::MiddleEnvironment,
     errors::MiddleErr,
     typing::{MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType},
 };
 use calibre_parser::{
     IdentifiersUsed, Span,
     ast::{
-        ObjectMap, ObjectType, Operator,
+        ObjectMap, ObjectType, Operator, RefMutability,
         comparison::{BooleanOperator, ComparisonOperator},
         generics::TraitMemberKind,
         idents::{
@@ -253,12 +253,7 @@ impl MiddleEnvironment {
                                 },
                             ));
 
-                            CallArg::Value(Node::new(
-                                self.context.current_span(),
-                                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                    ident.into(),
-                                )),
-                            ))
+                            CallArg::Value(Node::identifier(self.context.current_span(), ident))
                         };
 
                         for arg in args.drain(..) {
@@ -283,11 +278,8 @@ impl MiddleEnvironment {
                                 header: FunctionHeader {
                                     generics: GenericTypes::default(),
                                     parameters: Vec::new(),
-                                    return_type: ParserDataType::new(
-                                        self.context.current_span(),
-                                        ParserInnerType::Auto(None),
-                                    )
-                                    .into(),
+                                    return_type: ParserDataType::auto(self.context.current_span())
+                                        .into(),
                                     param_destructures: Vec::new(),
                                 },
                                 body: Box::new(Node::call_full(
@@ -476,10 +468,7 @@ impl MiddleEnvironment {
                                             var_type: VarType::Immutable,
                                             identifier: fn_ident.clone(),
                                             data_type: PotentialNewType::DataType(
-                                                ParserDataType::new(
-                                                    self.context.current_span(),
-                                                    ParserInnerType::Auto(None),
-                                                ),
+                                                ParserDataType::auto(self.context.current_span()),
                                             ),
                                             value: Box::new(Node::new(
                                                 self.context.current_span(),
@@ -487,12 +476,7 @@ impl MiddleEnvironment {
                                             )),
                                         },
                                     ),
-                                    Node::new(
-                                        self.context.current_span(),
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(fn_ident),
-                                        ),
-                                    ),
+                                    Node::identifier(self.context.current_span(), fn_ident),
                                 ]),
                                 named: None,
                                 is_temp: true,
@@ -516,9 +500,9 @@ impl MiddleEnvironment {
                                 NodeType::VariableDeclaration {
                                     var_type: VarType::Immutable,
                                     identifier: wg_ident.clone(),
-                                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                                    data_type: PotentialNewType::DataType(ParserDataType::object(
                                         node.span,
-                                        ParserInnerType::Auto(None),
+                                        "WaitGroup",
                                     )),
                                     value: Box::new(Node::new(
                                         node.span,
@@ -533,12 +517,7 @@ impl MiddleEnvironment {
                                 node.span,
                                 Node::member(
                                     node.span,
-                                    Node::new(
-                                        node.span,
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(wg_ident),
-                                        ),
-                                    ),
+                                    Node::identifier(node.span, wg_ident),
                                     "wait",
                                 ),
                                 Vec::new(),
@@ -604,7 +583,7 @@ impl MiddleEnvironment {
                             CallArg::Value(Node::new(
                                 span,
                                 NodeType::RefStatement {
-                                    mutability: calibre_parser::ast::RefMutability::MutRef,
+                                    mutability: RefMutability::MutRef,
                                     value: Box::new(wg_ident_node.clone()),
                                 },
                             )),
@@ -635,25 +614,16 @@ impl MiddleEnvironment {
                                 NodeType::VariableDeclaration {
                                     var_type: VarType::Immutable,
                                     identifier: wg_ident.clone(),
-                                    data_type: PotentialNewType::DataType(ParserDataType::new(
+                                    data_type: PotentialNewType::DataType(ParserDataType::object(
                                         span,
-                                        ParserInnerType::Struct("WaitGroup".to_string()),
+                                        "WaitGroup",
                                     )),
                                     value: Box::new(scope_node),
                                 },
                             ),
                             Node::call(
                                 span,
-                                Node::member(
-                                    span,
-                                    Node::new(
-                                        span,
-                                        NodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(wg_ident),
-                                        ),
-                                    ),
-                                    "wait",
-                                ),
+                                Node::member(span, Node::identifier(span, wg_ident), "wait"),
                                 Vec::new(),
                             ),
                         ],
@@ -710,10 +680,7 @@ impl MiddleEnvironment {
                         NodeType::VariableDeclaration {
                             var_type: VarType::Immutable,
                             identifier: tmp_ident.clone(),
-                            data_type: PotentialNewType::DataType(ParserDataType::new(
-                                node.span,
-                                ParserInnerType::Auto(None),
-                            )),
+                            data_type: PotentialNewType::DataType(ParserDataType::auto(node.span)),
                             value: Box::new(Node::new(
                                 node.span,
                                 NodeType::MoveExpression {
@@ -735,17 +702,15 @@ impl MiddleEnvironment {
             },
             NodeType::TupleLiteral { values } => {
                 let span = node.span;
-                let tuple_call = Node::call(
-                    span,
-                    Node::new(
+
+                self.evaluate_inner(
+                    scope,
+                    Node::call(
                         span,
-                        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                            ParserText::from(String::from("tuple")).into(),
-                        )),
+                        Node::identifier(span, "tuple"),
+                        values.into_iter().map(CallArg::Value).collect(),
                     ),
-                    values.into_iter().map(CallArg::Value).collect(),
-                );
-                self.evaluate_inner(scope, tuple_call)
+                )
             }
 
             NodeType::Drop(x) => Ok(MiddleNode {
@@ -867,6 +832,7 @@ impl MiddleEnvironment {
                     } else if let Some(val) = value_node {
                         lst.push(val);
                     }
+
                     if has_break_value && let Some(broke_target) = broke_target {
                         let assign = MiddleNode::new(
                             MiddleNodeType::AssignmentExpression {
@@ -890,6 +856,7 @@ impl MiddleEnvironment {
                     if let Some(target_scope) = target_scope {
                         let chain_defers =
                             self.scoping.collect_defers_until(scope, Some(target_scope));
+
                         for x in chain_defers {
                             lst.push(self.evaluate(scope, x));
                         }
@@ -911,6 +878,7 @@ impl MiddleEnvironment {
                         })?
                         .defined
                         .clone();
+
                     for value in defined {
                         lst.push(MiddleNode::new(
                             MiddleNodeType::Drop(value.into()),
@@ -972,6 +940,7 @@ impl MiddleEnvironment {
                     if let Some(ctx) = continue_ctx.as_ref() {
                         let chain_defers =
                             self.scoping.collect_defers_until(scope, Some(ctx.scope_id));
+
                         for x in chain_defers {
                             lst.push(self.evaluate(scope, x));
                         }
@@ -1122,17 +1091,14 @@ impl MiddleEnvironment {
                 value,
             } => {
                 let tmp_ident: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_prefix("__destructure_tmp", node.span).into();
+                    ParserText::temp_name_with_prefix("destructure_tmp", node.span).into();
 
                 let tmp_decl = Node::new(
                     node.span,
                     NodeType::VariableDeclaration {
                         var_type: VarType::Immutable,
                         identifier: tmp_ident.clone(),
-                        data_type: PotentialNewType::DataType(ParserDataType::new(
-                            node.span,
-                            ParserInnerType::Auto(None),
-                        )),
+                        data_type: PotentialNewType::DataType(ParserDataType::auto(node.span)),
                         value,
                     },
                 );
@@ -1166,16 +1132,12 @@ impl MiddleEnvironment {
                     NodeType::VariableDeclaration {
                         var_type: VarType::Immutable,
                         identifier: tmp_ident.clone(),
-                        data_type: PotentialNewType::DataType(ParserDataType::new(
-                            node.span,
-                            ParserInnerType::Auto(None),
-                        )),
+                        data_type: PotentialNewType::DataType(ParserDataType::auto(node.span)),
                         value,
                     },
                 );
 
-                let mut body = Vec::new();
-                body.push(tmp_decl);
+                let mut body = vec![tmp_decl];
                 body.extend(
                     self.emit_destructure_statements(&tmp_ident, &pattern, node.span, false),
                 );
@@ -1233,6 +1195,7 @@ impl MiddleEnvironment {
                 )? {
                     return Ok(x);
                 }
+
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::ComparisonExpression {
                         left: Box::new(self.evaluate(scope, *left)),
@@ -1256,6 +1219,7 @@ impl MiddleEnvironment {
                 )? {
                     return Ok(x);
                 }
+
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::BinaryExpression {
                         left: Box::new(self.evaluate(scope, *left)),
@@ -1377,6 +1341,7 @@ impl MiddleEnvironment {
                             operator: ComparisonOperator::GreaterEqual,
                         },
                     );
+
                     let upper = Node::new(
                         self.context.current_span(),
                         NodeType::ComparisonExpression {
@@ -1389,6 +1354,7 @@ impl MiddleEnvironment {
                             },
                         },
                     );
+
                     return self.evaluate_inner(
                         scope,
                         Node::new(
@@ -1413,6 +1379,7 @@ impl MiddleEnvironment {
                             },
                         )
                     });
+
                     if let Some(first) = comparisons.next() {
                         let cond = comparisons.fold(first, |acc, cmp| {
                             Node::new(
@@ -1485,11 +1452,10 @@ impl MiddleEnvironment {
                     self.resolve_potential_new_type(scope, data_type)
                 };
 
-                let mut lst = Vec::new();
-
-                for item in x {
-                    lst.push(self.evaluate(scope, item));
-                }
+                let lst = x
+                    .into_iter()
+                    .map(|item| self.evaluate(scope, item))
+                    .collect();
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::ListLiteral(data_type, lst),
@@ -1522,13 +1488,12 @@ impl MiddleEnvironment {
                 };
 
                 let item = self.evaluate(scope, *value);
-                let mut lst = Vec::with_capacity(count);
-                for _ in 0..count {
-                    lst.push(item.clone());
-                }
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::ListLiteral(data_type, lst),
+                    node_type: MiddleNodeType::ListLiteral(
+                        data_type,
+                        (0..count).map(|_| item.clone()).collect(),
+                    ),
                     span: node.span,
                 })
             }
@@ -1624,11 +1589,7 @@ impl MiddleEnvironment {
             NodeType::TestDeclaration { identifier, body } => {
                 let func_identifier = format!(
                     "test::{}",
-                    get_disamubiguous_name(
-                        scope,
-                        Some(identifier.clone()),
-                        Some(&VarType::Constant)
-                    )
+                    ParserText::temp_name_with_prefix(identifier.text.trim(), node.span).text
                 );
                 let file_path = self.scoping.scopes.get(scope).map(|s| s.path.clone());
 
@@ -2328,7 +2289,7 @@ impl MiddleEnvironment {
                     }
                 };
 
-                let new_name = get_disamubiguous_name(scope, Some(base_name.as_str()), None);
+                let new_name = ParserText::temp_name_with_prefix(base_name.clone(), node.span).text;
 
                 self.typing.objects.insert(
                     new_name.clone(),
@@ -2509,7 +2470,26 @@ impl MiddleEnvironment {
                         ));
                     };
                 let raw_variant = value.to_string();
-                let value = if let Some(obj) = self.typing.objects.get(&identifier.text)
+                // Try to find the object by the resolved identifier first, then by the base name
+                let base_name = identifier
+                    .text
+                    .split(':')
+                    .last()
+                    .unwrap_or(&identifier.text);
+                let obj = self
+                    .typing
+                    .objects
+                    .get(&identifier.text)
+                    .or_else(|| self.typing.objects.get(base_name))
+                    .or_else(|| {
+                        // Try to find any object whose base name matches (handles different scope IDs)
+                        self.typing
+                            .objects
+                            .iter()
+                            .find(|(key, _)| key.split(':').last().unwrap_or(key) == base_name)
+                            .map(|(_, obj)| obj)
+                    });
+                let value = if let Some(obj) = obj
                     && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
                 {
                     variants

@@ -26,6 +26,7 @@ impl MiddleEnvironment {
             } => {
                 if let Some(i) = default_variant {
                     if let Some((default_variant_name, _)) = variants.get(*i) {
+                        // Use the full mangled identifier for the return type to ensure it resolves correctly
                         Node::new(
                             span,
                             NodeType::VariableDeclaration {

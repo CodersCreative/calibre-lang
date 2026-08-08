@@ -9,7 +9,7 @@ use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;
 use crate::typing::Typing;
 use calibre_parser::{
-    COUNTER, Span,
+    Span,
     ast::{
         Operator,
         idents::ParserText,
@@ -32,32 +32,6 @@ pub struct MiddleEnvironment {
     pub testing: Testing,
 }
 
-pub fn get_disamubiguous_name(
-    scope: &u64,
-    name: Option<impl ToString>,
-    var_type: Option<&VarType>,
-) -> String {
-    let name = name.map(|x| x.to_string()).unwrap_or(String::from("anon"));
-
-    format!(
-        "{0}-{1}{2}:{3}",
-        match var_type {
-            Some(VarType::Mutable) => "mut",
-            Some(VarType::Immutable) => "let",
-            _ => "const",
-        },
-        scope,
-        if name.contains("-") {
-            let mut counter = COUNTER.write().unwrap();
-            *counter += 1;
-            format!("-{}", counter)
-        } else {
-            String::new()
-        },
-        name
-    )
-}
-
 impl MiddleEnvironment {
     pub fn process_overload(
         &mut self,
@@ -66,10 +40,9 @@ impl MiddleEnvironment {
         generic_params: Vec<String>,
         target_name: Option<String>,
     ) -> Result<Option<MiddleOverload>, MiddleErr> {
-        overload.verify().map_err(|e| MiddleErr::Overload(e))?;
+        overload.verify().map_err(MiddleErr::Overload)?;
 
-        let operator =
-            Operator::from_str(&overload.operator.text).map_err(|e| MiddleErr::Overload(e))?;
+        let operator = Operator::from_str(&overload.operator.text).map_err(MiddleErr::Overload)?;
 
         let return_type =
             self.resolve_potential_new_type(scope, overload.header.return_type.clone());

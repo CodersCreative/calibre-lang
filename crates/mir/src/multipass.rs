@@ -1,11 +1,8 @@
-use crate::{
-    environment::{MiddleEnvironment, get_disamubiguous_name},
-    symbols::MiddleVariable,
-};
+use crate::{environment::MiddleEnvironment, symbols::MiddleVariable};
 use calibre_parser::{
     IdentifiersUsed, Span,
     ast::{
-        idents::PotentialDollarIdentifier,
+        idents::{ParserText, PotentialDollarIdentifier},
         nodes::{Node, NodeType, VarType},
         types::{ParserDataType, ParserInnerType, PotentialNewType},
     },
@@ -292,7 +289,8 @@ impl MiddleEnvironment {
     }
 
     fn predeclare_type_binding(&mut self, scope: &u64, identifier: &str) {
-        let new_name = get_disamubiguous_name(scope, Some(identifier.trim()), None);
+        let new_name =
+            ParserText::temp_name_with_prefix(identifier.trim(), self.context.current_span()).text;
 
         if self.symbols.variables.contains_key(&new_name) {
             return;
@@ -331,7 +329,7 @@ impl MiddleEnvironment {
         let new_name = if identifier.text.contains("->") || identifier.text.contains("::") {
             identifier.text.clone()
         } else {
-            get_disamubiguous_name(scope, Some(identifier.text.trim()), Some(&var_type))
+            ParserText::temp_name_with_prefix(identifier.text.trim(), span).text
         };
 
         if self.symbols.variables.contains_key(&new_name) {
@@ -374,11 +372,7 @@ impl MiddleEnvironment {
         let new_name = if identifier.text.contains("->") || identifier.text.contains("::") {
             identifier.text.clone()
         } else {
-            get_disamubiguous_name(
-                scope,
-                Some(identifier.text.trim()),
-                Some(&VarType::Constant),
-            )
+            ParserText::temp_name_with_prefix(identifier.text.trim(), identifier.span).text
         };
 
         if self.symbols.variables.contains_key(&new_name) {

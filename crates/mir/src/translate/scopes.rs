@@ -1,13 +1,13 @@
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, get_disamubiguous_name},
+    environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeMacro,
 };
 use calibre_parser::{
     Span,
     ast::{
-        idents::PotentialDollarIdentifier,
+        idents::{ParserText, PotentialDollarIdentifier},
         nodes::{LoopType, NamedScope, Node, NodeType},
     },
 };
@@ -238,10 +238,7 @@ impl MiddleEnvironment {
         if let Some(mut body) = body {
             for stmt in body.iter() {
                 if let NodeType::VariableDeclaration {
-                    var_type,
-                    identifier,
-                    value,
-                    ..
+                    identifier, value, ..
                 } = &stmt.node_type
                     && matches!(value.node_type, NodeType::FunctionDeclaration { .. })
                 {
@@ -253,7 +250,7 @@ impl MiddleEnvironment {
                     let new_name = if ident.text.contains("->") {
                         ident.text.clone()
                     } else {
-                        get_disamubiguous_name(&new_scope, Some(ident.text.trim()), Some(var_type))
+                        ParserText::temp_name_with_prefix(ident.text.trim(), span).text
                     };
                     self.scoping
                         .scope_mut_or_err(&new_scope)?

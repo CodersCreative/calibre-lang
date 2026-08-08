@@ -1,6 +1,6 @@
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
-    environment::{MiddleEnvironment, get_disamubiguous_name},
+    environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::MiddleScope,
     symbols::FunctionParamDefault,
@@ -411,15 +411,14 @@ impl MiddleEnvironment {
     pub(crate) fn wrap_generator_body(body: Node, elem_type: ParserDataType, span: Span) -> Node {
         let next_name = ParserText::temp_name_with_prefix("gen_next", span);
         let rewritten = Self::rewrite_generator_returns(body);
+
         let next_body = match rewritten.node_type {
             NodeType::ScopeDeclaration {
                 body: Some(mut items),
                 ..
             } => {
-                let mut out = Vec::with_capacity(items.len() + 1);
-                out.append(&mut items);
-                out.push(Node::identifier(span, "none"));
-                Node::new_temp_scope(out)
+                items.push(Node::identifier(span, "none"));
+                Node::new_temp_scope(items)
             }
             other => {
                 Node::new_temp_scope(vec![Node::new(span, other), Node::identifier(span, "none")])
@@ -596,7 +595,8 @@ impl MiddleEnvironment {
                 self.context
                     .err_at_current(MiddleErr::Scope(identifier.to_string()))
             })?;
-        let new_name = get_disamubiguous_name(scope, Some(ident.trim()), Some(&VarType::Constant));
+
+        let new_name = ParserText::temp_name_with_prefix(ident.trim(), span).text;
 
         let mut params = Vec::new();
         for ty in parameters {
@@ -661,8 +661,7 @@ impl MiddleEnvironment {
                     self.context
                         .err_at_current(MiddleErr::Scope(param.0.to_string()))
                 })?;
-            let new_name =
-                get_disamubiguous_name(scope, Some(og_name.trim()), Some(&VarType::Mutable));
+            let new_name = ParserText::temp_name_with_prefix(og_name.text.trim(), span).text;
 
             let data_type = if let Some(x) = param.1 {
                 self.resolve_potential_new_type(scope, x)
@@ -692,7 +691,7 @@ impl MiddleEnvironment {
 
         if needs_caller_context {
             let caller_context_name =
-                get_disamubiguous_name(scope, Some("caller_context"), Some(&VarType::Mutable));
+                ParserText::temp_name_with_prefix("caller_context", span).text;
             let caller_context_type =
                 ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
 

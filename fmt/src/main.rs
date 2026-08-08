@@ -1,4 +1,4 @@
-use calibre_diagnostics::{emit_error, emit_parser_errors};
+use calibre_diagnostics::{emit_calibre_errors, emit_error};
 use calibre_fmt::{FormatError, default_all_entry_path, format_all, format_file, format_recursive};
 use calibre_parser::ast::formatter::Formatter;
 use clap::Parser;
@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     contents,
                     errors,
                 } => {
-                    emit_parser_errors(path, contents, errors);
+                    emit_calibre_errors(path, contents, errors);
                 }
                 FormatError::FormattedParseFailed {
                     path,
@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         "Formatter generated invalid syntax; refusing to write file.".to_string(),
                         None,
                     );
-                    emit_parser_errors(path, formatted, errors);
+                    emit_calibre_errors(path, formatted, errors);
                 }
                 FormatError::FormatterFailed { path, message } => {
                     let content = std::fs::read_to_string(path).unwrap_or_default();

@@ -1,5 +1,5 @@
 use crate::{
-    environment::{MiddleEnvironment, get_disamubiguous_name},
+    environment::MiddleEnvironment,
     errors::MiddleErr,
     symbols::MiddleOverload,
     typing::{MiddleObject, MiddleTrait, MiddleTypeDefType},
@@ -383,12 +383,13 @@ impl MiddleEnvironment {
                 let identifier = self
                     .resolve_dollar_ident_only(scope, &identifier)
                     .unwrap_or_else(|| ParserText::from(identifier.to_string()).into());
-                let new_name = get_disamubiguous_name(scope, Some(identifier.text.trim()), None);
+                let new_name =
+                    ParserText::temp_name_with_prefix(identifier.text.trim(), identifier.span).text;
                 let type_def = MiddleTypeDefType::from_type_def_type(self, scope, type_def);
                 self.typing.objects.insert(
                     new_name.clone(),
                     MiddleObject {
-                        object_type: type_def,
+                        object_type: type_def.clone(),
                         variables: FxHashMap::default(),
                         traits: Vec::new(),
                         location: self.context.current_location.clone(),

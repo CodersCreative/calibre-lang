@@ -1,12 +1,12 @@
 use crate::{
-    environment::{MiddleEnvironment, get_disamubiguous_name},
+    environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{MiddleScope, Scoping},
     symbols::MiddleVariable,
 };
 use calibre_parser::{
     Parser,
-    ast::{nodes::VarType, types::ParserDataType},
+    ast::{idents::ParserText, nodes::VarType, types::ParserDataType},
 };
 use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
 use rustc_hash::FxHashMap;
@@ -289,7 +289,7 @@ impl MiddleEnvironment {
             .collect();
 
         for var in funcs.iter().cloned() {
-            let name = get_disamubiguous_name(&scope, Some(&var.0), None);
+            let name = ParserText::temp_name_with_prefix(var.0.trim(), var.1.span).text;
             let _ = self.symbols.variables.insert(
                 name.clone(),
                 MiddleVariable {

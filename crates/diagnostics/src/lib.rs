@@ -8,7 +8,7 @@ use codespan_reporting::{
 };
 use std::path::Path;
 
-pub fn emit_calibre_errors<T : CalibreError>(path: &Path, contents: &str, errors: &[T]) {
+pub fn emit_calibre_errors<T: CalibreError>(path: &Path, contents: &str, errors: &[T]) {
     let mut files = SimpleFiles::new();
     let file_id = files.add(path.to_string_lossy().to_string(), contents.to_string());
     let writer = StandardStream::stderr(ColorChoice::Auto);
@@ -92,7 +92,12 @@ pub fn emit_mir_error(path: &Path, contents: &str, err: &MiddleErr) {
     }
 }
 
-pub fn emit_calibre_error<T : CalibreError>(path: &Path, contents: &str, err: &T, span: Option<Span>) {
+pub fn emit_calibre_error<T: CalibreError>(
+    path: &Path,
+    contents: &str,
+    err: &T,
+    span: Option<Span>,
+) {
     let mut files = SimpleFiles::new();
     let file_id = files.add(path.to_string_lossy().to_string(), contents.to_string());
     let writer = StandardStream::stderr(ColorChoice::Auto);
