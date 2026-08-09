@@ -26,12 +26,11 @@ fn collect_inlineable(node: &MiddleNode, map: &mut FxHashMap<String, InlineFn>, 
                 parameters, body, ..
             } = &value.node_type
                 && let Some(expr) = extract_single_return_expr(body)
+                && !&expr.calls_self(&identifier.text)
+                && expr.len() <= max_nodes
             {
-                let name = identifier.text.clone();
-                if !contains_self_call(&expr, &name) && expr.len() <= max_nodes {
-                    let params = parameters.iter().map(|(p, _, _)| p.text.clone()).collect();
-                    map.insert(name, InlineFn { params, body: expr });
-                }
+                let params = parameters.iter().map(|(p, _, _)| p.text.clone()).collect();
+                map.insert(identifier.text.clone(), InlineFn { params, body: expr });
             }
         }
         _ => {}
@@ -44,6 +43,7 @@ fn extract_single_return_expr(body: &MiddleNode) -> Option<MiddleNode> {
             if body.len() != 1 {
                 return None;
             }
+
             match &body[0].node_type {
                 MiddleNodeType::Return { value: Some(expr) } => Some((**expr).clone()),
                 _ => None,
@@ -51,57 +51,6 @@ fn extract_single_return_expr(body: &MiddleNode) -> Option<MiddleNode> {
         }
         MiddleNodeType::Return { value: Some(expr) } => Some((**expr).clone()),
         _ => None,
-    }
-}
-
-fn contains_self_call(node: &MiddleNode, name: &str) -> bool {
-    match &node.node_type {
-        MiddleNodeType::Identifier(id) => id.text == name,
-        MiddleNodeType::CallExpression { caller, args } => {
-            if contains_self_call(caller, name) {
-                return true;
-            }
-            args.iter().any(|a| contains_self_call(a, name))
-        }
-        MiddleNodeType::FunctionDeclaration { .. } => false,
-        MiddleNodeType::ScopeDeclaration { body, .. } => {
-            body.iter().any(|n| contains_self_call(n, name))
-        }
-        MiddleNodeType::Return { value } => {
-            value.as_ref().is_some_and(|v| contains_self_call(v, name))
-        }
-        MiddleNodeType::VariableDeclaration { value, .. } => contains_self_call(value, name),
-        MiddleNodeType::AssignmentExpression { identifier, value } => {
-            contains_self_call(identifier, name) || contains_self_call(value, name)
-        }
-        MiddleNodeType::BinaryExpression { left, right, .. }
-        | MiddleNodeType::ComparisonExpression { left, right, .. }
-        | MiddleNodeType::BooleanExpression { left, right, .. } => {
-            contains_self_call(left, name) || contains_self_call(right, name)
-        }
-        MiddleNodeType::AsExpression { value, .. }
-        | MiddleNodeType::IsExpression { value, .. }
-        | MiddleNodeType::NegExpression { value }
-        | MiddleNodeType::RefStatement { value, .. }
-        | MiddleNodeType::DerefStatement { value }
-        | MiddleNodeType::DebugExpression { value, .. } => contains_self_call(value, name),
-        MiddleNodeType::ListLiteral(_, values) => {
-            values.iter().any(|v| contains_self_call(v, name))
-        }
-        MiddleNodeType::RangeDeclaration { from, to, .. } => {
-            contains_self_call(from, name) || contains_self_call(to, name)
-        }
-        MiddleNodeType::LoopDeclaration { state, body, .. } => {
-            state.as_ref().is_some_and(|s| contains_self_call(s, name))
-                || contains_self_call(body, name)
-        }
-        MiddleNodeType::MemberExpression { path } => {
-            path.iter().any(|(n, _)| contains_self_call(n, name))
-        }
-        MiddleNodeType::EnumExpression { data, .. } => {
-            data.as_ref().is_some_and(|d| contains_self_call(d, name))
-        }
-        _ => false,
     }
 }
 
@@ -131,7 +80,7 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
                     replacements.insert(param.clone(), arg.clone());
                 }
                 let mut inlined = inline_fn.body.clone();
-                substitute_idents(&mut inlined, &replacements);
+                inlined.substitute(&replacements);
                 *node = inlined;
             }
         }
@@ -175,76 +124,6 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
         MiddleNodeType::EnumExpression { data, .. } => {
             if let Some(d) = data.as_mut() {
                 inline_in_node(d, map);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn substitute_idents(node: &mut MiddleNode, repl: &FxHashMap<String, MiddleNode>) {
-    match &mut node.node_type {
-        MiddleNodeType::Identifier(id) => {
-            if let Some(replacement) = repl.get(&id.text) {
-                *node = replacement.clone();
-            }
-        }
-        MiddleNodeType::FunctionDeclaration { .. } => {}
-        MiddleNodeType::ScopeDeclaration { body, .. } => {
-            for stmt in body {
-                substitute_idents(stmt, repl);
-            }
-        }
-        MiddleNodeType::VariableDeclaration { value, .. } => substitute_idents(value, repl),
-        MiddleNodeType::AssignmentExpression { identifier, value } => {
-            substitute_idents(identifier, repl);
-            substitute_idents(value, repl);
-        }
-        MiddleNodeType::CallExpression { caller, args } => {
-            substitute_idents(caller, repl);
-            for a in args.iter_mut() {
-                substitute_idents(a, repl);
-            }
-        }
-        MiddleNodeType::Return { value } => {
-            if let Some(v) = value.as_mut() {
-                substitute_idents(v, repl);
-            }
-        }
-        MiddleNodeType::BinaryExpression { left, right, .. }
-        | MiddleNodeType::ComparisonExpression { left, right, .. }
-        | MiddleNodeType::BooleanExpression { left, right, .. } => {
-            substitute_idents(left, repl);
-            substitute_idents(right, repl);
-        }
-        MiddleNodeType::AsExpression { value, .. }
-        | MiddleNodeType::IsExpression { value, .. }
-        | MiddleNodeType::NegExpression { value }
-        | MiddleNodeType::RefStatement { value, .. }
-        | MiddleNodeType::DerefStatement { value }
-        | MiddleNodeType::DebugExpression { value, .. } => substitute_idents(value, repl),
-        MiddleNodeType::ListLiteral(_, values) => {
-            for v in values {
-                substitute_idents(v, repl);
-            }
-        }
-        MiddleNodeType::RangeDeclaration { from, to, .. } => {
-            substitute_idents(from, repl);
-            substitute_idents(to, repl);
-        }
-        MiddleNodeType::LoopDeclaration { state, body, .. } => {
-            if let Some(s) = state.as_mut() {
-                substitute_idents(s, repl);
-            }
-            substitute_idents(body, repl);
-        }
-        MiddleNodeType::MemberExpression { path } => {
-            for (n, _) in path.iter_mut() {
-                substitute_idents(n, repl);
-            }
-        }
-        MiddleNodeType::EnumExpression { data, .. } => {
-            if let Some(d) = data.as_mut() {
-                substitute_idents(d, repl);
             }
         }
         _ => {}

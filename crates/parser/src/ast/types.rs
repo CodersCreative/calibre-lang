@@ -81,61 +81,11 @@ impl ParserDataType {
         names
     }
 
-    fn canonical_key(&self) -> String {
-        match &self.data_type {
-            ParserInnerType::Struct(s) => format!("struct_{}", s),
-            ParserInnerType::List(x) => format!("list_{}", x.canonical_key()),
-            ParserInnerType::Ptr(x) => format!("ptr_{}", x.canonical_key()),
-            ParserInnerType::Option(x) => format!("opt_{}", x.canonical_key()),
-            ParserInnerType::Result { ok, err } => {
-                format!("res_{}_{}", err.canonical_key(), ok.canonical_key())
-            }
-            ParserInnerType::Tuple(xs) => {
-                let inner = xs
-                    .iter()
-                    .map(Self::canonical_key)
-                    .collect::<Vec<_>>()
-                    .join("_");
-                format!("tup_{}", inner)
-            }
-            ParserInnerType::Ref(x, m) => format!("ref{}_{}", m, x.canonical_key()),
-            ParserInnerType::StructWithGenerics {
-                identifier,
-                generic_types,
-            } => {
-                let inner = generic_types
-                    .iter()
-                    .map(Self::canonical_key)
-                    .collect::<Vec<_>>()
-                    .join("_");
-                format!("gen_{}_{}", identifier, inner)
-            }
-            ParserInnerType::Function {
-                return_type,
-                parameters,
-            } => {
-                let params = parameters
-                    .iter()
-                    .map(Self::canonical_key)
-                    .collect::<Vec<_>>()
-                    .join("_");
-                format!("fn_{}_ret_{}", params, return_type.canonical_key())
-            }
-            ParserInnerType::Auto(_)
-            | ParserInnerType::DollarIdentifier(_)
-            | ParserInnerType::Scope(_)
-            | ParserInnerType::NativeFunction(_) => {
-                format!("other_{}", self.impl_name())
-            }
-            _ => self.impl_name(),
-        }
-    }
-
     pub fn canonical_args_key(args: &[ParserDataType]) -> String {
         args.iter()
-            .map(Self::canonical_key)
+            .map(|x| x.to_string())
             .collect::<Vec<_>>()
-            .join("__")
+            .join(", ")
     }
 
     pub fn impl_name(&self) -> String {
@@ -409,39 +359,23 @@ impl ParserInnerType {
     }
 
     pub fn is_auto(&self) -> bool {
-        match self {
-            Self::Auto(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Auto(_))
     }
 
     pub fn is_result(&self) -> bool {
-        match self {
-            Self::Result { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::Result { .. })
     }
 
     pub fn is_bool(&self) -> bool {
-        match self {
-            Self::Bool => true,
-            _ => false,
-        }
+        matches!(self, Self::Bool)
     }
 
     pub fn is_null(&self) -> bool {
-        match self {
-            Self::Null => true,
-            _ => false,
-        }
+        matches!(self, Self::Null)
     }
 
     pub fn is_list(&self) -> bool {
-        match self {
-            Self::List(_) => true,
-            Self::Ref(x, _) => x.is_list(),
-            _ => false,
-        }
+        matches!(self, Self::List(_))
     }
 
     pub fn verify(self) -> Self {
@@ -753,14 +687,7 @@ impl Display for ParserInnerType {
                 if traits.is_empty() {
                     write!(f, "dyn")
                 } else {
-                    let mut txt = String::new();
-                    for (i, tr) in traits.iter().enumerate() {
-                        if i > 0 {
-                            txt.push_str(", ");
-                        }
-                        txt.push_str(tr);
-                    }
-                    write!(f, "dyn:<{}>", txt)
+                    write!(f, "dyn:<{}>", traits.join(", "))
                 }
             }
             Self::Bool => write!(f, "bool"),
@@ -784,66 +711,54 @@ impl Display for ParserInnerType {
                 if generic_types.is_empty() {
                     write!(f, "{}", identifier)
                 } else {
-                    let mut txt = format!(
-                        "{}<{}",
+                    write!(
+                        f,
+                        "{}:<{}>",
                         identifier,
                         generic_types
-                            .first()
+                            .iter()
                             .map(|x| x.to_string())
-                            .unwrap_or(String::new())
-                    );
-
-                    for typ in generic_types.iter().skip(1) {
-                        txt.push_str(&format!(", {}", typ));
-                    }
-
-                    txt.push_str(">");
-
-                    write!(f, "{}", txt)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
                 }
             }
             Self::FfiType(x) => write!(f, "@{}", x),
             Self::List(x) => write!(f, "list:<{}>", x),
             Self::Tuple(types) => {
-                let mut txt = format!(
-                    "<{}",
-                    types.get(0).map(|x| x.to_string()).unwrap_or(String::new())
-                );
-                for typ in types.iter().skip(1) {
-                    txt.push_str(&format!(", {}", typ));
-                }
-
-                txt.push_str(">");
-
-                write!(f, "{}", txt)
+                write!(
+                    f,
+                    "<{}>",
+                    types
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
             Self::Scope(values) => {
-                let mut txt = values[0].to_string();
-
-                for typ in values.iter().skip(1) {
-                    txt.push_str(&format!("::{}", typ));
-                }
-
-                write!(f, "{}", txt)
+                write!(
+                    f,
+                    "{}",
+                    values
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join("::")
+                )
             }
             Self::Function {
                 return_type,
                 parameters,
             } => {
-                let mut txt = String::from("fn (");
-
-                txt.push_str(
-                    &parameters
-                        .get(0)
+                let mut txt = format!(
+                    "fn ({})",
+                    parameters
+                        .iter()
                         .map(|x| x.to_string())
-                        .unwrap_or(String::new()),
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 );
-
-                for typ in parameters.iter().skip(1) {
-                    txt.push_str(&format!(", {}", typ));
-                }
-
-                txt.push_str(")");
 
                 if return_type.data_type != ParserInnerType::Null {
                     txt.push_str(&format!(" -> {}", return_type));

@@ -12,6 +12,7 @@ use calibre_parser::{
         types::{GenericTypes, ParserDataType},
     },
 };
+use rustc_hash::FxHashMap;
 use std::fmt::Display;
 
 pub mod identifiers;
@@ -133,6 +134,127 @@ impl MiddleNode {
             _ => {}
         }
         count
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn substitute(&mut self, repl: &FxHashMap<String, MiddleNode>) {
+        match &mut self.node_type {
+            MiddleNodeType::Identifier(id) => {
+                if let Some(replacement) = repl.get(&id.text) {
+                    *self = replacement.clone();
+                }
+            }
+            MiddleNodeType::FunctionDeclaration { .. } => {}
+            MiddleNodeType::ScopeDeclaration { body, .. } => {
+                for stmt in body {
+                    stmt.substitute(repl);
+                }
+            }
+            MiddleNodeType::AssignmentExpression { identifier, value } => {
+                identifier.substitute(repl);
+                value.substitute(repl);
+            }
+            MiddleNodeType::CallExpression { caller, args } => {
+                caller.substitute(repl);
+                for a in args.iter_mut() {
+                    a.substitute(repl);
+                }
+            }
+            MiddleNodeType::Return { value } => {
+                if let Some(v) = value.as_mut() {
+                    v.substitute(repl);
+                }
+            }
+            MiddleNodeType::BinaryExpression { left, right, .. }
+            | MiddleNodeType::ComparisonExpression { left, right, .. }
+            | MiddleNodeType::BooleanExpression { left, right, .. }
+            | MiddleNodeType::RangeDeclaration {
+                from: left,
+                to: right,
+                ..
+            } => {
+                left.substitute(repl);
+                right.substitute(repl);
+            }
+            MiddleNodeType::AsExpression { value, .. }
+            | MiddleNodeType::IsExpression { value, .. }
+            | MiddleNodeType::NegExpression { value }
+            | MiddleNodeType::RefStatement { value, .. }
+            | MiddleNodeType::DerefStatement { value }
+            | MiddleNodeType::DebugExpression { value, .. }
+            | MiddleNodeType::VariableDeclaration { value, .. } => value.substitute(repl),
+            MiddleNodeType::ListLiteral(_, values) => {
+                for v in values {
+                    v.substitute(repl);
+                }
+            }
+            MiddleNodeType::LoopDeclaration { state, body, .. } => {
+                if let Some(s) = state.as_mut() {
+                    s.substitute(repl);
+                }
+                body.substitute(repl);
+            }
+            MiddleNodeType::MemberExpression { path } => {
+                for (n, _) in path.iter_mut() {
+                    n.substitute(repl);
+                }
+            }
+            MiddleNodeType::EnumExpression { data, .. } => {
+                if let Some(d) = data.as_mut() {
+                    d.substitute(repl);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn calls_self(&self, name: &impl ToString) -> bool {
+        match &self.node_type {
+            MiddleNodeType::Identifier(id) => id.text == name.to_string(),
+            MiddleNodeType::CallExpression { caller, args } => {
+                if caller.calls_self(name) {
+                    return true;
+                }
+                args.iter().any(|a| a.calls_self(name))
+            }
+            MiddleNodeType::FunctionDeclaration { .. } => false,
+            MiddleNodeType::ScopeDeclaration { body, .. } => {
+                body.iter().any(|n| n.calls_self(name))
+            }
+            MiddleNodeType::Return { value } => value.as_ref().is_some_and(|v| v.calls_self(name)),
+            MiddleNodeType::AssignmentExpression { identifier, value } => {
+                identifier.calls_self(name) || value.calls_self(name)
+            }
+            MiddleNodeType::BinaryExpression { left, right, .. }
+            | MiddleNodeType::ComparisonExpression { left, right, .. }
+            | MiddleNodeType::BooleanExpression { left, right, .. }
+            | MiddleNodeType::RangeDeclaration {
+                from: left,
+                to: right,
+                ..
+            } => left.calls_self(name) || right.calls_self(name),
+            MiddleNodeType::AsExpression { value, .. }
+            | MiddleNodeType::IsExpression { value, .. }
+            | MiddleNodeType::NegExpression { value }
+            | MiddleNodeType::RefStatement { value, .. }
+            | MiddleNodeType::DerefStatement { value }
+            | MiddleNodeType::DebugExpression { value, .. }
+            | MiddleNodeType::VariableDeclaration { value, .. } => value.calls_self(name),
+            MiddleNodeType::ListLiteral(_, values) => values.iter().any(|v| v.calls_self(name)),
+            MiddleNodeType::LoopDeclaration { state, body, .. } => {
+                state.as_ref().is_some_and(|s| s.calls_self(name)) || body.calls_self(name)
+            }
+            MiddleNodeType::MemberExpression { path } => {
+                path.iter().any(|(n, _)| n.calls_self(name))
+            }
+            MiddleNodeType::EnumExpression { data, .. } => {
+                data.as_ref().is_some_and(|d| d.calls_self(name))
+            }
+            _ => false,
+        }
     }
 }
 

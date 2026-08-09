@@ -513,14 +513,14 @@ impl Formatter {
                     } else if values.len() == 1 {
                         txt.push_str(&values[0].to_string());
                     } else if !values.is_empty() {
-                        txt.push_str("(");
-
-                        for val in values {
-                            txt.push_str(&format!("{val}, "));
-                        }
-
-                        txt = txt.trim_end().trim_end_matches(",").trim_end().to_string();
-                        txt.push_str(")");
+                        txt.push_str(&format!(
+                            "({})",
+                            values
+                                .iter()
+                                .map(|x| x.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
                     } else {
                         txt.push_str(&get_module(&module));
                         return txt;
@@ -800,11 +800,7 @@ impl Formatter {
                 )
             }
             NodeType::IsExpression { value, data_type } => {
-                format!(
-                    "{} is {}",
-                    self.format(value),
-                    self.fmt_parser_data_type(data_type)
-                )
+                format!("{} is {}", self.format(value), data_type)
             }
             NodeType::InDeclaration { identifier, value } => {
                 format!("{} in {}", self.format(identifier), self.format(value))
@@ -820,18 +816,13 @@ impl Formatter {
 
                 if !generic_types.is_empty() {
                     txt.push_str(&format!(
-                        ":<{}",
+                        ":<{}>",
                         generic_types
-                            .get(0)
+                            .iter()
                             .map(|x| x.to_string())
-                            .unwrap_or(String::new())
+                            .collect::<Vec<_>>()
+                            .join(", "),
                     ));
-
-                    for typ in generic_types.iter().skip(1) {
-                        txt.push_str(&format!(", {}", typ));
-                    }
-
-                    txt.push_str(">")
                 }
 
                 if let Some(sfn) = string_fn {
@@ -859,13 +850,14 @@ impl Formatter {
                 };
 
                 if !reverse_args.is_empty() {
-                    txt.push_str("<(");
-                    let mut args = Vec::new();
-                    for arg in reverse_args {
-                        args.push(self.format(arg));
-                    }
-                    txt.push_str(&args.join(", "));
-                    txt.push(')');
+                    txt.push_str(&format!(
+                        "<({})",
+                        reverse_args
+                            .iter()
+                            .map(|x| self.format(x))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
                 }
 
                 txt
@@ -1686,11 +1678,14 @@ impl Formatter {
         for typ in types.0.iter() {
             txt.push_str(&typ.identifier.to_string());
             if !typ.trait_constraints.is_empty() {
-                txt.push_str(" :");
-                for constraint in &typ.trait_constraints {
-                    txt.push_str(&format!(" {} +", constraint));
-                }
-                txt = txt.trim_end_matches("+").trim().to_string();
+                txt.push_str(&format!(
+                    " : {}",
+                    typ.trait_constraints
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" + ")
+                ));
             }
             txt.push_str(", ");
         }
@@ -2060,7 +2055,7 @@ impl Formatter {
 
     fn fmt_potential_new_type(&mut self, data_type: &PotentialNewType) -> String {
         match data_type {
-            PotentialNewType::DataType(x) => self.fmt_parser_data_type(x),
+            PotentialNewType::DataType(x) => x.to_string(),
             PotentialNewType::NewType {
                 identifier,
                 type_def,
@@ -2073,75 +2068,6 @@ impl Formatter {
                     self.fmt_overloads(overloads)
                 )
             }
-        }
-    }
-
-    fn fmt_parser_data_type(&mut self, data_type: &ParserDataType) -> String {
-        self.fmt_parser_inner_type(&data_type.data_type)
-    }
-
-    fn fmt_parser_inner_type(&mut self, inner: &ParserInnerType) -> String {
-        match inner {
-            ParserInnerType::StructWithGenerics {
-                identifier,
-                generic_types,
-            } => {
-                if generic_types.is_empty() {
-                    identifier.to_string()
-                } else {
-                    let mut parts = Vec::new();
-                    for typ in generic_types {
-                        parts.push(self.fmt_parser_data_type(typ));
-                    }
-                    format!("{}:<{}>", identifier, parts.join(", "))
-                }
-            }
-            ParserInnerType::Ref(typ, mutability) => {
-                mutability.fmt_with_val(&self.fmt_parser_data_type(typ))
-            }
-            ParserInnerType::Result { err, ok } => {
-                format!(
-                    "{}!{}",
-                    self.fmt_parser_data_type(err),
-                    self.fmt_parser_data_type(ok)
-                )
-            }
-            ParserInnerType::Option(typ) => format!("{}?", self.fmt_parser_data_type(typ)),
-            ParserInnerType::NativeFunction(typ) => {
-                format!("native -> {}", self.fmt_parser_data_type(typ))
-            }
-            ParserInnerType::FfiType(typ) => typ.to_string(),
-            ParserInnerType::Ptr(typ) => format!("ptr:<{}>", self.fmt_parser_data_type(typ)),
-            ParserInnerType::List(typ) => format!("list:<{}>", self.fmt_parser_data_type(typ)),
-            ParserInnerType::Tuple(types) => {
-                let mut parts = Vec::new();
-                for typ in types {
-                    parts.push(self.fmt_parser_data_type(typ));
-                }
-                format!("<{}>", parts.join(", "))
-            }
-            ParserInnerType::Scope(values) => {
-                let mut parts = Vec::new();
-                for typ in values {
-                    parts.push(self.fmt_parser_data_type(typ));
-                }
-                parts.join("::")
-            }
-            ParserInnerType::Function {
-                return_type,
-                parameters,
-            } => {
-                let mut args = Vec::new();
-                for arg in parameters {
-                    args.push(self.fmt_parser_data_type(arg));
-                }
-                format!(
-                    "fn({}) -> {}",
-                    args.join(", "),
-                    self.fmt_parser_data_type(return_type)
-                )
-            }
-            _ => inner.to_string(),
         }
     }
 
@@ -2261,7 +2187,7 @@ impl Formatter {
             MatchTupleItem::Wildcard(_) => "_".to_string(),
             MatchTupleItem::Value(node) => self.format(node),
             MatchTupleItem::IsType(data_type) => {
-                format!("is {}", self.fmt_parser_data_type(data_type))
+                format!("is {}", data_type)
             }
             MatchTupleItem::In(node) => format!("in {}", self.format(node)),
             MatchTupleItem::At {
@@ -2398,7 +2324,7 @@ impl Formatter {
             }
             MatchArmType::Value(x) => self.format(x),
             MatchArmType::IsType(data_type) => {
-                format!("is {}", self.fmt_parser_data_type(data_type))
+                format!("is {}", data_type)
             }
             MatchArmType::Wildcard(_) => String::from("_"),
         }
@@ -2526,7 +2452,7 @@ impl Formatter {
     fn fmt_ffi_normal_type(&mut self, data_type: &ParserDataType) -> String {
         match &data_type.data_type {
             ParserInnerType::Ptr(inner) => format!("ptr:<{}>", self.fmt_ffi_normal_type(inner)),
-            _ => self.fmt_parser_data_type(data_type),
+            _ => data_type.to_string(),
         }
     }
 
