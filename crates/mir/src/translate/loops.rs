@@ -676,7 +676,7 @@ impl MiddleEnvironment {
             return self.evaluate_inner(scope, Node::new_temp_scope(body));
         } else {
             let map_tmp_ident: PotentialDollarIdentifier =
-                ParserText::from(String::from("__iter_map_value")).into();
+                ParserText::from(String::from("iter_map_value")).into();
 
             let map_tmp_decl = Node::new(
                 self.context.current_span(),

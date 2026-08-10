@@ -114,7 +114,7 @@ impl MiddleEnvironment {
                         &x,
                         PotentialGenericTypeIdentifier::Identifier(
                             PotentialDollarIdentifier::Identifier(text)
-                        ) if text.text.contains("::")
+                        ) if ParserText::is_temp_name(&text.text)
                     ) {
                         ParserText::from(x.to_string())
                     } else if let PotentialDollarIdentifier::DollarIdentifier(x) = x.get_ident() {
@@ -238,7 +238,7 @@ impl MiddleEnvironment {
                         let mut idx = 0usize;
 
                         let mut push_capture = |arg: Node| {
-                            let name = format!("__spawn_capture_{idx}");
+                            let name = format!("spawn_capture_{idx}");
                             idx += 1;
                             let ident: PotentialDollarIdentifier =
                                 ParserText::from(name.clone()).into();

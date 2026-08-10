@@ -751,7 +751,7 @@ impl MiddleEnvironment {
         body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
     ) -> Result<MiddleNode, MiddleErr> {
         let (resolved_data_type, decl, value) = if let Some(value) = value {
-            let tmp_name = ParserText::temp_name_with_prefix("__match_tmp", span);
+            let tmp_name = ParserText::temp_name_with_prefix("match_tmp", span);
             let resolved = self.resolve_type_from_node(scope, &value);
             (
                 resolved.clone(),

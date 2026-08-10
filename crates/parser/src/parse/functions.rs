@@ -239,7 +239,7 @@ pub fn build_function_parsers<'a>(
                         span,
                     } => {
                         let param_index = parameters.len();
-                        let synthetic_name = format!("__destructure_param_{}", synthetic_idx);
+                        let synthetic_name = format!("destructure_param_{}", synthetic_idx);
                         synthetic_idx += 1;
                         parameters.push((
                             PotentialDollarIdentifier::Identifier(ParserText::new(

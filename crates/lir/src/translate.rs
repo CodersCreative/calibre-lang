@@ -91,7 +91,7 @@ impl<'a> LirEnvironment<'a> {
     #[inline]
     fn next_function_label(&mut self) -> String {
         if let Some(name) = self.last_ident.take()
-            && !name.contains("__curry_capture_")
+            && !name.contains("curry_capture")
         {
             return name;
         }

@@ -237,7 +237,7 @@ impl MiddleEnvironment {
             && let NodeType::Identifier(member_ident) = &caller.node_type
         {
             let name = member_ident.to_string();
-            if name.contains("::") {
+            if ParserText::is_temp_name(&name) {
                 resolved_caller = Some(name);
             }
         }
@@ -339,7 +339,7 @@ impl MiddleEnvironment {
         } else {
             if let NodeType::Identifier(member_ident) = &caller.node_type {
                 let qualified = member_ident.to_string();
-                if qualified.contains("::") {
+                if ParserText::is_temp_name(&qualified) {
                     let lowered_args = self.lower_call_args_with_receiver(
                         scope,
                         receiver_middle,
@@ -373,7 +373,7 @@ impl MiddleEnvironment {
             if let MiddleNodeType::MemberExpression { path } = &lowered_caller.node_type
                 && path.len() == 2
                 && let MiddleNodeType::Identifier(qualified) = &path[1].0.node_type
-                && qualified.text.contains("::")
+                && ParserText::is_temp_name(&qualified)
             {
                 let receiver = path[0].0.clone();
 
@@ -607,10 +607,7 @@ impl MiddleEnvironment {
         fn normalize_owner(owner: impl ToString) -> String {
             let mut cur = owner.to_string();
             loop {
-                let is_mangled =
-                    cur.starts_with("const-") || cur.starts_with("let-") || cur.starts_with("mut-");
-
-                if !is_mangled {
+                if !ParserText::is_temp_name(&cur) {
                     break;
                 }
 

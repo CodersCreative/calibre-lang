@@ -654,7 +654,7 @@ pub fn build_match_parsers<'a>(
                     parameters: vec![(
                         PotentialDollarIdentifier::Identifier(ParserText::new(
                             sp,
-                            "__match_value".to_string(),
+                            "match_value".to_string(),
                         )),
                         param_ty,
                         default.map(Box::new),

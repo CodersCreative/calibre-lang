@@ -253,7 +253,7 @@ impl ParserText {
     pub fn temp_name(span: Span) -> Self {
         Self::new(
             span,
-            format!("{}-{}", span, {
+            format!("[]-{}-{}", span, {
                 let mut counter = COUNTER.write().unwrap();
                 *counter += 1;
                 *counter
@@ -261,15 +261,41 @@ impl ParserText {
         )
     }
 
-    pub fn temp_name_with_prefix(prefix: impl Display, span: Span) -> Self {
+    pub fn temp_name_with_prefix(prefix: impl ToString, span: Span) -> Self {
+        let prefix = prefix.to_string();
+        if Self::is_temp_name(&prefix) {
+            return Self::new(span, prefix);
+        }
+
         Self::new(
             span,
-            format!("{prefix}-{}-{}", span, {
+            format!("[{prefix}]-{}-{}", span, {
                 let mut counter = COUNTER.write().unwrap();
                 *counter += 1;
                 *counter
             }),
         )
+    }
+
+    pub fn is_temp_name(ident: &impl ToString) -> bool {
+        ident.to_string().contains("[")
+    }
+
+    pub fn get_temp_name_prefix(ident: &impl ToString) -> Option<String> {
+        let ident = ident.to_string();
+        if !Self::is_temp_name(&ident) {
+            return Some(ident);
+        }
+
+        if ident.contains("[]") {
+            return None;
+        }
+
+        return ident
+            .split(']')
+            .next()
+            .and_then(|x| x.split('[').next())
+            .map(|x| x.to_string());
     }
 }
 

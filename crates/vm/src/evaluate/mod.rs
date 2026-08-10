@@ -1,8 +1,8 @@
 use calibre_lir::ast::BlockId;
-use calibre_parser::ast::ObjectMap;
 use calibre_parser::ast::binary::BinaryOperator;
 use calibre_parser::ast::comparison::ComparisonOperator;
 use calibre_parser::ast::types::ParserInnerType;
+use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
@@ -575,7 +575,7 @@ impl VM {
                 return Some(resolved);
             }
         }
-        if !owner.contains("::") {
+        if !ParserText::is_temp_name(&owner) {
             let std_owner = format!("std::{owner}");
             let candidates =
                 Self::build_member_candidates(&std_owner, member, short_member, true, None);
@@ -668,10 +668,7 @@ impl VM {
 
     #[inline]
     fn should_install_capture(name: &str) -> bool {
-        if name == "true" || name == "false" || name == "null" {
-            return false;
-        }
-        !name.contains("__anon_loop_")
+        !(name == "true" || name == "false" || name == "null")
     }
 
     #[inline]
@@ -877,7 +874,7 @@ impl VM {
             return Some(found);
         }
 
-        if name.contains('.') && !name.contains("::") {
+        if name.contains('.') && !ParserText::is_temp_name(&name) {
             let normalized = name.replace('.', "::");
             if let Some(found) = self.resolve_named_global_runtime_value(&normalized) {
                 return Some(found);
@@ -885,7 +882,7 @@ impl VM {
         }
 
         let Some(short_name) = calibre_parser::short_name_if_qualified(name) else {
-            if name.contains("::") {
+            if ParserText::is_temp_name(&name) {
                 if let Some((owner, member)) = name.rsplit_once("::") {
                     if let Some(resolved) =
                         self.resolve_associated_member_value(owner, member, Some(member))
@@ -967,7 +964,7 @@ impl VM {
         if let Some(found) = self.move_named_global_runtime_value(name) {
             return Some(found);
         }
-        if name.contains("::") {
+        if ParserText::is_temp_name(&name) {
             return None;
         }
 
@@ -1455,11 +1452,7 @@ impl VM {
                 let frame = self.current_frame_mut();
                 for (name, mapped) in frame.local_map.iter_mut() {
                     let key = name.as_ref();
-                    let is_local_style = key.starts_with("mut-")
-                        || key.starts_with("let-")
-                        || key.contains(':')
-                        || key.contains("->");
-                    if !is_local_style || *mapped != reg {
+                    if !ParserText::is_temp_name(&key) || *mapped != reg {
                         continue;
                     }
                     *mapped = phi.dest;

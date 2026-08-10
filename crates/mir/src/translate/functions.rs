@@ -329,7 +329,7 @@ impl MiddleEnvironment {
     ) {
         let looks_like_member_rewrite = matches!(
             &caller.node_type,
-            NodeType::Identifier(id) if id.to_string().contains("::")
+            NodeType::Identifier(id) if ParserText::is_temp_name(&id)
         );
         if !looks_like_member_rewrite || args.is_empty() {
             return;
@@ -382,6 +382,7 @@ impl MiddleEnvironment {
         )
     }
 
+    // TODO Cleanup whatever uses this
     pub(crate) fn is_generator_return_type(return_type: &ParserDataType) -> Option<ParserDataType> {
         let ty_txt = return_type.data_type.to_string();
         if ty_txt == "gen" || ty_txt.starts_with("gen->") || ty_txt.contains(":gen->") {
@@ -558,7 +559,7 @@ impl MiddleEnvironment {
         ident: &PotentialGenericTypeIdentifier,
     ) -> Option<String> {
         let name = ident.to_string();
-        if name.contains("::") || !matches!(name.as_str(), "ok" | "err" | "some") {
+        if ParserText::is_temp_name(&name) || !matches!(name.as_str(), "ok" | "err" | "some") {
             return None;
         }
 
@@ -926,9 +927,9 @@ impl MiddleEnvironment {
                 self.should_prefer_native_constructor(scope, &caller_ident);
             let caller_name = caller_ident.to_string();
             let caller_resolved = self.resolve_potential_generic_ident(scope, &caller_ident);
-            if !caller_name.contains("::")
+            if !ParserText::is_temp_name(&caller_name)
                 && let Some(resolved) = caller_resolved.clone()
-                && resolved.text.contains("::")
+                && ParserText::is_temp_name(&resolved.text)
                 && let Some(global_name) =
                     self.scoping.get_global_scope().mappings.get(&caller_name)
                 && global_name != &resolved.text
@@ -940,8 +941,9 @@ impl MiddleEnvironment {
             {
                 caller = Node::identifier(span, global_name.clone());
             }
+
             let caller_exact_callable = self.resolved_callable_name(scope, &caller_ident).is_some();
-            if caller_name.contains("::")
+            if ParserText::is_temp_name(&caller_name)
                 && let Some(full_name) = self.symbols.variables.iter().find_map(|(name, var)| {
                     if !name.ends_with(&caller_name) {
                         return None;
@@ -967,6 +969,8 @@ impl MiddleEnvironment {
                         _ => None,
                     }
                 });
+
+                // TODO Cleanup this shit
                 if let Some(first_ty) = first_ty {
                     let target_ty = first_ty.unwrap_all_refs();
                     let caller_member_name = caller_ident

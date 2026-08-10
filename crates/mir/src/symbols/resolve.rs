@@ -196,7 +196,7 @@ impl MiddleEnvironment {
             if let Some(root) = root_mapping {
                 let in_impl_scope = scope_ref.mappings.contains_key("Self");
                 let collides_with_impl_member = current != root
-                    && current.contains("::")
+                    && ParserText::is_temp_name(&current)
                     && calibre_parser::qualified_name_tail(&current) == iden;
                 if in_impl_scope && collides_with_impl_member {
                     return Some(root);

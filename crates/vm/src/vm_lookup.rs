@@ -1,3 +1,5 @@
+use calibre_parser::ast::idents::ParserText;
+
 use super::*;
 
 #[derive(Debug, Clone)]
@@ -30,7 +32,7 @@ impl VM {
                 .find(|(k, _)| k.starts_with(prefix))
                 .map(|(_, v)| Arc::clone(v));
         }
-        if name.contains("::") {
+        if ParserText::is_temp_name(&name) {
             return None;
         }
         let short_name = calibre_parser::qualified_name_tail(name);
@@ -321,7 +323,7 @@ impl VM {
             return VarName::Func(name.to_string());
         } else if self.variables.contains_key(name) {
             return VarName::Var(name.to_string());
-        } else if name.contains('.') && !name.contains("::") {
+        } else if name.contains('.') && !ParserText::is_temp_name(&name) {
             let normalized = name.replace('.', "::");
             if self.get_function_ref(&normalized).is_some() {
                 return VarName::Func(normalized);
@@ -329,7 +331,7 @@ impl VM {
             if self.variables.contains_key(&normalized) {
                 return VarName::Var(normalized);
             }
-        } else if name.contains("::") {
+        } else if ParserText::is_temp_name(&name) {
             return VarName::Global;
         }
 

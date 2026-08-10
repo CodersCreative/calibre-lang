@@ -206,22 +206,26 @@ impl Display for LirNodeType {
                     elements,
                     data_type,
                 } => {
-                    let mut txt = format!("list:<{}>[", data_type);
-                    for element in elements {
-                        txt.push_str(&format!("{}, ", element));
-                    }
-                    txt = txt.trim_end().trim_end_matches(",").to_string();
-                    txt.push(']');
-                    txt
+                    format!(
+                        "list:<{}>[{}]",
+                        data_type,
+                        elements
+                            .iter()
+                            .map(|x| x.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
                 }
                 Self::Closure { label, captures } => {
-                    let mut txt = format!("let {} = fn[", label);
-                    for capture in captures {
-                        txt.push_str(&format!("{}, ", capture));
-                    }
-                    txt = txt.trim_end().trim_end_matches(",").to_string();
-                    txt.push_str("]");
-                    txt
+                    format!(
+                        "let {} = fn[{}]",
+                        label,
+                        captures
+                            .iter()
+                            .map(|x| x.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
                 }
                 Self::Aggregate { name, fields: _ } => {
                     let txt = if let Some(name) = name {
@@ -251,17 +255,18 @@ impl Display for LirNodeType {
                     parameters,
                     return_type,
                 } => {
-                    let mut txt = format!("extern \"{}\" {}(", abi, symbol);
-                    for (i, param) in parameters.iter().enumerate() {
-                        if i > 0 {
-                            txt.push_str(", ");
-                        }
-                        txt.push_str(&param.to_string());
-                    }
-                    txt.push_str(") -> ");
-                    txt.push_str(&return_type.to_string());
-                    txt.push_str(&format!(" from {}", library));
-                    txt
+                    format!(
+                        "extern \"{}\" {}({}) -> {} from {}",
+                        abi,
+                        symbol,
+                        parameters
+                            .iter()
+                            .map(|x| x.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        return_type,
+                        library
+                    )
                 }
                 Self::Range {
                     from,

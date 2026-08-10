@@ -1,6 +1,6 @@
 use super::*;
 use crate::native::stdlib::generator::{GeneratorResumeFn, GeneratorState};
-use calibre_parser::ast::nodes::AsFailureMode;
+use calibre_parser::ast::{idents::ParserText, nodes::AsFailureMode};
 
 impl VM {
     pub fn sync_local_reg_value(&mut self, frame_idx: usize, reg: u16, value: RuntimeValue) {
@@ -136,18 +136,14 @@ impl VM {
 
     #[inline]
     fn reg_is_named_local(&self, reg: u16) -> bool {
-        let is_user_local = |name: &str| {
-            (name.starts_with("mut-") || name.starts_with("let-") || name.starts_with("const-"))
-                && name.contains(':')
-        };
         let frame = self.current_frame();
         frame
             .local_map
             .iter()
-            .any(|(name, r)| *r == reg && is_user_local(name.as_ref()))
+            .any(|(name, r)| *r == reg && ParserText::is_temp_name(name))
             || frame.local_map_base.as_ref().is_some_and(|m| {
                 m.iter()
-                    .any(|(name, r)| *r == reg && is_user_local(name.as_ref()))
+                    .any(|(name, r)| *r == reg && ParserText::is_temp_name(name))
             })
     }
 
@@ -174,7 +170,7 @@ impl VM {
 
         let frame_idx = self.frames.len().saturating_sub(1);
 
-        if member_name.contains("::") {
+        if ParserText::is_temp_name(&member_name) {
             return Self::bind_receiver_if_callable(callee, resolved_receiver);
         }
 
@@ -798,8 +794,7 @@ impl VM {
             }
             VMInstruction::LoadGlobal { dst, name } => {
                 let name = self.local_string(block, *name)?;
-                let is_local_style = (name.starts_with("mut-") || name.starts_with("let-"))
-                    && !name.contains("__anon_loop_");
+                let is_local_style = ParserText::is_temp_name(&name);
                 if is_local_style {
                     let value = match self.resolve_var_name(name) {
                         VarName::Var(var) => {
@@ -949,8 +944,7 @@ impl VM {
                 let name = self.local_string(block, *name)?;
                 let mut value = self.get_reg_value(*src).clone();
 
-                let is_local_style = (name.starts_with("mut-") || name.starts_with("let-"))
-                    && !name.contains("__anon_loop_");
+                let is_local_style = ParserText::is_temp_name(&name);
 
                 if is_local_style {
                     let interned = self.intern_name(name);

@@ -33,11 +33,7 @@ impl MiddleEnvironment {
                     .err_at_current(MiddleErr::Scope(identifier.to_string()))
             })?;
 
-        let new_name = if identifier.text.contains("->") || identifier.text.contains("::") {
-            identifier.text.clone()
-        } else {
-            ParserText::temp_name_with_prefix(identifier.text.trim(), span).text
-        };
+        let new_name = ParserText::temp_name_with_prefix(identifier.text.trim(), span).text;
 
         if let NodeType::CallExpression {
             caller,
@@ -421,11 +417,7 @@ impl MiddleEnvironment {
                 MiddleErr::At(span, Box::new(MiddleErr::Scope(identifier.to_string())))
             })?;
 
-        let new_name = if identifier.text.contains("__") {
-            identifier.text.clone()
-        } else {
-            ParserText::temp_name_with_prefix(identifier.text.trim(), span).text
-        };
+        let new_name = ParserText::temp_name_with_prefix(identifier.text.trim(), span).text;
 
         let object = MiddleTypeDefType::from_type_def_type(self, scope, object.clone());
 
